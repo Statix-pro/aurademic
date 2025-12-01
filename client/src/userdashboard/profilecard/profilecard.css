@@ -1,0 +1,89 @@
+.profile-card {
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  margin: 20px;
+  font-size: 15px;
+  padding: 30px 20px 30px;
+}
+
+.blur {
+  filter: blur(4px);
+  opacity: 0.7;
+  /* Optionally apply a transition effect */
+  transition: filter 0.3s ease-out;
+}
+
+.stat-title {
+  color: #f3772a;
+}
+
+.profile-img {
+  max-width: 150px;
+  /* border-radius: 50%; */
+}
+
+.name {
+  font-weight: bold;
+  font-size: 15px;
+  color: #f3772a;
+}
+
+.role {
+  font-size: 14px;
+  color: #555;
+}
+
+.info {
+  padding-left: 20px;
+}
+
+.employee-id {
+  font-weight: bold;
+  color: #f3772a;
+}
+
+.department,
+.research-area {
+  color: #333;
+}
+
+.action-buttons {
+  margin-top: 15px;
+}
+
+.action-buttons .btn {
+  margin-right: 10px;
+  margin-bottom: 10px;
+  background-color: #005bb1;
+  color: #fff;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.stats {
+  margin-top: 20px;
+}
+
+.stats h5 {
+  color: #f3772a;
+  font-weight: bold;
+}
+
+.stats .col-md-6:first-child {
+  border-right: 2px solid #ddd; /* Adds the vertical line */
+  padding-right: 20px; /* Adds space between content and border */
+}
+
+.stats .col-md-6:last-child {
+  padding-left: 20px; /* Adds space on the left side of the second column */
+}
+
+.stats .col h6 {
+  font-size: 14px;
+}
+
+.stats .col p {
+  margin: 0;
+  font-size: 16px;
+}

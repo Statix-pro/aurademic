@@ -1,0 +1,39 @@
+name: Code Quality Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  CLIENT_DIR: client
+  SERVER_DIR: server
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install client dependencies
+        run: npm install
+        working-directory: ${{ env.CLIENT_DIR }}
+
+      - name: Install server dependencies
+        run: npm install
+        working-directory: ${{ env.SERVER_DIR }}
+
+      - name: Build client
+        run: npm run build
+        working-directory: ${{ env.CLIENT_DIR }}
+
+      - name: Test client
+        run: npm test -- --watchAll=false
+        working-directory: ${{ env.CLIENT_DIR }}

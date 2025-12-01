@@ -1,0 +1,136 @@
+.journal-status-updates {
+  padding: 20px;
+}
+
+.journal-status-updates .table th {
+  background-color: #343a40;
+  color: white;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.journal-status-updates .badge {
+  font-size: 0.75em;
+}
+
+.journal-status-updates .btn-group .btn {
+  margin-right: 5px;
+}
+
+.journal-status-updates .pagination {
+  margin-top: 20px;
+}
+
+.journal-status-updates .filter-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.journal-status-updates .status-filter {
+  min-width: 200px;
+}
+
+.journal-status-updates .table-responsive {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.journal-status-updates .comment-cell {
+  max-width: 200px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.journal-status-updates .user-info {
+  font-size: 0.9em;
+}
+
+.journal-status-updates .user-info strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.journal-status-updates .user-info small {
+  color: #6c757d;
+}
+
+/* Modal styles */
+.journal-status-updates .modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.journal-status-updates .modal-header {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.journal-status-updates .form-control:focus {
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Status badge colors */
+.journal-status-updates .badge.bg-primary {
+  background-color: #007bff !important;
+}
+
+.journal-status-updates .badge.bg-warning {
+  background-color: #ffc107 !important;
+  color: #212529 !important;
+}
+
+.journal-status-updates .badge.bg-success {
+  background-color: #28a745 !important;
+}
+
+.journal-status-updates .badge.bg-danger {
+  background-color: #dc3545 !important;
+}
+
+.journal-status-updates .badge.bg-info {
+  background-color: #17a2b8 !important;
+}
+
+.journal-status-updates .badge.bg-secondary {
+  background-color: #6c757d !important;
+}
+
+/* Loading and error states */
+.journal-status-updates .loading {
+  text-align: center;
+  padding: 40px;
+  color: #6c757d;
+}
+
+.journal-status-updates .error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  border: 1px solid #f5c6cb;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .journal-status-updates .table-responsive {
+    font-size: 0.875rem;
+  }
+
+  .journal-status-updates .btn-group .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .journal-status-updates .filter-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .journal-status-updates .status-filter {
+    min-width: auto;
+  }
+}

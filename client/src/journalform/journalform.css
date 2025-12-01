@@ -1,0 +1,1260 @@
+/* General Body and Container Styles */
+.journal-form-body {
+  background-color: #f0f6ff;
+  /* Light blue background */
+  font-family: 'Roboto', sans-serif;
+  color: #4f4f6e;
+}
+
+/* Custom Tooltip Styles */
+.custom-tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.custom-tooltip .tooltip-text {
+  visibility: hidden;
+  background-color: #015b93;
+  color: #fff;
+  text-align: center;
+  border-radius: 4px;
+  padding: 6px 10px;
+  position: absolute;
+  z-index: 1001;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.1s;
+  font-size: 11px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 105, 171, 0.3);
+  white-space: nowrap;
+  min-width: fit-content;
+  max-width: 200px;
+}
+
+.custom-tooltip .tooltip-text::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -4px;
+  border-width: 4px;
+  border-style: solid;
+  border-color: #0069ab transparent transparent transparent;
+}
+
+.custom-tooltip:hover .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+  transition-delay: 0s; /* No delay on hover */
+}
+
+.journal-form-container {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+  max-width: 1200px;
+}
+
+/* Ensure section titles use blue theme */
+.journal-form-body .form-section-title,
+.form-card .form-section-title {
+  color: #0069ab !important;
+  font-weight: 600;
+}
+
+/* Category Toggle Buttons */
+.category-toggle-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2rem;
+  background-color: #e1f0ff;
+  /* Light blue background */
+  border-radius: 50px;
+  padding: 5px;
+  width: 250px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.category-toggle-container button {
+  border: none;
+  background-color: transparent;
+  color: #5d6b8a;
+  /* Darker blue-gray text */
+  padding: 8px 20px;
+  border-radius: 50px;
+  font-weight: 500;
+  width: 50%;
+  transition: all 0.3s ease;
+}
+
+.category-toggle-container button.active {
+  background-color: #0069ab;
+  /* Primary blue */
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
+}
+
+/* Card Styling */
+.form-card,
+.form-card-dashed {
+  background-color: #fff;
+  border-radius: 20px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.form-card-dashed {
+  background-color: #fff;
+  border: 2px dashed #b3d9ff;
+  /* Light blue dashed border */
+}
+
+.form-card-dashed.container-gap {
+  margin-top: 20px;
+}
+
+.form-section-title {
+  color: #0069ab;
+  /* Primary blue */
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Form Elements Styling */
+.form-label {
+  font-size: 14px;
+  color: #495057;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+.form-control {
+  border-radius: 12px !important;
+  border: 1px solid #e0e0e0;
+  padding: 0.4rem 1rem !important;
+  background-color: #fcfdff;
+  /* Very light blue tint */
+}
+
+.form-control:focus {
+  border-color: #0069ab;
+  /* Primary blue */
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+}
+
+.form-control:disabled {
+  background-color: #f5f5f5;
+  color: #999;
+}
+
+/* Author Section */
+.author-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.author-input-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-grow: 1;
+  flex-wrap: nowrap;
+}
+
+.author-input-group .form-control {
+  flex: 1;
+  min-width: 100px;
+  max-width: 200px;
+}
+
+.author-input-group .form-control[readOnly] {
+  background-color: #e9ecef !important;
+  color: #495057;
+}
+
+.designation-select {
+  flex: 0 0 auto;
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
+}
+
+.author-search-container {
+  position: relative;
+  flex: 1;
+  min-width: 150px;
+  max-width: 200px;
+}
+
+.author-suggestions-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.author-suggestions-list .list-group-item-action:hover {
+  background-color: #f8f9fa;
+  cursor: pointer;
+}
+
+.author-row-radio {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #ced4da;
+  border-radius: 50%;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.author-row-radio:checked {
+  border-color: #0069ab;
+  /* Primary blue */
+}
+
+.author-row-radio::after {
+  content: '';
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #0069ab;
+  /* Primary blue */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 0.15s ease-in-out;
+}
+
+.author-row-radio:checked::after {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.author-row-index {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background-color: #e9ecef;
+  border-radius: 8px;
+  color: #495057;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.author-row .form-control {
+  background-color: #fcfdff !important;
+}
+
+.author-number {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  background-color: #0069ab;
+  /* Primary blue */
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.author-action-buttons {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  align-items: center;
+  width: 72px;
+  flex-shrink: 0;
+  justify-content: center;
+}
+
+.btn-add-author {
+  background-color: #0069ab;
+  /* Primary blue */
+  color: #fff;
+  border: none;
+  border-radius: 8px !important;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.btn-add-author:hover {
+  background-color: #0069ab !important;
+  /* Force blue color on hover */
+  color: #fff !important;
+  /* Ensure white text on hover */
+}
+
+.btn-delete-author {
+  color: #dc3545;
+  background: #f8d7da !important;
+  border-radius: 8px !important;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none !important;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.btn-delete-author:hover {
+  background: #f8d7da !important;
+  /* Maintain background color on hover */
+  color: #dc3545 !important;
+  /* Maintain text color on hover */
+}
+
+/* Custom Radio Buttons */
+.radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.radio-item {
+  display: flex;
+  align-items: center;
+}
+
+.radio-item input[type='radio'] {
+  display: none;
+}
+
+.radio-item label {
+  margin-left: 0.5rem;
+  cursor: pointer;
+  position: relative;
+  padding-left: 28px;
+  color: #5d6b8a;
+  /* Blue-gray text */
+}
+
+.radio-item label::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: 2px solid;
+  /* Light blue border */
+  border-radius: 50%;
+  background-color: #fff;
+}
+
+.radio-item label::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%) scale(0);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #0069ab;
+  /* Primary blue */
+  transition: transform 0.2s ease-in-out;
+}
+
+.radio-item input[type='radio']:checked+label::before {
+  border-color: #0069ab;
+  /* Primary blue */
+}
+
+.radio-item input[type='radio']:checked+label::after {
+  transform: translateY(-50%) scale(1);
+}
+
+/* Custom Checkbox */
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+}
+
+.checkbox-item input[type='checkbox'] {
+  display: none;
+}
+
+.checkbox-item label {
+  cursor: pointer;
+  position: relative;
+  padding-left: 28px;
+  color: #5d6b8a;
+  /* Blue-gray text */
+  user-select: none;
+}
+
+.checkbox-item label::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: 2px solid;
+  /* Light blue border */
+  border-radius: 4px;
+  background-color: #fff;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.checkbox-item label::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  width: 6px;
+  height: 11px;
+  border: solid white;
+  border-width: 0 3px 3px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform 0.2s ease-in-out;
+}
+
+.checkbox-item input[type='checkbox']:checked+label::before {
+  background-color: #0069ab;
+  /* Primary blue */
+  border-color: #0069ab;
+}
+
+.checkbox-item input[type='checkbox']:checked+label::after {
+  transform: rotate(45deg) scale(1);
+}
+
+/* Custom Toggle Switch */
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-switch .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
+  border-radius: 34px;
+}
+
+.toggle-switch .slider:before {
+  position: absolute;
+  content: '';
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+.toggle-switch input:checked+.slider {
+  background-color: #0069ab;
+  /* Primary blue */
+}
+
+.toggle-switch input:checked+.slider:before {
+  transform: translateX(20px);
+}
+
+/* Metrics Section */
+.metric-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.metric-item-vertical {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  gap: 0.75rem;
+}
+
+.metric-item-vertical .form-control {
+  flex-grow: 1;
+}
+
+.metric-input {
+  width: 80px !important;
+  margin-left: 1rem;
+}
+
+.metric-input-custom {
+  width: 100% !important;
+  min-width: 100px;
+  max-width: 300px;
+}
+
+.metric-item-vertical .d-flex.justify-content-between {
+  align-items: center;
+  gap: 1rem;
+}
+
+.metric-item-vertical .form-label {
+  flex: 0 0 120px;
+  margin-bottom: 0;
+}
+
+.metric-item-vertical .toggle-switch {
+  flex-shrink: 0;
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.metric-item-vertical .form-control {
+  width: 100%;
+  max-width: 470px;
+  margin-left: 0;
+}
+
+.metric-item-vertical .d-flex.gap-2 {
+  margin-left: 0;
+  gap: 0.5rem;
+}
+
+.metric-item-vertical .d-flex.gap-2 .form-control {
+  max-width: 100px;
+  flex: 1;
+}
+
+.metric-item-vertical input[type='date'] {
+  max-width: 200px;
+  width: 100%;
+}
+
+/* Upload Section */
+.upload-section {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.upload-button {
+  background-color: #0069ab;
+  /* Primary blue */
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 1rem;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 0.2s ease;
+}
+
+.upload-button:hover:not(:disabled) {
+  background-color: #005492;
+  /* Darker blue on hover */
+}
+
+.upload-button:disabled {
+  background-color: #b3d9ff;
+  /* Light blue when disabled */
+  cursor: not-allowed;
+}
+
+.upload-button input[type='file'] {
+  display: none;
+}
+
+.file-name-display {
+  color: #4a5575;
+  /* Blue-gray text */
+  font-style: italic;
+  flex: 1;
+}
+
+.file-display-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.file-name-text {
+  color: #4a5575;
+  /* Blue-gray text */
+  font-style: italic;
+}
+
+/* Submit Button */
+.btn-submit-approval {
+  background-color: #0069ab;
+  /* Primary blue */
+  color: white;
+  border: none;
+  padding: 12px 40px;
+  font-size: 1.1rem;
+  border-radius: 15px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 105, 171, 0.4);
+}
+
+.btn-submit-approval:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 105, 171, 0.5);
+  background-color: #005492;
+  /* Darker blue on hover */
+}
+
+.btn-submit-approval:disabled {
+  background-color: #b3d9ff;
+  /* Light blue when disabled */
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Override Bootstrap Alert Colors to Match Blue Theme */
+.alert-info {
+  background-color: #e1f0ff !important;
+  /* Light blue background */
+  border-color: #b3d9ff !important;
+  /* Light blue border */
+  color: #0069ab !important;
+  /* Primary blue text */
+}
+
+.alert-danger {
+  background-color: #ffe1e1 !important;
+  /* Light red background */
+  border-color: #ffb3b3 !important;
+  /* Light red border */
+  color: #dc3545 !important;
+  /* Keep red for danger */
+}
+
+/* Override Bootstrap Button Colors to Match Blue Theme */
+.btn-warning {
+  background-color: #0069ab !important;
+  /* Primary blue */
+  border-color: #0069ab !important;
+  color: #fff !important;
+}
+
+.btn-warning:hover {
+  background-color: #005492 !important;
+  /* Darker blue on hover */
+  border-color: #005492 !important;
+  color: #fff !important;
+}
+
+.btn-primary {
+  background-color: #0069ab !important;
+  /* Primary blue */
+  border-color: #0069ab !important;
+  color: #fff !important;
+}
+
+.btn-primary:hover {
+  background-color: #005492 !important;
+  /* Darker blue on hover */
+  border-color: #005492 !important;
+  color: #fff !important;
+}
+
+.btn-secondary {
+  background-color: #5d6b8a !important;
+  /* Blue-gray */
+  border-color: #5d6b8a !important;
+  color: #fff !important;
+}
+
+.btn-secondary:hover {
+  background-color: #4a5575 !important;
+  /* Darker blue-gray on hover */
+  border-color: #4a5575 !important;
+  color: #fff !important;
+}
+
+/* Override Bootstrap Form Check Input Colors */
+.form-check-input:checked {
+  background-color: #0069ab !important;
+  /* Primary blue */
+  border-color: #0069ab !important;
+}
+
+.form-check-input:focus {
+  border-color: #0069ab !important;
+  /* Primary blue */
+  box-shadow: 0 0 0 0.25rem rgba(0, 105, 171, 0.25) !important;
+}
+
+/* Override Bootstrap Close Button */
+.btn-close {
+  background-color: #0069ab !important;
+  opacity: 0.8;
+}
+
+.btn-close:hover {
+  opacity: 1;
+}
+
+/* Override any remaining Bootstrap form control focus states */
+.form-control:focus,
+.form-select:focus {
+  border-color: #0069ab !important;
+  /* Primary blue */
+  box-shadow: 0 0 0 0.25rem rgba(0, 105, 171, 0.25) !important;
+}
+
+/* Ensure all text uses the blue theme */
+.text-muted {
+  color: #5d6b8a !important;
+  /* Blue-gray text */
+}
+
+/* Override any list group item hover states */
+.list-group-item-action:hover {
+  background-color: #f0f6ff !important;
+  /* Light blue background */
+  color: #0069ab !important;
+  /* Primary blue text */
+}
+
+.list-group-item-action:focus {
+  background-color: #e1f0ff !important;
+  /* Slightly darker blue */
+  color: #0069ab !important;
+  /* Primary blue text */
+}
+
+/* Modal styling to match theme */
+.modal-content {
+  border: none !important;
+  border-radius: 20px !important;
+  box-shadow: 0 4px 20px rgba(0, 105, 171, 0.15) !important;
+}
+
+.modal-header {
+  background-color: #f0f6ff !important;
+  /* Light blue background */
+  border-bottom: 1px solid #b3d9ff !important;
+  /* Light blue border */
+  border-radius: 20px 20px 0 0 !important;
+}
+
+.modal-title {
+  color: #0069ab !important;
+  /* Primary blue text */
+  font-weight: 600;
+}
+
+/* Override any remaining Bootstrap default colors */
+.btn-close {
+  filter: none !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%230069ab'%3e%3cpath d='m.5 3.5 1-1L8 8.5 14.5 2l1 1L9 10.5l-6.5 6.5-1-1L7 9.5.5 3.5z'/%3e%3c/svg%3e") !important;
+}
+
+/* White close button for badges */
+.btn-close-white {
+  background-color: transparent !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23ffffff'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e") !important;
+  opacity: 0.8;
+}
+
+.btn-close-white:hover {
+  opacity: 1;
+}
+
+
+/* Ensure submit button uses the correct blue theme */
+.btn-submit-approval {
+  background-color: #0069ab !important;
+  /* Primary blue */
+  color: white !important;
+  border: none !important;
+  padding: 12px 40px !important;
+  font-size: 1.1rem !important;
+  border-radius: 15px !important;
+  cursor: pointer !important;
+  font-weight: 600 !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 4px 15px rgba(0, 105, 171, 0.4) !important;
+}
+
+.btn-submit-approval:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 20px rgba(0, 105, 171, 0.5) !important;
+  background-color: #005492 !important;
+  /* Darker blue on hover */
+}
+
+.btn-submit-approval:disabled {
+  background-color: #b3d9ff !important;
+  /* Light blue when disabled */
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Fix any remaining Bootstrap button overrides */
+button[type='submit'] {
+  background-color: #0069ab !important;
+  color: white !important;
+  border: none !important;
+}
+
+button[type='submit']:hover:not(:disabled) {
+  background-color: #005492 !important;
+}
+
+button[type='submit']:disabled {
+  background-color: #b3d9ff !important;
+  cursor: not-allowed !important;
+}
+
+/* Force theme on custom toggle */
+.toggle-switch .slider {
+  background-color: #ccc !important;
+}
+
+.toggle-switch input:checked+.slider {
+  background-color: #0069ab !important;
+}
+
+.toggle-switch .slider:before {
+  background-color: #fff !important;
+}
+
+.toggle-switch input:checked+.slider:before {
+  transform: translateX(20px) !important;
+}
+
+/* Force theme on custom radios */
+.radio-item label::before {
+  background-color: #fff !important;
+}
+
+.radio-item input[type='radio']:checked+label::before {
+  border-color: #0069ab !important;
+}
+
+.radio-item label::after {
+  background-color: #0069ab !important;
+}
+
+/* Force theme on custom checkboxes */
+.checkbox-item label::before {
+  background-color: #fff !important;
+}
+
+.checkbox-item input[type='checkbox']:checked+label::before {
+  background-color: #0069ab !important;
+  border-color: #0069ab !important;
+}
+
+/* Ensure native/Bootstrap radios & checkboxes use blue in modern browsers */
+input[type='radio'],
+input[type='checkbox'],
+.form-check-input {
+  accent-color: #0069ab !important;
+}
+
+/* Extra guard for Bootstrap check inputs */
+.form-check-input:checked {
+  background-color: #0069ab !important;
+  border-color: #0069ab !important;
+}
+
+.form-check-input:focus {
+  border-color: #0069ab !important;
+  box-shadow: 0 0 0 0.25rem rgba(0, 105, 171, 0.25) !important;
+}
+
+/* Status Tracking Table Styles */
+.table-responsive {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.table {
+  margin-bottom: 0;
+  background-color: #fff;
+}
+
+.table thead th {
+  background-color: #f0f6ff;
+  color: #0069ab;
+  font-weight: 600;
+  border: none;
+  padding: 1rem 0.75rem;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.table tbody td {
+  padding: 1rem 0.75rem;
+  border-top: 1px solid #e9ecef;
+  vertical-align: middle;
+}
+
+.table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+/* Badge styles for status */
+.badge {
+  font-size: 0.75rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 20px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.bg-success {
+  background-color: #28a745 !important;
+}
+
+.bg-danger {
+  background-color: #dc3545 !important;
+}
+
+.bg-primary {
+  background-color: #0069ab !important;
+}
+
+.bg-warning {
+  background-color: #ffc107 !important;
+  color: #212529 !important;
+}
+
+/* Status Update Form Styles */
+.status-update-form .form-control {
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.status-update-form .form-control:focus {
+  border-color: #0069ab;
+  box-shadow: 0 0 0 0.2rem rgba(0, 105, 171, 0.15);
+}
+
+/* Empty state styling */
+.empty-state {
+  padding: 3rem 1rem;
+  text-align: center;
+  color: #6c757d;
+}
+
+.empty-state h5 {
+  color: #495057;
+  margin-bottom: 0.5rem;
+}
+
+/* Request Journal and Preview Button Styles */
+.btn-outline-secondary {
+  background-color: transparent !important;
+  border: 2px solid #0069ab !important;
+  color: #0069ab !important;
+  transition: all 0.3s ease !important;
+}
+
+.btn-outline-secondary:hover {
+  background-color: #0069ab !important;
+  color: white !important;
+  border-color: #0069ab !important;
+  box-shadow: 0 2px 8px rgba(0, 105, 171, 0.3) !important;
+}
+
+.btn-outline-secondary:focus {
+  background-color: #0069ab !important;
+  color: white !important;
+  border-color: #0069ab !important;
+  box-shadow: 0 0 0 0.25rem rgba(0, 105, 171, 0.25) !important;
+}
+
+/* Specific styles for Request Journal button */
+.btn-outline-secondary[type='button'] {
+  font-size: 0.875rem;
+  padding: 0.375rem 0.75rem;
+  font-weight: 500;
+}
+
+/* Specific styles for Preview button */
+.btn-outline-secondary.btn-sm {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  margin-left: 0.5rem;
+}
+
+/* Modal specific styles for journal request modal */
+.modal.fade.show {
+  display: block !important;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-backdrop.fade.show {
+  display: block !important;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+/* Modal dialog and content styling - Compact size */
+.modal-dialog {
+  margin: 3% auto;
+  max-width: 500px;
+}
+
+.modal-content {
+  border: none !important;
+  border-radius: 15px !important;
+  box-shadow: 0 4px 20px rgba(0, 105, 171, 0.15) !important;
+  overflow: hidden;
+}
+
+/* Modal header styling - Compact */
+.modal-header {
+  background-color: #f0f6ff !important;
+  border-bottom: 1px solid #b3d9ff !important;
+  border-radius: 15px 15px 0 0 !important;
+  padding: 0.75rem 1rem;
+}
+
+.modal-title {
+  color: #0069ab !important;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+/* Modal body styling - Compact */
+.modal-body {
+  padding: 1rem;
+  background-color: white;
+}
+
+/* Modal footer styling - Compact */
+.modal-footer {
+  border-top: 1px solid #e9ecef;
+  padding: 1rem 1.5rem;
+  background-color: #f8f9fa;
+  border-radius: 0 0 15px 15px;
+}
+
+/* Form controls within modal - Compact */
+.modal-body .form-control,
+.modal-body .form-select {
+  border-radius: 8px !important;
+  border: 1px solid #e0e0e0;
+  padding: 0.4rem 0.75rem !important;
+  background-color: #fcfdff;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.modal-body .form-control:focus,
+.modal-body .form-select:focus {
+  border-color: #0069ab !important;
+  box-shadow: 0 0 0 2px rgba(0, 105, 171, 0.15) !important;
+  background-color: white;
+}
+
+.modal-body .form-label {
+  font-size: 13px;
+  color: #495057;
+  margin-bottom: 0;
+  font-weight: 600;
+}
+
+/* Form group spacing - Compact */
+.modal-body .mb-3 {
+  margin-bottom: 0.5rem !important;
+}
+
+.modal-body .row .mb-3 {
+  margin-bottom: 0.5rem !important;
+}
+
+.modal-body .row {
+  margin-left: -0.25rem;
+  margin-right: -0.25rem;
+}
+
+.modal-body .row>[class*='col-'] {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+/* Alert styling within modal - Compact */
+.modal-body .alert {
+  border-radius: 8px;
+  border: 1px solid;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.modal-body .alert-danger {
+  background-color: #ffe1e1 !important;
+  border-color: #ffb3b3 !important;
+  color: #dc3545 !important;
+}
+
+/* Modal close button styling */
+.modal-header .btn-close {
+  background-color: transparent !important;
+  border: none !important;
+  opacity: 0.8;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%230069ab'%3e%3cpath d='m.5 3.5 1-1L8 8.5 14.5 2l1 1L9 10.5l-6.5 6.5-1-1L7 9.5.5 3.5z'/%3e%3c/svg%3e") !important;
+  background-size: 14px 14px;
+  background-repeat: no-repeat;
+  background-position: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+}
+
+.modal-header .btn-close:hover {
+  opacity: 1;
+  background-color: rgba(0, 105, 171, 0.1) !important;
+  border-radius: 50%;
+}
+
+/* Button styles within modal - Compact */
+.modal-footer .btn {
+  border-radius: 8px !important;
+  padding: 0.4rem 1rem !important;
+  font-weight: 500 !important;
+  transition: all 0.3s ease !important;
+  font-size: 0.9rem;
+}
+
+.modal-footer .btn-secondary {
+  background-color: #6c757d !important;
+  border-color: #6c757d !important;
+  color: white !important;
+}
+
+.modal-footer .btn-secondary:hover {
+  background-color: #5a6268 !important;
+  border-color: #545b62 !important;
+  color: white !important;
+}
+
+.modal-footer .btn-primary {
+  background-color: #0069ab !important;
+  border-color: #0069ab !important;
+  color: white !important;
+}
+
+.modal-footer .btn-primary:hover {
+  background-color: #005492 !important;
+  border-color: #005492 !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(0, 105, 171, 0.3) !important;
+}
+
+/* Form validation states within modal */
+.modal-body .form-control.is-invalid {
+  border-color: #dc3545 !important;
+  box-shadow: 0 0 0 0.15rem rgba(220, 53, 69, 0.25) !important;
+}
+
+.modal-body .form-control.is-valid {
+  border-color: #28a745 !important;
+  box-shadow: 0 0 0 0.15rem rgba(40, 167, 69, 0.25) !important;
+}
+
+/* Loading state for modal buttons */
+.modal-footer .btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* Reference Number Input - Wider width */
+.reference-number-input {
+  max-width: 230px !important;
+  width: 100% !important;
+}
+
+/* DOI Input - Lighter placeholder text */
+#doiInput::placeholder {
+  color: #999 !important;
+  opacity: 0.4 !important;
+}
+
+/* Delete File Button */
+.btn-delete-file {
+  background-color: #f8d7da;
+  color: #dc3545;
+  border: none;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+}
+
+.btn-delete-file:hover {
+  background-color: #dc3545;
+  color: white;
+  transform: scale(1.05);
+}
