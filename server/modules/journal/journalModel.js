@@ -10,13 +10,13 @@ const journalModel = {
       // For Conference, Book Chapter, and Book, journal_name might be empty
       // In that case, we'll create a placeholder entry or use a default
       let journalOptionsId;
-      
+
       // Check if this is a type that uses publication_details instead of journal_options
-      const usesPublicationDetails = 
+      const usesPublicationDetails =
         journalData.type === 'Conference paper' ||
         journalData.type === 'Book Chapter' ||
         journalData.type === 'Book';
-      
+
       if (usesPublicationDetails && !journalData.journal_name) {
         // For these types, create a minimal journal_option entry with a placeholder name
         // or use a default entry. We'll use the title as a placeholder.
@@ -25,7 +25,7 @@ const journalModel = {
           'SELECT id FROM journal_options WHERE journal_name = ?',
           [placeholderName]
         );
-        
+
         if (existingOptions.length > 0) {
           journalOptionsId = existingOptions[0].id;
         } else {
@@ -43,44 +43,44 @@ const journalModel = {
         }
       } else {
         // For Journal type, use the normal logic
-      const [existingOptions] = await connection.query(
-        'SELECT id FROM journal_options WHERE journal_name = ?',
-        [journalData.journal_name]
-      );
-
-      if (existingOptions.length > 0) {
-        journalOptionsId = existingOptions[0].id;
-
-        // Update existing journal_options with new data if provided
-        const updateData = {};
-        if (journalData.publisher !== undefined)
-          updateData.publisher = journalData.publisher;
-        if (journalData.website !== undefined)
-          updateData.website = journalData.website;
-        if (journalData.print_issn !== undefined)
-          updateData.print_issn = journalData.print_issn;
-        if (journalData.online_issn !== undefined)
-          updateData.online_issn = journalData.online_issn;
-
-        if (Object.keys(updateData).length > 0) {
-          await connection.query('UPDATE journal_options SET ? WHERE id = ?', [
-            updateData,
-            journalOptionsId,
-          ]);
-        }
-      } else {
-        // Create new journal option
-        const [result] = await connection.query(
-          'INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn) VALUES (?, ?, ?, ?, ?)',
-          [
-            journalData.journal_name,
-            journalData.publisher || '',
-            journalData.website || '',
-            journalData.print_issn || '',
-            journalData.online_issn || '',
-          ]
+        const [existingOptions] = await connection.query(
+          'SELECT id FROM journal_options WHERE journal_name = ?',
+          [journalData.journal_name]
         );
-        journalOptionsId = result.insertId;
+
+        if (existingOptions.length > 0) {
+          journalOptionsId = existingOptions[0].id;
+
+          // Update existing journal_options with new data if provided
+          const updateData = {};
+          if (journalData.publisher !== undefined)
+            updateData.publisher = journalData.publisher;
+          if (journalData.website !== undefined)
+            updateData.website = journalData.website;
+          if (journalData.print_issn !== undefined)
+            updateData.print_issn = journalData.print_issn;
+          if (journalData.online_issn !== undefined)
+            updateData.online_issn = journalData.online_issn;
+
+          if (Object.keys(updateData).length > 0) {
+            await connection.query('UPDATE journal_options SET ? WHERE id = ?', [
+              updateData,
+              journalOptionsId,
+            ]);
+          }
+        } else {
+          // Create new journal option
+          const [result] = await connection.query(
+            'INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn) VALUES (?, ?, ?, ?, ?)',
+            [
+              journalData.journal_name,
+              journalData.publisher || '',
+              journalData.website || '',
+              journalData.print_issn || '',
+              journalData.online_issn || '',
+            ]
+          );
+          journalOptionsId = result.insertId;
         }
       }
 
@@ -98,6 +98,9 @@ const journalModel = {
         anna_university_annexure_no: journalData.anna_university_annexure_no,
         acknowledgement: JSON.stringify(journalData.acknowledgement),
         author_affiliation: JSON.stringify(journalData.author_affiliation),
+        external_details: journalData.external_details
+          ? JSON.stringify(journalData.external_details)
+          : null,
         driven_by: journalData.driven_by,
         date_of_submission: journalData.date_of_submission,
         status: journalData.status || 'waiting',
@@ -153,12 +156,22 @@ const journalModel = {
           ([_, value]) => value !== null && value !== undefined
         )
       );
-      
+
       // Handle publication_details JSON field
-      if (filteredData.publication_details && typeof filteredData.publication_details === 'object') {
+      if (
+        filteredData.publication_details &&
+        typeof filteredData.publication_details === 'object'
+      ) {
         filteredData.publication_details = JSON.stringify(filteredData.publication_details);
       }
-      
+      // Handle external_details JSON field
+      if (
+        filteredData.external_details &&
+        typeof filteredData.external_details === 'object'
+      ) {
+        filteredData.external_details = JSON.stringify(filteredData.external_details);
+      }
+
       const [result] = await db.query('UPDATE journals SET ? WHERE id = ?', [
         filteredData,
         id,
@@ -237,6 +250,7 @@ const journalModel = {
       await connection.beginTransaction();
 
       let authorId;
+      let isExternalAuthor = false;
       const {
         designation,
         author_id,
@@ -261,70 +275,126 @@ const journalModel = {
         authorId = existingFaculty[0].id;
       } else if (designation === 'student') {
         if (!author_id) throw new Error('Student Register Number is required.');
-        const [existingStudent] = await connection.query(
-          'SELECT id FROM authors WHERE student_id = ?',
-          [author_id] // author_id from request is the student_id
+
+        // Ensure student exists in author_students table
+        let studentId;
+        const [existingStudentRows] = await connection.query(
+          'SELECT id FROM author_students WHERE student_unique_id = ?',
+          [author_id]
         );
 
-        if (existingStudent.length > 0) {
-          throw new Error(
-            `A student with Register Number '${author_id}' already exists.`
+        if (existingStudentRows.length > 0) {
+          studentId = existingStudentRows[0].id;
+        } else {
+          const [studentInsert] = await connection.query(
+            'INSERT INTO author_students (student_unique_id, name, department, organization, country) VALUES (?, ?, ?, ?, ?)',
+            [author_id, name, department, organization, country]
           );
+          studentId = studentInsert.insertId;
         }
 
-        const studentAuthorData = {
-          student_id: author_id, // Use the new student_id column
-          designation: 'student',
-          name,
-          department,
-          organization,
-          country,
-          email: email || null,
-        };
-
-        const [result] = await connection.query(
-          'INSERT INTO authors SET ?',
-          studentAuthorData
+        // Reuse or create corresponding author row that references this student
+        const [existingAuthorRows] = await connection.query(
+          'SELECT id FROM authors WHERE student_ref = ?',
+          [studentId]
         );
-        authorId = result.insertId;
+
+        if (existingAuthorRows.length > 0) {
+          authorId = existingAuthorRows[0].id;
+          // Optionally keep author details in sync with latest student info
+          await connection.query(
+            'UPDATE authors SET name = ?, department = ?, organization = ?, country = ?, email = ? WHERE id = ?',
+            [name, department, organization, country, email || null, authorId]
+          );
+        } else {
+          const studentAuthorData = {
+            student_ref: studentId,
+            designation: 'student',
+            name,
+            department,
+            organization,
+            country,
+            email: email || null,
+          };
+
+          const [result] = await connection.query(
+            'INSERT INTO authors SET ?',
+            studentAuthorData
+          );
+          authorId = result.insertId;
+        }
       } else if (designation === 'external') {
-        // External: No author_id, create new author row with designation external
-        if (!name || !department || !organization || !country || !state) {
+        // External authors are stored in journals.external_details JSON, not in authors table
+        if (!name || !department || !organization || !country) {
           throw new Error(
-            'Name, Department, Organization, Country, and State are required for external authors.'
+            'Name, Department, Organization, and Country are required for external authors.'
           );
         }
-        const externalAuthorData = {
-          designation: 'external',
+
+        // Fetch existing external_details for this journal
+        const [journalRows] = await connection.query(
+          'SELECT external_details FROM journals WHERE id = ? FOR UPDATE',
+          [journalId]
+        );
+        if (!journalRows || journalRows.length === 0) {
+          throw new Error('Journal not found while adding external author.');
+        }
+
+        let externalDetails = [];
+        const rawExternal = journalRows[0].external_details;
+        if (rawExternal) {
+          try {
+            externalDetails =
+              typeof rawExternal === 'string'
+                ? JSON.parse(rawExternal)
+                : rawExternal;
+            if (!Array.isArray(externalDetails)) externalDetails = [];
+          } catch (e) {
+            externalDetails = [];
+          }
+        }
+
+        externalDetails.push({
           name,
           department,
           organization,
           country,
-          state,
+          state: state || '',
           email: email || null,
-        };
-        const [result] = await connection.query(
-          'INSERT INTO authors SET ?',
-          externalAuthorData
+          is_first_author: !!authorData.is_first_author,
+          is_primary: !!authorData.is_primary,
+        });
+
+        await connection.query(
+          'UPDATE journals SET external_details = ? WHERE id = ?',
+          [JSON.stringify(externalDetails), journalId]
         );
-        authorId = result.insertId;
+        // Mark as external-only so we skip author_journal insert
+        isExternalAuthor = true;
       } else {
         throw new Error('Invalid designation provided.');
       }
+      let authorJournalResult = { insertId: null };
 
-      const [authorJournalResult] = await connection.query(
-        `INSERT INTO author_journal (author_id, journal_id, is_first_author, is_primary) 
+      if (!isExternalAuthor) {
+        const [insertResult] = await connection.query(
+          `INSERT INTO author_journal (author_id, journal_id, is_first_author, is_primary) 
                  VALUES (?, ?, ?, ?)`,
-        [
-          authorId,
-          journalId,
-          authorData.is_first_author ? 1 : 0,
-          authorData.is_primary ? 1 : 0,
-        ]
-      );
+          [
+            authorId,
+            journalId,
+            authorData.is_first_author ? 1 : 0,
+            authorData.is_primary ? 1 : 0,
+          ]
+        );
+        authorJournalResult = insertResult;
+      }
 
       await connection.commit();
-      return { authorId, authorJournalId: authorJournalResult.insertId };
+      return {
+        authorId: isExternalAuthor ? null : authorId,
+        authorJournalId: authorJournalResult.insertId,
+      };
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -337,9 +407,15 @@ const journalModel = {
     try {
       const [rows] = await db.query(
         `
-                SELECT a.*, aj.id AS dbAuthorId, aj.is_first_author, aj.is_primary
+                SELECT
+                  a.*,
+                  s.student_unique_id AS student_id,
+                  aj.id AS dbAuthorId,
+                  aj.is_first_author,
+                  aj.is_primary
                 FROM authors a
                 JOIN author_journal aj ON a.id = aj.author_id
+                LEFT JOIN author_students s ON a.student_ref = s.id
                 WHERE aj.journal_id = ?
             `,
         [journalId]
@@ -352,9 +428,21 @@ const journalModel = {
 
   async searchAuthor(query, designation = null) {
     try {
-      let queryStr = `SELECT id, name, email, designation, author_id, student_id, organization, department, country
-                            FROM authors
-                            WHERE name LIKE ? OR author_id LIKE ? OR student_id LIKE ?`;
+      let queryStr = `
+            SELECT
+              a.id,
+              a.name,
+              a.email,
+              a.designation,
+              a.author_id,
+              s.student_unique_id AS student_id,
+              a.organization,
+              a.department,
+              a.country
+            FROM authors a
+            LEFT JOIN author_students s ON a.student_ref = s.id
+            WHERE a.name LIKE ? OR a.author_id LIKE ? OR s.student_unique_id LIKE ?
+          `;
       let params = [`%${query}%`, `${query}%`, `${query}%`];
 
       if (designation) {
@@ -467,9 +555,15 @@ const journalModel = {
       // Get authors, aliasing aj.id as dbAuthorId
       const [authors] = await db.query(
         `
-                SELECT a.*, aj.id AS dbAuthorId, aj.is_first_author, aj.is_primary
+                SELECT
+                  a.*,
+                  s.student_unique_id AS student_id,
+                  aj.id AS dbAuthorId,
+                  aj.is_first_author,
+                  aj.is_primary
                 FROM authors a
                 JOIN author_journal aj ON a.id = aj.author_id
+                LEFT JOIN author_students s ON a.student_ref = s.id
                 WHERE aj.journal_id = ?
             `,
         [id]
@@ -503,6 +597,10 @@ const journalModel = {
       journalResult.sdgs = safeParseJSON(journalResult.sdgs, []);
       journalResult.credit_to = safeParseJSON(journalResult.credit_to, []);
       journalResult.publication_details = safeParseJSON(journalResult.publication_details, null);
+      journalResult.external_details = safeParseJSON(
+        journalResult.external_details,
+        []
+      );
 
       return {
         ...journalResult,

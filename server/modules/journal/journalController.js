@@ -12,18 +12,18 @@ const journalController = {
 
       // Validate required fields
       // For Conference, Book Chapter, and Book, journal_name may not be required if publication_details is provided
-      const isConferenceOrBook = 
+      const isConferenceOrBook =
         journalData.type === 'Conference paper' ||
         journalData.type === 'Book Chapter' ||
         journalData.type === 'Book';
-      
+
       if (!journalData.title || !journalData.type) {
         return res.status(400).json({
           status: 'error',
           message: 'Missing required fields: title or type',
         });
       }
-      
+
       // For Journal type, require journal_name
       if (!isConferenceOrBook && !journalData.journal_name) {
         return res.status(400).json({
@@ -31,7 +31,7 @@ const journalController = {
           message: 'Missing required field: journal name',
         });
       }
-      
+
       // For Conference, Book Chapter, and Book, require publication_details
       if (isConferenceOrBook && !journalData.publication_details) {
         return res.status(400).json({
@@ -44,7 +44,12 @@ const journalController = {
       const isJournalType =
         journalData.type === 'Article' ||
         journalData.type === 'Journal Article' ||
-        journalData.type === 'Research Article';
+        journalData.type === 'Research Article' ||
+        journalData.type === 'Erratum' ||
+        journalData.type === 'Editorial' ||
+        journalData.type === 'Note' ||
+        journalData.type === 'Review' ||
+        journalData.type === 'Retraction';
 
       if (isJournalType && !journalData.quartile) {
         return res.status(400).json({
@@ -121,7 +126,12 @@ const journalController = {
       const isJournalType =
         journalData.type === 'Article' ||
         journalData.type === 'Journal Article' ||
-        journalData.type === 'Research Article';
+        journalData.type === 'Research Article' ||
+        journalData.type === 'Erratum' ||
+        journalData.type === 'Editorial' ||
+        journalData.type === 'Note' ||
+        journalData.type === 'Review' ||
+        journalData.type === 'Retraction';
 
       if (isJournalType && !journalData.quartile) {
         return res.status(400).json({
@@ -143,6 +153,7 @@ const journalController = {
         'anna_university_annexure_no',
         'acknowledgement',
         'author_affiliation',
+        'external_details',
         'driven_by',
         'date_of_submission',
         'status',
@@ -214,6 +225,11 @@ const journalController = {
       if (journalUpdateData.publication_details) {
         journalUpdateData.publication_details = JSON.stringify(
           journalUpdateData.publication_details
+        );
+      }
+      if (journalUpdateData.external_details) {
+        journalUpdateData.external_details = JSON.stringify(
+          journalUpdateData.external_details
         );
       }
 
@@ -319,15 +335,14 @@ const journalController = {
           !authorData.name ||
           !authorData.department ||
           !authorData.organization ||
-          !authorData.country ||
-          !authorData.state
+          !authorData.country
         ) {
           return res
             .status(400)
             .json({
               status: 'error',
               message:
-                'Name, Department, Organization, Country, and State are required for external authors',
+                'Name, Department, Organization, and Country are required for external authors',
             });
         }
       } else {

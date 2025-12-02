@@ -158,6 +158,7 @@ const JournalForm = () => {
     acceptedForPublication: false,
     availableOnline: false,
   });
+  const [doi, setDoi] = useState('');
 
   // Add new state for page/article number choice
   const [pageOrArticleChoice, setPageOrArticleChoice] = useState('pages'); // 'pages' or 'article'
@@ -220,11 +221,12 @@ const JournalForm = () => {
     print_isbn: '',
     online_isbn: '',
   }); // State for publication details (Conference, Book Chapter, Book)
+  const [externalAuthorDetails, setExternalAuthorDetails] = useState([]); // External authors stored as JSON on journal
 
   // Function to determine category from type field
   const getCategoryFromType = (type) => {
     if (!type) return null;
-    
+
     const journalTypes = ['Article', 'Journal Article', 'Research Article', 'Erratum', 'Editorial', 'Note', 'Review', 'Retraction'];
     if (journalTypes.includes(type)) return 'Journal';
     if (type === 'Conference paper') return 'Conference';
@@ -778,17 +780,14 @@ const JournalForm = () => {
         );
         if (quartileRadio) quartileRadio.checked = true;
 
-        // Set metrics values and toggle switches
+        // Set Impact Factor
         if (journalData.impact_factor) {
-          const toggle = document.getElementById('impactFactorToggle');
-          if (toggle) toggle.checked = true;
           const input = document.getElementById('impactFactorInput');
           if (input) input.value = journalData.impact_factor;
         }
 
+        // Set Cite Score
         if (journalData.cite_score) {
-          const toggle = document.getElementById('citeScoreToggle');
-          if (toggle) toggle.checked = true;
           const input = document.getElementById('citeScoreInput');
           if (input) input.value = journalData.cite_score;
         }
@@ -857,13 +856,6 @@ const JournalForm = () => {
           if (input) input.value = journalData.article_number;
         }
 
-        // Set DOI
-        if (journalData.doi) {
-          const toggle = document.getElementById('doiToggle');
-          if (toggle) toggle.checked = true;
-          const input = document.getElementById('doiInput');
-          if (input) input.value = journalData.doi;
-        }
 
         // Set Credit To
         if (journalData.credit_to) {
@@ -978,11 +970,11 @@ const JournalForm = () => {
         });
         setJournalSearchQuery('');
       }
-      
+
       setIsInternational(journalData.category === 'International');
       setStatus(journalData.status || 'waiting');
       setDrivenBy(journalData.driven_by || 'faculty');
-      setAnnaUniversityListed(journalData.anna_university_listed === 1);
+      setAnnaUniversityListed(journalData.anna_university_listed === 1 || journalData.anna_university_listed === true);
 
       // Set Abstract and Keywords
       setAbstract(journalData.abstract || '');
@@ -1003,6 +995,9 @@ const JournalForm = () => {
         availableOnline: Boolean(journalData.available_online_date),
       }));
 
+      // Set DOI value
+      setDoi(journalData.doi || '');
+
       // Set page/article choice based on existing data
       if (journalData.pages_from && journalData.pages_to) {
         setPageOrArticleChoice('pages');
@@ -1015,8 +1010,8 @@ const JournalForm = () => {
       // Parse and set acknowledgements (may already be parsed by backend)
       if (journalData.acknowledgement) {
         try {
-          const parsedAck = typeof journalData.acknowledgement === 'string' 
-            ? JSON.parse(journalData.acknowledgement) 
+          const parsedAck = typeof journalData.acknowledgement === 'string'
+            ? JSON.parse(journalData.acknowledgement)
             : journalData.acknowledgement;
           setAcknowledgements(parsedAck);
           if (parsedAck.Others) {
@@ -1084,7 +1079,6 @@ const JournalForm = () => {
       }
 
       // Set authors
-      // Set authors
       let fetchedAuthors = [];
       if (Array.isArray(journalData.authors)) {
         fetchedAuthors = journalData.authors.map((author, index) => {
@@ -1102,7 +1096,9 @@ const JournalForm = () => {
             designation: normalizedDesignation,
             name: author.name,
             department: author.department,
-            organization: author.organization,
+            organization: normalizedDesignation === 'student' && !author.organization
+              ? 'K.S.Rangasamy College of Technology'
+              : author.organization,
             country: author.country,
             state: author.state || '',
             is_first_author:
@@ -1156,6 +1152,79 @@ const JournalForm = () => {
           return newDesignations.slice(0, fetchedAuthors.length);
         });
       }
+
+      // Append external authors coming from journals.external_details JSON
+      let combinedAuthors = fetchedAuthors;
+      if (Array.isArray(journalData.external_details)) {
+        const externalAuthorsFromJson = journalData.external_details.map(
+          (extAuthor, index) => ({
+            id: fetchedAuthors.length + index + 1,
+            dbAuthorId: null,
+            author_id: '',
+            email: extAuthor.email || '',
+            designation: 'external',
+            name: extAuthor.name || '',
+            department: extAuthor.department || '',
+            organization: extAuthor.organization || '',
+            country: extAuthor.country || '',
+            state: extAuthor.state || '',
+            is_first_author:
+              extAuthor.is_first_author === 1 || extAuthor.is_first_author === true,
+            is_primary:
+              extAuthor.is_primary === 1 || extAuthor.is_primary === true,
+            register_no: '',
+          })
+        );
+        combinedAuthors = [...fetchedAuthors, ...externalAuthorsFromJson];
+        setAuthors(combinedAuthors);
+
+        // Ensure authorDesignations and search-related arrays cover external authors too
+        setAuthorDesignations((prev) => {
+          const base = Array.isArray(prev)
+            ? prev
+            : Array(MAX_AUTHORS).fill('faculty');
+          const next = [...base];
+          externalAuthorsFromJson.forEach((author, idx) => {
+            const index = fetchedAuthors.length + idx;
+            if (index < MAX_AUTHORS) {
+              next[index] = 'external';
+            }
+          });
+          return next.slice(0, combinedAuthors.length);
+        });
+
+        setSearchQueries((prev) => {
+          const base = Array.isArray(prev)
+            ? prev
+            : Array(MAX_AUTHORS).fill('');
+          const next = [...base];
+          // For external authors, the search field is not used – keep empty for those rows
+          return next.slice(0, combinedAuthors.length);
+        });
+
+        setSearchResults((prev) => {
+          const base = Array.isArray(prev)
+            ? prev
+            : Array(MAX_AUTHORS).fill([]);
+          const next = [...base];
+          return next.slice(0, combinedAuthors.length);
+        });
+
+        setShowSuggestions((prev) => {
+          const base = Array.isArray(prev)
+            ? prev
+            : Array(MAX_AUTHORS).fill(false);
+          const next = [...base];
+          return next.slice(0, combinedAuthors.length);
+        });
+      }
+
+      // Track external authors separately for easier JSON construction on submit
+      setExternalAuthorDetails(
+        Array.isArray(journalData.external_details)
+          ? journalData.external_details
+          : []
+      );
 
       // Check if the current user is the primary or first author
       const currentUserEmail = user?.email;
@@ -1253,7 +1322,7 @@ const JournalForm = () => {
         register_no: '',
         name: '',
         department: '',
-        organization: '',
+        organization: designation === 'student' ? 'K.S.Rangasamy College of Technology' : '',
         country: '',
         state: '',
         designation: designation, // Set the new designation
@@ -1822,6 +1891,10 @@ const JournalForm = () => {
       [metric]: value !== null ? value : !prev[metric],
     }));
 
+    if (metric === 'doi' && !value) {
+      setDoi('');
+    }
+
     if (metric === 'dateOfSubmission' && !value) {
       setStatus('waiting');
       const dependentFields = [
@@ -1845,6 +1918,8 @@ const JournalForm = () => {
       });
       // Reset page/article choice when dateOfSubmission is disabled
       setPageOrArticleChoice('pages');
+      // Reset DOI when dateOfSubmission is disabled
+      setDoi('');
     }
   };
 
@@ -2143,8 +2218,13 @@ const JournalForm = () => {
       return element.value || defaultValue;
     };
 
-    const getMetricValue = (metric, inputName) =>
-      metric ? parseFloat(getFormValue(inputName)) : null;
+    const getMetricValue = (metric, inputName) => {
+      if (!metric) return null;
+      const value = getFormValue(inputName);
+      if (!value || value === '') return null;
+      const parsed = parseFloat(value);
+      return isNaN(parsed) ? null : parsed;
+    };
 
     // Required fields validation (conditional based on category)
     if (!event.target.title.value) errors.push('Title is required');
@@ -2170,7 +2250,12 @@ const JournalForm = () => {
     const isJournalType =
       typeValue === 'Article' ||
       typeValue === 'Journal Article' ||
-      typeValue === 'Research Article';
+      typeValue === 'Research Article' ||
+      typeValue === 'Erratum' ||
+      typeValue === 'Editorial' ||
+      typeValue === 'Note' ||
+      typeValue === 'Review' ||
+      typeValue === 'Retraction';
     if (isJournalType && !event.target.quartile.value) {
       errors.push('Quartile is required for Journal articles');
     }
@@ -2299,7 +2384,7 @@ const JournalForm = () => {
       journal_name: isJournal ? journalDetails.name : (isConference ? publicationDetails.conference_title : ''),
       author_affiliation: getCollaborations(),
       driven_by: drivenBy,
-      acknowledgement: JSON.stringify(acknowledgementData),
+      acknowledgement: acknowledgementData,
       sdgs: selectedSDGs,
       abstract: abstract,
       keywords: keywords,
@@ -2329,21 +2414,60 @@ const JournalForm = () => {
       journalData.publication_details = publicationDetailsData;
     }
 
+    // Build external_details JSON array from authors marked as external
+    const externalDetails = [];
+    authors.forEach((author) => {
+      if (author.designation === 'external') {
+        externalDetails.push({
+          name: (author.name || '').trim(),
+          department: (author.department || '').trim(),
+          organization: (author.organization || '').trim(),
+          country: (author.country || '').trim(),
+          state: (author.state || '').trim(),
+          email: (author.email || '').trim() || null,
+          is_first_author: Boolean(author.is_first_author),
+          is_primary: Boolean(author.is_primary),
+        });
+      }
+    });
+
+    // Attach external_details to journalData BEFORE sending
+    if (externalDetails.length > 0) {
+      journalData.external_details = externalDetails;
+    } else {
+      journalData.external_details = null;
+    }
+
     // Add Journal-specific fields only for Journal types
     if (isJournalType) {
-      journalData.quartile = getFormValue('quartile');
-      journalData.impact_factor = getMetricValue(
-        metrics.impactFactor,
-        'impactFactorInput'
-      );
-      journalData.cite_score = getMetricValue(
-        metrics.citeScore,
-        'citeScoreInput'
-      );
-      journalData.anna_university_listed = annaUniversityListed;
-      journalData.anna_university_annexure_no = annaUniversityListed
-        ? getFormValue('annexureNo')
+      const quartileValue = getFormValue('quartile');
+      const annexureValue = getFormValue('annexureNo');
+      const impactFactorValue = getFormValue('impactFactorInput');
+      const citeScoreValue = getFormValue('citeScoreInput');
+
+      journalData.quartile = quartileValue || null;
+
+      // Parse Impact Factor and Cite Score - always collect if present
+      journalData.impact_factor = impactFactorValue && impactFactorValue !== ''
+        ? parseFloat(impactFactorValue)
         : null;
+      journalData.cite_score = citeScoreValue && citeScoreValue !== ''
+        ? parseFloat(citeScoreValue)
+        : null;
+
+      journalData.anna_university_listed = annaUniversityListed;
+      journalData.anna_university_annexure_no = annaUniversityListed && annexureValue
+        ? annexureValue.trim()
+        : null;
+
+      // Debug logging - can be removed after verification
+      console.log('Journal-specific fields being sent:', {
+        quartile: journalData.quartile,
+        impact_factor: journalData.impact_factor,
+        cite_score: journalData.cite_score,
+        anna_university_listed: journalData.anna_university_listed,
+        anna_university_annexure_no: journalData.anna_university_annexure_no
+      });
     }
 
     try {
@@ -2371,6 +2495,10 @@ const JournalForm = () => {
       for (const author of authors) {
         const isStudent = author.designation === 'student';
         const isExternal = author.designation === 'external';
+
+        // Skip external authors as they are already saved in journalData.external_details
+        if (isExternal) continue;
+
         // Validate student required fields
         if (isStudent) {
           const nameOk = Boolean(author.name?.trim());
@@ -2385,16 +2513,10 @@ const JournalForm = () => {
         const authorData = {
           author_id: isStudent
             ? (author.register_no || '').trim()
-            : isExternal
-              ? ''
-              : (author.author_id || '').trim(), // For students, use register_no. External has no author_id.
+            : (author.author_id || '').trim(), // For students, use register_no.
           name: (author.name || '').trim(),
           department: (author.department || '').trim(),
-          designation: isStudent
-            ? 'student'
-            : isExternal
-              ? 'external'
-              : 'faculty',
+          designation: isStudent ? 'student' : 'faculty',
           organization: (author.organization || '').trim(),
           country: (author.country || '').trim(),
           state: (author.state || '').trim(),
@@ -3902,6 +4024,7 @@ const JournalForm = () => {
                             </label>
                             <input
                               type="number"
+                              step="0.001"
                               id="impactFactorInput"
                               name="impactFactorInput"
                               className="form-control"
@@ -3915,6 +4038,7 @@ const JournalForm = () => {
                             </label>
                             <input
                               type="number"
+                              step="0.001"
                               id="citeScoreInput"
                               name="citeScoreInput"
                               className="form-control"
@@ -4185,14 +4309,10 @@ const JournalForm = () => {
                             metrics.doi ? (
                               <div className="form-control-plaintext">
                                 {(() => {
-                                  // Get the DOI value from the input field
-                                  const doiInput =
-                                    document.getElementById('doiInput');
-                                  const doiValue = doiInput
-                                    ? doiInput.value
-                                    : '';
+                                  // Use the DOI value from state
+                                  const doiValue = doi;
                                   if (!doiValue) return 'N/A';
-
+                        
                                   // Create the full DOI URL
                                   const fullDoiUrl = doiValue.startsWith('http')
                                     ? doiValue
@@ -4228,6 +4348,8 @@ const JournalForm = () => {
                                 id="doiInput"
                                 className="form-control"
                                 placeholder="10.1109/ICACCS60874.2024.10717004"
+                                value={doi}
+                                onChange={(e) => setDoi(e.target.value)}
                                 disabled={!metrics.doi}
                               />
                               {metrics.doi && (
@@ -4270,7 +4392,7 @@ const JournalForm = () => {
                       {/* <label className="form-section-title mb-3">Date(s)</label> */}
 
                       {/* Credit To Field */}
-                      {(selectedIndexes.includes('SCIE') || selectedIndexes.includes('Scopus')) && authors.length > 0 && (
+                      {(selectedIndexes.includes('SCIE') || selectedIndexes.includes('Scopus') || selectedIndexes.includes('PubMed') || selectedIndexes.includes('Google Scholar')) && authors.length > 0 && (
                         <div className="metric-item-vertical mb-3">
                           <div className="d-flex justify-content-between align-items-center">
                             <label className="form-label mb-0">Credit to</label>
@@ -4303,34 +4425,36 @@ const JournalForm = () => {
                                     </option>
                                   ))}
                               </select>
-                              <select
-                                className="form-control"
-                                value={selectedCreditTo[1] || ''}
-                                onChange={(e) => {
-                                  const newSelected = [...selectedCreditTo];
-                                  newSelected[1] = e.target.value;
-                                  setSelectedCreditTo(newSelected.filter(v => v));
-                                }}
-                                disabled={!editMode && isViewMode}
-                                style={{ minWidth: '150px' }}
-                              >
-                                <option value="">Select Author 2</option>
-                                {authors
-                                  .filter(
-                                    (author) => author.name && author.name.trim()
-                                  )
-                                  .map((author) => (
-                                    <option
-                                      key={author.id}
-                                      value={
-                                        author.author_id || author.register_no
-                                      }
-                                    >
-                                      {author.name} (
-                                      {author.author_id || author.register_no})
-                                    </option>
-                                  ))}
-                              </select>
+                              {selectedIndexes.includes('SCIE') && (
+                                <select
+                                  className="form-control"
+                                  value={selectedCreditTo[1] || ''}
+                                  onChange={(e) => {
+                                    const newSelected = [...selectedCreditTo];
+                                    newSelected[1] = e.target.value;
+                                    setSelectedCreditTo(newSelected.filter(v => v));
+                                  }}
+                                  disabled={!editMode && isViewMode}
+                                  style={{ minWidth: '150px' }}
+                                >
+                                  <option value="">Select Author 2</option>
+                                  {authors
+                                    .filter(
+                                      (author) => author.name && author.name.trim()
+                                    )
+                                    .map((author) => (
+                                      <option
+                                        key={author.id}
+                                        value={
+                                          author.author_id || author.register_no
+                                        }
+                                      >
+                                        {author.name} (
+                                        {author.author_id || author.register_no})
+                                      </option>
+                                    ))}
+                                </select>
+                              )}
                             </div>
                           </div>
                         </div>

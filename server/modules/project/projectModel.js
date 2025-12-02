@@ -839,33 +839,51 @@ const researchProjectModel = {
       } else if (designation === 'student') {
         if (!register_no)
           throw new Error('Student Register Number is required.');
-        const [existingStudent] = await connection.query(
-          'SELECT id FROM authors WHERE student_id = ?',
+        // Ensure student exists in author_students table
+        let studentId;
+        const [existingStudentRows] = await connection.query(
+          'SELECT id FROM author_students WHERE student_unique_id = ?',
           [register_no]
         );
 
-        if (existingStudent.length === 0) {
-          // Insert new student author
-          const [result] = await connection.query(
-            'INSERT INTO authors (student_id, designation, name, department, organization, country, email) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [
-              register_no,
-              'student',
-              name,
-              department,
-              organization,
-              country,
-              email || null,
-            ]
-          );
-          authorId = result.insertId;
+        if (existingStudentRows.length > 0) {
+          studentId = existingStudentRows[0].id;
         } else {
-          // For students, if they already exist, we should probably update their details
-          authorId = existingStudent[0].id;
+          const [studentInsert] = await connection.query(
+            'INSERT INTO author_students (student_unique_id, name, department, organization, country) VALUES (?, ?, ?, ?, ?)',
+            [register_no, name, department, organization, country]
+          );
+          studentId = studentInsert.insertId;
+        }
+
+        // Reuse or create corresponding author row that references this student
+        const [existingAuthorRows] = await connection.query(
+          'SELECT id FROM authors WHERE student_ref = ?',
+          [studentId]
+        );
+
+        if (existingAuthorRows.length > 0) {
+          authorId = existingAuthorRows[0].id;
           await connection.query(
             'UPDATE authors SET name = ?, department = ?, organization = ?, country = ?, email = ? WHERE id = ?',
             [name, department, organization, country, email || null, authorId]
           );
+        } else {
+          const studentAuthorData = {
+            student_ref: studentId,
+            designation: 'student',
+            name,
+            department,
+            organization,
+            country,
+            email: email || null,
+          };
+
+          const [result] = await connection.query(
+            'INSERT INTO authors SET ?',
+            studentAuthorData
+          );
+          authorId = result.insertId;
         }
       } else {
         throw new Error('Invalid designation provided for investigator.');
@@ -1190,7 +1208,7 @@ const researchProjectModel = {
                         JSON_ARRAYAGG(
                             JSON_OBJECT(
                                 'author_id', a.author_id,
-                                'student_id', a.student_id,
+                                'student_id', s.student_unique_id,
                                 'name', a.name,
                                 'designation', a.designation,
                                 'department', a.department,
@@ -1200,8 +1218,9 @@ const researchProjectModel = {
                                 'is_primary', IF(ap.is_primary, true, false)
                             )
                         ), '[]'
-                    ) FROM author_project ap 
-                    JOIN authors a ON ap.author_id = a.id 
+                    ) FROM author_project ap
+                    JOIN authors a ON ap.author_id = a.id
+                    LEFT JOIN author_students s ON a.student_ref = s.id
                     WHERE ap.project_id = rp.id) as investigators,
 
                     # Get financial contributions
