@@ -3,10 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Home from './home/home';
 import Login from './login/login';
 import EventPage from './Eventpage/components/EventPage';
-import PreEvent from './Eventpage/components/PreEvent';
-import FinanceSection from './Eventpage/components/FinanceSection';
-import EventUpdates from './Eventpage/components/EventUpdates';
-import Documents from './Eventpage/components/Documents';
 
 import Journalform from './journalform/journalform';
 import Projectform from './projectform/projectform';
@@ -160,10 +156,6 @@ function App() {
                   </AdminRoute>
                 }
               />
-              <Route path="/pre-event" element={<PreEvent />} />
-              <Route path="/finance-section" element={<FinanceSection />} />
-              <Route path="/event-updates" element={<EventUpdates />} />
-              <Route path="/documents" element={<Documents />} />
               <Route path="/" element={<Navigate to="/home" />} />
 
               <Route path="/eventdashboard" element={<EventDashboard />} />
