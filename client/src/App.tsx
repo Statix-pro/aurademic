@@ -18,6 +18,7 @@ import EventDashboard from './Eventpage/components/EventDashboard';
 import EventEntry from './Eventpage/components/EventEntry';
 import PublicationsPage from './pages/PublicationsPage';
 import ProjectsPage from './pages/ProjectsPage';
+import ComponentTestPage from './pages/ComponentTestPage.jsx';
 
 function App() {
   return (
@@ -160,6 +161,7 @@ function App() {
 
               <Route path="/eventdashboard" element={<EventDashboard />} />
               <Route path="/event-entry" element={<EventEntry />} />
+              <Route path="/test-components" element={<ComponentTestPage />} />
             </Routes>
           </AuthProvider>
         </BrowserRouter>
