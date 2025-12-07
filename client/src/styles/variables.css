@@ -1,0 +1,44 @@
+:root {
+  /* Brand Colors */
+  --primary-color: #0069ab;
+  --primary-hover: #005492;
+  --secondary-color: #5d6b8a;
+  --secondary-hover: #4a5575;
+
+  /* Background Colors */
+  --bg-light: #f0f6ff;
+  --bg-surface: #ffffff;
+  --bg-input: #fcfdff;
+
+  /* Text Colors */
+  --text-main: #4f4f6e;
+  --text-muted: #6c757d;
+  --text-light: #ffffff;
+
+  /* Border Colors */
+  --border-color: #e0e0e0;
+  --border-focus: #0069ab;
+
+  /* Functional Colors */
+  --error-color: #dc3545;
+  --success-color: #198754;
+
+  /* Spacing & Layout */
+  --border-radius-sm: 8px;
+  --border-radius-md: 12px;
+  --border-radius-lg: 20px;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 105, 171, 0.1);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.05);
+  --shadow-focus: 0 0 0 3px rgba(0, 105, 171, 0.15);
+
+  /* Bootstrap Overrides */
+  --bs-primary: var(--primary-color);
+  --bs-secondary: var(--secondary-color);
+  --bs-success: var(--success-color);
+  --bs-danger: var(--error-color);
+  --bs-body-bg: var(--bg-surface);
+  --bs-body-color: var(--text-main);
+  --bs-border-radius: var(--border-radius-md);
+}
