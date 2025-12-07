@@ -30,7 +30,7 @@ const EventPage: React.FC = () => {
     if (!eventId) return;
     authenticityUtility
       .get(`/events/${eventId}/summary`)
-      .then((res) => setSummary(res as EventSummary))
+      .then((res) => setSummary(res as unknown as EventSummary))
       .catch((err: unknown) => console.error("Failed to load summary:", err));
   }, [eventId]);
 

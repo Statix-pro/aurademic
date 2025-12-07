@@ -38,6 +38,7 @@ interface Project {
   submission_status?: string;
   date_of_submission?: string;
   edit_request_status?: string;
+  is_collaboration_enabled?: boolean | number;
   [key: string]: unknown;
 }
 
@@ -888,7 +889,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {project.is_collaboration_enabled && collaboratingPartners.length > 0 && (
+        {!!project.is_collaboration_enabled && collaboratingPartners.length > 0 && (
           <div className="detail-section">
             <h4>Collaborations</h4>
             <div className="table-responsive">

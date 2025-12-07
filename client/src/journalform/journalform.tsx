@@ -18,11 +18,6 @@ import {
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/navbar/navbar';
 
-declare module 'lodash.debounce' {
-  const debounce: <T extends (...args: any[]) => any>(func: T, wait?: number, immediate?: boolean) => T;
-  export default debounce;
-}
-
 // Type definitions
 interface Author {
   id: number;
@@ -199,7 +194,7 @@ const JournalForm: React.FC = () => {
   ];
 
   // Add defensive state initialization
-  const initializeArrayState = <T>(defaultValue: T, length: number = MAX_AUTHORS): T[] => {
+  const initializeArrayState = <T,>(defaultValue: T, length: number = MAX_AUTHORS): T[] => {
     try {
       return Array(length).fill(defaultValue);
     } catch (error) {
@@ -369,7 +364,7 @@ const JournalForm: React.FC = () => {
   const [showAcknowledgementSuggestions, setShowAcknowledgementSuggestions] = useState<boolean>(false);
 
   // Check if we're in view mode based on URL
-  const isViewMode = journalId && window.location.search.includes('mode=view');
+  const isViewMode = !!(journalId && window.location.search.includes('mode=view'));
 
   // Parse category from URL path
   const pathname = window.location.pathname;
@@ -579,7 +574,7 @@ const JournalForm: React.FC = () => {
       // API call with proper URL construction
       const data = await authenticityUtility.get(
         `/journals/search?query=${encodeURIComponent(journalSearchQuery.trim())}`
-      );
+      ) as any;
 
       // Response validation
       if (data && data.status === 'success' && Array.isArray(data.data)) {
@@ -620,7 +615,7 @@ const JournalForm: React.FC = () => {
       try {
         const authors = await authenticityUtility.get(
           `/authors/search?query=${encodeURIComponent(query)}&designation=${encodeURIComponent(authorDesignations[index])}&_=${Date.now()}`
-        );
+        ) as any;
 
         if (authors && Array.isArray(authors)) {
           setSearchResults((prevResults) => {
@@ -705,7 +700,7 @@ const JournalForm: React.FC = () => {
     try {
       const response = await authenticityUtility.get(
         `/edit-requests/journals/${journalId}?_=${Date.now()}`
-      );
+      ) as any;
 
       if (response.data) {
         const status = response.data.status;
@@ -756,7 +751,7 @@ const JournalForm: React.FC = () => {
       const response = await authenticityUtility.post(
         '/journal-requests',
         journalRequest
-      );
+      ) as any;
 
       if (response.status === 'success') {
         alert(
@@ -815,7 +810,7 @@ const JournalForm: React.FC = () => {
       const response = await authenticityUtility.post(
         '/conference-requests',
         conferenceRequest
-      );
+      ) as any;
 
       if (response.status === 'success') {
         alert(
@@ -858,7 +853,7 @@ const JournalForm: React.FC = () => {
     try {
       const response = await authenticityUtility.post(
         `/edit-requests/journals/${journalId}`
-      );
+      ) as any;
 
       if (response && response.success === true) {
         setEditRequestStatus('pending');
@@ -1272,7 +1267,7 @@ const JournalForm: React.FC = () => {
         });
       }
 
- authors coming from journals      // Append external.external_details JSON
+      // Append external.external_details JSON
       let combinedAuthors = fetchedAuthors;
       if (Array.isArray(journalData.external_details)) {
         const externalAuthorsFromJson = journalData.external_details.map(
@@ -1502,6 +1497,7 @@ const JournalForm: React.FC = () => {
           department: '',
           organization: '',
           country: '',
+          state: '',
           is_first_author: false,
           is_primary: false,
           register_no: '',
@@ -2163,7 +2159,7 @@ const JournalForm: React.FC = () => {
           status: newStatusUpdate.status,
           user_comment: newStatusUpdate.userComment,
         }
-      );
+      ) as any;
 
       if (response.status === 'success') {
         setNewStatusUpdate({ status: '', userComment: '' });
@@ -2303,7 +2299,7 @@ const JournalForm: React.FC = () => {
 
     // Helper to safely get form values
     const getFormValue = (name: string, defaultValue: string | null = null): string | null => {
-      const element = event.target.elements.namedItem(name) as HTMLInputElement;
+      const element = (event.currentTarget as HTMLFormElement).elements.namedItem(name) as HTMLInputElement;
       if (!element) return defaultValue;
       if (element.type === 'radio') {
         const checkedRadio = document.querySelector(
@@ -2323,8 +2319,8 @@ const JournalForm: React.FC = () => {
     };
 
     // Required fields validation (conditional based on category)
-    if (!event.target.title.value) errors.push('Title is required');
-    if (!event.target.type.value) errors.push('Type is required');
+    if (!getFormValue('title')) errors.push('Title is required');
+    if (!getFormValue('type')) errors.push('Type is required');
 
     // For Journal, require journal name
     if (isJournal && !journalDetails.name) {
@@ -2352,7 +2348,7 @@ const JournalForm: React.FC = () => {
       typeValue === 'Note' ||
       typeValue === 'Review' ||
       typeValue === 'Retraction';
-    if (isJournalType && !event.target.quartile.value) {
+    if (isJournalType && !getFormValue('quartile')) {
       errors.push('Quartile is required for Journal articles');
     }
 
@@ -2382,39 +2378,39 @@ const JournalForm: React.FC = () => {
 
     // Metrics validation (only for Journal type)
     if (isJournalType) {
-      if (metrics.impactFactor && !(event.target.impactFactorInput as HTMLInputElement)?.value) {
+      if (metrics.impactFactor && !getFormValue('impactFactorInput')) {
         errors.push('Impact Factor is required when enabled');
       }
-      if (metrics.citeScore && !(event.target.citeScoreInput as HTMLInputElement)?.value) {
+      if (metrics.citeScore && !getFormValue('citeScoreInput')) {
         errors.push('Cite Score is required when enabled');
       }
     }
 
     if (metrics.dateOfSubmission) {
-      if (!(event.target.dateOfSubmissionInput as HTMLInputElement)?.value)
+      if (!getFormValue('dateOfSubmissionInput'))
         errors.push('Date of Submission is required');
-      if (metrics.volume && !(event.target.volumeInput as HTMLInputElement)?.value)
+      if (metrics.volume && !getFormValue('volumeInput'))
         errors.push('Volume is required');
-      if (metrics.issue && !(event.target.issueInput as HTMLInputElement)?.value)
+      if (metrics.issue && !getFormValue('issueInput'))
         errors.push('Issue is required');
       if (
         metrics.pages &&
-        (!(event.target.pagesFromInput as HTMLInputElement)?.value || !(event.target.pagesToInput as HTMLInputElement)?.value)
+        (!getFormValue('pagesFromInput') || !getFormValue('pagesToInput'))
       ) {
         errors.push('Both From and To pages are required');
       }
-      if (metrics.articleNumber && !(event.target.articleNumberInput as HTMLInputElement)?.value) {
+      if (metrics.articleNumber && !getFormValue('articleNumberInput')) {
         errors.push('Article Number is required');
       }
-      if (metrics.doi && !(event.target.doiInput as HTMLInputElement)?.value)
+      if (metrics.doi && !getFormValue('doiInput'))
         errors.push('DOI is required');
       if (
         metrics.acceptedForPublication &&
-        !(event.target.acceptedDateInput as HTMLInputElement)?.value
+        !getFormValue('acceptedDateInput')
       ) {
         errors.push('Accepted Date is required');
       }
-      if (metrics.availableOnline && !(event.target.availableDateInput as HTMLInputElement)?.value) {
+      if (metrics.availableOnline && !getFormValue('availableDateInput')) {
         errors.push('Available Online Date is required');
       }
     }
@@ -2457,6 +2453,7 @@ const JournalForm: React.FC = () => {
       };
     } else if (isBookChapter) {
       publicationDetailsData = {
+        conference_title: '',
         source: publicationDetails.source?.trim() || '',
         publisher: publicationDetails.publisher?.trim() || '',
         print_isbn: publicationDetails.print_isbn?.trim() || '',
@@ -2464,6 +2461,7 @@ const JournalForm: React.FC = () => {
       };
     } else if (isBook) {
       publicationDetailsData = {
+        conference_title: '',
         source: publicationDetails.source?.trim() || '',
         publisher: publicationDetails.publisher?.trim() || '',
         print_isbn: publicationDetails.print_isbn?.trim() || '',
@@ -2659,7 +2657,7 @@ const JournalForm: React.FC = () => {
           const response = await authenticityUtility.postFile(
             `/journals/${currentJournalId}/upload`,
             formData
-          );
+          ) as any;
           if (response && (response.data?.filePath || response.filePath)) {
             const filePath = response.data?.filePath || response.filePath;
 
@@ -2683,7 +2681,7 @@ const JournalForm: React.FC = () => {
       // After successful submission, update the edit request status on the backend
       await authenticityUtility.patch(
         `/edit-requests/journals/${currentJournalId}`,
-        { status: 'none', userId: user.id }
+        { status: 'none', userId: user?.id }
       );
 
       alert('Journal submitted successfully!');
@@ -3089,7 +3087,7 @@ const JournalForm: React.FC = () => {
                     <div className="mb-3">
                       <label className="form-label">Collaboration</label>
                       {/* Container for tags and input */}
-                      <div className-container border rounded d="sdg-selection-flex flex-wrap align-items-center p-1 gap-1" style={{ minHeight: '36px', backgroundColor: '#fff' }}>
+                      <div className="sdg-selection-container border rounded d-flex flex-wrap align-items-center p-1 gap-1" style={{ minHeight: '36px', backgroundColor: '#fff' }}>
                         {/* Selected Collaborations as tags inline with input */}
                         {selectedCollaborations.map((collab) => (
                           <span key={collab} className="badge bg-primary d-inline-flex align-items-center flex-shrink-0" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>
@@ -3908,10 +3906,6 @@ const JournalForm: React.FC = () => {
                                   <button
                                     type="submit"
                                     className="btn btn-primary"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      handleJournalRequestSubmit(e);
-                                    }}
                                     disabled={journalRequestLoading}
                                   >
                                     {journalRequestLoading
@@ -4026,14 +4020,14 @@ const JournalForm: React.FC = () => {
                                   <input
                                     type="url"
                                     className="form-control"
-                                    value={conferenceRequest.website={(e) =>
-                                      handleConferenceRequestwebsite',
+                                    value={conferenceRequest.website}
+                                    onChange={(e) =>
+                                      handleConferenceRequestChange(
+                                        'website',
                                         e.target.value
                                       )
                                     }
-                                 Change(
-                                        '}
-                                    onChange />
+                                  />
                                 </div>
                                 <div className="row mb-3">
                                   <div className="col-6">
@@ -4083,10 +4077,6 @@ const JournalForm: React.FC = () => {
                                   <button
                                     type="submit"
                                     className="btn btn-primary"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      handleConferenceRequestSubmit(e);
-                                    }}
                                     disabled={conferenceRequestLoading}
                                   >
                                     {conferenceRequestLoading
@@ -4179,7 +4169,7 @@ const JournalForm: React.FC = () => {
                           <select
                             id="statusDropdown"
                             className="form-control"
-: '200px                            style={{ width' }}
+                            style={{ width: '200px' }}
                             value={status}
                             onChange={handleStatusChange}
                             disabled={!editMode && isViewMode}
@@ -4564,8 +4554,8 @@ const JournalForm: React.FC = () => {
                           </label>
                           <input
                             type="text"
-                           Input"
-                            class id="referenceNumberName="form-control reference-number-input"
+                            id="referenceNumberInput"
+                            className="form-control reference-number-input"
                             value={referenceNumber}
                             onChange={(e) =>
                               setReferenceNumber(e.target.value)
@@ -4691,14 +4681,14 @@ const JournalForm: React.FC = () => {
                                   href={
                                     selectedFile
                                       ? URL.createObjectURL(selectedFile)
-                                      : getFileUrl(uploadedFile.path)
+                                      : getFileUrl(uploadedFile!.path)
                                   }
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
                                   {selectedFile
                                     ? selectedFile.name
-                                    : uploadedFile.name}
+                                    : uploadedFile!.name}
                                 </a>
                               ) : (
                                 // Placeholder text when no file is chosen

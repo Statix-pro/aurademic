@@ -1011,7 +1011,7 @@ const ResearchProjectForm: React.FC = () => {
     const newContributions = [...financialContributions];
     // Don't handle agencyType or agencyTypeSearchTerm here anymore
     if (field !== 'agencyType' && field !== 'agencyTypeSearchTerm') {
-      newContributions[index][field as keyof FinancialContribution] = value;
+      (newContributions[index] as any)[field] = value;
       setFinancialContributions(newContributions);
     }
   };

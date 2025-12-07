@@ -437,7 +437,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
               name="themes"
               options={themeOptions}
               value={theme}
-              onChange={(selected) => setTheme(selected || [])}
+              onChange={(selected) => setTheme([...(selected || [])])}
               className="event-react-select__control"
               classNamePrefix="select"
               isSearchable={false}
@@ -451,7 +451,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
               name="sdgs"
               options={sdgOptions}
               value={sdg}
-              onChange={(selected) => setSdg(selected || [])}
+              onChange={(selected) => setSdg([...(selected || [])])}
               className="event-react-select__control"
               classNamePrefix="select"
               isSearchable={false}
