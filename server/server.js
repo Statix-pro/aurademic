@@ -17,6 +17,8 @@ import { errorHandler } from './middleware/errorMiddleware.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import swaggerUi from 'swagger-ui-express';
+import specs from './config/swagger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -50,6 +52,11 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // app.use(express.json());
+
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+  console.log('Swagger UI available at /api-docs');
+}
 
 // Debug middleware for all requests
 // app.use((req, res, next) => {
