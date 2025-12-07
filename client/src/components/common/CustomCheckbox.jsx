@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { Form } from 'react-bootstrap';
 import './common.css';
 
 const CustomCheckbox = ({
@@ -12,21 +13,17 @@ const CustomCheckbox = ({
   ...props
 }) => {
   return (
-    <div className={`custom-check-container ${className}`}>
-      <input
-        type="checkbox"
-        id={name}
-        name={name}
-        className="custom-check-input"
-        checked={checked}
-        onChange={onChange}
-        disabled={disabled}
-        {...props}
-      />
-      <label htmlFor={name} className="custom-check-label">
-        {label}
-      </label>
-    </div>
+    <Form.Check
+      type="checkbox"
+      id={name}
+      name={name}
+      label={label}
+      checked={checked}
+      onChange={onChange}
+      disabled={disabled}
+      className={`custom-check-container ${className}`}
+      {...props}
+    />
   );
 };
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { Form } from 'react-bootstrap';
 import './common.css';
 
 const CustomRadio = ({
@@ -10,25 +11,22 @@ const CustomRadio = ({
   onChange,
   disabled = false,
   className = '',
+  id,
   ...props
 }) => {
   return (
-    <div className={`custom-check-container ${className}`}>
-      <input
-        type="radio"
-        id={`${name}-${value}`}
-        name={name}
-        value={value}
-        className="custom-check-input"
-        checked={checked}
-        onChange={onChange}
-        disabled={disabled}
-        {...props}
-      />
-      <label htmlFor={`${name}-${value}`} className="custom-check-label">
-        {label}
-      </label>
-    </div>
+    <Form.Check
+      type="radio"
+      id={id || `${name}-${value}`}
+      name={name}
+      label={label}
+      value={value}
+      checked={checked}
+      onChange={onChange}
+      disabled={disabled}
+      className={`custom-check-container ${className}`}
+      {...props}
+    />
   );
 };
 
@@ -40,6 +38,7 @@ CustomRadio.propTypes = {
   onChange: PropTypes.func.isRequired,
   disabled: PropTypes.bool,
   className: PropTypes.string,
+  id: PropTypes.string,
 };
 
 export default CustomRadio;

@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { Form } from 'react-bootstrap';
 import './common.css';
 
 const CustomInput = ({
@@ -12,24 +13,30 @@ const CustomInput = ({
   error,
   disabled = false,
   className = '',
+  as,
+  rows,
   ...props
 }) => {
   return (
-    <div className={`custom-input-group ${className}`}>
-      {label && <label className="custom-label" htmlFor={name}>{label}</label>}
-      <input
-        id={name}
-        name={name}
+    <Form.Group className={`custom-input-group ${className}`} controlId={name}>
+      {label && <Form.Label className="custom-label">{label}</Form.Label>}
+      <Form.Control
+        as={as}
+        rows={rows}
         type={type}
-        className={`custom-input ${error ? 'is-invalid' : ''}`}
+        name={name}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
         disabled={disabled}
+        isInvalid={!!error}
+        className="custom-input"
         {...props}
       />
-      {error && <div className="custom-error-text">{error}</div>}
-    </div>
+      <Form.Control.Feedback type="invalid" className="custom-error-text">
+        {error}
+      </Form.Control.Feedback>
+    </Form.Group>
   );
 };
 
@@ -43,6 +50,8 @@ CustomInput.propTypes = {
   error: PropTypes.string,
   disabled: PropTypes.bool,
   className: PropTypes.string,
+  as: PropTypes.elementType,
+  rows: PropTypes.number,
 };
 
 export default CustomInput;

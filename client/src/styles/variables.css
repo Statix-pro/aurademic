@@ -32,4 +32,13 @@
   --shadow-sm: 0 2px 8px rgba(0, 105, 171, 0.1);
   --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.05);
   --shadow-focus: 0 0 0 3px rgba(0, 105, 171, 0.15);
+
+  /* Bootstrap Overrides */
+  --bs-primary: var(--primary-color);
+  --bs-secondary: var(--secondary-color);
+  --bs-success: var(--success-color);
+  --bs-danger: var(--error-color);
+  --bs-body-bg: var(--bg-surface);
+  --bs-body-color: var(--text-main);
+  --bs-border-radius: var(--border-radius-md);
 }

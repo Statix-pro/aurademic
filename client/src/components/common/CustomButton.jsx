@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { Button } from 'react-bootstrap';
 import './common.css';
 
 const CustomButton = ({
@@ -13,21 +14,29 @@ const CustomButton = ({
   ...props
 }) => {
   return (
-    <button
+    <Button
+      variant={variant}
       type={type}
-      className={`custom-btn custom-btn-${variant} ${className}`}
+      className={`custom-btn ${className}`}
       disabled={disabled || loading}
       onClick={onClick}
       {...props}
     >
-      {loading ? 'Loading...' : children}
-    </button>
+      {loading ? (
+        <>
+          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+          Loading...
+        </>
+      ) : (
+        children
+      )}
+    </Button>
   );
 };
 
 CustomButton.propTypes = {
   children: PropTypes.node.isRequired,
-  variant: PropTypes.oneOf(['primary', 'secondary', 'outline', 'danger']),
+  variant: PropTypes.string,
   className: PropTypes.string,
   loading: PropTypes.bool,
   disabled: PropTypes.bool,

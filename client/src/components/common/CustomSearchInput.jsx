@@ -1,0 +1,123 @@
+import React, { useState, useEffect, useRef } from 'react';
+import PropTypes from 'prop-types';
+import { Form, ListGroup, Spinner } from 'react-bootstrap';
+import './common.css';
+
+const CustomSearchInput = ({
+  label,
+  name,
+  value,
+  onChange,
+  results = [],
+  renderResult,
+  onSelect,
+  loading = false,
+  placeholder,
+  error,
+  disabled = false,
+  className = '',
+  ...props
+}) => {
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const wrapperRef = useRef(null);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Show suggestions when results update and are not empty
+  useEffect(() => {
+    if (results && results.length > 0 && document.activeElement === document.getElementById(name)) {
+      setShowSuggestions(true);
+    } else if (!results || results.length === 0) {
+      setShowSuggestions(false);
+    }
+  }, [results, name]);
+
+  const handleSelect = (item) => {
+    onSelect(item);
+    setShowSuggestions(false);
+  };
+
+  const handleFocus = () => {
+    if (results && results.length > 0) {
+      setShowSuggestions(true);
+    }
+  };
+
+  return (
+    <Form.Group
+      className={`custom-input-group position-relative ${className}`}
+      controlId={name}
+      ref={wrapperRef}
+    >
+      {label && <Form.Label className="custom-label">{label}</Form.Label>}
+      <div className="position-relative">
+        <Form.Control
+          type="text"
+          name={name}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={handleFocus}
+          placeholder={placeholder}
+          disabled={disabled}
+          isInvalid={!!error}
+          className="custom-input"
+          autoComplete="off"
+          {...props}
+        />
+        {loading && (
+          <div className="position-absolute top-50 end-0 translate-middle-y me-3">
+             <Spinner animation="border" size="sm" variant="primary" />
+          </div>
+        )}
+      </div>
+
+      {showSuggestions && results.length > 0 && (
+        <ListGroup
+          className="position-absolute w-100 mt-1 shadow-sm"
+          style={{ zIndex: 1000, maxHeight: '200px', overflowY: 'auto' }}
+        >
+          {results.map((item, index) => (
+            <ListGroup.Item
+              key={item.id || index}
+              action
+              onClick={() => handleSelect(item)}
+              className="border-start-0 border-end-0"
+            >
+              {renderResult ? renderResult(item) : (item.label || item.name || item)}
+            </ListGroup.Item>
+          ))}
+        </ListGroup>
+      )}
+
+      <Form.Control.Feedback type="invalid" className="custom-error-text">
+        {error}
+      </Form.Control.Feedback>
+    </Form.Group>
+  );
+};
+
+CustomSearchInput.propTypes = {
+  label: PropTypes.string,
+  name: PropTypes.string.isRequired,
+  value: PropTypes.string.isRequired,
+  onChange: PropTypes.func.isRequired,
+  results: PropTypes.array,
+  renderResult: PropTypes.func,
+  onSelect: PropTypes.func.isRequired,
+  loading: PropTypes.bool,
+  placeholder: PropTypes.string,
+  error: PropTypes.string,
+  disabled: PropTypes.bool,
+  className: PropTypes.string,
+};
+
+export default CustomSearchInput;

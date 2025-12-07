@@ -2,10 +2,14 @@
 .custom-card {
   background-color: var(--bg-surface);
   border-radius: var(--border-radius-lg);
-  padding: 2rem;
+  padding: 0; /* Let Card.Body handle padding */
   box-shadow: var(--shadow-md);
   margin-bottom: 1.5rem;
   border: 1px solid transparent; /* default */
+}
+
+.custom-card .card-body {
+  padding: 2rem;
 }
 
 .custom-card.dashed {
@@ -24,53 +28,20 @@
   margin: 0;
 }
 
-/* CustomButton Styles */
+/* CustomButton Styles - Layout only, colors handled by Bootstrap variables */
 .custom-btn {
   padding: 0.5rem 1.5rem;
   border-radius: var(--border-radius-md);
   font-weight: 600;
   transition: all 0.2s ease;
-  border: none;
-  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
 }
 
-.custom-btn:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-
-.custom-btn-primary {
-  background-color: var(--primary-color);
-  color: var(--text-light);
-}
-
-.custom-btn-primary:hover:not(:disabled) {
-  background-color: var(--primary-hover);
+.custom-btn:hover {
   transform: translateY(-1px);
-}
-
-.custom-btn-secondary {
-  background-color: var(--secondary-color);
-  color: var(--text-light);
-}
-
-.custom-btn-secondary:hover:not(:disabled) {
-  background-color: var(--secondary-hover);
-}
-
-.custom-btn-outline {
-  background-color: transparent;
-  border: 2px solid var(--primary-color);
-  color: var(--primary-color);
-}
-
-.custom-btn-outline:hover:not(:disabled) {
-  background-color: var(--primary-color);
-  color: var(--text-light);
 }
 
 /* CustomInput Styles */
@@ -86,7 +57,9 @@
   margin-bottom: 0.5rem;
 }
 
-.custom-input {
+/* Target both .custom-input and .form-control inside our custom components */
+.custom-input,
+.form-control.custom-input {
   width: 100%;
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius-md);
@@ -96,13 +69,15 @@
   color: var(--text-main);
 }
 
-.custom-input:focus {
+.custom-input:focus,
+.form-control.custom-input:focus {
   outline: none;
   border-color: var(--border-focus);
   box-shadow: var(--shadow-focus);
 }
 
-.custom-input.is-invalid {
+.custom-input.is-invalid,
+.form-control.custom-input.is-invalid {
   border-color: var(--error-color);
 }
 
@@ -121,15 +96,10 @@
   margin-bottom: 0.5rem;
 }
 
-.custom-check-input {
-  accent-color: var(--primary-color);
+.custom-check-container .form-check-input {
   width: 1.1em;
   height: 1.1em;
-}
-
-.custom-check-label {
-  color: var(--text-main);
-  font-weight: 500;
+  cursor: pointer;
 }
 
 /* Custom Modal Overrides */
@@ -156,20 +126,23 @@
   padding: 1rem 1.5rem;
 }
 
-.custom-btn-danger {
-  background-color: var(--error-color);
-  color: var(--text-light);
+/* Custom Table Styles */
+.custom-table th {
+  font-weight: 600;
+  color: var(--text-main);
+  background-color: var(--bg-light);
+  border-bottom: 2px solid var(--border-color);
+  padding: 1rem;
 }
 
-.custom-btn-danger:hover:not(:disabled) {
-  background-color: #bb2d3b; /* darker red */
+.custom-table td {
+  padding: 1rem;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-color);
 }
 
-.custom-btn-success {
-  background-color: var(--success-color);
-  color: var(--text-light);
-}
-
-.custom-btn-success:hover:not(:disabled) {
-  background-color: #157347; /* darker green */
+/* Toggle Styles */
+.custom-toggle .form-check-input {
+  height: 1.5em;
+  width: 3em;
 }
