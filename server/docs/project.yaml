@@ -2,6 +2,108 @@ tags:
   - name: Project
     description: Project management
 
+components:
+  schemas:
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+        project_category:
+          type: string
+          example: "Sponsored"
+        category:
+          type: string
+          example: "Research"
+        title:
+          type: string
+          example: "AI for Health"
+        agency_id:
+          type: integer
+        scheme_id:
+          type: integer
+        duration_years:
+          type: integer
+          example: 2
+        duration_months:
+          type: integer
+          example: 6
+        duration_days:
+          type: integer
+          example: 0
+        date_of_submission:
+          type: string
+          format: date
+        submission_status:
+          type: string
+          default: "waiting"
+        is_collaboration_enabled:
+          type: boolean
+          default: false
+        file_path:
+          type: string
+        application_number:
+          type: string
+          example: "APP-2023-001"
+
+    ProjectRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        request_type:
+          type: string
+          enum: [agency, scheme, agency_type]
+        name:
+          type: string
+          example: "New Agency Name"
+        description:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          default: pending
+
+    FinancialContribution:
+      type: object
+      properties:
+        id:
+          type: integer
+        project_id:
+          type: integer
+        agency_type_id:
+          type: integer
+        agency:
+          type: string
+          example: "DST"
+        amount:
+          type: number
+          format: float
+          example: 500000.00
+
+    GrantDisbursement:
+      type: object
+      properties:
+        id:
+          type: integer
+        project_id:
+          type: integer
+        fiscal_year:
+          type: string
+          example: "2023-24"
+        agency:
+          type: string
+          example: "DST"
+        amount:
+          type: number
+          format: float
+          example: 250000.00
+        disbursement_date:
+          type: string
+          format: date
+
 paths:
   /project-options/agencies/search:
     get:
@@ -17,6 +119,17 @@ paths:
       responses:
         200:
           description: List of agencies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
 
   /project-options/schemes/search:
     get:
@@ -59,7 +172,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/ProjectRequest'
       responses:
         201:
           description: Project request created
@@ -71,6 +184,12 @@ paths:
       responses:
         200:
           description: List of project requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectRequest'
 
   /project-requests/{id}:
     get:
@@ -87,6 +206,10 @@ paths:
       responses:
         200:
           description: Project request details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectRequest'
 
   /projects:
     post:
@@ -99,10 +222,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/Project'
       responses:
         201:
           description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
 
   /projects/{id}:
     get:
@@ -119,6 +246,10 @@ paths:
       responses:
         200:
           description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
     put:
       summary: Update a project
       tags: [Project]
@@ -135,7 +266,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/Project'
       responses:
         200:
           description: Project updated
@@ -171,7 +302,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '../journal.yaml#/components/schemas/Author'
       responses:
         201:
           description: Author added
@@ -189,6 +320,12 @@ paths:
       responses:
         200:
           description: List of authors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../journal.yaml#/components/schemas/Author'
     delete:
       summary: Remove an author from a project
       tags: [Project]
@@ -230,7 +367,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/FinancialContribution'
       responses:
         201:
           description: Contribution added
@@ -248,6 +385,12 @@ paths:
       responses:
         200:
           description: List of contributions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FinancialContribution'
 
   /projects/{id}/contributions/{contributionId}:
     delete:

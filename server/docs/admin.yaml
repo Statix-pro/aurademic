@@ -12,6 +12,14 @@ paths:
       responses:
         200:
           description: Dashboard data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stats:
+                    type: object
+                    example: { "total_projects": 10, "total_journals": 5 }
 
   /admin/projects:
     get:
@@ -22,6 +30,12 @@ paths:
       responses:
         200:
           description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../project.yaml#/components/schemas/Project'
 
   /admin/journals:
     get:
@@ -32,6 +46,12 @@ paths:
       responses:
         200:
           description: List of journals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../journal.yaml#/components/schemas/Journal'
 
   /admin/projects/{id}:
     get:
@@ -48,6 +68,10 @@ paths:
       responses:
         200:
           description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '../project.yaml#/components/schemas/Project'
 
   /admin/journals/{id}:
     get:
@@ -64,6 +88,10 @@ paths:
       responses:
         200:
           description: Journal details
+          content:
+            application/json:
+              schema:
+                $ref: '../journal.yaml#/components/schemas/Journal'
 
   /admin/journal-requests:
     get:
@@ -74,6 +102,12 @@ paths:
       responses:
         200:
           description: List of journal requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../journal.yaml#/components/schemas/JournalRequest'
 
   /admin/journal-requests/{id}/approve:
     patch:
@@ -116,6 +150,12 @@ paths:
       responses:
         200:
           description: List of project requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../project.yaml#/components/schemas/ProjectRequest'
 
   /admin/project-requests/{id}/approve:
     patch:
@@ -158,6 +198,12 @@ paths:
       responses:
         200:
           description: List of journal status updates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../journal.yaml#/components/schemas/StatusUpdate'
 
   /admin/journals/{id}/status-updates:
     get:
@@ -174,6 +220,12 @@ paths:
       responses:
         200:
           description: List of status updates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../journal.yaml#/components/schemas/StatusUpdate'
 
   /admin/journals/{id}/with-status-updates:
     get:
@@ -190,6 +242,10 @@ paths:
       responses:
         200:
           description: Journal with status updates
+          content:
+            application/json:
+              schema:
+                $ref: '../journal.yaml#/components/schemas/Journal'
 
   /admin/status-updates/{statusUpdateId}/admin-reply:
     patch:
