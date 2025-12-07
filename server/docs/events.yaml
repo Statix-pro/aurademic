@@ -2,6 +2,73 @@ tags:
   - name: Events
     description: Event management
 
+components:
+  schemas:
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+          example: "Annual Tech Symposium"
+        status:
+          type: string
+          enum: [draft, submitted, approved, rejected]
+          default: draft
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PreEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+          example: "Pre-Symposium Workshop"
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        inaugural_date:
+          type: string
+          format: date
+        inaugural_time:
+          type: string
+          example: "10:00:00"
+        inaugural_venue:
+          type: string
+          example: "Auditorium A"
+        valedictory_date:
+          type: string
+          format: date
+        valedictory_time:
+          type: string
+          example: "16:00:00"
+        valedictory_venue:
+          type: string
+          example: "Auditorium A"
+        mode:
+          type: string
+          enum: [Physical, Virtual, Hybrid]
+        meeting_link:
+          type: string
+        level:
+          type: string
+          enum: [international, national, state, district, intra_college]
+        description:
+          type: string
+        expected_participants:
+          type: integer
+          example: 100
+
 paths:
   /events:
     get:
@@ -10,6 +77,12 @@ paths:
       responses:
         200:
           description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
     post:
       summary: Create a new event
       tags: [Events]
@@ -18,10 +91,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/Event'
       responses:
         201:
           description: Event created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
 
   /events/{id}:
     get:
@@ -36,6 +113,10 @@ paths:
       responses:
         200:
           description: Event details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
     put:
       summary: Update an event
       tags: [Events]
@@ -50,7 +131,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/Event'
       responses:
         200:
           description: Event updated

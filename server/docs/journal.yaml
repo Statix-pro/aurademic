@@ -2,6 +2,163 @@ tags:
   - name: Journal
     description: Journal management
 
+components:
+  schemas:
+    Journal:
+      type: object
+      properties:
+        id:
+          type: integer
+        category:
+          type: string
+          example: "National"
+        title:
+          type: string
+          example: "Advanced Computing Research"
+        type:
+          type: string
+          example: "Research Article"
+        journal_options_id:
+          type: integer
+        quartile:
+          type: string
+          example: "Q1"
+        impact_factor:
+          type: number
+          format: float
+          example: 4.5
+        cite_score:
+          type: number
+          format: float
+          example: 7.2
+        anna_university_listed:
+          type: boolean
+          example: true
+        anna_university_annexure_no:
+          type: string
+          example: "12345"
+        acknowledgement:
+          type: object
+        author_affiliation:
+          type: object
+        driven_by:
+          type: string
+          enum: [faculty, student]
+          default: faculty
+        date_of_submission:
+          type: string
+          format: date
+        status:
+          type: string
+          default: "waiting"
+        volume:
+          type: string
+          example: "12"
+        issue:
+          type: string
+          example: "4"
+        issue_type:
+          type: string
+        pages_from:
+          type: integer
+          example: 100
+        pages_to:
+          type: integer
+          example: 115
+        article_number:
+          type: string
+          example: "A123"
+        abstract:
+          type: string
+        keywords:
+          type: string
+        sdgs:
+          type: object
+        doi:
+          type: string
+          example: "10.1000/xyz123"
+        credit_to:
+          type: string
+        reference_number:
+          type: string
+        accepted_date:
+          type: string
+          format: date
+        available_online_date:
+          type: string
+          format: date
+        file_path:
+          type: string
+
+    Author:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          example: "Dr. Smith"
+        email:
+          type: string
+          format: email
+          example: "smith@example.com"
+        designation:
+          type: string
+          example: "Professor"
+        department:
+          type: string
+          example: "Computer Science"
+        organization:
+          type: string
+          example: "University of Tech"
+        country:
+          type: string
+          example: "USA"
+
+    Index:
+      type: object
+      properties:
+        id:
+          type: integer
+        journal_id:
+          type: integer
+        index_name:
+          type: string
+          example: "Scopus"
+
+    StatusUpdate:
+      type: object
+      properties:
+        id:
+          type: integer
+        journal_id:
+          type: integer
+        status:
+          type: string
+          example: "Submitted"
+        user_comment:
+          type: string
+        admin_reply:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    JournalRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        journal_name:
+          type: string
+        publisher:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+
 paths:
   /journals/search:
     get:
@@ -16,6 +173,12 @@ paths:
       responses:
         200:
           description: List of journals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Journal'
 
   /authors/search:
     get:
@@ -30,6 +193,12 @@ paths:
       responses:
         200:
           description: List of authors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Author'
 
   /journals:
     post:
@@ -42,15 +211,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                title:
-                  type: string
-                description:
-                  type: string
+              $ref: '#/components/schemas/Journal'
       responses:
         201:
           description: Journal created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Journal'
 
   /journals/{id}:
     get:
@@ -65,6 +233,10 @@ paths:
       responses:
         200:
           description: Journal details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Journal'
     put:
       summary: Update a journal
       tags: [Journal]
@@ -81,7 +253,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/Journal'
       responses:
         200:
           description: Journal updated
@@ -117,7 +289,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/Author'
       responses:
         201:
           description: Author added
@@ -135,6 +307,12 @@ paths:
       responses:
         200:
           description: List of authors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Author'
 
   /journals/{id}/authors/{dbAuthorId}:
     put:
@@ -158,7 +336,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/Author'
       responses:
         200:
           description: Author updated
@@ -180,7 +358,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/Index'
       responses:
         201:
           description: Index added
@@ -198,6 +376,12 @@ paths:
       responses:
         200:
           description: List of indexes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Index'
 
   /journals/{id}/status-updates:
     post:
@@ -217,6 +401,11 @@ paths:
           application/json:
             schema:
               type: object
+              properties:
+                status:
+                  type: string
+                user_comment:
+                  type: string
       responses:
         201:
           description: Status update created
@@ -234,6 +423,12 @@ paths:
       responses:
         200:
           description: List of status updates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StatusUpdate'
 
   /status-updates/{statusUpdateId}/admin-reply:
     put:
@@ -296,7 +491,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/JournalRequest'
       responses:
         201:
           description: Journal request created
@@ -308,6 +503,12 @@ paths:
       responses:
         200:
           description: List of journal requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JournalRequest'
 
   /journal-requests/{id}:
     get:
@@ -324,3 +525,7 @@ paths:
       responses:
         200:
           description: Journal request details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalRequest'

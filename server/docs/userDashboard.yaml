@@ -12,6 +12,18 @@ paths:
       responses:
         200:
           description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_projects:
+                    type: integer
+                  total_journals:
+                    type: integer
+                example:
+                  total_projects: 2
+                  total_journals: 3
 
   /dashboard/profile:
     get:
@@ -22,6 +34,10 @@ paths:
       responses:
         200:
           description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '../auth.yaml#/components/schemas/User'
 
   /dashboard/journals:
     get:
@@ -32,6 +48,12 @@ paths:
       responses:
         200:
           description: List of user journals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../journal.yaml#/components/schemas/Journal'
 
   /dashboard/journals/{id}:
     get:
@@ -48,6 +70,10 @@ paths:
       responses:
         200:
           description: Journal details
+          content:
+            application/json:
+              schema:
+                $ref: '../journal.yaml#/components/schemas/Journal'
     delete:
       summary: Delete a journal
       tags: [UserDashboard]
@@ -72,6 +98,12 @@ paths:
       responses:
         200:
           description: List of user projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../project.yaml#/components/schemas/Project'
 
   /dashboard/projects/{id}:
     get:
@@ -88,3 +120,7 @@ paths:
       responses:
         200:
           description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '../project.yaml#/components/schemas/Project'
