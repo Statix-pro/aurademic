@@ -22,7 +22,7 @@ interface LinkState {
 
 interface DocState {
   active: boolean;
-  file: File | File[] | null;
+  file: File | File[] | (File | null)[] | null;
 }
 
 interface ParticipantsPageProps {
@@ -36,6 +36,7 @@ interface ImportantLinksPageProps {
 }
 
 interface DocumentsPageProps {
+  goToTab?: (tab: string) => void;
   eventId?: number | string;
 }
 
@@ -367,7 +368,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = 1 }) => {
     documents.reduce((acc, doc) => {
       acc[doc] = {
         active: false,
-        file: doc === "Photos" ? [null, null, null, null] as unknown as File[] : null,
+        file: doc === "Photos" ? ([null, null, null, null] as (File | null)[]) : null,
       };
       return acc;
     }, {} as Record<string, DocState>),

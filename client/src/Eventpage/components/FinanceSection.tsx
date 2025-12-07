@@ -1011,4 +1011,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
   );
 };
 
-export default SponsoringAgencySection;
+// Export SponsoringAgencySection as FinanceSection to match EventPage's import
+// Export as FinanceSection to match EventPage's import expectation
+export default SponsoringAgencySection as React.ComponentType<SponsoringAgencySectionProps>;
+export { SponsoringAgencySection };
