@@ -70,6 +70,7 @@ interface FinanceSectionProps {
 
 interface SponsoringAgencySectionProps {
   goToTab: (tab: string) => void;
+  eventId?: string;
 }
 
 // ---------------- Finance Section ----------------
@@ -586,7 +587,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
 };
 
 // ---------------- Sponsoring Agency Section ----------------
-const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToTab }) => {
+const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToTab, eventId }) => {
   const [enabled, setEnabled] = useState<boolean>(true);
 
   const initialDocStates: DocState[] = [
@@ -700,7 +701,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
 
     // Prepare finance data
     const financeData = {
-      event_id: 1,
+      event_id: eventId ? parseInt(eventId) : 1,
       income: incomeRows
         .filter((row) => row.incomeHead && row.agency && row.income)
         .map((row) => ({

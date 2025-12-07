@@ -670,6 +670,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
 
   const [websiteEnabled, setWebsiteEnabled] = useState(false);
   const [websiteDate, setWebsiteDate] = useState("");
+  const [websiteFile, setWebsiteFile] = useState<File | null>(null);
 
   const [newspaperEnabled, setNewspaperEnabled] = useState(false);
   const [newspaperDate, setNewspaperDate] = useState("");
@@ -756,6 +757,10 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
   const handleSubmit = async (): Promise<void> => {
     console.log("handleSubmit called");
     try {
+      let websiteUploadId: number | null = null;
+      if (websiteEnabled && websiteFile) {
+        websiteUploadId = await uploadFile(websiteFile);
+      }
       let newspaperUploadId: number | null = null;
       if (newspaperEnabled && newspaperFile) {
         newspaperUploadId = await uploadFile(newspaperFile);
@@ -768,6 +773,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
       const publicityData = {
         website_enabled: websiteEnabled,
         website_date: websiteDate,
+        website_upload_id: websiteUploadId,
         newspaper_enabled: newspaperEnabled,
         newspaper_date: newspaperDate,
         newspaper_upload_id: newspaperUploadId,
@@ -829,20 +835,20 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
           </label>
           <button
             type="button"
-            disabled={!newspaperFile}
+            disabled={!websiteFile}
             onClick={() =>
-              handleSendMail("Newspaper Engagement", true, newspaperFile)
+              handleSendMail("Website Scrolling", true, websiteFile)
             }
             style={{
               padding: "4px 10px",
               marginLeft: "4px",
-              backgroundColor: newspaperFile ? "#0069ab" : "#ccc",
-              color: newspaperFile ? "#fff" : "#666",
+              backgroundColor: websiteFile ? "#0069ab" : "#ccc",
+              color: websiteFile ? "#fff" : "#666",
               border: "none",
               borderRadius: "4px",
-              cursor: newspaperFile ? "pointer" : "not-allowed",
+              cursor: websiteFile ? "pointer" : "not-allowed",
             }}
-            title={!newspaperFile ? "Upload file first" : "Send Mail"}
+            title={!websiteFile ? "Upload file first" : "Send Mail"}
           >
             Send Mail
           </button>
@@ -852,18 +858,18 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
             onChange={(e) => setWebsiteDate(e.target.value)}
             className="event-date-input"
           />
-          <label className="event-upload-icon" htmlFor="newspaper-upload">
+          <label className="event-upload-icon" htmlFor="website-upload">
             <FaCloudUploadAlt />
           </label>
           <input
             type="file"
-            id="newspaper-upload"
+            id="website-upload"
             style={{ display: "none" }}
-            onChange={handleFileChange(setNewspaperFile)}
+            onChange={handleFileChange(setWebsiteFile)}
           />
           <span
-            className={`event-eye-icon${!newspaperFile ? " disabled" : ""}`}
-            onClick={() => newspaperFile && handleViewFile(newspaperFile)}
+            className={`event-eye-icon${!websiteFile ? " disabled" : ""}`}
+            onClick={() => websiteFile && handleViewFile(websiteFile)}
           >
             <FaEye />
           </span>
