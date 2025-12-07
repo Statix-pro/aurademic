@@ -1,12 +1,3 @@
 
 > server@1.0.0 start
 > node server.js
-
-Swagger UI available at /api-docs
-Attempting to serve static files from: /app/uploads
-Server running on port 5000
-Available routes:
-- /api/auth/google (POST)
-- /api/journal/*
-- /api/project/*
-- /api/admin/*

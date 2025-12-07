@@ -1,0 +1,326 @@
+tags:
+  - name: Journal
+    description: Journal management
+
+paths:
+  /journals/search:
+    get:
+      summary: Search journals
+      tags: [Journal]
+      parameters:
+        - in: query
+          name: query
+          schema:
+            type: string
+          description: Search query
+      responses:
+        200:
+          description: List of journals
+
+  /authors/search:
+    get:
+      summary: Search authors
+      tags: [Journal]
+      parameters:
+        - in: query
+          name: name
+          schema:
+            type: string
+          description: Author name
+      responses:
+        200:
+          description: List of authors
+
+  /journals:
+    post:
+      summary: Create a new journal
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+      responses:
+        201:
+          description: Journal created
+
+  /journals/{id}:
+    get:
+      summary: Get a journal by ID
+      tags: [Journal]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Journal details
+    put:
+      summary: Update a journal
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Journal updated
+    delete:
+      summary: Delete a journal
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Journal deleted
+
+  /journals/{id}/authors:
+    post:
+      summary: Add an author to a journal
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        201:
+          description: Author added
+    get:
+      summary: Get authors of a journal
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: List of authors
+
+  /journals/{id}/authors/{dbAuthorId}:
+    put:
+      summary: Update an author of a journal
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: dbAuthorId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Author updated
+
+  /journals/{id}/indexes:
+    post:
+      summary: Add an index to a journal
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        201:
+          description: Index added
+    get:
+      summary: Get indexes of a journal
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: List of indexes
+
+  /journals/{id}/status-updates:
+    post:
+      summary: Create a status update for a journal
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        201:
+          description: Status update created
+    get:
+      summary: Get status updates for a journal
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: List of status updates
+
+  /status-updates/{statusUpdateId}/admin-reply:
+    put:
+      summary: Admin reply to status update
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: statusUpdateId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                admin_reply:
+                  type: string
+      responses:
+        200:
+          description: Reply updated
+
+  /journals/{id}/upload:
+    post:
+      summary: Upload a file for a journal
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        200:
+          description: File uploaded
+
+  /journal-requests:
+    post:
+      summary: Create a journal request
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        201:
+          description: Journal request created
+    get:
+      summary: Get user journal requests
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of journal requests
+
+  /journal-requests/{id}:
+    get:
+      summary: Get a journal request by ID
+      tags: [Journal]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Journal request details
