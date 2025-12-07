@@ -15,11 +15,13 @@ components:
         title:
           type: string
           example: "Advanced Computing Research"
+        book_chapter_title:
+          type: string
+        publication_details:
+          type: object
         type:
           type: string
           example: "Research Article"
-        journal_options_id:
-          type: integer
         quartile:
           type: string
           example: "Q1"
@@ -39,12 +41,6 @@ components:
           example: "12345"
         acknowledgement:
           type: object
-        author_affiliation:
-          type: object
-        driven_by:
-          type: string
-          enum: [faculty, student]
-          default: faculty
         date_of_submission:
           type: string
           format: date
@@ -77,10 +73,6 @@ components:
         doi:
           type: string
           example: "10.1000/xyz123"
-        credit_to:
-          type: string
-        reference_number:
-          type: string
         accepted_date:
           type: string
           format: date
@@ -89,60 +81,52 @@ components:
           format: date
         file_path:
           type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        author_affiliation:
+          type: object
+        external_details:
+          type: object
+        journal_options_id:
+          type: integer
+        driven_by:
+          type: string
+          enum: [faculty, student]
+          default: faculty
+        credit_to:
+          type: string
+        reference_number:
+          type: string
 
-    Author:
+    JournalOptions:
       type: object
       properties:
         id:
           type: integer
-        name:
+        journal_name:
           type: string
-          example: "Dr. Smith"
-        email:
+        publisher:
           type: string
-          format: email
-          example: "smith@example.com"
-        designation:
+        website:
           type: string
-          example: "Professor"
-        department:
+        print_issn:
           type: string
-          example: "Computer Science"
-        organization:
-          type: string
-          example: "University of Tech"
-        country:
-          type: string
-          example: "USA"
-
-    Index:
-      type: object
-      properties:
-        id:
-          type: integer
-        journal_id:
-          type: integer
-        index_name:
-          type: string
-          example: "Scopus"
-
-    StatusUpdate:
-      type: object
-      properties:
-        id:
-          type: integer
-        journal_id:
-          type: integer
-        status:
-          type: string
-          example: "Submitted"
-        user_comment:
-          type: string
-        admin_reply:
+        online_issn:
           type: string
         created_at:
           type: string
           format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        category:
+          type: string
+          enum: [National, International]
+          default: National
 
     JournalRequest:
       type: object
@@ -155,9 +139,110 @@ components:
           type: string
         publisher:
           type: string
+        website:
+          type: string
+        print_issn:
+          type: string
+        online_issn:
+          type: string
         status:
           type: string
           enum: [pending, approved, rejected]
+          default: pending
+        admin_comment:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        category:
+          type: string
+          enum: [National, International]
+          default: National
+
+    JournalStatusUpdate:
+      type: object
+      properties:
+        id:
+          type: integer
+        journal_id:
+          type: integer
+        user_id:
+          type: integer
+        status:
+          type: string
+        user_comment:
+          type: string
+        admin_reply:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    JournalIndex:
+      type: object
+      properties:
+        id:
+          type: integer
+        journal_id:
+          type: integer
+        index_name:
+          type: string
+
+    Author:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        author_id:
+          type: string
+        designation:
+          type: string
+        name:
+          type: string
+        department:
+          type: string
+        organization:
+          type: string
+        country:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        state:
+          type: string
+        student_ref:
+          type: integer
+
+    AuthorJournal:
+      type: object
+      properties:
+        id:
+          type: integer
+        author_id:
+          type: integer
+        journal_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        is_first_author:
+          type: boolean
+          default: false
+        is_primary:
+          type: boolean
+          default: false
 
 paths:
   /journals/search:
@@ -358,7 +443,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Index'
+              $ref: '#/components/schemas/JournalIndex'
       responses:
         201:
           description: Index added
@@ -381,7 +466,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Index'
+                  $ref: '#/components/schemas/JournalIndex'
 
   /journals/{id}/status-updates:
     post:
@@ -428,7 +513,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/StatusUpdate'
+                  $ref: '#/components/schemas/JournalStatusUpdate'
 
   /status-updates/{statusUpdateId}/admin-reply:
     put:

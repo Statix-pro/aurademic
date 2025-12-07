@@ -203,7 +203,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '../journal.yaml#/components/schemas/StatusUpdate'
+                  $ref: '../journal.yaml#/components/schemas/JournalStatusUpdate'
 
   /admin/journals/{id}/status-updates:
     get:
@@ -225,7 +225,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '../journal.yaml#/components/schemas/StatusUpdate'
+                  $ref: '../journal.yaml#/components/schemas/JournalStatusUpdate'
 
   /admin/journals/{id}/with-status-updates:
     get:
