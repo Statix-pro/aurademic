@@ -36,8 +36,8 @@ interface ImportantLinksPageProps {
 }
 
 interface DocumentsPageProps {
-  goToTab?: (tab: string) => void;
-  eventId?: number | string;
+  goToTab: (tab: string) => void;
+  eventId?: string;
 }
 
 const participantTypes: ParticipantType[] = [
@@ -363,7 +363,7 @@ const documents = [
   "Sample Certificate",
 ];
 
-const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = 1 }) => {
+const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
   const [docState, setDocState] = useState<Record<string, DocState>>(
     documents.reduce((acc, doc) => {
       acc[doc] = {

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, ChangeEvent } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
-import { DayCellContentArg, DayCellMountArg } from "@fullcalendar/core";
+import { DayCellContentArg } from "@fullcalendar/core";
 import EventDetailsPopup from "./EventDetailsPopup";
 import {
   FaRegClock,
@@ -317,7 +317,7 @@ const Dashboard: React.FC = () => {
                   dateClick={handleDateClick}
                   eventDisplay="none"
                   headerToolbar={false}
-                  dayCellClassNames={(arg: DayCellMountArg) => {
+                  dayCellClassNames={(arg: DayCellContentArg) => {
                     const date = arg.date;
                     const yyyy = date.getFullYear();
                     const mm = String(date.getMonth() + 1).padStart(2, "0");
