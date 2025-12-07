@@ -1,0 +1,90 @@
+tags:
+  - name: UserDashboard
+    description: User dashboard operations
+
+paths:
+  /dashboard/stats:
+    get:
+      summary: Get dashboard statistics
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Dashboard statistics
+
+  /dashboard/profile:
+    get:
+      summary: Get user profile
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: User profile
+
+  /dashboard/journals:
+    get:
+      summary: Get user journals
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of user journals
+
+  /dashboard/journals/{id}:
+    get:
+      summary: Get journal details
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Journal details
+    delete:
+      summary: Delete a journal
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Journal deleted
+
+  /dashboard/projects:
+    get:
+      summary: Get user projects
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of user projects
+
+  /dashboard/projects/{id}:
+    get:
+      summary: Get project details
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Project details
