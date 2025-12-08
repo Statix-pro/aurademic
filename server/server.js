@@ -129,9 +129,10 @@ app.use(errorHandler);
 const port = process.env.PORT || 5000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  console.log('Available routes:');
-  console.log('- /api/auth/google (POST)');
-  console.log('- /api/journal/*');
-  console.log('- /api/project/*');
-  console.log('- /api/admin/*');
+  // console.log('Available routes:');
+  // console.log('- /api/auth/google (POST)');
+  // console.log('- /api/journal/*');
+  // console.log('- /api/project/*');
+  // console.log('- /api/admin/*');
+  console.log('- /api-docs (Swagger API docs)');
 });
