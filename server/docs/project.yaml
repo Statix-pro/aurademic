@@ -1,0 +1,640 @@
+tags:
+  - name: Project
+    description: Project management
+
+components:
+  schemas:
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+        project_category:
+          type: string
+          example: "Sponsored"
+        category:
+          type: string
+          example: "Research"
+        title:
+          type: string
+          example: "AI for Health"
+        duration_years:
+          type: integer
+          example: 2
+        duration_months:
+          type: integer
+          example: 6
+        duration_days:
+          type: integer
+          example: 0
+        date_of_submission:
+          type: string
+          format: date
+        submission_status:
+          type: string
+          default: "waiting"
+        is_collaboration_enabled:
+          type: boolean
+          default: false
+        file_path:
+          type: string
+        application_number:
+          type: string
+          example: "APP-2023-001"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        agency_id:
+          type: integer
+        scheme_id:
+          type: integer
+
+    ProjectRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        request_type:
+          type: string
+          enum: [agency, scheme, agency_type]
+        name:
+          type: string
+          example: "New Agency Name"
+        description:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          default: pending
+        admin_comment:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FinancialContribution:
+      type: object
+      properties:
+        id:
+          type: integer
+        project_id:
+          type: integer
+        agency:
+          type: string
+          example: "DST"
+        amount:
+          type: number
+          format: float
+          example: 500000.00
+        agency_type_id:
+          type: integer
+
+    GrantDisbursement:
+      type: object
+      properties:
+        id:
+          type: integer
+        project_id:
+          type: integer
+        fiscal_year:
+          type: string
+          example: "2023-24"
+        agency:
+          type: string
+          example: "DST"
+        amount:
+          type: number
+          format: float
+          example: 250000.00
+        disbursement_date:
+          type: string
+          format: date
+        sanction_letter_path:
+          type: string
+        uc_and_soe_path:
+          type: string
+
+    AuthorJournal:
+      type: object
+      properties:
+        id:
+          type: integer
+        author_id:
+          type: integer
+        journal_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        is_first_author:
+          type: boolean
+          default: false
+        is_primary:
+          type: boolean
+          default: false
+
+    AuthorProject:
+      type: object
+      properties:
+        id:
+          type: integer
+        author_id:
+          type: integer
+        project_id:
+          type: integer
+        is_principal:
+          type: boolean
+          default: false
+        created_at:
+          type: string
+          format: date-time
+        is_primary:
+          type: boolean
+          default: false
+
+    AuthorStudents:
+      type: object
+      properties:
+        id:
+          type: integer
+        student_unique_id:
+          type: string
+        name:
+          type: string
+        department:
+          type: string
+        organization:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Authors:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        author_id:
+          type: string
+        designation:
+          type: string
+        name:
+          type: string
+        department:
+          type: string
+        organization:
+          type: string
+        country:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        state:
+          type: string
+        student_ref:
+          type: integer
+
+    EditRequests:
+      type: object
+      properties:
+        id:
+          type: integer
+        entity_type:
+          type: string
+          enum: [journals, research_projects]
+        entity_id:
+          type: integer
+        user_id:
+          type: integer
+        status:
+          type: string
+          enum: [pending, approved, rejected, none]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProjectAgencyOptions:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProjectAgencyTypeOptions:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProjectCollaborations:
+      type: object
+      properties:
+        id:
+          type: integer
+        project_id:
+          type: integer
+        partner:
+          type: string
+        address:
+          type: string
+        support:
+          type: string
+
+    ProjectDetails:
+      type: object
+      properties:
+        id:
+          type: integer
+        project_id:
+          type: integer
+        date_of_presentation:
+          type: string
+          format: date
+        date_of_result_announcement:
+          type: string
+          format: date
+        sanction_order_amount:
+          type: number
+          format: float
+        sanction_order_date:
+          type: string
+          format: date
+        project_duration_start_date:
+          type: string
+          format: date
+        project_duration_end_date:
+          type: string
+          format: date
+        outcome_type:
+          type: string
+
+    ProjectDocuments:
+      type: object
+      properties:
+        id:
+          type: integer
+        project_id:
+          type: integer
+        document_type:
+          type: string
+          enum: [sanctionOrder, utilizationCertificate, statementOfExpenditure, projectReport, bankStatement, sanctionLetter, ucAndSoe]
+        file_path:
+          type: string
+
+    ProjectSchemeOptions:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+paths:
+  /project-options/agencies/search:
+    get:
+      summary: Search agencies
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: name
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of agencies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+
+  /project-options/schemes/search:
+    get:
+      summary: Search schemes
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: name
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of schemes
+
+  /project-options/agency-types/search:
+    get:
+      summary: Search agency types
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: name
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of agency types
+
+  /project-requests:
+    post:
+      summary: Create a project request
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+      responses:
+        201:
+          description: Project request created
+    get:
+      summary: Get user project requests
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of project requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectRequest'
+
+  /project-requests/{id}:
+    get:
+      summary: Get a project request by ID
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Project request details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectRequest'
+
+  /projects:
+    post:
+      summary: Create a project
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Project'
+      responses:
+        201:
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+
+  /projects/{id}:
+    get:
+      summary: Get a project by ID
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+    put:
+      summary: Update a project
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Project'
+      responses:
+        200:
+          description: Project updated
+    delete:
+      summary: Delete a project
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Project deleted
+
+  /projects/{id}/authors:
+    post:
+      summary: Add an author to a project
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../journal.yaml#/components/schemas/Author'
+      responses:
+        201:
+          description: Author added
+    get:
+      summary: Get authors of a project
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: List of authors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../journal.yaml#/components/schemas/Author'
+    delete:
+      summary: Remove an author from a project
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                authorId:
+                  type: integer
+      responses:
+        200:
+          description: Author removed
+
+  /projects/{id}/contributions:
+    post:
+      summary: Add a financial contribution to a project
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinancialContribution'
+      responses:
+        201:
+          description: Contribution added
+    get:
+      summary: Get financial contributions of a project
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: List of contributions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FinancialContribution'
+
+  /projects/{id}/contributions/{contributionId}:
+    delete:
+      summary: Delete a financial contribution
+      tags: [Project]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: contributionId
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Contribution deleted
