@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import "../styles/EventForm.css";
 import { FaEye, FaPlus, FaTrash, FaCloudUploadAlt } from "react-icons/fa";
-import authenticityUtility from "../../../utility/authenticityUtility";
+import authenticityUtility from "../../../shared/utils/authenticityUtility";
 
 // --- Letters Section ---
 
@@ -201,11 +201,10 @@ const LettersPage: React.FC<LettersPageProps> = ({ formData, setFormData }) => {
             Send Mail
           </button>
           <label
-            className={`event-upload-icon ${
-              formData[section].active || formData[section].file
+            className={`event-upload-icon ${formData[section].active || formData[section].file
                 ? "active"
                 : "disabled"
-            }`}
+              }`}
           >
             <FaCloudUploadAlt />
             <input
@@ -567,10 +566,10 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
                         const updatedRows = rows.map((r) =>
                           r.id === row.id
                             ? {
-                                ...r,
-                                uploadedFile: fileURL,
-                                fileName: file.name,
-                              }
+                              ...r,
+                              uploadedFile: fileURL,
+                              fileName: file.name,
+                            }
                             : r,
                         );
                         setRows(updatedRows);
@@ -687,7 +686,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
     linkedin: "",
   });
 
-  const handleFileChange = (setter: React.Dispatch<React.SetStateAction<File | null>>) => 
+  const handleFileChange = (setter: React.Dispatch<React.SetStateAction<File | null>>) =>
     (e: React.ChangeEvent<HTMLInputElement>): void => setter(e.target.files?.[0] || null);
 
   const handleViewFile = (file: File | null): void => {
@@ -980,9 +979,8 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
               <input
                 type="text"
                 className="event-big-social-input"
-                placeholder={`${
-                  platform.charAt(0).toUpperCase() + platform.slice(1)
-                } link`}
+                placeholder={`${platform.charAt(0).toUpperCase() + platform.slice(1)
+                  } link`}
                 value={links[platform]}
                 style={{ width: "350px", fontSize: "14px", padding: "12px" }}
                 onChange={(e) =>

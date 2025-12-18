@@ -1,7 +1,7 @@
 import React, { useState, useEffect, ChangeEvent } from "react";
 import "../styles/EventForm.css";
 import { FaCloudUploadAlt, FaEye, FaPlus, FaTrash } from "react-icons/fa";
-import authenticityUtility from "../../../utility/authenticityUtility";
+import authenticityUtility from "../../../shared/utils/authenticityUtility";
 
 interface ParticipantType {
   value: string;
@@ -477,8 +477,8 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
 
   const handleViewFile = (doc: string, index: number | null = null) => {
     const docData = docState[doc];
-    const file = doc === "Photos" && index !== null 
-      ? (docData.file as (File | null)[])[index] 
+    const file = doc === "Photos" && index !== null
+      ? (docData.file as (File | null)[])[index]
       : docData.file as File | null;
     if (file) {
       const fileURL = URL.createObjectURL(file);
@@ -533,9 +533,8 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
             {photoFiles.map((_, i) => (
               <div key={i} className="event-upload-box">
                 <label
-                  className={`event-upload-icon ${
-                    !docState[doc].active ? "disabled" : ""
-                  }`}
+                  className={`event-upload-icon ${!docState[doc].active ? "disabled" : ""
+                    }`}
                 >
                   <FaCloudUploadAlt />
                   <input
@@ -547,9 +546,8 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
                 </label>
 
                 <span
-                  className={`event-eye-icon ${
-                    !photoFiles[i] ? "disabled" : ""
-                  }`}
+                  className={`event-eye-icon ${!photoFiles[i] ? "disabled" : ""
+                    }`}
                   onClick={() =>
                     photoFiles[i] && handleViewFile(doc, i)
                   }

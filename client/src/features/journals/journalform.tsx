@@ -252,7 +252,7 @@ const JournalForm: React.FC = () => {
     MODROBS: false,
     Others: false,
   });
-  
+
   const [annaUniversityListed, setAnnaUniversityListed] = useState<boolean>(false);
   const [othersSelected, setOthersSelected] = useState<boolean>(false);
   const [otherAcknowledgement, setOtherAcknowledgement] = useState<string>('');
@@ -2226,6 +2226,11 @@ const JournalForm: React.FC = () => {
   };
 
   const validateAcknowledgements = (): string => {
+    // Skip acknowledgement validation for Book and Book Chapter types
+    if (isBook || isBookChapter) {
+      return '';
+    }
+
     // Check if at least one acknowledgement is selected
     const hasAcknowledgement = selectedAcknowledgements.length > 0 || acknowledgements.Others;
 
@@ -2562,19 +2567,20 @@ const JournalForm: React.FC = () => {
     }
 
     try {
-      let response;
-      let currentJournalId;
+      let currentJournalId: string;
+      const isEditFlow = Boolean(journalId);
 
-      // Check if this is an update (existing journal) or a new journal
-      if (journalId) {
-        response = await authenticityUtility.put(
-          `/journals/${journalId}`,
-          journalData
-        );
+      // ══════════════════════════════════════════════════════════════════════
+      // STEP 1: CREATE or UPDATE the journal record
+      // ══════════════════════════════════════════════════════════════════════
+      if (isEditFlow) {
+        // EDIT FLOW: Update existing journal
+        await authenticityUtility.put(`/journals/${journalId}`, journalData);
         currentJournalId = journalId;
       } else {
-        response = await authenticityUtility.post('/journals', journalData);
-        if (!response || !response.data || !response.data.id) {
+        // CREATE FLOW: Create new journal
+        const response = await authenticityUtility.post('/journals', journalData);
+        if (!response?.data?.id) {
           console.error('Invalid response structure:', response);
           throw new Error('Server response missing journal ID');
         }
@@ -2582,15 +2588,17 @@ const JournalForm: React.FC = () => {
         setJournalId(currentJournalId);
       }
 
-      // Process authors – update if the author already exists, otherwise create new
+      // ══════════════════════════════════════════════════════════════════════
+      // STEP 2: Process authors (common to both flows)
+      // ══════════════════════════════════════════════════════════════════════
       for (const author of authors) {
         const isStudent = author.designation === 'student';
         const isExternal = author.designation === 'external';
 
-        // Skip external authors as they are already saved in journalData.external_details
+        // Skip external authors - already saved in journalData.external_details
         if (isExternal) continue;
 
-        // Validate student required fields
+        // Validate required fields
         if (isStudent) {
           const nameOk = Boolean(author.name?.trim());
           const depOk = Boolean(author.department?.trim());
@@ -2604,7 +2612,7 @@ const JournalForm: React.FC = () => {
         const authorData = {
           author_id: isStudent
             ? (author.register_no || '').trim()
-            : (author.author_id || '').trim(), // For students, use register_no.
+            : (author.author_id || '').trim(),
           name: (author.name || '').trim(),
           department: (author.department || '').trim(),
           designation: isStudent ? 'student' : 'faculty',
@@ -2615,30 +2623,23 @@ const JournalForm: React.FC = () => {
           is_primary: Boolean(author.is_primary),
         };
 
-        // If this is an update and the author has an existing database record, update it using PUT.
-        if (journalId && author.dbAuthorId) {
+        // Update existing author or create new
+        if (isEditFlow && author.dbAuthorId) {
           await authenticityUtility.put(
             `/journals/${currentJournalId}/authors/${author.dbAuthorId}`,
             authorData
           );
         } else {
-          // Otherwise, create a new author record via POST.
-          try {
-            const response = await authenticityUtility.post(
-              `/journals/${currentJournalId}/authors`,
-              authorData
-            );
-            console.log('Author submission successful:', response);
-          } catch (error: any) {
-            console.error('Author submission failed:', error.response?.data);
-            console.error('Full error:', error);
-            console.error('Request data that failed:', authorData);
-            throw error; // Re-throw to be caught by the outer catch
-          }
+          await authenticityUtility.post(
+            `/journals/${currentJournalId}/authors`,
+            authorData
+          );
         }
       }
 
-      // Process indexes by sending POST for each selected index (after journal is created)
+      // ══════════════════════════════════════════════════════════════════════
+      // STEP 3: Process indexes (common to both flows)
+      // ══════════════════════════════════════════════════════════════════════
       for (const indexName of selectedIndexes) {
         await authenticityUtility.post(
           `/journals/${currentJournalId}/indexes`,
@@ -2646,58 +2647,66 @@ const JournalForm: React.FC = () => {
         );
       }
 
-      // If a file is selected, upload the file
+      // ══════════════════════════════════════════════════════════════════════
+      // STEP 4: Upload file if selected (common to both flows)
+      // ══════════════════════════════════════════════════════════════════════
       if (selectedFile) {
         const formData = new FormData();
         formData.append('file', selectedFile);
         try {
-          const response = await authenticityUtility.postFile(
+          const uploadResponse = await authenticityUtility.postFile(
             `/journals/${currentJournalId}/upload`,
             formData
           ) as any;
-          if (response && (response.data?.filePath || response.filePath)) {
-            const filePath = response.data?.filePath || response.filePath;
-
-            setUploadedFile({
-              path: filePath,
-              name: selectedFile.name,
-            });
+          const filePath = uploadResponse?.data?.filePath || uploadResponse?.filePath;
+          if (filePath) {
+            setUploadedFile({ path: filePath, name: selectedFile.name });
             setUploadedFileName(selectedFile.name);
             setSelectedFile(null);
           } else {
-            console.warn('Invalid file upload response:', response);
+            console.warn('Invalid file upload response:', uploadResponse);
           }
-        } catch (error) {
-          console.error('Error uploading file:', error);
-          alert(
-            'Warning: File upload encountered an issue, but form will still be submitted.'
-          );
+        } catch (uploadError) {
+          console.error('Error uploading file:', uploadError);
+          // Non-critical: continue with success flow
         }
       }
 
-      // After successful submission, update the edit request status on the backend
-      await authenticityUtility.patch(
-        `/edit-requests/journals/${currentJournalId}`,
-        { status: 'none', userId: user?.id }
-      );
+      // ══════════════════════════════════════════════════════════════════════
+      // STEP 5: EDIT FLOW ONLY - Clear edit request status
+      // ══════════════════════════════════════════════════════════════════════
+      if (isEditFlow) {
+        try {
+          await authenticityUtility.patch(
+            `/edit-requests/journals/${currentJournalId}`,
+            { status: 'none', userId: user?.id }
+          );
+        } catch (editRequestError: any) {
+          // Non-critical: Log but don't fail the submission
+          console.warn('Non-critical: Could not clear edit request status:', editRequestError.message);
+        }
+      }
 
-      alert('Journal submitted successfully!');
+      // ══════════════════════════════════════════════════════════════════════
+      // STEP 6: Success handling
+      // ══════════════════════════════════════════════════════════════════════
+      const successMessage = isEditFlow
+        ? 'Journal updated successfully!'
+        : 'Journal created successfully!';
+      alert(successMessage);
+
       setEditMode(false);
       setEditRequestStatus(null);
+
       // Update URL to view mode
       const url = new URL(window.location.href);
       url.searchParams.set('mode', 'view');
       window.history.replaceState({}, '', url.toString());
+
     } catch (error: any) {
       console.error('Error submitting journal:', error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
-      alert(
-        `Error submitting journal: ${error.response?.data?.message || error.message}`
-      );
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      alert(`Error submitting journal: ${errorMessage}`);
     }
   };
 
@@ -4395,7 +4404,7 @@ const JournalForm: React.FC = () => {
                                   // Use the DOI value from state
                                   const doiValue = doi;
                                   if (!doiValue) return 'N/A';
-                        
+
                                   // Create the full DOI URL
                                   const fullDoiUrl = doiValue.startsWith('http')
                                     ? doiValue

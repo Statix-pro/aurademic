@@ -4,7 +4,7 @@ import "../styles/EventForm.css";
 import { v4 as uuidv4 } from "uuid";
 import { FaPlus, FaTrash, FaEye } from "react-icons/fa";
 import { FaCloudUploadAlt } from "react-icons/fa";
-import authenticityUtility from "../../../utility/authenticityUtility";
+import authenticityUtility from "../../../shared/utils/authenticityUtility";
 
 interface EventData {
   eventId?: string;
@@ -268,7 +268,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
         date_to: eventData.dateTo,
         mode: mode,
         meeting_link: mode === "Virtual" || mode === "Hybrid" ? eventData.meetingLink : null,
-        venue: mode === "Physical" || mode === "Hybrid" ? 
+        venue: mode === "Physical" || mode === "Hybrid" ?
           (modeVenueDropdown !== "Others" ? modeVenueDropdown : modeVenueOther) : null,
         registration_fee_enabled: registrationFeeEnabled,
         registration_fee_amount: registrationFeeEnabled ? registrationFeeAmount : null,
@@ -281,12 +281,12 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
         inaugural_enabled: inauguralEnabled,
         inaugural_date: inauguralEnabled ? inauguralDate : null,
         inaugural_time: inauguralEnabled ? `${inauguralTime.hour}:${inauguralTime.minute} ${inauguralTime.period}` : null,
-        inaugural_venue: inauguralEnabled ? 
+        inaugural_venue: inauguralEnabled ?
           (inauguralVenueDropdown !== "Others" ? inauguralVenueDropdown : inauguralVenue) : null,
         valedictory_enabled: valedictoryEnabled,
         valedictory_date: valedictoryEnabled ? valedictoryDate : null,
         valedictory_time: valedictoryEnabled ? `${valedictoryTime.hour}:${valedictoryTime.minute} ${valedictoryTime.period}` : null,
-        valedictory_venue: valedictoryEnabled ? 
+        valedictory_venue: valedictoryEnabled ?
           (valedictoryVenueDropdown !== "Others" ? valedictoryVenueDropdown : valedictoryVenue) : null,
         collaboration_data: collaborationData,
         coordinators: coordinators,
@@ -313,7 +313,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
     <div className="event-form-container">
       <div className="event-card-section">
         <h2 className="event-section-title">Event Details</h2>
-        
+
         <div className="event-form-row">
           <div className="event-form-group">
             <label>Event Name *</label>
@@ -530,7 +530,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
               )}
             </div>
           )}
-          
+
           {/* Virtual → Meeting Link */}
           {(mode === 'Virtual' || mode === 'Hybrid') && (
             <div className="event-form-group">
@@ -544,7 +544,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             </div>
           )}
         </div>
-        
+
         {/* --- Inaugural Section --- */}
         {/* --- Inaugural & Valedictory Combined Card --- */}
         <div

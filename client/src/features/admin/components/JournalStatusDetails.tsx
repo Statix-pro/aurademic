@@ -2,7 +2,7 @@ import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { Modal, Button, Form, Badge, Alert, Card, Row, Col } from "react-bootstrap";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faReply, faUser, faFileAlt } from "@fortawesome/free-solid-svg-icons";
-import authenticityUtility from "../../../utility/authenticityUtility";
+import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import "./JournalStatusDetails.css";
 
 interface JournalStatusDetailsProps {

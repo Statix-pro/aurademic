@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import authenticityUtility from "../../../utility/authenticityUtility";
+import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import "./EventPage.css";
 import PreEvent from "./PreEvent";
 import FinanceSection from "./FinanceSection";
