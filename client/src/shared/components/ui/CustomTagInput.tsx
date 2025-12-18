@@ -71,10 +71,10 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
       // Allow adding custom tag if not in suggestions?
       // For now, let's assume if it's not in suggestions, we add it as custom
       // unless strictly restricted.
-       if (!value.includes(inputValue.trim())) {
-          onChange([...value, inputValue.trim()]);
-          setInputValue('');
-       }
+      if (!value.includes(inputValue.trim())) {
+        onChange([...value, inputValue.trim()]);
+        setInputValue('');
+      }
     } else if (e.key === 'Backspace' && !inputValue && value.length > 0) {
       // Remove last tag on backspace
       handleRemove(value[value.length - 1]);
@@ -86,7 +86,7 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
       {label && <Form.Label className="custom-label">{label}</Form.Label>}
       <div className={`form-control custom-input d-flex flex-wrap align-items-center gap-2 ${error ? 'is-invalid' : ''}`} style={{ minHeight: '38px', height: 'auto' }}>
         {value.map((item, index) => (
-          <Badge key={index} bg="primary" className="d-flex align-items-center py-2 px-3">
+          <Badge key={index} className="custom-tag-badge">
             {item}
             {!disabled && (
               <span
@@ -104,7 +104,7 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          onFocus={() => { if(suggestions.length > 0) setShowSuggestions(true); }}
+          onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
           placeholder={value.length === 0 ? placeholder : ''}
           disabled={disabled}
           className="border-0 flex-grow-1"
@@ -115,7 +115,7 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
 
       {showSuggestions && suggestions.length > 0 && (
         <ListGroup className="position-absolute w-100 mt-1 shadow-sm" style={{ zIndex: 1000, maxHeight: '200px', overflowY: 'auto' }}>
-           {suggestions.filter(s => !value.includes(s)).map((item, index) => (
+          {suggestions.filter(s => !value.includes(s)).map((item, index) => (
             <ListGroup.Item
               key={index}
               action
