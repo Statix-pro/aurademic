@@ -18,7 +18,7 @@ import EventDashboard from '../features/events/components/EventDashboard';
 import EventEntry from '../features/events/components/EventEntry';
 import PublicationsPage from '../features/publications/pages/PublicationsPage';
 import ProjectsPage from '../features/publications/pages/ProjectsPage';
-import ComponentTestPage from '../features/demo/ComponentTestPage';
+import Storybook from '../features/storybook/Storybook';
 
 function App() {
   return (
@@ -161,7 +161,7 @@ function App() {
 
               <Route path="/eventdashboard" element={<EventDashboard />} />
               <Route path="/event-entry" element={<EventEntry />} />
-              <Route path="/test-components" element={<ComponentTestPage />} />
+              <Route path="/storybook" element={<Storybook />} />
             </Routes>
           </AuthProvider>
         </BrowserRouter>

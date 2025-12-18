@@ -71,7 +71,7 @@ authenticityUtility.postFile = async (endpoint: string, formData: FormData): Pro
 };
 
 authenticityUtility.getBaseURL = (): string => {
-  return 'http://localhost:5000';
+  return baseURL.replace(/\/api\/?$/, '');
 };
 
 export default authenticityUtility;
