@@ -3,7 +3,7 @@ import { FaTrash, FaEye, FaPlus } from "react-icons/fa";
 import { FaCloudUploadAlt } from "react-icons/fa";
 import "../styles/EventForm.css";
 import { v4 as uuidv4 } from "uuid";
-import authenticityUtility from "../../../utility/authenticityUtility";
+import authenticityUtility from "../../../shared/utils/authenticityUtility";
 
 // Type definitions
 interface IncomeRow {
@@ -175,10 +175,10 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                             incomeRows.map((r) =>
                               r.id === row.id
                                 ? {
-                                    ...r,
-                                    incomeHead: e.target.value,
-                                    incomeHeadOther: "", // clear the other input
-                                  }
+                                  ...r,
+                                  incomeHead: e.target.value,
+                                  incomeHeadOther: "", // clear the other input
+                                }
                                 : r
                             )
                           )
@@ -204,11 +204,11 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                             incomeRows.map((r) =>
                               r.id === row.id
                                 ? {
-                                    ...r,
-                                    incomeHeadOther: e.target.value,
-                                    incomeHead:
-                                      e.target.value === "" ? "" : "Others", // switch back if cleared
-                                  }
+                                  ...r,
+                                  incomeHeadOther: e.target.value,
+                                  incomeHead:
+                                    e.target.value === "" ? "" : "Others", // switch back if cleared
+                                }
                                 : r
                             )
                           )
@@ -342,10 +342,10 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                             expenditureRows.map((r) =>
                               r.id === row.id
                                 ? {
-                                    ...r,
-                                    budgetHead: e.target.value,
-                                    budgetHeadOther: "",
-                                  }
+                                  ...r,
+                                  budgetHead: e.target.value,
+                                  budgetHeadOther: "",
+                                }
                                 : r
                             )
                           )
@@ -370,12 +370,12 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                             expenditureRows.map((r) =>
                               r.id === row.id
                                 ? {
-                                    ...r,
-                                    budgetHeadOther: e.target.value,
-                                    budgetHead: e.target.value.trim()
-                                      ? "Others"
-                                      : "",
-                                  }
+                                  ...r,
+                                  budgetHeadOther: e.target.value,
+                                  budgetHead: e.target.value.trim()
+                                    ? "Others"
+                                    : "",
+                                }
                                 : r
                             )
                           )
@@ -649,9 +649,9 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
       agencies.map((a) =>
         a.id === id
           ? {
-              ...a,
-              sanctionDetails: { ...a.sanctionDetails, [field]: value },
-            }
+            ...a,
+            sanctionDetails: { ...a.sanctionDetails, [field]: value },
+          }
           : a
       )
     );
@@ -662,13 +662,13 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
       agencies.map((a) =>
         a.id === agencyId
           ? {
-              ...a,
-              docStates: a.docStates.map((doc, i) =>
-                i === index
-                  ? { ...doc, enabled: !doc.enabled, file: null }
-                  : doc
-              ),
-            }
+            ...a,
+            docStates: a.docStates.map((doc, i) =>
+              i === index
+                ? { ...doc, enabled: !doc.enabled, file: null }
+                : doc
+            ),
+          }
           : a
       )
     );
@@ -679,11 +679,11 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
       agencies.map((a) =>
         a.id === agencyId
           ? {
-              ...a,
-              docStates: a.docStates.map((doc, i) =>
-                i === index ? { ...doc, file } : doc
-              ),
-            }
+            ...a,
+            docStates: a.docStates.map((doc, i) =>
+              i === index ? { ...doc, file } : doc
+            ),
+          }
           : a
       )
     );
@@ -718,13 +718,13 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
         })),
       sponsoring_agencies: enabled
         ? agencies
-            .filter((agency) => agency.agency)
-            .map((agency) => ({
-              agency_name: agency.agency,
-              order_no: agency.sanctionDetails.orderNo,
-              amount: parseFloat(agency.sanctionDetails.amount) || null,
-              date: agency.sanctionDetails.date,
-            }))
+          .filter((agency) => agency.agency)
+          .map((agency) => ({
+            agency_name: agency.agency,
+            order_no: agency.sanctionDetails.orderNo,
+            amount: parseFloat(agency.sanctionDetails.amount) || null,
+            date: agency.sanctionDetails.date,
+          }))
         : [],
       supporting_docs: Object.keys(financeDocs)
         .filter((doc) => financeDocs[doc].active && financeDocs[doc].file)
@@ -753,8 +753,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
       console.error("🔴 Finance frontend error:", error);
       console.error("🔴 Error response:", error.response?.data);
       alert(
-        `❌ Failed to submit finance data: ${
-          error.response?.data?.error || error.message
+        `❌ Failed to submit finance data: ${error.response?.data?.error || error.message
         }`
       );
     }
@@ -935,9 +934,8 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
                           <span className="event-slider"></span>
                         </label>
                         <label
-                          className={`event-upload-icon ${
-                            !doc.enabled ? "disabled" : ""
-                          }`}
+                          className={`event-upload-icon ${!doc.enabled ? "disabled" : ""
+                            }`}
                           onClick={() =>
                             doc.enabled &&
                             document

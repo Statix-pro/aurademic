@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, ChangeEvent, FormEvent } from "react";
 import { Table, Button, Form, Modal, Alert } from "react-bootstrap";
-import authenticityUtility from "../../../utility/authenticityUtility";
+import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import "./FormManagementStyles.css";
 
 interface ProjectOption {

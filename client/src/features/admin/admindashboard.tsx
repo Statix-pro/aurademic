@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, ChangeEvent } from "react";
-import authenticityUtility from "../../utility/authenticityUtility";
+import authenticityUtility from "../../shared/utils/authenticityUtility";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faEdit,
@@ -116,41 +116,41 @@ const Dashboard: React.FC = () => {
     return savedConfig
       ? JSON.parse(savedConfig)
       : {
-          projects: {
-            title: { show: true, order: 0, label: "Title", group: "Essential" },
-            project_category: { show: true, order: 1, label: "Category", group: "Essential" },
-            agency: { show: true, order: 2, label: "Agency", group: "Essential" },
-            scheme: { show: true, order: 3, label: "Scheme", group: "Essential" },
-            submission_status: { show: true, order: 4, label: "Status", group: "Essential" },
-            date_of_submission: { show: true, order: 5, label: "Submission Date", group: "Essential" },
-            project_type: { show: false, order: 6, label: "Project Type", group: "Details" },
-            project_duration: { show: false, order: 7, label: "Duration", group: "Details" },
-            sanctioned_amount: { show: false, order: 9, label: "Sanctioned Amount (₹)", group: "Financial" },
-            start_date: { show: false, order: 11, label: "Start Date", group: "Timeline" },
-            end_date: { show: false, order: 12, label: "End Date", group: "Timeline" },
-            investigators: { show: false, order: 13, label: "Investigators", group: "Team" },
-            collaborating_institute: { show: false, order: 14, label: "Collaborating Institute", group: "Team" },
-            edit_request_status: { show: true, order: 18, label: "Edit Request", group: "Essential" },
-            actions: { show: true, order: 19, label: "Actions", group: "Essential" },
-          },
-          journals: {
-            title: { show: true, order: 0, label: "Title", group: "Essential" },
-            journal_name: { show: true, order: 1, label: "Journal Name", group: "Essential" },
-            publication_status: { show: true, order: 2, label: "Status", group: "Essential" },
-            submission_date: { show: true, order: 3, label: "Submission Date", group: "Essential" },
-            author_names: { show: true, order: 4, label: "Authors", group: "Details" },
-            volume: { show: false, order: 6, label: "Volume", group: "Details" },
-            issue: { show: false, order: 7, label: "Issue", group: "Details" },
-            page_numbers: { show: false, order: 8, label: "Page Numbers", group: "Details" },
-            doi: { show: false, order: 9, label: "DOI", group: "Details" },
-            publication_date: { show: false, order: 10, label: "Publication Date", group: "Timeline" },
-            publisher: { show: false, order: 11, label: "Publisher", group: "Details" },
-            index_names: { show: true, order: 12, label: "Indexing", group: "Metrics" },
-            edit_request_status: { show: true, order: 17, label: "Edit Request", group: "Essential" },
-            status_updates: { show: true, order: 18, label: "Status Updates", group: "Essential" },
-            actions: { show: true, order: 19, label: "Actions", group: "Essential" },
-          },
-        };
+        projects: {
+          title: { show: true, order: 0, label: "Title", group: "Essential" },
+          project_category: { show: true, order: 1, label: "Category", group: "Essential" },
+          agency: { show: true, order: 2, label: "Agency", group: "Essential" },
+          scheme: { show: true, order: 3, label: "Scheme", group: "Essential" },
+          submission_status: { show: true, order: 4, label: "Status", group: "Essential" },
+          date_of_submission: { show: true, order: 5, label: "Submission Date", group: "Essential" },
+          project_type: { show: false, order: 6, label: "Project Type", group: "Details" },
+          project_duration: { show: false, order: 7, label: "Duration", group: "Details" },
+          sanctioned_amount: { show: false, order: 9, label: "Sanctioned Amount (₹)", group: "Financial" },
+          start_date: { show: false, order: 11, label: "Start Date", group: "Timeline" },
+          end_date: { show: false, order: 12, label: "End Date", group: "Timeline" },
+          investigators: { show: false, order: 13, label: "Investigators", group: "Team" },
+          collaborating_institute: { show: false, order: 14, label: "Collaborating Institute", group: "Team" },
+          edit_request_status: { show: true, order: 18, label: "Edit Request", group: "Essential" },
+          actions: { show: true, order: 19, label: "Actions", group: "Essential" },
+        },
+        journals: {
+          title: { show: true, order: 0, label: "Title", group: "Essential" },
+          journal_name: { show: true, order: 1, label: "Journal Name", group: "Essential" },
+          publication_status: { show: true, order: 2, label: "Status", group: "Essential" },
+          submission_date: { show: true, order: 3, label: "Submission Date", group: "Essential" },
+          author_names: { show: true, order: 4, label: "Authors", group: "Details" },
+          volume: { show: false, order: 6, label: "Volume", group: "Details" },
+          issue: { show: false, order: 7, label: "Issue", group: "Details" },
+          page_numbers: { show: false, order: 8, label: "Page Numbers", group: "Details" },
+          doi: { show: false, order: 9, label: "DOI", group: "Details" },
+          publication_date: { show: false, order: 10, label: "Publication Date", group: "Timeline" },
+          publisher: { show: false, order: 11, label: "Publisher", group: "Details" },
+          index_names: { show: true, order: 12, label: "Indexing", group: "Metrics" },
+          edit_request_status: { show: true, order: 17, label: "Edit Request", group: "Essential" },
+          status_updates: { show: true, order: 18, label: "Status Updates", group: "Essential" },
+          actions: { show: true, order: 19, label: "Actions", group: "Essential" },
+        },
+      };
   });
 
   useEffect(() => {
@@ -598,7 +598,7 @@ const Dashboard: React.FC = () => {
       const newConfig = { ...prevConfig };
       const tabKey = activeTab as 'projects' | 'journals';
       if (tabKey !== 'projects' && tabKey !== 'journals') return prevConfig;
-      
+
       const currentTabConfig = { ...newConfig[tabKey] };
 
       const columnKeys = Object.keys(currentTabConfig)
@@ -621,7 +621,7 @@ const Dashboard: React.FC = () => {
     setColumnConfig((prev) => {
       const tabKey = activeTab as 'projects' | 'journals';
       if (tabKey !== 'projects' && tabKey !== 'journals') return prev;
-      
+
       return {
         ...prev,
         [tabKey]: {
@@ -638,7 +638,7 @@ const Dashboard: React.FC = () => {
   const getVisibleColumns = (): VisibleColumn[] => {
     const tabKey = activeTab as 'projects' | 'journals';
     if (tabKey !== 'projects' && tabKey !== 'journals') return [];
-    
+
     const visibleColumns = Object.entries(columnConfig[tabKey])
       .filter(([, config]) => config.show)
       .sort((a, b) => a[1].order - b[1].order)
@@ -650,7 +650,7 @@ const Dashboard: React.FC = () => {
   const renderColumnToggleDropdown = () => {
     const tabKey = activeTab as 'projects' | 'journals';
     if (tabKey !== 'projects' && tabKey !== 'journals') return null;
-    
+
     const columns = Object.entries(columnConfig[tabKey]);
     const groupedColumns = columns.reduce((acc, [key, config]) => {
       const group = config.group || "Other";
@@ -982,7 +982,7 @@ const Dashboard: React.FC = () => {
   const renderJournalDetails = () => {
     if (!selectedItem) return null;
     const journal = selectedItem as Journal & Record<string, unknown>;
-    
+
     let acknowledgements: string[] = [];
     try {
       if (journal.acknowledgement) {

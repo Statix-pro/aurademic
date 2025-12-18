@@ -2,7 +2,7 @@ import React, { useState, useEffect, ChangeEvent } from "react";
 import { Modal, Button, Form, Badge, Alert } from "react-bootstrap";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faReply, faTimes } from "@fortawesome/free-solid-svg-icons";
-import authenticityUtility from "../../../utility/authenticityUtility";
+import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import "./JournalStatusUpdates.css";
 
 interface StatusUpdate {
