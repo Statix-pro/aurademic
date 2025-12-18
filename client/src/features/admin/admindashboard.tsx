@@ -94,6 +94,69 @@ interface EditRequestActionsProps {
 
 type TabType = 'projects' | 'journals' | 'journal-requests' | 'project-requests' | 'journal-status-updates';
 
+const defaultColumnConfig: ColumnConfig = {
+  projects: {
+    title: { show: true, order: 0, label: "Title", group: "Essential" },
+    project_category: { show: true, order: 1, label: "Category", group: "Essential" },
+    agency: { show: true, order: 2, label: "Agency", group: "Essential" },
+    scheme: { show: true, order: 3, label: "Scheme", group: "Essential" },
+    submission_status: { show: true, order: 4, label: "Status", group: "Essential" },
+    date_of_submission: { show: true, order: 5, label: "Submission Date", group: "Essential" },
+    project_type: { show: false, order: 6, label: "Project Type", group: "Details" },
+    project_duration: { show: false, order: 7, label: "Duration", group: "Details" },
+    sanctioned_amount: { show: false, order: 9, label: "Sanctioned Amount (₹)", group: "Financial" },
+    start_date: { show: false, order: 11, label: "Start Date", group: "Timeline" },
+    end_date: { show: false, order: 12, label: "End Date", group: "Timeline" },
+    investigators: { show: false, order: 13, label: "Investigators", group: "Team" },
+    collaborating_institute: { show: false, order: 14, label: "Collaborating Institute", group: "Team" },
+    edit_request_status: { show: true, order: 18, label: "Edit Request", group: "Essential" },
+    actions: { show: true, order: 19, label: "Actions", group: "Essential" },
+  },
+  journals: {
+    title: { show: true, order: 0, label: "Title", group: "Essential" },
+    journal_name: { show: true, order: 1, label: "Journal Name", group: "Essential" },
+    publication_status: { show: true, order: 2, label: "Status", group: "Essential" },
+    submission_date: { show: true, order: 3, label: "Submission Date", group: "Essential" },
+    author_names: { show: true, order: 4, label: "Authors", group: "Details" },
+    volume: { show: false, order: 6, label: "Volume", group: "Details" },
+    issue: { show: false, order: 7, label: "Issue", group: "Details" },
+    page_numbers: { show: false, order: 8, label: "Page Numbers", group: "Details" },
+    doi: { show: false, order: 9, label: "DOI", group: "Details" },
+    publication_date: { show: false, order: 10, label: "Publication Date", group: "Timeline" },
+    publisher: { show: false, order: 11, label: "Publisher", group: "Details" },
+    index_names: { show: true, order: 12, label: "Indexing", group: "Metrics" },
+    edit_request_status: { show: true, order: 17, label: "Edit Request", group: "Essential" },
+    status_updates: { show: true, order: 18, label: "Status Updates", group: "Essential" },
+    actions: { show: true, order: 19, label: "Actions", group: "Essential" },
+  },
+};
+
+const EditRequestActions: React.FC<EditRequestActionsProps> = ({ status, onUpdateStatus }) => {
+  const getStatusBadge = () => {
+    const currentStatus = status || "no_request";
+    switch (currentStatus) {
+      case "pending":
+        return (
+          <div className="d-flex align-items-center">
+            <span className="badge bg-warning me-2">Pending</span>
+            <div className="btn-group">
+              <button type="button" className="btn btn-sm btn-success" onClick={() => onUpdateStatus("approved")} title="Approve">✓</button>
+              <button type="button" className="btn btn-sm btn-danger" onClick={() => onUpdateStatus("rejected")} title="Reject">✕</button>
+            </div>
+          </div>
+        );
+      case "approved":
+        return <span className="badge bg-success">Approved</span>;
+      case "rejected":
+        return <span className="badge bg-danger">Rejected</span>;
+      default:
+        return <span className="badge bg-secondary">No Request</span>;
+    }
+  };
+
+  return getStatusBadge();
+};
+
 const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>("projects");
   const [projects, setProjects] = useState<Project[]>([]);
@@ -106,51 +169,21 @@ const Dashboard: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<Project | Journal | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [totalItems] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
   const [adminComment, setAdminComment] = useState("");
   const [showStatusDetailsModal, setShowStatusDetailsModal] = useState(false);
   const [selectedJournalForStatus, setSelectedJournalForStatus] = useState<number | null>(null);
 
   const [columnConfig, setColumnConfig] = useState<ColumnConfig>(() => {
     const savedConfig = localStorage.getItem("columnConfig");
-    return savedConfig
-      ? JSON.parse(savedConfig)
-      : {
-        projects: {
-          title: { show: true, order: 0, label: "Title", group: "Essential" },
-          project_category: { show: true, order: 1, label: "Category", group: "Essential" },
-          agency: { show: true, order: 2, label: "Agency", group: "Essential" },
-          scheme: { show: true, order: 3, label: "Scheme", group: "Essential" },
-          submission_status: { show: true, order: 4, label: "Status", group: "Essential" },
-          date_of_submission: { show: true, order: 5, label: "Submission Date", group: "Essential" },
-          project_type: { show: false, order: 6, label: "Project Type", group: "Details" },
-          project_duration: { show: false, order: 7, label: "Duration", group: "Details" },
-          sanctioned_amount: { show: false, order: 9, label: "Sanctioned Amount (₹)", group: "Financial" },
-          start_date: { show: false, order: 11, label: "Start Date", group: "Timeline" },
-          end_date: { show: false, order: 12, label: "End Date", group: "Timeline" },
-          investigators: { show: false, order: 13, label: "Investigators", group: "Team" },
-          collaborating_institute: { show: false, order: 14, label: "Collaborating Institute", group: "Team" },
-          edit_request_status: { show: true, order: 18, label: "Edit Request", group: "Essential" },
-          actions: { show: true, order: 19, label: "Actions", group: "Essential" },
-        },
-        journals: {
-          title: { show: true, order: 0, label: "Title", group: "Essential" },
-          journal_name: { show: true, order: 1, label: "Journal Name", group: "Essential" },
-          publication_status: { show: true, order: 2, label: "Status", group: "Essential" },
-          submission_date: { show: true, order: 3, label: "Submission Date", group: "Essential" },
-          author_names: { show: true, order: 4, label: "Authors", group: "Details" },
-          volume: { show: false, order: 6, label: "Volume", group: "Details" },
-          issue: { show: false, order: 7, label: "Issue", group: "Details" },
-          page_numbers: { show: false, order: 8, label: "Page Numbers", group: "Details" },
-          doi: { show: false, order: 9, label: "DOI", group: "Details" },
-          publication_date: { show: false, order: 10, label: "Publication Date", group: "Timeline" },
-          publisher: { show: false, order: 11, label: "Publisher", group: "Details" },
-          index_names: { show: true, order: 12, label: "Indexing", group: "Metrics" },
-          edit_request_status: { show: true, order: 17, label: "Edit Request", group: "Essential" },
-          status_updates: { show: true, order: 18, label: "Status Updates", group: "Essential" },
-          actions: { show: true, order: 19, label: "Actions", group: "Essential" },
-        },
-      };
+    if (savedConfig) {
+      try {
+        return JSON.parse(savedConfig);
+      } catch (e) {
+        console.error("Error parsing columnConfig from localStorage", e);
+      }
+    }
+    return defaultColumnConfig;
   });
 
   useEffect(() => {
@@ -180,8 +213,11 @@ const Dashboard: React.FC = () => {
           page: currentPage,
           per_page: itemsPerPage,
         },
-      }) as { data: unknown[] };
+      }) as { data: unknown[]; total?: number };
       const data = response.data;
+      if (typeof response.total === 'number') {
+        setTotalItems(response.total);
+      }
 
       if (activeTab === "projects") {
         setProjects(Array.isArray(data) ? data as Project[] : []);
@@ -321,6 +357,7 @@ const Dashboard: React.FC = () => {
                   {request.status === "pending" && (
                     <div className="btn-group">
                       <button
+                        type="button"
                         className="btn btn-sm btn-success me-1"
                         onClick={() => handleApproveJournalRequest(request.id)}
                         title="Approve"
@@ -328,6 +365,7 @@ const Dashboard: React.FC = () => {
                         <FontAwesomeIcon icon={faCheck} />
                       </button>
                       <button
+                        type="button"
                         className="btn btn-sm btn-danger"
                         onClick={() => handleRejectJournalRequest(request.id)}
                         title="Reject"
@@ -393,32 +431,6 @@ const Dashboard: React.FC = () => {
       const error = err as { response?: { data?: { message?: string } } };
       alert(error.response?.data?.message || "Failed to reject project request");
     }
-  };
-
-  const EditRequestActions: React.FC<EditRequestActionsProps> = ({ status, onUpdateStatus }) => {
-    const getStatusBadge = () => {
-      const currentStatus = status || "no_request";
-      switch (currentStatus) {
-        case "pending":
-          return (
-            <div className="d-flex align-items-center">
-              <span className="badge bg-warning me-2">Pending</span>
-              <div className="btn-group">
-                <button className="btn btn-sm btn-success" onClick={() => onUpdateStatus("approved")} title="Approve">✓</button>
-                <button className="btn btn-sm btn-danger" onClick={() => onUpdateStatus("rejected")} title="Reject">✕</button>
-              </div>
-            </div>
-          );
-        case "approved":
-          return <span className="badge bg-success">Approved</span>;
-        case "rejected":
-          return <span className="badge bg-danger">Rejected</span>;
-        default:
-          return <span className="badge bg-secondary">No Request</span>;
-      }
-    };
-
-    return getStatusBadge();
   };
 
   const getFileUrl = (filePath: string | undefined): string => {
@@ -1081,13 +1093,13 @@ const Dashboard: React.FC = () => {
           return (
             <td key={column.key}>
               <div className="btn-group">
-                <button className="btn btn-sm btn-info me-1" onClick={() => handleViewDetails(item.id)} title="View Details">
+                <button type="button" className="btn btn-sm btn-info me-1" onClick={() => handleViewDetails(item.id)} title="View Details">
                   <FontAwesomeIcon icon={faEye} />
                 </button>
-                <button className="btn btn-sm btn-primary me-1" title="Edit">
+                <button type="button" className="btn btn-sm btn-primary me-1" title="Edit">
                   <FontAwesomeIcon icon={faEdit} />
                 </button>
-                <button className="btn btn-sm btn-danger" onClick={() => handleDelete(item.id)} title="Delete">
+                <button type="button" className="btn btn-sm btn-danger" onClick={() => handleDelete(item.id)} title="Delete">
                   <FontAwesomeIcon icon={faTrash} />
                 </button>
               </div>
@@ -1142,10 +1154,10 @@ const Dashboard: React.FC = () => {
                 <td>
                   {request.status === "pending" && (
                     <div className="btn-group" role="group">
-                      <button className="btn btn-success btn-sm" onClick={() => handleApproveProjectRequest(request.id)} title="Approve">
+                      <button type="button" className="btn btn-success btn-sm" onClick={() => handleApproveProjectRequest(request.id)} title="Approve">
                         <FontAwesomeIcon icon={faCheck} />
                       </button>
-                      <button className="btn btn-danger btn-sm" onClick={() => handleRejectProjectRequest(request.id)} title="Reject">
+                      <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRejectProjectRequest(request.id)} title="Reject">
                         <FontAwesomeIcon icon={faTimes} />
                       </button>
                     </div>

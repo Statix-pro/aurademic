@@ -21,8 +21,6 @@ authenticityUtility.interceptors.request.use(
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    } else {
-      console.warn('No token found in localStorage');
     }
     return config;
   },
@@ -59,7 +57,7 @@ authenticityUtility.postFile = async (endpoint: string, formData: FormData): Pro
         'Content-Type': 'multipart/form-data',
       },
     });
-    return (response as unknown as AxiosResponse).data;
+    return response;
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: unknown }; message?: string };
     console.error(

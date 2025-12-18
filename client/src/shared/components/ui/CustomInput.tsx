@@ -7,7 +7,7 @@ interface CustomInputProps {
   name: string;
   type?: string;
   value?: string | number;
-  onChange: (value: string | number) => void;
+  onChange: (value: string) => void;
   placeholder?: string;
   error?: string;
   disabled?: boolean;
@@ -38,6 +38,7 @@ const CustomInput: React.FC<CustomInputProps> = ({
     <Form.Group className={`custom-input-group ${className}`} controlId={name}>
       {label && <Form.Label className="custom-label">{label}</Form.Label>}
       <Form.Control
+        {...props}
         as={as}
         rows={rows}
         type={type}
@@ -48,7 +49,6 @@ const CustomInput: React.FC<CustomInputProps> = ({
         disabled={disabled}
         isInvalid={!!error}
         className="custom-input"
-        {...props}
       />
       <Form.Control.Feedback type="invalid" className="custom-error-text">
         {error}

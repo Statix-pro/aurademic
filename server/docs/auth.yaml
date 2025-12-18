@@ -63,6 +63,7 @@ paths:
     post:
       summary: Login with Google
       tags: [Auth]
+      security: []
       requestBody:
         required: true
         content:
