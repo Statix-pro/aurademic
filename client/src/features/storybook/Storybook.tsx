@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import CustomButton from '../../shared/components/ui/CustomButton';
 import CustomInput from '../../shared/components/ui/CustomInput';
 import CustomCheckbox from '../../shared/components/ui/CustomCheckbox';
@@ -63,6 +63,7 @@ const Storybook: React.FC = () => {
     const [showDocs, setShowDocs] = useState<boolean>(true);
     const [canvasBackground, setCanvasBackground] = useState<'light' | 'dark' | 'grid'>('light');
     const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+    const [sidebarSearchQuery, setSidebarSearchQuery] = useState<string>('');
 
     // State for interactive examples
     const [searchVal, setSearchVal] = useState<string>('');
@@ -697,6 +698,22 @@ const results = data.filter(item =>
     const currentStory = findCurrentStory();
     const currentGroup = findCurrentGroup();
 
+    const filteredComponentGroups = componentGroups.map(group => ({
+        ...group,
+        stories: group.stories.filter(story =>
+            story.name.toLowerCase().includes(sidebarSearchQuery.toLowerCase()) ||
+            group.name.toLowerCase().includes(sidebarSearchQuery.toLowerCase())
+        )
+    })).filter(group => group.stories.length > 0);
+
+    // Auto-expand groups when searching
+    useEffect(() => {
+        if (sidebarSearchQuery.trim() !== '') {
+            const groupsToExpand = filteredComponentGroups.map(g => g.id);
+            setExpandedGroups(prev => Array.from(new Set([...prev, ...groupsToExpand])));
+        }
+    }, [sidebarSearchQuery, filteredComponentGroups]);
+
     return (
         <div className="sb-container">
             {/* Sidebar */}
@@ -721,12 +738,14 @@ const results = data.filter(item =>
                                 type="text"
                                 className="sb-search-input"
                                 placeholder="Find components..."
+                                value={sidebarSearchQuery}
+                                onChange={(e) => setSidebarSearchQuery(e.target.value)}
                             />
                             <span className="sb-search-icon">🔍</span>
                         </div>
 
                         <nav className="sb-nav">
-                            {componentGroups.map(group => (
+                            {filteredComponentGroups.map(group => (
                                 <div key={group.id} className="sb-nav-group">
                                     <button
                                         className="sb-nav-group-header"
