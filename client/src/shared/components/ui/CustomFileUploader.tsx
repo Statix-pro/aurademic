@@ -60,6 +60,16 @@ const CustomFileUploader: React.FC<CustomFileUploaderProps> = ({
   const handleFileClick = () => {
     const url = previewUrl || fileUrl;
     if (url) {
+      try {
+        const urlObj = new URL(url, window.location.origin);
+        if (!['http:', 'https:', 'blob:'].includes(urlObj.protocol)) {
+          console.error('Unsafe URL protocol:', urlObj.protocol);
+          return;
+        }
+      } catch (e) {
+        console.error('Invalid URL:', url);
+        return;
+      }
       window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
