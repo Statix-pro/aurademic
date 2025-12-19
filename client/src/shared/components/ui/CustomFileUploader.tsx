@@ -1,7 +1,6 @@
 import React, { useRef } from 'react';
 import { Form, Button } from 'react-bootstrap';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUpload, faTrashAlt, faFile } from '@fortawesome/free-solid-svg-icons';
+import { Upload, Trash2, FileText } from 'lucide-react';
 import './common.css';
 
 interface CustomFileUploaderProps {
@@ -63,26 +62,26 @@ const CustomFileUploader: React.FC<CustomFileUploaderProps> = ({
           disabled={disabled}
           className="d-flex align-items-center gap-2"
         >
-          <FontAwesomeIcon icon={faUpload} />
+          <Upload size={16} />
           {buttonText}
         </Button>
 
         {fileName ? (
           <div className="d-flex align-items-center gap-2 p-2 border rounded bg-light flex-grow-1">
-             <FontAwesomeIcon icon={faFile} className="text-muted" />
-             <span className="text-truncate" style={{ maxWidth: '200px' }} title={fileName}>
-               {fileName}
-             </span>
-             {onDelete && !disabled && (
-               <Button
-                 variant="link"
-                 size="sm"
-                 className="text-danger p-0 ms-auto"
-                 onClick={onDelete}
-               >
-                 <FontAwesomeIcon icon={faTrashAlt} />
-               </Button>
-             )}
+            <FileText size={16} className="text-muted" />
+            <span className="text-truncate" style={{ maxWidth: '200px' }} title={fileName}>
+              {fileName}
+            </span>
+            {onDelete && !disabled && (
+              <Button
+                variant="link"
+                size="sm"
+                className="text-danger p-0 ms-auto"
+                onClick={onDelete}
+              >
+                <Trash2 size={16} />
+              </Button>
+            )}
           </div>
         ) : (
           <span className="text-muted small">No file selected</span>

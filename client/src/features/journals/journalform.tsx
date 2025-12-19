@@ -6,13 +6,7 @@ import '../../shared/styles/forms.css';
 import '../../shared/components/ui/common.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-  faTrashAlt,
-  faPlus,
-  faGripVertical,
-  faChevronDown,
-} from '@fortawesome/free-solid-svg-icons';
+import { Trash2, Plus, GripVertical, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import Navbar from '../../shared/components/layout/navbar/navbar';
 
@@ -138,7 +132,7 @@ type ActiveTab = 'form' | 'status';
 type EditRequestStatus = 'pending' | 'approved' | 'rejected' | 'none' | null;
 
 const debounce = <T extends (...args: any[]) => any>(func: T, wait: number = 300): T => {
-  let timeout: NodeJS.Timeout;
+  let timeout: ReturnType<typeof setTimeout>;
   return ((...args: any[]) => {
     const later = () => {
       clearTimeout(timeout);
@@ -509,7 +503,7 @@ const JournalForm: React.FC = () => {
   }, [editRequestStatus, journalId]);
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
     if (editRequestStatus === 'rejected') {
       setShowRejectedAlert(true);
       timer = setTimeout(() => {
@@ -2846,7 +2840,7 @@ const JournalForm: React.FC = () => {
                           color: '#6c757d',
                         }}
                       >
-                        <FontAwesomeIcon icon={faGripVertical} />
+                        <GripVertical size={16} />
                       </div>
                     )}
                     {/* 1. Radio button (always visible) */}
@@ -2885,8 +2879,8 @@ const JournalForm: React.FC = () => {
                         <option value="student">Student</option>
                         <option value="external">External</option>
                       </select>
-                      <FontAwesomeIcon
-                        icon={faChevronDown}
+                      <ChevronDown
+                        size={12}
                         style={{
                           position: 'absolute',
                           right: '10px',
@@ -2894,7 +2888,6 @@ const JournalForm: React.FC = () => {
                           transform: 'translateY(-50%)',
                           pointerEvents: 'none',
                           color: '#6c757d',
-                          fontSize: '12px',
                         }}
                       />
                     </div>
@@ -2918,7 +2911,7 @@ const JournalForm: React.FC = () => {
                           aria-label="Add author"
                           title="Add author"
                         >
-                          <FontAwesomeIcon icon={faPlus} />
+                          <Plus size={16} />
                         </button>
                       )}
 
@@ -2929,7 +2922,7 @@ const JournalForm: React.FC = () => {
                           onClick={() => deleteAuthor(author.id)}
                           disabled={!editMode && isViewMode}
                         >
-                          <FontAwesomeIcon icon={faTrashAlt} />
+                          <Trash2 size={16} />
                         </button>
                       )}
                     </div>
@@ -3821,8 +3814,8 @@ const JournalForm: React.FC = () => {
                                         International
                                       </option>
                                     </select>
-                                    <FontAwesomeIcon
-                                      icon={faChevronDown}
+                                    <ChevronDown
+                                      size={12}
                                       style={{
                                         position: 'absolute',
                                         right: '10px',
@@ -3830,7 +3823,6 @@ const JournalForm: React.FC = () => {
                                         transform: 'translateY(-50%)',
                                         pointerEvents: 'none',
                                         color: '#6c757d',
-                                        fontSize: '12px',
                                       }}
                                     />
                                   </div>
@@ -3992,8 +3984,8 @@ const JournalForm: React.FC = () => {
                                         International
                                       </option>
                                     </select>
-                                    <FontAwesomeIcon
-                                      icon={faChevronDown}
+                                    <ChevronDown
+                                      size={12}
                                       style={{
                                         position: 'absolute',
                                         right: '10px',
@@ -4001,7 +3993,6 @@ const JournalForm: React.FC = () => {
                                         transform: 'translateY(-50%)',
                                         pointerEvents: 'none',
                                         color: '#6c757d',
-                                        fontSize: '12px',
                                       }}
                                     />
                                   </div>
@@ -4188,8 +4179,8 @@ const JournalForm: React.FC = () => {
                             </option>
                             <option value="published">Published</option>
                           </select>
-                          <FontAwesomeIcon
-                            icon={faChevronDown}
+                          <ChevronDown
+                            size={12}
                             style={{
                               position: 'absolute',
                               right: '10px',
@@ -4197,7 +4188,6 @@ const JournalForm: React.FC = () => {
                               transform: 'translateY(-50%)',
                               pointerEvents: 'none',
                               color: '#6c757d',
-                              fontSize: '12px',
                             }}
                           />
                         </div>
@@ -4711,7 +4701,7 @@ const JournalForm: React.FC = () => {
                                 onClick={handleFileDelete}
                                 title="Delete file"
                               >
-                                <FontAwesomeIcon icon={faTrashAlt} />
+                                <Trash2 size={16} />
                               </button>
                             )}
                           </div>

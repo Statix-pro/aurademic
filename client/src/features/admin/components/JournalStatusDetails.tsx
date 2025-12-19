@@ -1,7 +1,6 @@
 import React, { useState, useEffect, ChangeEvent } from "react";
 import { Modal, Button, Form, Badge, Alert, Card, Row, Col } from "react-bootstrap";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faReply, faUser, faFileAlt } from "@fortawesome/free-solid-svg-icons";
+import { Reply, User, FileText } from "lucide-react";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import "./JournalStatusDetails.css";
 
@@ -138,14 +137,14 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
     <Card key={update.id} className="mb-3 status-update-card">
       <Card.Header className="d-flex justify-content-between align-items-center">
         <div className="user-info">
-          <FontAwesomeIcon icon={faUser} className="text-muted" />
+          <User size={16} className="text-muted" />
           <strong>{update.user_name}</strong>
           <span className="text-muted">({update.user_email})</span>
         </div>
         <div className="d-flex align-items-center gap-2">
           {getStatusBadge(update.status)}
           <Button variant="outline-primary" size="sm" onClick={() => handleReply(update)} title="Reply">
-            <FontAwesomeIcon icon={faReply} />
+            <Reply size={16} />
           </Button>
         </div>
       </Card.Header>
@@ -168,7 +167,7 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
               </div>
             ) : (
               <div className="no-reply">
-                <FontAwesomeIcon icon={faReply} />
+                <Reply size={16} />
                 No admin reply yet
               </div>
             )}
@@ -183,7 +182,7 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
       <Modal show={show} onHide={onHide} size="xl" className="journal-status-details">
         <Modal.Header closeButton>
           <Modal.Title>
-            <FontAwesomeIcon icon={faFileAlt} className="me-2" />
+            <FileText size={16} className="me-2" />
             Journal Status Updates
           </Modal.Title>
         </Modal.Header>

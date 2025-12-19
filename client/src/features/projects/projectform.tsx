@@ -3,8 +3,7 @@ import './projectform.css';
 import '../../shared/styles/forms.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUpload, faTrashAlt } from '@fortawesome/free-solid-svg-icons';
+import { Trash2 } from 'lucide-react';
 import Navbar from '../../shared/components/layout/navbar/navbar';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import debounce from 'lodash.debounce';
@@ -250,7 +249,7 @@ const ResearchProjectForm: React.FC = () => {
   const [financialContributions, setFinancialContributions] = useState<FinancialContribution[]>([
     { id: 1, agencyType: '', agency: '', amount: '', agencyTypeSearchTerm: '' },
   ]);
-  const [showAgencyTypeDropdowns, setShowAgencyTypeDropdowns] = useState<{[key: number]: boolean}>({});
+  const [showAgencyTypeDropdowns, setShowAgencyTypeDropdowns] = useState<{ [key: number]: boolean }>({});
 
   const [enableCollaboration, setEnableCollaboration] = useState(false);
   const [collaborations, setCollaborations] = useState<Collaboration[]>([
@@ -563,8 +562,8 @@ const ResearchProjectForm: React.FC = () => {
     const computedInvestigatorId =
       normalizedDesignation === 'student'
         ? selectedInvestigator.student_id ||
-          selectedInvestigator.register_no ||
-          ''
+        selectedInvestigator.register_no ||
+        ''
         : selectedInvestigator.author_id || '';
 
     if (!selectedInvestigator || !computedInvestigatorId) {
@@ -2100,7 +2099,7 @@ const ResearchProjectForm: React.FC = () => {
                         disabled={isFormDisabled}
                         {...inputProps}
                       >
-                        <FontAwesomeIcon icon={faTrashAlt} />
+                        <Trash2 size={16} />
                       </button>
                     )}
                   </div>
@@ -2550,7 +2549,7 @@ const ResearchProjectForm: React.FC = () => {
                       className="btn btn-sm btn-delete-author"
                       onClick={() => removeFinancialContribution(index)}
                     >
-                      <FontAwesomeIcon icon={faTrashAlt} />
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>
@@ -2647,7 +2646,7 @@ const ResearchProjectForm: React.FC = () => {
                         className="btn btn-sm btn-delete-author"
                         onClick={() => removeCollaboration(collab.id)}
                       >
-                        <FontAwesomeIcon icon={faTrashAlt} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
@@ -2822,8 +2821,8 @@ const ResearchProjectForm: React.FC = () => {
                             item.type === 'number'
                               ? projectDetails[item.key as keyof ProjectDetails].value || ''
                               : formatDateForInput(
-                                  projectDetails[item.key as keyof ProjectDetails].value
-                                )
+                                projectDetails[item.key as keyof ProjectDetails].value
+                              )
                           }
                           onChange={(e) =>
                             handleProjectDetailsChange(item.key, e.target.value)
@@ -2942,7 +2941,7 @@ const ResearchProjectForm: React.FC = () => {
                           onClick={() => removeGrantDisbursement(index)}
                           {...inputProps}
                         >
-                          <FontAwesomeIcon icon={faTrashAlt} />
+                          <Trash2 size={16} />
                         </button>
                       </div>
                     </div>

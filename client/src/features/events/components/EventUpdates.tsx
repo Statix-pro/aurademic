@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import "../styles/EventForm.css";
-import { FaEye, FaPlus, FaTrash, FaCloudUploadAlt } from "react-icons/fa";
+import { Eye, Plus, Trash2, CloudUpload } from "lucide-react";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 
 // --- Letters Section ---
@@ -202,11 +202,11 @@ const LettersPage: React.FC<LettersPageProps> = ({ formData, setFormData }) => {
           </button>
           <label
             className={`event-upload-icon ${formData[section].active || formData[section].file
-                ? "active"
-                : "disabled"
+              ? "active"
+              : "disabled"
               }`}
           >
-            <FaCloudUploadAlt />
+            <CloudUpload size={14} />
             <input
               type="file"
               style={{ display: "none" }}
@@ -221,7 +221,7 @@ const LettersPage: React.FC<LettersPageProps> = ({ formData, setFormData }) => {
               formData[section].file && handleViewFile(formData[section].file)
             }
           >
-            <FaEye />
+            <Eye size={14} />
           </span>
 
           <input
@@ -553,7 +553,7 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
                     title="Upload"
                     style={{ color: "#1D4ED8" }}
                   >
-                    <FaCloudUploadAlt size={14} />
+                    <CloudUpload size={14} />
                   </button>
                   <input
                     id={`file-input-${row.id}`}
@@ -591,7 +591,7 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
                     title="Preview"
                     style={{ color: row.uploadedFile ? "#1D4ED8" : "gray" }}
                   >
-                    <FaEye size={14} />
+                    <Eye size={14} />
                   </button>
                 </td>
                 <td className="event-actions">
@@ -603,7 +603,7 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
                       className="event-icon-btn"
                       title="Delete"
                     >
-                      <FaTrash size={14} />
+                      <Trash2 size={14} />
                     </button>
                   )}
 
@@ -615,7 +615,7 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
                       className="event-add"
                       title="Add Row"
                     >
-                      <FaPlus size={14} />
+                      <Plus size={14} />
                     </button>
                   )}
                 </td>
@@ -858,7 +858,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
             className="event-date-input"
           />
           <label className="event-upload-icon" htmlFor="website-upload">
-            <FaCloudUploadAlt />
+            <CloudUpload size={14} />
           </label>
           <input
             type="file"
@@ -870,7 +870,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
             className={`event-eye-icon${!websiteFile ? " disabled" : ""}`}
             onClick={() => websiteFile && handleViewFile(websiteFile)}
           >
-            <FaEye />
+            <Eye size={14} />
           </span>
         </div>
 
@@ -907,7 +907,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
             className="event-date-input"
           />
           <label className="event-upload-icon" htmlFor="newspaper-upload">
-            <FaCloudUploadAlt />
+            <CloudUpload size={14} />
           </label>
           <input
             type="file"
@@ -919,7 +919,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
             className={`event-eye-icon${!newspaperFile ? " disabled" : ""}`}
             onClick={() => newspaperFile && handleViewFile(newspaperFile)}
           >
-            <FaEye />
+            <Eye size={14} />
           </span>
         </div>
 
@@ -954,7 +954,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
             className="event-date-input"
           />
           <label className="event-upload-icon" htmlFor="press-upload">
-            <FaCloudUploadAlt />
+            <CloudUpload size={14} />
           </label>
           <input
             type="file"
@@ -966,7 +966,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
             className={`event-eye-icon${!pressFile ? " disabled" : ""}`}
             onClick={() => pressFile && handleViewFile(pressFile)}
           >
-            <FaEye />
+            <Eye size={14} />
           </span>
         </div>
 
@@ -991,7 +991,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
                 className={`event-eye-icon${!links[platform] ? " disabled" : ""}`}
                 onClick={() => openLink(links[platform])}
               >
-                <FaEye />
+                <Eye size={14} />
               </span>
             </div>
           ))}
