@@ -222,6 +222,9 @@ const journalController = {
       if (journalUpdateData.sdgs) {
         journalUpdateData.sdgs = JSON.stringify(journalUpdateData.sdgs);
       }
+      if (journalUpdateData.credit_to) {
+        journalUpdateData.credit_to = JSON.stringify(journalUpdateData.credit_to);
+      }
       if (journalUpdateData.publication_details) {
         journalUpdateData.publication_details = JSON.stringify(
           journalUpdateData.publication_details

@@ -1,0 +1,126 @@
+tags:
+  - name: UserDashboard
+    description: User dashboard operations
+
+paths:
+  /dashboard/stats:
+    get:
+      summary: Get dashboard statistics
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_projects:
+                    type: integer
+                  total_journals:
+                    type: integer
+                example:
+                  total_projects: 2
+                  total_journals: 3
+
+  /dashboard/profile:
+    get:
+      summary: Get user profile
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '../auth.yaml#/components/schemas/User'
+
+  /dashboard/journals:
+    get:
+      summary: Get user journals
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of user journals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../journal.yaml#/components/schemas/Journal'
+
+  /dashboard/journals/{id}:
+    get:
+      summary: Get journal details
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Journal details
+          content:
+            application/json:
+              schema:
+                $ref: '../journal.yaml#/components/schemas/Journal'
+    delete:
+      summary: Delete a journal
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Journal deleted
+
+  /dashboard/projects:
+    get:
+      summary: Get user projects
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of user projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../project.yaml#/components/schemas/Project'
+
+  /dashboard/projects/{id}:
+    get:
+      summary: Get project details
+      tags: [UserDashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '../project.yaml#/components/schemas/Project'

@@ -1,116 +1,172 @@
-# Getting Started with Create React App
+# Aurademic Client
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A modern React-based single-page application for managing academic research, including journals, projects, and events.
 
-## Available Scripts
+## 🚀 Tech Stack
 
-In the project directory, you can run:
+| Technology | Purpose |
+|------------|---------|
+| **React 18** | UI Framework |
+| **TypeScript** | Type-safe JavaScript |
+| **Vite** | Build tool & dev server |
+| **React Router DOM** | Client-side routing |
+| **Axios** | HTTP client |
+| **React Bootstrap** | UI component library |
+| **Lucide React** | Icon library |
+| **MSAL React** | Microsoft Azure AD authentication |
+| **Google OAuth** | Google authentication |
+| **FullCalendar** | Calendar/event management |
+| **@hello-pangea/dnd** | Drag and drop functionality |
 
-### `npm start`
+## 📁 Directory Structure
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+```
+client/
+├── public/               # Static assets
+├── src/
+│   ├── app/              # App-level components (layout, routing)
+│   ├── config/           # App configuration
+│   ├── contexts/         # React context providers
+│   ├── features/         # Feature modules
+│   │   ├── admin/        # Admin dashboard
+│   │   ├── auth/         # Authentication
+│   │   ├── events/       # Event management
+│   │   ├── home/         # Home page
+│   │   ├── journals/     # Journal management
+│   │   ├── projects/     # Project management
+│   │   ├── publications/ # Publications management
+│   │   ├── storybook/    # UI component showcase
+│   │   └── user-dashboard/ # User dashboard
+│   ├── shared/           # Shared components & utilities
+│   ├── types/            # TypeScript type definitions
+│   └── main.tsx          # Application entry point
+├── .env.development      # Development environment variables
+├── .env.production       # Production environment variables
+├── index.html            # HTML entry point
+├── package.json          # Dependencies & scripts
+├── tsconfig.json         # TypeScript configuration
+└── vite.config.ts        # Vite configuration
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## 🛠️ Getting Started
 
-### `npm test`
+### Prerequisites
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- **Node.js** >= 18.x
+- **npm** >= 9.x
 
-### `npm run build`
+### Installation
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```bash
+# Navigate to the client directory
+cd client
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+# Install dependencies
+npm install
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### Environment Variables
 
-### `npm run eject`
+Create a `.env.development` file with the following variables:
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+```env
+VITE_API_URL=http://localhost:5000/api
+VITE_GOOGLE_CLIENT_ID=your_google_client_id
+VITE_AZURE_CLIENT_ID=your_azure_client_id
+```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### Running the Application
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+#### Development Mode
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+```bash
+npm run dev
+```
 
-## Learn More
+This will start the Vite dev server at `http://localhost:3000`.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+#### Production Build
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```bash
+npm run build
+```
 
-### Code Splitting
+The production-ready files will be generated in the `dist/` directory.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+#### Preview Production Build
 
-### Analyzing the Bundle Size
+```bash
+npm run preview
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## 📜 Available Scripts
 
-### Making a Progressive Web App
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Build for production (TypeScript + Vite) |
+| `npm run preview` | Preview production build locally |
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+## 🔐 Authentication
 
-### Advanced Configuration
+The application supports multiple authentication methods:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+- **Microsoft Azure AD** - Using `@azure/msal-react`
+- **Google OAuth** - Using `@react-oauth/google`
 
-### Deployment
+Authentication state is managed via React Context and JWT tokens stored in localStorage.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+## 🌟 Key Features
 
-### `npm run build` fails to minify
+- **📚 Journal Management** - Create, edit, and track academic journal submissions
+- **📋 Project Management** - Manage research projects with team collaboration
+- **📅 Event Management** - Calendar-based event scheduling with FullCalendar
+- **📊 Admin Dashboard** - Administrative controls and analytics
+- **👤 User Dashboard** - Personal research activity overview
+- **📝 Publications** - Track and manage academic publications
+- **🎨 Storybook** - UI component library and documentation
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## 🔗 API Integration
 
-├── client
-│ ├── public
-│ │ ├── favicon.ico
-│ │ ├── index.html
-│ │ ├── logo192.png
-│ │ ├── logo512.png
-│ │ ├── manifest.json
-│ │ └── robots.txt
-│ ├── src
-│ │ ├── App.css
-│ │ ├── App.js
-│ │ ├── components
-│ │ │ └── navbar
-│ │ │ ├── navbar.css
-│ │ │ └── navbar.jsx
-│ │ ├── form.css
-│ │ ├── home
-│ │ │ ├── home.css
-│ │ │ └── home.jsx
-│ │ ├── index.js
-│ │ ├── journal
-│ │ │ ├── journalform.css
-│ │ │ └── journalform.jsx
-│ │ ├── login
-│ │ │ ├── login.css
-│ │ │ └── login.jsx
-│ │ ├── projectform.js
-│ │ ├── research
-│ │ │ ├── projectform.css
-│ │ │ └── projectform.jsx
-│ │ ├── reportWebVitals.js
-│ │ └── setupTests.js
-│ ├── .gitignore
-│ ├── package-lock.json
-│ ├── package.json
-│ └── README.md
-└── server
-├── config
-│ └── connection.js
-├── journal
-│ ├── journalController.js
-│ └── journalRoutes.js
-│ └── journalModels.js
-├── server.js
-└── package.json
+The client communicates with the backend API via Axios. The base URL is configured through the `VITE_API_URL` environment variable.
+
+```typescript
+// Example API call
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL,
+});
+```
+
+## 📦 Dependencies
+
+### Production Dependencies
+
+- `react` & `react-dom` - UI framework
+- `react-router-dom` - Routing
+- `axios` - HTTP client
+- `@azure/msal-browser` & `@azure/msal-react` - Microsoft authentication
+- `@react-oauth/google` - Google authentication
+- `react-bootstrap` & `bootstrap` - UI components
+- `lucide-react` - Icon library
+- `@fullcalendar/*` - Calendar components
+- `@hello-pangea/dnd` - Drag and drop
+- `react-select` - Advanced select inputs
+- `jwt-decode` - JWT token parsing
+- `lodash.debounce` - Debounce utility
+- `uuid` - Unique ID generation
+
+### Dev Dependencies
+
+- `typescript` - Type checking
+- `vite` - Build tool
+- `@vitejs/plugin-react` - React plugin for Vite
+- `@types/*` - TypeScript type definitions
+
+## 🤝 Contributing
+
+1. Create a new branch for your feature
+2. Make your changes following the existing code style
+3. Ensure TypeScript compilation passes (`npm run build`)
+4. Submit a pull request with a detailed description

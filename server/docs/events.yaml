@@ -1,0 +1,524 @@
+tags:
+  - name: Events
+    description: Event management
+
+components:
+  schemas:
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+          example: "Annual Tech Symposium"
+        status:
+          type: string
+          enum: [draft, submitted, approved, rejected]
+          default: draft
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PreEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+          example: "Pre-Symposium Workshop"
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        inaugural_date:
+          type: string
+          format: date
+        inaugural_time:
+          type: string
+          example: "10:00:00"
+        inaugural_venue:
+          type: string
+          example: "Auditorium A"
+        valedictory_date:
+          type: string
+          format: date
+        valedictory_time:
+          type: string
+          example: "16:00:00"
+        valedictory_venue:
+          type: string
+          example: "Auditorium A"
+        mode:
+          type: string
+          enum: [Physical, Virtual, Hybrid]
+        meeting_link:
+          type: string
+        level:
+          type: string
+          enum: [international, national, state, district, intra_college]
+        description:
+          type: string
+        expected_participants:
+          type: integer
+          example: 100
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Budgets:
+      type: object
+      properties:
+        id:
+          type: integer
+        pre_event_id:
+          type: integer
+        head:
+          type: string
+          example: "Travel Expenses"
+        amount:
+          type: number
+          format: float
+          example: 5000.00
+
+    Collaborations:
+      type: object
+      properties:
+        id:
+          type: integer
+        pre_event_id:
+          type: integer
+        collaborator:
+          type: string
+          example: "Tech Corp"
+
+    Coordinators:
+      type: object
+      properties:
+        id:
+          type: integer
+        pre_event_id:
+          type: integer
+        name:
+          type: string
+          example: "John Doe"
+        email:
+          type: string
+          format: email
+        department:
+          type: string
+        mobile:
+          type: string
+        phone:
+          type: string
+
+    Departments:
+      type: object
+      properties:
+        id:
+          type: integer
+        pre_event_id:
+          type: integer
+        name:
+          type: string
+          example: "Computer Science"
+
+    Documents:
+      type: object
+      properties:
+        id:
+          type: integer
+        event_id:
+          type: integer
+        doc_name:
+          type: string
+          example: "Brochure"
+        active:
+          type: boolean
+          default: false
+        upload_id:
+          type: integer
+
+    EventTypes:
+      type: object
+      properties:
+        id:
+          type: integer
+        pre_event_id:
+          type: integer
+        type_name:
+          type: string
+          example: "Workshop"
+
+    EventsUploads:
+      type: object
+      properties:
+        id:
+          type: integer
+        event_id:
+          type: integer
+        filename:
+          type: string
+        original_name:
+          type: string
+        mime:
+          type: string
+        size:
+          type: integer
+        uploaded_at:
+          type: string
+          format: date-time
+
+    Finance:
+      type: object
+      properties:
+        id:
+          type: integer
+        event_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    FinanceDocs:
+      type: object
+      properties:
+        id:
+          type: integer
+        finance_id:
+          type: integer
+        filename:
+          type: string
+        original_name:
+          type: string
+        mime:
+          type: string
+        size:
+          type: integer
+        uploaded_at:
+          type: string
+          format: date-time
+
+    FinanceExpenditure:
+      type: object
+      properties:
+        id:
+          type: integer
+        finance_id:
+          type: integer
+        category:
+          type: string
+        amount_proposed:
+          type: number
+          format: float
+        amount:
+          type: number
+          format: float
+        upload_id:
+          type: integer
+
+    FinanceIncome:
+      type: object
+      properties:
+        id:
+          type: integer
+        finance_id:
+          type: integer
+        source:
+          type: string
+        agency_name:
+          type: string
+        amount:
+          type: number
+          format: float
+
+    FinanceSponsors:
+      type: object
+      properties:
+        id:
+          type: integer
+        finance_id:
+          type: integer
+        agency_name:
+          type: string
+        amount:
+          type: number
+          format: float
+
+    ImportantLinks:
+      type: object
+      properties:
+        id:
+          type: integer
+        event_id:
+          type: integer
+        registration_enabled:
+          type: boolean
+          default: false
+        registration_url:
+          type: string
+        feedback_enabled:
+          type: boolean
+          default: false
+        feedback_url:
+          type: string
+        youtube_enabled:
+          type: boolean
+          default: false
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Letters:
+      type: object
+      properties:
+        id:
+          type: integer
+        event_id:
+          type: integer
+        section_name:
+          type: string
+        active:
+          type: boolean
+          default: false
+        mode:
+          type: string
+          enum: [Letter, Email, Letter/ Email]
+          default: Letter/ Email
+        letter_date:
+          type: string
+          format: date
+        upload_id:
+          type: integer
+
+    Participants:
+      type: object
+      properties:
+        id:
+          type: integer
+        event_id:
+          type: integer
+        type:
+          type: string
+          enum: [internal-students, external-students, faculty, research-scholars, industry-experts, alumni, general-public]
+        count:
+          type: integer
+          default: 0
+        count_verified:
+          type: boolean
+          default: false
+
+    Publicity:
+      type: object
+      properties:
+        id:
+          type: integer
+        event_id:
+          type: integer
+        website_enabled:
+          type: boolean
+          default: false
+        website_date:
+          type: string
+          format: date
+        newspaper_enabled:
+          type: boolean
+          default: false
+        newspaper_date:
+          type: string
+          format: date
+        newspaper_upload_id:
+          type: integer
+        press_enabled:
+          type: boolean
+          default: false
+        press_date:
+          type: string
+          format: date
+        press_upload_id:
+          type: integer
+        facebook_link:
+          type: string
+        x_link:
+          type: string
+        instagram_link:
+          type: string
+        linkedin_link:
+          type: string
+
+    ResourcePersons:
+      type: object
+      properties:
+        id:
+          type: integer
+        event_id:
+          type: integer
+        name:
+          type: string
+        designation:
+          type: string
+        organization:
+          type: string
+        email:
+          type: string
+        linkedin:
+          type: string
+        location:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Sdgs:
+      type: object
+      properties:
+        id:
+          type: integer
+        pre_event_id:
+          type: integer
+        sdg_name:
+          type: string
+
+    TargetAudience:
+      type: object
+      properties:
+        id:
+          type: integer
+        pre_event_id:
+          type: integer
+        audience:
+          type: string
+
+    Themes:
+      type: object
+      properties:
+        id:
+          type: integer
+        pre_event_id:
+          type: integer
+        theme:
+          type: string
+
+    YoutubeLinks:
+      type: object
+      properties:
+        id:
+          type: integer
+        event_id:
+          type: integer
+        url:
+          type: string
+        enabled:
+          type: boolean
+          default: true
+        sort_order:
+          type: integer
+          default: 0
+        created_at:
+          type: string
+          format: date-time
+
+paths:
+  /events:
+    get:
+      summary: Get all events
+      tags: [Events]
+      responses:
+        200:
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+    post:
+      summary: Create a new event
+      tags: [Events]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Event'
+      responses:
+        201:
+          description: Event created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+
+  /events/{id}:
+    get:
+      summary: Get event by ID
+      tags: [Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Event details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+    put:
+      summary: Update an event
+      tags: [Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Event'
+      responses:
+        200:
+          description: Event updated
+    delete:
+      summary: Delete an event
+      tags: [Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Event deleted
+
+  /events/{id}/summary:
+    get:
+      summary: Get event summary
+      tags: [Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Event summary
