@@ -1,224 +1,128 @@
-# GEMINI.md
+# Research Portal (GEMINI Project)
 
-This document provides a comprehensive overview of the research-mac project, its architecture, and instructions for development.
+This document outlines the architecture, setup, and deployment procedures for the Research Portal application (`research-mac`).
 
-## Project Overview
+## 1. Project Overview
 
-The project is a full-stack web application designed for managing academic research, including journals and projects. It features a client-server architecture:
+The Research Portal is a full-stack web application designed to manage academic research activities, including:
+*   **Journal Publications:** Tracking and management of research papers.
+*   **Projects:** Monitoring funded projects, proposals, and grants.
+*   **Events:** Management of academic events, finances, and pre-event planning.
+*   **User Dashboard:** Personalized views for faculty and students.
+*   **Admin Dashboard:** Centralized control for administrators.
 
-*   **Client:** A React-based single-page application for the user interface.
-*   **Server:** A Node.js and Express-based REST API for handling business logic and data persistence.
-*   **Database:** A MySQL database for storing all application data.
+## 2. Technology Stack
 
-## Key Technologies
+### Client (Frontend)
+*   **Framework:** React 18
+*   **Build Tool:** Vite
+*   **Language:** TypeScript
+*   **UI Library:** Bootstrap 5, React Bootstrap
+*   **Icons:** Lucide React
+*   **HTTP Client:** Axios
+*   **Authentication:** Azure MSAL (Microsoft), Google OAuth (@react-oauth/google)
+*   **Calendar:** FullCalendar
 
-### Client
-
-*   **Framework:** React
-*   **Routing:** `react-router-dom`
-*   **HTTP Client:** `axios`
-*   **Authentication:** `@azure/msal-react`
-*   **UI Components:** `react-bootstrap`, `@mui/material`
-
-### Server
-
+### Server (Backend)
+*   **Runtime:** Node.js
 *   **Framework:** Express.js
-*   **Database:** MySQL (`mysql2` driver)
-*   **Authentication:** `jsonwebtoken`
-*   **File Uploads:** `multer`
-*   **Module System:** ES Modules
+*   **Database:** MySQL (via `mysql2`)
+*   **API Documentation:** Swagger UI
+*   **File Handling:** Multer
+*   **Module System:** ES Modules (`import`/`export`)
 
-## Directory Structure
+## 3. Directory Structure
 
 ```
-/
-├── client/         # React client application
+research-mac/
+├── client/                 # React (Vite + TypeScript) Application
 │   ├── src/
-│   │   ├── components/ # Reusable components
-│   │   ├── pages/      # Application pages
-│   │   ├── App.js      # Main application component
-│   │   └── index.js    # Entry point
+│   │   ├── admin/          # Admin Dashboard modules
+│   │   ├── components/     # Reusable UI components
+│   │   ├── context/        # React Context (Auth, etc.)
+│   │   ├── shared/         # Shared utilities (authenticityUtility.ts)
+│   │   ├── styles/         # Global styles
+│   │   ├── App.tsx         # Main Component
+│   │   └── main.tsx        # Entry Point
+│   ├── .env.development    # Local development config
+│   ├── .env.production     # Production build config
+│   ├── package.json
+│   └── vite.config.ts
+├── server/                 # Node.js Express Application
+│   ├── config/             # DB connections & Swagger setup
+│   ├── middleware/         # Auth & Error handling middleware
+│   ├── modules/            # Feature-based modules (Controller/Routes/Models)
+│   ├── schema/             # SQL Schema definitions
+│   ├── uploads/            # File upload storage
+│   ├── .env.development    # Local environment config
+│   ├── .env.production     # Production environment config
+│   ├── iisnode-start.cjs   # Entry point for IISNode
+│   ├── server.js           # Main Express App entry
 │   └── package.json
-├── server/         # Node.js server application
-│   ├── config/     # Configuration files
-│   ├── middleware/ # Express middleware
-│   ├── modules/    # Application modules (features)
-│   ├── schema/     # Database schema
-│   ├── server.js   # Server entry point
-│   └── package.json
-└── GEMINI.md       # This file
+├── web.config              # IIS Configuration for the root
+└── GEMINI.md               # This documentation
 ```
 
-## Available Scripts
+## 4. Configuration & Environment
 
-### Client
+The project uses **Split Environment Configuration** to support seamless transitions between local development and production.
 
-*   `npm start`: Runs the app in the development mode.
-*   `npm test`: Launches the test runner in the interactive watch mode.
-*   `npm run build`: Builds the app for production to the `build` folder.
-*   `npm run eject`: Removes the single dependency and copies all the configuration files and transitive dependencies (webpack, Babel, ESLint, etc.) right into your project.
+### Client Configuration (`client/`)
 
-### Server
+*   **`.env.development`** (Loaded via `npm run dev`)
+    ```ini
+    REACT_APP_API_URL=http://localhost:5000/api
+    REACT_APP_GOOGLE_CLIENT_ID=...
+    REACT_APP_MICROSOFT_CLIENT_ID=...
+    ```
 
-*   `npm start`: Runs the server.
-*   `npm run dev`: Runs the server in development mode with `nodemon`.
+### Server Configuration (`server/`)
 
-## Building and Running
+The server determines the environment via the `NODE_ENV` variable.
 
-### Client
+*   **`.env.development`** (Loaded when `NODE_ENV` is missing or 'development')
+    ```ini
+    PORT=5000
+    HOST=localhost
+    USER=root
+    PASSWORD=root
+    DB=research
+    FRONTEND_URL=http://localhost:5173
+    ```
 
-To run the client application in development mode:
+## 5. Development Setup (Local)
 
-```bash
-cd client
-npm install
-npm start
-```
+1.  **Prerequisites:** Node.js (v18+), MySQL.
+2.  **Database:** Import the schema from `server/schema` into your local MySQL instance.
 
-This will start the development server on `http://localhost:3000`.
-
-To build the client application for production:
-
-```bash
-cd client
-npm install
-npm run build
-```
-
-The production-ready files will be generated in the `client/build` directory.
-
-### Server
-
-To run the server application in development mode:
-
+### Running the Server
 ```bash
 cd server
 npm install
 npm run dev
 ```
+*   Server runs on: `http://localhost:5000`
+*   Swagger Docs: `http://localhost:5000/api-docs`
 
-This will start the server on `http://localhost:8080` (or as configured in your environment) and automatically restart it when changes are detected.
-
-To run the server in production:
-
+### Running the Client
 ```bash
-cd server
+cd client
 npm install
-npm start
+npm run dev
 ```
+*   Client runs on: `http://localhost:5173` (Vite default)
 
-## API Endpoints
+## 6. Key Utilities
 
-The server exposes the following main API endpoints:
+### Authenticity Utility (`authenticityUtility.ts`)
+Located in `client/src/shared/utils/`. This utility dynamically resolves the Base URL for API requests.
+*   **Development:** Returns `http://localhost:5000`
+*   **Production:** Returns `https://research.ksrct.ac.in` (derived from `REACT_APP_API_URL`).
 
-*   `/api/auth`: Authentication routes
-*   `/api/admin`: Admin dashboard routes
-*   `/api/dashboard`: User dashboard routes
-*   `/api/form-options`: Form options routes
-*   `/api/journal`: Journal routes
-*   `/api/project`: Project routes
-*   `/api/events`: Event routes
-
-## Development Conventions
-
-*   **Database Schema:** The database schema is defined in the `server/schema` directory. Any changes to the database schema should be reflected in these SQL files.
-*   **Environment Variables:** The application uses environment variables for configuration. A `.env` file should be created in both the `client` and `server` directories based on the provided `.env.example` files (if available).
-*   **API Routes:** The server's API routes are organized by module in the `server/modules` directory. Each module has its own routes, controller, and model.
-*   **React Components:** React components are organized in the `client/src` directory. Reusable components are placed in the `client/src/components` directory.
-*   **Styling:** The project uses a combination of CSS files and UI libraries like `react-bootstrap` and `@mui/material` for styling.
-
-## Contributing
-
-We welcome contributions to this project. Please follow these guidelines:
-
-*   **Branching:** Create a new branch for each feature or bug fix.
-*   **Commits:** Write clear and concise commit messages.
-*   **Pull Requests:** Open a pull request with a detailed description of your changes.
-*   **Code Style:** Follow the existing code style and conventions.
-
-## License
-
-This project is licensed under the MIT License.
-
-## Acknowledgements
-
-This project was created by the Gemini team.
-
-## OAuth Configuration
-
-The project uses Microsoft and Google for OAuth. The configuration for these can be found at the a
-following links:
-
-*   **Microsoft OAuth:** [maheshwaran325](https://portal.azure.com/#view/Microsoft_AAD_UsersAndTenants/UserManagementMenuBlade/~/AllUsers)
-*   **Google OAuth:** [gingfreecss325](https://console.cloud.google.com/apis/credentials?authuser=2&project=sonorous-seat-426510-q0)
-
-## Database Schema
-
-The database schema is defined in the `server/schema` directory. Here are the definitions for the main tables:
-
-### `journals`
-
-```sql
-CREATE TABLE journals (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  category VARCHAR(50) NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  type VARCHAR(100) NOT NULL,
-  journal_options_id INT NOT NULL,
-  quartile VARCHAR(2),
-  impact_factor DECIMAL(10,3),
-  cite_score DECIMAL(10,3),
-  anna_university_listed BOOLEAN,
-  anna_university_annexure_no VARCHAR(50),
-  acknowledgement JSON,
-  author_affiliation JSON,
-  driven_by ENUM('faculty','student') DEFAULT 'faculty',
-  date_of_submission DATE,
-  status VARCHAR(50) DEFAULT 'waiting',
-  volume VARCHAR(50),
-  issue VARCHAR(50),
-  issue_type VARCHAR(50),
-  pages_from INT,
-  pages_to INT,
-  article_number VARCHAR(50),
-  abstract TEXT,
-  keywords TEXT,
-  sdgs JSON,
-  doi VARCHAR(255),
-  credit_to VARCHAR(255),
-  reference_number VARCHAR(255),
-  accepted_date DATE,
-  available_online_date DATE,
-  file_path VARCHAR(255),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-```
-
-### `projects`
-
-```sql
-CREATE TABLE projects (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  s_no VARCHAR(255) NOT NULL,
-  proposal_id VARCHAR(255),
-  project_title TEXT NOT NULL,
-  project_type_id INT,
-  funding_agency_id INT,
-  duration_months INT,
-  total_funding_sanctioned DECIMAL(15, 2),
-  start_date DATE,
-  end_date DATE,
-  project_status_id INT,
-  team_members JSON,
-  publications_details JSON,
-  patents_details JSON,
-  created_by INT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (project_type_id) REFERENCES project_types(id),
-  FOREIGN KEY (funding_agency_id) REFERENCES funding_agencies(id),
-  FOREIGN KEY (project_status_id) REFERENCES project_statuses(id),
-  FOREIGN KEY (created_by) REFERENCES users(id)
-);
-```
+## 8. Database Schema
+Major tables include:
+*   `users`: Authentication and profile info.
+*   `journals`: Research publication details.
+*   `projects`: Funded project details.
+*   `events`: Event management data.
+*   `finance`: Budget and expense tracking for events.
