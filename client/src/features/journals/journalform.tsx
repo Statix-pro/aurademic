@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import './journalform.css';
 import '../../shared/styles/forms.css';
+import '../../shared/components/ui/common.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -3030,7 +3031,7 @@ const JournalForm: React.FC = () => {
                       <div className="sdg-selection-container border rounded d-flex flex-wrap align-items-center p-1 gap-1" style={{ minHeight: '36px', backgroundColor: '#fff' }}>
                         {/* Selected Indexes as tags inline with input */}
                         {selectedIndexes.map((index) => (
-                          <span key={index} className="badge bg-primary d-inline-flex align-items-center flex-shrink-0" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>
+                          <span key={index} className="badge custom-tag-badge d-inline-flex align-items-center flex-shrink-0" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>
                             {index}
                             <button
                               type="button"
@@ -3096,7 +3097,7 @@ const JournalForm: React.FC = () => {
                       <div className="sdg-selection-container border rounded d-flex flex-wrap align-items-center p-1 gap-1" style={{ minHeight: '36px', backgroundColor: '#fff' }}>
                         {/* Selected Collaborations as tags inline with input */}
                         {selectedCollaborations.map((collab) => (
-                          <span key={collab} className="badge bg-primary d-inline-flex align-items-center flex-shrink-0" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>
+                          <span key={collab} className="badge custom-tag-badge d-inline-flex align-items-center flex-shrink-0" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>
                             {collab}
                             <button
                               type="button"
@@ -3237,7 +3238,7 @@ const JournalForm: React.FC = () => {
                         <div className="sdg-selection-container border rounded d-flex flex-wrap align-items-center p-1 gap-1" style={{ minHeight: '36px', backgroundColor: '#fff' }}>
                           {/* Selected Acknowledgements as tags inline with input */}
                           {selectedAcknowledgements.map((ack) => (
-                            <span key={ack} className="badge bg-primary d-inline-flex align-items-center flex-shrink-0" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>
+                            <span key={ack} className="badge custom-tag-badge d-inline-flex align-items-center flex-shrink-0" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>
                               {ack}
                               <button
                                 type="button"
@@ -3383,7 +3384,7 @@ const JournalForm: React.FC = () => {
                       <div className="sdg-selection-container border rounded d-flex flex-wrap align-items-center p-1 gap-1" style={{ minHeight: '36px', backgroundColor: '#fff' }}>
                         {/* Selected SDGs as tags inline with input */}
                         {selectedSDGs.map((sdg) => (
-                          <span key={sdg} className="badge bg-primary d-inline-flex align-items-center flex-shrink-0" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>
+                          <span key={sdg} className="badge custom-tag-badge d-inline-flex align-items-center flex-shrink-0" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>
                             {typeof sdg === 'string' && sdg.includes('.') ? sdg.split('.')[0] : sdg}
                             <button
                               type="button"
