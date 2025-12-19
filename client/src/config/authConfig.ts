@@ -1,9 +1,19 @@
 import { Configuration } from "@azure/msal-browser";
 
+const clientId = process.env.REACT_APP_MICROSOFT_CLIENT_ID;
+const tenantId = process.env.REACT_APP_MICROSOFT_TENANT_ID;
+
+if (!clientId) {
+  console.warn('REACT_APP_MICROSOFT_CLIENT_ID is not set');
+}
+if (!tenantId) {
+  console.warn('REACT_APP_MICROSOFT_TENANT_ID is not set');
+}
+
 export const msalConfig: Configuration = {
   auth: {
-    clientId: process.env.REACT_APP_MICROSOFT_CLIENT_ID || '',
-    authority: `https://login.microsoftonline.com/${process.env.REACT_APP_MICROSOFT_TENANT_ID || ''}`,
+    clientId: clientId || '00000000-0000-0000-0000-000000000000', // Placeholder to prevent empty string crash
+    authority: `https://login.microsoftonline.com/${tenantId || 'common'}`,
     redirectUri: window.location.origin,
   },
   cache: {

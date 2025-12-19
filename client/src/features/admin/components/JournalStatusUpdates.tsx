@@ -280,7 +280,7 @@ const JournalStatusUpdates: React.FC = () => {
                     </td>
                     <td>{formatDate(update.created_at)}</td>
                     <td>
-                      <Button variant="outline-primary" size="sm" onClick={() => handleReply(update)} title="Reply">
+                      <Button variant="primary" size="sm" onClick={() => handleReply(update)} title="Reply">
                         <FontAwesomeIcon icon={faReply} />
                       </Button>
                     </td>

@@ -158,9 +158,22 @@ function App() {
                 }
               />
               <Route path="/" element={<Navigate to="/home" />} />
-
-              <Route path="/eventdashboard" element={<EventDashboard />} />
-              <Route path="/event-entry" element={<EventEntry />} />
+              <Route
+                path="/eventdashboard"
+                element={
+                  <ProtectedRoute>
+                    <EventDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/event-entry"
+                element={
+                  <ProtectedRoute>
+                    <EventEntry />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/storybook" element={<Storybook />} />
             </Routes>
           </AuthProvider>

@@ -179,9 +179,11 @@
 .radio-item label::before {
   background-color: #fff !important;
 }
-.radio-item input[type='radio']:checked + label::before {
+
+.radio-item input[type='radio']:checked+label::before {
   border-color: #0069ab !important;
 }
+
 .radio-item label::after {
   background-color: #0069ab !important;
 }
@@ -189,7 +191,8 @@
 .checkbox-item label::before {
   background-color: #fff !important;
 }
-.checkbox-item input[type='checkbox']:checked + label::before {
+
+.checkbox-item input[type='checkbox']:checked+label::before {
   background-color: #0069ab !important;
   border-color: #0069ab !important;
 }
@@ -306,16 +309,17 @@ input[type='checkbox'],
   margin-right: -0.25rem;
 }
 
-.modal-body .row > [class*='col-'] {
+.modal-body .row>[class*='col-'] {
   padding-left: 0.25rem;
   padding-right: 0.25rem;
 }
+
 /* Modal close button styling */
 .modal-header .btn-close {
   background-color: transparent !important;
   border: none !important;
   opacity: 0.8;
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%230069ab'%3e%3cpath d='m.5 3.5 1-1L8 8.5 14.5 2l1 1L9 10.5l-6.5 6.5-1-1L7 9.5.5 3.5z'/%3e%3c/svg%3e") !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%230069ab'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e") !important;
   background-size: 14px 14px;
   background-repeat: no-repeat;
   background-position: center;
