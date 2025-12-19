@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Form, Badge, ListGroup } from 'react-bootstrap';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTimes } from '@fortawesome/free-solid-svg-icons';
+import { X } from 'lucide-react';
 import './common.css';
 
 interface CustomTagInputProps {
@@ -94,7 +93,7 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
                 onClick={() => handleRemove(item)}
                 style={{ cursor: 'pointer' }}
               >
-                <FontAwesomeIcon icon={faTimes} size="sm" />
+                <X size={12} />
               </span>
             )}
           </Badge>

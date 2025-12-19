@@ -2,8 +2,7 @@ import React, { useState, useEffect } from "react";
 import Select from "react-select";
 import "../styles/EventForm.css";
 import { v4 as uuidv4 } from "uuid";
-import { FaPlus, FaTrash, FaEye } from "react-icons/fa";
-import { FaCloudUploadAlt } from "react-icons/fa";
+import { Plus, Trash2, Eye, CloudUpload } from "lucide-react";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 
 interface EventData {
@@ -1165,7 +1164,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                           }
                           className="event-icon-btn"
                         >
-                          <FaTrash size={16} />
+                          <Trash2 size={16} />
                         </button>
                       )}
                       {index === budgetRows.length - 1 && (
@@ -1179,7 +1178,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                           }}
                           className="event-add"
                         >
-                          <FaPlus size={16} />
+                          <Plus size={16} />
                         </button>
                       )}
                     </td>

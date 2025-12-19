@@ -4,12 +4,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
 import { DayCellContentArg } from "@fullcalendar/core";
 import EventDetailsPopup from "./EventDetailsPopup";
-import {
-  FaRegClock,
-  FaBuilding,
-  FaLayerGroup,
-  FaMapMarkerAlt,
-} from "react-icons/fa";
+import { Clock, Building2, Layers, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import Navbar from "../../..//shared/components/layout/navbar/navbar";
@@ -216,19 +211,19 @@ const Dashboard: React.FC = () => {
                   >
                     <div className="event-top">
                       <span className="event-category">
-                        <FaLayerGroup className="icon" /> {event.category}
+                        <Layers size={16} className="icon" /> {event.category}
                       </span>
                       <span className="event-time">
-                        <FaRegClock className="icon" /> {event.time}
+                        <Clock size={16} className="icon" /> {event.time}
                       </span>
                       <span className="event-department">
-                        <FaBuilding className="icon" /> {event.department}
+                        <Building2 size={16} className="icon" /> {event.department}
                       </span>
                     </div>
                     <div className="event-bottom">
                       <span className="event-name">{event.name}</span>
                       <span className="event-venue">
-                        <FaMapMarkerAlt className="icon" /> {event.venue}
+                        <MapPin size={16} className="icon" /> {event.venue}
                       </span>
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, ChangeEvent } from "react";
 import "../styles/EventForm.css";
-import { FaCloudUploadAlt, FaEye, FaPlus, FaTrash } from "react-icons/fa";
+import { CloudUpload, Eye, Plus, Trash2 } from "lucide-react";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 
 interface ParticipantType {
@@ -123,7 +123,7 @@ const ParticipantsPage: React.FC<ParticipantsPageProps> = ({ participants, setPa
         />
 
         <button type="button" className="event-add" onClick={handleAdd}>
-          <FaPlus />
+          <Plus size={16} />
         </button>
       </div>
 
@@ -158,7 +158,7 @@ const ParticipantsPage: React.FC<ParticipantsPageProps> = ({ participants, setPa
                         fontSize: "16px",
                       }}
                     >
-                      <FaTrash />
+                      <Trash2 size={16} />
                     </button>
                   </td>
                 </tr>
@@ -263,7 +263,7 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
               }
               disabled={!feedback.url}
             >
-              <FaEye />
+              <Eye size={16} />
             </button>
           </div>
         </div>
@@ -316,7 +316,7 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
                 onClick={() => yt.url && window.open(yt.url, "_blank")}
                 disabled={!yt.url}
               >
-                <FaEye />
+                <Eye size={16} />
               </button>
             </div>
 
@@ -328,7 +328,7 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
                   onClick={handleAddYoutube}
                   disabled={!youtubeLinks[0]?.enabled}
                 >
-                  <FaPlus />
+                  <Plus size={16} />
                 </button>
               )}
               {youtubeLinks.length > 1 && (
@@ -338,7 +338,7 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
                   onClick={() => handleDeleteYoutube(index)}
                   disabled={!youtubeLinks[0]?.enabled}
                 >
-                  <FaTrash />
+                  <Trash2 size={16} />
                 </button>
               )}
             </div>
@@ -536,7 +536,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
                   className={`event-upload-icon ${!docState[doc].active ? "disabled" : ""
                     }`}
                 >
-                  <FaCloudUploadAlt />
+                  <CloudUpload size={16} />
                   <input
                     type="file"
                     onChange={(e) => handleFileUpload(doc, e, i)}
@@ -552,7 +552,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
                     photoFiles[i] && handleViewFile(doc, i)
                   }
                 >
-                  <FaEye />
+                  <Eye size={16} />
                 </span>
               </div>
             ))}
@@ -575,7 +575,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
         <label
           className={`event-upload-icon ${!docState[doc].active ? "disabled" : ""}`}
         >
-          <FaCloudUploadAlt />
+          <CloudUpload size={16} />
           <input
             type="file"
             onChange={(e) => handleFileUpload(doc, e)}
@@ -587,7 +587,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
           className={`event-eye-icon ${!docState[doc].file ? "disabled" : ""}`}
           onClick={() => docState[doc].file && handleViewFile(doc)}
         >
-          <FaEye />
+          <Eye size={16} />
         </span>
       </div>
     );

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, ChangeEvent } from "react";
 import { Modal, Button, Form, Badge, Alert } from "react-bootstrap";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faReply, faTimes } from "@fortawesome/free-solid-svg-icons";
+import { Reply, X } from "lucide-react";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import "./JournalStatusUpdates.css";
 
@@ -217,7 +216,7 @@ const JournalStatusUpdates: React.FC = () => {
           </Form.Select>
           {statusFilter && (
             <Button variant="outline-secondary" size="sm" onClick={() => { setStatusFilter(""); setCurrentPage(1); }}>
-              <FontAwesomeIcon icon={faTimes} />
+              <X size={16} />
             </Button>
           )}
         </div>
@@ -281,7 +280,7 @@ const JournalStatusUpdates: React.FC = () => {
                     <td>{formatDate(update.created_at)}</td>
                     <td>
                       <Button variant="primary" size="sm" onClick={() => handleReply(update)} title="Reply">
-                        <FontAwesomeIcon icon={faReply} />
+                        <Reply size={16} />
                       </Button>
                     </td>
                   </tr>

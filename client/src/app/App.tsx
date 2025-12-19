@@ -23,7 +23,7 @@ import Storybook from '../features/storybook/Storybook';
 function App() {
   return (
     <MsalProvider>
-      <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID || ''}>
+      <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ''}>
         <BrowserRouter>
           <AuthProvider>
             <Routes>

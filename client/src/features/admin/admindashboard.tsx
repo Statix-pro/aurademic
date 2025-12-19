@@ -1,13 +1,6 @@
 import React, { useState, useEffect, useCallback, ChangeEvent } from "react";
 import authenticityUtility from "../../shared/utils/authenticityUtility";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faEdit,
-  faTrash,
-  faEye,
-  faCheck,
-  faTimes,
-} from "@fortawesome/free-solid-svg-icons";
+import { Pencil, Trash2, Eye, Check, X } from "lucide-react";
 import { Modal, Button } from "react-bootstrap";
 import Navbar from "../../shared/components/layout/navbar/navbar";
 import "./admindashboard.css";
@@ -362,7 +355,7 @@ const Dashboard: React.FC = () => {
                         onClick={() => handleApproveJournalRequest(request.id)}
                         title="Approve"
                       >
-                        <FontAwesomeIcon icon={faCheck} />
+                        <Check size={16} />
                       </button>
                       <button
                         type="button"
@@ -370,7 +363,7 @@ const Dashboard: React.FC = () => {
                         onClick={() => handleRejectJournalRequest(request.id)}
                         title="Reject"
                       >
-                        <FontAwesomeIcon icon={faTimes} />
+                        <X size={16} />
                       </button>
                     </div>
                   )}
@@ -589,7 +582,7 @@ const Dashboard: React.FC = () => {
             }}
             title="View Status Updates"
           >
-            <FontAwesomeIcon icon={faEye} />
+            <Eye size={16} />
           </Button>
         );
 
@@ -1094,13 +1087,13 @@ const Dashboard: React.FC = () => {
             <td key={column.key}>
               <div className="btn-group">
                 <button type="button" className="btn btn-sm btn-info me-1" onClick={() => handleViewDetails(item.id)} title="View Details">
-                  <FontAwesomeIcon icon={faEye} />
+                  <Eye size={16} />
                 </button>
                 <button type="button" className="btn btn-sm btn-primary me-1" title="Edit">
-                  <FontAwesomeIcon icon={faEdit} />
+                  <Pencil size={16} />
                 </button>
                 <button type="button" className="btn btn-sm btn-danger" onClick={() => handleDelete(item.id)} title="Delete">
-                  <FontAwesomeIcon icon={faTrash} />
+                  <Trash2 size={16} />
                 </button>
               </div>
             </td>
@@ -1155,10 +1148,10 @@ const Dashboard: React.FC = () => {
                   {request.status === "pending" && (
                     <div className="btn-group" role="group">
                       <button type="button" className="btn btn-success btn-sm" onClick={() => handleApproveProjectRequest(request.id)} title="Approve">
-                        <FontAwesomeIcon icon={faCheck} />
+                        <Check size={16} />
                       </button>
                       <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRejectProjectRequest(request.id)} title="Reject">
-                        <FontAwesomeIcon icon={faTimes} />
+                        <X size={16} />
                       </button>
                     </div>
                   )}

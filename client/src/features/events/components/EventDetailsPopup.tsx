@@ -1,11 +1,5 @@
 import React from "react";
-import {
-  FaTimes,
-  FaRegClock,
-  FaBuilding,
-  FaLayerGroup,
-  FaMapMarkerAlt,
-} from "react-icons/fa";
+import { X, Clock, Building2, Layers, MapPin } from "lucide-react";
 import "../styles/EventDetailsPopup.css";
 
 interface EventData {
@@ -29,37 +23,37 @@ const EventDetailsPopup: React.FC<EventDetailsPopupProps> = ({ event, onClose })
     <div className="popup-overlay" onClick={onClose}>
       <div className="popup-content" onClick={(e) => e.stopPropagation()}>
         <button className="popup-close-btn" onClick={onClose}>
-          <FaTimes />
+          <X size={16} />
         </button>
         <h2 className="popup-title">{event.name}</h2>
 
         <div className="popup-details">
           <div className="popup-detail">
-            <FaLayerGroup className="icon" />
+            <Layers size={16} className="icon" />
             <span>
               <strong>Category:</strong> {event.category}
             </span>
           </div>
           <div className="popup-detail">
-            <FaBuilding className="icon" />
+            <Building2 size={16} className="icon" />
             <span>
               <strong>Department:</strong> {event.department}
             </span>
           </div>
           <div className="popup-detail">
-            <FaRegClock className="icon" />
+            <Clock size={16} className="icon" />
             <span>
               <strong>Time:</strong> {event.time}
             </span>
           </div>
           <div className="popup-detail">
-            <FaMapMarkerAlt className="icon" />
+            <MapPin size={16} className="icon" />
             <span>
               <strong>Venue:</strong> {event.venue}
             </span>
           </div>
           <div className="popup-detail">
-            <FaMapMarkerAlt className="icon" />
+            <MapPin size={16} className="icon" />
             <span>
               <strong>Date:</strong> {event.date}
             </span>

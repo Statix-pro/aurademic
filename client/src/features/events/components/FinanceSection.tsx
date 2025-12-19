@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { FaTrash, FaEye, FaPlus } from "react-icons/fa";
-import { FaCloudUploadAlt } from "react-icons/fa";
+import { Trash2, Eye, Plus, CloudUpload } from "lucide-react";
 import "../styles/EventForm.css";
 import { v4 as uuidv4 } from "uuid";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
@@ -258,7 +257,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                           onClick={addIncomeRow}
                           title="Add"
                         >
-                          <FaPlus />
+                          <Plus size={16} />
                         </button>
                       ) : isLastRow ? (
                         // Last row → Delete + Add
@@ -269,7 +268,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                             onClick={() => deleteIncomeRow(row.id)}
                             title="Delete"
                           >
-                            <FaTrash />
+                            <Trash2 size={16} />
                           </button>
                           <button
                             type="button"
@@ -277,7 +276,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                             onClick={addIncomeRow}
                             title="Add"
                           >
-                            <FaPlus />
+                            <Plus size={16} />
                           </button>
                         </>
                       ) : (
@@ -288,7 +287,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                           onClick={() => deleteIncomeRow(row.id)}
                           title="Delete"
                         >
-                          <FaTrash />
+                          <Trash2 size={16} />
                         </button>
                       )}
                     </div>
@@ -431,7 +430,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                         title="Upload document"
                         style={{ cursor: "pointer" }}
                       >
-                        <FaCloudUploadAlt size={18} />
+                        <CloudUpload size={18} />
                         <input
                           type="file"
                           style={{ display: "none" }}
@@ -468,7 +467,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                           height: "100%",
                         }}
                       >
-                        <FaEye size={18} />
+                        <Eye size={18} />
                       </span>
                     </div>
                   </td>
@@ -482,7 +481,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                           onClick={addExpenditureRow}
                           title="Add"
                         >
-                          <FaPlus />
+                          <Plus size={16} />
                         </button>
                       ) : isLastRow ? (
                         <>
@@ -492,7 +491,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                             onClick={() => deleteExpenditureRow(row.id)}
                             title="Delete"
                           >
-                            <FaTrash />
+                            <Trash2 size={16} />
                           </button>
                           <button
                             type="button"
@@ -500,7 +499,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                             onClick={addExpenditureRow}
                             title="Add"
                           >
-                            <FaPlus />
+                            <Plus size={16} />
                           </button>
                         </>
                       ) : (
@@ -510,7 +509,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                           onClick={() => deleteExpenditureRow(row.id)}
                           title="Delete"
                         >
-                          <FaTrash />
+                          <Trash2 size={16} />
                         </button>
                       )}
                     </div>
@@ -555,7 +554,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                   <label
                     className={`event-upload-icon ${!active ? "disabled" : ""}`}
                   >
-                    <FaCloudUploadAlt />
+                    <CloudUpload size={18} />
                     <input
                       type="file"
                       style={{ display: "none" }}
@@ -575,7 +574,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                     className={`event-eye-icon ${!file ? "disabled" : ""}`}
                     onClick={() => file && handleViewFile(file)}
                   >
-                    <FaEye />
+                    <Eye size={18} />
                   </span>
                 </div>
               );
@@ -834,7 +833,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
                               title="Add"
                               disabled={!enabled}
                             >
-                              <FaPlus />
+                              <Plus size={16} />
                             </button>
                           ) : isLastRow ? (
                             <div className="flex items-center gap-2">
@@ -845,7 +844,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
                                 title="Delete"
                                 disabled={!enabled}
                               >
-                                <FaTrash />
+                                <Trash2 size={16} />
                               </button>
                               <button
                                 type="button"
@@ -854,7 +853,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
                                 title="Add"
                                 disabled={!enabled}
                               >
-                                <FaPlus />
+                                <Plus size={16} />
                               </button>
                             </div>
                           ) : (
@@ -865,7 +864,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
                               title="Delete"
                               disabled={!enabled}
                             >
-                              <FaTrash />
+                              <Trash2 size={16} />
                             </button>
                           )}
                         </div>
@@ -943,7 +942,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
                               ?.click()
                           }
                         >
-                          <FaCloudUploadAlt />
+                          <CloudUpload size={18} />
                           <input
                             type="file"
                             onChange={(e) =>
@@ -962,7 +961,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
                           className={`event-eye-icon ${!doc.file ? "disabled" : ""}`}
                           onClick={() => doc.file && viewFile(doc.file)}
                         >
-                          <FaEye />
+                          <Eye size={18} />
                         </span>
                       </div>
                     ))}

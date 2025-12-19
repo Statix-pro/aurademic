@@ -1,13 +1,13 @@
 import { Configuration } from "@azure/msal-browser";
 
-const clientId = process.env.REACT_APP_MICROSOFT_CLIENT_ID;
-const tenantId = process.env.REACT_APP_MICROSOFT_TENANT_ID;
+const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
+const tenantId = import.meta.env.VITE_MICROSOFT_TENANT_ID;
 
 if (!clientId) {
-  console.warn('REACT_APP_MICROSOFT_CLIENT_ID is not set');
+  console.warn('VITE_MICROSOFT_CLIENT_ID is not set');
 }
 if (!tenantId) {
-  console.warn('REACT_APP_MICROSOFT_TENANT_ID is not set');
+  console.warn('VITE_MICROSOFT_TENANT_ID is not set');
 }
 
 export const msalConfig: Configuration = {
