@@ -709,10 +709,17 @@ const results = data.filter(item =>
     // Auto-expand groups when searching
     useEffect(() => {
         if (sidebarSearchQuery.trim() !== '') {
-            const groupsToExpand = filteredComponentGroups.map(g => g.id);
+            const groupsToExpand = componentGroups
+                .filter(group =>
+                    group.stories.some(story =>
+                        story.name.toLowerCase().includes(sidebarSearchQuery.toLowerCase()) ||
+                        group.name.toLowerCase().includes(sidebarSearchQuery.toLowerCase())
+                    )
+                )
+                .map(g => g.id);
             setExpandedGroups(prev => Array.from(new Set([...prev, ...groupsToExpand])));
         }
-    }, [sidebarSearchQuery, filteredComponentGroups]);
+    }, [sidebarSearchQuery]);
 
     return (
         <div className="sb-container">
