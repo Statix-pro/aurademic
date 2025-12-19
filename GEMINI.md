@@ -71,9 +71,18 @@ The project uses **Split Environment Configuration** to support seamless transit
 
 *   **`.env.development`** (Loaded via `npm run dev`)
     ```ini
-    REACT_APP_API_URL=http://localhost:5000/api
-    REACT_APP_GOOGLE_CLIENT_ID=...
-    REACT_APP_MICROSOFT_CLIENT_ID=...
+    VITE_API_URL=http://localhost:5000/api
+    VITE_GOOGLE_CLIENT_ID=...
+    VITE_MICROSOFT_CLIENT_ID=...
+    VITE_MICROSOFT_TENANT_ID=...
+    ```
+
+*   **`.env.production`** (Loaded via `npm run build`)
+    ```ini
+    VITE_API_URL=https://research.ksrct.ac.in/api
+    VITE_GOOGLE_CLIENT_ID=...
+    VITE_MICROSOFT_CLIENT_ID=...
+    VITE_MICROSOFT_TENANT_ID=...
     ```
 
 ### Server Configuration (`server/`)
@@ -117,7 +126,7 @@ npm run dev
 ### Authenticity Utility (`authenticityUtility.ts`)
 Located in `client/src/shared/utils/`. This utility dynamically resolves the Base URL for API requests.
 *   **Development:** Returns `http://localhost:5000`
-*   **Production:** Returns `https://research.ksrct.ac.in` (derived from `REACT_APP_API_URL`).
+*   **Production:** Returns `https://research.ksrct.ac.in` (derived from `VITE_API_URL`).
 
 ## 8. Database Schema
 Major tables include:
