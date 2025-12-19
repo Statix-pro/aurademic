@@ -1,5 +1,5 @@
+import './config/env.js';
 import express from 'express';
-import dotenv from 'dotenv';
 import cors from 'cors';
 import journalRoutes from './modules/journal/journalRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
@@ -17,6 +17,8 @@ import { errorHandler } from './middleware/errorMiddleware.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import swaggerUi from 'swagger-ui-express';
+import specs from './config/swagger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,8 +36,6 @@ const corsOptions = {
   exposedHeaders: ['Authorization'],
 };
 
-dotenv.config();
-
 app.get('/api/debug/config', (req, res) => {
   res.json({
     googleClientIdLength: process.env.GOOGLE_CLIENT_ID?.length || 0,
@@ -50,6 +50,11 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // app.use(express.json());
+
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+  console.log('Swagger UI available at /api-docs');
+}
 
 // Debug middleware for all requests
 // app.use((req, res, next) => {
@@ -122,9 +127,10 @@ app.use(errorHandler);
 const port = process.env.PORT || 5000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  console.log('Available routes:');
-  console.log('- /api/auth/google (POST)');
-  console.log('- /api/journal/*');
-  console.log('- /api/project/*');
-  console.log('- /api/admin/*');
+  // console.log('Available routes:');
+  // console.log('- /api/auth/google (POST)');
+  // console.log('- /api/journal/*');
+  // console.log('- /api/project/*');
+  // console.log('- /api/admin/*');
+  console.log('- /api-docs (Swagger API docs)');
 });

@@ -1,0 +1,287 @@
+tags:
+  - name: Admin
+    description: Admin management
+
+paths:
+  /admin/dashboard:
+    get:
+      summary: Get admin dashboard data
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stats:
+                    type: object
+                    example:
+                      total_projects: 10
+                      total_journals: 5
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - Admin access required
+        500:
+          description: Server error
+
+  /admin/projects:
+    get:
+      summary: Get all projects
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../project.yaml#/components/schemas/Project'
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - Admin access required
+        500:
+          description: Server error
+
+  /admin/journals:
+    get:
+      summary: Get all journals
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of journals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../journal.yaml#/components/schemas/Journal'
+
+  /admin/projects/{id}:
+    get:
+      summary: Get project details
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '../project.yaml#/components/schemas/Project'
+
+  /admin/journals/{id}:
+    get:
+      summary: Get journal details
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Journal details
+          content:
+            application/json:
+              schema:
+                $ref: '../journal.yaml#/components/schemas/Journal'
+
+  /admin/journal-requests:
+    get:
+      summary: Get all journal requests
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of journal requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../journal.yaml#/components/schemas/JournalRequest'
+
+  /admin/journal-requests/{id}/approve:
+    patch:
+      summary: Approve a journal request
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Journal request approved
+
+  /admin/journal-requests/{id}/reject:
+    patch:
+      summary: Reject a journal request
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Journal request rejected
+
+  /admin/project-requests:
+    get:
+      summary: Get all project requests
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of project requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../project.yaml#/components/schemas/ProjectRequest'
+
+  /admin/project-requests/{id}/approve:
+    patch:
+      summary: Approve a project request
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Project request approved
+
+  /admin/project-requests/{id}/reject:
+    patch:
+      summary: Reject a project request
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Project request rejected
+
+  /admin/journal-status-updates:
+    get:
+      summary: Get all journal status updates
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of journal status updates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../journal.yaml#/components/schemas/JournalStatusUpdate'
+
+  /admin/journals/{id}/status-updates:
+    get:
+      summary: Get status updates for a journal
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: List of status updates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../journal.yaml#/components/schemas/JournalStatusUpdate'
+
+  /admin/journals/{id}/with-status-updates:
+    get:
+      summary: Get journal with status updates
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Journal with status updates
+          content:
+            application/json:
+              schema:
+                $ref: '../journal.yaml#/components/schemas/Journal'
+
+  /admin/status-updates/{statusUpdateId}/admin-reply:
+    patch:
+      summary: Reply to a status update
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: statusUpdateId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                admin_reply:
+                  type: string
+      responses:
+        200:
+          description: Reply updated
