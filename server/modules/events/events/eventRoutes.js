@@ -7,8 +7,11 @@ import {
   updateEvent,
   deleteEvent,
 } from './eventController.js';
+import { authMiddleware } from '../../../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+router.use(authMiddleware);
 
 // Event APIs
 router.get('/', getEvents); // GET all events

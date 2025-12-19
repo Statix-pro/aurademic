@@ -19,7 +19,15 @@ paths:
                 properties:
                   stats:
                     type: object
-                    example: { "total_projects": 10, "total_journals": 5 }
+                    example:
+                      total_projects: 10
+                      total_journals: 5
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - Admin access required
+        500:
+          description: Server error
 
   /admin/projects:
     get:
@@ -36,6 +44,12 @@ paths:
                 type: array
                 items:
                   $ref: '../project.yaml#/components/schemas/Project'
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - Admin access required
+        500:
+          description: Server error
 
   /admin/journals:
     get:

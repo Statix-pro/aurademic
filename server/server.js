@@ -1,5 +1,5 @@
+import './config/env.js';
 import express from 'express';
-import dotenv from 'dotenv';
 import cors from 'cors';
 import journalRoutes from './modules/journal/journalRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
@@ -35,9 +35,6 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'],
   exposedHeaders: ['Authorization'],
 };
-
-const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
-dotenv.config({ path: envFile });
 
 app.get('/api/debug/config', (req, res) => {
   res.json({

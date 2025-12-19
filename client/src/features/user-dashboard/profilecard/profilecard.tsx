@@ -26,11 +26,11 @@ const ProfileCard: React.FC = () => {
             </div>
 
             <div className="action-buttons">
-              <button className="btn">Google Scholar</button>
-              <button className="btn">Scopus</button>
-              <button className="btn">Researcher ID</button>
-              <button className="btn">Orcid ID</button>
-              <button className="btn">Extract Profile</button>
+              <button type="button" className="btn" onClick={() => console.log('Google Scholar clicked')}>Google Scholar</button>
+              <button type="button" className="btn" onClick={() => console.log('Scopus clicked')}>Scopus</button>
+              <button type="button" className="btn" onClick={() => console.log('Researcher ID clicked')}>Researcher ID</button>
+              <button type="button" className="btn" onClick={() => console.log('Orcid ID clicked')}>Orcid ID</button>
+              <button type="button" className="btn" onClick={() => console.log('Extract Profile clicked')}>Extract Profile</button>
             </div>
             <div className="stats mt-4">
               <div className="row">
