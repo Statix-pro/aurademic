@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Form, Button } from 'react-bootstrap';
 import { Upload, Trash2, FileText } from 'lucide-react';
 import './common.css';
@@ -9,6 +9,8 @@ interface CustomFileUploaderProps {
   onChange: (file: File) => void;
   onDelete?: () => void;
   fileName?: string;
+  file?: File | null;
+  fileUrl?: string;
   accept?: string;
   disabled?: boolean;
   error?: string;
@@ -22,6 +24,8 @@ const CustomFileUploader: React.FC<CustomFileUploaderProps> = ({
   onChange,
   onDelete,
   fileName,
+  file,
+  fileUrl,
   accept,
   disabled = false,
   error,
@@ -29,16 +33,35 @@ const CustomFileUploader: React.FC<CustomFileUploaderProps> = ({
   buttonText = "Upload File"
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // Create object URL for file preview
+  useEffect(() => {
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [file]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onChange(file);
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      onChange(selectedFile);
     }
   };
 
   const handleButtonClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleFileClick = () => {
+    const url = previewUrl || fileUrl;
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   return (
@@ -57,10 +80,30 @@ const CustomFileUploader: React.FC<CustomFileUploaderProps> = ({
         />
 
         <Button
-          variant="secondary"
           onClick={handleButtonClick}
           disabled={disabled}
           className="d-flex align-items-center gap-2"
+          style={{
+            backgroundColor: disabled ? '#b3d9ff' : '#0069ab',
+            color: 'white',
+            border: 'none',
+            padding: '10px 20px',
+            fontSize: '1rem',
+            borderRadius: '12px',
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+            transition: 'background-color 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            if (!disabled) {
+              (e.target as HTMLButtonElement).style.backgroundColor = '#005492';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!disabled) {
+              (e.target as HTMLButtonElement).style.backgroundColor = '#0069ab';
+            }
+          }}
         >
           <Upload size={16} />
           {buttonText}
@@ -69,7 +112,16 @@ const CustomFileUploader: React.FC<CustomFileUploaderProps> = ({
         {fileName ? (
           <div className="d-flex align-items-center gap-2 p-2 border rounded bg-light flex-grow-1">
             <FileText size={16} className="text-muted" />
-            <span className="text-truncate" style={{ maxWidth: '200px' }} title={fileName}>
+            <span
+              className="text-truncate"
+              style={{
+                maxWidth: '200px',
+                cursor: (previewUrl || fileUrl) ? 'pointer' : 'default',
+                color: (previewUrl || fileUrl) ? '#0069ab' : 'inherit',
+              }}
+              title={fileName}
+              onClick={handleFileClick}
+            >
               {fileName}
             </span>
             {onDelete && !disabled && (

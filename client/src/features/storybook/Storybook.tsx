@@ -640,6 +640,7 @@ const results = data.filter(item =>
                                 onChange={(f) => setFile(f)}
                                 onDelete={() => setFile(null)}
                                 fileName={file?.name}
+                                file={file}
                             />
                         </div>
                     ),
@@ -659,6 +660,8 @@ const results = data.filter(item =>
                         { name: 'onChange', type: '(file: File) => void', description: 'File select handler', required: true },
                         { name: 'onDelete', type: '() => void', description: 'Delete handler' },
                         { name: 'fileName', type: 'string', description: 'Current file name' },
+                        { name: 'file', type: 'File | null', description: 'File object for preview (newly selected files)' },
+                        { name: 'fileUrl', type: 'string', description: 'URL for preview (existing server files)' },
                         { name: 'accept', type: 'string', description: 'Accepted file types' },
                     ]
                 },
