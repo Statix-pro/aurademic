@@ -33,7 +33,7 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@types/node": "^25.0.3",
+    "@types/node": "^22.19.3",
     "@types/react": "^18.3.27",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.3.4",
