@@ -116,27 +116,30 @@ The application supports multiple authentication methods:
 
 Authentication state is managed via React Context and JWT tokens stored in localStorage.
 
-## 🌟 Key Features
-
-- **📚 Journal Management** - Create, edit, and track academic journal submissions
-- **📋 Project Management** - Manage research projects with team collaboration
-- **📅 Event Management** - Calendar-based event scheduling with FullCalendar
-- **📊 Admin Dashboard** - Administrative controls and analytics
-- **👤 User Dashboard** - Personal research activity overview
-- **📝 Publications** - Track and manage academic publications
-- **🎨 Storybook** - UI component library and documentation
-
 ## 🔗 API Integration
 
-The client communicates with the backend API via Axios. The base URL is configured through the `VITE_API_URL` environment variable.
+The client communicates with the backend API via `authenticityUtility`, a pre-configured Axios instance that handles:
+- JWT token injection in headers
+- Automatic session expiry handling
+- File upload support
 
 ```typescript
-// Example API call
-import axios from 'axios';
+// Import the utility
+import authenticityUtility from '@/shared/utils/authenticityUtility';
 
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-});
+// GET request
+const data = await authenticityUtility.get('/journals');
+
+// POST request
+const result = await authenticityUtility.post('/journals', { title: 'New Journal' });
+
+// File upload
+const formData = new FormData();
+formData.append('file', file);
+await authenticityUtility.postFile('/upload', formData);
+
+// Get base URL (without /api)
+const baseUrl = authenticityUtility.getBaseURL();
 ```
 
 ## 📦 Dependencies
