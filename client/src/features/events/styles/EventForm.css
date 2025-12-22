@@ -499,7 +499,7 @@ form {
   text-align: center;
 }
 
-ions {
+.event-actions {
   text-align: center;
   vertical-align: middle; /* this is the key */
 }
