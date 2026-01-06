@@ -2045,549 +2045,635 @@ const ResearchProjectForm: React.FC = () => {
         {activeTab === 'form' ? (
           <form onSubmit={handleSubmit} className="research-form">
             {/* Investigators Card */}
-            <div className="card form-card mb-4">
-              <div className="card-body">
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h6 className="form-section-title">Investigators:</h6>
-                  <div className="d-flex align-items-center">
-                    <span className="me-3">Driven by:</span>
-                    <div className="radio-group">
-                      <div className="radio-item">
-                        <input
-                          type="radio"
-                          id="drivenByFaculty"
-                          name="drivenBy"
-                          value="faculty"
-                          checked={!isFacultyDriven}
-                          onChange={() => !isViewMode && toggleCategory()}
-                          disabled={isViewMode || isFormDisabled}
-                        />
-                        <label htmlFor="drivenByFaculty">Faculty</label>
-                      </div>
-                      <div className="radio-item">
-                        <input
-                          type="radio"
-                          id="drivenByStudent"
-                          name="drivenBy"
-                          value="student"
-                          checked={isFacultyDriven}
-                          onChange={() => !isViewMode && toggleCategory()}
-                          disabled={isViewMode || isFormDisabled}
-                        />
-                        <label htmlFor="drivenByStudent">Student</label>
-                      </div>
+            <div className="form-card">
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h6 className="form-section-title">Investigators:</h6>
+                <div className="d-flex align-items-center">
+                  <span className="me-3">Driven by:</span>
+                  <div className="radio-group">
+                    <div className="radio-item">
+                      <input
+                        type="radio"
+                        id="drivenByFaculty"
+                        name="drivenBy"
+                        value="faculty"
+                        checked={!isFacultyDriven}
+                        onChange={() => !isViewMode && toggleCategory()}
+                        disabled={isViewMode || isFormDisabled}
+                      />
+                      <label htmlFor="drivenByFaculty">Faculty</label>
+                    </div>
+                    <div className="radio-item">
+                      <input
+                        type="radio"
+                        id="drivenByStudent"
+                        name="drivenBy"
+                        value="student"
+                        checked={isFacultyDriven}
+                        onChange={() => !isViewMode && toggleCategory()}
+                        disabled={isViewMode || isFormDisabled}
+                      />
+                      <label htmlFor="drivenByStudent">Student</label>
                     </div>
                   </div>
                 </div>
-                {validationErrors.investigators && (
-                  <div className="alert alert-danger">
-                    {validationErrors.investigators}
+              </div>
+              {validationErrors.investigators && (
+                <div className="alert alert-danger">
+                  {validationErrors.investigators}
+                </div>
+              )}
+              {investigators.map((investigator, index) => (
+                <div
+                  key={investigator.id}
+                  className="investigator-row mb-3"
+                >
+                  {/* Radio button with tooltip */}
+                  <div className="custom-tooltip">
+                    <input
+                      type="radio"
+                      id={`investigator${investigator.id}`}
+                      name="primary_investigator"
+                      className="investigator-row-radio"
+                      checked={investigator.is_primary}
+                      onChange={() => handlePrimarySelection(index)}
+                      required
+                      disabled={isFormDisabled}
+                    />
+                    <span className="tooltip-text">
+                      {index === 0 ? 'PI' : 'Co-PI'}
+                    </span>
                   </div>
-                )}
-                {investigators.map((investigator, index) => (
-                  <div
-                    key={investigator.id}
-                    className="investigator-row mb-3"
-                  >
-                    {/* Radio button with tooltip */}
-                    <div className="custom-tooltip">
-                      <input
-                        type="radio"
-                        id={`investigator${investigator.id}`}
-                        name="primary_investigator"
-                        className="investigator-row-radio"
-                        checked={investigator.is_primary}
-                        onChange={() => handlePrimarySelection(index)}
-                        required
-                        disabled={isFormDisabled}
-                      />
-                      <span className="tooltip-text">
-                        {index === 0 ? 'PI' : 'Co-PI'}
-                      </span>
-                    </div>
 
-                    {/* Designation dropdown with ChevronDown */}
-                    <div style={{ position: 'relative' }}>
-                      <select
-                        className="form-control designation-select"
-                        value={(
-                          investigatorDesignations[index] ||
-                          investigator.designation ||
-                          'faculty'
-                        ).toLowerCase()}
-                        onChange={(e) =>
-                          handleDesignationChange(index, e.target.value)
+                  {/* Designation dropdown with ChevronDown */}
+                  <div style={{ position: 'relative' }}>
+                    <select
+                      className="form-control designation-select"
+                      value={(
+                        investigatorDesignations[index] ||
+                        investigator.designation ||
+                        'faculty'
+                      ).toLowerCase()}
+                      onChange={(e) =>
+                        handleDesignationChange(index, e.target.value)
+                      }
+                      disabled={isFormDisabled}
+                    >
+                      <option value="faculty">Faculty</option>
+                      <option value="student">Student</option>
+                      <option value="external">External</option>
+                    </select>
+                    <ChevronDown
+                      size={12}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        pointerEvents: 'none',
+                        color: '#6c757d',
+                      }}
+                    />
+                  </div>
+
+                  {/* Conditional Fields based on designation */}
+                  {renderInvestigatorFields(investigator, index)}
+
+                  {/* Action buttons: Add and Delete */}
+                  <div className="investigator-action-buttons">
+                    {/* Only show add button on the last investigator row */}
+                    {index === investigators.length - 1 && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-add-author"
+                        onClick={addInvestigator}
+                        disabled={
+                          investigators.length >= MAX_INVESTIGATORS ||
+                          isFormDisabled
                         }
+                        aria-label="Add investigator"
+                        title="Add investigator"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    )}
+
+                    {investigators.length > 1 && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-delete-author"
+                        onClick={() => removeInvestigator(investigator.id)}
                         disabled={isFormDisabled}
                       >
-                        <option value="faculty">Faculty</option>
-                        <option value="student">Student</option>
-                        <option value="external">External</option>
-                      </select>
-                      <ChevronDown
-                        size={12}
-                        style={{
-                          position: 'absolute',
-                          right: '10px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          pointerEvents: 'none',
-                          color: '#6c757d',
-                        }}
-                      />
-                    </div>
-
-                    {/* Conditional Fields based on designation */}
-                    {renderInvestigatorFields(investigator, index)}
-
-                    {/* Action buttons: Add and Delete */}
-                    <div className="investigator-action-buttons">
-                      {/* Only show add button on the last investigator row */}
-                      {index === investigators.length - 1 && (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-add-author"
-                          onClick={addInvestigator}
-                          disabled={
-                            investigators.length >= MAX_INVESTIGATORS ||
-                            isFormDisabled
-                          }
-                          aria-label="Add investigator"
-                          title="Add investigator"
-                        >
-                          <Plus size={16} />
-                        </button>
-                      )}
-
-                      {investigators.length > 1 && (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-delete-author"
-                          onClick={() => removeInvestigator(investigator.id)}
-                          disabled={isFormDisabled}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
-                    </div>
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
 
             {/* Title, Type, Agency, Scheme, Duration Card */}
-            <div className="card form-card mb-4">
-              <div className="card-body">
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="form-group mb-3">
-                      <label className="form-label">Title</label>
+            <div className="form-card">
+              <div className="row">
+                <div className="col-md-6">
+                  <div className="form-group mb-3">
+                    <label className="form-label">Title</label>
+                    <input
+                      type="text"
+                      value={title}
+                      className={`form-control ${validationErrors.title ? 'is-invalid' : ''}`}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Title"
+                      {...inputProps}
+                      required
+                    />
+                    {validationErrors.title && (
+                      <div className="invalid-feedback">
+                        {validationErrors.title}
+                      </div>
+                    )}
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label d-block">Type</label>
+                    <div className="radio-group">
+                      {[
+                        'researchProject',
+                        'infrastructure',
+                        'conceptNote',
+                        'competition',
+                        'scheme',
+                      ].map((cat) => (
+                        <div className="radio-item" key={cat}>
+                          <input
+                            type="radio"
+                            name="projectType"
+                            id={cat}
+                            checked={category.includes(cat)}
+                            onChange={() => setCategory([cat])}
+                            {...inputProps}
+                          />
+                          <label htmlFor={cat}>
+                            {cat
+                              .replace(/([A-Z])/g, ' $1')
+                              .replace(/^./, (str) => str.toUpperCase())}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    {validationErrors.category && (
+                      <div className="alert alert-danger mt-2">
+                        {validationErrors.category}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  {/* Agency & Scheme */}
+                  <div className="form-group mb-3">
+                    <div className="d-flex align-items-center mb-1">
+                      <label className="form-label mb-0">Agency</label>
+                      <div style={{ flex: 1 }}></div>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={() => {
+                          setProjectRequest({
+                            request_type: 'agency',
+                            name: '',
+                            description: '',
+                          });
+                          setShowProjectRequestModal(true);
+                        }}
+                        disabled={!editMode && isViewMode}
+                        style={{ fontSize: '0.75rem' }}
+                      >
+                        Request Agency
+                      </button>
+                    </div>
+                    <div className="position-relative">
                       <input
                         type="text"
-                        value={title}
-                        className={`form-control ${validationErrors.title ? 'is-invalid' : ''}`}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Title"
-                        {...inputProps}
+                        value={agencySearchTerm}
+                        className="form-control"
+                        onChange={(e) => {
+                          setAgencySearchTerm(e.target.value);
+                          searchAgencies(e.target.value);
+                          setShowAgencyDropdown(true);
+                          if (e.target.value === '') setAgency('');
+                        }}
+                        onBlur={() =>
+                          setTimeout(() => setShowAgencyDropdown(false), 150)
+                        }
+                        placeholder="Search and select agency"
                         required
+                        {...inputProps}
                       />
-                      {validationErrors.title && (
-                        <div className="invalid-feedback">
-                          {validationErrors.title}
-                        </div>
+                      {showAgencyDropdown && agencyOptions.length > 0 && (
+                        <ul
+                          className="dropdown-menu show"
+                          style={{
+                            width: '100%',
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            zIndex: 1000,
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                          }}
+                        >
+                          {agencyOptions.map((o) => (
+                            <li
+                              key={o.id}
+                              className="dropdown-item"
+                              onMouseDown={() => {
+                                setAgency(o.name);
+                                setAgencySearchTerm(o.name);
+                                setShowAgencyDropdown(false);
+                              }}
+                            >
+                              {o.name}
+                            </li>
+                          ))}
+                        </ul>
                       )}
                     </div>
-                    <div className="form-group">
-                      <label className="form-label d-block">Type</label>
-                      <div className="radio-group">
-                        {[
-                          'researchProject',
-                          'infrastructure',
-                          'conceptNote',
-                          'competition',
-                          'scheme',
-                        ].map((cat) => (
-                          <div className="radio-item" key={cat}>
-                            <input
-                              type="radio"
-                              name="projectType"
-                              id={cat}
-                              checked={category.includes(cat)}
-                              onChange={() => setCategory([cat])}
-                              {...inputProps}
-                            />
-                            <label htmlFor={cat}>
-                              {cat
-                                .replace(/([A-Z])/g, ' $1')
-                                .replace(/^./, (str) => str.toUpperCase())}
-                            </label>
-                          </div>
-                        ))}
+                    {validationErrors.agency && (
+                      <div className="invalid-feedback d-block">
+                        {validationErrors.agency}
                       </div>
-                      {validationErrors.category && (
-                        <div className="alert alert-danger mt-2">
-                          {validationErrors.category}
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
-                  <div className="col-md-6">
-                    {/* Agency & Scheme */}
-                    <div className="form-group mb-3">
-                      <div className="d-flex align-items-center mb-1">
-                        <label className="form-label mb-0">Agency</label>
-                        <div style={{ flex: 1 }}></div>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-secondary"
-                          onClick={() => {
-                            setProjectRequest({
-                              request_type: 'agency',
-                              name: '',
-                              description: '',
-                            });
-                            setShowProjectRequestModal(true);
-                          }}
-                          disabled={!editMode && isViewMode}
-                          style={{ fontSize: '0.75rem' }}
-                        >
-                          Request Agency
-                        </button>
-                      </div>
-                      <div className="position-relative">
-                        <input
-                          type="text"
-                          value={agencySearchTerm}
-                          className="form-control"
-                          onChange={(e) => {
-                            setAgencySearchTerm(e.target.value);
-                            searchAgencies(e.target.value);
-                            setShowAgencyDropdown(true);
-                            if (e.target.value === '') setAgency('');
-                          }}
-                          onBlur={() =>
-                            setTimeout(() => setShowAgencyDropdown(false), 150)
-                          }
-                          placeholder="Search and select agency"
-                          required
-                          {...inputProps}
-                        />
-                        {showAgencyDropdown && agencyOptions.length > 0 && (
-                          <ul
-                            className="dropdown-menu show"
-                            style={{
-                              width: '100%',
-                              position: 'absolute',
-                              top: '100%',
-                              left: 0,
-                              zIndex: 1000,
-                              maxHeight: '200px',
-                              overflowY: 'auto',
-                            }}
-                          >
-                            {agencyOptions.map((o) => (
-                              <li
-                                key={o.id}
-                                className="dropdown-item"
-                                onMouseDown={() => {
-                                  setAgency(o.name);
-                                  setAgencySearchTerm(o.name);
-                                  setShowAgencyDropdown(false);
-                                }}
-                              >
-                                {o.name}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                      {validationErrors.agency && (
-                        <div className="invalid-feedback d-block">
-                          {validationErrors.agency}
-                        </div>
-                      )}
-                    </div>
 
-                    <div className="form-group mb-3">
-                      <div className="d-flex align-items-center mb-1 justify-content-between">
-                        <label className="form-label mb-0">Scheme</label>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-secondary ms-2"
-                          onClick={() => {
-                            setProjectRequest({
-                              request_type: 'scheme',
-                              name: '',
-                              description: '',
-                            });
-                            setShowProjectRequestModal(true);
+                  <div className="form-group mb-3">
+                    <div className="d-flex align-items-center mb-1 justify-content-between">
+                      <label className="form-label mb-0">Scheme</label>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary ms-2"
+                        onClick={() => {
+                          setProjectRequest({
+                            request_type: 'scheme',
+                            name: '',
+                            description: '',
+                          });
+                          setShowProjectRequestModal(true);
+                        }}
+                        disabled={!editMode && isViewMode}
+                        style={{ fontSize: '0.75rem' }}
+                      >
+                        Request Scheme
+                      </button>
+                    </div>
+                    <div className="position-relative">
+                      <input
+                        type="text"
+                        value={schemeSearchTerm}
+                        className="form-control"
+                        onChange={(e) => {
+                          setSchemeSearchTerm(e.target.value);
+                          searchSchemes(e.target.value);
+                          setShowSchemeDropdown(true);
+                          if (e.target.value === '') setScheme('');
+                        }}
+                        onBlur={() =>
+                          setTimeout(() => setShowSchemeDropdown(false), 150)
+                        }
+                        placeholder="Search and select scheme"
+                        required
+                        {...inputProps}
+                      />
+                      {showSchemeDropdown && schemeOptions.length > 0 && (
+                        <ul
+                          className="dropdown-menu show"
+                          style={{
+                            width: '100%',
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            zIndex: 1000,
+                            maxHeight: '200px',
+                            overflowY: 'auto',
                           }}
-                          disabled={!editMode && isViewMode}
-                          style={{ fontSize: '0.75rem' }}
                         >
-                          Request Scheme
-                        </button>
+                          {schemeOptions.map((o) => (
+                            <li
+                              key={o.id}
+                              className="dropdown-item"
+                              onMouseDown={() => {
+                                setScheme(o.name);
+                                setSchemeSearchTerm(o.name);
+                                setShowSchemeDropdown(false);
+                              }}
+                            >
+                              {o.name}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    {validationErrors.scheme && (
+                      <div className="invalid-feedback d-block">
+                        {validationErrors.scheme}
                       </div>
-                      <div className="position-relative">
+                    )}
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Duration</label>
+                    <div className="row g-2">
+                      <div className="col">
                         <input
-                          type="text"
-                          value={schemeSearchTerm}
+                          type="number"
                           className="form-control"
-                          onChange={(e) => {
-                            setSchemeSearchTerm(e.target.value);
-                            searchSchemes(e.target.value);
-                            setShowSchemeDropdown(true);
-                            if (e.target.value === '') setScheme('');
-                          }}
-                          onBlur={() =>
-                            setTimeout(() => setShowSchemeDropdown(false), 150)
+                          value={duration.years}
+                          onChange={(e) =>
+                            setDuration({
+                              ...duration,
+                              years: parseInt(e.target.value),
+                            })
                           }
-                          placeholder="Search and select scheme"
-                          required
+                          placeholder="Years"
                           {...inputProps}
                         />
-                        {showSchemeDropdown && schemeOptions.length > 0 && (
-                          <ul
-                            className="dropdown-menu show"
-                            style={{
-                              width: '100%',
-                              position: 'absolute',
-                              top: '100%',
-                              left: 0,
-                              zIndex: 1000,
-                              maxHeight: '200px',
-                              overflowY: 'auto',
-                            }}
-                          >
-                            {schemeOptions.map((o) => (
-                              <li
-                                key={o.id}
-                                className="dropdown-item"
-                                onMouseDown={() => {
-                                  setScheme(o.name);
-                                  setSchemeSearchTerm(o.name);
-                                  setShowSchemeDropdown(false);
-                                }}
-                              >
-                                {o.name}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
                       </div>
-                      {validationErrors.scheme && (
-                        <div className="invalid-feedback d-block">
-                          {validationErrors.scheme}
-                        </div>
-                      )}
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Duration</label>
-                      <div className="row g-2">
-                        <div className="col">
-                          <input
-                            type="number"
-                            className="form-control"
-                            value={duration.years}
-                            onChange={(e) =>
-                              setDuration({
-                                ...duration,
-                                years: parseInt(e.target.value),
-                              })
-                            }
-                            placeholder="Years"
-                            {...inputProps}
-                          />
-                        </div>
-                        <div className="col">
-                          <input
-                            type="number"
-                            className="form-control"
-                            value={duration.months}
-                            onChange={(e) =>
-                              setDuration({
-                                ...duration,
-                                months: parseInt(e.target.value),
-                              })
-                            }
-                            placeholder="Months"
-                            {...inputProps}
-                          />
-                        </div>
-                        <div className="col">
-                          <input
-                            type="number"
-                            className="form-control"
-                            value={duration.days}
-                            onChange={(e) =>
-                              setDuration({
-                                ...duration,
-                                days: parseInt(e.target.value),
-                              })
-                            }
-                            placeholder="Days"
-                            {...inputProps}
-                          />
-                        </div>
+                      <div className="col">
+                        <input
+                          type="number"
+                          className="form-control"
+                          value={duration.months}
+                          onChange={(e) =>
+                            setDuration({
+                              ...duration,
+                              months: parseInt(e.target.value),
+                            })
+                          }
+                          placeholder="Months"
+                          {...inputProps}
+                        />
                       </div>
-                      {validationErrors.duration && (
-                        <div className="validation-error">
-                          {validationErrors.duration}
-                        </div>
-                      )}
+                      <div className="col">
+                        <input
+                          type="number"
+                          className="form-control"
+                          value={duration.days}
+                          onChange={(e) =>
+                            setDuration({
+                              ...duration,
+                              days: parseInt(e.target.value),
+                            })
+                          }
+                          placeholder="Days"
+                          {...inputProps}
+                        />
+                      </div>
                     </div>
+                    {validationErrors.duration && (
+                      <div className="validation-error">
+                        {validationErrors.duration}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Financial Contribution Card */}
-            <div className="card form-card mb-4">
-              <div className="card-body">
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h6 className="form-section-title">Financial Contribution</h6>
-                  <div className="d-flex gap-2">
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-secondary"
-                      onClick={() => {
-                        setProjectRequest({
-                          request_type: 'agency_type',
-                          name: '',
-                          description: '',
+            <div className="form-card">
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h6 className="form-section-title">Financial Contribution</h6>
+                <div className="d-flex gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => {
+                      setProjectRequest({
+                        request_type: 'agency_type',
+                        name: '',
+                        description: '',
+                      });
+                      setShowProjectRequestModal(true);
+                    }}
+                    disabled={!editMode && isViewMode}
+                    style={{ fontSize: '0.75rem' }}
+                  >
+                    Request Agency Type
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-add"
+                    onClick={addFinancialContribution}
+                    disabled={
+                      financialContributions.length >=
+                      MAX_FINANCIAL_CONTRIBUTIONS
+                    }
+                    {...inputProps}
+                  >
+                    + Add
+                  </button>
+                </div>
+              </div>
+              {financialContributions.map((contribution, index) => (
+                <div
+                  key={contribution.id}
+                  className="row align-items-center mb-2"
+                >
+                  <div className="col-auto">{index + 1}.</div>
+                  <div className="col position-relative agency-type-input-wrapper">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Search & select agency type"
+                      value={contribution.agencyTypeSearchTerm ?? ''}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setFinancialContributions((prevContributions) => {
+                          const newContributions = [...prevContributions];
+                          newContributions[index] = {
+                            ...newContributions[index],
+                            agencyTypeSearchTerm: newValue,
+                            ...(newValue !==
+                              newContributions[index].agencyType && {
+                              agencyType: '',
+                            }),
+                          };
+                          return newContributions;
                         });
-                        setShowProjectRequestModal(true);
+                        debouncedSearchAgencyTypes(newValue);
+                        setShowAgencyTypeDropdowns((prev) => ({
+                          ...prev,
+                          [index]: true,
+                        }));
                       }}
-                      disabled={!editMode && isViewMode}
-                      style={{ fontSize: '0.75rem' }}
-                    >
-                      Request Agency Type
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-add"
-                      onClick={addFinancialContribution}
-                      disabled={
-                        financialContributions.length >=
-                        MAX_FINANCIAL_CONTRIBUTIONS
+                      onFocus={() => {
+                        if (contribution.agencyTypeSearchTerm) {
+                          searchAgencyTypes(contribution.agencyTypeSearchTerm);
+                        }
+                        setShowAgencyTypeDropdowns((prev) => ({
+                          ...prev,
+                          [index]: true,
+                        }));
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          setShowAgencyTypeDropdowns((prev) => ({
+                            ...prev,
+                            [index]: false,
+                          }));
+                          const currentContribution =
+                            financialContributions[index];
+                          if (
+                            currentContribution.agencyTypeSearchTerm !==
+                            currentContribution.agencyType
+                          ) {
+                            const newContributions = [
+                              ...financialContributions,
+                            ];
+                            newContributions[index].agencyTypeSearchTerm =
+                              newContributions[index].agencyType ?? '';
+                            setFinancialContributions(newContributions);
+                          }
+                        }, 150);
+                      }}
+                      {...inputProps}
+                      required
+                    />
+                    {showAgencyTypeDropdowns[index] &&
+                      agencyTypeOptions.length > 0 && (
+                        <ul
+                          className="dropdown-menu show"
+                          style={{
+                            width: '100%',
+                            position: 'absolute',
+                            zIndex: 1000,
+                          }}
+                        >
+                          {agencyTypeOptions.map((option) => (
+                            <li
+                              key={option.id}
+                              className="dropdown-item"
+                              onMouseDown={() => {
+                                const newContributions = [
+                                  ...financialContributions,
+                                ];
+                                newContributions[index].agencyType =
+                                  option.name;
+                                newContributions[index].agencyTypeSearchTerm =
+                                  option.name;
+                                setFinancialContributions(newContributions);
+                                setShowAgencyTypeDropdowns((prev) => ({
+                                  ...prev,
+                                  [index]: false,
+                                }));
+                                setAgencyTypeOptions([]);
+                              }}
+                            >
+                              {option.name}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                  </div>
+                  <div className="col">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Agency"
+                      value={contribution.agency}
+                      onChange={(e) =>
+                        handleFinancialContributionChange(
+                          index,
+                          'agency',
+                          e.target.value
+                        )
                       }
                       {...inputProps}
+                    />
+                  </div>
+                  <div className="col">
+                    <input
+                      type="number"
+                      className="form-control"
+                      placeholder="Amount (₹)"
+                      value={contribution.amount}
+                      onChange={(e) =>
+                        handleFinancialContributionChange(
+                          index,
+                          'amount',
+                          e.target.value
+                        )
+                      }
+                      {...inputProps}
+                    />
+                  </div>
+                  <div className="col-auto">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-delete-author"
+                      onClick={() => removeFinancialContribution(index)}
                     >
-                      + Add
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>
-                {financialContributions.map((contribution, index) => (
-                  <div
-                    key={contribution.id}
-                    className="row align-items-center mb-2"
+              ))}
+            </div>
+
+            <div className="form-card">
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h6 className="form-section-title">Collaboration</h6>
+                <div className="d-flex align-items-center">
+                  <div className="form-check form-switch me-3">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      role="switch"
+                      id="collaborationToggle"
+                      checked={enableCollaboration}
+                      onChange={toggleCollaboration}
+                      {...inputProps}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-add"
+                    onClick={addCollaboration}
+                    disabled={!enableCollaboration}
+                    {...inputProps}
                   >
+                    + Add Collab
+                  </button>
+                </div>
+              </div>
+              {enableCollaboration &&
+                collaborations.map((collab, index) => (
+                  <div key={collab.id} className="row align-items-center mb-2">
                     <div className="col-auto">{index + 1}.</div>
-                    <div className="col position-relative agency-type-input-wrapper">
+                    <div className="col">
                       <input
                         type="text"
                         className="form-control"
                         placeholder="Search & select agency type"
-                        value={contribution.agencyTypeSearchTerm ?? ''}
-                        onChange={(e) => {
-                          const newValue = e.target.value;
-                          setFinancialContributions((prevContributions) => {
-                            const newContributions = [...prevContributions];
-                            newContributions[index] = {
-                              ...newContributions[index],
-                              agencyTypeSearchTerm: newValue,
-                              ...(newValue !==
-                                newContributions[index].agencyType && {
-                                agencyType: '',
-                              }),
-                            };
-                            return newContributions;
-                          });
-                          debouncedSearchAgencyTypes(newValue);
-                          setShowAgencyTypeDropdowns((prev) => ({
-                            ...prev,
-                            [index]: true,
-                          }));
-                        }}
-                        onFocus={() => {
-                          if (contribution.agencyTypeSearchTerm) {
-                            searchAgencyTypes(contribution.agencyTypeSearchTerm);
-                          }
-                          setShowAgencyTypeDropdowns((prev) => ({
-                            ...prev,
-                            [index]: true,
-                          }));
-                        }}
-                        onBlur={() => {
-                          setTimeout(() => {
-                            setShowAgencyTypeDropdowns((prev) => ({
-                              ...prev,
-                              [index]: false,
-                            }));
-                            const currentContribution =
-                              financialContributions[index];
-                            if (
-                              currentContribution.agencyTypeSearchTerm !==
-                              currentContribution.agencyType
-                            ) {
-                              const newContributions = [
-                                ...financialContributions,
-                              ];
-                              newContributions[index].agencyTypeSearchTerm =
-                                newContributions[index].agencyType ?? '';
-                              setFinancialContributions(newContributions);
-                            }
-                          }, 150);
-                        }}
+                        value={collab.partner}
+                        onChange={(e) =>
+                          handleCollaborationChange(
+                            collab.id,
+                            'partner',
+                            e.target.value
+                          )
+                        }
                         {...inputProps}
-                        required
                       />
-                      {showAgencyTypeDropdowns[index] &&
-                        agencyTypeOptions.length > 0 && (
-                          <ul
-                            className="dropdown-menu show"
-                            style={{
-                              width: '100%',
-                              position: 'absolute',
-                              zIndex: 1000,
-                            }}
-                          >
-                            {agencyTypeOptions.map((option) => (
-                              <li
-                                key={option.id}
-                                className="dropdown-item"
-                                onMouseDown={() => {
-                                  const newContributions = [
-                                    ...financialContributions,
-                                  ];
-                                  newContributions[index].agencyType =
-                                    option.name;
-                                  newContributions[index].agencyTypeSearchTerm =
-                                    option.name;
-                                  setFinancialContributions(newContributions);
-                                  setShowAgencyTypeDropdowns((prev) => ({
-                                    ...prev,
-                                    [index]: false,
-                                  }));
-                                  setAgencyTypeOptions([]);
-                                }}
-                              >
-                                {option.name}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
                     </div>
                     <div className="col">
                       <input
                         type="text"
                         className="form-control"
                         placeholder="Agency"
-                        value={contribution.agency}
+                        value={collab.address}
                         onChange={(e) =>
-                          handleFinancialContributionChange(
-                            index,
-                            'agency',
+                          handleCollaborationChange(
+                            collab.id,
+                            'address',
                             e.target.value
                           )
                         }
@@ -2595,79 +2681,242 @@ const ResearchProjectForm: React.FC = () => {
                       />
                     </div>
                     <div className="col">
-                      <input
-                        type="number"
-                        className="form-control"
-                        placeholder="Amount (₹)"
-                        value={contribution.amount}
+                      <select
+                        className="form-select"
+                        value={collab.support}
                         onChange={(e) =>
-                          handleFinancialContributionChange(
-                            index,
-                            'amount',
+                          handleCollaborationChange(
+                            collab.id,
+                            'support',
                             e.target.value
                           )
                         }
                         {...inputProps}
-                      />
+                        required
+                      >
+                        <option value="Technical">Technical</option>
+                        <option value="Financial">Financial</option>
+                        <option value="Other">Other</option>
+                      </select>
                     </div>
                     <div className="col-auto">
                       <button
                         type="button"
                         className="btn btn-sm btn-delete-author"
-                        onClick={() => removeFinancialContribution(index)}
+                        onClick={() => removeCollaboration(collab.id)}
                       >
                         <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
                 ))}
-              </div>
             </div>
 
-            {/* Collaboration Card */}
-            <div className="card form-card mb-4">
-              <div className="card-body">
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h6 className="form-section-title">Collaboration</h6>
-                  <div className="d-flex align-items-center">
+            {/* Journal Article & Submission Card */}
+            <div className="row mb-4 journal-submission-row">
+              {/* Journal Article Card */}
+              <div className="col-md-6">
+                <div className="form-card h-100">
+                  <div>
+                    <label className="form-label">Journal Article</label>
+                    <div className="d-flex align-items-center mb-2">
+                      <label className="btn btn-secondary btn-upload me-2 mb-0">
+                        + Upload Journal Article
+                        <input
+                          type="file"
+                          hidden
+                          onChange={handleJournalArticleUpload}
+                          accept=".pdf, .doc, .docx"
+                          {...inputProps}
+                        />
+                      </label>
+                      {journalArticle.file && (
+                        <span className="file-name-display">
+                          {journalArticle.file.name}
+                        </span>
+                      )}
+                      {isViewMode && !editMode && journalArticle?.filePath && (
+                        <a
+                          href={getFileUrl(journalArticle.filePath)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-link"
+                        >
+                          {journalArticle.filePath.split('/').pop()}
+                        </a>
+                      )}
+                    </div>
+                    <small className="form-text text-muted">
+                      Max 120 MB, PDF / Word
+                    </small>
+                  </div>
+                </div>
+              </div>
+              {/* Date of Submission Card */}
+              <div className="col-md-6">
+                <div className="form-card h-100 date-submission-card">
+                  <div className="mb-3 d-flex align-items-center">
+                    <label className="form-label mb-0 me-3">
+                      Date of Submission
+                    </label>
                     <div className="form-check form-switch me-3">
                       <input
                         className="form-check-input"
                         type="checkbox"
-                        role="switch"
-                        id="collaborationToggle"
-                        checked={enableCollaboration}
-                        onChange={toggleCollaboration}
+                        id="dateOfSubmissionToggle"
+                        checked={dateOfSubmission}
+                        onChange={handleDateOfSubmissionToggle}
                         {...inputProps}
                       />
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-add"
-                      onClick={addCollaboration}
-                      disabled={!enableCollaboration}
+                    <input
+                      type="date"
+                      className="form-control me-2"
+                      style={{ width: '130px' }}
+                      value={submissionDate}
+                      onChange={handleSubmissionDateChange}
+                      disabled={!dateOfSubmission}
+                      required={dateOfSubmission}
+                      {...inputProps}
+                    />
+                    <select
+                      className="form-control"
+                      style={{ width: '120px' }}
+                      value={submissionStatus}
+                      onChange={handleSubmissionStatusChange}
+                      disabled={!dateOfSubmission}
+                      required={dateOfSubmission}
                       {...inputProps}
                     >
-                      + Add Collab
-                    </button>
+                      <option value="submitted">Submitted</option>
+                      <option value="underReview">Under Review</option>
+                      <option value="revisionSubmitted">
+                        Revision Submitted
+                      </option>
+                      <option value="published">Published</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label mb-1">
+                      Application Number
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Enter App. No"
+                      value={applicationNumber}
+                      onChange={(e) => setApplicationNumber(e.target.value)}
+                      disabled={!dateOfSubmission}
+                      required={dateOfSubmission}
+                      style={{ width: '100%' }}
+                      {...inputProps}
+                    />
                   </div>
                 </div>
-                {enableCollaboration &&
-                  collaborations.map((collab, index) => (
-                    <div key={collab.id} className="row align-items-center mb-2">
-                      <div className="col-auto">{index + 1}.</div>
+              </div>
+            </div>
+
+            {/* Main Details Section */}
+            {dateOfSubmission && submissionStatus === 'published' && (
+              <div className="form-card-dashed mb-4">
+                {/* Project Details */}
+                <h6 className="form-section-title mb-3">Project Details:</h6>
+                <div className="row mb-3">
+                  {/* Simplified project details mapping */}
+                  {[
+                    {
+                      key: 'dateOfPresentation',
+                      label: 'Date of Presentation',
+                    },
+                    {
+                      key: 'dateOfResultAnnouncement',
+                      label: 'Date of Result Announcement',
+                    },
+                    {
+                      key: 'sanctionOrderAmount',
+                      label: 'Section Order Amount',
+                      type: 'number',
+                    },
+                    { key: 'sanctionOrderDate', label: 'Section Order Date' },
+                    {
+                      key: 'projectDurationStartDate',
+                      label: 'Project Duration Start Date',
+                    },
+                    {
+                      key: 'projectDurationEndDate',
+                      label: 'Project Duration End Date',
+                    },
+                  ].map((item) => (
+                    <div className="col-md-6 mb-2" key={item.key}>
+                      <div className="d-flex align-items-center">
+                        <label
+                          className="form-label me-auto"
+                          style={{ minWidth: '220px' }}
+                        >
+                          {item.label}
+                        </label>
+                        <div className="form-check form-switch me-2">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            checked={projectDetails[item.key as keyof ProjectDetails].enabled}
+                            onChange={() =>
+                              handleProjectDetailsToggle(item.key)
+                            }
+                            {...inputProps}
+                          />
+                        </div>
+                        <input
+                          type={item.type === 'number' ? 'number' : 'date'}
+                          className="form-control"
+                          disabled={!projectDetails[item.key as keyof ProjectDetails].enabled}
+                          value={
+                            item.type === 'number'
+                              ? projectDetails[item.key as keyof ProjectDetails].value || ''
+                              : formatDateForInput(
+                                projectDetails[item.key as keyof ProjectDetails].value
+                              )
+                          }
+                          onChange={(e) =>
+                            handleProjectDetailsChange(item.key, e.target.value)
+                          }
+                          required={projectDetails[item.key as keyof ProjectDetails].enabled}
+                          {...inputProps}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <hr />
+
+                {/* Grant Disbursement */}
+                <div className="d-flex justify-content-between align-items-center my-3">
+                  <h6 className="form-section-title">Grant Disbursement:</h6>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-add"
+                    onClick={addGrantDisbursement}
+                    {...inputProps}
+                  >
+                    + Add
+                  </button>
+                </div>
+                {grantDisbursements.map((grant, index) => {
+                  const grantIdentifier =
+                    grant.id != null ? grant.id : grant.tempId;
+                  return (
+                    <div
+                      key={grant.id ?? grant.tempId}
+                      className="row g-2 align-items-center mb-2"
+                    >
                       <div className="col">
                         <input
                           type="text"
                           className="form-control"
-                          placeholder="Search & select agency type"
-                          value={collab.partner}
+                          placeholder="FY"
+                          value={grant.fy}
                           onChange={(e) =>
-                            handleCollaborationChange(
-                              collab.id,
-                              'partner',
-                              e.target.value
-                            )
+                            handleInputChange(index, 'fy', e.target.value)
                           }
                           {...inputProps}
                         />
@@ -2677,440 +2926,176 @@ const ResearchProjectForm: React.FC = () => {
                           type="text"
                           className="form-control"
                           placeholder="Agency"
-                          value={collab.address}
+                          value={grant.agency}
                           onChange={(e) =>
-                            handleCollaborationChange(
-                              collab.id,
-                              'address',
-                              e.target.value
-                            )
+                            handleInputChange(index, 'agency', e.target.value)
                           }
                           {...inputProps}
                         />
                       </div>
                       <div className="col">
-                        <select
-                          className="form-select"
-                          value={collab.support}
+                        <input
+                          type="number"
+                          className="form-control"
+                          placeholder="Amount (₹)"
+                          value={grant.amount}
                           onChange={(e) =>
-                            handleCollaborationChange(
-                              collab.id,
-                              'support',
-                              e.target.value
-                            )
+                            handleInputChange(index, 'amount', e.target.value)
                           }
                           {...inputProps}
-                          required
-                        >
-                          <option value="Technical">Technical</option>
-                          <option value="Financial">Financial</option>
-                          <option value="Other">Other</option>
-                        </select>
+                        />
+                      </div>
+                      <div className="col">
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={formatDateForInput(grant.date)}
+                          onChange={(e) =>
+                            handleInputChange(index, 'date', e.target.value)
+                          }
+                          {...inputProps}
+                        />
+                      </div>
+                      <div className="col-auto">
+                        <label className="btn btn-secondary btn-upload-sm">
+                          + Upload Sanction Letter
+                          <input
+                            type="file"
+                            hidden
+                            disabled={!grant.sanctionLetter.enabled}
+                            onChange={(e) =>
+                              handleFileUpload(
+                                e,
+                                `sanctionLetter${grantIdentifier}`
+                              )
+                            }
+                            {...inputProps}
+                          />
+                        </label>
+                      </div>
+                      <div className="col-auto">
+                        <label className="btn btn-secondary btn-upload-sm">
+                          + Upload UC & SoE
+                          <input
+                            type="file"
+                            hidden
+                            disabled={!grant.ucAndSoE.enabled}
+                            onChange={(e) =>
+                              handleFileUpload(e, `ucAndSoE${grantIdentifier}`)
+                            }
+                            {...inputProps}
+                          />
+                        </label>
                       </div>
                       <div className="col-auto">
                         <button
                           type="button"
                           className="btn btn-sm btn-delete-author"
-                          onClick={() => removeCollaboration(collab.id)}
+                          onClick={() => removeGrantDisbursement(index)}
+                          {...inputProps}
                         >
                           <Trash2 size={16} />
                         </button>
                       </div>
                     </div>
-                  ))}
-              </div>
-            </div>
+                  );
+                })}
+                <hr />
 
-            {/* Journal Article & Submission Card */}
-            <div className="row mb-4 journal-submission-row">
-              {/* Journal Article Card */}
-              <div className="col-md-6">
-                <div className="card form-card h-100">
-                  <div className="card-body d-flex flex-column justify-content-between">
-                    <div>
-                      <label className="form-label">Journal Article</label>
-                      <div className="d-flex align-items-center mb-2">
-                        <label className="btn btn-secondary btn-upload me-2 mb-0">
-                          + Upload Journal Article
+                <div className="d-flex align-items-center my-3">
+                  <h6 className="form-section-title me-4">Outcome:</h6>
+                  <div className="checkbox-group">
+                    {[
+                      { id: 'journals', label: 'Journals' },
+                      { id: 'conference', label: 'Conference' },
+                      { id: 'ipr', label: 'IPR' },
+                      {
+                        id: 'technologyTransfer',
+                        label: 'Technology Transfer',
+                      },
+                      { id: 'prototype', label: 'Prototype' },
+                      { id: 'product', label: 'Product' },
+                    ].map((opt) => (
+                      <div className="checkbox-item" key={opt.id}>
+                        <input
+                          type="checkbox"
+                          id={opt.id}
+                          checked={outcome[opt.id as keyof Outcome]}
+                          onChange={handleCheckboxChange}
+                          {...inputProps}
+                        />
+                        <label htmlFor={opt.id}>{opt.label}</label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <hr />
+
+                {/* Documents */}
+                <h6 className="form-section-title my-3">Documents:</h6>
+                <div className="row">
+                  {[
+                    { key: 'sanctionOrder', label: 'Sanction Order' },
+                    {
+                      key: 'utilizationCertificate',
+                      label: 'Utilization Certificate',
+                    },
+                    {
+                      key: 'statementOfExpenditure',
+                      label: 'Statement of Expenditure',
+                    },
+                    { key: 'projectReport', label: 'Project Report' },
+                    { key: 'bankStatement', label: 'Bank Statement' },
+                  ].map((doc) => (
+                    <div className="col-md-6 mb-3" key={doc.key}>
+                      <div className="d-flex align-items-center">
+                        <label
+                          className="form-label me-auto"
+                          style={{ minWidth: '200px' }}
+                        >
+                          {doc.label}
+                        </label>
+                        <div className="form-check form-switch me-2">
+                          {' '}
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id={`${doc.key}Toggle`}
+                            checked={documents[doc.key as keyof Documents]?.enabled || false}
+                            onChange={() => handleDocumentToggle(doc.key)}
+                            {...inputProps}
+                          />{' '}
+                        </div>
+                        <label className="btn btn-secondary btn-upload flex-grow-1">
+                          + Upload {doc.label}
                           <input
                             type="file"
                             hidden
-                            onChange={handleJournalArticleUpload}
-                            accept=".pdf, .doc, .docx"
+                            disabled={!documents[doc.key as keyof Documents]?.enabled}
+                            onChange={(e) => handleFileUpload(e, doc.key)}
                             {...inputProps}
                           />
                         </label>
-                        {journalArticle.file && (
-                          <span className="file-name-display">
-                            {journalArticle.file.name}
+                        {documents[doc.key as keyof Documents]?.file && (
+                          <span className="file-name-display ms-2">
+                            {(documents[doc.key as keyof Documents]?.file as File).name}
                           </span>
                         )}
-                        {isViewMode && !editMode && journalArticle?.filePath && (
-                          <a
-                            href={getFileUrl(journalArticle.filePath)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-link"
-                          >
-                            {journalArticle.filePath.split('/').pop()}
-                          </a>
-                        )}
-                      </div>
-                      <small className="form-text text-muted">
-                        Max 120 MB, PDF / Word
-                      </small>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Date of Submission Card */}
-              <div className="col-md-6">
-                <div className="card form-card h-100 date-submission-card">
-                  <div className="card-body">
-                    <div className="mb-3 d-flex align-items-center">
-                      <label className="form-label mb-0 me-3">
-                        Date of Submission
-                      </label>
-                      <div className="form-check form-switch me-3">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          id="dateOfSubmissionToggle"
-                          checked={dateOfSubmission}
-                          onChange={handleDateOfSubmissionToggle}
-                          {...inputProps}
-                        />
-                      </div>
-                      <input
-                        type="date"
-                        className="form-control me-2"
-                        style={{ width: '130px' }}
-                        value={submissionDate}
-                        onChange={handleSubmissionDateChange}
-                        disabled={!dateOfSubmission}
-                        required={dateOfSubmission}
-                        {...inputProps}
-                      />
-                      <select
-                        className="form-control"
-                        style={{ width: '120px' }}
-                        value={submissionStatus}
-                        onChange={handleSubmissionStatusChange}
-                        disabled={!dateOfSubmission}
-                        required={dateOfSubmission}
-                        {...inputProps}
-                      >
-                        <option value="submitted">Submitted</option>
-                        <option value="underReview">Under Review</option>
-                        <option value="revisionSubmitted">
-                          Revision Submitted
-                        </option>
-                        <option value="published">Published</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="form-label mb-1">
-                        Application Number
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Enter App. No"
-                        value={applicationNumber}
-                        onChange={(e) => setApplicationNumber(e.target.value)}
-                        disabled={!dateOfSubmission}
-                        required={dateOfSubmission}
-                        style={{ width: '100%' }}
-                        {...inputProps}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Main Details Section */}
-            {dateOfSubmission && submissionStatus === 'published' && (
-              <div className="form-card-dashed  mb-4">
-                <div className="card-body">
-                  {/* Project Details */}
-                  <h6 className="form-section-title mb-3">Project Details:</h6>
-                  <div className="row mb-3">
-                    {/* Simplified project details mapping */}
-                    {[
-                      {
-                        key: 'dateOfPresentation',
-                        label: 'Date of Presentation',
-                      },
-                      {
-                        key: 'dateOfResultAnnouncement',
-                        label: 'Date of Result Announcement',
-                      },
-                      {
-                        key: 'sanctionOrderAmount',
-                        label: 'Section Order Amount',
-                        type: 'number',
-                      },
-                      { key: 'sanctionOrderDate', label: 'Section Order Date' },
-                      {
-                        key: 'projectDurationStartDate',
-                        label: 'Project Duration Start Date',
-                      },
-                      {
-                        key: 'projectDurationEndDate',
-                        label: 'Project Duration End Date',
-                      },
-                    ].map((item) => (
-                      <div className="col-md-6 mb-2" key={item.key}>
-                        <div className="d-flex align-items-center">
-                          <label
-                            className="form-label me-auto"
-                            style={{ minWidth: '220px' }}
-                          >
-                            {item.label}
-                          </label>
-                          <div className="form-check form-switch me-2">
-                            <input
-                              className="form-check-input"
-                              type="checkbox"
-                              checked={projectDetails[item.key as keyof ProjectDetails].enabled}
-                              onChange={() =>
-                                handleProjectDetailsToggle(item.key)
-                              }
-                              {...inputProps}
-                            />
-                          </div>
-                          <input
-                            type={item.type === 'number' ? 'number' : 'date'}
-                            className="form-control"
-                            disabled={!projectDetails[item.key as keyof ProjectDetails].enabled}
-                            value={
-                              item.type === 'number'
-                                ? projectDetails[item.key as keyof ProjectDetails].value || ''
-                                : formatDateForInput(
-                                  projectDetails[item.key as keyof ProjectDetails].value
-                                )
-                            }
-                            onChange={(e) =>
-                              handleProjectDetailsChange(item.key, e.target.value)
-                            }
-                            required={projectDetails[item.key as keyof ProjectDetails].enabled}
-                            {...inputProps}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <hr />
-
-                  {/* Grant Disbursement */}
-                  <div className="d-flex justify-content-between align-items-center my-3">
-                    <h6 className="form-section-title">Grant Disbursement:</h6>
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-add"
-                      onClick={addGrantDisbursement}
-                      {...inputProps}
-                    >
-                      + Add
-                    </button>
-                  </div>
-                  {grantDisbursements.map((grant, index) => {
-                    const grantIdentifier =
-                      grant.id != null ? grant.id : grant.tempId;
-                    return (
-                      <div
-                        key={grant.id ?? grant.tempId}
-                        className="row g-2 align-items-center mb-2"
-                      >
-                        <div className="col">
-                          <input
-                            type="text"
-                            className="form-control"
-                            placeholder="FY"
-                            value={grant.fy}
-                            onChange={(e) =>
-                              handleInputChange(index, 'fy', e.target.value)
-                            }
-                            {...inputProps}
-                          />
-                        </div>
-                        <div className="col">
-                          <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Agency"
-                            value={grant.agency}
-                            onChange={(e) =>
-                              handleInputChange(index, 'agency', e.target.value)
-                            }
-                            {...inputProps}
-                          />
-                        </div>
-                        <div className="col">
-                          <input
-                            type="number"
-                            className="form-control"
-                            placeholder="Amount (₹)"
-                            value={grant.amount}
-                            onChange={(e) =>
-                              handleInputChange(index, 'amount', e.target.value)
-                            }
-                            {...inputProps}
-                          />
-                        </div>
-                        <div className="col">
-                          <input
-                            type="date"
-                            className="form-control"
-                            value={formatDateForInput(grant.date)}
-                            onChange={(e) =>
-                              handleInputChange(index, 'date', e.target.value)
-                            }
-                            {...inputProps}
-                          />
-                        </div>
-                        <div className="col-auto">
-                          <label className="btn btn-secondary btn-upload-sm">
-                            + Upload Sanction Letter
-                            <input
-                              type="file"
-                              hidden
-                              disabled={!grant.sanctionLetter.enabled}
-                              onChange={(e) =>
-                                handleFileUpload(
-                                  e,
-                                  `sanctionLetter${grantIdentifier}`
-                                )
-                              }
-                              {...inputProps}
-                            />
-                          </label>
-                        </div>
-                        <div className="col-auto">
-                          <label className="btn btn-secondary btn-upload-sm">
-                            + Upload UC & SoE
-                            <input
-                              type="file"
-                              hidden
-                              disabled={!grant.ucAndSoE.enabled}
-                              onChange={(e) =>
-                                handleFileUpload(e, `ucAndSoE${grantIdentifier}`)
-                              }
-                              {...inputProps}
-                            />
-                          </label>
-                        </div>
-                        <div className="col-auto">
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-delete-author"
-                            onClick={() => removeGrantDisbursement(index)}
-                            {...inputProps}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <hr />
-
-                  <div className="d-flex align-items-center my-3">
-                    <h6 className="form-section-title me-4">Outcome:</h6>
-                    <div className="checkbox-group">
-                      {[
-                        { id: 'journals', label: 'Journals' },
-                        { id: 'conference', label: 'Conference' },
-                        { id: 'ipr', label: 'IPR' },
-                        {
-                          id: 'technologyTransfer',
-                          label: 'Technology Transfer',
-                        },
-                        { id: 'prototype', label: 'Prototype' },
-                        { id: 'product', label: 'Product' },
-                      ].map((opt) => (
-                        <div className="checkbox-item" key={opt.id}>
-                          <input
-                            type="checkbox"
-                            id={opt.id}
-                            checked={outcome[opt.id as keyof Outcome]}
-                            onChange={handleCheckboxChange}
-                            {...inputProps}
-                          />
-                          <label htmlFor={opt.id}>{opt.label}</label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <hr />
-
-                  {/* Documents */}
-                  <h6 className="form-section-title my-3">Documents:</h6>
-                  <div className="row">
-                    {[
-                      { key: 'sanctionOrder', label: 'Sanction Order' },
-                      {
-                        key: 'utilizationCertificate',
-                        label: 'Utilization Certificate',
-                      },
-                      {
-                        key: 'statementOfExpenditure',
-                        label: 'Statement of Expenditure',
-                      },
-                      { key: 'projectReport', label: 'Project Report' },
-                      { key: 'bankStatement', label: 'Bank Statement' },
-                    ].map((doc) => (
-                      <div className="col-md-6 mb-3" key={doc.key}>
-                        <div className="d-flex align-items-center">
-                          <label
-                            className="form-label me-auto"
-                            style={{ minWidth: '200px' }}
-                          >
-                            {doc.label}
-                          </label>
-                          <div className="form-check form-switch me-2">
-                            {' '}
-                            <input
-                              className="form-check-input"
-                              type="checkbox"
-                              id={`${doc.key}Toggle`}
-                              checked={documents[doc.key as keyof Documents]?.enabled || false}
-                              onChange={() => handleDocumentToggle(doc.key)}
-                              {...inputProps}
-                            />{' '}
-                          </div>
-                          <label className="btn btn-secondary btn-upload flex-grow-1">
-                            + Upload {doc.label}
-                            <input
-                              type="file"
-                              hidden
-                              disabled={!documents[doc.key as keyof Documents]?.enabled}
-                              onChange={(e) => handleFileUpload(e, doc.key)}
-                              {...inputProps}
-                            />
-                          </label>
-                          {documents[doc.key as keyof Documents]?.file && (
-                            <span className="file-name-display ms-2">
-                              {(documents[doc.key as keyof Documents]?.file as File).name}
-                            </span>
+                        {isViewMode &&
+                          !editMode &&
+                          documents[doc.key as keyof Documents]?.filePath && (
+                            <a
+                              href={getFileUrl(documents[doc.key as keyof Documents]?.filePath || '')}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-link"
+                            >
+                              View
+                            </a>
                           )}
-                          {isViewMode &&
-                            !editMode &&
-                            documents[doc.key as keyof Documents]?.filePath && (
-                              <a
-                                href={getFileUrl(documents[doc.key as keyof Documents]?.filePath || '')}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="btn btn-link"
-                              >
-                                View
-                              </a>
-                            )}
-                        </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -3127,107 +3112,107 @@ const ResearchProjectForm: React.FC = () => {
             </div>
           </form>
         ) : (
-          <div className="card form-card mb-4">
-            <div className="card-body">
-              <h5 className="card-title">Budget Section</h5>
-              <p className="text-muted">Budget details and financial management.</p>
-            </div>
+          <div className="form-card">
+            <h5 className="form-section-title">Budget Section</h5>
+            <p className="text-muted">Budget details and financial management.</p>
           </div>
         )}
         {/* Project Request Modal */}
-        {showProjectRequestModal && (
-          <div
-            className="modal fade show"
-            style={{ display: 'block', zIndex: 1050 }}
-            tabIndex={-1}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                setShowProjectRequestModal(false);
-              }
-            }}
-          >
-            <div className="modal-dialog" style={{ zIndex: 1055 }}>
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title">
-                    Request New{' '}
-                    {projectRequest.request_type
-                      .replace('_', ' ')
-                      .replace(/\b\w/g, (l) => l.toUpperCase())}
-                  </h5>
-                  <button
-                    type="button"
-                    className="btn-close"
-                    onClick={() => setShowProjectRequestModal(false)}
-                  ></button>
-                </div>
-                <form onSubmit={handleProjectRequestSubmit}>
-                  <div className="modal-body">
-                    <div className="mb-3">
-                      <label className="form-label">Name</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={projectRequest.name}
-                        onChange={(e) =>
-                          handleProjectRequestChange('name', e.target.value)
-                        }
-                        placeholder={`Enter ${projectRequest.request_type.replace('_', ' ')} name`}
-                        required
-                      />
-                    </div>
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Description (Optional)
-                      </label>
-                      <textarea
-                        className="form-control"
-                        value={projectRequest.description}
-                        onChange={(e) =>
-                          handleProjectRequestChange(
-                            'description',
-                            e.target.value
-                          )
-                        }
-                        placeholder="Enter description..."
-                        rows={3}
-                      />
-                    </div>
-                    {projectRequestError && (
-                      <div className="alert alert-danger">
-                        {projectRequestError}
-                      </div>
-                    )}
-                  </div>
-                  <div className="modal-footer">
+        {
+          showProjectRequestModal && (
+            <div
+              className="modal fade show"
+              style={{ display: 'block', zIndex: 1050 }}
+              tabIndex={-1}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setShowProjectRequestModal(false);
+                }
+              }}
+            >
+              <div className="modal-dialog" style={{ zIndex: 1055 }}>
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h5 className="modal-title">
+                      Request New{' '}
+                      {projectRequest.request_type
+                        .replace('_', ' ')
+                        .replace(/\b\w/g, (l) => l.toUpperCase())}
+                    </h5>
                     <button
                       type="button"
-                      className="btn btn-secondary"
+                      className="btn-close"
                       onClick={() => setShowProjectRequestModal(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn btn-primary"
-                      disabled={projectRequestLoading}
-                    >
-                      {projectRequestLoading
-                        ? 'Submitting...'
-                        : 'Submit Request'}
-                    </button>
+                    ></button>
                   </div>
-                </form>
+                  <form onSubmit={handleProjectRequestSubmit}>
+                    <div className="modal-body">
+                      <div className="mb-3">
+                        <label className="form-label">Name</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={projectRequest.name}
+                          onChange={(e) =>
+                            handleProjectRequestChange('name', e.target.value)
+                          }
+                          placeholder={`Enter ${projectRequest.request_type.replace('_', ' ')} name`}
+                          required
+                        />
+                      </div>
+                      <div className="mb-3">
+                        <label className="form-label">
+                          Description (Optional)
+                        </label>
+                        <textarea
+                          className="form-control"
+                          value={projectRequest.description}
+                          onChange={(e) =>
+                            handleProjectRequestChange(
+                              'description',
+                              e.target.value
+                            )
+                          }
+                          placeholder="Enter description..."
+                          rows={3}
+                        />
+                      </div>
+                      {projectRequestError && (
+                        <div className="alert alert-danger">
+                          {projectRequestError}
+                        </div>
+                      )}
+                    </div>
+                    <div className="modal-footer">
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setShowProjectRequestModal(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn btn-primary"
+                        disabled={projectRequestLoading}
+                      >
+                        {projectRequestLoading
+                          ? 'Submitting...'
+                          : 'Submit Request'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
+              <div
+                className="modal-backdrop fade show"
+                style={{ zIndex: 1040 }}
+              ></div>
             </div>
-            <div
-              className="modal-backdrop fade show"
-              style={{ zIndex: 1040 }}
-            ></div>
-          </div>
-        )}
-      </div>
-    </div>
+          )
+        }
+      </div >
+    </div >
   );
 };
 

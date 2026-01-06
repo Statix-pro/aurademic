@@ -188,19 +188,9 @@
   margin-bottom: 2rem;
 }
 
-.card.form-card {
-  border: 0;
-}
-
-.journal-submission-row .card.form-card {
+/* Cards match shared form-card styling from forms.css */
+.journal-submission-row .form-card {
   min-height: 120px;
-  box-shadow: 0 2px 12px rgba(0, 105, 171, 0.07);
-  border-radius: 16px;
-  background: #fff;
-  padding: 1.5rem 1.5rem 1rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
 }
 
 .journal-submission-row .btn-upload {
