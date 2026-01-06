@@ -18,7 +18,7 @@ const Navbar: React.FC = () => {
     const newState = !mobileMenuOpen;
     setMobileMenuOpen(newState);
     setActiveMenu(null);
-    
+
     if (newState) {
       document.body.classList.add('menu-open');
     } else {
@@ -62,7 +62,7 @@ const Navbar: React.FC = () => {
         <Link
           to="/publications"
           className="home-icon-link"
-          style={{ marginRight: "8px" }}
+          style={{ marginRight: "8px", display: "none" }}
           onClick={() => {
             setMobileMenuOpen(false);
             document.body.classList.remove('menu-open');
@@ -82,9 +82,8 @@ const Navbar: React.FC = () => {
         <ul className="nav-menu">
           <li className="nav-item">
             <div
-              className={`nav-item-wrapper ${
-                activeMenu === "Research" ? "active" : ""
-              }`}
+              className={`nav-item-wrapper ${activeMenu === "Research" ? "active" : ""
+                }`}
               onClick={() => toggleDropdown("Research")}
             >
               Research
@@ -100,8 +99,8 @@ const Navbar: React.FC = () => {
             <ul
               className={`dropdown ${activeMenu === "Research" ? "show" : ""}`}
             >
-              <Link 
-                to="/publications" 
+              <Link
+                to="/publications"
                 className="dropdown-li"
                 onClick={() => {
                   setMobileMenuOpen(false);
@@ -110,8 +109,8 @@ const Navbar: React.FC = () => {
               >
                 <li>Publication</li>
               </Link>
-              <Link 
-                to="/projects" 
+              <Link
+                to="/projects"
                 className="dropdown-li"
                 onClick={() => {
                   setMobileMenuOpen(false);
@@ -127,9 +126,8 @@ const Navbar: React.FC = () => {
 
           <li className="nav-item">
             <div
-              className={`nav-item-wrapper ${
-                activeMenu === "Bookings" ? "active" : ""
-              }`}
+              className={`nav-item-wrapper ${activeMenu === "Bookings" ? "active" : ""
+                }`}
               onClick={() => toggleDropdown("Bookings")}
             >
               Bookings
@@ -145,8 +143,8 @@ const Navbar: React.FC = () => {
             <ul
               className={`dropdown ${activeMenu === "Bookings" ? "show" : ""}`}
             >
-              <Link 
-                to="/eventdashboard" 
+              <Link
+                to="/eventdashboard"
                 className="dropdown-li"
                 onClick={() => {
                   setMobileMenuOpen(false);
@@ -155,8 +153,8 @@ const Navbar: React.FC = () => {
               >
                 <li>Event</li>
               </Link>
-              <Link 
-                to="/hall-booking" 
+              <Link
+                to="/hall-booking"
                 className="dropdown-li"
                 onClick={() => {
                   setMobileMenuOpen(false);
@@ -169,8 +167,8 @@ const Navbar: React.FC = () => {
           </li>
 
           <li className="nav-item">
-            <Link 
-              to="/profile" 
+            <Link
+              to="/profile"
               className="nav-item-wrapper"
               onClick={() => {
                 setMobileMenuOpen(false);
@@ -181,8 +179,8 @@ const Navbar: React.FC = () => {
             </Link>
           </li>
           <li className="nav-item">
-            <Link 
-              to="/kpi" 
+            <Link
+              to="/kpi"
               className="nav-item-wrapper"
               onClick={() => {
                 setMobileMenuOpen(false);
@@ -193,8 +191,8 @@ const Navbar: React.FC = () => {
             </Link>
           </li>
           <li className="nav-item">
-            <Link 
-              to="/task" 
+            <Link
+              to="/task"
               className="nav-item-wrapper"
               onClick={() => {
                 setMobileMenuOpen(false);
@@ -205,8 +203,8 @@ const Navbar: React.FC = () => {
             </Link>
           </li>
           <li className="nav-item">
-            <Link 
-              to="/reports" 
+            <Link
+              to="/reports"
               className="nav-item-wrapper"
               onClick={() => {
                 setMobileMenuOpen(false);
@@ -218,8 +216,8 @@ const Navbar: React.FC = () => {
           </li>
         </ul>
 
-        <button 
-          className="logout-btn" 
+        <button
+          className="logout-btn"
           onClick={() => {
             logout();
             setMobileMenuOpen(false);
