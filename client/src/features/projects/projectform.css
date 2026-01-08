@@ -6,6 +6,13 @@
 
 /* Input base styles shared in forms.css */
 
+/* Card spacing to match journal form */
+.form-card,
+.form-card-dashed {
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
 /* Custom Tooltip Styles */
 .custom-tooltip {
   position: relative;
