@@ -120,12 +120,14 @@ const CustomFileUploader: React.FC<CustomFileUploaderProps> = ({
         </Button>
 
         {fileName ? (
-          <div className="d-flex align-items-center gap-2 p-2 border rounded bg-light flex-grow-1">
-            <FileText size={16} className="text-muted" />
+          <div
+            className="d-flex align-items-center gap-2 p-2 border rounded bg-light"
+            style={{ maxWidth: '180px', overflow: 'hidden' }}
+          >
+            <FileText size={16} className="text-muted flex-shrink-0" />
             <span
               className="text-truncate"
               style={{
-                maxWidth: '200px',
                 cursor: (previewUrl || fileUrl) ? 'pointer' : 'default',
                 color: (previewUrl || fileUrl) ? '#0069ab' : 'inherit',
               }}
@@ -138,7 +140,7 @@ const CustomFileUploader: React.FC<CustomFileUploaderProps> = ({
               <Button
                 variant="link"
                 size="sm"
-                className="text-danger p-0 ms-auto"
+                className="text-danger p-0 flex-shrink-0"
                 onClick={onDelete}
               >
                 <Trash2 size={16} />

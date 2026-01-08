@@ -4,6 +4,7 @@ import '../../shared/styles/forms.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { Trash2, Plus, ChevronDown } from 'lucide-react';
+import CustomFileUploader from '../../shared/components/ui/CustomFileUploader';
 import Navbar from '../../shared/components/layout/navbar/navbar';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import debounce from 'lodash.debounce';
@@ -1006,12 +1007,13 @@ const ResearchProjectForm: React.FC = () => {
     );
   };
 
-  const handleJournalArticleUpload = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const filePath = `uploads/journal-articles/${file.name}`;
-      setJournalArticle({ filePath, file });
-    }
+  const handleJournalArticleUpload = (file: File): void => {
+    const filePath = `uploads/journal-articles/${file.name}`;
+    setJournalArticle({ filePath, file });
+  };
+
+  const handleJournalArticleDelete = (): void => {
+    setJournalArticle({ filePath: '', file: null });
   };
 
   const addGrantDisbursement = (): void => {
@@ -1085,66 +1087,113 @@ const ResearchProjectForm: React.FC = () => {
     }));
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, docType: string): void => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (
-        docType.startsWith('sanctionLetter') ||
-        docType.startsWith('ucAndSoE')
-      ) {
-        const idPartMatcher = /(\d+)$/; // Regex to find numbers at the end
-        const match = docType.match(idPartMatcher);
-        const idFromDocTypeString = match ? match[0] : null;
+  const handleFileUpload = (file: File, docType: string): void => {
+    if (
+      docType.startsWith('sanctionLetter') ||
+      docType.startsWith('ucAndSoE')
+    ) {
+      const idPartMatcher = /(\d+)$/; // Regex to find numbers at the end
+      const match = docType.match(idPartMatcher);
+      const idFromDocTypeString = match ? match[0] : null;
 
-        if (idFromDocTypeString) {
-          const updatedGrantDisbursements = grantDisbursements.map((g) => {
-            // Check if current grant 'g' matches the idFromDocTypeString (could be g.id or g.tempId)
-            const matchesId =
-              g.id != null && g.id.toString() === idFromDocTypeString;
-            const matchesTempId =
-              g.tempId != null && g.tempId.toString() === idFromDocTypeString;
+      if (idFromDocTypeString) {
+        const updatedGrantDisbursements = grantDisbursements.map((g) => {
+          // Check if current grant 'g' matches the idFromDocTypeString (could be g.id or g.tempId)
+          const matchesId =
+            g.id != null && g.id.toString() === idFromDocTypeString;
+          const matchesTempId =
+            g.tempId != null && g.tempId.toString() === idFromDocTypeString;
 
-            if (matchesId || matchesTempId) {
-              const updatedGrant = { ...g }; // Clone the grant to modify
-              if (docType.startsWith('sanctionLetter')) {
-                updatedGrant.sanctionLetter = {
-                  ...updatedGrant.sanctionLetter,
-                  enabled: true,
-                  file,
-                  filePath: '',
-                }; // Clear filePath
-              } else {
-                // ucAndSoE
-                updatedGrant.ucAndSoE = {
-                  ...updatedGrant.ucAndSoE,
-                  enabled: true,
-                  file,
-                  filePath: '',
-                }; // Clear filePath
-              }
-              return updatedGrant;
+          if (matchesId || matchesTempId) {
+            const updatedGrant = { ...g }; // Clone the grant to modify
+            if (docType.startsWith('sanctionLetter')) {
+              updatedGrant.sanctionLetter = {
+                ...updatedGrant.sanctionLetter,
+                enabled: true,
+                file,
+                filePath: '',
+              }; // Clear filePath
+            } else {
+              // ucAndSoE
+              updatedGrant.ucAndSoE = {
+                ...updatedGrant.ucAndSoE,
+                enabled: true,
+                file,
+                filePath: '',
+              }; // Clear filePath
             }
-            return g; // Return unmodified grant if no match
-          });
-          setGrantDisbursements(updatedGrantDisbursements);
-        } else {
-          console.error(
-            'Could not extract ID from docType for grant file:',
-            docType
-          );
-        }
+            return updatedGrant;
+          }
+          return g; // Return unmodified grant if no match
+        });
+        setGrantDisbursements(updatedGrantDisbursements);
       } else {
-        // For other documents (non-grant specific)
-        const baseDocType = docType.replace(/\d+$/, '');
-        setDocuments((prev) => ({
-          ...prev,
-          [baseDocType]: {
-            ...prev[baseDocType as keyof Documents],
-            file,
-            filePath: '', // Clear filePath on new upload
-          },
-        }));
+        console.error(
+          'Could not extract ID from docType for grant file:',
+          docType
+        );
       }
+    } else {
+      // For other documents (non-grant specific)
+      const baseDocType = docType.replace(/\d+$/, '');
+      setDocuments((prev) => ({
+        ...prev,
+        [baseDocType]: {
+          ...prev[baseDocType as keyof Documents],
+          file,
+          filePath: '', // Clear filePath on new upload
+        },
+      }));
+    }
+  };
+
+  const handleFileDelete = (docType: string): void => {
+    if (
+      docType.startsWith('sanctionLetter') ||
+      docType.startsWith('ucAndSoE')
+    ) {
+      const idPartMatcher = /(\d+)$/;
+      const match = docType.match(idPartMatcher);
+      const idFromDocTypeString = match ? match[0] : null;
+
+      if (idFromDocTypeString) {
+        const updatedGrantDisbursements = grantDisbursements.map((g) => {
+          const matchesId =
+            g.id != null && g.id.toString() === idFromDocTypeString;
+          const matchesTempId =
+            g.tempId != null && g.tempId.toString() === idFromDocTypeString;
+
+          if (matchesId || matchesTempId) {
+            const updatedGrant = { ...g };
+            if (docType.startsWith('sanctionLetter')) {
+              updatedGrant.sanctionLetter = {
+                ...updatedGrant.sanctionLetter,
+                file: null,
+                filePath: '',
+              };
+            } else {
+              updatedGrant.ucAndSoE = {
+                ...updatedGrant.ucAndSoE,
+                file: null,
+                filePath: '',
+              };
+            }
+            return updatedGrant;
+          }
+          return g;
+        });
+        setGrantDisbursements(updatedGrantDisbursements);
+      }
+    } else {
+      const baseDocType = docType.replace(/\d+$/, '');
+      setDocuments((prev) => ({
+        ...prev,
+        [baseDocType]: {
+          ...prev[baseDocType as keyof Documents],
+          file: null,
+          filePath: '',
+        },
+      }));
     }
   };
 
@@ -2718,34 +2767,18 @@ const ResearchProjectForm: React.FC = () => {
               <div className="col-md-6">
                 <div className="form-card h-100">
                   <div>
-                    <label className="form-label">Journal Article</label>
-                    <div className="d-flex align-items-center mb-2">
-                      <label className="btn btn-secondary btn-upload me-2 mb-0">
-                        + Upload Journal Article
-                        <input
-                          type="file"
-                          hidden
-                          onChange={handleJournalArticleUpload}
-                          accept=".pdf, .doc, .docx"
-                          {...inputProps}
-                        />
-                      </label>
-                      {journalArticle.file && (
-                        <span className="file-name-display">
-                          {journalArticle.file.name}
-                        </span>
-                      )}
-                      {isViewMode && !editMode && journalArticle?.filePath && (
-                        <a
-                          href={getFileUrl(journalArticle.filePath)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn btn-link"
-                        >
-                          {journalArticle.filePath.split('/').pop()}
-                        </a>
-                      )}
-                    </div>
+                    <CustomFileUploader
+                      label="Journal Article"
+                      name="journalArticle"
+                      onChange={handleJournalArticleUpload}
+                      onDelete={handleJournalArticleDelete}
+                      fileName={journalArticle.file?.name || journalArticle.filePath?.split('/').pop()}
+                      file={journalArticle.file}
+                      fileUrl={journalArticle.filePath ? getFileUrl(journalArticle.filePath) : undefined}
+                      accept=".pdf,.doc,.docx"
+                      disabled={isFormDisabled}
+                      buttonText="Upload"
+                    />
                     <small className="form-text text-muted">
                       Max 120 MB, PDF / Word
                     </small>
@@ -2957,35 +2990,28 @@ const ResearchProjectForm: React.FC = () => {
                         />
                       </div>
                       <div className="col-auto">
-                        <label className="btn btn-secondary btn-upload-sm">
-                          + Upload Sanction Letter
-                          <input
-                            type="file"
-                            hidden
-                            disabled={!grant.sanctionLetter.enabled}
-                            onChange={(e) =>
-                              handleFileUpload(
-                                e,
-                                `sanctionLetter${grantIdentifier}`
-                              )
-                            }
-                            {...inputProps}
-                          />
-                        </label>
+                        <CustomFileUploader
+                          name={`sanctionLetter${grantIdentifier}`}
+                          onChange={(file) => handleFileUpload(file, `sanctionLetter${grantIdentifier}`)}
+                          onDelete={() => handleFileDelete(`sanctionLetter${grantIdentifier}`)}
+                          fileName={grant.sanctionLetter.file?.name || grant.sanctionLetter.filePath?.split('/').pop()}
+                          file={grant.sanctionLetter.file}
+                          fileUrl={grant.sanctionLetter.filePath ? getFileUrl(grant.sanctionLetter.filePath) : undefined}
+                          disabled={isFormDisabled || !grant.sanctionLetter.enabled}
+                          buttonText="Sanction Letter"
+                        />
                       </div>
                       <div className="col-auto">
-                        <label className="btn btn-secondary btn-upload-sm">
-                          + Upload UC & SoE
-                          <input
-                            type="file"
-                            hidden
-                            disabled={!grant.ucAndSoE.enabled}
-                            onChange={(e) =>
-                              handleFileUpload(e, `ucAndSoE${grantIdentifier}`)
-                            }
-                            {...inputProps}
-                          />
-                        </label>
+                        <CustomFileUploader
+                          name={`ucAndSoE${grantIdentifier}`}
+                          onChange={(file) => handleFileUpload(file, `ucAndSoE${grantIdentifier}`)}
+                          onDelete={() => handleFileDelete(`ucAndSoE${grantIdentifier}`)}
+                          fileName={grant.ucAndSoE.file?.name || grant.ucAndSoE.filePath?.split('/').pop()}
+                          file={grant.ucAndSoE.file}
+                          fileUrl={grant.ucAndSoE.filePath ? getFileUrl(grant.ucAndSoE.filePath) : undefined}
+                          disabled={isFormDisabled || !grant.ucAndSoE.enabled}
+                          buttonText="UC & SoE"
+                        />
                       </div>
                       <div className="col-auto">
                         <button
@@ -3048,15 +3074,14 @@ const ResearchProjectForm: React.FC = () => {
                     { key: 'bankStatement', label: 'Bank Statement' },
                   ].map((doc) => (
                     <div className="col-md-6 mb-3" key={doc.key}>
-                      <div className="d-flex align-items-center">
+                      <div className="d-flex align-items-center gap-2">
                         <label
-                          className="form-label me-auto"
-                          style={{ minWidth: '200px' }}
+                          className="form-label mb-0"
+                          style={{ minWidth: '180px' }}
                         >
                           {doc.label}
                         </label>
-                        <div className="form-check form-switch me-2">
-                          {' '}
+                        <div className="form-check form-switch">
                           <input
                             className="form-check-input"
                             type="checkbox"
@@ -3064,35 +3089,25 @@ const ResearchProjectForm: React.FC = () => {
                             checked={documents[doc.key as keyof Documents]?.enabled || false}
                             onChange={() => handleDocumentToggle(doc.key)}
                             {...inputProps}
-                          />{' '}
-                        </div>
-                        <label className="btn btn-secondary btn-upload flex-grow-1">
-                          + Upload {doc.label}
-                          <input
-                            type="file"
-                            hidden
-                            disabled={!documents[doc.key as keyof Documents]?.enabled}
-                            onChange={(e) => handleFileUpload(e, doc.key)}
-                            {...inputProps}
                           />
-                        </label>
-                        {documents[doc.key as keyof Documents]?.file && (
-                          <span className="file-name-display ms-2">
-                            {(documents[doc.key as keyof Documents]?.file as File).name}
-                          </span>
-                        )}
-                        {isViewMode &&
-                          !editMode &&
-                          documents[doc.key as keyof Documents]?.filePath && (
-                            <a
-                              href={getFileUrl(documents[doc.key as keyof Documents]?.filePath || '')}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="btn btn-link"
-                            >
-                              View
-                            </a>
-                          )}
+                        </div>
+                        <CustomFileUploader
+                          name={doc.key}
+                          onChange={(file) => handleFileUpload(file, doc.key)}
+                          onDelete={() => handleFileDelete(doc.key)}
+                          fileName={
+                            documents[doc.key as keyof Documents]?.file?.name ||
+                            documents[doc.key as keyof Documents]?.filePath?.split('/').pop()
+                          }
+                          file={documents[doc.key as keyof Documents]?.file}
+                          fileUrl={
+                            documents[doc.key as keyof Documents]?.filePath
+                              ? getFileUrl(documents[doc.key as keyof Documents]?.filePath || '')
+                              : undefined
+                          }
+                          disabled={isFormDisabled || !documents[doc.key as keyof Documents]?.enabled}
+                          buttonText="Upload"
+                        />
                       </div>
                     </div>
                   ))}
