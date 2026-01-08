@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Home from '../features/home/home';
 import Login from '../features/auth/login/login';
 import EventPage from '../features/events/components/EventPage';
-
 import Journalform from '../features/journals/journalform';
 import Projectform from '../features/projects/projectform';
 import Dashboard from '../features/admin/admindashboard';
@@ -19,6 +18,9 @@ import EventEntry from '../features/events/components/EventEntry';
 import PublicationsPage from '../features/publications/pages/PublicationsPage';
 import ProjectsPage from '../features/publications/pages/ProjectsPage';
 import Storybook from '../features/storybook/Storybook';
+import FinanceApprovalForm from '../features/forms/finance/financeapproval';
+import VehicleBooking from '../features/forms/vehicle/vehiclebooking';
+
 
 function App() {
   return (
@@ -175,6 +177,10 @@ function App() {
                 }
               />
               <Route path="/storybook" element={<Storybook />} />
+             
+<Route path="/finance-approval" element={<FinanceApprovalForm />} />
+<Route path="/vehicle-booking" element={<VehicleBooking />} />
+
             </Routes>
           </AuthProvider>
         </BrowserRouter>
