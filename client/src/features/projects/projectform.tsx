@@ -2285,7 +2285,7 @@ const ResearchProjectForm: React.FC = () => {
                       <div style={{ flex: 1 }}></div>
                       <button
                         type="button"
-                        className="btn btn-sm btn-outline-secondary"
+                        className="btn btn-sm btn-primary btn-add"
                         onClick={() => {
                           setProjectRequest({
                             request_type: 'agency',
@@ -2295,7 +2295,6 @@ const ResearchProjectForm: React.FC = () => {
                           setShowProjectRequestModal(true);
                         }}
                         disabled={!editMode && isViewMode}
-                        style={{ fontSize: '0.75rem' }}
                       >
                         Request Agency
                       </button>
@@ -2359,7 +2358,7 @@ const ResearchProjectForm: React.FC = () => {
                       <label className="form-label mb-0">Scheme</label>
                       <button
                         type="button"
-                        className="btn btn-sm btn-outline-secondary ms-2"
+                        className="btn btn-sm btn-primary btn-add ms-2"
                         onClick={() => {
                           setProjectRequest({
                             request_type: 'scheme',
@@ -2369,7 +2368,6 @@ const ResearchProjectForm: React.FC = () => {
                           setShowProjectRequestModal(true);
                         }}
                         disabled={!editMode && isViewMode}
-                        style={{ fontSize: '0.75rem' }}
                       >
                         Request Scheme
                       </button>
@@ -2493,7 +2491,7 @@ const ResearchProjectForm: React.FC = () => {
                 <div className="d-flex gap-2">
                   <button
                     type="button"
-                    className="btn btn-sm btn-outline-secondary"
+                    className="btn btn-sm btn-primary btn-add"
                     onClick={() => {
                       setProjectRequest({
                         request_type: 'agency_type',
@@ -2503,7 +2501,6 @@ const ResearchProjectForm: React.FC = () => {
                       setShowProjectRequestModal(true);
                     }}
                     disabled={!editMode && isViewMode}
-                    style={{ fontSize: '0.75rem' }}
                   >
                     Request Agency Type
                   </button>
