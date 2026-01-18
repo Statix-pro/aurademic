@@ -197,7 +197,7 @@
 }
 
 /* Category Toggle */
-.category-toggle-container {
+.finance-approval-body .category-toggle-container {
   display: flex;
   gap: 12px;
   background-color: rgba(0, 0, 0, 0.04);
@@ -207,7 +207,7 @@
   max-width: 400px;
 }
 
-.category-btn {
+.finance-approval-body .category-btn {
   flex: 1;
   border: none;
   background-color: transparent;
@@ -220,21 +220,21 @@
   font-size: 14px;
 }
 
-.category-btn.active {
+.finance-approval-body .category-btn.active {
   background-color: var(--primary-color, #0069ab);
   color: #ffffff;
   box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 105, 171, 0.1));
 }
 
-.category-btn:hover {
+.finance-approval-body .category-btn:hover {
   background-color: rgba(0, 0, 0, 0.08);
 }
 
-.category-btn.active:hover {
+.finance-approval-body .category-btn.active:hover {
   background-color: var(--primary-hover, #005492);
 }
 
-.category-btn:focus-visible {
+.finance-approval-body .category-btn:focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus, 0 0 0 3px rgba(0, 105, 171, 0.15));
 }
@@ -503,12 +503,12 @@
     font-size: 12px;
   }
 
-  .category-btn {
+  .finance-approval-body .category-btn {
     padding: 10px 16px;
     font-size: 12px;
   }
 
-  .category-toggle-container {
+  .finance-approval-body .category-toggle-container {
     width: 100%;
     max-width: 100%;
   }
@@ -594,7 +594,7 @@
     padding: 8px 4px;
   }
 
-  .category-toggle-container {
+  .finance-approval-body .category-toggle-container {
     width: 100%;
     max-width: 100%;
   }

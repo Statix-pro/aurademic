@@ -1584,7 +1584,7 @@ const FinanceApproval: React.FC = () => {
 
 
   return (
-    <div style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}>
+    <div className="finance-approval-body" style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}>
       <Navbar />
 
       {!showPreview && (
