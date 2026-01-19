@@ -664,7 +664,7 @@ const Dashboard: React.FC = () => {
       return acc;
     }, {} as Record<string, [string, ColumnConfigItem][]>);
 
-    const groupOrder = ["Essential", ...Object.keys(groupedColumns).filter((g) => g !== "Essential").sort()];
+    const groupOrder = ["Essential", ...Object.keys(groupedColumns).filter((g) => g !== "Essential").sort((a, b) => a.localeCompare(b))];
 
     return (
       <div className="dropdown mb-3">

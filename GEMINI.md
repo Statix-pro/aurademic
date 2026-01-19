@@ -128,7 +128,21 @@ Located in `client/src/shared/utils/`. This utility dynamically resolves the Bas
 *   **Development:** Returns `http://localhost:5000`
 *   **Production:** Returns `https://research.ksrct.ac.in` (derived from `VITE_API_URL`).
 
-## 8. Database Schema
+## 8. Quality Assurance (SonarQube)
+
+Code quality is tracked using SonarQube.
+
+*   **Server URL:** `http://localhost:9000`
+*   **Project Key:** `Research`
+*   **Configuration:** `sonar-project.properties` (at root)
+
+To run analysis manually:
+```bash
+# Ensure you are in the root directory
+sonar
+```
+
+## 9. Database Schema
 Major tables include:
 *   `users`: Authentication and profile info.
 *   `journals`: Research publication details.

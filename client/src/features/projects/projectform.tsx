@@ -3,7 +3,8 @@ import './projectform.css';
 import '../../shared/styles/forms.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Plus, ChevronDown } from 'lucide-react';
+import CustomFileUploader from '../../shared/components/ui/CustomFileUploader';
 import Navbar from '../../shared/components/layout/navbar/navbar';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import debounce from 'lodash.debounce';
@@ -268,6 +269,7 @@ const ResearchProjectForm: React.FC = () => {
   const [projectRequestLoading, setProjectRequestLoading] = useState(false);
   const [projectRequestError, setProjectRequestError] = useState('');
   const [isFacultyDriven, setIsFacultyDriven] = useState(true);
+  const [activeTab, setActiveTab] = useState('form');
 
   const toggleCategory = () => {
     setIsFacultyDriven(!isFacultyDriven);
@@ -746,6 +748,201 @@ const ResearchProjectForm: React.FC = () => {
     );
   };
 
+  // Function to render investigator fields based on designation
+  const renderInvestigatorFields = (investigator: Investigator, index: number): JSX.Element => {
+    const designationLower = (
+      investigatorDesignations[index] ||
+      investigator.designation ||
+      'faculty'
+    ).toLowerCase();
+
+    const inputProps = {
+      disabled: isFormDisabled,
+    };
+
+    if (designationLower === 'student') {
+      return (
+        <>
+          <div className="investigator-input-group">
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Register No."
+              name="register_no"
+              value={investigator.register_no || ''}
+              onChange={(e) =>
+                handleInputChange(index, e.target.name, e.target.value)
+              }
+              {...inputProps}
+            />
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Name"
+              name="name"
+              value={investigator.name || ''}
+              onChange={(e) =>
+                handleInputChange(index, e.target.name, e.target.value)
+              }
+              {...inputProps}
+            />
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Department"
+              name="department"
+              value={investigator.department || ''}
+              onChange={(e) =>
+                handleInputChange(index, e.target.name, e.target.value)
+              }
+              {...inputProps}
+            />
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Organization"
+              name="organization"
+              value={investigator.organization || 'K.S.Rangasamy College of Technology'}
+              onChange={(e) =>
+                handleInputChange(index, e.target.name, e.target.value)
+              }
+              {...inputProps}
+              readOnly
+            />
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Country"
+              name="country"
+              value={investigator.country || 'India'}
+              onChange={(e) =>
+                handleInputChange(index, e.target.name, e.target.value)
+              }
+              {...inputProps}
+              readOnly
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (designationLower === 'external') {
+      return (
+        <>
+          <div className="investigator-input-group">
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Name"
+              name="name"
+              value={investigator.name || ''}
+              onChange={(e) =>
+                handleInputChange(index, e.target.name, e.target.value)
+              }
+              {...inputProps}
+            />
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Department"
+              name="department"
+              value={investigator.department || ''}
+              onChange={(e) =>
+                handleInputChange(index, e.target.name, e.target.value)
+              }
+              {...inputProps}
+            />
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Organization"
+              name="organization"
+              value={investigator.organization || ''}
+              onChange={(e) =>
+                handleInputChange(index, e.target.name, e.target.value)
+              }
+              {...inputProps}
+            />
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Country"
+              name="country"
+              value={investigator.country || ''}
+              onChange={(e) =>
+                handleInputChange(index, e.target.name, e.target.value)
+              }
+              {...inputProps}
+            />
+          </div>
+        </>
+      );
+    }
+
+    // Default: Faculty - search with readonly fields
+    return (
+      <>
+        <div className="investigator-input-group">
+          <div className="investigator-search-container">
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Search or Enter Author ID"
+              value={searchQueries[index] || investigator.author_id}
+              onChange={(e) => handleSearchInputChange(e, index)}
+              {...inputProps}
+            />
+            {showSuggestions[index] &&
+              searchResults[index].length > 0 &&
+              !(investigator.author_id || investigator.register_no) && (
+                <ul className="investigator-suggestions-list">
+                  {searchResults[index].map((result) => (
+                    <li
+                      key={result.author_id || result.student_id}
+                      className="list-group-item list-group-item-action"
+                      onClick={() => handleInvestigatorSelect(result, index)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {result.author_id || result.student_id} - {result.name} - {result.organization}
+                      {result.department && ` - ${result.department}`}
+                    </li>
+                  ))}
+                </ul>
+              )}
+          </div>
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Name"
+            value={investigator.name || ''}
+            readOnly
+          />
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Department"
+            value={investigator.department || ''}
+            readOnly
+          />
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Organization"
+            value={investigator.organization || ''}
+            readOnly
+          />
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Country"
+            value={investigator.country || ''}
+            readOnly
+          />
+        </div>
+      </>
+    );
+  };
+
   const addFinancialContribution = (): void => {
     if (financialContributions.length < MAX_FINANCIAL_CONTRIBUTIONS) {
       setFinancialContributions([
@@ -810,12 +1007,13 @@ const ResearchProjectForm: React.FC = () => {
     );
   };
 
-  const handleJournalArticleUpload = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const filePath = `uploads/journal-articles/${file.name}`;
-      setJournalArticle({ filePath, file });
-    }
+  const handleJournalArticleUpload = (file: File): void => {
+    const filePath = `uploads/journal-articles/${file.name}`;
+    setJournalArticle({ filePath, file });
+  };
+
+  const handleJournalArticleDelete = (): void => {
+    setJournalArticle({ filePath: '', file: null });
   };
 
   const addGrantDisbursement = (): void => {
@@ -889,66 +1087,113 @@ const ResearchProjectForm: React.FC = () => {
     }));
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, docType: string): void => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (
-        docType.startsWith('sanctionLetter') ||
-        docType.startsWith('ucAndSoE')
-      ) {
-        const idPartMatcher = /(\d+)$/; // Regex to find numbers at the end
-        const match = docType.match(idPartMatcher);
-        const idFromDocTypeString = match ? match[0] : null;
+  const handleFileUpload = (file: File, docType: string): void => {
+    if (
+      docType.startsWith('sanctionLetter') ||
+      docType.startsWith('ucAndSoE')
+    ) {
+      const idPartMatcher = /(\d+)$/; // Regex to find numbers at the end
+      const match = docType.match(idPartMatcher);
+      const idFromDocTypeString = match ? match[0] : null;
 
-        if (idFromDocTypeString) {
-          const updatedGrantDisbursements = grantDisbursements.map((g) => {
-            // Check if current grant 'g' matches the idFromDocTypeString (could be g.id or g.tempId)
-            const matchesId =
-              g.id != null && g.id.toString() === idFromDocTypeString;
-            const matchesTempId =
-              g.tempId != null && g.tempId.toString() === idFromDocTypeString;
+      if (idFromDocTypeString) {
+        const updatedGrantDisbursements = grantDisbursements.map((g) => {
+          // Check if current grant 'g' matches the idFromDocTypeString (could be g.id or g.tempId)
+          const matchesId =
+            g.id != null && g.id.toString() === idFromDocTypeString;
+          const matchesTempId =
+            g.tempId != null && g.tempId.toString() === idFromDocTypeString;
 
-            if (matchesId || matchesTempId) {
-              const updatedGrant = { ...g }; // Clone the grant to modify
-              if (docType.startsWith('sanctionLetter')) {
-                updatedGrant.sanctionLetter = {
-                  ...updatedGrant.sanctionLetter,
-                  enabled: true,
-                  file,
-                  filePath: '',
-                }; // Clear filePath
-              } else {
-                // ucAndSoE
-                updatedGrant.ucAndSoE = {
-                  ...updatedGrant.ucAndSoE,
-                  enabled: true,
-                  file,
-                  filePath: '',
-                }; // Clear filePath
-              }
-              return updatedGrant;
+          if (matchesId || matchesTempId) {
+            const updatedGrant = { ...g }; // Clone the grant to modify
+            if (docType.startsWith('sanctionLetter')) {
+              updatedGrant.sanctionLetter = {
+                ...updatedGrant.sanctionLetter,
+                enabled: true,
+                file,
+                filePath: '',
+              }; // Clear filePath
+            } else {
+              // ucAndSoE
+              updatedGrant.ucAndSoE = {
+                ...updatedGrant.ucAndSoE,
+                enabled: true,
+                file,
+                filePath: '',
+              }; // Clear filePath
             }
-            return g; // Return unmodified grant if no match
-          });
-          setGrantDisbursements(updatedGrantDisbursements);
-        } else {
-          console.error(
-            'Could not extract ID from docType for grant file:',
-            docType
-          );
-        }
+            return updatedGrant;
+          }
+          return g; // Return unmodified grant if no match
+        });
+        setGrantDisbursements(updatedGrantDisbursements);
       } else {
-        // For other documents (non-grant specific)
-        const baseDocType = docType.replace(/\d+$/, '');
-        setDocuments((prev) => ({
-          ...prev,
-          [baseDocType]: {
-            ...prev[baseDocType as keyof Documents],
-            file,
-            filePath: '', // Clear filePath on new upload
-          },
-        }));
+        console.error(
+          'Could not extract ID from docType for grant file:',
+          docType
+        );
       }
+    } else {
+      // For other documents (non-grant specific)
+      const baseDocType = docType.replace(/\d+$/, '');
+      setDocuments((prev) => ({
+        ...prev,
+        [baseDocType]: {
+          ...prev[baseDocType as keyof Documents],
+          file,
+          filePath: '', // Clear filePath on new upload
+        },
+      }));
+    }
+  };
+
+  const handleFileDelete = (docType: string): void => {
+    if (
+      docType.startsWith('sanctionLetter') ||
+      docType.startsWith('ucAndSoE')
+    ) {
+      const idPartMatcher = /(\d+)$/;
+      const match = docType.match(idPartMatcher);
+      const idFromDocTypeString = match ? match[0] : null;
+
+      if (idFromDocTypeString) {
+        const updatedGrantDisbursements = grantDisbursements.map((g) => {
+          const matchesId =
+            g.id != null && g.id.toString() === idFromDocTypeString;
+          const matchesTempId =
+            g.tempId != null && g.tempId.toString() === idFromDocTypeString;
+
+          if (matchesId || matchesTempId) {
+            const updatedGrant = { ...g };
+            if (docType.startsWith('sanctionLetter')) {
+              updatedGrant.sanctionLetter = {
+                ...updatedGrant.sanctionLetter,
+                file: null,
+                filePath: '',
+              };
+            } else {
+              updatedGrant.ucAndSoE = {
+                ...updatedGrant.ucAndSoE,
+                file: null,
+                filePath: '',
+              };
+            }
+            return updatedGrant;
+          }
+          return g;
+        });
+        setGrantDisbursements(updatedGrantDisbursements);
+      }
+    } else {
+      const baseDocType = docType.replace(/\d+$/, '');
+      setDocuments((prev) => ({
+        ...prev,
+        [baseDocType]: {
+          ...prev[baseDocType as keyof Documents],
+          file: null,
+          filePath: '',
+        },
+      }));
     }
   };
 
@@ -1832,41 +2077,55 @@ const ResearchProjectForm: React.FC = () => {
         {/* Category Toggle */}
         <div className="category-toggle-container mb-4">
           <button
-            className={`category-button ${isFacultyDriven ? '' : 'active'}`}
-            onClick={() =>
-              isViewMode || toggleCategory()
-            } // Simulate event object
+            className={`category-button ${activeTab === 'form' ? 'active' : ''}`}
+            onClick={() => setActiveTab('form')}
             disabled={isViewMode}
           >
-            Faculty Driven
+            Form
           </button>
           <button
-            className={`category-button ${isFacultyDriven ? 'active' : ''}`}
-            onClick={() =>
-              isViewMode || toggleCategory()
-            } // Simulate event object
+            className={`category-button ${activeTab === 'budget' ? 'active' : ''}`}
+            onClick={() => setActiveTab('budget')}
             disabled={isViewMode}
           >
-            Student Driven
+            Budget
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="research-form">
-          {/* Investigators Card */}
-          <div className="card form-card mb-4">
-            <div className="card-body">
+        {activeTab === 'form' ? (
+          <form onSubmit={handleSubmit} className="research-form">
+            {/* Investigators Card */}
+            <div className="form-card">
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <h6 className="form-section-title">Investigators:</h6>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-add"
-                  onClick={addInvestigator}
-                  disabled={
-                    investigators.length >= MAX_INVESTIGATORS || isFormDisabled
-                  }
-                  {...inputProps}
-                >
-                  + Add Investigator
-                </button>
+                <div className="d-flex align-items-center">
+                  <span className="me-3">Driven by:</span>
+                  <div className="radio-group">
+                    <div className="radio-item">
+                      <input
+                        type="radio"
+                        id="drivenByFaculty"
+                        name="drivenBy"
+                        value="faculty"
+                        checked={!isFacultyDriven}
+                        onChange={() => !isViewMode && toggleCategory()}
+                        disabled={isViewMode || isFormDisabled}
+                      />
+                      <label htmlFor="drivenByFaculty">Faculty</label>
+                    </div>
+                    <div className="radio-item">
+                      <input
+                        type="radio"
+                        id="drivenByStudent"
+                        name="drivenBy"
+                        value="student"
+                        checked={isFacultyDriven}
+                        onChange={() => !isViewMode && toggleCategory()}
+                        disabled={isViewMode || isFormDisabled}
+                      />
+                      <label htmlFor="drivenByStudent">Student</label>
+                    </div>
+                  </div>
+                </div>
               </div>
               {validationErrors.investigators && (
                 <div className="alert alert-danger">
@@ -1876,25 +2135,27 @@ const ResearchProjectForm: React.FC = () => {
               {investigators.map((investigator, index) => (
                 <div
                   key={investigator.id}
-                  className="row align-items-center investigator-row mb-2"
+                  className="investigator-row mb-3"
                 >
-                  <div className="col-auto">
-                    <div className="radio-item">
-                      <input
-                        type="radio"
-                        id={`investigator${investigator.id}`}
-                        name="primary_investigator"
-                        checked={investigator.is_primary}
-                        onChange={() => handlePrimarySelection(index)}
-                        required
-                        {...inputProps}
-                      />
-                      <label htmlFor={`investigator${investigator.id}`}>
-                        {index === 0 ? 'PI' : 'Co-PI'}
-                      </label>
-                    </div>
+                  {/* Radio button with tooltip */}
+                  <div className="custom-tooltip">
+                    <input
+                      type="radio"
+                      id={`investigator${investigator.id}`}
+                      name="primary_investigator"
+                      className="investigator-row-radio"
+                      checked={investigator.is_primary}
+                      onChange={() => handlePrimarySelection(index)}
+                      required
+                      disabled={isFormDisabled}
+                    />
+                    <span className="tooltip-text">
+                      {index === 0 ? 'PI' : 'Co-PI'}
+                    </span>
                   </div>
-                  <div className="col-auto">
+
+                  {/* Designation dropdown with ChevronDown */}
+                  <div style={{ position: 'relative' }}>
                     <select
                       className="form-control designation-select"
                       value={(
@@ -1906,198 +2167,52 @@ const ResearchProjectForm: React.FC = () => {
                         handleDesignationChange(index, e.target.value)
                       }
                       disabled={isFormDisabled}
-                      {...inputProps}
                     >
                       <option value="faculty">Faculty</option>
                       <option value="student">Student</option>
+                      <option value="external">External</option>
                     </select>
+                    <ChevronDown
+                      size={12}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        pointerEvents: 'none',
+                        color: '#6c757d',
+                      }}
+                    />
                   </div>
-                  {(
-                    investigatorDesignations[index] ||
-                    investigator.designation ||
-                    'faculty'
-                  ).toLowerCase() === 'student' ? (
-                    <>
-                      <div className="col">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Register No."
-                          name="register_no"
-                          value={investigator.register_no || ''}
-                          onChange={(e) =>
-                            handleInputChange(
-                              index,
-                              e.target.name,
-                              e.target.value
-                            )
-                          }
-                          disabled={isFormDisabled}
-                          {...inputProps}
-                        />
-                      </div>
-                      <div className="col">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Name"
-                          name="name"
-                          value={investigator.name || ''}
-                          onChange={(e) =>
-                            handleInputChange(
-                              index,
-                              e.target.name,
-                              e.target.value
-                            )
-                          }
-                          disabled={isFormDisabled}
-                          {...inputProps}
-                        />
-                      </div>
-                      <div className="col">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Department"
-                          name="department"
-                          value={investigator.department || ''}
-                          onChange={(e) =>
-                            handleInputChange(
-                              index,
-                              e.target.name,
-                              e.target.value
-                            )
-                          }
-                          disabled={isFormDisabled}
-                          {...inputProps}
-                        />
-                      </div>
-                      <div className="col">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Organization"
-                          name="organization"
-                          value={investigator.organization || ''}
-                          onChange={(e) =>
-                            handleInputChange(
-                              index,
-                              e.target.name,
-                              e.target.value
-                            )
-                          }
-                          disabled={isFormDisabled}
-                          {...inputProps}
-                        />
-                      </div>
-                      <div className="col">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Country"
-                          name="country"
-                          value={investigator.country || ''}
-                          onChange={(e) =>
-                            handleInputChange(
-                              index,
-                              e.target.name,
-                              e.target.value
-                            )
-                          }
-                          disabled={isFormDisabled}
-                          {...inputProps}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="col">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Search or Enter a value"
-                          value={searchQueries[index] || investigator.author_id}
-                          onChange={(e) => handleSearchInputChange(e, index)}
-                          {...inputProps}
-                        />
-                        {showSuggestions[index] &&
-                          searchResults[index].length > 0 &&
-                          !(
-                            investigator.author_id || investigator.register_no
-                          ) && (
-                            <ul
-                              className="list-group mt-1 position-absolute"
-                              style={{ zIndex: 10 }}
-                            >
-                              {searchResults[index].map((result) => (
-                                <li
-                                  key={result.author_id || result.student_id}
-                                  className="list-group-item list-group-item-action"
-                                  onClick={() =>
-                                    handleInvestigatorSelect(result, index)
-                                  }
-                                >
-                                  {result.author_id || result.student_id} -{' '}
-                                  {result.name} - {result.organization}{' '}
-                                  {result.department &&
-                                    `- ${result.department}`}{' '}
-                                  {result.country && `- ${result.country}`}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                      </div>
-                      <div className="col">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Name"
-                          value={investigator.name || ''}
-                          readOnly
-                          {...inputProps}
-                        />
-                      </div>
-                      <div className="col">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Department"
-                          value={investigator.department || ''}
-                          readOnly
-                          {...inputProps}
-                        />
-                      </div>
-                      <div className="col">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Organization"
-                          value={investigator.organization || ''}
-                          readOnly
-                          {...inputProps}
-                        />
-                      </div>
-                      <div className="col">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Country"
-                          value={investigator.country || ''}
-                          readOnly
-                          {...inputProps}
-                        />
-                      </div>
-                    </>
-                  )}
 
-                  <div className="col-auto">
-                    {index !== 0 && (
+                  {/* Conditional Fields based on designation */}
+                  {renderInvestigatorFields(investigator, index)}
+
+                  {/* Action buttons: Add and Delete */}
+                  <div className="investigator-action-buttons">
+                    {/* Only show add button on the last investigator row */}
+                    {index === investigators.length - 1 && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-add-author"
+                        onClick={addInvestigator}
+                        disabled={
+                          investigators.length >= MAX_INVESTIGATORS ||
+                          isFormDisabled
+                        }
+                        aria-label="Add investigator"
+                        title="Add investigator"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    )}
+
+                    {investigators.length > 1 && (
                       <button
                         type="button"
                         className="btn btn-sm btn-delete-author"
                         onClick={() => removeInvestigator(investigator.id)}
                         disabled={isFormDisabled}
-                        {...inputProps}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -2106,11 +2221,9 @@ const ResearchProjectForm: React.FC = () => {
                 </div>
               ))}
             </div>
-          </div>
 
-          {/* Title, Type, Agency, Scheme, Duration Card */}
-          <div className="card form-card mb-4">
-            <div className="card-body">
+            {/* Title, Type, Agency, Scheme, Duration Card */}
+            <div className="form-card">
               <div className="row">
                 <div className="col-md-6">
                   <div className="form-group mb-3">
@@ -2172,7 +2285,7 @@ const ResearchProjectForm: React.FC = () => {
                       <div style={{ flex: 1 }}></div>
                       <button
                         type="button"
-                        className="btn btn-sm btn-outline-secondary"
+                        className="btn btn-sm btn-primary btn-add"
                         onClick={() => {
                           setProjectRequest({
                             request_type: 'agency',
@@ -2182,7 +2295,6 @@ const ResearchProjectForm: React.FC = () => {
                           setShowProjectRequestModal(true);
                         }}
                         disabled={!editMode && isViewMode}
-                        style={{ fontSize: '0.75rem' }}
                       >
                         Request Agency
                       </button>
@@ -2246,7 +2358,7 @@ const ResearchProjectForm: React.FC = () => {
                       <label className="form-label mb-0">Scheme</label>
                       <button
                         type="button"
-                        className="btn btn-sm btn-outline-secondary ms-2"
+                        className="btn btn-sm btn-primary btn-add ms-2"
                         onClick={() => {
                           setProjectRequest({
                             request_type: 'scheme',
@@ -2256,7 +2368,6 @@ const ResearchProjectForm: React.FC = () => {
                           setShowProjectRequestModal(true);
                         }}
                         disabled={!editMode && isViewMode}
-                        style={{ fontSize: '0.75rem' }}
                       >
                         Request Scheme
                       </button>
@@ -2372,17 +2483,15 @@ const ResearchProjectForm: React.FC = () => {
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Financial Contribution Card */}
-          <div className="card form-card mb-4">
-            <div className="card-body">
+            {/* Financial Contribution Card */}
+            <div className="form-card">
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <h6 className="form-section-title">Financial Contribution</h6>
                 <div className="d-flex gap-2">
                   <button
                     type="button"
-                    className="btn btn-sm btn-outline-secondary"
+                    className="btn btn-sm btn-primary btn-add"
                     onClick={() => {
                       setProjectRequest({
                         request_type: 'agency_type',
@@ -2392,7 +2501,6 @@ const ResearchProjectForm: React.FC = () => {
                       setShowProjectRequestModal(true);
                     }}
                     disabled={!editMode && isViewMode}
-                    style={{ fontSize: '0.75rem' }}
                   >
                     Request Agency Type
                   </button>
@@ -2555,11 +2663,8 @@ const ResearchProjectForm: React.FC = () => {
                 </div>
               ))}
             </div>
-          </div>
 
-          {/* Collaboration Card */}
-          <div className="card form-card mb-4">
-            <div className="card-body">
+            <div className="form-card">
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <h6 className="form-section-title">Collaboration</h6>
                 <div className="d-flex align-items-center">
@@ -2652,54 +2757,34 @@ const ResearchProjectForm: React.FC = () => {
                   </div>
                 ))}
             </div>
-          </div>
 
-          {/* Journal Article & Submission Card */}
-          <div className="row mb-4 journal-submission-row">
-            {/* Journal Article Card */}
-            <div className="col-md-6">
-              <div className="card form-card h-100">
-                <div className="card-body d-flex flex-column justify-content-between">
+            {/* Journal Article & Submission Card */}
+            <div className="row mb-4 journal-submission-row">
+              {/* Journal Article Card */}
+              <div className="col-md-6">
+                <div className="form-card h-100">
                   <div>
-                    <label className="form-label">Journal Article</label>
-                    <div className="d-flex align-items-center mb-2">
-                      <label className="btn btn-secondary btn-upload me-2 mb-0">
-                        + Upload Journal Article
-                        <input
-                          type="file"
-                          hidden
-                          onChange={handleJournalArticleUpload}
-                          accept=".pdf, .doc, .docx"
-                          {...inputProps}
-                        />
-                      </label>
-                      {journalArticle.file && (
-                        <span className="file-name-display">
-                          {journalArticle.file.name}
-                        </span>
-                      )}
-                      {isViewMode && !editMode && journalArticle?.filePath && (
-                        <a
-                          href={getFileUrl(journalArticle.filePath)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn btn-link"
-                        >
-                          {journalArticle.filePath.split('/').pop()}
-                        </a>
-                      )}
-                    </div>
+                    <CustomFileUploader
+                      label="Journal Article"
+                      name="journalArticle"
+                      onChange={handleJournalArticleUpload}
+                      onDelete={handleJournalArticleDelete}
+                      fileName={journalArticle.file?.name || journalArticle.filePath?.split('/').pop()}
+                      file={journalArticle.file}
+                      fileUrl={journalArticle.filePath ? getFileUrl(journalArticle.filePath) : undefined}
+                      accept=".pdf,.doc,.docx"
+                      disabled={isFormDisabled}
+                      buttonText="Upload"
+                    />
                     <small className="form-text text-muted">
                       Max 120 MB, PDF / Word
                     </small>
                   </div>
                 </div>
               </div>
-            </div>
-            {/* Date of Submission Card */}
-            <div className="col-md-6">
-              <div className="card form-card h-100 date-submission-card">
-                <div className="card-body">
+              {/* Date of Submission Card */}
+              <div className="col-md-6">
+                <div className="form-card h-100 date-submission-card">
                   <div className="mb-3 d-flex align-items-center">
                     <label className="form-label mb-0 me-3">
                       Date of Submission
@@ -2760,12 +2845,10 @@ const ResearchProjectForm: React.FC = () => {
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Main Details Section */}
-          {dateOfSubmission && submissionStatus === 'published' && (
-            <div className="form-card-dashed  mb-4">
-              <div className="card-body">
+            {/* Main Details Section */}
+            {dateOfSubmission && submissionStatus === 'published' && (
+              <div className="form-card-dashed mb-4">
                 {/* Project Details */}
                 <h6 className="form-section-title mb-3">Project Details:</h6>
                 <div className="row mb-3">
@@ -2904,35 +2987,28 @@ const ResearchProjectForm: React.FC = () => {
                         />
                       </div>
                       <div className="col-auto">
-                        <label className="btn btn-secondary btn-upload-sm">
-                          + Upload Sanction Letter
-                          <input
-                            type="file"
-                            hidden
-                            disabled={!grant.sanctionLetter.enabled}
-                            onChange={(e) =>
-                              handleFileUpload(
-                                e,
-                                `sanctionLetter${grantIdentifier}`
-                              )
-                            }
-                            {...inputProps}
-                          />
-                        </label>
+                        <CustomFileUploader
+                          name={`sanctionLetter${grantIdentifier}`}
+                          onChange={(file) => handleFileUpload(file, `sanctionLetter${grantIdentifier}`)}
+                          onDelete={() => handleFileDelete(`sanctionLetter${grantIdentifier}`)}
+                          fileName={grant.sanctionLetter.file?.name || grant.sanctionLetter.filePath?.split('/').pop()}
+                          file={grant.sanctionLetter.file}
+                          fileUrl={grant.sanctionLetter.filePath ? getFileUrl(grant.sanctionLetter.filePath) : undefined}
+                          disabled={isFormDisabled || !grant.sanctionLetter.enabled}
+                          buttonText="Sanction Letter"
+                        />
                       </div>
                       <div className="col-auto">
-                        <label className="btn btn-secondary btn-upload-sm">
-                          + Upload UC & SoE
-                          <input
-                            type="file"
-                            hidden
-                            disabled={!grant.ucAndSoE.enabled}
-                            onChange={(e) =>
-                              handleFileUpload(e, `ucAndSoE${grantIdentifier}`)
-                            }
-                            {...inputProps}
-                          />
-                        </label>
+                        <CustomFileUploader
+                          name={`ucAndSoE${grantIdentifier}`}
+                          onChange={(file) => handleFileUpload(file, `ucAndSoE${grantIdentifier}`)}
+                          onDelete={() => handleFileDelete(`ucAndSoE${grantIdentifier}`)}
+                          fileName={grant.ucAndSoE.file?.name || grant.ucAndSoE.filePath?.split('/').pop()}
+                          file={grant.ucAndSoE.file}
+                          fileUrl={grant.ucAndSoE.filePath ? getFileUrl(grant.ucAndSoE.filePath) : undefined}
+                          disabled={isFormDisabled || !grant.ucAndSoE.enabled}
+                          buttonText="UC & SoE"
+                        />
                       </div>
                       <div className="col-auto">
                         <button
@@ -2995,15 +3071,14 @@ const ResearchProjectForm: React.FC = () => {
                     { key: 'bankStatement', label: 'Bank Statement' },
                   ].map((doc) => (
                     <div className="col-md-6 mb-3" key={doc.key}>
-                      <div className="d-flex align-items-center">
+                      <div className="d-flex align-items-center gap-2">
                         <label
-                          className="form-label me-auto"
-                          style={{ minWidth: '200px' }}
+                          className="form-label mb-0"
+                          style={{ minWidth: '180px' }}
                         >
                           {doc.label}
                         </label>
-                        <div className="form-check form-switch me-2">
-                          {' '}
+                        <div className="form-check form-switch">
                           <input
                             className="form-check-input"
                             type="checkbox"
@@ -3011,148 +3086,145 @@ const ResearchProjectForm: React.FC = () => {
                             checked={documents[doc.key as keyof Documents]?.enabled || false}
                             onChange={() => handleDocumentToggle(doc.key)}
                             {...inputProps}
-                          />{' '}
-                        </div>
-                        <label className="btn btn-secondary btn-upload flex-grow-1">
-                          + Upload {doc.label}
-                          <input
-                            type="file"
-                            hidden
-                            disabled={!documents[doc.key as keyof Documents]?.enabled}
-                            onChange={(e) => handleFileUpload(e, doc.key)}
-                            {...inputProps}
                           />
-                        </label>
-                        {documents[doc.key as keyof Documents]?.file && (
-                          <span className="file-name-display ms-2">
-                            {(documents[doc.key as keyof Documents]?.file as File).name}
-                          </span>
-                        )}
-                        {isViewMode &&
-                          !editMode &&
-                          documents[doc.key as keyof Documents]?.filePath && (
-                            <a
-                              href={getFileUrl(documents[doc.key as keyof Documents]?.filePath || '')}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="btn btn-link"
-                            >
-                              View
-                            </a>
-                          )}
+                        </div>
+                        <CustomFileUploader
+                          name={doc.key}
+                          onChange={(file) => handleFileUpload(file, doc.key)}
+                          onDelete={() => handleFileDelete(doc.key)}
+                          fileName={
+                            documents[doc.key as keyof Documents]?.file?.name ||
+                            documents[doc.key as keyof Documents]?.filePath?.split('/').pop()
+                          }
+                          file={documents[doc.key as keyof Documents]?.file}
+                          fileUrl={
+                            documents[doc.key as keyof Documents]?.filePath
+                              ? getFileUrl(documents[doc.key as keyof Documents]?.filePath || '')
+                              : undefined
+                          }
+                          disabled={isFormDisabled || !documents[doc.key as keyof Documents]?.enabled}
+                          buttonText="Upload"
+                        />
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Submit Button */}
-          <div className="text-center mt-4 mb-5">
-            <button
-              type="submit"
-              className="btn-submit-approval "
-              disabled={isFormDisabled || (isViewMode && !editMode)}
-            >
-              Submit for approval
-            </button>
-          </div>
-        </form>
-        {/* Project Request Modal */}
-        {showProjectRequestModal && (
-          <div
-            className="modal fade show"
-            style={{ display: 'block', zIndex: 1050 }}
-            tabIndex={-1}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                setShowProjectRequestModal(false);
-              }
-            }}
-          >
-            <div className="modal-dialog" style={{ zIndex: 1055 }}>
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title">
-                    Request New{' '}
-                    {projectRequest.request_type
-                      .replace('_', ' ')
-                      .replace(/\b\w/g, (l) => l.toUpperCase())}
-                  </h5>
-                  <button
-                    type="button"
-                    className="btn-close"
-                    onClick={() => setShowProjectRequestModal(false)}
-                  ></button>
-                </div>
-                <form onSubmit={handleProjectRequestSubmit}>
-                  <div className="modal-body">
-                    <div className="mb-3">
-                      <label className="form-label">Name</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={projectRequest.name}
-                        onChange={(e) =>
-                          handleProjectRequestChange('name', e.target.value)
-                        }
-                        placeholder={`Enter ${projectRequest.request_type.replace('_', ' ')} name`}
-                        required
-                      />
-                    </div>
-                    <div className="mb-3">
-                      <label className="form-label">
-                        Description (Optional)
-                      </label>
-                      <textarea
-                        className="form-control"
-                        value={projectRequest.description}
-                        onChange={(e) =>
-                          handleProjectRequestChange(
-                            'description',
-                            e.target.value
-                          )
-                        }
-                        placeholder="Enter description..."
-                        rows={3}
-                      />
-                    </div>
-                    {projectRequestError && (
-                      <div className="alert alert-danger">
-                        {projectRequestError}
-                      </div>
-                    )}
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => setShowProjectRequestModal(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn btn-primary"
-                      disabled={projectRequestLoading}
-                    >
-                      {projectRequestLoading
-                        ? 'Submitting...'
-                        : 'Submit Request'}
-                    </button>
-                  </div>
-                </form>
-              </div>
+            {/* Submit Button */}
+            <div className="text-center mt-4 mb-5">
+              <button
+                type="submit"
+                className="btn-submit-approval "
+                disabled={isFormDisabled || (isViewMode && !editMode)}
+              >
+                Submit for approval
+              </button>
             </div>
-            <div
-              className="modal-backdrop fade show"
-              style={{ zIndex: 1040 }}
-            ></div>
+          </form>
+        ) : (
+          <div className="form-card">
+            <h5 className="form-section-title">Budget Section</h5>
+            <p className="text-muted">Budget details and financial management.</p>
           </div>
         )}
-      </div>
-    </div>
+        {/* Project Request Modal */}
+        {
+          showProjectRequestModal && (
+            <div
+              className="modal fade show"
+              style={{ display: 'block', zIndex: 1050 }}
+              tabIndex={-1}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setShowProjectRequestModal(false);
+                }
+              }}
+            >
+              <div className="modal-dialog" style={{ zIndex: 1055 }}>
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h5 className="modal-title">
+                      Request New{' '}
+                      {projectRequest.request_type
+                        .replace('_', ' ')
+                        .replace(/\b\w/g, (l) => l.toUpperCase())}
+                    </h5>
+                    <button
+                      type="button"
+                      className="btn-close"
+                      onClick={() => setShowProjectRequestModal(false)}
+                    ></button>
+                  </div>
+                  <form onSubmit={handleProjectRequestSubmit}>
+                    <div className="modal-body">
+                      <div className="mb-3">
+                        <label className="form-label">Name</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={projectRequest.name}
+                          onChange={(e) =>
+                            handleProjectRequestChange('name', e.target.value)
+                          }
+                          placeholder={`Enter ${projectRequest.request_type.replace('_', ' ')} name`}
+                          required
+                        />
+                      </div>
+                      <div className="mb-3">
+                        <label className="form-label">
+                          Description (Optional)
+                        </label>
+                        <textarea
+                          className="form-control"
+                          value={projectRequest.description}
+                          onChange={(e) =>
+                            handleProjectRequestChange(
+                              'description',
+                              e.target.value
+                            )
+                          }
+                          placeholder="Enter description..."
+                          rows={3}
+                        />
+                      </div>
+                      {projectRequestError && (
+                        <div className="alert alert-danger">
+                          {projectRequestError}
+                        </div>
+                      )}
+                    </div>
+                    <div className="modal-footer">
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setShowProjectRequestModal(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn btn-primary"
+                        disabled={projectRequestLoading}
+                      >
+                        {projectRequestLoading
+                          ? 'Submitting...'
+                          : 'Submit Request'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+              <div
+                className="modal-backdrop fade show"
+                style={{ zIndex: 1040 }}
+              ></div>
+            </div>
+          )
+        }
+      </div >
+    </div >
   );
 };
 
