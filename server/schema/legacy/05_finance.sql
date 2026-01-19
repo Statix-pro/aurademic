@@ -2,13 +2,10 @@ CREATE TABLE finance_requests (
   id INT NOT NULL AUTO_INCREMENT,
 
   /* =========================
-     Applicant details
+     Employee Link (replaces redundant applicant fields)
+     Applicant data comes from master_employees via view
   ========================== */
-  applicant_name VARCHAR(255) NOT NULL,
-  designation VARCHAR(150) DEFAULT NULL,
-  department VARCHAR(255) DEFAULT NULL,
-  email VARCHAR(255) DEFAULT NULL,
-  mobile VARCHAR(15) DEFAULT NULL,
+  employee_id INT NULL COMMENT 'FK to master_employees for applicant data',
 
   /* =========================
      Request metadata
@@ -94,6 +91,7 @@ CREATE TABLE finance_requests (
      Indexes (performance)
   ========================== */
   KEY idx_created_by (created_by),
+  KEY idx_employee_id (employee_id),
   KEY idx_overall_status (overall_status),
   KEY idx_request_date (request_date),
   KEY idx_director_status (director_status),
@@ -103,7 +101,12 @@ CREATE TABLE finance_requests (
   CONSTRAINT fk_finance_user
     FOREIGN KEY (created_by)
     REFERENCES users(id)
-    ON DELETE CASCADE
+    ON DELETE CASCADE,
+
+  CONSTRAINT fk_finance_employee
+    FOREIGN KEY (employee_id)
+    REFERENCES master_employees(id)
+    ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
@@ -158,3 +161,66 @@ CREATE TABLE finance_status_updates (
     REFERENCES users(id)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ============================================
+-- VIEW: Finance Requests with Applicant Data
+-- ============================================
+-- Joins with master_employees to get applicant info
+
+CREATE OR REPLACE VIEW v_finance_requests AS
+SELECT 
+    fr.id,
+    fr.employee_id,
+    fr.created_by,
+    
+    -- Applicant data from master_employees
+    CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS applicant_name,
+    e.designation,
+    d.name AS department,
+    e.email,
+    e.mobile,
+    e.erp_id,
+    
+    -- Request details
+    fr.request_date,
+    fr.description,
+    fr.beneficiary_type,
+    fr.beneficiary_value,
+    fr.primary_head,
+    fr.event_sub_head,
+    
+    -- Budget
+    fr.is_budget_proposed,
+    fr.proposed_amount,
+    fr.balance_amount,
+    fr.total_budget,
+    
+    -- Financial nature
+    fr.income_type,
+    fr.income_status,
+    fr.income_amount_type,
+    fr.credit_status,
+    fr.debit_status,
+    fr.partial_amount,
+    
+    -- Enclosures
+    fr.enclosures,
+    
+    -- Approval status
+    fr.director_status,
+    fr.director_comment,
+    fr.principal_status,
+    fr.principal_comment,
+    fr.principal_priority,
+    fr.chairman_status,
+    fr.chairman_comment,
+    fr.overall_status,
+    
+    -- Timestamps
+    fr.created_at,
+    fr.updated_at
+    
+FROM finance_requests fr
+LEFT JOIN master_employees e ON fr.employee_id = e.id
+LEFT JOIN master_departments d ON e.department_id = d.id;
