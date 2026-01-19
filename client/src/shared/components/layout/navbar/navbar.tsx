@@ -64,7 +64,7 @@ const Navbar: React.FC = () => {
         <Link
           to="/publications"
           className="home-icon-link"
-          style={{ marginRight: "8px" }}
+          style={{ marginRight: "8px", display: "none" }}
           onClick={() => {
             setMobileMenuOpen(false);
             document.body.classList.remove('menu-open');
@@ -187,8 +187,19 @@ const Navbar: React.FC = () => {
               >
                 <li>Finance</li>
               </Link>
-              {/* <Link 
-                to="/vehicle-booking" 
+              <Link
+                to="/guesthouse-booking"
+                className="dropdown-li"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  document.body.classList.remove('menu-open');
+                }}
+              >
+                <li>Guest House</li>
+              </Link>
+
+              <Link
+                to="/vehicle-booking"
                 className="dropdown-li"
                 onClick={() => {
                   setMobileMenuOpen(false);
@@ -196,7 +207,7 @@ const Navbar: React.FC = () => {
                 }}
               >
                 <li>Vehicle</li>
-              </Link> */}
+              </Link>
               <Link
                 to="/hall-booking"
                 className="dropdown-li"
@@ -207,6 +218,7 @@ const Navbar: React.FC = () => {
               >
                 <li>Hall Booking</li>
               </Link>
+
             </ul>
           </li>
 
