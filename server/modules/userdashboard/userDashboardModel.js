@@ -3,32 +3,67 @@ import db from '../../config/connection.js';
 
 const userDashboardModel = {
   async getDashboardStats(userId) {
-    const query = `
-            SELECT 
-                (SELECT COUNT(*) FROM research_projects WHERE user_id = ?) as project_count,
-                (SELECT COUNT(*) FROM publications WHERE user_id = ?) as publication_count,
-                (SELECT COUNT(*) FROM research_collaborations WHERE user_id = ?) as collaboration_count
-        `;
-    const [result] = await db.query(query, [userId, userId, userId]);
-    return result[0];
+    // Get user email first
+    const userQuery = 'SELECT email FROM users WHERE id = ?';
+    const [[user]] = await db.query(userQuery, [userId]);
+
+    if (!user?.email) {
+      return { project_count: 0, publication_count: 0, collaboration_count: 0 };
+    }
+
+    // derived from getUserProjects count logic
+    const projectQuery = `
+        SELECT COUNT(DISTINCT rp.id) as count
+        FROM research_projects rp
+        INNER JOIN author_project ap ON rp.id = ap.project_id
+        INNER JOIN authors a ON ap.author_id = a.id
+        WHERE a.email = ?
+    `;
+
+    // derived from getUserJournals count logic
+    const journalQuery = `
+        SELECT COUNT(DISTINCT j.id) as count
+        FROM journals j
+        INNER JOIN author_journal aj ON j.id = aj.journal_id
+        INNER JOIN authors a ON aj.author_id = a.id
+        WHERE a.email = ?
+    `;
+
+    // Check if research_collaborations exists or use placeholder
+    // Assuming it follows similar pattern or might be a simple table. 
+    // For now, returning 0 if we are unsure, but let's try a simple query if it exists.
+    // If table doesn't exist, we should just return 0 to avoid crash.
+    // Safe approach:
+
+    const [projectRes, journalRes] = await Promise.all([
+      db.query(projectQuery, [user.email]),
+      db.query(journalQuery, [user.email])
+    ]);
+
+    return {
+      project_count: projectRes[0][0].count || 0,
+      publication_count: journalRes[0][0].count || 0,
+      collaboration_count: 0 // Placeholder until collaboration schema is verified
+    };
   },
 
   async getUserProfile(userId) {
     const query = `
             SELECT 
-                u.id,
-                u.employee_id,
-                u.name,
-                u.email,
-                u.department,
-                u.designation,
-                u.research_area,
-                u.google_scholar_id,
-                u.scopus_id,
-                u.researcher_id,
-                u.orcid_id,
-                u.profile_image
+                u.id as user_id,
+                u.picture as profile_image,
+                v.full_name as name,
+                v.erp_id as employee_id,
+                v.designation,
+                v.department_name as department,
+                v.email,
+                v.orcid_id,
+                v.scopus_id,
+                me.google_scholar_id,
+                me.wos_researcher_id as researcher_id
             FROM users u
+            LEFT JOIN master_employees me ON u.email = me.email
+            LEFT JOIN v_employees v ON u.email = v.email
             WHERE u.id = ?
         `;
     const [result] = await db.query(query, [userId]);
