@@ -14,6 +14,7 @@ export interface User {
   orcid_id?: string;
   scopus_id?: string;
   google_scholar_id?: string;
+  author_id?: string;
 }
 
 export interface AuthContextType {
