@@ -263,16 +263,37 @@ const journalModel = {
       } = authorData;
 
       if (designation === 'faculty') {
-        if (!author_id) throw new Error('Faculty ID is required.');
-        const [existingFaculty] = await connection.query(
-          'SELECT id FROM authors WHERE author_id = ?',
-          [author_id] // author_id from request is the faculty author_id
+        if (!author_id) throw new Error('Faculty ERP ID is required.');
+
+        // Look up in master_employees using erp_id
+        const [employeeRows] = await connection.query(
+          'SELECT id, email, first_name, last_name FROM master_employees WHERE erp_id = ?',
+          [author_id]
         );
 
-        if (existingFaculty.length === 0) {
-          throw new Error(`Faculty not found with ID: ${author_id}`);
+        if (employeeRows.length === 0) {
+          throw new Error(`Faculty not found with ERP ID: ${author_id}`);
         }
-        authorId = existingFaculty[0].id;
+
+        const employee = employeeRows[0];
+
+        // Check if an author entry already exists for this employee
+        const [existingAuthorRows] = await connection.query(
+          'SELECT id FROM authors WHERE employee_id = ?',
+          [employee.id]
+        );
+
+        if (existingAuthorRows.length > 0) {
+          // Reuse existing author entry
+          authorId = existingAuthorRows[0].id;
+        } else {
+          // Create new author entry linked to employee
+          const [authorInsert] = await connection.query(
+            `INSERT INTO authors (employee_id, name, email, designation) VALUES (?, ?, ?, 'faculty')`,
+            [employee.id, null, null]  // name and email come from master_employees via view
+          );
+          authorId = authorInsert.insertId;
+        }
       } else if (designation === 'student') {
         if (!author_id) throw new Error('Student Register Number is required.');
 
@@ -405,19 +426,25 @@ const journalModel = {
 
   async getAuthors(journalId) {
     try {
+      // Use v_authors view which pulls faculty data from master_employees
       const [rows] = await db.query(
-        `
-                SELECT
-                  a.*,
-                  s.student_unique_id AS student_id,
-                  aj.id AS dbAuthorId,
-                  aj.is_first_author,
-                  aj.is_primary
-                FROM authors a
-                JOIN author_journal aj ON a.id = aj.author_id
-                LEFT JOIN author_students s ON a.student_ref = s.id
-                WHERE aj.journal_id = ?
-            `,
+        `SELECT
+          v.author_id AS id,
+          v.author_name AS name,
+          v.email,
+          v.designation,
+          v.department,
+          v.organization,
+          v.author_type,
+          v.erp_id AS author_id,
+          v.orcid_id,
+          v.scopus_id,
+          aj.id AS dbAuthorId,
+          aj.is_first_author,
+          aj.is_primary
+        FROM v_authors v
+        JOIN author_journal aj ON v.author_id = aj.author_id
+        WHERE aj.journal_id = ?`,
         [journalId]
       );
       return rows;
@@ -428,29 +455,36 @@ const journalModel = {
 
   async searchAuthor(query, designation = null) {
     try {
-      let queryStr = `
-            SELECT
-              a.id,
-              a.name,
-              a.email,
-              a.designation,
-              a.author_id,
-              s.student_unique_id AS student_id,
-              a.organization,
-              a.department,
-              a.country
-            FROM authors a
-            LEFT JOIN author_students s ON a.student_ref = s.id
-            WHERE a.name LIKE ? OR a.author_id LIKE ? OR s.student_unique_id LIKE ?
-          `;
-      let params = [`%${query}%`, `${query}%`, `${query}%`];
+      // Only search faculty in master_employees
+      // Students are added manually, no search needed
+      const [rows] = await db.query(
+        `SELECT 
+          e.id,
+          CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+          e.email,
+          'faculty' AS designation,
+          e.erp_id AS author_id,
+          'K.S.Rangasamy College of Technology' AS organization,
+          d.name AS department,
+          'India' AS country,
+          e.orcid_id,
+          e.scopus_id,
+          e.google_scholar_id
+        FROM master_employees e
+        LEFT JOIN master_departments d ON e.department_id = d.id
+        WHERE e.status = 'Active'
+          AND (
+            e.first_name LIKE ? 
+            OR e.last_name LIKE ? 
+            OR CONCAT(e.first_name, ' ', e.last_name) LIKE ?
+            OR e.erp_id LIKE ?
+            OR e.email LIKE ?
+          )
+        ORDER BY e.first_name, e.last_name
+        LIMIT 20`,
+        [`%${query}%`, `%${query}%`, `%${query}%`, `${query}%`, `%${query}%`]
+      );
 
-      if (designation) {
-        queryStr += ` AND designation = ?`;
-        params.push(designation);
-      }
-
-      const [rows] = await db.query(queryStr, params);
       return rows;
     } catch (error) {
       console.error('Database error in searchAuthor:', error);
@@ -552,20 +586,25 @@ const journalModel = {
 
       if (!journal[0]) return null;
 
-      // Get authors, aliasing aj.id as dbAuthorId
+      // Get authors using v_authors view (pulls faculty data from master_employees)
       const [authors] = await db.query(
-        `
-                SELECT
-                  a.*,
-                  s.student_unique_id AS student_id,
-                  aj.id AS dbAuthorId,
-                  aj.is_first_author,
-                  aj.is_primary
-                FROM authors a
-                JOIN author_journal aj ON a.id = aj.author_id
-                LEFT JOIN author_students s ON a.student_ref = s.id
-                WHERE aj.journal_id = ?
-            `,
+        `SELECT
+          v.author_id AS id,
+          v.author_name AS name,
+          v.email,
+          v.designation,
+          v.department,
+          v.organization,
+          v.author_type,
+          v.erp_id AS author_id,
+          v.orcid_id,
+          v.scopus_id,
+          aj.id AS dbAuthorId,
+          aj.is_first_author,
+          aj.is_primary
+        FROM v_authors v
+        JOIN author_journal aj ON v.author_id = aj.author_id
+        WHERE aj.journal_id = ?`,
         [id]
       );
 
