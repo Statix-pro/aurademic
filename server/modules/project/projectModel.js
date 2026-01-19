@@ -885,6 +885,40 @@ const researchProjectModel = {
           );
           authorId = result.insertId;
         }
+      } else if (designation === 'external') {
+        // For external investigators, create a new author with designation='external'
+        // First check if this external author already exists (match by name + organization + department)
+        const [existingExternal] = await connection.query(
+          `SELECT id FROM authors 
+           WHERE designation = 'external' 
+           AND name = ? 
+           AND organization = ? 
+           AND department = ?`,
+          [name, organization || '', department || '']
+        );
+
+        if (existingExternal.length > 0) {
+          authorId = existingExternal[0].id;
+          // Update existing external author details
+          await connection.query(
+            'UPDATE authors SET country = ?, email = ? WHERE id = ?',
+            [country || null, email || null, authorId]
+          );
+        } else {
+          // Insert new external author
+          const [result] = await connection.query(
+            'INSERT INTO authors (designation, name, department, organization, country, email) VALUES (?, ?, ?, ?, ?, ?)',
+            [
+              'external',
+              name,
+              department || null,
+              organization || null,
+              country || null,
+              email || null,
+            ]
+          );
+          authorId = result.insertId;
+        }
       } else {
         throw new Error('Invalid designation provided for investigator.');
       }

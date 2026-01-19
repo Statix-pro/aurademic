@@ -86,7 +86,7 @@ const authModel = {
   async findOrCreateUser(userData) {
     try {
       let user;
-      let authorId = null; // Initialize authorId
+      let employeeData = null; // Employee data from master_employees
 
       // Check if user exists
       const [existingUsers] = await db.query(
@@ -124,34 +124,57 @@ const authModel = {
         };
       }
 
-      // --- BEGIN NEW CODE ---
-      // Fetch author_id based on user's email
-      // Adjust 'authors' table name and 'faculty_email' column name if different
+      // Fetch employee data from master_employees
       try {
-        const [authorRows] = await db.query(
-          'SELECT author_id FROM authors WHERE email = ? LIMIT 1',
+        const [employeeRows] = await db.query(
+          `SELECT 
+            e.id AS employee_id,
+            e.erp_id,
+            CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS full_name,
+            e.designation,
+            d.name AS department,
+            e.orcid_id,
+            e.scopus_id,
+            e.google_scholar_id
+          FROM master_employees e
+          LEFT JOIN master_departments d ON e.department_id = d.id
+          WHERE e.email = ? AND e.status = 'Active'
+          LIMIT 1`,
           [user.email]
         );
-        if (authorRows.length > 0) {
-          authorId = authorRows[0].author_id;
+
+        if (employeeRows.length > 0) {
+          employeeData = employeeRows[0];
+
+          // Link user_id to employee record if not already linked
+          await db.query(
+            'UPDATE master_employees SET user_id = ? WHERE id = ? AND user_id IS NULL',
+            [user.id, employeeData.employee_id]
+          );
         }
-      } catch (authorError) {
-        // Log error but don't prevent login if author lookup fails
+      } catch (employeeError) {
+        // Log error but don't prevent login if employee lookup fails
         console.error(
-          `Error fetching author_id for email ${user.email}:`,
-          authorError
+          `Error fetching employee data for email ${user.email}:`,
+          employeeError
         );
       }
-      // --- END NEW CODE ---
 
-      // Return combined user data including author_id
+      // Return combined user data including employee info
       return {
         id: user.id,
         email: user.email,
-        name: user.name,
+        name: employeeData?.full_name || user.name,
         picture: user.picture,
         is_admin: user.is_admin,
-        author_id: authorId, // Include author_id here
+        // Employee-specific fields
+        employee_id: employeeData?.employee_id || null,
+        erp_id: employeeData?.erp_id || null,
+        designation: employeeData?.designation || null,
+        department: employeeData?.department || null,
+        orcid_id: employeeData?.orcid_id || null,
+        scopus_id: employeeData?.scopus_id || null,
+        google_scholar_id: employeeData?.google_scholar_id || null,
       };
     } catch (error) {
       console.error('Database operation failed:', error);
