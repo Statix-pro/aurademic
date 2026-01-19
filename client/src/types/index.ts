@@ -6,9 +6,14 @@ export interface User {
   name?: string;
   picture?: string;
   is_admin: boolean;
-  author_id?: string;
+  // Employee fields from master_employees
+  employee_id?: number;
+  erp_id?: string;
   department?: string;
   designation?: string;
+  orcid_id?: string;
+  scopus_id?: string;
+  google_scholar_id?: string;
 }
 
 export interface AuthContextType {

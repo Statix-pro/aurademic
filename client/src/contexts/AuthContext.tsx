@@ -16,6 +16,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     checkAuth();
+
+    // Check token expiration when page becomes visible or focused
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        checkTokenExpiration();
+      }
+    };
+
+    const handleFocus = () => {
+      checkTokenExpiration();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   const checkAuth = async () => {
