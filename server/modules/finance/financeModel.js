@@ -25,11 +25,8 @@ const financeModel = {
       await connection.beginTransaction();
 
       const financeEntry = {
-        applicant_name: financeData.applicant_name,
-        designation: financeData.designation || null,
-        department: financeData.department || null,
-        email: financeData.email || null,
-        mobile: financeData.mobile || null,
+        // Only employee_id - applicant data comes from master_employees via view
+        employee_id: financeData.employee_id || null,
 
         request_date: financeData.request_date,
         description: financeData.description || null,
@@ -51,13 +48,11 @@ const financeModel = {
         debit_status: financeData.debit_status || null,
         partial_amount: financeData.partial_amount || null,
 
-        // ✅ FIXED: Proper JSON storage
         enclosures: financeData.enclosures
           ? JSON.stringify(financeData.enclosures)
           : null,
 
         total_budget: financeData.total_budget || 0,
-
         created_by: userId,
       };
 
@@ -108,16 +103,15 @@ const financeModel = {
   ====================================================== */
   async getFinanceRequestById(id) {
     try {
+      // Use view to get applicant data from master_employees
       const [rows] = await db.query(
-        'SELECT * FROM finance_requests WHERE id = ?',
+        'SELECT * FROM v_finance_requests WHERE id = ?',
         [id]
       );
 
       if (!rows.length) return null;
 
       const finance = rows[0];
-
-      // ✅ SAFE JSON parsing
       finance.enclosures = safeParseJSON(finance.enclosures, []);
 
       return finance;
@@ -131,7 +125,8 @@ const financeModel = {
   ====================================================== */
   async listFinanceRequests({ userId, mine, status }) {
     try {
-      let query = 'SELECT * FROM finance_requests WHERE 1=1';
+      // Use view to get applicant data from master_employees
+      let query = 'SELECT * FROM v_finance_requests WHERE 1=1';
       const params = [];
 
       if (mine) {
@@ -276,6 +271,34 @@ const financeModel = {
       [id]
     );
     return rows.length > 0;
+  },
+
+  /* =====================================================
+     GET EMPLOYEE BY EMAIL (for auto-fill applicant data)
+  ====================================================== */
+  async getEmployeeByEmail(email) {
+    try {
+      const [rows] = await db.query(
+        `SELECT 
+          e.id AS employee_id,
+          e.erp_id,
+          CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+          e.designation,
+          d.name AS department,
+          e.email,
+          e.mobile,
+          e.orcid_id,
+          e.scopus_id
+        FROM master_employees e
+        LEFT JOIN master_departments d ON e.department_id = d.id
+        WHERE e.email = ? AND e.status = 'Active'
+        LIMIT 1`,
+        [email]
+      );
+      return rows.length > 0 ? rows[0] : null;
+    } catch (error) {
+      throw new Error(`Error fetching employee: ${error.message}`);
+    }
   },
 };
 

@@ -9,16 +9,16 @@ const financeController = {
       const userId = req.user.id;
       const data = req.body;
 
-      // Basic validation (same philosophy as journalController)
+      // Basic validation - employee_id required for applicant data
       if (
-        !data.applicant_name ||
+        !data.employee_id ||
         !data.request_date ||
         !data.beneficiary_type ||
         !data.primary_head
       ) {
         return res.status(400).json({
           status: 'error',
-          message: 'Missing required fields',
+          message: 'Missing required fields (employee_id, request_date, beneficiary_type, primary_head)',
         });
       }
 
@@ -270,6 +270,47 @@ const financeController = {
       });
     } catch (error) {
       console.error('Error in getStatusUpdates:', error);
+      res.status(500).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
+  },
+
+  /* =====================================================
+     GET CURRENT USER'S EMPLOYEE INFO (for auto-fill)
+  ====================================================== */
+  async getCurrentEmployeeInfo(req, res) {
+    try {
+      const userEmail = req.user.email;
+
+      if (!userEmail) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'User email not found',
+        });
+      }
+
+      const employee = await financeModel.getEmployeeByEmail(userEmail);
+
+      if (!employee) {
+        // Not an employee, return basic user info
+        return res.status(200).json({
+          status: 'success',
+          data: {
+            name: req.user.name || '',
+            email: userEmail,
+            employee_id: null,
+          },
+        });
+      }
+
+      res.status(200).json({
+        status: 'success',
+        data: employee,
+      });
+    } catch (error) {
+      console.error('Error in getCurrentEmployeeInfo:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,

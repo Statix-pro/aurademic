@@ -7,6 +7,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './financeapproval.css';
 import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
 import Navbar from '../../shared/components/layout/navbar/navbar';
+import authenticityUtility from '../../shared/utils/authenticityUtility';
 
 interface SelectOption {
   value: string;
@@ -584,7 +585,30 @@ const FinanceApproval: React.FC = () => {
   const [budgetRows, setBudgetRows] = useState([
     { category: "", head: "", amount: "" },]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [employeeId, setEmployeeId] = useState<number | null>(null);
   const componentRef = useRef<HTMLDivElement>(null);
+
+  // Auto-fill applicant data from employee record
+  useEffect(() => {
+    const fetchEmployeeData = async () => {
+      try {
+        const response = await authenticityUtility.get('/finance-requests/me') as { status: string; data: { name?: string; designation?: string; department?: string; email?: string; mobile?: string; employee_id?: number } };
+        if (response.status === 'success' && response.data) {
+          const emp = response.data;
+          if (emp.name) setApplicantName(emp.name.trim());
+          if (emp.designation) setDesignation(emp.designation);
+          if (emp.department) setDepartment(emp.department);
+          if (emp.email) setEmail(emp.email);
+          if (emp.mobile) setMobile(emp.mobile);
+          if (emp.employee_id) setEmployeeId(emp.employee_id);
+        }
+      } catch (error) {
+        console.error('Error fetching employee data:', error);
+      }
+    };
+    fetchEmployeeData();
+  }, []);
+
   const getSubHeadOptions = (budgetHead: string): string[] =>
     SUB_HEAD_BY_BUDGET_HEAD[budgetHead] ?? [];
   const handlePrint = useReactToPrint({
@@ -982,11 +1006,8 @@ const FinanceApproval: React.FC = () => {
   const handleSubmit = async (): Promise<void> => {
     try {
       const payload = {
-        applicant_name: applicantName,
-        designation,
-        department,
-        email,
-        mobile,
+        // Only employee_id - applicant data comes from master_employees
+        employee_id: employeeId,
 
         request_date: date,
         description,
@@ -1011,21 +1032,9 @@ const FinanceApproval: React.FC = () => {
         enclosures: enclosureSelections,
       };
 
-      const response = await fetch(
-        'http://localhost:5000/api/finance-requests',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      const result = await authenticityUtility.post('/finance-requests', payload) as { status: string; message?: string };
 
-      const result = await response.json();
-
-      if (!response.ok) {
+      if (result.status !== 'success') {
         alert(result.message || 'Submission failed');
         return;
       }
