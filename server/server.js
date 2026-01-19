@@ -11,6 +11,7 @@ import editRequestRoutes from './modules/editRequest/editRequestRoutes.js';
 import eventRoutes from './modules/events/events/eventRoutes.js';
 import preEventRoutes from './modules/events/preevents/preEventRoutes.js';
 import financeRoutes from './modules/events/finance/financeRoutes.js';
+import financePageRoutes from './modules/finance/financeRoutes.js';
 import updatesRoutes from './modules/events/updates/updatesRoutes.js';
 import documentsRoutes from './modules/events/documents/documentsRoutes.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
@@ -109,6 +110,7 @@ app.use('/api', editRequestRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/pre-events', preEventRoutes);
 app.use('/api/finance', financeRoutes);
+app.use('/api/finance-requests', financePageRoutes);
 app.use('/api/updates', updatesRoutes);
 app.use('/api/documents', documentsRoutes);
 

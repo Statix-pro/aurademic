@@ -1,0 +1,795 @@
+/* Finance Approval Form Styles - Scoped to prevent global conflicts */
+
+/* Page & Container Styles */
+.finance-approval-body {
+  background-color: var(--bg-light, #f0f6ff);
+  min-height: 100vh;
+  padding: 20px;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  color: var(--text-main, #4f4f6e);
+}
+
+.finance-approval-container {
+  max-width: 1024px;
+  margin: 0 auto;
+}
+
+/* Title Section */
+.finance-title-section {
+  text-align: center;
+  margin-bottom: 32px;
+  padding: 20px 0;
+}
+
+.finance-page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--primary-color, #0069ab);
+  margin: 0 0 8px 0;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.finance-page-subtitle {
+  font-size: 14px;
+  color: var(--text-muted, #6c757d);
+  margin: 0;
+  font-weight: 400;
+}
+
+/* Action Buttons */
+.finance-action-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.btn-primary-action,
+.btn-secondary-action {
+  border: none;
+  border-radius: 12px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1.5;
+}
+
+.btn-primary-action {
+  background-color: var(--primary-color, #0069ab);
+  color: #ffffff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+}
+
+.btn-primary-action:hover {
+  background-color: var(--primary-hover, #005492);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+}
+
+.btn-primary-action:active {
+  background-color: var(--primary-hover, #005492);
+  transform: translateY(0);
+}
+
+.btn-primary-action:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus, 0 0 0 3px rgba(0, 105, 171, 0.15));
+}
+
+.btn-secondary-action {
+  background-color: rgba(0, 0, 0, 0.04);
+  color: var(--text-main, #4f4f6e);
+  border: 1px solid var(--border-color, #e0e0e0);
+}
+
+.btn-secondary-action:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.btn-secondary-action:active {
+  background-color: rgba(0, 0, 0, 0.12);
+  transform: translateY(0);
+}
+
+.btn-secondary-action:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus, 0 0 0 3px rgba(0, 105, 171, 0.15));
+}
+
+/* Form Card */
+.finance-approval-body .form-card {
+  background: var(--bg-surface, #ffffff);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 105, 171, 0.1));
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid var(--border-color, #e0e0e0);
+}
+
+.finance-approval-body .form-card:hover {
+  box-shadow: var(--shadow-md, 0 4px 20px rgba(0, 0, 0, 0.05));
+}
+
+/* Form Card Title */
+.finance-approval-body .form-card-title {
+  font-size: 18px;
+  font-weight: 550;
+  color: var(--primary-color, #0069ab);
+  margin: 0 0 20px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.08);
+  line-height: 1.2;
+}
+
+/* Form Grid Layout */
+.finance-approval-body .form-row-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.finance-approval-body .form-row-grid.full {
+  grid-template-columns: 1fr;
+}
+
+/* Form Group - Scoped */
+.finance-approval-body .form-group {
+  margin-bottom: 20px;
+}
+
+.finance-approval-body .form-group:last-child {
+  margin-bottom: 0;
+}
+
+/* Form Label - Scoped */
+.finance-approval-body .form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-main, #4f4f6e);
+  margin-bottom: 8px;
+}
+
+/* Form Control - Scoped */
+.finance-approval-body .form-control {
+  width: 100%;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text-main, #4f4f6e);
+  background-color: var(--bg-input, #fcfdff);
+  transition: border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.finance-approval-body .form-control:focus {
+  border-color: var(--border-focus, #0069ab);
+  box-shadow: var(--shadow-focus, 0 0 0 3px rgba(0, 105, 171, 0.15));
+  outline: none;
+  background-color: var(--bg-surface, #ffffff);
+}
+
+.finance-approval-body .form-control:disabled {
+  background-color: rgba(0, 0, 0, 0.04);
+  color: var(--text-muted, #6c757d);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.finance-approval-body textarea.form-control {
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+}
+
+/* Category Toggle */
+.finance-approval-body .category-toggle-container {
+  display: flex;
+  gap: 12px;
+  background-color: rgba(0, 0, 0, 0.04);
+  border-radius: 9999px;
+  padding: 4px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.finance-approval-body .category-btn {
+  flex: 1;
+  border: none;
+  background-color: transparent;
+  color: var(--text-muted, #6c757d);
+  padding: 12px 20px;
+  border-radius: 9999px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  font-size: 14px;
+}
+
+.finance-approval-body .category-btn.active {
+  background-color: var(--primary-color, #0069ab);
+  color: #ffffff;
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 105, 171, 0.1));
+}
+
+.finance-approval-body .category-btn:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+.finance-approval-body .category-btn.active:hover {
+  background-color: var(--primary-hover, #005492);
+}
+
+.finance-approval-body .category-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus, 0 0 0 3px rgba(0, 105, 171, 0.15));
+}
+
+/* Budget Table */
+.budget-table-wrapper {
+  overflow-x: auto;
+  margin-bottom: 16px;
+  border-radius: 8px;
+}
+
+.budget-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.budget-table thead {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.budget-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 550;
+  color: var(--primary-color, #0069ab);
+  border-bottom: 2px solid var(--border-color, #e0e0e0);
+  font-size: 12px;
+}
+
+.budget-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  font-size: 14px;
+  color: var(--text-main, #4f4f6e);
+}
+
+.budget-table tbody tr {
+  transition: background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.budget-table tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.budget-table select,
+.budget-table input {
+  width: 100%;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+  color: var(--text-main, #4f4f6e);
+  background-color: var(--bg-input, #fcfdff);
+  font-family: inherit;
+  transition: border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.budget-table select:focus,
+.budget-table input:focus {
+  border-color: var(--border-focus, #0069ab);
+  box-shadow: var(--shadow-focus, 0 0 0 3px rgba(0, 105, 171, 0.15));
+  outline: none;
+}
+
+/* Action Cell */
+.action-cell {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.finance-approval-body .btn-add,
+.finance-approval-body .btn-delete {
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.finance-approval-body .btn-add {
+  background-color: rgba(0, 0, 0, 0.04);
+  color: var(--primary-color, #0069ab);
+}
+
+.finance-approval-body .btn-add:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+  transform: scale(1.05);
+}
+
+.finance-approval-body .btn-add:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus, 0 0 0 3px rgba(0, 105, 171, 0.15));
+}
+
+.finance-approval-body .btn-delete {
+  background-color: rgba(220, 53, 69, 0.1);
+  color: var(--error-color, #dc3545);
+}
+
+.finance-approval-body .btn-delete:hover {
+  background-color: rgba(220, 53, 69, 0.2);
+  transform: scale(1.05);
+}
+
+.finance-approval-body .btn-delete:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.3);
+}
+
+/* Budget Total */
+.budget-total {
+  text-align: right;
+  padding: 16px;
+  background-color: rgba(0, 0, 0, 0.04);
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 550;
+  color: var(--primary-color, #0069ab);
+}
+
+/* Approval Section */
+.approval-section {
+  padding: 20px;
+  margin-bottom: 20px;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-radius: 12px;
+  border-left: 4px solid var(--primary-color, #0069ab);
+}
+
+.approval-section:last-child {
+  margin-bottom: 0;
+}
+
+.approval-section-title {
+  font-size: 16px;
+  font-weight: 550;
+  color: var(--primary-color, #0069ab);
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  line-height: 1.2;
+}
+
+/* Submit Buttons */
+.finance-submit-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 32px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.finance-approval-body .btn-submit,
+.finance-approval-body .btn-cancel {
+  border: none;
+  border-radius: 12px;
+  padding: 12px 28px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1.5;
+}
+
+.finance-approval-body .btn-submit {
+  background-color: var(--primary-color, #0069ab);
+  color: #ffffff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+}
+
+.finance-approval-body .btn-submit:hover {
+  background-color: var(--primary-hover, #005492);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+}
+
+.finance-approval-body .btn-submit:active {
+  background-color: var(--primary-hover, #005492);
+  transform: translateY(0);
+}
+
+.finance-approval-body .btn-submit:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus, 0 0 0 3px rgba(0, 105, 171, 0.15));
+}
+
+.finance-approval-body .btn-cancel {
+  background-color: rgba(0, 0, 0, 0.04);
+  color: var(--text-main, #4f4f6e);
+  border: 1px solid var(--border-color, #e0e0e0);
+}
+
+.finance-approval-body .btn-cancel:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.finance-approval-body .btn-cancel:active {
+  background-color: rgba(0, 0, 0, 0.12);
+  transform: translateY(0);
+}
+
+.finance-approval-body .btn-cancel:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus, 0 0 0 3px rgba(0, 105, 171, 0.15));
+}
+
+/* Responsive Design - Mobile Portrait (480px) */
+@media (max-width: 480px) {
+  .finance-approval-body {
+    padding: 10px;
+  }
+
+  .finance-approval-container {
+    padding: 0 10px;
+  }
+
+  .finance-approval-body .form-card {
+    padding: 12px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+  }
+
+  .finance-approval-body .form-card-title {
+    font-size: 16px;
+    margin-bottom: 16px;
+  }
+
+  .finance-approval-body .form-row-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .finance-action-buttons {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn-primary-action,
+  .btn-secondary-action {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+
+  .finance-page-title {
+    font-size: 18px;
+  }
+
+  .finance-page-subtitle {
+    font-size: 12px;
+  }
+
+  .finance-approval-body .category-btn {
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+
+  .finance-approval-body .category-toggle-container {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .budget-table-wrapper {
+    border-radius: 8px;
+  }
+
+  .budget-table {
+    font-size: 11px;
+  }
+
+  .budget-table th,
+  .budget-table td {
+    padding: 6px 4px;
+    font-size: 11px;
+  }
+
+  .finance-approval-body .btn-add,
+  .finance-approval-body .btn-delete {
+    width: 32px;
+    height: 32px;
+  }
+
+  .approval-section {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .approval-section-title {
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .finance-submit-buttons {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .finance-approval-body .btn-submit,
+  .finance-approval-body .btn-cancel {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Responsive Design - Tablet (768px) */
+@media (max-width: 768px) {
+  .finance-approval-container {
+    padding: 0 10px;
+  }
+
+  .finance-approval-body .form-card {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .finance-approval-body .form-row-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .finance-action-buttons {
+    flex-direction: column;
+  }
+
+  .btn-primary-action,
+  .btn-secondary-action {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .finance-page-title {
+    font-size: 20px;
+  }
+
+  .budget-table {
+    font-size: 12px;
+  }
+
+  .budget-table th,
+  .budget-table td {
+    padding: 8px 4px;
+  }
+
+  .finance-approval-body .category-toggle-container {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .approval-section {
+    padding: 16px;
+  }
+
+  .finance-submit-buttons {
+    flex-direction: column;
+  }
+
+  .finance-approval-body .btn-submit,
+  .finance-approval-body .btn-cancel {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .finance-approval-body {
+    background-color: #ffffff;
+    padding: 0;
+  }
+
+  .finance-action-buttons,
+  .finance-submit-buttons {
+    display: none !important;
+  }
+
+  .finance-approval-body .form-card {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid var(--border-color, #e0e0e0);
+  }
+
+  .finance-approval-body .form-control,
+  .finance-approval-body select {
+    border: 1px solid var(--border-color, #e0e0e0) !important;
+  }
+
+  .budget-table {
+    border-collapse: collapse;
+  }
+
+  .budget-table td,
+  .budget-table th {
+    border: 1px solid var(--text-main, #4f4f6e) !important;
+  }
+}
+
+/* Animation */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.finance-approval-body .form-card {
+  animation: slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* PDF Preview Modal Styles */
+.pdf-preview-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.pdf-preview-modal {
+  background-color: var(--bg-surface, #ffffff);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.pdf-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.pdf-preview-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--primary-color, #0069ab);
+  margin: 0;
+}
+
+.pdf-preview-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted, #6c757d);
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.pdf-preview-close:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+  color: var(--primary-color, #0069ab);
+}
+
+.pdf-preview-body {
+  flex: 1;
+  overflow: hidden;
+  padding: 16px;
+  background-color: #f9f9f9;
+}
+
+.pdf-preview-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 20px 24px;
+  border-top: 1px solid var(--border-color, #e0e0e0);
+  background-color: var(--bg-surface, #ffffff);
+}
+
+.pdf-preview-footer .btn-submit,
+.pdf-preview-footer .btn-cancel {
+  min-width: 120px;
+}
+
+/* Responsive Design - Mobile for PDF Modal */
+@media (max-width: 768px) {
+  .pdf-preview-modal {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .pdf-preview-header {
+    padding: 16px;
+  }
+
+  .pdf-preview-title {
+    font-size: 18px;
+  }
+
+  .pdf-preview-footer {
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+  }
+
+  .pdf-preview-footer .btn-submit,
+  .pdf-preview-footer .btn-cancel {
+    width: 100%;
+  }
+}
