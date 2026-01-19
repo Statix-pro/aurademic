@@ -20,6 +20,7 @@ import ProjectsPage from '../features/publications/pages/ProjectsPage';
 import Storybook from '../features/storybook/Storybook';
 import FinanceApprovalForm from '../features/finance/financeapproval';
 import UnderConstruction from '../shared/components/ui/UnderConstruction';
+import ProfilePage from '../features/profile/ProfilePage';
 
 
 function App() {
@@ -184,7 +185,7 @@ function App() {
               <Route path="/guesthouse-booking" element={<ProtectedRoute><UnderConstruction pageName="Guest House Booking" /></ProtectedRoute>} />
               <Route path="/vehicle-booking" element={<ProtectedRoute><UnderConstruction pageName="Vehicle Booking" /></ProtectedRoute>} />
               <Route path="/hall-booking" element={<ProtectedRoute><UnderConstruction pageName="Hall Booking" /></ProtectedRoute>} />
-              <Route path="/profile" element={<ProtectedRoute><UnderConstruction pageName="Profile" /></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               <Route path="/kpi" element={<ProtectedRoute><UnderConstruction pageName="KPI Dashboard" /></ProtectedRoute>} />
               <Route path="/task" element={<ProtectedRoute><UnderConstruction pageName="Task Management" /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><UnderConstruction pageName="Reports" /></ProtectedRoute>} />
