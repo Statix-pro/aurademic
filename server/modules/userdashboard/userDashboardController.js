@@ -6,13 +6,13 @@ const userDashboardController = {
     try {
       const stats = await userDashboardModel.getDashboardStats(req.user.id);
       res.json({
-        status: 'success',
+        success: true,
         data: stats,
       });
     } catch (error) {
       console.error('Error getting dashboard stats:', error);
       res.status(500).json({
-        status: 'error',
+        success: false,
         message: 'Failed to fetch dashboard statistics',
       });
     }
@@ -23,18 +23,18 @@ const userDashboardController = {
       const profile = await userDashboardModel.getUserProfile(req.user.id);
       if (!profile) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Profile not found',
         });
       }
       res.json({
-        status: 'success',
+        success: true,
         data: profile,
       });
     } catch (error) {
       console.error('Error getting user profile:', error);
       res.status(500).json({
-        status: 'error',
+        success: false,
         message: 'Failed to fetch user profile',
       });
     }
