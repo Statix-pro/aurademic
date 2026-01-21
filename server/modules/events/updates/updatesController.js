@@ -1,4 +1,4 @@
-import eventDb from '../../../config/eventConnection.js';
+import eventDb from '../../../config/connection.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -53,20 +53,20 @@ export const getEventDetails = async (req, res) => {
       const letterData = letters.find((l) => l.section_name === section);
       lettersData[section] = letterData
         ? {
-            id: letterData.id,
-            active: Boolean(letterData.active),
-            mode: letterData.mode || 'Letter/ Email',
-            date: letterData.letter_date,
-            upload_id: letterData.upload_id,
-            file: null, // Will be populated if upload_id exists
-          }
+          id: letterData.id,
+          active: Boolean(letterData.active),
+          mode: letterData.mode || 'Letter/ Email',
+          date: letterData.letter_date,
+          upload_id: letterData.upload_id,
+          file: null, // Will be populated if upload_id exists
+        }
         : {
-            active: false,
-            mode: 'Letter/ Email',
-            date: null,
-            upload_id: null,
-            file: null,
-          };
+          active: false,
+          mode: 'Letter/ Email',
+          date: null,
+          upload_id: null,
+          file: null,
+        };
     });
 
     // Fetch uploads/files
@@ -138,12 +138,12 @@ export const getEventDetails = async (req, res) => {
         active: Boolean(doc.active),
         file: doc.filename
           ? {
-              id: doc.upload_id,
-              filename: doc.filename,
-              original_name: doc.original_name,
-              mime: doc.mime,
-              size: doc.size,
-            }
+            id: doc.upload_id,
+            filename: doc.filename,
+            original_name: doc.original_name,
+            mime: doc.mime,
+            size: doc.size,
+          }
           : null,
       })),
       participants: participants.map((p) => ({
@@ -154,12 +154,12 @@ export const getEventDetails = async (req, res) => {
       })),
       importantLinks: importantLinks
         ? {
-            registration_enabled: Boolean(importantLinks.registration_enabled),
-            registration_url: importantLinks.registration_url,
-            feedback_enabled: Boolean(importantLinks.feedback_enabled),
-            feedback_url: importantLinks.feedback_url,
-            youtube_enabled: Boolean(importantLinks.youtube_enabled),
-          }
+          registration_enabled: Boolean(importantLinks.registration_enabled),
+          registration_url: importantLinks.registration_url,
+          feedback_enabled: Boolean(importantLinks.feedback_enabled),
+          feedback_url: importantLinks.feedback_url,
+          youtube_enabled: Boolean(importantLinks.youtube_enabled),
+        }
         : null,
       youtubeLinks,
     };
