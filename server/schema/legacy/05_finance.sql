@@ -2,10 +2,18 @@ CREATE TABLE finance_requests (
   id INT NOT NULL AUTO_INCREMENT,
 
   /* =========================
-     Employee Link (replaces redundant applicant fields)
-     Applicant data comes from master_employees via view
+     Employee Link (for staff applicants)
   ========================== */
-  employee_id INT NULL COMMENT 'FK to master_employees for applicant data',
+  employee_id INT NULL COMMENT 'FK to master_employees for staff applicants',
+
+  /* =========================
+     External Applicant fields (used when employee_id is NULL)
+  ========================== */
+  applicant_name VARCHAR(255) NULL COMMENT 'For external/non-staff applicants',
+  designation VARCHAR(150) NULL,
+  department VARCHAR(255) NULL,
+  email VARCHAR(255) NULL,
+  mobile VARCHAR(15) NULL,
 
   /* =========================
      Request metadata
@@ -166,7 +174,7 @@ CREATE TABLE finance_status_updates (
 -- ============================================
 -- VIEW: Finance Requests with Applicant Data
 -- ============================================
--- Joins with master_employees to get applicant info
+-- Hybrid support: Uses master_employees for staff, falls back to direct fields for external
 
 CREATE OR REPLACE VIEW v_finance_requests AS
 SELECT 
@@ -174,13 +182,19 @@ SELECT
     fr.employee_id,
     fr.created_by,
     
-    -- Applicant data from master_employees
-    CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS applicant_name,
-    e.designation,
-    d.name AS department,
-    e.email,
-    e.mobile,
+    -- Applicant data: COALESCE for hybrid (staff from master_employees, external from direct fields)
+    COALESCE(
+        CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')),
+        fr.applicant_name
+    ) AS applicant_name,
+    COALESCE(e.designation, fr.designation) AS designation,
+    COALESCE(d.name, fr.department) AS department,
+    COALESCE(e.email, fr.email) AS email,
+    COALESCE(e.mobile, fr.mobile) AS mobile,
     e.erp_id,
+    
+    -- Is external applicant flag
+    CASE WHEN fr.employee_id IS NULL THEN 1 ELSE 0 END AS is_external,
     
     -- Request details
     fr.request_date,

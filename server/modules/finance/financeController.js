@@ -9,16 +9,17 @@ const financeController = {
       const userId = req.user.id;
       const data = req.body;
 
-      // Basic validation - employee_id required for applicant data
+      // Validation: require either employee_id (staff) OR applicant_name (external)
+      const hasApplicant = data.employee_id || data.applicant_name;
       if (
-        !data.employee_id ||
+        !hasApplicant ||
         !data.request_date ||
         !data.beneficiary_type ||
         !data.primary_head
       ) {
         return res.status(400).json({
           status: 'error',
-          message: 'Missing required fields (employee_id, request_date, beneficiary_type, primary_head)',
+          message: 'Missing required fields (employee_id or applicant_name, request_date, beneficiary_type, primary_head)',
         });
       }
 
@@ -311,6 +312,29 @@ const financeController = {
       });
     } catch (error) {
       console.error('Error in getCurrentEmployeeInfo:', error);
+      res.status(500).json({
+        status: 'error',
+        message: error.message,
+      });
+    }
+  },
+
+  /* =====================================================
+     SEARCH APPLICANT (for searchable dropdown)
+  ====================================================== */
+  async searchApplicant(req, res) {
+    try {
+      const { q } = req.query;
+
+      // Allow empty query to fetch default list (top 20)
+      const results = await financeModel.searchApplicant(q || '');
+
+      res.status(200).json({
+        status: 'success',
+        data: results,
+      });
+    } catch (error) {
+      console.error('Error in searchApplicant:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,

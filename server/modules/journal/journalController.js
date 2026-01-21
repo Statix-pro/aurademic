@@ -392,16 +392,14 @@ const journalController = {
   async searchAuthor(req, res) {
     try {
       const { query, designation } = req.query;
-      if (!query || query.trim().length === 0) {
-        return res.status(400).json({ message: 'Search query is required' });
-      }
 
-      const authors = await journalModel.searchAuthor(query, designation);
+      // Allow empty query to fetch default list (top 20)
+      const authors = await journalModel.searchAuthor(query || '', designation);
 
       if (authors && authors.length > 0) {
         res.status(200).json(authors);
       } else {
-        res.status(404).json({ message: 'No authors found' });
+        res.status(200).json([]); // Return empty array instead of 404
       }
     } catch (error) {
       console.error('Controller error:', error);
@@ -499,11 +497,8 @@ const journalController = {
     try {
       const { query } = req.query;
 
-      if (!query || query.trim().length === 0) {
-        return res.status(400).json({ message: 'Search query is required' });
-      }
-
-      const journals = await journalModel.searchJournals(query);
+      // Allow empty query to return default list
+      const journals = await journalModel.searchJournals(query || '');
 
       res.json({
         status: 'success',
