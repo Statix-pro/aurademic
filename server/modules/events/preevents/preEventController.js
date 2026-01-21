@@ -1,4 +1,4 @@
-import eventDb from '../../../config/eventConnection.js';
+import eventDb from '../../../config/connection.js';
 
 // Utility: run queries
 async function query(sql, params = []) {

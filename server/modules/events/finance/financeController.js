@@ -1,4 +1,4 @@
-import eventDb from '../../../config/eventConnection.js';
+import eventDb from '../../../config/connection.js';
 
 async function query(sql, params = []) {
   const [rows] = await eventDb.query(sql, params);
@@ -78,10 +78,10 @@ export const getFinanceById = async (req, res) => {
         actualExpenditure: parseFloat(item.actualExpenditure) || 0,
         file: item.filename
           ? {
-              name: item.original_name,
-              filename: item.filename,
-              upload_id: item.upload_id,
-            }
+            name: item.original_name,
+            filename: item.filename,
+            upload_id: item.upload_id,
+          }
           : null,
       })),
       agencies: sponsorsData.map((item) => ({
