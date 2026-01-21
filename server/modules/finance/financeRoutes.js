@@ -22,6 +22,9 @@ router.post('/', financeController.createFinanceRequest);
 // List finance requests (dashboard / approvals / my requests)
 router.get('/', financeController.listFinanceRequests);
 
+// Search applicant (for searchable dropdown)
+router.get('/search-applicant', financeController.searchApplicant);
+
 // Get current user's employee info (for auto-fill applicant data)
 router.get('/me', financeController.getCurrentEmployeeInfo);
 

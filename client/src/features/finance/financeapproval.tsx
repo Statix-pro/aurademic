@@ -1,4 +1,5 @@
 import React, { useState, useRef, CSSProperties, useEffect, ChangeEvent, MouseEvent } from 'react';
+import { Info } from 'lucide-react';
 import Select, { MultiValue, StylesConfig, ControlProps, GroupBase, CSSObjectWithLabel } from 'react-select';
 import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
@@ -8,6 +9,7 @@ import './financeapproval.css';
 import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
 import Navbar from '../../shared/components/layout/navbar/navbar';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
+import CustomTagInput from '../../shared/components/ui/CustomTagInput';
 
 interface SelectOption {
   value: string;
@@ -65,9 +67,10 @@ const selectStyles: StylesConfig<SelectOption, true, GroupBase<SelectOption>> = 
   multiValueRemove: (base: CSSObjectWithLabel) => ({
     ...base,
     color: "#6c757d",
+    cursor: "pointer",
     ":hover": {
-      backgroundColor: "#dc3545",
-      color: "white",
+      backgroundColor: "transparent",
+      color: "#343a40",
     },
   } as CSSObjectWithLabel),
 
@@ -586,9 +589,55 @@ const FinanceApproval: React.FC = () => {
     { category: "", head: "", amount: "" },]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
+  const [isExternalApplicant, setIsExternalApplicant] = useState<boolean>(false);
+  const [applicantSearchQuery, setApplicantSearchQuery] = useState<string>('');
+  const [applicantSearchResults, setApplicantSearchResults] = useState<Array<{ employee_id: number; name: string; designation: string; department: string; email: string; mobile: string; employee_type: string }>>([]);
+  const [showApplicantDropdown, setShowApplicantDropdown] = useState<boolean>(false);
   const componentRef = useRef<HTMLDivElement>(null);
 
-  // Auto-fill applicant data from employee record
+  // Search applicant handler
+  const handleApplicantSearch = async (query: string) => {
+    setApplicantSearchQuery(query);
+    // Allow empty query to fetch initial list
+    // if (query.length < 2) { ... } <- Removed restriction
+    try {
+      const response = await authenticityUtility.get(`/finance-requests/search-applicant?q=${encodeURIComponent(query)}`) as { status: string; data: Array<{ employee_id: number; name: string; designation: string; department: string; email: string; mobile: string; employee_type: string }> };
+      if (response.status === 'success') {
+        setApplicantSearchResults(response.data || []);
+        setShowApplicantDropdown(true);
+      }
+    } catch (error) {
+      console.error('Error searching applicant:', error);
+    }
+  };
+
+  // Select applicant from search results
+  const handleSelectApplicant = (emp: { employee_id: number; name: string; designation: string; department: string; email: string; mobile: string }) => {
+    setEmployeeId(emp.employee_id);
+    setApplicantName(emp.name.trim());
+    setDesignation(emp.designation || '');
+    setDepartment(emp.department || '');
+    setEmail(emp.email || '');
+    setMobile(emp.mobile || '');
+    setIsExternalApplicant(false);
+    setShowApplicantDropdown(false);
+    setApplicantSearchQuery(emp.name.trim()); // Show selected name in input
+  };
+
+  // Switch to external applicant mode
+  const handleAddExternalApplicant = () => {
+    setIsExternalApplicant(true);
+    setEmployeeId(null);
+    setApplicantName('');
+    setDesignation('');
+    setDepartment('');
+    setEmail('');
+    setMobile('');
+    setShowApplicantDropdown(false);
+  };
+
+  // Auto-fill removed per user request - form starts empty
+  /*
   useEffect(() => {
     const fetchEmployeeData = async () => {
       try {
@@ -608,6 +657,7 @@ const FinanceApproval: React.FC = () => {
     };
     fetchEmployeeData();
   }, []);
+  */
 
   const getSubHeadOptions = (budgetHead: string): string[] =>
     SUB_HEAD_BY_BUDGET_HEAD[budgetHead] ?? [];
@@ -1006,8 +1056,13 @@ const FinanceApproval: React.FC = () => {
   const handleSubmit = async (): Promise<void> => {
     try {
       const payload = {
-        // Only employee_id - applicant data comes from master_employees
-        employee_id: employeeId,
+        // For staff: send employee_id, for external: send applicant details
+        employee_id: isExternalApplicant ? null : employeeId,
+        applicant_name: isExternalApplicant ? applicantName : null,
+        designation: isExternalApplicant ? designation : null,
+        department: isExternalApplicant ? department : null,
+        email: isExternalApplicant ? email : null,
+        mobile: isExternalApplicant ? mobile : null,
 
         request_date: date,
         description,
@@ -1445,7 +1500,7 @@ const FinanceApproval: React.FC = () => {
             }}
             autoFocus={true}
             onClick={(e) => e.currentTarget.select()}
-            placeholder="Type head OR subhead"
+            placeholder="Type head or subhead"
             style={{
               width: "100%",
               padding: "12px 16px",
@@ -1554,7 +1609,9 @@ const FinanceApproval: React.FC = () => {
                               title="Click to jump here (no dragging)"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setActiveSubHead(subhead);
+                                setPrimaryHead(head); // Set the main category
+                                setEventSubHead(subhead); // Fill the sub-head field
+                                setShowSearchModal(false); // Close the modal
                               }}
                             >
                               {subhead}
@@ -1609,12 +1666,21 @@ const FinanceApproval: React.FC = () => {
 
             <div className="row mb-3" style={{ marginBottom: '15px' }}>
               <div className="col-md-7">
-                <div className="form-group">
-                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Applicant Name <span style={{ color: 'red' }}></span></label>
+                <div className="form-group" style={{ position: 'relative' }}>
+                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                    Applicant Name <span style={{ color: 'red' }}></span>
+                    {isExternalApplicant && <span style={{ fontSize: '12px', color: '#6c757d', marginLeft: '8px' }}>(External)</span>}
+                  </label>
                   <input
                     type="text"
-                    value={applicantName}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setApplicantName(e.target.value)}
+                    value={isExternalApplicant ? applicantName : applicantSearchQuery}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                      if (isExternalApplicant) {
+                        setApplicantName(e.target.value);
+                      } else {
+                        handleApplicantSearch(e.target.value);
+                      }
+                    }}
                     style={{
                       borderRadius: '12px',
                       border: '1px solid #e0e0e0',
@@ -1629,14 +1695,106 @@ const FinanceApproval: React.FC = () => {
                     onFocus={(e) => {
                       e.currentTarget.style.borderColor = '#0069ab';
                       e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                      // Show dropdown immediately on focus with default list
+                      if (!isExternalApplicant && !showApplicantDropdown) {
+                        handleApplicantSearch(applicantSearchQuery);
+                      }
                     }}
                     onBlur={(e) => {
                       e.currentTarget.style.borderColor = '#e0e0e0';
                       e.currentTarget.style.boxShadow = 'none';
+                      // Delay hiding dropdown to allow click
+                      setTimeout(() => setShowApplicantDropdown(false), 200);
                     }}
-                    placeholder="Enter full name"
+                    placeholder={isExternalApplicant ? "Enter external applicant name" : "Search employee by name or ERP ID"}
                     required
                   />
+                  {/* Search Results Dropdown */}
+                  {showApplicantDropdown && applicantSearchResults.length > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      backgroundColor: '#fff',
+                      border: '1px solid #e0e0e0',
+                      borderRadius: '12px',
+                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                      zIndex: 1000,
+                      maxHeight: '250px',
+                      overflowY: 'auto',
+                      marginTop: '4px'
+                    }}>
+                      {/* Add External Option */}
+                      <div
+                        onClick={handleAddExternalApplicant}
+                        style={{
+                          padding: '10px 15px',
+                          cursor: 'pointer',
+                          backgroundColor: '#f8f9fa',
+                          color: '#0069ab',
+                          fontWeight: '600',
+                          borderBottom: '2px solid #e0e0e0'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                      >
+                        + Add External Applicant
+                      </div>
+
+                      {applicantSearchResults.map((emp) => (
+                        <div
+                          key={emp.employee_id}
+                          onClick={() => handleSelectApplicant(emp)}
+                          style={{
+                            padding: '10px 15px',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid #f0f0f0',
+                            transition: 'background-color 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
+                        >
+                          <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
+                          <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                            {emp.designation} | {emp.department}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* No results message */}
+                  {showApplicantDropdown && applicantSearchQuery.length >= 2 && applicantSearchResults.length === 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      backgroundColor: '#fff',
+                      border: '1px solid #e0e0e0',
+                      borderRadius: '12px',
+                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                      zIndex: 1000,
+                      marginTop: '4px'
+                    }}>
+                      <div style={{ padding: '10px 15px', color: '#6c757d' }}>No employees found</div>
+                      <div
+                        onClick={handleAddExternalApplicant}
+                        style={{
+                          padding: '10px 15px',
+                          cursor: 'pointer',
+                          backgroundColor: '#f8f9fa',
+                          color: '#0069ab',
+                          fontWeight: '600',
+                          borderTop: '1px solid #e0e0e0'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                      >
+                        + Add External Applicant
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="col-md-5">
@@ -1896,19 +2054,19 @@ const FinanceApproval: React.FC = () => {
                           </label>
 
                           {isMultipleSelect(categoryType) ? (
-                            <Select
-                              isMulti
-                              closeMenuOnSelect={false}
-                              value={categorySelections}
-                              onChange={(selected) => {
-                                const vals = (selected as MultiValue<SelectOption>) ?? [];
-                                setCategorySelections(vals);
-                                setCategoryItem(vals.map((v) => v.value).join(", "));
+                            <CustomTagInput
+                              name="categorySelections"
+                              value={categorySelections.map(s => s.value)}
+                              onChange={(tags) => {
+                                const newSelections = tags.map(t => ({ value: t, label: t }));
+                                setCategorySelections(newSelections);
+                                setCategoryItem(tags.join(", "));
                               }}
-                              options={subcategoryOptions}
-                              styles={selectStyles}
-                              components={{ IndicatorSeparator: () => null }}
+                              suggestions={subcategoryList.filter(sub =>
+                                !categorySelections.some(sel => sel.value === sub)
+                              )}
                               placeholder=""
+                              disabled={false}
                             />
                           ) : (
                             <select
@@ -2108,12 +2266,27 @@ const FinanceApproval: React.FC = () => {
                         setShowSearchModal(true);
                         setSearchTerm('');
                       }}
-                      style={{ /* keep same style */ }}
+                      type="button"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: '0',
+                        cursor: 'pointer',
+                        color: '#6c757d',
+                        transition: 'color 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = '#0069ab';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = '#6c757d';
+                      }}
                       title="Search Budget Heads"
                     >
-
-                      ℹ️
-
+                      <Info size={20} strokeWidth={2} />
                     </button>
 
 
@@ -2738,85 +2911,30 @@ const FinanceApproval: React.FC = () => {
                   >
 
                     <div style={{ width: "95%", outline: "none" }}>
-                      <Select
-                        isMulti
-                        closeMenuOnSelect={false}
-                        value={incomeSelections}
-                        onChange={(selected) => {
-                          const values = selected ?? [];
+                      <CustomTagInput
+                        name="incomeSelections"
+                        value={incomeSelections.map(s => s.value)}
+                        onChange={(tags) => {
+                          const values = tags.map(t => ({ value: t, label: t }));
                           setIncomeSelections(values);
-                          setIncomeType(values.map((v) => v.value).join(", "));
+                          setIncomeType(tags.join(", "));
 
-                          const hasNonManagement = values.some((v) => v.value !== "Management");
+                          const hasNonManagement = tags.some((t) => t !== "Management");
                           if (!hasNonManagement) {
                             setIncomeAmountType("" as any);
                             setPartialAmount("");
                             setCreditStatus("");
                           }
                         }}
-                        options={[
-                          { value: "Government Funding", label: "Government Funding" },
-                          { value: "Registration Fees", label: "Registration Fees" },
-                          { value: "Sponsorship", label: "Sponsorship" },
-                          { value: "Management", label: "Management" },
-                          { value: "Staff Club", label: "Staff Club" },
-                        ]}
-                        styles={{
-                          ...selectStyles,
-                          control: (provided, state) => ({
-                            ...provided,
-                            width: "100%",
-                            minHeight: "44px",
-                            height: "44px",
-                            borderRadius: "12px",
-                            backgroundColor: "#fcfdff",
-                            boxShadow: state.isFocused
-                              ? "0 0 0 3px rgba(0, 105, 171, 0.15)"
-                              : "none",
-                            outline: "none",
-                            border: state.isFocused ? "1px solid #0069ab" : "1px solid #e0e0e0",
-                            padding: "0",
-                          }),
-                          valueContainer: (provided) => ({
-                            ...provided,
-                            padding: "0 12px",
-                            height: "44px",
-                          }),
-                          indicatorsContainer: (provided) => ({
-                            ...provided,
-                            paddingRight: "10px",
-                            height: "44px",
-                          }),
-                          placeholder: (provided) => ({
-                            ...provided,
-                            color: "#6c757d",
-                          }),
-                          multiValue: (provided) => ({
-                            ...provided,
-                            backgroundColor: "#e3f2fd",
-                            borderRadius: "6px",
-                          }),
-                          menu: (provided) => ({
-                            ...provided,
-                            zIndex: 9999,
-                            borderRadius: "12px",
-                            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)",
-                          }),
-                          option: (provided, { isFocused, isSelected }) => ({
-                            ...provided,
-                            backgroundColor: isSelected
-                              ? "#0069ab"
-                              : isFocused
-                                ? "#f0f6ff"
-                                : "white",
-                            color: isSelected
-                              ? "white"
-                              : "#495057",
-                            cursor: "pointer",
-                          }),
-                        }}
-                        components={{ IndicatorSeparator: null }}
+                        suggestions={[
+                          "Government Funding",
+                          "Registration Fees",
+                          "Sponsorship",
+                          "Management",
+                          "Staff Club"
+                        ].filter(opt => !incomeSelections.some(sel => sel.value === opt))}
                         placeholder=""
+                        disabled={false}
                       />
 
                     </div>

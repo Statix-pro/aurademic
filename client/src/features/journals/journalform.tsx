@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import './journalform.css';
@@ -9,6 +9,7 @@ import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { Trash2, Plus, GripVertical, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import Navbar from '../../shared/components/layout/navbar/navbar';
+import CustomTagInput from '../../shared/components/ui/CustomTagInput';
 
 // Type definitions
 interface Author {
@@ -196,6 +197,7 @@ const JournalForm: React.FC = () => {
   };
 
   const [journalId, setJournalId] = useState<string | undefined>(urlJournalId);
+  const justAddedAuthorRef = useRef<boolean>(false); // Track if author was just added
   const [isInternational, setIsInternational] = useState<boolean>(false);
   const [editMode, setEditMode] = useState<boolean>(!urlJournalId);
   const [editRequestStatus, setEditRequestStatus] = useState<EditRequestStatus>(null);
@@ -451,9 +453,6 @@ const JournalForm: React.FC = () => {
       const authorJustSelected = authors[index]?.author_id === query;
       if (query.length > 0 && !isViewMode && !authorJustSelected) {
         return setTimeout(() => searchAuthor(query, index), 300);
-      } else if (query.length === 0 && !isViewMode) {
-        searchAuthor(query, index);
-        return null;
       }
       return null;
     });
@@ -555,17 +554,12 @@ const JournalForm: React.FC = () => {
   }, [activeTab, journalId]);
 
   const searchJournals = async (journalSearchQuery?: string) => {
-    // Input validation
-    if (!journalSearchQuery || journalSearchQuery.trim().length === 0) {
-      setJournalSearchResults([]);
-      setShowJournalSuggestions(false);
-      return;
-    }
-
+    // Allow empty query to show default list on focus
     try {
       // API call with proper URL construction
+      const queryParam = journalSearchQuery ? journalSearchQuery.trim() : '';
       const data = await authenticityUtility.get(
-        `/journals/search?query=${encodeURIComponent(journalSearchQuery.trim())}`
+        `/journals/search?query=${encodeURIComponent(queryParam)}`
       ) as any;
 
       // Response validation
@@ -603,56 +597,19 @@ const JournalForm: React.FC = () => {
   };
 
   const searchAuthor = async (query: string, index: number) => {
-    if (query.length > 0) {
-      try {
-        const authors = await authenticityUtility.get(
-          `/authors/search?query=${encodeURIComponent(query)}&designation=${encodeURIComponent(authorDesignations[index])}&_=${Date.now()}`
-        ) as any;
+    // Allow empty query to show initial list on focus
+    try {
+      const authors = await authenticityUtility.get(
+        `/authors/search?query=${encodeURIComponent(query)}&designation=${encodeURIComponent(authorDesignations[index])}&_=${Date.now()}`
+      ) as any;
 
-        if (authors && Array.isArray(authors)) {
-          setSearchResults((prevResults) => {
-            const prevArray = Array.isArray(prevResults)
-              ? prevResults
-              : Array(MAX_AUTHORS).fill([]);
-            const newResults = [...prevArray];
-            newResults[index] = authors;
-            return newResults;
-          });
-
-          setShowSuggestions((prev) => {
-            const prevArray = Array.isArray(prev)
-              ? prev
-              : Array(MAX_AUTHORS).fill(false);
-            const newShow = [...prevArray];
-            newShow[index] = authors.length > 0;
-            return newShow;
-          });
-        } else {
-          console.warn('Invalid response format:', authors);
-          throw new Error('Invalid response format from server');
-        }
-        setError(null);
-      } catch (error: any) {
-        console.error('Search error:', {
-          message: error.message,
-          response: error.response,
-          data: error.response?.data,
-          stack: error.stack,
-        });
-
-        setError(
-          error.response?.data?.message ||
-          error.message ||
-          'Failed to search for authors. Please try again.'
-        );
-
-        // Clear results for this index
+      if (authors && Array.isArray(authors)) {
         setSearchResults((prevResults) => {
           const prevArray = Array.isArray(prevResults)
             ? prevResults
             : Array(MAX_AUTHORS).fill([]);
           const newResults = [...prevArray];
-          newResults[index] = [];
+          newResults[index] = authors;
           return newResults;
         });
 
@@ -661,12 +618,29 @@ const JournalForm: React.FC = () => {
             ? prev
             : Array(MAX_AUTHORS).fill(false);
           const newShow = [...prevArray];
-          newShow[index] = false;
+          newShow[index] = authors.length > 0;
           return newShow;
         });
+      } else {
+        console.warn('Invalid response format:', authors);
+        throw new Error('Invalid response format from server');
       }
-    } else {
-      // Clear results when query is empty
+      setError(null);
+    } catch (error: any) {
+      console.error('Search error:', {
+        message: error.message,
+        response: error.response,
+        data: error.response?.data,
+        stack: error.stack,
+      });
+
+      setError(
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to search for authors. Please try again.'
+      );
+
+      // Clear results for this index
       setSearchResults((prevResults) => {
         const prevArray = Array.isArray(prevResults)
           ? prevResults
@@ -675,6 +649,7 @@ const JournalForm: React.FC = () => {
         newResults[index] = [];
         return newResults;
       });
+
       setShowSuggestions((prev) => {
         const prevArray = Array.isArray(prev)
           ? prev
@@ -1479,6 +1454,8 @@ const JournalForm: React.FC = () => {
 
   const addAuthor = () => {
     if (authors.length < MAX_AUTHORS) {
+      justAddedAuthorRef.current = true; // Flag to prevent dropdown on new row
+      setTimeout(() => { justAddedAuthorRef.current = false; }, 100); // Reset after short delay
       const newAuthorId = authorIndex;
       setAuthors((prevAuthors) => [
         ...prevAuthors,
@@ -1897,29 +1874,54 @@ const JournalForm: React.FC = () => {
                   : searchQueries[index] || ''
               }
               onChange={(e) => handleSearchInputChange(e, index)}
+              onFocus={() => {
+                // Skip if author was just added to prevent auto-dropdown
+                if (justAddedAuthorRef.current) return;
+                // Trigger search on focus to show dropdown when clicking
+                if (!isViewMode && editMode) {
+                  searchAuthor(searchQueries[index] || '', index);
+                }
+              }}
               onBlur={() => handleAuthorSearchBlur(index)}
               disabled={!editMode && isViewMode}
               autoComplete="off"
             />
             {showSuggestions[index] &&
               (searchResults[index] || []).length > 0 && (
-                <ul className="author-suggestions-list">
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: '#fff',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '8px',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                  zIndex: 1000,
+                  maxHeight: '250px',
+                  overflowY: 'auto',
+                  marginTop: '4px'
+                }}>
                   {(searchResults[index] || []).map((result) => (
-                    <li
+                    <div
                       key={result?.id || ''}
-                      className="list-group-item list-group-item-action"
                       onMouseDown={() => handleAuthorSelect(result, index)}
-                      style={{ cursor: 'pointer' }}
+                      style={{
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #f0f0f0',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
                     >
-                      {result
-                        ? result.student_id
-                          ? result.student_id
-                          : result.author_id || ''
-                        : ''}{' '}
-                      - {result?.name || ''} - {result?.organization || ''}
-                    </li>
+                      <div style={{ fontWeight: '600', color: '#333', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{result?.name || ''}</div>
+                      <div style={{ fontSize: '11px', color: '#6c757d' }}>
+                        {result?.author_id || ''} | {result?.designation || 'Faculty'} | {result?.department || ''}
+                      </div>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
           </div>
           {/* These readOnly fields will display the data after a faculty member is selected */}
@@ -3020,132 +3022,38 @@ const JournalForm: React.FC = () => {
 
                     <div className="mb-3">
                       <label className="form-label">Index</label>
-                      {/* Container for tags and input */}
-                      <div className="sdg-selection-container border rounded d-flex flex-wrap align-items-center p-1 gap-1" style={{ minHeight: '36px', backgroundColor: '#fff' }}>
-                        {/* Selected Indexes as tags inline with input */}
-                        {selectedIndexes.map((index) => (
-                          <span key={index} className="badge custom-tag-badge d-inline-flex align-items-center flex-shrink-0" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>
-                            {index}
-                            <button
-                              type="button"
-                              className="btn-close btn-close-white ms-1"
-                              style={{ fontSize: '9px', width: '10px', height: '10px' }}
-                              onClick={() => setSelectedIndexes((prev) => prev.filter((item) => item !== index))}
-                              disabled={!editMode && isViewMode}
-                            ></button>
-                          </span>
-                        ))}
-                        {/* Search input inline */}
-                        <div className="position-relative flex-grow-1">
-                          <input
-                            type="text"
-                            className="form-control border-0 p-0"
-                            style={{ boxShadow: 'none', outline: 'none', minWidth: '180px', fontSize: '0.9rem', height: '28px' }}
-                            placeholder={selectedIndexes.length === 0 ? "Type to search and select indexes" : ""}
-                            value={indexSearchQuery}
-                            onChange={(e) => {
-                              setIndexSearchQuery(e.target.value);
-                              setShowIndexSuggestions(true);
-                            }}
-                            onFocus={() => setShowIndexSuggestions(true)}
-                            onBlur={() => setTimeout(() => setShowIndexSuggestions(false), 150)}
-                            disabled={!editMode && isViewMode}
-                            autoComplete="off"
-                          />
-                          {/* Suggestions */}
-                          {showIndexSuggestions && (() => {
-                            const availableIndexes = ['SCIE', 'Scopus', 'PubMed', 'Google Scholar'];
-                            const filteredIndexes = availableIndexes.filter(
-                              (index) =>
-                                index.toLowerCase().includes(indexSearchQuery.toLowerCase()) &&
-                                !selectedIndexes.includes(index)
-                            );
-                            return filteredIndexes.length > 0 ? (
-                              <ul className="list-group position-absolute w-100" style={{ zIndex: 1000, maxHeight: '200px', overflowY: 'auto', top: '100%', left: 0 }}>
-                                {filteredIndexes.map((index) => (
-                                  <li
-                                    key={index}
-                                    className="list-group-item list-group-item-action"
-                                    onMouseDown={() => {
-                                      setSelectedIndexes((prev) => [...prev, index]);
-                                      setIndexSearchQuery('');
-                                      setShowIndexSuggestions(false);
-                                    }}
-                                    style={{ cursor: 'pointer' }}
-                                  >
-                                    {index}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : null;
-                          })()}
-                        </div>
-                      </div>
+                      <CustomTagInput
+                        name="index"
+                        value={selectedIndexes}
+                        onChange={setSelectedIndexes}
+                        suggestions={(() => {
+                          const availableIndexes = ['SCIE', 'Scopus', 'PubMed', 'Google Scholar'];
+                          return availableIndexes.filter(index =>
+                            index.toLowerCase().includes(indexSearchQuery.toLowerCase()) &&
+                            !selectedIndexes.includes(index)
+                          );
+                        })()}
+                        onSearch={setIndexSearchQuery}
+                        placeholder={selectedIndexes.length === 0 ? "Type to search and select indexes" : ""}
+                        disabled={!editMode && isViewMode}
+                      />
                     </div>
 
                     {/* Collaboration Section - SDG-style multi-select */}
                     <div className="mb-3">
                       <label className="form-label">Collaboration</label>
-                      {/* Container for tags and input */}
-                      <div className="sdg-selection-container border rounded d-flex flex-wrap align-items-center p-1 gap-1" style={{ minHeight: '36px', backgroundColor: '#fff' }}>
-                        {/* Selected Collaborations as tags inline with input */}
-                        {selectedCollaborations.map((collab) => (
-                          <span key={collab} className="badge custom-tag-badge d-inline-flex align-items-center flex-shrink-0" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>
-                            {collab}
-                            <button
-                              type="button"
-                              className="btn-close btn-close-white ms-1"
-                              style={{ fontSize: '9px', width: '10px', height: '10px' }}
-                              onClick={() => setSelectedCollaborations((prev) => prev.filter((item) => item !== collab))}
-                              disabled={!editMode && isViewMode}
-                            ></button>
-                          </span>
-                        ))}
-                        {/* Search input inline */}
-                        <div className="position-relative flex-grow-1">
-                          <input
-                            type="text"
-                            className="form-control border-0 p-0"
-                            style={{ boxShadow: 'none', outline: 'none', minWidth: '180px', fontSize: '0.9rem', height: '28px' }}
-                            placeholder={selectedCollaborations.length === 0 ? "Type to search and select collaborations" : ""}
-                            value={collaborationSearchQuery}
-                            onChange={(e) => {
-                              setCollaborationSearchQuery(e.target.value);
-                              setShowCollaborationSuggestions(true);
-                            }}
-                            onFocus={() => setShowCollaborationSuggestions(true)}
-                            onBlur={() => setTimeout(() => setShowCollaborationSuggestions(false), 150)}
-                            disabled={!editMode && isViewMode}
-                            autoComplete="off"
-                          />
-                          {/* Suggestions */}
-                          {showCollaborationSuggestions && (() => {
-                            const filteredCollaborations = allCollaborations.filter(
-                              (collab) =>
-                                collab.toLowerCase().includes(collaborationSearchQuery.toLowerCase()) &&
-                                !selectedCollaborations.includes(collab)
-                            );
-                            return filteredCollaborations.length > 0 ? (
-                              <ul className="list-group position-absolute w-100" style={{ zIndex: 1000, maxHeight: '200px', overflowY: 'auto', top: '100%', left: 0 }}>
-                                {filteredCollaborations.map((collab) => (
-                                  <li
-                                    key={collab}
-                                    className="list-group-item list-group-item-action"
-                                    onMouseDown={() => {
-                                      setSelectedCollaborations((prev) => [...prev, collab]);
-                                      setCollaborationSearchQuery('');
-                                      setShowCollaborationSuggestions(false);
-                                    }}
-                                    style={{ cursor: 'pointer' }}
-                                  >
-                                    {collab}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : null;
-                          })()}
-                        </div>
-                      </div>
+                      <CustomTagInput
+                        name="collaboration"
+                        value={selectedCollaborations}
+                        onChange={setSelectedCollaborations}
+                        suggestions={allCollaborations.filter(collab =>
+                          collab.toLowerCase().includes(collaborationSearchQuery.toLowerCase()) &&
+                          !selectedCollaborations.includes(collab)
+                        )}
+                        onSearch={setCollaborationSearchQuery}
+                        placeholder={selectedCollaborations.length === 0 ? "Type to search and select collaborations" : ""}
+                        disabled={!editMode && isViewMode}
+                      />
 
                       {/* "Others" checkbox and input */}
                       {/* <div className="mt-2">
@@ -3227,78 +3135,29 @@ const JournalForm: React.FC = () => {
                         <label className="form-label">
                           Acknowledgement
                         </label>
-                        {/* Container for tags and input */}
-                        <div className="sdg-selection-container border rounded d-flex flex-wrap align-items-center p-1 gap-1" style={{ minHeight: '36px', backgroundColor: '#fff' }}>
-                          {/* Selected Acknowledgements as tags inline with input */}
-                          {selectedAcknowledgements.map((ack) => (
-                            <span key={ack} className="badge custom-tag-badge d-inline-flex align-items-center flex-shrink-0" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>
-                              {ack}
-                              <button
-                                type="button"
-                                className="btn-close btn-close-white ms-1"
-                                style={{ fontSize: '9px', width: '10px', height: '10px' }}
-                                onClick={() => {
-                                  setSelectedAcknowledgements((prev) => prev.filter((item) => item !== ack));
-                                }}
-                                disabled={!editMode && isViewMode}
-                              ></button>
-                            </span>
-                          ))}
-                          {/* Search input inline */}
-                          <div className="position-relative flex-grow-1">
-                            <input
-                              type="text"
-                              className="form-control border-0 p-0"
-                              style={{ boxShadow: 'none', outline: 'none', minWidth: '180px', fontSize: '0.9rem', height: '28px' }}
-                              placeholder={selectedAcknowledgements.length === 0 ? "Type to search and select acknowledgements" : ""}
-                              value={acknowledgementSearchQuery}
-                              onChange={(e) => {
-                                setAcknowledgementSearchQuery(e.target.value);
-                                setShowAcknowledgementSuggestions(true);
-                              }}
-                              onFocus={() => setShowAcknowledgementSuggestions(true)}
-                              onBlur={() => setTimeout(() => setShowAcknowledgementSuggestions(false), 150)}
-                              disabled={!editMode && isViewMode}
-                              autoComplete="off"
-                            />
-                            {/* Suggestions */}
-                            {showAcknowledgementSuggestions && (() => {
-                              const filteredAcknowledgements = allAcknowledgements.filter(
-                                (ack) =>
-                                  ack.toLowerCase().includes(acknowledgementSearchQuery.toLowerCase()) &&
-                                  !selectedAcknowledgements.includes(ack)
-                              );
-                              return filteredAcknowledgements.length > 0 ? (
-                                <ul className="list-group position-absolute w-100" style={{ zIndex: 1000, maxHeight: '200px', overflowY: 'auto', top: '100%', left: 0 }}>
-                                  {filteredAcknowledgements.map((ack) => (
-                                    <li
-                                      key={ack}
-                                      className="list-group-item list-group-item-action"
-                                      onMouseDown={() => {
-                                        // If selecting Nil, clear all others
-                                        if (ack === 'Nil') {
-                                          setSelectedAcknowledgements(['Nil']);
-                                          setOtherAcknowledgement('');
-                                        } else {
-                                          // If selecting others, remove Nil
-                                          setSelectedAcknowledgements((prev) => {
-                                            const filtered = prev.filter(item => item !== 'Nil');
-                                            return [...filtered, ack];
-                                          });
-                                        }
-                                        setAcknowledgementSearchQuery('');
-                                        setShowAcknowledgementSuggestions(false);
-                                      }}
-                                      style={{ cursor: 'pointer' }}
-                                    >
-                                      {ack}
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : null;
-                            })()}
-                          </div>
-                        </div>
+                        <CustomTagInput
+                          name="acknowledgement"
+                          value={selectedAcknowledgements}
+                          onChange={(newTags) => {
+                            if (newTags.includes('Nil') && !selectedAcknowledgements.includes('Nil')) {
+                              setSelectedAcknowledgements(['Nil']);
+                              setOtherAcknowledgement('');
+                            } else if (newTags.length > 1 && newTags.includes('Nil')) {
+                              // If currently have "Nil" and added something else, remove "Nil"
+                              const withoutNil = newTags.filter(t => t !== 'Nil');
+                              setSelectedAcknowledgements(withoutNil);
+                            } else {
+                              setSelectedAcknowledgements(newTags);
+                            }
+                          }}
+                          suggestions={allAcknowledgements.filter(ack =>
+                            ack.toLowerCase().includes(acknowledgementSearchQuery.toLowerCase()) &&
+                            !selectedAcknowledgements.includes(ack)
+                          )}
+                          onSearch={setAcknowledgementSearchQuery}
+                          placeholder={selectedAcknowledgements.length === 0 ? "Type to search and select acknowledgements" : ""}
+                          disabled={!editMode && isViewMode}
+                        />
 
                         {/* "Others" checkbox and input */}
                         {/* <div className="mt-2">
@@ -3373,66 +3232,19 @@ const JournalForm: React.FC = () => {
                     {/* Sustainable Development Goals Section */}
                     <div className="mb-3">
                       <label className="form-label">Sustainable Development Goals (SDGs)</label>
-                      {/* Container for tags and input */}
-                      <div className="sdg-selection-container border rounded d-flex flex-wrap align-items-center p-1 gap-1" style={{ minHeight: '36px', backgroundColor: '#fff' }}>
-                        {/* Selected SDGs as tags inline with input */}
-                        {selectedSDGs.map((sdg) => (
-                          <span key={sdg} className="badge custom-tag-badge d-inline-flex align-items-center flex-shrink-0" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}>
-                            {typeof sdg === 'string' && sdg.includes('.') ? sdg.split('.')[0] : sdg}
-                            <button
-                              type="button"
-                              className="btn-close btn-close-white ms-1"
-                              style={{ fontSize: '9px', width: '10px', height: '10px' }}
-                              onClick={() => setSelectedSDGs((prev) => prev.filter((item) => item !== sdg))}
-                              disabled={!editMode && isViewMode}
-                            ></button>
-                          </span>
-                        ))}
-                        {/* Search input inline */}
-                        <div className="position-relative flex-grow-1">
-                          <input
-                            type="text"
-                            className="form-control border-0 p-0"
-                            style={{ boxShadow: 'none', outline: 'none', minWidth: '180px', fontSize: '0.9rem', height: '28px' }}
-                            placeholder={selectedSDGs.length === 0 ? "Type to search and select SDGs" : ""}
-                            value={sdgSearchQuery}
-                            onChange={(e) => {
-                              setSdgSearchQuery(e.target.value);
-                              setShowSdgSuggestions(true);
-                            }}
-                            onFocus={() => setShowSdgSuggestions(true)}
-                            onBlur={() => setTimeout(() => setShowSdgSuggestions(false), 150)}
-                            disabled={!editMode && isViewMode}
-                            autoComplete="off"
-                          />
-                          {/* Suggestions */}
-                          {showSdgSuggestions && (() => {
-                            const filteredSDGs = allSDGs.filter(
-                              (sdg) =>
-                                sdg.toLowerCase().includes(sdgSearchQuery.toLowerCase()) &&
-                                !selectedSDGs.includes(sdg)
-                            );
-                            return filteredSDGs.length > 0 ? (
-                              <ul className="list-group position-absolute w-100" style={{ zIndex: 1000, maxHeight: '200px', overflowY: 'auto', top: '100%', left: 0 }}>
-                                {filteredSDGs.map((sdg) => (
-                                  <li
-                                    key={sdg}
-                                    className="list-group-item list-group-item-action"
-                                    onMouseDown={() => {
-                                      setSelectedSDGs((prev) => [...prev, sdg]);
-                                      setSdgSearchQuery('');
-                                      setShowSdgSuggestions(false);
-                                    }}
-                                    style={{ cursor: 'pointer' }}
-                                  >
-                                    {sdg}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : null;
-                          })()}
-                        </div>
-                      </div>
+                      <CustomTagInput
+                        name="sdgs"
+                        value={selectedSDGs}
+                        onChange={setSelectedSDGs}
+                        suggestions={allSDGs.filter(sdg =>
+                          sdg.toLowerCase().includes(sdgSearchQuery.toLowerCase()) &&
+                          !selectedSDGs.includes(sdg)
+                        )}
+                        onSearch={setSdgSearchQuery}
+                        placeholder={selectedSDGs.length === 0 ? "Type to search and select SDGs" : ""}
+                        disabled={!editMode && isViewMode}
+                        renderTag={(tag) => typeof tag === 'string' && tag.includes('.') ? tag.split('.')[0] : tag}
+                      />
                     </div>
                   </div>
                 </div>
@@ -3468,7 +3280,13 @@ const JournalForm: React.FC = () => {
                           placeholder="Search for a Journal"
                           value={journalSearchQuery}
                           onChange={handleJournalSearchChange}
-                          onBlur={() => setShowJournalSuggestions(false)}
+                          onFocus={() => {
+                            // Show dropdown on focus
+                            if (!isViewMode && editMode) {
+                              searchJournals(journalSearchQuery || '');
+                            }
+                          }}
+                          onBlur={() => setTimeout(() => setShowJournalSuggestions(false), 150)}
                           disabled={!editMode && isViewMode}
                           autoComplete="off"
                         />

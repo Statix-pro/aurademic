@@ -457,12 +457,37 @@ const journalModel = {
     try {
       // Only search faculty in master_employees
       // Students are added manually, no search needed
-      const [rows] = await db.query(
-        `SELECT 
+
+      let queryStr = query ? query.trim() : '';
+      let sql = '';
+      let params = [];
+
+      if (!queryStr) {
+        // Return top 20 active faculty if query is empty
+        sql = `SELECT 
           e.id,
           CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
           e.email,
-          'faculty' AS designation,
+          e.designation,
+          e.erp_id AS author_id,
+          'K.S.Rangasamy College of Technology' AS organization,
+          d.name AS department,
+          'India' AS country,
+          e.orcid_id,
+          e.scopus_id,
+          e.google_scholar_id
+        FROM master_employees e
+        LEFT JOIN master_departments d ON e.department_id = d.id
+        WHERE e.status = 'Active'
+        ORDER BY e.first_name, e.last_name
+        LIMIT 20`;
+      } else {
+        // Search by query
+        sql = `SELECT 
+          e.id,
+          CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+          e.email,
+          e.designation,
           e.erp_id AS author_id,
           'K.S.Rangasamy College of Technology' AS organization,
           d.name AS department,
@@ -481,14 +506,15 @@ const journalModel = {
             OR e.email LIKE ?
           )
         ORDER BY e.first_name, e.last_name
-        LIMIT 20`,
-        [`%${query}%`, `%${query}%`, `%${query}%`, `${query}%`, `%${query}%`]
-      );
+        LIMIT 20`;
+        params = [`%${queryStr}%`, `%${queryStr}%`, `%${queryStr}%`, `${queryStr}%`, `%${queryStr}%`];
+      }
 
+      const [rows] = await db.query(sql, params);
       return rows;
     } catch (error) {
       console.error('Database error in searchAuthor:', error);
-      throw new Error(`Error searching for author: ${error.message}`);
+      throw new Error(`Error searching for author: ${error.message} `);
     }
   },
 
@@ -500,7 +526,7 @@ const journalModel = {
       });
       return result;
     } catch (error) {
-      throw new Error(`Error adding index: ${error.message}`);
+      throw new Error(`Error adding index: ${error.message} `);
     }
   },
 
@@ -512,47 +538,49 @@ const journalModel = {
       );
       return rows;
     } catch (error) {
-      throw new Error(`Error retrieving indexes: ${error.message}`);
+      throw new Error(`Error retrieving indexes: ${error.message} `);
     }
   },
 
   async searchJournals(query) {
     try {
-      const searchTerm = `%${query}%`;
-      const [rows] = await db.query(
-        `
-                SELECT 
-                    jo.id,
-                    jo.journal_name as name,
-                    jo.publisher,
-                    jo.website,
-                    jo.print_issn as printISSN,
-                    jo.online_issn as onlineISSN,
-                    j.category
-                FROM journal_options jo
-                LEFT JOIN journals j ON j.journal_options_id = jo.id
-                WHERE jo.journal_name LIKE ?
-                
-                UNION
-                
-                SELECT 
-                    jr.id + 1000000 as id, -- Use offset to avoid conflicts
-                    jr.journal_name as name,
-                    jr.publisher,
-                    jr.website,
-                    jr.print_issn as printISSN,
-                    jr.online_issn as onlineISSN,
-                    jr.category
-                FROM journal_requests jr
-                WHERE jr.status = 'approved' 
-                AND jr.journal_name LIKE ?
-                
-                ORDER BY name
-                LIMIT 10
-            `,
-        [searchTerm, searchTerm]
-      );
+      const queryStr = query ? query.trim() : '';
+      let sql = '';
+      let params = [];
 
+      if (!queryStr) {
+        // Return all journals when query is empty
+        sql = `
+          SELECT
+            jo.id,
+            jo.journal_name as name,
+            jo.publisher,
+            jo.website,
+            jo.print_issn as printISSN,
+            jo.online_issn as onlineISSN
+          FROM journal_options jo
+          ORDER BY jo.journal_name
+          LIMIT 20
+        `;
+      } else {
+        const searchTerm = `%${queryStr}%`;
+        sql = `
+          SELECT
+            jo.id,
+            jo.journal_name as name,
+            jo.publisher,
+            jo.website,
+            jo.print_issn as printISSN,
+            jo.online_issn as onlineISSN
+          FROM journal_options jo
+          WHERE jo.journal_name LIKE ?
+          ORDER BY jo.journal_name
+          LIMIT 20
+        `;
+        params = [searchTerm];
+      }
+
+      const [rows] = await db.query(sql, params);
       return rows;
     } catch (error) {
       throw new Error(`Error searching journals: ${error.message}`);
@@ -570,17 +598,17 @@ const journalModel = {
     try {
       const [journal] = await db.query(
         `
-                SELECT
-                    j.*,
-                    jo.journal_name,
-                    jo.publisher,
-                    jo.website,
-                    jo.print_issn,
-                    jo.online_issn
+SELECT
+j.*,
+  jo.journal_name,
+  jo.publisher,
+  jo.website,
+  jo.print_issn,
+  jo.online_issn
                 FROM journals j
                 JOIN journal_options jo ON j.journal_options_id = jo.id
                 WHERE j.id = ?
-            `,
+  `,
         [id]
       );
 
@@ -589,22 +617,22 @@ const journalModel = {
       // Get authors using v_authors view (pulls faculty data from master_employees)
       const [authors] = await db.query(
         `SELECT
-          v.author_id AS id,
-          v.author_name AS name,
-          v.email,
-          v.designation,
-          v.department,
-          v.organization,
-          v.author_type,
-          v.erp_id AS author_id,
-          v.orcid_id,
-          v.scopus_id,
-          aj.id AS dbAuthorId,
-          aj.is_first_author,
-          aj.is_primary
+v.author_id AS id,
+  v.author_name AS name,
+    v.email,
+    v.designation,
+    v.department,
+    v.organization,
+    v.author_type,
+    v.erp_id AS author_id,
+      v.orcid_id,
+      v.scopus_id,
+      aj.id AS dbAuthorId,
+        aj.is_first_author,
+        aj.is_primary
         FROM v_authors v
         JOIN author_journal aj ON v.author_id = aj.author_id
-        WHERE aj.journal_id = ?`,
+        WHERE aj.journal_id = ? `,
         [id]
       );
 
@@ -647,7 +675,7 @@ const journalModel = {
         indexes: indexes.map((i) => i.index_name),
       };
     } catch (error) {
-      throw new Error(`Error retrieving journal details: ${error.message}`);
+      throw new Error(`Error retrieving journal details: ${error.message} `);
     }
   },
 
@@ -676,7 +704,7 @@ const journalModel = {
 
       return request[0];
     } catch (error) {
-      throw new Error(`Error creating journal request: ${error.message}`);
+      throw new Error(`Error creating journal request: ${error.message} `);
     }
   },
 
@@ -688,7 +716,7 @@ const journalModel = {
       );
       return requests;
     } catch (error) {
-      throw new Error(`Error getting user journal requests: ${error.message}`);
+      throw new Error(`Error getting user journal requests: ${error.message} `);
     }
   },
 
@@ -700,7 +728,7 @@ const journalModel = {
       );
       return requests[0] || null;
     } catch (error) {
-      throw new Error(`Error getting journal request: ${error.message}`);
+      throw new Error(`Error getting journal request: ${error.message} `);
     }
   },
 
@@ -713,7 +741,7 @@ const journalModel = {
       );
       return result.insertId;
     } catch (error) {
-      throw new Error(`Error creating status update: ${error.message}`);
+      throw new Error(`Error creating status update: ${error.message} `);
     }
   },
 
@@ -723,13 +751,13 @@ const journalModel = {
         `SELECT jsu.*, u.name as user_name 
                  FROM journal_status_updates jsu
                  JOIN users u ON jsu.user_id = u.id
-                 WHERE jsu.journal_id = ? 
-                 ORDER BY jsu.created_at ASC`,
+                 WHERE jsu.journal_id = ?
+  ORDER BY jsu.created_at ASC`,
         [journalId]
       );
       return rows;
     } catch (error) {
-      throw new Error(`Error retrieving status updates: ${error.message}`);
+      throw new Error(`Error retrieving status updates: ${error.message} `);
     }
   },
 
@@ -741,7 +769,7 @@ const journalModel = {
       );
       return result;
     } catch (error) {
-      throw new Error(`Error updating admin reply: ${error.message}`);
+      throw new Error(`Error updating admin reply: ${error.message} `);
     }
   },
 };

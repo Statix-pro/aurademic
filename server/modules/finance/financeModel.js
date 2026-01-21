@@ -25,8 +25,14 @@ const financeModel = {
       await connection.beginTransaction();
 
       const financeEntry = {
-        // Only employee_id - applicant data comes from master_employees via view
+        // For staff: employee_id links to master_employees
+        // For external: store applicant details directly
         employee_id: financeData.employee_id || null,
+        applicant_name: financeData.employee_id ? null : (financeData.applicant_name || null),
+        designation: financeData.employee_id ? null : (financeData.designation || null),
+        department: financeData.employee_id ? null : (financeData.department || null),
+        email: financeData.employee_id ? null : (financeData.email || null),
+        mobile: financeData.employee_id ? null : (financeData.mobile || null),
 
         request_date: financeData.request_date,
         description: financeData.description || null,
@@ -298,6 +304,65 @@ const financeModel = {
       return rows.length > 0 ? rows[0] : null;
     } catch (error) {
       throw new Error(`Error fetching employee: ${error.message}`);
+    }
+  },
+
+  /* =====================================================
+     SEARCH APPLICANT (for searchable dropdown)
+  ====================================================== */
+  async searchApplicant(query) {
+    try {
+      let queryStr = query ? query.trim() : '';
+      let sql = '';
+      let params = [];
+
+      if (!queryStr) {
+        // Return top 20 active employees if query is empty
+        sql = `SELECT 
+          e.id AS employee_id,
+          e.erp_id,
+          CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+          e.designation,
+          d.name AS department,
+          e.email,
+          e.mobile,
+          e.employee_type
+        FROM master_employees e
+        LEFT JOIN master_departments d ON e.department_id = d.id
+        WHERE e.status = 'Active'
+        ORDER BY e.first_name, e.last_name
+        LIMIT 20`;
+      } else {
+        // Search by query
+        sql = `SELECT 
+          e.id AS employee_id,
+          e.erp_id,
+          CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+          e.designation,
+          d.name AS department,
+          e.email,
+          e.mobile,
+          e.employee_type
+        FROM master_employees e
+        LEFT JOIN master_departments d ON e.department_id = d.id
+        WHERE e.status = 'Active'
+          AND (
+            e.first_name LIKE ? 
+            OR e.last_name LIKE ? 
+            OR CONCAT(e.first_name, ' ', e.last_name) LIKE ?
+            OR e.erp_id LIKE ?
+            OR e.email LIKE ?
+            OR d.name LIKE ?
+          )
+        ORDER BY e.first_name, e.last_name
+        LIMIT 20`;
+        params = [`%${queryStr}%`, `%${queryStr}%`, `%${queryStr}%`, `${queryStr}%`, `%${queryStr}%`, `%${queryStr}%`];
+      }
+
+      const [rows] = await db.query(sql, params);
+      return rows;
+    } catch (error) {
+      throw new Error(`Error searching applicant: ${error.message}`);
     }
   },
 };

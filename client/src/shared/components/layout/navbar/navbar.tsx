@@ -121,40 +121,29 @@ const Navbar: React.FC = () => {
               >
                 <li>Project</li>
               </Link>
-              <li>Fellowship</li>
-              <li>Patent</li>
-            </ul>
-          </li>
-          <li className="nav-item">
-            <div
-              className={`nav-item-wrapper ${activeMenu === "Events" ? "active" : ""
-                }`}
-              onClick={() => toggleDropdown("Events")}
-            >
-              Event
-              <svg
-                className="arrow-icon"
-                width="10"
-                height="10"
-                viewBox="0 0 451.847 451.847"
-              >
-                <path d="M225.923,323.861L0,97.938l35.355-35.355l190.568,190.568L416.492,62.583l35.355,35.355L225.923,323.861z" />
-              </svg>
-            </div>
-
-            <ul className={`dropdown ${activeMenu === "Events" ? "show" : ""}`}>
               <Link
-                to="/eventdashboard"
+                to="/fellowship"
                 className="dropdown-li"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   document.body.classList.remove('menu-open');
                 }}
               >
-                <li>Event Dashboard</li>
+                <li>Fellowship</li>
+              </Link>
+              <Link
+                to="/patent"
+                className="dropdown-li"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  document.body.classList.remove('menu-open');
+                }}
+              >
+                <li>Patent</li>
               </Link>
             </ul>
           </li>
+
 
 
 
@@ -218,33 +207,57 @@ const Navbar: React.FC = () => {
               >
                 <li>Hall Booking</li>
               </Link>
+              <Link
+                to="/eventdashboard"
+                className="dropdown-li"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  document.body.classList.remove('menu-open');
+                }}
+              >
+                <li>Event Dashboard</li>
+              </Link>
 
             </ul>
           </li>
 
           <li className="nav-item">
-            <Link
-              to="/profile"
-              className="nav-item-wrapper"
-              onClick={() => {
-                setMobileMenuOpen(false);
-                document.body.classList.remove('menu-open');
-              }}
+            <div
+              className={`nav-item-wrapper ${activeMenu === "Profile" ? "active" : ""}`}
+              onClick={() => toggleDropdown("Profile")}
             >
               Profile
-            </Link>
-          </li>
-          <li className="nav-item">
-            <Link
-              to="/kpi"
-              className="nav-item-wrapper"
-              onClick={() => {
-                setMobileMenuOpen(false);
-                document.body.classList.remove('menu-open');
-              }}
-            >
-              KPI
-            </Link>
+              <svg
+                className="arrow-icon"
+                width="10"
+                height="10"
+                viewBox="0 0 451.847 451.847"
+              >
+                <path d="M225.923,323.861L0,97.938l35.355-35.355l190.568,190.568L416.492,62.583l35.355,35.355L225.923,323.861z" />
+              </svg>
+            </div>
+            <ul className={`dropdown ${activeMenu === "Profile" ? "show" : ""}`}>
+              <Link
+                to="/profile"
+                className="dropdown-li"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  document.body.classList.remove('menu-open');
+                }}
+              >
+                <li>Profile</li>
+              </Link>
+              <Link
+                to="/kpi"
+                className="dropdown-li"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  document.body.classList.remove('menu-open');
+                }}
+              >
+                <li>KPI</li>
+              </Link>
+            </ul>
           </li>
           <li className="nav-item">
             <Link

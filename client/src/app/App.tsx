@@ -189,6 +189,8 @@ function App() {
               <Route path="/kpi" element={<ProtectedRoute><UnderConstruction pageName="KPI Dashboard" /></ProtectedRoute>} />
               <Route path="/task" element={<ProtectedRoute><UnderConstruction pageName="Task Management" /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><UnderConstruction pageName="Reports" /></ProtectedRoute>} />
+              <Route path="/fellowship" element={<ProtectedRoute><UnderConstruction pageName="Fellowship" /></ProtectedRoute>} />
+              <Route path="/patent" element={<ProtectedRoute><UnderConstruction pageName="Patent" /></ProtectedRoute>} />
 
             </Routes>
           </AuthProvider>
