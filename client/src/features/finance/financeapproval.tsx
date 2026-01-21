@@ -802,9 +802,9 @@ const FinanceApproval: React.FC = () => {
         styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
         columnStyles: {
           0: { cellWidth: 38, fontStyle: 'bold' },
-          1: { cellWidth: 65 },
-          2: { cellWidth: 25, fontStyle: 'bold' },
-          3: { cellWidth: tableWidth - 38 - 65 - 25 }
+          1: { cellWidth: 75 },
+          2: { cellWidth: 22, fontStyle: 'bold' },
+          3: { cellWidth: tableWidth - 38 - 75 - 22 }
         },
         body: mainTableBody,
       });
@@ -1727,7 +1727,7 @@ const FinanceApproval: React.FC = () => {
                     }}>
                       {/* Add External Option */}
                       <div
-                        onClick={handleAddExternalApplicant}
+                        onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
                         style={{
                           padding: '10px 15px',
                           cursor: 'pointer',
@@ -1745,7 +1745,7 @@ const FinanceApproval: React.FC = () => {
                       {applicantSearchResults.map((emp) => (
                         <div
                           key={emp.employee_id}
-                          onClick={() => handleSelectApplicant(emp)}
+                          onMouseDown={(e) => { e.preventDefault(); handleSelectApplicant(emp); }}
                           style={{
                             padding: '10px 15px',
                             cursor: 'pointer',
@@ -1779,7 +1779,7 @@ const FinanceApproval: React.FC = () => {
                     }}>
                       <div style={{ padding: '10px 15px', color: '#6c757d' }}>No employees found</div>
                       <div
-                        onClick={handleAddExternalApplicant}
+                        onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
                         style={{
                           padding: '10px 15px',
                           cursor: 'pointer',
@@ -2000,7 +2000,7 @@ const FinanceApproval: React.FC = () => {
 
                   </label>
 
-                  <div className="row mb-3">
+                  <div className="row mb-3" style={{ alignItems: 'flex-start' }}>
                     <div className="col-md-6">
                       <div className="form-group">
                         <label style={{ fontSize: "14px", color: "#495057", marginBottom: "8px", fontWeight: 600, display: "block" }}>Beneficiary</label>
@@ -2067,6 +2067,7 @@ const FinanceApproval: React.FC = () => {
                               )}
                               placeholder=""
                               disabled={false}
+                              className="mb-0"
                             />
                           ) : (
                             <select

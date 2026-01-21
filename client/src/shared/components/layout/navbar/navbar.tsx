@@ -215,7 +215,7 @@ const Navbar: React.FC = () => {
                   document.body.classList.remove('menu-open');
                 }}
               >
-                <li>Event Dashboard</li>
+                <li>Event</li>
               </Link>
 
             </ul>

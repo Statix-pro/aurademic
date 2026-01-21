@@ -97,17 +97,65 @@ const ProfileCard: React.FC = () => {
             </div>
 
             <div className="row mt-3">
-              <div className="col-4">
+              <div className="col-md-6 mb-3">
                 <h6>SCOPUS ID: </h6>
-                <p className="text-secondary">{profile?.scopus_id || 'Not Available'}</p>
+                {profile?.scopus_id ? (
+                  <a
+                    href={`https://www.scopus.com/authid/detail.uri?authorId=${profile.scopus_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary text-decoration-none"
+                  >
+                    {profile.scopus_id}
+                  </a>
+                ) : (
+                  <p className="text-secondary mb-0">Not Available</p>
+                )}
               </div>
-              <div className="col-4">
+              <div className="col-md-6 mb-3">
                 <h6>RESEARCHER ID: </h6>
-                <p className="text-secondary">{profile?.researcher_id || 'Not Available'}</p>
+                {profile?.researcher_id ? (
+                  <a
+                    href={`https://www.webofscience.com/wos/author/record/${profile.researcher_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary text-decoration-none"
+                  >
+                    {profile.researcher_id}
+                  </a>
+                ) : (
+                  <p className="text-secondary mb-0">Not Available</p>
+                )}
               </div>
-              <div className="col-4">
+              <div className="col-md-6 mb-3">
                 <h6>GOOGLE SCHOLAR ID: </h6>
-                <p className="text-secondary">{profile?.google_scholar_id || 'Not Available'}</p>
+                {profile?.google_scholar_id ? (
+                  <a
+                    href={`https://scholar.google.com/citations?user=${profile.google_scholar_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary text-decoration-none"
+                  >
+                    {profile.google_scholar_id}
+                  </a>
+                ) : (
+                  <p className="text-secondary mb-0">Not Available</p>
+                )}
+              </div>
+              <div className="col-md-6 mb-3">
+                <h6>ORCID ID: </h6>
+                {profile?.orcid_id ? (
+                  <a
+                    href={`https://orcid.org/${profile.orcid_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary text-decoration-none"
+                  >
+                    {profile.orcid_id}
+                  </a>
+                ) : (
+                  <p className="text-secondary mb-0">Not Available</p>
+                )}
               </div>
             </div>
 
@@ -116,21 +164,6 @@ const ProfileCard: React.FC = () => {
                 <small>Your profile is not linked to employee records. Please contact the administrator to update your details.</small>
               </div>
             )}
-
-            <div className="action-buttons my-3">
-              {profile?.google_scholar_id && (
-                <a href={`https://scholar.google.com/citations?user=${profile.google_scholar_id}`} target="_blank" rel="noopener noreferrer" className="btn me-2">Google Scholar</a>
-              )}
-              {profile?.scopus_id && (
-                <a href={`https://www.scopus.com/authid/detail.uri?authorId=${profile.scopus_id}`} target="_blank" rel="noopener noreferrer" className="btn me-2">Scopus</a>
-              )}
-              {profile?.researcher_id && (
-                <a href={`https://www.webofscience.com/wos/author/record/${profile.researcher_id}`} target="_blank" rel="noopener noreferrer" className="btn me-2">Researcher ID</a>
-              )}
-              {profile?.orcid_id && (
-                <a href={`https://orcid.org/${profile.orcid_id}`} target="_blank" rel="noopener noreferrer" className="btn me-2">ORCID</a>
-              )}
-            </div>
 
             <div className="stats mt-4">
               <div className="row">
