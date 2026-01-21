@@ -1,4 +1,4 @@
-import eventDb from '../../../config/eventConnection.js';
+import eventDb from '../../../config/connection.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -40,13 +40,13 @@ export const getDocumentsAndParticipants = async (req, res) => {
       active: Boolean(doc.active),
       upload: doc.upload_id
         ? {
-            id: doc.upload_id,
-            filename: doc.filename,
-            originalName: doc.originalName,
-            mime: doc.mime,
-            size: doc.size,
-            uploadedAt: doc.uploadedAt,
-          }
+          id: doc.upload_id,
+          filename: doc.filename,
+          originalName: doc.originalName,
+          mime: doc.mime,
+          size: doc.size,
+          uploadedAt: doc.uploadedAt,
+        }
         : null,
     }));
 
@@ -137,13 +137,13 @@ export const updateDocument = async (req, res) => {
       active: Boolean(updated.active),
       upload: updated.upload_id
         ? {
-            id: updated.upload_id,
-            filename: updated.filename,
-            originalName: updated.originalName,
-            mime: updated.mime,
-            size: updated.size,
-            uploadedAt: updated.uploadedAt,
-          }
+          id: updated.upload_id,
+          filename: updated.filename,
+          originalName: updated.originalName,
+          mime: updated.mime,
+          size: updated.size,
+          uploadedAt: updated.uploadedAt,
+        }
         : null,
       wasCreated: existing.length === 0,
       wasUpdated,
@@ -437,11 +437,11 @@ export const getImportantLinks = async (req, res) => {
       youtube:
         youtubeLinks.length > 0
           ? youtubeLinks.map((yt) => ({
-              id: yt.id,
-              enabled: Boolean(yt.enabled),
-              url: yt.url || '',
-              sort_order: yt.sort_order,
-            }))
+            id: yt.id,
+            enabled: Boolean(yt.enabled),
+            url: yt.url || '',
+            sort_order: yt.sort_order,
+          }))
           : [{ enabled: false, url: '' }],
     };
 
@@ -902,13 +902,13 @@ export const getDocumentByName = async (req, res) => {
       active: Boolean(doc.active),
       upload: doc.upload_id
         ? {
-            id: doc.upload_id,
-            filename: doc.filename,
-            originalName: doc.originalName,
-            mime: doc.mime,
-            size: doc.size,
-            uploadedAt: doc.uploadedAt,
-          }
+          id: doc.upload_id,
+          filename: doc.filename,
+          originalName: doc.originalName,
+          mime: doc.mime,
+          size: doc.size,
+          uploadedAt: doc.uploadedAt,
+        }
         : null,
     };
 
