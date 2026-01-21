@@ -1,3 +1,10 @@
 {
-    "zencoder.enableRepoIndexing": true
+    "zencoder.enableRepoIndexing": true,
+    "workbench.colorCustomizations": {
+        "titleBar.activeBackground": "#003366",
+        "activityBar.background": "#003366",
+        "statusBar.background": "#003366",
+        "statusBar.foreground": "#ffffff",
+        "titleBar.activeForeground": "#ffffff"
+    }
 }
