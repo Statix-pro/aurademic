@@ -1,5 +1,6 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import Home from '../features/home/home';
 import Login from '../features/auth/login/login';
 import EventPage from '../features/events/components/EventPage';
@@ -29,6 +30,7 @@ function App() {
       <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ''}>
         <BrowserRouter>
           <AuthProvider>
+            <SpeedInsights />
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route
