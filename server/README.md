@@ -22,7 +22,7 @@ A Node.js and Express-based REST API for managing academic research data, includ
 server/
 ├── config/               # Configuration files
 │   ├── connection.js     # Main database connection
-│   ├── eventConnection.js # Events database connection
+│   ├── connection.js # Events database connection
 │   ├── env.js            # Environment loader
 │   └── swagger.js        # Swagger configuration
 ├── docs/                 # API documentation
