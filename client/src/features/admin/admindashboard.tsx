@@ -55,6 +55,8 @@ interface JournalRequest {
   website?: string;
   print_issn?: string;
   online_issn?: string;
+  impact_factor?: number | null;
+  cite_score?: number | null;
   user_name: string;
   status: string;
   created_at: string;
@@ -320,6 +322,8 @@ const Dashboard: React.FC = () => {
               <th style={darkHeaderCellStyle}>Website</th>
               <th style={darkHeaderCellStyle}>Print ISSN</th>
               <th style={darkHeaderCellStyle}>Online ISSN</th>
+              <th style={darkHeaderCellStyle}>Impact Factor</th>
+              <th style={darkHeaderCellStyle}>Cite Score</th>
               <th style={darkHeaderCellStyle}>Requested By</th>
               <th style={darkHeaderCellStyle}>Status</th>
               <th style={darkHeaderCellStyle}>Date</th>
@@ -339,6 +343,8 @@ const Dashboard: React.FC = () => {
                 <td>{request.website || "-"}</td>
                 <td>{request.print_issn || "-"}</td>
                 <td>{request.online_issn || "-"}</td>
+                <td>{request.impact_factor ?? "-"}</td>
+                <td>{request.cite_score ?? "-"}</td>
                 <td>{request.user_name}</td>
                 <td>
                   <span className={`badge bg-${request.status === "pending" ? "warning" : request.status === "approved" ? "success" : "danger"}`}>

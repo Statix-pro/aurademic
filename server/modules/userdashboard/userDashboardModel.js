@@ -12,21 +12,23 @@ const userDashboardModel = {
     }
 
     // derived from getUserProjects count logic
+    // Use v_authors view to get email from master_employees for faculty
     const projectQuery = `
         SELECT COUNT(DISTINCT rp.id) as count
         FROM research_projects rp
         INNER JOIN author_project ap ON rp.id = ap.project_id
-        INNER JOIN authors a ON ap.author_id = a.id
-        WHERE a.email = ?
+        INNER JOIN v_authors va ON ap.author_id = va.author_id
+        WHERE va.email = ?
     `;
 
     // derived from getUserJournals count logic
+    // Use v_authors view to get email from master_employees for faculty
     const journalQuery = `
         SELECT COUNT(DISTINCT j.id) as count
         FROM journals j
         INNER JOIN author_journal aj ON j.id = aj.journal_id
-        INNER JOIN authors a ON aj.author_id = a.id
-        WHERE a.email = ?
+        INNER JOIN v_authors va ON aj.author_id = va.author_id
+        WHERE va.email = ?
     `;
 
     // Check if research_collaborations exists or use placeholder
@@ -107,9 +109,9 @@ const userDashboardModel = {
             LEFT JOIN author_project ap ON rp.id = ap.project_id
             LEFT JOIN authors a ON ap.author_id = a.id
             WHERE EXISTS (
-                SELECT 1 FROM authors a2 
-                INNER JOIN author_project ap2 ON a2.id = ap2.author_id 
-                WHERE ap2.project_id = rp.id AND a2.email = ?
+                SELECT 1 FROM v_authors va2 
+                INNER JOIN author_project ap2 ON va2.author_id = ap2.author_id 
+                WHERE ap2.project_id = rp.id AND va2.email = ?
             )
             GROUP BY rp.id, pd.sanction_order_amount, pd.project_duration_start_date, 
                      pd.project_duration_end_date, pao.name
@@ -121,8 +123,8 @@ const userDashboardModel = {
             SELECT COUNT(DISTINCT rp.id) as total 
             FROM research_projects rp
             INNER JOIN author_project ap ON rp.id = ap.project_id
-            INNER JOIN authors a ON ap.author_id = a.id
-            WHERE a.email = ?
+            INNER JOIN v_authors va ON ap.author_id = va.author_id
+            WHERE va.email = ?
         `;
 
       // Execute both queries
@@ -175,9 +177,9 @@ const userDashboardModel = {
                 LEFT JOIN author_journal aj ON j.id = aj.journal_id
                 LEFT JOIN authors a ON aj.author_id = a.id
                 WHERE EXISTS (
-                    SELECT 1 FROM authors a2 
-                    INNER JOIN author_journal aj2 ON a2.id = aj2.author_id 
-                    WHERE aj2.journal_id = j.id AND a2.email = ?
+                    SELECT 1 FROM v_authors va2 
+                    INNER JOIN author_journal aj2 ON va2.author_id = aj2.author_id 
+                    WHERE aj2.journal_id = j.id AND va2.email = ?
                 )
                 GROUP BY j.id, jo.journal_name, jo.publisher
                 ORDER BY j.updated_at DESC
@@ -191,8 +193,8 @@ const userDashboardModel = {
                 SELECT COUNT(DISTINCT j.id) as total 
                 FROM journals j
                 INNER JOIN author_journal aj ON j.id = aj.journal_id
-                INNER JOIN authors a ON aj.author_id = a.id
-                WHERE a.email = ?
+                INNER JOIN v_authors va ON aj.author_id = va.author_id
+                WHERE va.email = ?
             `;
 
       const [[countResult]] = await db.query(countQuery, [user.email]);
@@ -300,9 +302,9 @@ const userDashboardModel = {
                 LEFT JOIN project_scheme_options pso ON rp.scheme_id = pso.id
                 WHERE rp.id = ? 
                 AND EXISTS (
-                    SELECT 1 FROM authors a2 
-                    INNER JOIN author_project ap2 ON a2.id = ap2.author_id 
-                    WHERE ap2.project_id = rp.id AND a2.email = ?
+                    SELECT 1 FROM v_authors va2 
+                    INNER JOIN author_project ap2 ON va2.author_id = ap2.author_id 
+                    WHERE ap2.project_id = rp.id AND va2.email = ?
                 )
                 GROUP BY rp.id, pd.id, pao.name, pso.name
             `;

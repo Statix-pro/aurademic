@@ -87,6 +87,8 @@ interface JournalRequest {
   website: string;
   print_issn: string;
   online_issn: string;
+  impact_factor: string;
+  cite_score: string;
   category: string;
 }
 
@@ -292,6 +294,8 @@ const JournalForm: React.FC = () => {
     website: '',
     print_issn: '',
     online_issn: '',
+    impact_factor: '',
+    cite_score: '',
     category: '',
   });
   const [journalRequestLoading, setJournalRequestLoading] = useState<boolean>(false);
@@ -731,6 +735,8 @@ const JournalForm: React.FC = () => {
           website: '',
           print_issn: '',
           online_issn: '',
+          impact_factor: '',
+          cite_score: '',
           category: '',
         });
       } else {
@@ -1367,6 +1373,16 @@ const JournalForm: React.FC = () => {
     });
     setJournalSearchQuery(journal.name);
     setShowJournalSuggestions(false);
+
+    // Set Impact Factor and Cite Score from journal options
+    const impactFactorInput = document.getElementById('impactFactorInput') as HTMLInputElement;
+    const citeScoreInput = document.getElementById('citeScoreInput') as HTMLInputElement;
+    if (impactFactorInput) {
+      impactFactorInput.value = journal.impactFactor != null ? String(journal.impactFactor) : '';
+    }
+    if (citeScoreInput) {
+      citeScoreInput.value = journal.citeScore != null ? String(journal.citeScore) : '';
+    }
 
     // Set category based on journal selection
     if (journal.category) {
@@ -2898,36 +2914,34 @@ const JournalForm: React.FC = () => {
 
                     {/* --- End Conditional Block --- */}
 
-                    {/* 4. Row action buttons: Add and Delete */}
-                    <div className="author-action-buttons">
-                      {/* Only show add button on the last author row */}
-                      {index === authors.length - 1 && (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-add-author"
-                          onClick={addAuthor}
-                          disabled={
-                            authors.length >= MAX_AUTHORS ||
-                            (!editMode && isViewMode)
-                          }
-                          aria-label="Add author"
-                          title="Add author"
-                        >
-                          <Plus size={16} />
-                        </button>
-                      )}
+                    {/* 4. Row action buttons: Add and Delete - Hide completely in view mode */}
+                    {editMode && !isViewMode && (
+                      <div className="author-action-buttons">
+                        {/* Only show add button on the last author row */}
+                        {index === authors.length - 1 && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-add-author"
+                            onClick={addAuthor}
+                            disabled={authors.length >= MAX_AUTHORS}
+                            aria-label="Add author"
+                            title="Add author"
+                          >
+                            <Plus size={16} />
+                          </button>
+                        )}
 
-                      {authors.length > 1 && (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-delete-author"
-                          onClick={() => deleteAuthor(author.id)}
-                          disabled={!editMode && isViewMode}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
-                    </div>
+                        {authors.length > 1 && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-delete-author"
+                            onClick={() => deleteAuthor(author.id)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -3291,7 +3305,8 @@ const JournalForm: React.FC = () => {
                           autoComplete="off"
                         />
                         {showJournalSuggestions &&
-                          journalSearchResults.length > 0 && (
+                          journalSearchResults.length > 0 &&
+                          !isViewMode && editMode && (
                             <ul className="list-group" style={suggestionsStyle}>
                               {journalSearchResults.map((journal, index) => (
                                 <li
@@ -3647,7 +3662,7 @@ const JournalForm: React.FC = () => {
                                 </div>
                                 <div className="mb-3">
                                   <label className="form-label">
-                                    Publisher
+                                    Publisher *
                                   </label>
                                   <input
                                     type="text"
@@ -3659,10 +3674,11 @@ const JournalForm: React.FC = () => {
                                         e.target.value
                                       )
                                     }
+                                    required
                                   />
                                 </div>
                                 <div className="mb-3">
-                                  <label className="form-label">Website</label>
+                                  <label className="form-label">Website *</label>
                                   <input
                                     type="url"
                                     className="form-control"
@@ -3673,12 +3689,13 @@ const JournalForm: React.FC = () => {
                                         e.target.value
                                       )
                                     }
+                                    required
                                   />
                                 </div>
                                 <div className="row mb-3">
                                   <div className="col-6">
                                     <label className="form-label">
-                                      Print ISSN
+                                      Print ISSN *
                                     </label>
                                     <input
                                       type="text"
@@ -3690,11 +3707,12 @@ const JournalForm: React.FC = () => {
                                           e.target.value
                                         )
                                       }
+                                      required
                                     />
                                   </div>
                                   <div className="col-6">
                                     <label className="form-label">
-                                      Online ISSN
+                                      Online ISSN *
                                     </label>
                                     <input
                                       type="text"
@@ -3706,6 +3724,47 @@ const JournalForm: React.FC = () => {
                                           e.target.value
                                         )
                                       }
+                                      required
+                                    />
+                                  </div>
+                                </div>
+                                <div className="row mb-3">
+                                  <div className="col-6">
+                                    <label className="form-label">
+                                      Impact Factor *
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step="0.001"
+                                      className="form-control"
+                                      value={journalRequest.impact_factor}
+                                      onChange={(e) =>
+                                        handleJournalRequestChange(
+                                          'impact_factor',
+                                          e.target.value
+                                        )
+                                      }
+                                      placeholder="e.g., 5.123"
+                                      required
+                                    />
+                                  </div>
+                                  <div className="col-6">
+                                    <label className="form-label">
+                                      Cite Score *
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step="0.001"
+                                      className="form-control"
+                                      value={journalRequest.cite_score}
+                                      onChange={(e) =>
+                                        handleJournalRequestChange(
+                                          'cite_score',
+                                          e.target.value
+                                        )
+                                      }
+                                      placeholder="e.g., 8.5"
+                                      required
                                     />
                                   </div>
                                 </div>
@@ -3930,8 +3989,9 @@ const JournalForm: React.FC = () => {
                               id="impactFactorInput"
                               name="impactFactorInput"
                               className="form-control"
-                              disabled={!editMode && isViewMode}
-                              placeholder="0.00"
+                              disabled={true}
+                              readOnly
+                              style={{ backgroundColor: '#e9ecef', cursor: 'not-allowed', color: '#495057' }}
                             />
                           </div>
                           <div className="col-6">
@@ -3944,8 +4004,9 @@ const JournalForm: React.FC = () => {
                               id="citeScoreInput"
                               name="citeScoreInput"
                               className="form-control"
-                              disabled={!editMode && isViewMode}
-                              placeholder="0.00"
+                              disabled={true}
+                              readOnly
+                              style={{ backgroundColor: '#e9ecef', cursor: 'not-allowed', color: '#495057' }}
                             />
                           </div>
                         </div>

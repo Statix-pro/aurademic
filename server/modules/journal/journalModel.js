@@ -557,7 +557,9 @@ const journalModel = {
             jo.publisher,
             jo.website,
             jo.print_issn as printISSN,
-            jo.online_issn as onlineISSN
+            jo.online_issn as onlineISSN,
+            jo.impact_factor as impactFactor,
+            jo.cite_score as citeScore
           FROM journal_options jo
           ORDER BY jo.journal_name
           LIMIT 20
@@ -571,7 +573,9 @@ const journalModel = {
             jo.publisher,
             jo.website,
             jo.print_issn as printISSN,
-            jo.online_issn as onlineISSN
+            jo.online_issn as onlineISSN,
+            jo.impact_factor as impactFactor,
+            jo.cite_score as citeScore
           FROM journal_options jo
           WHERE jo.journal_name LIKE ?
           ORDER BY jo.journal_name
@@ -683,7 +687,7 @@ v.author_id AS id,
   async createJournalRequest(requestData) {
     try {
       const [result] = await db.query(
-        'INSERT INTO journal_requests (user_id, journal_name, publisher, website, print_issn, online_issn, category, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO journal_requests (user_id, journal_name, publisher, website, print_issn, online_issn, impact_factor, cite_score, category, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           requestData.user_id,
           requestData.journal_name,
@@ -691,6 +695,8 @@ v.author_id AS id,
           requestData.website,
           requestData.print_issn,
           requestData.online_issn,
+          requestData.impact_factor || null,
+          requestData.cite_score || null,
           requestData.category || 'National',
           'pending', // Default status
         ]
