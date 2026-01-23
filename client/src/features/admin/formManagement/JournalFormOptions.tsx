@@ -10,6 +10,8 @@ interface JournalOption {
   website?: string;
   print_issn?: string;
   online_issn?: string;
+  impact_factor?: number | null;
+  cite_score?: number | null;
   category: string;
 }
 
@@ -24,6 +26,8 @@ const JournalManagement: React.FC = () => {
     website: "",
     print_issn: "",
     online_issn: "",
+    impact_factor: null,
+    cite_score: null,
     category: "National",
   });
   const [isEditing, setIsEditing] = useState(false);
@@ -102,6 +106,8 @@ const JournalManagement: React.FC = () => {
       website: "",
       print_issn: "",
       online_issn: "",
+      impact_factor: null,
+      cite_score: null,
       category: "National",
     });
     setIsEditing(false);
@@ -134,6 +140,8 @@ const JournalManagement: React.FC = () => {
             <th>Publisher</th>
             <th>Print ISSN</th>
             <th>Online ISSN</th>
+            <th>Impact Factor</th>
+            <th>Cite Score</th>
             <th>Website</th>
             <th>Actions</th>
           </tr>
@@ -151,6 +159,8 @@ const JournalManagement: React.FC = () => {
                 <td>{journal.publisher}</td>
                 <td>{journal.print_issn}</td>
                 <td>{journal.online_issn}</td>
+                <td>{journal.impact_factor ?? "-"}</td>
+                <td>{journal.cite_score ?? "-"}</td>
                 <td>{journal.website}</td>
                 <td>
                   <Button variant="primary" size="sm" className="me-2" onClick={() => handleEdit(journal)}>Edit</Button>
@@ -160,7 +170,7 @@ const JournalManagement: React.FC = () => {
             ))
           ) : (
             <tr>
-              <td colSpan={7} className="text-center">{loading ? "Loading..." : "No journals found"}</td>
+              <td colSpan={9} className="text-center">{loading ? "Loading..." : "No journals found"}</td>
             </tr>
           )}
         </tbody>
@@ -194,35 +204,67 @@ const JournalManagement: React.FC = () => {
               </Form.Select>
             </Form.Group>
             <Form.Group className="mb-3">
-              <Form.Label>Publisher</Form.Label>
+              <Form.Label>Publisher *</Form.Label>
               <Form.Control
                 type="text"
                 value={currentJournal.publisher || ""}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentJournal({ ...currentJournal, publisher: e.target.value })}
+                required
               />
             </Form.Group>
             <Form.Group className="mb-3">
-              <Form.Label>Print ISSN</Form.Label>
+              <Form.Label>Print ISSN *</Form.Label>
               <Form.Control
                 type="text"
                 value={currentJournal.print_issn || ""}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentJournal({ ...currentJournal, print_issn: e.target.value })}
+                required
               />
             </Form.Group>
             <Form.Group className="mb-3">
-              <Form.Label>Online ISSN</Form.Label>
+              <Form.Label>Online ISSN *</Form.Label>
               <Form.Control
                 type="text"
                 value={currentJournal.online_issn || ""}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentJournal({ ...currentJournal, online_issn: e.target.value })}
+                required
               />
             </Form.Group>
+            <div className="row mb-3">
+              <div className="col-6">
+                <Form.Group>
+                  <Form.Label>Impact Factor *</Form.Label>
+                  <Form.Control
+                    type="number"
+                    step="0.001"
+                    value={currentJournal.impact_factor ?? ""}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentJournal({ ...currentJournal, impact_factor: e.target.value ? parseFloat(e.target.value) : null })}
+                    placeholder="e.g., 5.123"
+                    required
+                  />
+                </Form.Group>
+              </div>
+              <div className="col-6">
+                <Form.Group>
+                  <Form.Label>Cite Score *</Form.Label>
+                  <Form.Control
+                    type="number"
+                    step="0.001"
+                    value={currentJournal.cite_score ?? ""}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentJournal({ ...currentJournal, cite_score: e.target.value ? parseFloat(e.target.value) : null })}
+                    placeholder="e.g., 8.5"
+                    required
+                  />
+                </Form.Group>
+              </div>
+            </div>
             <Form.Group className="mb-3">
-              <Form.Label>Website</Form.Label>
+              <Form.Label>Website *</Form.Label>
               <Form.Control
                 type="text"
                 value={currentJournal.website || ""}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentJournal({ ...currentJournal, website: e.target.value })}
+                required
               />
             </Form.Group>
             <div className="d-flex justify-content-end">

@@ -72,8 +72,7 @@ SELECT
     CASE WHEN a.employee_id IS NOT NULL THEN e.email ELSE a.email END AS email,
     CASE WHEN a.employee_id IS NOT NULL THEN e.designation ELSE a.designation END AS designation,
     CASE WHEN a.employee_id IS NOT NULL THEN d.name ELSE a.department END AS department,
-    CASE WHEN a.employee_id IS NOT NULL THEN 'KSRCT' ELSE a.organization END AS organization,
-    
+    CASE WHEN a.employee_id IS NOT NULL THEN 'K.S.Rangasamy College of Technology' ELSE a.organization END AS organization,    
     -- Employee-specific fields (NULL for external authors)
     e.erp_id,
     e.orcid_id,
