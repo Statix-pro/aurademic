@@ -522,6 +522,8 @@ const journalController = {
         website,
         print_issn,
         online_issn,
+        impact_factor,
+        cite_score,
         category,
       } = req.body;
       const userId = req.user.id;
@@ -541,6 +543,8 @@ const journalController = {
         website: website?.trim() || '',
         print_issn: print_issn?.trim() || '',
         online_issn: online_issn?.trim() || '',
+        impact_factor: impact_factor || null,
+        cite_score: cite_score || null,
         category: category || 'National',
       });
 
