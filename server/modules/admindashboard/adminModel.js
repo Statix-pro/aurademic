@@ -24,7 +24,15 @@ const adminModel = {
                     pd.sanction_order_amount,
                     pd.project_duration_start_date,
                     pd.project_duration_end_date,
-                    GROUP_CONCAT(DISTINCT CONCAT(a.name)) as team_members_names,
+                    GROUP_CONCAT(DISTINCT 
+                        CONCAT(
+                            va.author_name,
+                            CASE WHEN va.erp_id IS NOT NULL 
+                                 THEN CONCAT(' [', va.erp_id, ']') 
+                                 ELSE '' 
+                            END
+                        )
+                    ) as team_members_names,
                     GROUP_CONCAT(DISTINCT 
                         CONCAT(
                             pgd.fiscal_year, ':', 
@@ -38,7 +46,7 @@ const adminModel = {
                 LEFT JOIN project_scheme_options pso ON rp.scheme_id = pso.id
                 LEFT JOIN project_details pd ON rp.id = pd.project_id
                 LEFT JOIN author_project ap ON rp.id = ap.project_id
-                LEFT JOIN authors a ON ap.author_id = a.id
+                LEFT JOIN v_authors va ON ap.author_id = va.author_id
                 LEFT JOIN edit_requests er ON 
                     er.entity_id = rp.id AND 
                     er.entity_type = 'research_projects'
@@ -62,20 +70,20 @@ const adminModel = {
         scheme: row.scheme_name, // Map scheme_name to scheme for backwards compatibility
         team_members: row.team_members_names
           ? row.team_members_names
-              .split(',')
-              .map((name) => ({ name: name.trim() }))
+            .split(',')
+            .map((name) => ({ name: name.trim() }))
           : [],
         grant_disbursements: row.grant_disbursements_data
           ? row.grant_disbursements_data.split(',').map((gd) => {
-              const [fiscal_year, agency, amount, disbursement_date] =
-                gd.split(':');
-              return {
-                fiscal_year,
-                agency,
-                amount: parseFloat(amount),
-                disbursement_date,
-              };
-            })
+            const [fiscal_year, agency, amount, disbursement_date] =
+              gd.split(':');
+            return {
+              fiscal_year,
+              agency,
+              amount: parseFloat(amount),
+              disbursement_date,
+            };
+          })
           : [],
       }));
 
@@ -117,18 +125,22 @@ const adminModel = {
         throw new Error('Project not found');
       }
 
-      // Get team members with their roles
+      // Get team members with their roles and employee details
       const [teamMembers] = await db.query(
         `
             SELECT 
-                a.id,
-                a.name,
+                va.author_id as id,
+                va.author_name as name,
+                va.erp_id,
+                va.designation,
+                va.department,
+                va.author_type,
                 ap.is_principal,
                 ap.is_primary
-            FROM authors a
-            JOIN author_project ap ON a.id = ap.author_id
+            FROM v_authors va
+            JOIN author_project ap ON va.author_id = ap.author_id
             WHERE ap.project_id = ?
-            ORDER BY ap.is_principal DESC, ap.is_primary DESC, a.name
+            ORDER BY ap.is_principal DESC, ap.is_primary DESC, va.author_name
         `,
         [id]
       );
@@ -196,6 +208,10 @@ const adminModel = {
         team_members: teamMembers.map((member) => ({
           id: member.id,
           name: member.name,
+          erp_id: member.erp_id,
+          designation: member.designation,
+          department: member.department,
+          author_type: member.author_type,
           is_principal: member.is_principal,
           is_primary: member.is_primary,
         })),
@@ -254,12 +270,20 @@ const adminModel = {
                     jo.online_issn,
                     jo.website,
                     er.status as edit_request_status,
-                    GROUP_CONCAT(DISTINCT a.name ORDER BY a.id) as author_names,
+                    GROUP_CONCAT(DISTINCT 
+                        CONCAT(
+                            va.author_name,
+                            CASE WHEN va.erp_id IS NOT NULL 
+                                 THEN CONCAT(' [', va.erp_id, ']') 
+                                 ELSE '' 
+                            END
+                        ) ORDER BY va.author_id
+                    ) as author_names,
                     GROUP_CONCAT(DISTINCT ji.index_name ORDER BY ji.id) as index_names
                 FROM journals j
                 LEFT JOIN journal_options jo ON j.journal_options_id = jo.id
                 LEFT JOIN author_journal aj ON j.id = aj.journal_id
-                LEFT JOIN authors a ON aj.author_id = a.id
+                LEFT JOIN v_authors va ON aj.author_id = va.author_id
                 LEFT JOIN edit_requests er ON 
                     er.entity_id = j.id AND 
                     er.entity_type = 'journals'
@@ -297,14 +321,22 @@ const adminModel = {
                     jo.print_issn,
                     jo.online_issn,
                     jo.website,
-                    GROUP_CONCAT(DISTINCT a.name ORDER BY a.id) as author_names,
+                    GROUP_CONCAT(DISTINCT 
+                        CONCAT(
+                            va.author_name,
+                            CASE WHEN va.erp_id IS NOT NULL 
+                                 THEN CONCAT(' [', va.erp_id, ']') 
+                                 ELSE '' 
+                            END
+                        ) ORDER BY va.author_id
+                    ) as author_names,
                     GROUP_CONCAT(DISTINCT ji.index_name ORDER BY ji.id) as index_names,
                     er.status as edit_request_status,
                     er.created_at as edit_request_date
                 FROM journals j
                 LEFT JOIN journal_options jo ON j.journal_options_id = jo.id
                 LEFT JOIN author_journal aj ON j.id = aj.journal_id
-                LEFT JOIN authors a ON aj.author_id = a.id
+                LEFT JOIN v_authors va ON aj.author_id = va.author_id
                 LEFT JOIN journal_indexes ji ON j.id = ji.journal_id
                  LEFT JOIN edit_requests er ON j.id = er.entity_id AND er.entity_type = 'journals'
                 WHERE j.id = ?
@@ -391,14 +423,16 @@ const adminModel = {
 
       // Add to journal_options table
       const [result] = await db.query(
-        `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn) 
-                     VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, impact_factor, cite_score) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           request.journal_name,
           request.publisher,
           request.website,
           request.print_issn,
           request.online_issn,
+          request.impact_factor || null,
+          request.cite_score || null,
         ]
       );
 
@@ -503,7 +537,7 @@ const adminModel = {
                      WHERE id = ?`,
         [
           adminComment ||
-            `${request.request_type.replace('_', ' ')} approved and added to options`,
+          `${request.request_type.replace('_', ' ')} approved and added to options`,
           requestId,
         ]
       );
