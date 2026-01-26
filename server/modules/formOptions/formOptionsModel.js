@@ -4,14 +4,16 @@ const formOptionsModel = {
   async addJournalOption(journal) {
     try {
       const [result] = await db.query(
-        `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, category) 
-                 VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, impact_factor, cite_score, category) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           journal.journal_name,
           journal.publisher || '',
           journal.website || '',
           journal.print_issn || '',
           journal.online_issn || '',
+          journal.impact_factor || null,
+          journal.cite_score || null,
           journal.category || 'National',
         ]
       );
@@ -38,7 +40,7 @@ const formOptionsModel = {
     try {
       const [result] = await db.query(
         `UPDATE journal_options 
-                 SET journal_name = ?, publisher = ?, website = ?, print_issn = ?, online_issn = ?, category = ? 
+                 SET journal_name = ?, publisher = ?, website = ?, print_issn = ?, online_issn = ?, impact_factor = ?, cite_score = ?, category = ? 
                  WHERE id = ?`,
         [
           updatedData.journal_name,
@@ -46,6 +48,8 @@ const formOptionsModel = {
           updatedData.website || '',
           updatedData.print_issn || '',
           updatedData.online_issn || '',
+          updatedData.impact_factor || null,
+          updatedData.cite_score || null,
           updatedData.category || 'National',
           id,
         ]
