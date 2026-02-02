@@ -298,29 +298,19 @@ const PublicationsPage: React.FC = () => {
                 ) : (
                   journals.map((journal) => (
                     <div key={journal.id} className="research-card compact-row">
-                      <div className="research-id" aria-label={`Publication ID ${journal.id}`}>{journal.id}</div>
-                      <div className="compact-content">
-                        <div className="compact-header">
-                          <h6 className="research-title">{journal.title}</h6>
-                          <div className="research-actions" role="group" aria-label="Publication actions">
-                            <button className="action-btn view-btn" onClick={() => handleView(journal.id)} title="View publication details" aria-label="View publication details">
-                              <i className="fas fa-eye" aria-hidden="true"></i>
-                            </button>
-                            <button className="action-btn share-btn" title="Share publication" aria-label="Share publication">
-                              <i className="fas fa-link" aria-hidden="true"></i>
-                            </button>
-                            <button className="action-btn edit-btn" onClick={() => handleEdit(journal)} title="Edit publication" aria-label="Edit publication">
-                              <i className="fas fa-edit" aria-hidden="true"></i>
-                            </button>
-                            <button className="action-btn delete-btn" onClick={() => handleDelete(journal.id)} title="Delete publication" aria-label="Delete publication">
-                              <i className="fas fa-trash" aria-hidden="true"></i>
-                            </button>
+                      {/* Use flexbox to separate content from fixed metadata */}
+                      <div className="d-flex w-100 align-items-start">
+                        {/* Left side: Title, Authors, Journal, Publisher (flexible) */}
+                        <div className="compact-content flex-grow-1 pe-3">
+                          {/* Line 1: Title */}
+                          <div className="mb-2">
+                            <h6 className="research-title mb-0" style={{ fontSize: '1.1rem', fontWeight: '600', color: '#161616' }}>{journal.title}</h6>
                           </div>
-                        </div>
-                        <div className="compact-details">
-                          <span className="detail-item">
-                            <span className="detail-label">Authors:</span>
-                            <span className="detail-value">
+
+                          {/* Line 2: Authors */}
+                          <div className="mb-2 text-truncate-2-lines">
+                            <span className="text-muted" style={{ fontSize: '0.9rem', marginRight: '5px' }}>Authors:</span>
+                            <span style={{ fontSize: '0.95rem', color: '#393939' }}>
                               {journal.authors?.split(', ').map((author, index) => (
                                 <span key={index}>
                                   {index > 0 && ', '}
@@ -335,45 +325,64 @@ const PublicationsPage: React.FC = () => {
                                 </span>
                               ))}
                             </span>
-                          </span>
-                          <span className="detail-separator">•</span>
-                          <span className="detail-item">
-                            <span className="detail-label">Journal:</span>
-                            <span className="detail-value">{journal.journal_name}</span>
-                          </span>
-                          <span className="detail-separator">•</span>
-                          <span className="detail-item">
-                            <span className="detail-label">Publisher:</span>
-                            <span className="detail-value">{journal.publisher || 'Not specified'}</span>
-                          </span>
-                          <span className="detail-separator">•</span>
-                          <span className={`type-badge type-${journal.type?.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}>
-                            {journal.type}
-                          </span>
-                          <span className="detail-separator">•</span>
-                          <span className={`status-badge status-${journal.status?.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}>
-                            {journal.status}
-                          </span>
-                          <span className="detail-separator">•</span>
-                          <span className="detail-item">
-                            <span className="detail-label">
-                              {journal.status === 'published' ? 'Published:' : 'Submitted:'}
+                          </div>
+
+                          {/* Line 3: Journal & Publisher */}
+                          <div className="d-flex flex-wrap align-items-center text-muted" style={{ fontSize: '0.85rem' }}>
+                            <span className="me-2">Journal: <span className="text-dark">{journal.journal_name}</span></span>
+                            <span className="mx-2">•</span>
+                            <span className="me-2">Publisher: <span className="text-dark">{journal.publisher || 'Not specified'}</span></span>
+                            {journal.doi && (
+                              <>
+                                <span className="mx-2">•</span>
+                                <span>DOI: <span className="text-primary">{journal.doi}</span></span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Right side: Fixed column for ID, Type, Status, Date, and Actions */}
+                        <div className="metadata-fixed-column text-end" style={{ minWidth: '220px', flexShrink: 0 }}>
+                          {/* ID Row at top */}
+                          <div className="d-flex justify-content-end align-items-center mb-2">
+                            <span className="research-id" aria-label={`Publication ID ${journal.id}`}>{journal.id}</span>
+                          </div>
+
+                          {/* Action buttons with Type badge */}
+                          <div className="research-actions mb-3 d-flex justify-content-end align-items-center" role="group" aria-label="Publication actions">
+                            {/* Type badge */}
+                            <span className={`type-badge me-2 type-${journal.type?.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                              style={{ padding: '6px 10px', fontSize: '0.75rem', borderRadius: '4px', height: 'fit-content' }}>
+                              {journal.type}
                             </span>
-                            <span className="detail-value">
+
+                            <button className="action-btn view-btn" onClick={() => handleView(journal.id)} title="View publication details" aria-label="View publication details">
+                              <i className="fas fa-eye" aria-hidden="true"></i>
+                            </button>
+                            <button className="action-btn share-btn" title="Share publication" aria-label="Share publication">
+                              <i className="fas fa-link" aria-hidden="true"></i>
+                            </button>
+                            <button className="action-btn edit-btn" onClick={() => handleEdit(journal)} title="Edit publication" aria-label="Edit publication">
+                              <i className="fas fa-edit" aria-hidden="true"></i>
+                            </button>
+                            <button className="action-btn delete-btn" onClick={() => handleDelete(journal.id)} title="Delete publication" aria-label="Delete publication">
+                              <i className="fas fa-trash" aria-hidden="true"></i>
+                            </button>
+                          </div>
+
+                          {/* Status and Date - Stacked */}
+                          <div className="d-flex flex-column align-items-end gap-1 mt-2">
+                            <span className={`status-badge status-${journal.status?.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                              style={{ padding: '4px 8px', fontSize: '0.75rem', borderRadius: '4px', display: 'inline-block' }}>
+                              {journal.status}
+                            </span>
+                            <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+                              {journal.status === 'published' ? 'Published: ' : 'Submitted: '}
                               {journal.status === 'published' && journal.available_online_date
                                 ? formatDate(journal.available_online_date)
                                 : formatDate(journal.date_of_submission)}
                             </span>
-                          </span>
-                          {journal.doi && (
-                            <>
-                              <span className="detail-separator">•</span>
-                              <span className="detail-item">
-                                <span className="detail-label">DOI:</span>
-                                <span className="detail-value doi-value">{journal.doi}</span>
-                              </span>
-                            </>
-                          )}
+                          </div>
                         </div>
                       </div>
                     </div>
