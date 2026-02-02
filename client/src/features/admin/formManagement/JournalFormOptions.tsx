@@ -132,18 +132,18 @@ const JournalManagement: React.FC = () => {
         </Button>
       </div>
 
-      <Table striped bordered hover>
+      <Table striped bordered hover responsive>
         <thead>
           <tr>
             <th>Journal Name</th>
-            <th>Category</th>
+            <th className="text-center">Category</th>
             <th>Publisher</th>
-            <th>Print ISSN</th>
-            <th>Online ISSN</th>
+            <th className="text-center">Print ISSN</th>
+            <th className="text-center">Online ISSN</th>
             <th>Impact Factor</th>
             <th>Cite Score</th>
             <th>Website</th>
-            <th>Actions</th>
+            <th className="text-center">Actions</th>
           </tr>
         </thead>
         <tbody>

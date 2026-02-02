@@ -23,12 +23,13 @@ const userDashboardModel = {
 
     // derived from getUserJournals count logic
     // Use v_authors view to get email from master_employees for faculty
+    // Only count PUBLISHED journals for the dashboard stats
     const journalQuery = `
         SELECT COUNT(DISTINCT j.id) as count
         FROM journals j
         INNER JOIN author_journal aj ON j.id = aj.journal_id
         INNER JOIN v_authors va ON aj.author_id = va.author_id
-        WHERE va.email = ?
+        WHERE va.email = ? AND j.status = 'published'
     `;
 
     // Check if research_collaborations exists or use placeholder
@@ -144,7 +145,7 @@ const userDashboardModel = {
     }
   },
 
-  async getUserJournals(userId, page = 1, perPage = 10) {
+  async getUserJournals(userId, page = 1, perPage = 10, status = null, sortBy = 'updated_at') {
     const offset = (page - 1) * perPage;
     try {
       // First verify the user exists and get their email
@@ -156,7 +157,18 @@ const userDashboardModel = {
         return { journals: [], total: 0 };
       }
 
+      // Build status filter condition
+      const statusCondition = status ? 'AND j.status = ?' : '';
+      const queryParams = status
+        ? [user.email, status, perPage, offset]
+        : [user.email, perPage, offset];
+
+      // Validate and sanitize sortBy to prevent SQL injection
+      const allowedSortColumns = ['updated_at', 'date_of_submission', 'available_online_date', 'created_at'];
+      const orderByColumn = allowedSortColumns.includes(sortBy) ? `j.${sortBy}` : 'j.updated_at';
+
       // Modified query to ensure proper joins and data retrieval
+      // Use v_authors to get author names (handles internal employees correctly)
       const query = `
                 SELECT 
                     j.*,
@@ -164,7 +176,7 @@ const userDashboardModel = {
                     jo.publisher,
                     GROUP_CONCAT(
                         DISTINCT 
-                        CONCAT(a.name,
+                        CONCAT(va.author_name,
                             CASE 
                                 WHEN aj.is_first_author THEN ' (First Author)'
                                 WHEN aj.is_primary THEN ' (Primary Author)'
@@ -175,29 +187,30 @@ const userDashboardModel = {
                 FROM journals j
                 LEFT JOIN journal_options jo ON j.journal_options_id = jo.id
                 LEFT JOIN author_journal aj ON j.id = aj.journal_id
-                LEFT JOIN authors a ON aj.author_id = a.id
+                LEFT JOIN v_authors va ON aj.author_id = va.author_id
                 WHERE EXISTS (
                     SELECT 1 FROM v_authors va2 
                     INNER JOIN author_journal aj2 ON va2.author_id = aj2.author_id 
                     WHERE aj2.journal_id = j.id AND va2.email = ?
-                )
+                ) ${statusCondition}
                 GROUP BY j.id, jo.journal_name, jo.publisher
-                ORDER BY j.updated_at DESC
+                ORDER BY ${orderByColumn} DESC
                 LIMIT ? OFFSET ?
             `;
 
-      const [journals] = await db.query(query, [user.email, perPage, offset]);
+      const [journals] = await db.query(query, queryParams);
 
-      // Get total count
+      // Get total count with status filter
+      const countParams = status ? [user.email, status] : [user.email];
       const countQuery = `
                 SELECT COUNT(DISTINCT j.id) as total 
                 FROM journals j
                 INNER JOIN author_journal aj ON j.id = aj.journal_id
                 INNER JOIN v_authors va ON aj.author_id = va.author_id
-                WHERE va.email = ?
+                WHERE va.email = ? ${statusCondition}
             `;
 
-      const [[countResult]] = await db.query(countQuery, [user.email]);
+      const [[countResult]] = await db.query(countQuery, countParams);
 
       return {
         journals: journals,

@@ -85,11 +85,15 @@ const userDashboardController = {
 
       const page = parseInt(req.query.page) || 1;
       const perPage = parseInt(req.query.per_page) || 10;
+      const status = req.query.status || null; // null means all statuses
+      const sortBy = req.query.sort_by || 'updated_at'; // default sort by updated_at
 
       const { journals, total } = await userDashboardModel.getUserJournals(
         userId,
         page,
-        perPage
+        perPage,
+        status,
+        sortBy
       );
 
       // The journals array is directly what we want to send
