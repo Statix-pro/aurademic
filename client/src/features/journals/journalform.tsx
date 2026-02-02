@@ -200,6 +200,7 @@ const JournalForm: React.FC = () => {
 
   const [journalId, setJournalId] = useState<string | undefined>(urlJournalId);
   const justAddedAuthorRef = useRef<boolean>(false); // Track if author was just added
+  const isLoadingJournalDataRef = useRef<boolean>(false); // Track if journal data is being loaded programmatically
   const [isInternational, setIsInternational] = useState<boolean>(false);
   const [editMode, setEditMode] = useState<boolean>(!urlJournalId);
   const [editRequestStatus, setEditRequestStatus] = useState<EditRequestStatus>(null);
@@ -466,6 +467,12 @@ const JournalForm: React.FC = () => {
   }, [searchQueries, authors, isViewMode]);
 
   useEffect(() => {
+    // Skip search if journal data is being loaded programmatically (not user input)
+    if (isLoadingJournalDataRef.current) {
+      isLoadingJournalDataRef.current = false;
+      return;
+    }
+
     if (journalSearchQuery.length > 2) {
       searchJournals();
     } else {
@@ -1040,6 +1047,8 @@ const JournalForm: React.FC = () => {
           onlineISSN: journalData.online_issn || '',
           website: journalData.website || '',
         });
+        // Set ref before setting search query to prevent dropdown from showing
+        isLoadingJournalDataRef.current = true;
         setJournalSearchQuery(journalData.journal_name || '');
       } else {
         // For Conference, Book Chapter, Book - use publication_details or empty
@@ -3024,7 +3033,7 @@ const JournalForm: React.FC = () => {
                                 type="radio"
                                 id={q.toLowerCase()}
                                 name="quartile"
-                                value={q}
+                                value={q === 'Nil' ? 'NA' : q}
                                 disabled={!editMode && isViewMode}
                               />
                               <label htmlFor={q.toLowerCase()}>{q}</label>
@@ -4056,6 +4065,7 @@ const JournalForm: React.FC = () => {
                             <option value="revisionSubmitted">
                               Revision Submitted
                             </option>
+                            <option value="accepted">Accepted</option>
                             <option value="published">Published</option>
                           </select>
                           <ChevronDown

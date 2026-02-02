@@ -107,13 +107,31 @@ const ProjectsList: React.FC = () => {
               <div className="col-md-10">
                 <h5 style={{ lineHeight: '32px' }}>{project.title}</h5>
                 <p>{project.team_members}</p>
-                <span>
-                  <p style={{ fontSize: '13px' }}>
-                    <span style={{ backgroundColor: '#AFDBF7', padding: '5px' }}>{project.agency_name || project.agency_id}</span>
-                    <span> Amount: ₹{project.sanction_order_amount || 'Not set'}</span>
-                    <span> Duration: {formatDate(project.project_duration_start_date)} - {formatDate(project.project_duration_end_date)}</span>
-                  </p>
-                </span>
+
+                {/* New Prominent Metadata Section */}
+                <div className="metadata-row mt-2 p-2 rounded" style={{ backgroundColor: '#f0f2f5', borderLeft: '4px solid #0f62fe' }}>
+                  <div className="row">
+                    <div className="col-md-3">
+                      <small className="text-muted d-block uppercase-label">Agency</small>
+                      <span className="fw-bold text-primary">{project.agency_name || project.agency_id || 'Not set'}</span>
+                    </div>
+                    <div className="col-md-3">
+                      <small className="text-muted d-block uppercase-label">Amount</small>
+                      <span className="fw-medium">₹{project.sanction_order_amount || 'Not set'}</span>
+                    </div>
+                    <div className="col-md-3">
+                      <small className="text-muted d-block uppercase-label">Duration</small>
+                      <span className="fw-medium" style={{ fontSize: '13px' }}>
+                        {formatDate(project.project_duration_start_date)} - {formatDate(project.project_duration_end_date)}
+                      </span>
+                    </div>
+                    <div className="col-md-3">
+                      <small className="text-muted d-block uppercase-label">Submitted On</small>
+                      <span className="fw-medium">{formatDate(project.date_of_submission)}</span>
+                    </div>
+                  </div>
+                </div>
+
               </div>
               <div className="col-md-2">
                 <div className="actions" style={{ marginTop: '20px' }}>
@@ -124,9 +142,7 @@ const ProjectsList: React.FC = () => {
                   <button className="btn custom-btn" title="Edit"><i className="fas fa-edit"></i></button>
                   <button className="btn custom-btn" title="Delete"><i className="fas fa-trash"></i></button>
                 </div>
-                <div>
-                  <p className="text-muted" style={{ fontSize: '13px' }}>Submitted: {formatDate(project.date_of_submission)}</p>
-                </div>
+                {/* Removed duplicate Submitted date from here */}
               </div>
             </div>
           </div>

@@ -18,12 +18,25 @@ const PublicationsList: React.FC = () => {
               Banana and Sisal Fiber Reinforced Epoxy Hybrid Composites
             </h5>
             <p>Jeyaprakasam S.;Kathirselvam M.;Velmurugan C.;Venkatachalam R.</p>
-            <span>
-              <p style={{ fontSize: '13px' }}>
-                <span style={{ backgroundColor: '#AFDBF7', padding: '5px' }}>Jounal Article</span>
-                <span>Journal of Natural Fibers, Year 2022</span>
-              </p>
-            </span>
+
+            {/* New Prominent Metadata Section (Static Example) */}
+            <div className="metadata-row mt-2 p-2 rounded" style={{ backgroundColor: '#f0f2f5', borderLeft: '4px solid #0f62fe' }}>
+              <div className="row">
+                <div className="col-md-4">
+                  <small className="text-muted d-block uppercase-label">Type</small>
+                  <span className="fw-bold text-primary">Journal Article</span>
+                </div>
+                <div className="col-md-4">
+                  <small className="text-muted d-block uppercase-label">Journal</small>
+                  <span className="fw-medium">Journal of Natural Fibers</span>
+                </div>
+                <div className="col-md-4">
+                  <small className="text-muted d-block uppercase-label">Published</small>
+                  <span className="fw-medium">2022</span>
+                </div>
+              </div>
+            </div>
+
           </div>
           <div className="col-md-2">
             <div className="actions" style={{ marginTop: '20px' }}>
@@ -32,7 +45,7 @@ const PublicationsList: React.FC = () => {
               <button className="btn custom-btn" title="Edit"><i className="fas fa-edit"></i></button>
               <button className="btn custom-btn" title="Delete"><i className="fas fa-trash"></i></button>
             </div>
-            <div>
+            <div className="mt-2 text-end">
               <p className="text-muted" style={{ fontSize: '13px' }}>Last edited : 2 days ago</p>
             </div>
           </div>

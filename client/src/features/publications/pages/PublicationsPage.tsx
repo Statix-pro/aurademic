@@ -15,6 +15,7 @@ interface Journal {
   publisher?: string;
   status: string;
   date_of_submission: string;
+  available_online_date?: string;
   doi?: string;
 }
 
@@ -42,6 +43,10 @@ const PublicationsPage: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedJournalForEdit, setSelectedJournalForEdit] = useState<Journal | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('updated_at');
   const [kpiData, setKpiData] = useState<KpiData>({
     journal: 0,
     conference: 0,
@@ -50,17 +55,23 @@ const PublicationsPage: React.FC = () => {
   });
 
   useEffect(() => {
-    fetchJournals(currentPage, itemsPerPage);
+    fetchJournals(currentPage, itemsPerPage, statusFilter, sortBy);
     fetchKpiData();
-  }, [currentPage, itemsPerPage]);
+  }, [currentPage, itemsPerPage, statusFilter, sortBy]);
 
-  const fetchJournals = async (page: number, perPage: number) => {
+  const fetchJournals = async (page: number, perPage: number, status: string = 'all', sort: string = 'updated_at') => {
     try {
       setError(null);
       setLoading(true);
 
+      const params: { page: number; per_page: number; status?: string; sort_by?: string } = { page, per_page: perPage };
+      if (status !== 'all') {
+        params.status = status;
+      }
+      params.sort_by = sort;
+
       const apiResponseData = await authenticityUtility.get('/dashboard/journals', {
-        params: { page, per_page: perPage },
+        params,
       }) as JournalsResponse;
 
       if (apiResponseData && Array.isArray(apiResponseData.data) && apiResponseData.pagination) {
@@ -89,18 +100,23 @@ const PublicationsPage: React.FC = () => {
       }) as JournalsResponse;
 
       if (response && Array.isArray(response.data)) {
+        // Only count published items
+        const publishedItems = response.data.filter((item) => item.status === 'published');
+
+        // Define conference and book types
+        const conferenceTypes = ['Conference', 'Conference Paper', 'Conference Proceedings'];
+        const bookTypes = ['Book', 'Monograph'];
+        const bookChapterTypes = ['Book Chapter', 'Chapter'];
+
         const kpis: KpiData = {
-          journal: response.data.filter(
-            (item) => item.type === 'Journal' || item.type === 'Journal Article' || item.type === 'Research Article'
-          ).length,
-          conference: response.data.filter(
-            (item) => item.type === 'Conference' || item.type === 'Conference Paper' || item.type === 'Conference Proceedings'
-          ).length,
-          book: response.data.filter(
-            (item) => item.type === 'Book' || item.type === 'Monograph'
-          ).length,
-          bookChapter: response.data.filter(
-            (item) => item.type === 'Book Chapter' || item.type === 'Chapter'
+          conference: publishedItems.filter((item) => conferenceTypes.includes(item.type)).length,
+          book: publishedItems.filter((item) => bookTypes.includes(item.type)).length,
+          bookChapter: publishedItems.filter((item) => bookChapterTypes.includes(item.type)).length,
+          // Journal = everything else (Research Article, Review, Note, Erratum, etc.)
+          journal: publishedItems.filter(
+            (item) => !conferenceTypes.includes(item.type) &&
+              !bookTypes.includes(item.type) &&
+              !bookChapterTypes.includes(item.type)
           ).length,
         };
         setKpiData(kpis);
@@ -145,6 +161,38 @@ const PublicationsPage: React.FC = () => {
     navigate(`/journal/${journalId}?mode=view`);
   };
 
+  const handleEdit = (journal: Journal) => {
+    setSelectedJournalForEdit(journal);
+    setShowEditModal(true);
+  };
+
+  const handleConfirmEdit = async () => {
+    if (selectedJournalForEdit) {
+      try {
+        const response = await authenticityUtility.post(
+          `/edit-requests/journals/${selectedJournalForEdit.id}`
+        ) as any;
+
+        if (response && response.success === true) {
+          alert(response.message || 'Edit request sent to admin for approval');
+        } else {
+          console.error('Edit request was not successful:', response.message);
+          alert(response.message || 'Failed to send edit request');
+        }
+      } catch (error: any) {
+        console.error('Error sending edit request:', error);
+        alert(error.response?.data?.message || 'Failed to send edit request');
+      }
+    }
+    setShowEditModal(false);
+    setSelectedJournalForEdit(null);
+  };
+
+  const handleCancelEdit = () => {
+    setShowEditModal(false);
+    setSelectedJournalForEdit(null);
+  };
+
   const handleAdd = () => {
     setShowCategoryModal(true);
   };
@@ -179,19 +227,6 @@ const PublicationsPage: React.FC = () => {
             <div className="article-score-card">
               <div className="score-card-header">
                 <h5 className="score-card-title">Article Score Card</h5>
-                <div className="filter-controls">
-                  <select className="filter-select">
-                    <option>Year</option>
-                    <option>2024</option>
-                    <option>2023</option>
-                    <option>2022</option>
-                  </select>
-                  <select className="filter-select">
-                    <option>Ascending</option>
-                    <option>Descending</option>
-                  </select>
-                  <button className="sort-btn">Sort</button>
-                </div>
               </div>
 
               <div className="kpi-cards">
@@ -229,7 +264,32 @@ const PublicationsPage: React.FC = () => {
             <div className="research-details">
               <div className="research-details-header">
                 <h5 className="research-details-title">List of Details</h5>
-                <button className="add-btn" onClick={handleAdd}>Add +</button>
+                <div className="d-flex gap-2 align-items-center">
+                  <select
+                    className="form-select form-select-sm"
+                    value={statusFilter}
+                    onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                    style={{ minWidth: '140px', paddingRight: '2rem' }}
+                  >
+                    <option value="all">All Status</option>
+                    <option value="accepted">Accepted</option>
+                    <option value="published">Published</option>
+                    <option value="submitted">Submitted</option>
+                    <option value="waiting">Waiting</option>
+                    <option value="underReview">Under Review</option>
+                  </select>
+                  <select
+                    className="form-select form-select-sm"
+                    value={sortBy}
+                    onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
+                    style={{ minWidth: '180px', paddingRight: '2.5rem' }}
+                  >
+                    <option value="updated_at">Sort: Latest Updated</option>
+                    <option value="date_of_submission">Sort: Submitted Date</option>
+                    <option value="available_online_date">Sort: Published Date</option>
+                  </select>
+                  <button className="add-btn" onClick={handleAdd} style={{ whiteSpace: 'nowrap' }}>Add +</button>
+                </div>
               </div>
 
               <div className="research-grid">
@@ -249,7 +309,7 @@ const PublicationsPage: React.FC = () => {
                             <button className="action-btn share-btn" title="Share publication" aria-label="Share publication">
                               <i className="fas fa-link" aria-hidden="true"></i>
                             </button>
-                            <button className="action-btn edit-btn" title="Edit publication" aria-label="Edit publication">
+                            <button className="action-btn edit-btn" onClick={() => handleEdit(journal)} title="Edit publication" aria-label="Edit publication">
                               <i className="fas fa-edit" aria-hidden="true"></i>
                             </button>
                             <button className="action-btn delete-btn" onClick={() => handleDelete(journal.id)} title="Delete publication" aria-label="Delete publication">
@@ -282,8 +342,14 @@ const PublicationsPage: React.FC = () => {
                           </span>
                           <span className="detail-separator">•</span>
                           <span className="detail-item">
-                            <span className="detail-label">Submitted:</span>
-                            <span className="detail-value">{formatDate(journal.date_of_submission)}</span>
+                            <span className="detail-label">
+                              {journal.status === 'published' ? 'Published:' : 'Submitted:'}
+                            </span>
+                            <span className="detail-value">
+                              {journal.status === 'published' && journal.available_online_date
+                                ? formatDate(journal.available_online_date)
+                                : formatDate(journal.date_of_submission)}
+                            </span>
                           </span>
                           {journal.doi && (
                             <>
@@ -345,6 +411,24 @@ const PublicationsPage: React.FC = () => {
                       <i className="fas fa-book"></i>Book
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showEditModal && selectedJournalForEdit && (
+          <div className="category-modal-overlay" onClick={handleCancelEdit}>
+            <div className="category-modal" onClick={(e: MouseEvent) => e.stopPropagation()}>
+              <div className="category-modal-header">
+                <h5 className="category-modal-title">Edit Publication</h5>
+                <button type="button" className="category-modal-close" onClick={handleCancelEdit} aria-label="Close">×</button>
+              </div>
+              <div className="category-modal-body">
+                <p>Are you sure you want to send an edit request for <strong>{selectedJournalForEdit.title}</strong>?</p>
+                <div className="d-flex justify-content-end gap-2 mt-4">
+                  <button type="button" className="btn btn-secondary" onClick={handleCancelEdit}>Cancel</button>
+                  <button type="button" className="btn btn-primary" onClick={handleConfirmEdit}>Confirm</button>
                 </div>
               </div>
             </div>

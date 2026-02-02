@@ -122,12 +122,25 @@ const JournalsList: React.FC = () => {
               <div className="col-md-10">
                 <h5 style={{ lineHeight: '32px' }}>{journal.title}</h5>
                 <p>{journal.authors}</p>
-                <span>
-                  <p style={{ fontSize: '13px' }}>
-                    <span style={{ backgroundColor: '#AFDBF7', padding: '5px' }}>{journal.type}</span>
-                    <span> {journal.journal_options_name}, Year {new Date(journal.date_of_submission).getFullYear()}</span>
-                  </p>
-                </span>
+
+                {/* New Prominent Metadata Section */}
+                <div className="metadata-row mt-2 p-2 rounded" style={{ backgroundColor: '#f0f2f5', borderLeft: '4px solid #0f62fe' }}>
+                  <div className="row">
+                    <div className="col-md-4">
+                      <small className="text-muted d-block uppercase-label">Status</small>
+                      <span className="fw-bold text-primary">{journal.journal_options_name}</span>
+                    </div>
+                    <div className="col-md-4">
+                      <small className="text-muted d-block uppercase-label">Type</small>
+                      <span className="fw-medium">{journal.type}</span>
+                    </div>
+                    <div className="col-md-4">
+                      <small className="text-muted d-block uppercase-label">Submitted On</small>
+                      <span className="fw-medium">{formatDate(journal.date_of_submission)}</span>
+                    </div>
+                  </div>
+                </div>
+
               </div>
               <div className="col-md-2">
                 <div className="actions" style={{ marginTop: '20px' }}>
@@ -140,8 +153,9 @@ const JournalsList: React.FC = () => {
                     <i className="fas fa-trash"></i>
                   </button>
                 </div>
-                <div>
-                  <p className="text-muted" style={{ fontSize: '13px' }}>Last edited: {formatDate(journal.updated_at)}</p>
+                <div className="mt-2 text-end">
+                  {/* Removed duplicate date info since it's now in the main block, keeping only last edited if needed */}
+                  <p className="text-muted" style={{ fontSize: '12px' }}>Last edited: {formatDate(journal.updated_at)}</p>
                 </div>
               </div>
             </div>
