@@ -535,9 +535,27 @@ const Dashboard: React.FC = () => {
 
       case "author_names":
         if (Array.isArray(journalItem.author_names)) {
-          return journalItem.author_names
-            .map((name) => name.replace(/\s*\[.*?\]/g, "").trim())
-            .join(", ");
+          return (
+            <>
+              {journalItem.author_names.map((name, index) => {
+                const cleanName = name.replace(/\s*\[.*?\]/g, "").trim();
+                const hasAsterisk = cleanName.endsWith('*');
+                return (
+                  <span key={index}>
+                    {index > 0 && ', '}
+                    {hasAsterisk ? (
+                      <>
+                        {cleanName.slice(0, -1)}
+                        <span style={{ color: 'red', fontWeight: 'bold' }}>*</span>
+                      </>
+                    ) : (
+                      cleanName
+                    )}
+                  </span>
+                );
+              })}
+            </>
+          );
         }
         return "-";
 
@@ -1081,7 +1099,19 @@ const Dashboard: React.FC = () => {
             <div className="col-md-6">
               <p><strong>Authors:</strong></p>
               <ul className="list-unstyled">
-                {journal.author_names ? journal.author_names.map((author, index) => <li key={index}>{author.trim()}</li>) : <li>N/A</li>}
+                {journal.author_names ? journal.author_names.map((author, index) => {
+                  const trimmed = author.trim();
+                  const hasAsterisk = trimmed.includes('*');
+                  if (hasAsterisk) {
+                    const parts = trimmed.split('*');
+                    return (
+                      <li key={index}>
+                        {parts[0]}<span style={{ color: 'red', fontWeight: 'bold' }}>*</span>{parts.slice(1).join('*')}
+                      </li>
+                    );
+                  }
+                  return <li key={index}>{trimmed}</li>;
+                }) : <li>N/A</li>}
               </ul>
             </div>
             <div className="col-md-6">

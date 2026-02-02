@@ -273,11 +273,12 @@ const adminModel = {
                     GROUP_CONCAT(DISTINCT 
                         CONCAT(
                             va.author_name,
+                            CASE WHEN aj.is_first_author THEN '*' ELSE '' END,
                             CASE WHEN va.erp_id IS NOT NULL 
                                  THEN CONCAT(' [', va.erp_id, ']') 
                                  ELSE '' 
                             END
-                        ) ORDER BY va.author_id
+                        ) ORDER BY aj.is_first_author DESC, va.author_id
                     ) as author_names,
                     GROUP_CONCAT(DISTINCT ji.index_name ORDER BY ji.id) as index_names
                 FROM journals j
@@ -324,11 +325,12 @@ const adminModel = {
                     GROUP_CONCAT(DISTINCT 
                         CONCAT(
                             va.author_name,
+                            CASE WHEN aj.is_first_author THEN '*' ELSE '' END,
                             CASE WHEN va.erp_id IS NOT NULL 
                                  THEN CONCAT(' [', va.erp_id, ']') 
                                  ELSE '' 
                             END
-                        ) ORDER BY va.author_id
+                        ) ORDER BY aj.is_first_author DESC, va.author_id
                     ) as author_names,
                     GROUP_CONCAT(DISTINCT ji.index_name ORDER BY ji.id) as index_names,
                     er.status as edit_request_status,

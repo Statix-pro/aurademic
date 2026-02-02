@@ -320,7 +320,21 @@ const PublicationsPage: React.FC = () => {
                         <div className="compact-details">
                           <span className="detail-item">
                             <span className="detail-label">Authors:</span>
-                            <span className="detail-value">{journal.authors}</span>
+                            <span className="detail-value">
+                              {journal.authors?.split(', ').map((author, index) => (
+                                <span key={index}>
+                                  {index > 0 && ', '}
+                                  {author.endsWith('*') ? (
+                                    <>
+                                      {author.slice(0, -1)}
+                                      <span style={{ color: 'red', fontWeight: 'bold' }}>*</span>
+                                    </>
+                                  ) : (
+                                    author
+                                  )}
+                                </span>
+                              ))}
+                            </span>
                           </span>
                           <span className="detail-separator">•</span>
                           <span className="detail-item">
