@@ -1,6 +1,7 @@
 /* Publications Page Styles */
 .publications-page {
-  background-color: #f0f6ff; /* Light blue background - matching journalform theme */
+  background-color: #f0f6ff;
+  /* Light blue background - matching journalform theme */
   min-height: 100vh;
   padding: 20px;
   font-family: 'Roboto', sans-serif;
@@ -31,7 +32,8 @@
 .score-card-title {
   font-size: 20px;
   font-weight: 600;
-  color: #0069ab; /* Primary blue - matching journalform theme */
+  color: #0069ab;
+  /* Primary blue - matching journalform theme */
   margin: 0;
 }
 
@@ -45,13 +47,16 @@
   padding: 8px 12px;
   border: 1px solid #e0e0e0;
   border-radius: 12px;
-  background: #fcfdff; /* Very light blue tint - matching journalform theme */
+  background: #fcfdff;
+  /* Very light blue tint - matching journalform theme */
   font-size: 14px;
-  color: #5d6b8a; /* Blue-gray text - matching journalform theme */
+  color: #5d6b8a;
+  /* Blue-gray text - matching journalform theme */
 }
 
 .sort-btn {
-  background: #0069ab; /* Primary blue - matching journalform theme */
+  background: #0069ab;
+  /* Primary blue - matching journalform theme */
   color: white;
   border: none;
   padding: 8px 16px;
@@ -63,7 +68,8 @@
 }
 
 .sort-btn:hover {
-  background: #005492; /* Darker blue on hover - matching journalform theme */
+  background: #005492;
+  /* Darker blue on hover - matching journalform theme */
   transform: translateY(-1px);
   box-shadow: 0 6px 15px rgba(0, 105, 171, 0.4);
 }
@@ -96,7 +102,8 @@
 .kpi-icon {
   width: 48px;
   height: 48px;
-  background: #0069ab; /* Primary blue - matching journalform theme */
+  background: #0069ab;
+  /* Primary blue - matching journalform theme */
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -113,14 +120,16 @@
 
 .kpi-label {
   font-size: 14px;
-  color: #5d6b8a; /* Blue-gray text - matching journalform theme */
+  color: #5d6b8a;
+  /* Blue-gray text - matching journalform theme */
   font-weight: 500;
 }
 
 .kpi-value {
   font-size: 24px;
   font-weight: 700;
-  color: #4f4f6e; /* Darker blue-gray - matching journalform theme */
+  color: #4f4f6e;
+  /* Darker blue-gray - matching journalform theme */
 }
 
 /* Research Details Section */
@@ -141,12 +150,14 @@
 .research-details-title {
   font-size: 20px;
   font-weight: 600;
-  color: #0069ab; /* Primary blue - matching journalform theme */
+  color: #0069ab;
+  /* Primary blue - matching journalform theme */
   margin: 0;
 }
 
 .add-btn {
-  background: #0069ab; /* Primary blue - matching journalform theme */
+  background: #0069ab;
+  /* Primary blue - matching journalform theme */
   color: white;
   border: none;
   padding: 10px 20px;
@@ -159,7 +170,8 @@
 }
 
 .add-btn:hover {
-  background: #005492; /* Darker blue on hover - matching journalform theme */
+  background: #005492;
+  /* Darker blue on hover - matching journalform theme */
   transform: translateY(-1px);
   box-shadow: 0 6px 15px rgba(0, 105, 171, 0.4);
 }
@@ -194,16 +206,16 @@
   outline-offset: 2px;
 }
 
-.research-id {
-  position: absolute;
-  top: 10px;
-  right: 12px;
+.publications-page .research-id {
+  position: static;
   background: #0069ab;
   color: white;
-  padding: 3px 8px;
+  padding: 3px 10px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 0.75rem;
   font-weight: 600;
+  font-family: 'Roboto Mono', 'Courier New', monospace;
+  letter-spacing: 0.5px;
 }
 
 /* Compact Row Layout */
@@ -456,7 +468,8 @@
   grid-column: 1 / -1;
   text-align: center;
   padding: 40px;
-  color: #5d6b8a; /* Blue-gray text - matching journalform theme */
+  color: #5d6b8a;
+  /* Blue-gray text - matching journalform theme */
   font-size: 16px;
 }
 
@@ -474,26 +487,33 @@
   padding: 8px 12px;
   border: 1px solid #e0e0e0;
   border-radius: 12px;
-  background: #fcfdff; /* Very light blue tint - matching journalform theme */
+  background: #fcfdff;
+  /* Very light blue tint - matching journalform theme */
   font-size: 14px;
-  color: #5d6b8a; /* Blue-gray text - matching journalform theme */
+  color: #5d6b8a;
+  /* Blue-gray text - matching journalform theme */
 }
 
 .pagination-controls button {
   padding: 8px 16px;
   border: 1px solid #e0e0e0;
   border-radius: 12px;
-  background: #fcfdff; /* Very light blue tint - matching journalform theme */
-  color: #5d6b8a; /* Blue-gray text - matching journalform theme */
+  background: #fcfdff;
+  /* Very light blue tint - matching journalform theme */
+  color: #5d6b8a;
+  /* Blue-gray text - matching journalform theme */
   cursor: pointer;
   font-size: 14px;
   transition: all 0.3s ease;
 }
 
 .pagination-controls button:hover:not(:disabled) {
-  background: #e1f0ff; /* Light blue background - matching journalform theme */
-  border-color: #0069ab; /* Primary blue border - matching journalform theme */
-  color: #0069ab; /* Primary blue text - matching journalform theme */
+  background: #e1f0ff;
+  /* Light blue background - matching journalform theme */
+  border-color: #0069ab;
+  /* Primary blue border - matching journalform theme */
+  color: #0069ab;
+  /* Primary blue text - matching journalform theme */
 }
 
 .pagination-controls button:disabled {
@@ -502,7 +522,8 @@
 }
 
 .pagination-controls span {
-  color: #5d6b8a; /* Blue-gray text - matching journalform theme */
+  color: #5d6b8a;
+  /* Blue-gray text - matching journalform theme */
   font-size: 14px;
 }
 
@@ -612,6 +633,7 @@
     opacity: 0;
     transform: translateY(-30px) scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -699,12 +721,10 @@
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(0, 105, 171, 0.1),
-    transparent
-  );
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(0, 105, 171, 0.1),
+      transparent);
   transition: left 0.5s ease;
 }
 
