@@ -121,7 +121,21 @@ const JournalsList: React.FC = () => {
             <div className="row">
               <div className="col-md-10">
                 <h5 style={{ lineHeight: '32px' }}>{journal.title}</h5>
-                <p>{journal.authors}</p>
+                <p>
+                  {journal.authors?.split(', ').map((author, index) => (
+                    <span key={index}>
+                      {index > 0 && ', '}
+                      {author.endsWith('*') ? (
+                        <>
+                          {author.slice(0, -1)}
+                          <span style={{ color: 'red', fontWeight: 'bold' }}>*</span>
+                        </>
+                      ) : (
+                        author
+                      )}
+                    </span>
+                  ))}
+                </p>
 
                 {/* New Prominent Metadata Section */}
                 <div className="metadata-row mt-2 p-2 rounded" style={{ backgroundColor: '#f0f2f5', borderLeft: '4px solid #0f62fe' }}>
