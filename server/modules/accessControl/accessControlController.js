@@ -41,6 +41,50 @@ const accessControlController = {
     }
   },
 
+  async createPermission(req, res) {
+    try {
+      const permission = await accessControlModel.createPermission(req.body || {});
+
+      return res.status(201).json({
+        status: 'success',
+        data: permission,
+      });
+    } catch (error) {
+      return handleError(res, error, 'Failed to create permission');
+    }
+  },
+
+  async updatePermission(req, res) {
+    try {
+      const { permissionId } = req.params;
+      const permission = await accessControlModel.updatePermission(
+        permissionId,
+        req.body || {}
+      );
+
+      return res.json({
+        status: 'success',
+        data: permission,
+      });
+    } catch (error) {
+      return handleError(res, error, 'Failed to update permission');
+    }
+  },
+
+  async deletePermission(req, res) {
+    try {
+      const { permissionId } = req.params;
+      await accessControlModel.deletePermission(permissionId);
+
+      return res.json({
+        status: 'success',
+        message: 'Permission deleted successfully',
+      });
+    } catch (error) {
+      return handleError(res, error, 'Failed to delete permission');
+    }
+  },
+
   async getRoles(req, res) {
     try {
       const roles = await accessControlModel.getRolesWithPermissions();
@@ -78,6 +122,34 @@ const accessControlController = {
       });
     } catch (error) {
       return handleError(res, error, 'Failed to create role');
+    }
+  },
+
+  async updateRole(req, res) {
+    try {
+      const { roleId } = req.params;
+      const role = await accessControlModel.updateRole(roleId, req.body || {});
+
+      return res.json({
+        status: 'success',
+        data: role,
+      });
+    } catch (error) {
+      return handleError(res, error, 'Failed to update role');
+    }
+  },
+
+  async deleteRole(req, res) {
+    try {
+      const { roleId } = req.params;
+      await accessControlModel.deleteRole(roleId);
+
+      return res.json({
+        status: 'success',
+        message: 'Role deleted successfully',
+      });
+    } catch (error) {
+      return handleError(res, error, 'Failed to delete role');
     }
   },
 

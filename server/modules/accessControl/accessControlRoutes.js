@@ -11,9 +11,18 @@ router.use(authMiddleware);
 router.use(superAdminMiddleware);
 
 router.get('/permissions', accessControlController.getPermissions);
+router.post('/permissions', accessControlController.createPermission);
+router.put('/permissions/:permissionId', accessControlController.updatePermission);
+router.delete('/permissions/:permissionId', accessControlController.deletePermission);
+
 router.get('/roles', accessControlController.getRoles);
 router.post('/roles', accessControlController.createRole);
-router.put('/roles/:roleId/permissions', accessControlController.updateRolePermissions);
+router.put('/roles/:roleId', accessControlController.updateRole);
+router.delete('/roles/:roleId', accessControlController.deleteRole);
+router.put(
+  '/roles/:roleId/permissions',
+  accessControlController.updateRolePermissions
+);
 
 router.get('/users', accessControlController.getUsers);
 router.put('/users/:userId/roles', accessControlController.updateUserRoles);
