@@ -1,16 +1,21 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./navbar.css";
-import { Link, NavLink } from "react-router-dom";  // Add NavLink here
-// ... other imports
+import { Link } from "react-router-dom";
 
 import KSRCTLogo from "../../../assets/images/ksrct_logo.png";
 import { useAuth } from "../../../../contexts/AuthContext";
+import {
+  canAccessAdminArea,
+  canManageAccessControl,
+} from "../../../utils/permissionUtils";
 
 const Navbar: React.FC = () => {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navbarRef = useRef<HTMLElement>(null);
+  const showAdminMenu = canAccessAdminArea(user);
+  const showAccessControl = canManageAccessControl(user);
 
   const toggleDropdown = (menuName: string) => {
     setActiveMenu((prev) => (prev === menuName ? null : menuName));
@@ -259,6 +264,48 @@ const Navbar: React.FC = () => {
               </Link>
             </ul>
           </li>
+          {showAdminMenu && (
+            <li className="nav-item">
+              <div
+                className={`nav-item-wrapper ${activeMenu === "Admin" ? "active" : ""}`}
+                onClick={() => toggleDropdown("Admin")}
+              >
+                Admin
+                <svg
+                  className="arrow-icon"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 451.847 451.847"
+                >
+                  <path d="M225.923,323.861L0,97.938l35.355-35.355l190.568,190.568L416.492,62.583l35.355,35.355L225.923,323.861z" />
+                </svg>
+              </div>
+              <ul className={`dropdown ${activeMenu === "Admin" ? "show" : ""}`}>
+                <Link
+                  to="/admin-dashboard"
+                  className="dropdown-li"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    document.body.classList.remove('menu-open');
+                  }}
+                >
+                  <li>Dashboard</li>
+                </Link>
+                {showAccessControl && (
+                  <Link
+                    to="/access-control"
+                    className="dropdown-li"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      document.body.classList.remove('menu-open');
+                    }}
+                  >
+                    <li>Access Control</li>
+                  </Link>
+                )}
+              </ul>
+            </li>
+          )}
           <li className="nav-item">
             <Link
               to="/task"

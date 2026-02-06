@@ -10,7 +10,11 @@ import JournalManagement from '../features/admin/formManagement/JournalFormOptio
 import UserDashboard from '../features/user-dashboard/userdashboard';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from '../contexts/AuthContext';
-import { ProtectedRoute, AdminRoute } from '../shared/components/ProtectedRoute';
+import {
+  ProtectedRoute,
+  AdminRoute,
+  SuperAdminRoute,
+} from '../shared/components/ProtectedRoute';
 import { MsalProvider } from '../shared/components/MsalProvider';
 import ProjectFormOptions from '../features/admin/formManagement/ProjectFormOptions';
 import EventDashboard from '../features/events/components/EventDashboard';
@@ -21,6 +25,7 @@ import Storybook from '../features/storybook/Storybook';
 import FinanceApprovalForm from '../features/finance/financeapproval';
 import UnderConstruction from '../shared/components/ui/UnderConstruction';
 import ProfilePage from '../features/profile/ProfilePage';
+import AccessControlPage from '../features/admin/accessControl/AccessControlPage';
 
 
 function App() {
@@ -158,6 +163,14 @@ function App() {
                   <AdminRoute>
                     <ProjectFormOptions />
                   </AdminRoute>
+                }
+              />
+              <Route
+                path="/access-control"
+                element={
+                  <SuperAdminRoute>
+                    <AccessControlPage />
+                  </SuperAdminRoute>
                 }
               />
               <Route path="/" element={<Navigate to="/home" />} />
