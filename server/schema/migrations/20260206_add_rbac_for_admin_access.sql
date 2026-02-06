@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS permissions (
   action_key VARCHAR(50) NOT NULL,
   permission_key VARCHAR(160) NOT NULL,
   description VARCHAR(255) DEFAULT NULL,
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_permissions_key (permission_key),
@@ -74,37 +75,38 @@ CREATE TABLE IF NOT EXISTS user_roles (
 -- =====================================================
 -- SEED PERMISSIONS
 -- =====================================================
-INSERT INTO permissions (module_key, action_key, permission_key, description)
+INSERT INTO permissions (module_key, action_key, permission_key, description, is_system)
 VALUES
-  ('admin_dashboard', 'read', 'admin_dashboard.read', 'View admin dashboard data'),
-  ('admin_dashboard', 'edit', 'admin_dashboard.edit', 'Edit admin-managed records'),
-  ('admin_dashboard', 'approve', 'admin_dashboard.approve', 'Approve and reject admin workflows'),
-  ('admin_dashboard', 'manage', 'admin_dashboard.manage', 'Full admin dashboard access'),
+  ('admin_dashboard', 'read', 'admin_dashboard.read', 'View admin dashboard data', 1),
+  ('admin_dashboard', 'edit', 'admin_dashboard.edit', 'Edit admin-managed records', 1),
+  ('admin_dashboard', 'approve', 'admin_dashboard.approve', 'Approve and reject admin workflows', 1),
+  ('admin_dashboard', 'manage', 'admin_dashboard.manage', 'Full admin dashboard access', 1),
 
-  ('form_options', 'read', 'form_options.read', 'View form option masters'),
-  ('form_options', 'edit', 'form_options.edit', 'Create and update form options'),
-  ('form_options', 'manage', 'form_options.manage', 'Full control over form options'),
+  ('form_options', 'read', 'form_options.read', 'View form option masters', 1),
+  ('form_options', 'edit', 'form_options.edit', 'Create and update form options', 1),
+  ('form_options', 'manage', 'form_options.manage', 'Full control over form options', 1),
 
-  ('finance', 'read', 'finance.read', 'View finance requests'),
-  ('finance', 'edit', 'finance.edit', 'Edit finance requests'),
-  ('finance', 'approve', 'finance.approve', 'Approve finance workflows'),
+  ('finance', 'read', 'finance.read', 'View finance requests', 1),
+  ('finance', 'edit', 'finance.edit', 'Edit finance requests', 1),
+  ('finance', 'approve', 'finance.approve', 'Approve finance workflows', 1),
 
-  ('publications', 'read', 'publications.read', 'View publication records'),
-  ('publications', 'edit', 'publications.edit', 'Edit publication records'),
+  ('publications', 'read', 'publications.read', 'View publication records', 1),
+  ('publications', 'edit', 'publications.edit', 'Edit publication records', 1),
 
-  ('projects', 'read', 'projects.read', 'View project records'),
-  ('projects', 'edit', 'projects.edit', 'Edit project records'),
+  ('projects', 'read', 'projects.read', 'View project records', 1),
+  ('projects', 'edit', 'projects.edit', 'Edit project records', 1),
 
-  ('events', 'read', 'events.read', 'View events'),
-  ('events', 'edit', 'events.edit', 'Create and edit events'),
+  ('events', 'read', 'events.read', 'View events', 1),
+  ('events', 'edit', 'events.edit', 'Create and edit events', 1),
 
-  ('reports', 'read', 'reports.read', 'View reports'),
-  ('reports', 'manage', 'reports.manage', 'Manage report access and exports'),
+  ('reports', 'read', 'reports.read', 'View reports', 1),
+  ('reports', 'manage', 'reports.manage', 'Manage report access and exports', 1),
 
-  ('access_control', 'read', 'access_control.read', 'View roles and permissions'),
-  ('access_control', 'manage', 'access_control.manage', 'Create roles and assign user access')
+  ('access_control', 'read', 'access_control.read', 'View roles and permissions', 1),
+  ('access_control', 'manage', 'access_control.manage', 'Create roles and assign user access', 1)
 ON DUPLICATE KEY UPDATE
-  description = VALUES(description);
+  description = VALUES(description),
+  is_system = VALUES(is_system);
 
 -- =====================================================
 -- SEED SYSTEM ROLES

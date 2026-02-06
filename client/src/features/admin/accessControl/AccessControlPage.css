@@ -27,10 +27,19 @@
   padding: 16px;
 }
 
-.role-form-grid {
+.role-form-grid,
+.permission-form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
+}
+
+.permission-form-actions,
+.role-chip-actions,
+.table-action-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .permissions-container {
@@ -65,7 +74,7 @@
 
 .role-badges {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 12px;
   margin-top: 14px;
 }
@@ -76,7 +85,13 @@
   background: #f7fafc;
   padding: 12px;
   display: grid;
-  gap: 6px;
+  gap: 8px;
+}
+
+.role-chip-detailed .role-permission-grid {
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .role-chip-title {
@@ -84,12 +99,6 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-}
-
-.role-chip p {
-  margin: 0;
-  color: #4d5968;
-  font-size: 0.9rem;
 }
 
 .users-header-row {
@@ -119,7 +128,7 @@
 .role-checkboxes {
   display: grid;
   gap: 4px;
-  max-height: 200px;
+  max-height: 220px;
   overflow-y: auto;
   padding-right: 4px;
 }
