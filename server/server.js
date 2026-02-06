@@ -14,6 +14,7 @@ import financeRoutes from './modules/events/finance/financeRoutes.js';
 import financePageRoutes from './modules/finance/financeRoutes.js';
 import updatesRoutes from './modules/events/updates/updatesRoutes.js';
 import documentsRoutes from './modules/events/documents/documentsRoutes.js';
+import accessControlRoutes from './modules/accessControl/accessControlRoutes.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import path from 'path';
 import fs from 'fs';
@@ -113,6 +114,7 @@ app.use('/api/finance', financeRoutes);
 app.use('/api/finance-requests', financePageRoutes);
 app.use('/api/updates', updatesRoutes);
 app.use('/api/documents', documentsRoutes);
+app.use('/api/access-control', accessControlRoutes);
 
 // Add 404 handler
 app.use((req, res) => {
