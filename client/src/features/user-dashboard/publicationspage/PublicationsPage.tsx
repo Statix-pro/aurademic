@@ -341,13 +341,8 @@ const PublicationsPage: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Right side: Fixed column for ID, Type, Status, Date, and Actions */}
+                        {/* Right side: Fixed column for Type, Status, Date, and Actions */}
                         <div className="metadata-fixed-column text-end" style={{ minWidth: '220px', flexShrink: 0 }}>
-                          {/* ID Row at top */}
-                          <div className="d-flex justify-content-end align-items-center mb-2">
-                            <span className="research-id" aria-label={`Publication ID ${journal.id}`}>{journal.id}</span>
-                          </div>
-
                           {/* Action buttons with Type badge */}
                           <div className="research-actions mb-3 d-flex justify-content-end align-items-center" role="group" aria-label="Publication actions">
                             {/* Type badge */}
@@ -381,6 +376,8 @@ const PublicationsPage: React.FC = () => {
                               {journal.status === 'published' && journal.available_online_date
                                 ? formatDate(journal.available_online_date)
                                 : formatDate(journal.date_of_submission)}
+                              <span className="mx-2">•</span>
+                              <span className="research-id" aria-label={`Publication ID ${journal.id}`}>ID: {journal.id}</span>
                             </span>
                           </div>
                         </div>
