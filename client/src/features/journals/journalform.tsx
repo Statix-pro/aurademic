@@ -178,7 +178,8 @@ const JournalForm: React.FC = () => {
     'International',
     'IITs',
     'NITs',
-    'National Research Labs'
+    'National Research Labs',
+    'Nil'
   ];
 
   // Available Acknowledgement options
@@ -2276,7 +2277,7 @@ const JournalForm: React.FC = () => {
     // Keywords validation (optional for all types)
     if (keywords) {
       const keywordList = keywords
-        .split(',')
+        .split(';')
         .map((k) => k.trim())
         .filter((k) => k);
       if (keywordList.length < 3) {
@@ -4116,7 +4117,7 @@ const JournalForm: React.FC = () => {
                       id="keywords"
                       name="keywords"
                       className="form-control"
-                      placeholder="Enter keywords separated by commas "
+                      placeholder="Enter keywords separated by semicolons "
                       value={keywords}
                       onChange={(e) => setKeywords(e.target.value)}
                       disabled={!editMode && isViewMode}
@@ -4366,69 +4367,34 @@ const JournalForm: React.FC = () => {
                       {/* Credit To Field */}
                       {(selectedIndexes.includes('SCIE') || selectedIndexes.includes('Scopus') || selectedIndexes.includes('PubMed') || selectedIndexes.includes('Google Scholar')) && authors.length > 0 && (
                         <div className="metric-item-vertical mb-3">
-                          <div className="d-flex justify-content-between align-items-center">
-                            <label className="form-label mb-0">Credit to</label>
-                            <div className="d-flex gap-2">
-                              <select
-                                className="form-control"
-                                value={selectedCreditTo[0] || ''}
-                                onChange={(e) => {
-                                  const newSelected = [...selectedCreditTo];
-                                  newSelected[0] = e.target.value;
-                                  setSelectedCreditTo(newSelected.filter(v => v));
-                                }}
-                                disabled={!editMode && isViewMode}
-                                style={{ minWidth: '150px' }}
-                              >
-                                <option value="">Select Author 1</option>
-                                {authors
-                                  .filter(
-                                    (author) => author.name && author.name.trim()
-                                  )
-                                  .map((author) => (
-                                    <option
-                                      key={author.id}
-                                      value={
-                                        author.author_id || author.register_no
-                                      }
-                                    >
-                                      {author.name} (
-                                      {author.author_id || author.register_no})
-                                    </option>
-                                  ))}
-                              </select>
-                              {selectedIndexes.includes('SCIE') && (
-                                <select
-                                  className="form-control"
-                                  value={selectedCreditTo[1] || ''}
-                                  onChange={(e) => {
-                                    const newSelected = [...selectedCreditTo];
-                                    newSelected[1] = e.target.value;
-                                    setSelectedCreditTo(newSelected.filter(v => v));
-                                  }}
-                                  disabled={!editMode && isViewMode}
-                                  style={{ minWidth: '150px' }}
+                          <label className="form-label mb-2">Credit to</label>
+                          <select
+                            className="form-control reference-number-input"
+                            value={selectedCreditTo[0] || ''}
+                            onChange={(e) => {
+                              const newSelected = [...selectedCreditTo];
+                              newSelected[0] = e.target.value;
+                              setSelectedCreditTo(newSelected.filter(v => v));
+                            }}
+                            disabled={!editMode && isViewMode}
+                          >
+                            <option value="">Select Author</option>
+                            {authors
+                              .filter(
+                                (author) => author.name && author.name.trim() && author.designation === 'faculty'
+                              )
+                              .map((author) => (
+                                <option
+                                  key={author.id}
+                                  value={
+                                    author.author_id || author.register_no
+                                  }
                                 >
-                                  <option value="">Select Author 2</option>
-                                  {authors
-                                    .filter(
-                                      (author) => author.name && author.name.trim()
-                                    )
-                                    .map((author) => (
-                                      <option
-                                        key={author.id}
-                                        value={
-                                          author.author_id || author.register_no
-                                        }
-                                      >
-                                        {author.name} (
-                                        {author.author_id || author.register_no})
-                                      </option>
-                                    ))}
-                                </select>
-                              )}
-                            </div>
-                          </div>
+                                  {author.name} (
+                                  {author.author_id || author.register_no})
+                                </option>
+                              ))}
+                          </select>
                         </div>
                       )}
 
