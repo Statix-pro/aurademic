@@ -1,5 +1,6 @@
 import './config/env.js';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import cors from 'cors';
 import journalRoutes from './modules/journal/journalRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
@@ -14,6 +15,7 @@ import financeRoutes from './modules/events/finance/financeRoutes.js';
 import financePageRoutes from './modules/finance/financeRoutes.js';
 import updatesRoutes from './modules/events/updates/updatesRoutes.js';
 import documentsRoutes from './modules/events/documents/documentsRoutes.js';
+import accessControlRoutes from './modules/accessControl/accessControlRoutes.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import path from 'path';
 import fs from 'fs';
@@ -47,6 +49,16 @@ app.get('/api/debug/config', (req, res) => {
 });
 
 app.use(cors(corsOptions));
+
+// Global Rate Limiter: 3000 requests per 15 minutes
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3000,
+  message: 'Too many requests from this IP, please try again after 15 minutes',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(globalLimiter);
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -118,6 +130,7 @@ app.use('/api/finance', financeRoutes);
 app.use('/api/finance-requests', financePageRoutes);
 app.use('/api/updates', updatesRoutes);
 app.use('/api/documents', documentsRoutes);
+app.use('/api/access-control', accessControlRoutes);
 
 // Add 404 handler
 app.use((req, res) => {

@@ -696,7 +696,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
   };
 
   const handleSubmitToBackend = async (): Promise<void> => {
-    console.log("🔴 Finance Submit button clicked!");
+    // console.log("🔴 Finance Submit button clicked!");
 
     // Prepare finance data
     const financeData = {
@@ -741,11 +741,11 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
         })),
     };
 
-    console.log("🔴 Prepared finance data:", financeData);
+    // console.log("🔴 Prepared finance data:", financeData);
 
     try {
       const response = await authenticityUtility.post("/finance", financeData);
-      console.log("🟢 Finance backend response:", response);
+      // console.log("🟢 Finance backend response:", response);
       alert("✅ Finance data submitted successfully!");
       goToTab("updates");
     } catch (error: any) {

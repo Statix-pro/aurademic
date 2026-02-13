@@ -102,6 +102,49 @@ const adminController = {
     }
   },
 
+  async updateJournalSubmissionApproval(req, res) {
+    try {
+      const journalId = parseInt(req.params.id, 10);
+      const { status, admin_comment } = req.body;
+
+      if (!Number.isInteger(journalId) || journalId <= 0) {
+        return res.status(400).json({
+          message: 'Invalid journal ID',
+        });
+      }
+
+      if (!['approved', 'rejected'].includes(status)) {
+        return res.status(400).json({
+          message: "Status must be either 'approved' or 'rejected'",
+        });
+      }
+
+      const updatedJournal = await adminModel.updateJournalSubmissionApproval(
+        journalId,
+        status,
+        admin_comment,
+        req.user.id
+      );
+
+      if (!updatedJournal) {
+        return res.status(404).json({
+          message: 'Journal not found',
+        });
+      }
+
+      return res.status(200).json({
+        message: `Journal submission ${status} successfully`,
+        data: updatedJournal,
+      });
+    } catch (error) {
+      console.error('Error in updateJournalSubmissionApproval:', error);
+      return res.status(500).json({
+        message: 'Error updating journal submission approval',
+        error: error.message,
+      });
+    }
+  },
+
   // Journal Request Management methods
   async getAllJournalRequests(req, res) {
     try {

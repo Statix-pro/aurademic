@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, ChangeEvent } from "react";
+import React, { useState, useEffect, useCallback, ChangeEvent, useRef } from "react";
 import authenticityUtility from "../../shared/utils/authenticityUtility";
-import { Pencil, Trash2, Eye, Check, X } from "lucide-react";
-import { Modal, Button } from "react-bootstrap";
+import { Pencil, Trash2, Eye, Check, X, Settings } from "lucide-react";
+import { Modal, Button, Dropdown } from "react-bootstrap";
 import Navbar from "../../shared/components/layout/navbar/navbar";
 import "./admindashboard.css";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
@@ -40,6 +40,8 @@ interface Journal {
   title: string;
   journal_name?: string;
   publication_status?: string;
+  admin_approval_status?: string;
+  admin_approval_comment?: string | null;
   submission_date?: string;
   author_names?: string[];
   index_names?: string[];
@@ -111,8 +113,9 @@ const defaultColumnConfig: ColumnConfig = {
     title: { show: true, order: 0, label: "Title", group: "Essential" },
     journal_name: { show: true, order: 1, label: "Journal Name", group: "Essential" },
     publication_status: { show: true, order: 2, label: "Status", group: "Essential" },
-    submission_date: { show: true, order: 3, label: "Submission Date", group: "Essential" },
-    author_names: { show: true, order: 4, label: "Authors", group: "Details" },
+    submission_approval_status: { show: true, order: 3, label: "Submission Approval", group: "Essential" },
+    submission_date: { show: true, order: 4, label: "Submission Date", group: "Essential" },
+    author_names: { show: true, order: 5, label: "Authors", group: "Details" },
     volume: { show: false, order: 6, label: "Volume", group: "Details" },
     issue: { show: false, order: 7, label: "Issue", group: "Details" },
     page_numbers: { show: false, order: 8, label: "Page Numbers", group: "Details" },
@@ -168,6 +171,25 @@ const Dashboard: React.FC = () => {
   const [adminComment, setAdminComment] = useState("");
   const [showStatusDetailsModal, setShowStatusDetailsModal] = useState(false);
   const [selectedJournalForStatus, setSelectedJournalForStatus] = useState<number | null>(null);
+  const [isColumnDropdownOpen, setIsColumnDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsColumnDropdownOpen(false);
+      }
+    };
+
+    if (isColumnDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isColumnDropdownOpen]);
 
   const [columnConfig, setColumnConfig] = useState<ColumnConfig>(() => {
     const savedConfig = localStorage.getItem("columnConfig");
@@ -286,6 +308,33 @@ const Dashboard: React.FC = () => {
       console.error("Error rejecting journal request:", err);
       const error = err as { message?: string };
       setError("Error rejecting journal request: " + error.message);
+    }
+  };
+
+  const handleJournalSubmissionApproval = async (
+    journalId: number,
+    status: "approved" | "rejected"
+  ) => {
+    try {
+      const response = await authenticityUtility.patch(
+        `/admin/journals/${journalId}/submission-approval`,
+        { status, admin_comment: adminComment }
+      ) as { message?: string };
+
+      alert(
+        response.message ||
+          `Journal submission ${status === "approved" ? "approved" : "rejected"} successfully`
+      );
+      setAdminComment("");
+      fetchData();
+    } catch (err: unknown) {
+      console.error("Error updating journal submission approval:", err);
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setError(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to update journal submission approval"
+      );
     }
   };
 
@@ -514,8 +563,77 @@ const Dashboard: React.FC = () => {
       case "date_of_submission":
         return projectItem.date_of_submission ? formatDateLocal(projectItem.date_of_submission as string) : "-";
 
+      case "submission_approval_status": {
+        const rawStatus = (journalItem.admin_approval_status as string) || "pending";
+        const approvalStatus =
+          rawStatus === "approved" || rawStatus === "rejected"
+            ? rawStatus
+            : "pending";
+
+        return (
+          <div className="submission-approval-cell">
+            <span className={`badge submission-approval-badge ${approvalStatus}`}>
+              {approvalStatus === "approved"
+                ? "Approved"
+                : approvalStatus === "rejected"
+                  ? "Rejected"
+                  : "Pending"}
+            </span>
+            <div className="submission-approval-actions">
+              {approvalStatus !== "approved" && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-success"
+                  onClick={() =>
+                    handleJournalSubmissionApproval(item.id, "approved")
+                  }
+                  title="Approve submission"
+                >
+                  <Check size={14} />
+                </button>
+              )}
+              {approvalStatus !== "rejected" && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger"
+                  onClick={() =>
+                    handleJournalSubmissionApproval(item.id, "rejected")
+                  }
+                  title="Reject submission"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      }
+
       case "author_names":
-        return Array.isArray(journalItem.author_names) ? journalItem.author_names.join(", ") : "-";
+        if (Array.isArray(journalItem.author_names)) {
+          return (
+            <>
+              {journalItem.author_names.map((name, index) => {
+                const cleanName = name.replace(/\s*\[.*?\]/g, "").trim();
+                const hasAsterisk = cleanName.endsWith('*');
+                return (
+                  <span key={index}>
+                    {index > 0 && ', '}
+                    {hasAsterisk ? (
+                      <>
+                        {cleanName.slice(0, -1)}
+                        <span style={{ color: 'red', fontWeight: 'bold' }}>*</span>
+                      </>
+                    ) : (
+                      cleanName
+                    )}
+                  </span>
+                );
+              })}
+            </>
+          );
+        }
+        return "-";
 
       case "page_numbers":
         return projectItem.pages_from && projectItem.pages_to
@@ -660,9 +778,13 @@ const Dashboard: React.FC = () => {
 
   const renderColumnToggleDropdown = () => {
     const tabKey = activeTab as 'projects' | 'journals';
-    if (tabKey !== 'projects' && tabKey !== 'journals') return null;
+
+    if (tabKey !== 'projects' && tabKey !== 'journals') {
+      return null;
+    }
 
     const columns = Object.entries(columnConfig[tabKey]);
+
     const groupedColumns = columns.reduce((acc, [key, config]) => {
       const group = config.group || "Other";
       if (!acc[group]) acc[group] = [];
@@ -673,52 +795,60 @@ const Dashboard: React.FC = () => {
     const groupOrder = ["Essential", ...Object.keys(groupedColumns).filter((g) => g !== "Essential").sort((a, b) => a.localeCompare(b))];
 
     return (
-      <div className="dropdown mb-3">
+      <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
         <button
-          className="btn btn-secondary dropdown-toggle"
+          className="btn btn-primary dropdown-toggle"
           type="button"
-          id="columnToggleDropdown"
-          data-bs-toggle="dropdown"
-          aria-expanded="false"
+          onClick={() => setIsColumnDropdownOpen(!isColumnDropdownOpen)}
         >
-          <i className="fas fa-columns me-1"></i> Configure Columns
+          <Settings size={16} className="me-2" /> Configure Columns
         </button>
-        <ul
-          className="dropdown-menu p-2"
-          style={{ minWidth: "250px", maxHeight: "70vh", overflowY: "auto" }}
-          aria-labelledby="columnToggleDropdown"
-        >
-          {groupOrder.map((group) => (
-            <div key={group}>
-              {group !== "Essential" && (
-                <li><hr className="dropdown-divider my-2" /></li>
-              )}
-              <li className="dropdown-header fw-bold text-dark mb-2">{group}</li>
-              {groupedColumns[group]?.sort((a, b) => a[1].order - b[1].order).map(([key, config]) => (
-                <li key={key} className="dropdown-item-text">
-                  <div className="form-check">
-                    <input
-                      type="checkbox"
-                      className="form-check-input"
-                      id={`column-toggle-${key}`}
-                      checked={config.show}
-                      onChange={() => toggleColumn(key)}
-                      disabled={group === "Essential"}
-                    />
-                    <label
-                      className={`form-check-label user-select-none ${group === "Essential" ? "text-muted" : ""}`}
-                      htmlFor={`column-toggle-${key}`}
-                      style={{ cursor: group === "Essential" ? "default" : "pointer" }}
-                      title={group === "Essential" ? "Essential columns cannot be hidden" : ""}
-                    >
-                      {config.label}
-                    </label>
+        {isColumnDropdownOpen && (
+          <div
+            className="dropdown-menu show p-2"
+            style={{
+              position: 'absolute',
+              top: '100%',
+              right: 0,
+              minWidth: '100%',
+              width: 'max-content',
+              maxHeight: '70vh',
+              overflowY: 'auto',
+              zIndex: 1050
+            }}
+          >
+            {groupOrder.map((group) => (
+              <div key={group}>
+                {group !== "Essential" && (
+                  <hr className="dropdown-divider my-2" />
+                )}
+                <h6 className="dropdown-header fw-bold text-dark mb-2">{group}</h6>
+                {groupedColumns[group]?.sort((a, b) => a[1].order - b[1].order).map(([key, config]) => (
+                  <div key={key} className="dropdown-item-text">
+                    <div className="form-check">
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        id={`column-toggle-${key}`}
+                        checked={config.show}
+                        onChange={() => toggleColumn(key)}
+                        disabled={group === "Essential"}
+                      />
+                      <label
+                        className={`form-check-label user-select-none ${group === "Essential" ? "text-muted" : ""}`}
+                        htmlFor={`column-toggle-${key}`}
+                        style={{ cursor: group === "Essential" ? "default" : "pointer" }}
+                        title={group === "Essential" ? "Essential columns cannot be hidden" : ""}
+                      >
+                        {config.label}
+                      </label>
+                    </div>
                   </div>
-                </li>
-              ))}
-            </div>
-          ))}
-        </ul>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
@@ -733,7 +863,6 @@ const Dashboard: React.FC = () => {
 
     return (
       <div className="table-responsive">
-        {renderColumnToggleDropdown()}
         <DragDropContext onDragEnd={handleColumnReorder}>
           <table className="table table-striped">
             <Droppable droppableId="table-header" direction="horizontal">
@@ -785,7 +914,7 @@ const Dashboard: React.FC = () => {
     }
 
     return (
-      <div className="d-flex justify-content-between align-items-center">
+      <div className="d-flex justify-content-between align-items-center mt-3">
         <select
           className="form-select w-auto"
           value={itemsPerPage}
@@ -828,7 +957,7 @@ const Dashboard: React.FC = () => {
 
     return (
       <div className="project-details">
-        <h3 className="mb-4">{project.title}</h3>
+        <h3 className="mb-2">{project.title}</h3>
 
         <div className="detail-section">
           <h4>Basic Information</h4>
@@ -946,7 +1075,7 @@ const Dashboard: React.FC = () => {
             <h4>Journal Article</h4>
             <div className="row">
               <div className="col-md-4 mb-2">
-                <a href={getFileUrl(project.file_path as string)} target="_blank" rel="noopener noreferrer" className="btn btn-outline-primary btn-sm w-100">View Journal Article</a>
+                <a href={getFileUrl(project.file_path as string)} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm w-100">View Journal Article</a>
               </div>
             </div>
           </div>
@@ -1006,7 +1135,7 @@ const Dashboard: React.FC = () => {
 
     return (
       <div className="project-details">
-        <h3 className="mb-4">{journal.title}</h3>
+        <h3 className="mb-2">{journal.title}</h3>
 
         <div className="detail-section">
           <h4>Basic Information</h4>
@@ -1046,7 +1175,19 @@ const Dashboard: React.FC = () => {
             <div className="col-md-6">
               <p><strong>Authors:</strong></p>
               <ul className="list-unstyled">
-                {journal.author_names ? journal.author_names.map((author, index) => <li key={index}>{author.trim()}</li>) : <li>N/A</li>}
+                {journal.author_names ? journal.author_names.map((author, index) => {
+                  const trimmed = author.trim();
+                  const hasAsterisk = trimmed.includes('*');
+                  if (hasAsterisk) {
+                    const parts = trimmed.split('*');
+                    return (
+                      <li key={index}>
+                        {parts[0]}<span style={{ color: 'red', fontWeight: 'bold' }}>*</span>{parts.slice(1).join('*')}
+                      </li>
+                    );
+                  }
+                  return <li key={index}>{trimmed}</li>;
+                }) : <li>N/A</li>}
               </ul>
             </div>
             <div className="col-md-6">
@@ -1065,7 +1206,7 @@ const Dashboard: React.FC = () => {
           <div className="row">
             {(journal.file_path as string) && (
               <div className="col-md-4 mb-2">
-                <a href={getFileUrl(journal.file_path as string)} target="_blank" rel="noopener noreferrer" className="btn btn-outline-primary btn-sm w-100">View Document</a>
+                <a href={getFileUrl(journal.file_path as string)} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm w-100">View Document</a>
               </div>
             )}
           </div>
@@ -1193,8 +1334,13 @@ const Dashboard: React.FC = () => {
           <>
             {(activeTab === "projects" || activeTab === "journals") && (
               <>
-                <div className="table-container">{renderTable()}</div>
-                {renderPagination()}
+                <div className="d-flex justify-content-end mb-3" style={{ width: '90%' }}>
+                  {renderColumnToggleDropdown()}
+                </div>
+                <div className="table-container">
+                  {renderTable()}
+                  {renderPagination()}
+                </div>
                 {activeTab === "journals" && <div className="journal-management-container"><JournalManagement /></div>}
                 {activeTab === "projects" && <div className="project-management-container"><ProjectFormOptions /></div>}
               </>
@@ -1212,9 +1358,7 @@ const Dashboard: React.FC = () => {
           <Modal.Body className="modal-body-scroll">
             {activeTab === "projects" ? renderProjectDetails() : renderJournalDetails()}
           </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>Close</Button>
-          </Modal.Footer>
+
         </Modal>
 
         <JournalStatusDetails journalId={selectedJournalForStatus} show={showStatusDetailsModal} onHide={() => { setShowStatusDetailsModal(false); setSelectedJournalForStatus(null); }} />

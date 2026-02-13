@@ -2823,6 +2823,7 @@ const ResearchProjectForm: React.FC = () => {
                       <option value="revisionSubmitted">
                         Revision Submitted
                       </option>
+                      <option value="accepted">Accepted</option>
                       <option value="published">Published</option>
                     </select>
                   </div>
