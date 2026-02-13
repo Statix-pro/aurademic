@@ -144,6 +144,14 @@ const PublicationsPage: React.FC = () => {
     });
   };
 
+  const formatMonthYear = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
   const handleDelete = async (journalId: number) => {
     if (window.confirm('Are you sure you want to delete this journal?')) {
       try {
@@ -332,12 +340,6 @@ const PublicationsPage: React.FC = () => {
                             <span className="me-2">Journal: <span className="text-dark">{journal.journal_name}</span></span>
                             <span className="mx-2">•</span>
                             <span className="me-2">Publisher: <span className="text-dark">{journal.publisher || 'Not specified'}</span></span>
-                            {journal.doi && (
-                              <>
-                                <span className="mx-2">•</span>
-                                <span>DOI: <span className="text-primary">{journal.doi}</span></span>
-                              </>
-                            )}
                           </div>
                         </div>
 
@@ -354,9 +356,15 @@ const PublicationsPage: React.FC = () => {
                             <button className="action-btn view-btn" onClick={() => handleView(journal.id)} title="View publication details" aria-label="View publication details">
                               <i className="fas fa-eye" aria-hidden="true"></i>
                             </button>
-                            <button className="action-btn share-btn" title="Share publication" aria-label="Share publication">
-                              <i className="fas fa-link" aria-hidden="true"></i>
-                            </button>
+                            {journal.doi ? (
+                              <a className="action-btn share-btn" href={journal.doi.startsWith('http') ? journal.doi : `https://doi.org/${journal.doi}`} target="_blank" rel="noopener noreferrer" title={`DOI: ${journal.doi}`} aria-label="Open DOI link">
+                                <i className="fas fa-link" aria-hidden="true"></i>
+                              </a>
+                            ) : (
+                              <button className="action-btn share-btn" disabled title="No DOI available" aria-label="No DOI available" style={{ opacity: 0.4, cursor: 'not-allowed' }}>
+                                <i className="fas fa-link" aria-hidden="true"></i>
+                              </button>
+                            )}
                             <button className="action-btn edit-btn" onClick={() => handleEdit(journal)} title="Edit publication" aria-label="Edit publication">
                               <i className="fas fa-edit" aria-hidden="true"></i>
                             </button>
@@ -374,7 +382,7 @@ const PublicationsPage: React.FC = () => {
                             <span className="text-muted" style={{ fontSize: '0.75rem' }}>
                               {journal.status === 'published' ? 'Published: ' : 'Submitted: '}
                               {journal.status === 'published' && journal.available_online_date
-                                ? formatDate(journal.available_online_date)
+                                ? formatMonthYear(journal.available_online_date)
                                 : formatDate(journal.date_of_submission)}
                               <span className="mx-2">•</span>
                               <span className="research-id" aria-label={`Publication ID ${journal.id}`}>ID: {journal.id}</span>
