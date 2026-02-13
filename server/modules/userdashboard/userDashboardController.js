@@ -74,7 +74,6 @@ const userDashboardController = {
   async getUserJournals(req, res) {
     try {
       const userId = req.user.id;
-      const userEmail = req.user.email;
 
       if (!userId) {
         return res.status(400).json({
@@ -85,11 +84,15 @@ const userDashboardController = {
 
       const page = parseInt(req.query.page) || 1;
       const perPage = parseInt(req.query.per_page) || 10;
+      const status = req.query.status || null; // null means all statuses
+      const sortBy = req.query.sort_by || 'updated_at'; // default sort by updated_at
 
       const { journals, total } = await userDashboardModel.getUserJournals(
         userId,
         page,
-        perPage
+        perPage,
+        status,
+        sortBy
       );
 
       // The journals array is directly what we want to send
@@ -188,6 +191,13 @@ const userDashboardController = {
         message: 'Journal deleted successfully',
       });
     } catch (error) {
+      if (error.statusCode === 403) {
+        return res.status(403).json({
+          status: 'error',
+          message: error.message,
+        });
+      }
+
       console.error('Error deleting journal:', error);
       res.status(500).json({
         status: 'error',

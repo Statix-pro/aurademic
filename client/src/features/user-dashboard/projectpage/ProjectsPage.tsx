@@ -200,11 +200,54 @@ const ProjectsPage: React.FC = () => {
                 {projects && projects.length > 0 ? (
                   projects.map((project) => (
                     <div key={project.id} className="research-card compact-row">
-                      <div className="research-id" aria-label={`Project ID ${project.id}`}>{project.id}</div>
-                      <div className="compact-content">
-                        <div className="compact-header">
-                          <h6 className="research-title">{project.title}</h6>
-                          <div className="research-actions" role="group" aria-label="Project actions">
+                      <div className="d-flex w-100 align-items-start">
+                        {/* Left side: Content */}
+                        <div className="compact-content flex-grow-1 pe-3">
+                          <div className="compact-header">
+                            <h6 className="research-title">{project.title}</h6>
+                          </div>
+                          <div className="compact-details">
+                            <span className="detail-item">
+                              <span className="detail-label">Team:</span>
+                              <span className="detail-value">{project.team_members}</span>
+                            </span>
+                            <span className="detail-separator">•</span>
+                            <span className="detail-item">
+                              <span className="detail-label">Agency:</span>
+                              <span className="detail-value">{project.agency_name || 'Not specified'}</span>
+                            </span>
+                            <span className="detail-separator">•</span>
+                            <span className="detail-item">
+                              <span className="detail-label">Category:</span>
+                              <span className="detail-value">{project.category}</span>
+                            </span>
+                            <span className="detail-separator">•</span>
+                            <span className="detail-item">
+                              <span className="detail-label">Amount:</span>
+                              <span className="detail-value">{project.sanction_order_amount || 'Not set'}</span>
+                            </span>
+                            <span className="detail-separator">•</span>
+                            <span className="detail-item">
+                              <span className="detail-label">Duration:</span>
+                              <span className="detail-value">
+                                {project.duration_years ? `${project.duration_years}y` : ''}
+                                {project.duration_months ? ` ${project.duration_months}m` : ''}
+                                {project.duration_days ? ` ${project.duration_days}d` : ''}
+                                {!project.duration_years && !project.duration_months && !project.duration_days && 'Not specified'}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Right side: ID, Actions, Status */}
+                        <div className="metadata-fixed-column text-end" style={{ minWidth: '220px', flexShrink: 0 }}>
+                          {/* ID Row at top */}
+                          <div className="d-flex justify-content-end align-items-center mb-2">
+                            <span className="research-id" aria-label={`Project ID ${project.id}`}>{project.id}</span>
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="research-actions mb-3 d-flex justify-content-end align-items-center" role="group" aria-label="Project actions">
                             <button className="action-btn view-btn" onClick={() => handleView(project.id)} title="View project details" aria-label="View project details">
                               <i className="fas fa-eye" aria-hidden="true"></i>
                             </button>
@@ -218,46 +261,16 @@ const ProjectsPage: React.FC = () => {
                               <i className="fas fa-trash" aria-hidden="true"></i>
                             </button>
                           </div>
-                        </div>
-                        <div className="compact-details">
-                          <span className="detail-item">
-                            <span className="detail-label">Team:</span>
-                            <span className="detail-value">{project.team_members}</span>
-                          </span>
-                          <span className="detail-separator">•</span>
-                          <span className="detail-item">
-                            <span className="detail-label">Agency:</span>
-                            <span className="detail-value">{project.agency_name || 'Not specified'}</span>
-                          </span>
-                          <span className="detail-separator">•</span>
-                          <span className="detail-item">
-                            <span className="detail-label">Category:</span>
-                            <span className="detail-value">{project.category}</span>
-                          </span>
-                          <span className="detail-separator">•</span>
-                          <span className="detail-item">
-                            <span className="detail-label">Amount:</span>
-                            <span className="detail-value">{project.sanction_order_amount || 'Not set'}</span>
-                          </span>
-                          <span className="detail-separator">•</span>
-                          <span className="detail-item">
-                            <span className="detail-label">Duration:</span>
-                            <span className="detail-value">
-                              {project.duration_years ? `${project.duration_years}y` : ''}
-                              {project.duration_months ? ` ${project.duration_months}m` : ''}
-                              {project.duration_days ? ` ${project.duration_days}d` : ''}
-                              {!project.duration_years && !project.duration_months && !project.duration_days && 'Not specified'}
+
+                          {/* Status and Date - Stacked */}
+                          <div className="d-flex flex-column align-items-end gap-1">
+                            <span className={`status-badge status-${project.submission_status?.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}>
+                              {project.submission_status}
                             </span>
-                          </span>
-                          <span className="detail-separator">•</span>
-                          <span className={`status-badge status-${project.submission_status?.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}>
-                            {project.submission_status}
-                          </span>
-                          <span className="detail-separator">•</span>
-                          <span className="detail-item">
-                            <span className="detail-label">Submitted:</span>
-                            <span className="detail-value">{formatDate(project.date_of_submission)}</span>
-                          </span>
+                            <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+                              Submitted: {formatDate(project.date_of_submission)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -287,3 +300,4 @@ const ProjectsPage: React.FC = () => {
 };
 
 export default ProjectsPage;
+

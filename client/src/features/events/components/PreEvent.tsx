@@ -255,7 +255,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
 
   // Submit handler
   const handleSubmitToBackend = async (): Promise<void> => {
-    console.log("🔴 Submit button clicked!");
+    // console.log("🔴 Submit button clicked!");
 
     try {
       const eventSubmitData = {
@@ -295,10 +295,10 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
         })),
       };
 
-      console.log("🔴 Prepared event data:", eventSubmitData);
+      // console.log("🔴 Prepared event data:", eventSubmitData);
 
       const response = await authenticityUtility.post("/events/pre-event", eventSubmitData);
-      console.log("🟢 Backend response:", response);
+      // console.log("🟢 Backend response:", response);
       alert("✅ Event created successfully!");
       goToTab("finance");
     } catch (error: any) {
@@ -1009,7 +1009,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
           type="button"
           className="event-next-btn"
           onClick={() => {
-            console.log('🔴 Submit & Next clicked, budgetRows:', budgetRows);
+            // console.log('🔴 Submit & Next clicked, budgetRows:', budgetRows);
             setShowBudgetModal(true);
           }}
         >
@@ -1218,10 +1218,10 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
               <button
                 type="button"
                 onClick={async () => {
-                  console.log(
-                    '🔴 Final Submit clicked, current budgetRows:',
-                    budgetRows
-                  );
+                  // console.log(
+                  //   '🔴 Final Submit clicked, current budgetRows:',
+                  //   budgetRows
+                  // );
                   await handleSubmitToBackend();
                   setShowBudgetModal(false);
                 }}

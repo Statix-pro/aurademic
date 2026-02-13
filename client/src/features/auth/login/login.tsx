@@ -119,6 +119,9 @@ const Login: React.FC = () => {
           name: response.account.name || undefined,
           picture: undefined,
           is_admin: false,
+          is_super_admin: false,
+          roles: [],
+          permissions: [],
         };
 
         localStorage.setItem('user', JSON.stringify(user));
