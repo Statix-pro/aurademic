@@ -133,6 +133,15 @@ interface ExternalAuthorDetails {
 type PageOrArticleChoice = 'pages' | 'article';
 type ActiveTab = 'form' | 'status';
 type EditRequestStatus = 'pending' | 'approved' | 'rejected' | 'none' | null;
+type ApprovalWorkflowStatus = 'pending' | 'approved' | 'rejected';
+
+const normalizeApprovalStatus = (value: string | null | undefined): ApprovalWorkflowStatus => {
+  if (value === 'approved' || value === 'rejected') {
+    return value;
+  }
+
+  return 'pending';
+};
 
 const debounce = <T extends (...args: any[]) => any>(func: T, wait: number = 300): T => {
   let timeout: ReturnType<typeof setTimeout>;
@@ -203,8 +212,16 @@ const JournalForm: React.FC = () => {
   const justAddedAuthorRef = useRef<boolean>(false); // Track if author was just added
   const isLoadingJournalDataRef = useRef<boolean>(false); // Track if journal data is being loaded programmatically
   const [isInternational, setIsInternational] = useState<boolean>(false);
-  const [editMode, setEditMode] = useState<boolean>(!urlJournalId);
+  const [editMode, setEditMode] = useState<boolean>(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const mode = searchParams.get('mode');
+    if (mode === 'edit') return true;
+    if (mode === 'view') return false;
+    return !urlJournalId;
+  });
   const [editRequestStatus, setEditRequestStatus] = useState<EditRequestStatus>(null);
+  const [adminApprovalStatus, setAdminApprovalStatus] =
+    useState<ApprovalWorkflowStatus>('pending');
   const [showRejectedAlert, setShowRejectedAlert] = useState<boolean>(false);
   const [canRequestEdit, setCanRequestEdit] = useState<boolean>(false);
   const [othersValue, setOthersValue] = useState<string>('');
@@ -500,18 +517,40 @@ const JournalForm: React.FC = () => {
     } else {
       setIsExistingJournal(false);
       setEditRequestStatus(null);
+      setAdminApprovalStatus('pending');
+      setCanRequestEdit(false);
+      setEditMode(true);
     }
   }, [journalId]);
 
   useEffect(() => {
-    if (journalId) {
-      if (editRequestStatus === 'approved') {
-        setEditMode(true);
-      } else {
-        setEditMode(false);
-      }
+    if (!journalId) {
+      return;
     }
-  }, [editRequestStatus, journalId]);
+
+    const requiresEditRequest = adminApprovalStatus === 'approved';
+    const hasApprovedEditRequest = editRequestStatus === 'approved';
+
+    if (requiresEditRequest && hasApprovedEditRequest && isViewMode) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('mode', 'edit');
+      window.history.replaceState({}, '', url.toString());
+      setEditMode(true);
+      return;
+    }
+
+    if (requiresEditRequest && !hasApprovedEditRequest) {
+      if (!isViewMode) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('mode', 'view');
+        window.history.replaceState({}, '', url.toString());
+      }
+      setEditMode(false);
+      return;
+    }
+
+    setEditMode(!isViewMode);
+  }, [adminApprovalStatus, editRequestStatus, isViewMode, journalId]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -686,25 +725,19 @@ const JournalForm: React.FC = () => {
 
         if (status === 'pending') {
           setEditRequestStatus('pending');
-          setEditMode(false);
         } else if (status === 'rejected') {
           setEditRequestStatus('rejected');
-          setEditMode(false);
         } else if (status === 'none') {
           setEditRequestStatus(null);
-          setEditMode(false);
         } else if (status === 'approved') {
           setEditRequestStatus('approved');
-          setEditMode(true);
         }
       } else {
         setEditRequestStatus(null);
-        setEditMode(false);
       }
     } catch (error) {
       console.error('Error checking edit status:', error);
       setEditRequestStatus(null);
-      setEditMode(false);
     }
   };
 
@@ -828,8 +861,21 @@ const JournalForm: React.FC = () => {
     }));
   };
 
+  const openEditableMode = () => {
+    if (!journalId) {
+      return;
+    }
+
+    setEditMode(true);
+    const url = new URL(window.location.href);
+    url.searchParams.set('mode', 'edit');
+    window.history.replaceState({}, '', url.toString());
+  };
+
   const handleEditRequest = async () => {
-    if (!journalId) return;
+    if (!journalId || adminApprovalStatus !== 'approved' || !canRequestEdit) {
+      return;
+    }
 
     try {
       const response = await authenticityUtility.post(
@@ -1323,6 +1369,11 @@ const JournalForm: React.FC = () => {
           : []
       );
 
+      const normalizedApprovalStatus = normalizeApprovalStatus(
+        journalData.admin_approval_status
+      );
+      setAdminApprovalStatus(normalizedApprovalStatus);
+
       // Check if the current user is the primary or first author
       const currentUserEmail = user?.email;
       if (currentUserEmail && fetchedAuthors.length > 0) {
@@ -1331,7 +1382,7 @@ const JournalForm: React.FC = () => {
             (author.is_primary || author.is_first_author) &&
             author.email === currentUserEmail
         );
-        setCanRequestEdit(isEligible);
+        setCanRequestEdit(isEligible && normalizedApprovalStatus === 'approved');
       } else {
         setCanRequestEdit(false);
       }
@@ -2579,14 +2630,6 @@ const JournalForm: React.FC = () => {
         ? annexureValue.trim()
         : null;
 
-      // Debug logging - can be removed after verification
-      console.log('Journal-specific fields being sent:', {
-        quartile: journalData.quartile,
-        impact_factor: journalData.impact_factor,
-        cite_score: journalData.cite_score,
-        anna_university_listed: journalData.anna_university_listed,
-        anna_university_annexure_no: journalData.anna_university_annexure_no
-      });
     }
 
     try {
@@ -2720,6 +2763,8 @@ const JournalForm: React.FC = () => {
 
       setEditMode(false);
       setEditRequestStatus(null);
+      setAdminApprovalStatus('pending');
+      setCanRequestEdit(false);
 
       // Update URL to view mode
       const url = new URL(window.location.href);
@@ -2755,22 +2800,36 @@ const JournalForm: React.FC = () => {
         <Navbar />
         <div className="container journal-form-container">
           {/* View Mode & Edit Request Alerts */}
-          {isViewMode && (
-            <div className="alert alert-info d-flex justify-content-between align-items-center">
-              <span>View Mode - Read Only Access</span>
-              <button
-                className="btn btn-warning"
-                onClick={handleEditRequest} // This should be your handleEditRequest or setEditMode(true) logic
-                disabled={
-                  !editMode && isViewMode && editRequestStatus === 'pending'
-                }
-              >
-                {editRequestStatus === 'pending'
-                  ? 'Request Pending'
-                  : 'Request Edit'}
-              </button>
-            </div>
-          )}
+          {isViewMode &&
+            (adminApprovalStatus === 'approved' ? (
+              <div className="alert alert-info d-flex justify-content-between align-items-center">
+                <span>
+                  View Mode - This publication is admin approved. Request edit to
+                  modify it.
+                </span>
+                <button
+                  className="btn btn-warning"
+                  onClick={handleEditRequest}
+                  disabled={!canRequestEdit || editRequestStatus === 'pending'}
+                >
+                  {editRequestStatus === 'pending'
+                    ? 'Request Pending'
+                    : canRequestEdit
+                      ? 'Request Edit'
+                      : 'Edit Not Available'}
+                </button>
+              </div>
+            ) : (
+              <div className="alert alert-info d-flex justify-content-between align-items-center">
+                <span>
+                  View Mode - This submission is unapproved. You can edit it
+                  directly.
+                </span>
+                <button className="btn btn-primary" onClick={openEditableMode}>
+                  Edit Now
+                </button>
+              </div>
+            ))}
           {editRequestStatus === 'rejected' && showRejectedAlert && (
             <div
               className="alert alert-danger alert-dismissible fade show"

@@ -82,6 +82,7 @@
 // export default authModel;
 
 import db from '../../config/connection.js';
+import accessControlModel from '../accessControl/accessControlModel.js';
 const authModel = {
   async findOrCreateUser(userData) {
     try {
@@ -160,13 +161,20 @@ const authModel = {
         );
       }
 
+      const authorization =
+        await accessControlModel.getUserAuthorizationSnapshot(user.id);
+      const computedIsAdmin = authorization.isAdmin || Boolean(user.is_admin);
+
       // Return combined user data including employee info
       return {
         id: user.id,
         email: user.email,
         name: employeeData?.full_name || user.name,
         picture: user.picture,
-        is_admin: user.is_admin,
+        is_admin: computedIsAdmin,
+        is_super_admin: authorization.isSuperAdmin,
+        roles: authorization.roles,
+        permissions: authorization.permissions,
         // Employee-specific fields
         employee_id: employeeData?.employee_id || null,
         erp_id: employeeData?.erp_id || null,

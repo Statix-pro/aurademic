@@ -74,7 +74,6 @@ const userDashboardController = {
   async getUserJournals(req, res) {
     try {
       const userId = req.user.id;
-      const userEmail = req.user.email;
 
       if (!userId) {
         return res.status(400).json({
@@ -192,6 +191,13 @@ const userDashboardController = {
         message: 'Journal deleted successfully',
       });
     } catch (error) {
+      if (error.statusCode === 403) {
+        return res.status(403).json({
+          status: 'error',
+          message: error.message,
+        });
+      }
+
       console.error('Error deleting journal:', error);
       res.status(500).json({
         status: 'error',
