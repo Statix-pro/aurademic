@@ -513,15 +513,19 @@ const userDashboardModel = {
   },
 
   async deleteJournal(userId, journalId) {
+    const connection = await db.getConnection();
     try {
+      await connection.beginTransaction();
+
       const userQuery = 'SELECT email FROM users WHERE id = ?';
-      const [[user]] = await db.query(userQuery, [userId]);
+      const [[user]] = await connection.query(userQuery, [userId]);
 
       if (!user?.email) {
+        await connection.rollback();
         return false;
       }
 
-      const [journalRows] = await db.query(
+      const [journalRows] = await connection.query(
         `
           SELECT
             j.id,
@@ -537,11 +541,13 @@ const userDashboardModel = {
                 AND va2.email = ?
             )
           LIMIT 1
+          FOR UPDATE
         `,
         [journalId, user.email]
       );
 
       if (!journalRows.length) {
+        await connection.rollback();
         return false;
       }
 
@@ -558,14 +564,18 @@ const userDashboardModel = {
         throw lockedError;
       }
 
-      const [deleteResult] = await db.query(
+      const [deleteResult] = await connection.query(
         'DELETE FROM journals WHERE id = ?',
         [journalId]
       );
 
+      await connection.commit();
       return deleteResult.affectedRows > 0;
     } catch (error) {
+      await connection.rollback();
       throw error;
+    } finally {
+      connection.release();
     }
   },
 };

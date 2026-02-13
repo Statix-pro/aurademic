@@ -1,4 +1,5 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import accessControlController from './accessControlController.js';
 import {
   authMiddleware,
@@ -9,6 +10,15 @@ const router = express.Router();
 
 router.use(authMiddleware);
 router.use(superAdminMiddleware);
+
+// Rate limiter: 100 requests per 15 minutes
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again after 15 minutes',
+});
+
+router.use(limiter);
 
 router.get('/permissions', accessControlController.getPermissions);
 router.post('/permissions', accessControlController.createPermission);

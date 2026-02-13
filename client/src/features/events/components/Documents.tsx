@@ -467,7 +467,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
           `/documents/${eventId}/doc/${encodeURIComponent(doc)}/upload`,
           formData,
         );
-        console.log("File uploaded:", response);
+        // console.log("File uploaded:", response);
       } catch (error) {
         console.error("Error uploading file:", error);
         alert("Failed to upload file: " + file.name);
