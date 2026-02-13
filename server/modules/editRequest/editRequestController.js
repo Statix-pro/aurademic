@@ -11,6 +11,14 @@ const editRequestController = {
       const { entityType, entityId } = req.params;
       const userId = req.user.id;
 
+      // Validate user email exists (critical for journal workflow check)
+      if (!req.user.email) {
+        return res.status(401).json({
+          success: false,
+          message: 'User email is required for this action.',
+        });
+      }
+
       // Validate entityType
       if (!['journals', 'research_projects'].includes(entityType)) {
         return res.status(400).json({
