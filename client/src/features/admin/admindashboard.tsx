@@ -40,6 +40,8 @@ interface Journal {
   title: string;
   journal_name?: string;
   publication_status?: string;
+  admin_approval_status?: string;
+  admin_approval_comment?: string | null;
   submission_date?: string;
   author_names?: string[];
   index_names?: string[];
@@ -111,8 +113,9 @@ const defaultColumnConfig: ColumnConfig = {
     title: { show: true, order: 0, label: "Title", group: "Essential" },
     journal_name: { show: true, order: 1, label: "Journal Name", group: "Essential" },
     publication_status: { show: true, order: 2, label: "Status", group: "Essential" },
-    submission_date: { show: true, order: 3, label: "Submission Date", group: "Essential" },
-    author_names: { show: true, order: 4, label: "Authors", group: "Details" },
+    submission_approval_status: { show: true, order: 3, label: "Submission Approval", group: "Essential" },
+    submission_date: { show: true, order: 4, label: "Submission Date", group: "Essential" },
+    author_names: { show: true, order: 5, label: "Authors", group: "Details" },
     volume: { show: false, order: 6, label: "Volume", group: "Details" },
     issue: { show: false, order: 7, label: "Issue", group: "Details" },
     page_numbers: { show: false, order: 8, label: "Page Numbers", group: "Details" },
@@ -305,6 +308,33 @@ const Dashboard: React.FC = () => {
       console.error("Error rejecting journal request:", err);
       const error = err as { message?: string };
       setError("Error rejecting journal request: " + error.message);
+    }
+  };
+
+  const handleJournalSubmissionApproval = async (
+    journalId: number,
+    status: "approved" | "rejected"
+  ) => {
+    try {
+      const response = await authenticityUtility.patch(
+        `/admin/journals/${journalId}/submission-approval`,
+        { status, admin_comment: adminComment }
+      ) as { message?: string };
+
+      alert(
+        response.message ||
+          `Journal submission ${status === "approved" ? "approved" : "rejected"} successfully`
+      );
+      setAdminComment("");
+      fetchData();
+    } catch (err: unknown) {
+      console.error("Error updating journal submission approval:", err);
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setError(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to update journal submission approval"
+      );
     }
   };
 
@@ -532,6 +562,52 @@ const Dashboard: React.FC = () => {
       case "submission_date":
       case "date_of_submission":
         return projectItem.date_of_submission ? formatDateLocal(projectItem.date_of_submission as string) : "-";
+
+      case "submission_approval_status": {
+        const rawStatus = (journalItem.admin_approval_status as string) || "pending";
+        const approvalStatus =
+          rawStatus === "approved" || rawStatus === "rejected"
+            ? rawStatus
+            : "pending";
+
+        return (
+          <div className="submission-approval-cell">
+            <span className={`badge submission-approval-badge ${approvalStatus}`}>
+              {approvalStatus === "approved"
+                ? "Approved"
+                : approvalStatus === "rejected"
+                  ? "Rejected"
+                  : "Pending"}
+            </span>
+            <div className="submission-approval-actions">
+              {approvalStatus !== "approved" && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-success"
+                  onClick={() =>
+                    handleJournalSubmissionApproval(item.id, "approved")
+                  }
+                  title="Approve submission"
+                >
+                  <Check size={14} />
+                </button>
+              )}
+              {approvalStatus !== "rejected" && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger"
+                  onClick={() =>
+                    handleJournalSubmissionApproval(item.id, "rejected")
+                  }
+                  title="Reject submission"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      }
 
       case "author_names":
         if (Array.isArray(journalItem.author_names)) {

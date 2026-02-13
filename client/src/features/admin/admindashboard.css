@@ -293,6 +293,33 @@
   color: #000;
 }
 
+.submission-approval-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.submission-approval-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.submission-approval-badge.pending {
+  background-color: #fff3cd;
+  color: #664d03;
+}
+
+.submission-approval-badge.approved {
+  background-color: #d1e7dd;
+  color: #0f5132;
+}
+
+.submission-approval-badge.rejected {
+  background-color: #f8d7da;
+  color: #842029;
+}
+
 .table-container {
   width: 90%;
   background-color: #fff;

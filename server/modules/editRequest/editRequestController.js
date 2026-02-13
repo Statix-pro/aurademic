@@ -2,6 +2,9 @@ import editRequestModel from './editRequestModel.js';
 import journalModel from '../journal/journalModel.js';
 import projectModel from '../project/projectModel.js';
 
+const isRequesterAdmin = (requestUser = {}) =>
+  Boolean(requestUser.isAdmin ?? requestUser.is_admin);
+
 const editRequestController = {
   async createEditRequest(req, res) {
     try {
@@ -18,9 +21,15 @@ const editRequestController = {
 
       // Validate entityId based on entityType
       let entityExists;
+      let workflowAccess = null;
       switch (entityType) {
         case 'journals':
-          entityExists = await journalModel.doesJournalExist(entityId);
+          workflowAccess = await journalModel.getJournalWorkflowAccess(
+            entityId,
+            userId,
+            req.user.email
+          );
+          entityExists = Boolean(workflowAccess);
           break;
         case 'research_projects':
           entityExists = await projectModel.doesProjectExist(entityId);
@@ -33,6 +42,23 @@ const editRequestController = {
           success: false,
           message: 'Entity not found.',
         });
+      }
+
+      if (entityType === 'journals') {
+        if (!isRequesterAdmin(req.user) && !workflowAccess.is_author) {
+          return res.status(403).json({
+            success: false,
+            message: 'You are not authorized to request edit for this journal.',
+          });
+        }
+
+        if (workflowAccess.admin_approval_status !== 'approved') {
+          return res.status(400).json({
+            success: false,
+            message:
+              'Edit requests are available only after admin approval.',
+          });
+        }
       }
 
       // Check for an existing edit request

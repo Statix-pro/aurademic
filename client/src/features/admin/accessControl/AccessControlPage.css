@@ -27,16 +27,13 @@
   padding: 16px;
 }
 
-.role-form-grid,
-.permission-form-grid {
+.role-form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
 }
 
-.permission-form-actions,
-.role-chip-actions,
-.table-action-row {
+.role-action-buttons-wrapper {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -141,4 +138,21 @@
   .search-form {
     width: 100%;
   }
+}
+
+/* Ensure role actions are always visible and clickable */
+.role-action-buttons-wrapper {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: flex !important;
+  height: auto !important;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.role-action-buttons-wrapper .btn {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: inline-flex !important;
 }
