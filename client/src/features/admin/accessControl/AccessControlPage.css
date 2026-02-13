@@ -33,11 +33,7 @@
   gap: 16px;
 }
 
-.role-action-buttons-wrapper {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
+
 
 .permissions-container {
   display: grid;

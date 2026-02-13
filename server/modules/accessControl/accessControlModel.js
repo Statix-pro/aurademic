@@ -166,21 +166,27 @@ const RBAC_MIGRATION_MESSAGE =
 const DYNAMIC_PERMISSION_MIGRATION_MESSAGE =
   'Permission metadata is missing. Run migration 20260207_add_dynamic_permission_management.sql.';
 
-const normalizeRoleCode = (value) =>
-  value
+const normalizeRoleCode = (value) => {
+  if (!value) return '';
+  return value
     .toString()
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .join('_');
+};
 
-const normalizePermissionToken = (value) =>
-  value
+const normalizePermissionToken = (value) => {
+  if (!value) return '';
+  return value
     .toString()
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .join('_');
+};
 
 const uniqueStringArray = (values = []) => [
   ...new Set(

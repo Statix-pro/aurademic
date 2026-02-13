@@ -82,8 +82,11 @@ const PublicationsPage: React.FC = () => {
 
   useEffect(() => {
     fetchJournals(currentPage, itemsPerPage, statusFilter, sortBy);
-    fetchKpiData();
   }, [currentPage, itemsPerPage, statusFilter, sortBy]);
+
+  useEffect(() => {
+    fetchKpiData();
+  }, []);
 
   const fetchJournals = async (
     page: number,
