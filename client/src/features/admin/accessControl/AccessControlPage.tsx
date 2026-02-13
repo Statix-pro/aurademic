@@ -52,44 +52,11 @@ interface ApiCollectionResponse<T> {
   data: T[];
 }
 
-interface PermissionDraft {
-  module_key: string;
-  action_key: string;
-  permission_key: string;
-  description: string;
-}
-
 interface RoleMetaDraft {
   role_name: string;
   description: string;
   is_admin_role: boolean;
 }
-
-const emptyPermissionDraft: PermissionDraft = {
-  module_key: '',
-  action_key: '',
-  permission_key: '',
-  description: '',
-};
-
-const buildPermissionKey = (moduleKey: string, actionKey: string) => {
-  const normalizedModuleKey = moduleKey
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  const normalizedActionKey = actionKey
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-
-  if (!normalizedModuleKey || !normalizedActionKey) {
-    return '';
-  }
-
-  return `${normalizedModuleKey}.${normalizedActionKey}`;
-};
 
 const AccessControlPage: React.FC = () => {
   const { user } = useAuth();
@@ -107,10 +74,6 @@ const AccessControlPage: React.FC = () => {
   const [savingRoleMetaId, setSavingRoleMetaId] = useState<number | null>(null);
   const [deletingRoleId, setDeletingRoleId] = useState<number | null>(null);
 
-  const [permissionCreating, setPermissionCreating] = useState(false);
-  const [permissionSavingId, setPermissionSavingId] = useState<number | null>(null);
-  const [permissionDeletingId, setPermissionDeletingId] = useState<number | null>(null);
-
   const [roleCreationLoading, setRoleCreationLoading] = useState(false);
 
   const [search, setSearch] = useState('');
@@ -121,11 +84,6 @@ const AccessControlPage: React.FC = () => {
   const [roleCode, setRoleCode] = useState('');
   const [roleDescription, setRoleDescription] = useState('');
   const [selectedPermissionKeys, setSelectedPermissionKeys] = useState<string[]>([]);
-
-  const [permissionDraft, setPermissionDraft] = useState<PermissionDraft>(
-    emptyPermissionDraft
-  );
-  const [editingPermissionId, setEditingPermissionId] = useState<number | null>(null);
 
   const currentUserId = Number(user?.id);
 
@@ -201,8 +159,8 @@ const AccessControlPage: React.FC = () => {
       };
       setError(
         errorObj.response?.data?.message ||
-          errorObj.message ||
-          'Failed to load access control data'
+        errorObj.message ||
+        'Failed to load access control data'
       );
     } finally {
       setLoading(false);
@@ -212,127 +170,6 @@ const AccessControlPage: React.FC = () => {
   useEffect(() => {
     fetchAccessControlData();
   }, []);
-
-  const handleCreatePermission = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const payload = {
-      module_key: permissionDraft.module_key,
-      action_key: permissionDraft.action_key,
-      permission_key:
-        permissionDraft.permission_key.trim() ||
-        buildPermissionKey(permissionDraft.module_key, permissionDraft.action_key),
-      description: permissionDraft.description.trim() || undefined,
-    };
-
-    setPermissionCreating(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      await authenticityUtility.post('/access-control/permissions', payload);
-      setPermissionDraft(emptyPermissionDraft);
-      setSuccessMessage('Permission created successfully.');
-      await fetchAccessControlData(search);
-    } catch (err: unknown) {
-      console.error('Failed to create permission', err);
-      const errorObj = err as {
-        response?: { data?: { message?: string } };
-        message?: string;
-      };
-      setError(
-        errorObj.response?.data?.message ||
-          errorObj.message ||
-          'Failed to create permission'
-      );
-    } finally {
-      setPermissionCreating(false);
-    }
-  };
-
-  const startEditPermission = (permission: Permission) => {
-    setEditingPermissionId(permission.id);
-    setPermissionDraft({
-      module_key: permission.module_key,
-      action_key: permission.action_key,
-      permission_key: permission.permission_key,
-      description: permission.description || '',
-    });
-  };
-
-  const cancelEditPermission = () => {
-    setEditingPermissionId(null);
-    setPermissionDraft(emptyPermissionDraft);
-  };
-
-  const handleSavePermission = async () => {
-    if (!editingPermissionId) {
-      return;
-    }
-
-    const payload = {
-      module_key: permissionDraft.module_key,
-      action_key: permissionDraft.action_key,
-      permission_key: permissionDraft.permission_key,
-      description: permissionDraft.description.trim() || undefined,
-    };
-
-    setPermissionSavingId(editingPermissionId);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      await authenticityUtility.put(
-        `/access-control/permissions/${editingPermissionId}`,
-        payload
-      );
-      setSuccessMessage('Permission updated successfully.');
-      cancelEditPermission();
-      await fetchAccessControlData(search);
-    } catch (err: unknown) {
-      console.error('Failed to update permission', err);
-      const errorObj = err as {
-        response?: { data?: { message?: string } };
-        message?: string;
-      };
-      setError(
-        errorObj.response?.data?.message ||
-          errorObj.message ||
-          'Failed to update permission'
-      );
-    } finally {
-      setPermissionSavingId(null);
-    }
-  };
-
-  const handleDeletePermission = async (permission: Permission) => {
-    if (!window.confirm(`Delete permission ${permission.permission_key}?`)) {
-      return;
-    }
-
-    setPermissionDeletingId(permission.id);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      await authenticityUtility.delete(`/access-control/permissions/${permission.id}`);
-      setSuccessMessage('Permission deleted successfully.');
-      await fetchAccessControlData(search);
-    } catch (err: unknown) {
-      console.error('Failed to delete permission', err);
-      const errorObj = err as {
-        response?: { data?: { message?: string } };
-        message?: string;
-      };
-      setError(
-        errorObj.response?.data?.message ||
-          errorObj.message ||
-          'Failed to delete permission'
-      );
-    } finally {
-      setPermissionDeletingId(null);
-    }
-  };
 
   const toggleCreateRolePermissionSelection = (permissionKey: string) => {
     setSelectedPermissionKeys((previousKeys) => {
@@ -379,8 +216,8 @@ const AccessControlPage: React.FC = () => {
       };
       setError(
         errorObj.response?.data?.message ||
-          errorObj.message ||
-          'Failed to create role'
+        errorObj.message ||
+        'Failed to create role'
       );
     } finally {
       setRoleCreationLoading(false);
@@ -425,8 +262,8 @@ const AccessControlPage: React.FC = () => {
       };
       setError(
         errorObj.response?.data?.message ||
-          errorObj.message ||
-          'Failed to update role permissions'
+        errorObj.message ||
+        'Failed to update role permissions'
       );
     } finally {
       setSavingRoleId(null);
@@ -476,8 +313,8 @@ const AccessControlPage: React.FC = () => {
       };
       setError(
         errorObj.response?.data?.message ||
-          errorObj.message ||
-          'Failed to update role'
+        errorObj.message ||
+        'Failed to update role'
       );
     } finally {
       setSavingRoleMetaId(null);
@@ -505,8 +342,8 @@ const AccessControlPage: React.FC = () => {
       };
       setError(
         errorObj.response?.data?.message ||
-          errorObj.message ||
-          'Failed to delete role'
+        errorObj.message ||
+        'Failed to delete role'
       );
     } finally {
       setDeletingRoleId(null);
@@ -551,8 +388,8 @@ const AccessControlPage: React.FC = () => {
       };
       setError(
         errorObj.response?.data?.message ||
-          errorObj.message ||
-          'Failed to update user roles'
+        errorObj.message ||
+        'Failed to update user roles'
       );
     } finally {
       setSavingUserId(null);
@@ -593,8 +430,8 @@ const AccessControlPage: React.FC = () => {
       };
       setError(
         errorObj.response?.data?.message ||
-          errorObj.message ||
-          'Failed to update Super Admin access'
+        errorObj.message ||
+        'Failed to update Super Admin access'
       );
     } finally {
       setSavingUserId(null);
@@ -613,8 +450,8 @@ const AccessControlPage: React.FC = () => {
         <div className="access-control-header">
           <h2>Access Control</h2>
           <p>
-            Fully role-based access: customize permissions and roles, then assign one or
-            more roles to users.
+            Fully role-based access: create roles, map existing permissions, and assign
+            roles to users.
           </p>
         </div>
 
@@ -630,157 +467,6 @@ const AccessControlPage: React.FC = () => {
         ) : (
           <>
             <section className="access-card">
-              <h4>Permission Catalog</h4>
-              <Form onSubmit={handleCreatePermission}>
-                <div className="permission-form-grid">
-                  <Form.Group>
-                    <Form.Label>Module Key *</Form.Label>
-                    <Form.Control
-                      type="text"
-                      placeholder="e.g. admissions"
-                      value={permissionDraft.module_key}
-                      onChange={(event) =>
-                        setPermissionDraft((previous) => ({
-                          ...previous,
-                          module_key: event.target.value,
-                        }))
-                      }
-                      required
-                    />
-                  </Form.Group>
-
-                  <Form.Group>
-                    <Form.Label>Action Key *</Form.Label>
-                    <Form.Control
-                      type="text"
-                      placeholder="e.g. approve"
-                      value={permissionDraft.action_key}
-                      onChange={(event) =>
-                        setPermissionDraft((previous) => ({
-                          ...previous,
-                          action_key: event.target.value,
-                        }))
-                      }
-                      required
-                    />
-                  </Form.Group>
-
-                  <Form.Group>
-                    <Form.Label>Permission Key (optional)</Form.Label>
-                    <Form.Control
-                      type="text"
-                      placeholder="auto: module.action"
-                      value={permissionDraft.permission_key}
-                      onChange={(event) =>
-                        setPermissionDraft((previous) => ({
-                          ...previous,
-                          permission_key: event.target.value,
-                        }))
-                      }
-                    />
-                  </Form.Group>
-                </div>
-
-                <Form.Group className="mt-3">
-                  <Form.Label>Description</Form.Label>
-                  <Form.Control
-                    type="text"
-                    placeholder="What this permission allows"
-                    value={permissionDraft.description}
-                    onChange={(event) =>
-                      setPermissionDraft((previous) => ({
-                        ...previous,
-                        description: event.target.value,
-                      }))
-                    }
-                  />
-                </Form.Group>
-
-                <div className="permission-form-actions mt-3">
-                  {editingPermissionId ? (
-                    <>
-                      <Button
-                        type="button"
-                        onClick={handleSavePermission}
-                        disabled={permissionSavingId === editingPermissionId}
-                      >
-                        {permissionSavingId === editingPermissionId
-                          ? 'Saving...'
-                          : 'Save Permission'}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline-secondary"
-                        onClick={cancelEditPermission}
-                      >
-                        Cancel Edit
-                      </Button>
-                    </>
-                  ) : (
-                    <Button type="submit" disabled={permissionCreating}>
-                      {permissionCreating ? 'Creating...' : 'Create Permission'}
-                    </Button>
-                  )}
-                </div>
-              </Form>
-
-              <Table bordered hover responsive className="mt-3">
-                <thead>
-                  <tr>
-                    <th>Permission Key</th>
-                    <th>Module</th>
-                    <th>Action</th>
-                    <th>Description</th>
-                    <th>Type</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {permissions.map((permission) => (
-                    <tr key={permission.id}>
-                      <td>{permission.permission_key}</td>
-                      <td>{permission.module_key}</td>
-                      <td>{permission.action_key}</td>
-                      <td>{permission.description || '-'}</td>
-                      <td>
-                        {permission.is_system ? (
-                          <Badge bg="secondary">System</Badge>
-                        ) : (
-                          <Badge bg="info">Custom</Badge>
-                        )}
-                      </td>
-                      <td>
-                        {permission.is_system ? (
-                          <small className="text-muted">Locked</small>
-                        ) : (
-                          <div className="table-action-row">
-                            <Button
-                              size="sm"
-                              variant="outline-primary"
-                              onClick={() => startEditPermission(permission)}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline-danger"
-                              onClick={() => handleDeletePermission(permission)}
-                              disabled={permissionDeletingId === permission.id}
-                            >
-                              {permissionDeletingId === permission.id
-                                ? 'Deleting...'
-                                : 'Delete'}
-                            </Button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </section>
-
-            <section className="access-card mt-4">
               <h4>Create New Role</h4>
               <Form onSubmit={handleCreateRole}>
                 <div className="role-form-grid">
@@ -914,10 +600,10 @@ const AccessControlPage: React.FC = () => {
                       />
 
                       {!role.is_system && (
-                        <div className="role-chip-actions">
+                        <div className="role-action-buttons-wrapper mt-2">
                           <Button
                             size="sm"
-                            variant="outline-primary"
+                            variant="primary"
                             onClick={() => handleSaveRoleMeta(role.id)}
                             disabled={savingRoleMetaId === role.id}
                           >
@@ -925,7 +611,7 @@ const AccessControlPage: React.FC = () => {
                           </Button>
                           <Button
                             size="sm"
-                            variant="outline-danger"
+                            variant="danger"
                             onClick={() => handleDeleteRole(role)}
                             disabled={
                               deletingRoleId === role.id || role.assigned_user_count > 0

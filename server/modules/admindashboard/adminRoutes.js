@@ -28,6 +28,11 @@ router.get('/projects', canReadAdminDashboard, adminController.getAllProjects);
 router.get('/journals', canReadAdminDashboard, adminController.getAllJournals);
 router.get('/projects/:id', canReadAdminDashboard, adminController.getProjectDetails);
 router.get('/journals/:id', canReadAdminDashboard, adminController.getJournalDetails);
+router.patch(
+  '/journals/:id/submission-approval',
+  canApproveAdminWorkflow,
+  adminController.updateJournalSubmissionApproval
+);
 
 // Journal Request Management routes
 router.get('/journal-requests', canReadAdminDashboard, adminController.getAllJournalRequests);
