@@ -10,6 +10,9 @@ const LEGACY_ADMIN_PERMISSION_KEYS = [
   'form_options.read',
   'form_options.edit',
   'form_options.manage',
+  'budget.proposal.manage',
+  'budget.admin.view',
+  'budget.admin.manage',
   'access_control.read',
   'access_control.manage',
 ];
@@ -62,6 +65,48 @@ const SYSTEM_PERMISSION_SEED = [
     action_key: 'manage',
     permission_key: 'form_options.manage',
     description: 'Full control over form options',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_proposal',
+    action_key: 'manage',
+    permission_key: 'budget.proposal.manage',
+    description: 'Create, edit, delete, and view own budget proposals',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_workflow',
+    action_key: 'hod',
+    permission_key: 'budget.workflow.hod',
+    description: 'View HOD queue and process HOD-stage approvals',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_workflow',
+    action_key: 'dof',
+    permission_key: 'budget.workflow.dof',
+    description: 'View DoF queue and process DoF-stage approvals',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_workflow',
+    action_key: 'principal',
+    permission_key: 'budget.workflow.principal',
+    description: 'View Principal queue and process Principal-stage approvals',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_admin',
+    action_key: 'view',
+    permission_key: 'budget.admin.view',
+    description: 'View budget admin dashboards, reports, and exports',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_admin',
+    action_key: 'manage',
+    permission_key: 'budget.admin.manage',
+    description: 'Manage budget approval configuration and entity masters',
     is_system: true,
   },
   {
@@ -226,6 +271,35 @@ const makeRbacError = (message, statusCode = 500) => {
   return error;
 };
 
+const ensureSystemPermissionSeed = async (connection = db) => {
+  for (const permission of SYSTEM_PERMISSION_SEED) {
+    await connection.query(
+      `
+        INSERT INTO permissions (
+          module_key,
+          action_key,
+          permission_key,
+          description,
+          is_system
+        )
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          module_key = VALUES(module_key),
+          action_key = VALUES(action_key),
+          description = VALUES(description),
+          is_system = VALUES(is_system)
+      `,
+      [
+        permission.module_key,
+        permission.action_key,
+        permission.permission_key,
+        permission.description,
+        permission.is_system ? 1 : 0,
+      ]
+    );
+  }
+};
+
 const getEmptyAuthorizationSnapshot = () => ({
   roles: [],
   permissions: [],
@@ -384,6 +458,8 @@ const accessControlModel = {
 
   async getAllPermissions() {
     try {
+      await ensureSystemPermissionSeed();
+
       const [rows] = await db.query(
         `
           SELECT

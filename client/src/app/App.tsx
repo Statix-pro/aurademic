@@ -213,7 +213,7 @@ function App() {
               <Route path="/admin/budget" element={<AdminBudget />} />
 
               {/* Under Construction Pages */}
-              <Route path="/guesthouse-booking" element={<ProtectedRoute><UnderConstruction pageName="Guest House Booking" /></ProtectedRoute>} />
+
               <Route path="/vehicle-booking" element={<ProtectedRoute><UnderConstruction pageName="Vehicle Booking" /></ProtectedRoute>} />
               <Route path="/hall-booking" element={<ProtectedRoute><UnderConstruction pageName="Hall Booking" /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />

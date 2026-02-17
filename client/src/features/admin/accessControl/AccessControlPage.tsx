@@ -58,6 +58,14 @@ interface RoleMetaDraft {
   is_admin_role: boolean;
 }
 
+const getPermissionGroupKey = (permission: Permission): string => {
+  if (permission.permission_key?.startsWith('budget.')) {
+    return 'budget';
+  }
+
+  return permission.module_key;
+};
+
 const AccessControlPage: React.FC = () => {
   const { user } = useAuth();
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -91,11 +99,13 @@ const AccessControlPage: React.FC = () => {
     const grouped: Record<string, Permission[]> = {};
 
     permissions.forEach((permission) => {
-      if (!grouped[permission.module_key]) {
-        grouped[permission.module_key] = [];
+      const groupKey = getPermissionGroupKey(permission);
+
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = [];
       }
 
-      grouped[permission.module_key].push(permission);
+      grouped[groupKey].push(permission);
     });
 
     return grouped;

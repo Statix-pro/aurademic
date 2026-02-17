@@ -785,16 +785,20 @@ async getAllBudgets(page, perPage, filters = {}) {
   const [rows] = await db.query(`
     SELECT 
       bp.*,
-      ou.name as org_unit_name,
-      out.name as org_unit_type,
+      md.name as department,
+      md.code as department_code,
+      me.name as org_unit_name,
+      met.name as org_unit_type,
+      met.code as org_unit_type_code,
       COUNT(DISTINCT bpl.id) as line_count,
-      SUM(bpl.line_total) as total_amount
+      COALESCE(SUM(bpl.line_total), bp.total_amount) as total_amount
     FROM budget_proposals bp
-    LEFT JOIN org_units ou ON bp.org_unit_id = ou.id
-    LEFT JOIN org_unit_types out ON ou.org_unit_type_id = out.id
+    LEFT JOIN master_departments md ON bp.department_id = md.id
+    LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+    LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
     LEFT JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
     ${whereClause}
-    GROUP BY bp.id, ou.name, out.name
+    GROUP BY bp.id, md.name, md.code, me.name, met.name, met.code
     ORDER BY bp.created_at DESC
     LIMIT ? OFFSET ?
   `, [...params, perPage, offset]);
