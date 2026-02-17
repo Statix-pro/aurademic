@@ -21,6 +21,8 @@ router.use(authMiddleware);
 router.get('/stats', userDashboardController.getDashboardStats);
 router.get('/profile', userDashboardController.getUserProfile);
 
+router.get('/budgets', userDashboardController.getUserBudgets);
+
 // Journal routes
 router.get('/journals', userDashboardController.getUserJournals);
 router.get('/journals/:id', userDashboardController.getJournalDetails);

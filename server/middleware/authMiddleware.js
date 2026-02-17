@@ -268,11 +268,11 @@ export const permissionMiddleware = (
       const userPermissionSet = new Set(uniqueStringArray(user.permissions));
       const hasAccess = requireAll
         ? requiredPermissionList.every((permission) =>
-            userPermissionSet.has(permission)
-          )
+          userPermissionSet.has(permission)
+        )
         : requiredPermissionList.some((permission) =>
-            userPermissionSet.has(permission)
-          );
+          userPermissionSet.has(permission)
+        );
 
       if (!hasAccess) {
         return res.status(403).json({
