@@ -11,6 +11,9 @@ interface SelectOption {
   label: string;
 }
 
+const normalizeText = (value: string | null | undefined): string =>
+  String(value || '').trim();
+
 type BudgetLine = {
   budgetHead: string;
   subHead: string;
@@ -471,7 +474,7 @@ const SUBCATEGORY_OPTIONS: Record<string, string[]> = {
     'Young Indians',
     'Rotaract Club',
   ],
-  ProfessionalBodies: [
+  'Professional Body': [
     'ICT Academy',
     'Indian Society for Technical Education',
     'The Institution of Engineers (India)',
@@ -492,6 +495,14 @@ const SUBCATEGORY_OPTIONS: Record<string, string[]> = {
     'The Indian Institute of Welding (IIW - India)',
     'The Institute of Indian Foundrymen (IIF)',
   ],
+};
+
+const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
+  Department: 'DEPARTMENT',
+  Centre: 'CENTRE',
+  Cell: 'CELL',
+  Club: 'CLUB',
+  'Professional Body': 'PROFESSIONAL_BODY',
 };
 
 const MONTH_KEYS = [
@@ -538,6 +549,7 @@ const Budget: React.FC = () => {
   const [subcategorySelections, setSubcategorySelections] = useState<string[]>([]);
   const [categorySelections, setCategorySelections] = useState<SelectOption[]>([]);
   const [categoryItem, setCategoryItem] = useState('');
+  const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
   const { id } = useParams(); // /budget/:id
   const [searchParams] = useSearchParams();
   const location = useLocation();
@@ -586,6 +598,7 @@ const Budget: React.FC = () => {
   // Helper functions
   const getSubcategoryLabel = (type: string): string => {
     if (!type) return 'Sub category';
+    if (type.includes(' ')) return type;
     return type.replace(/([A-Z])/g, ' $1').trim();
   };
 
@@ -593,14 +606,26 @@ const Budget: React.FC = () => {
     return ['Faculty_Team', 'Student_Team'].includes(type);
   };
 
-  const subcategoryList = beneficiaryType
+  const fallbackSubcategoryList = beneficiaryType
     ? SUBCATEGORY_OPTIONS[beneficiaryType as keyof typeof SUBCATEGORY_OPTIONS] || []
     : [];
 
-  const subcategoryOptions: SelectOption[] = subcategoryList.map((value) => ({
-    value,
-    label: value,
-  }));
+  const fetchedSubcategoryOptions = beneficiaryType
+    ? subcategoryOptionsByType[beneficiaryType] || []
+    : [];
+
+  const subcategoryList =
+    fetchedSubcategoryOptions.length > 0
+      ? fetchedSubcategoryOptions.map((option) => option.value)
+      : fallbackSubcategoryList;
+
+  const subcategoryOptions: SelectOption[] =
+    fetchedSubcategoryOptions.length > 0
+      ? fetchedSubcategoryOptions
+      : fallbackSubcategoryList.map((value) => ({
+          value,
+          label: value,
+        }));
 
   const hasSubcategories = subcategoryList.length > 0;
 
@@ -838,6 +863,55 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
 
   // ==================== EFFECTS ====================
   useEffect(() => {
+    let cancelled = false;
+
+    const loadBeneficiaryOptions = async () => {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (!token) return;
+
+      const nextOptions: Record<string, SelectOption[]> = {};
+
+      await Promise.all(
+        Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).map(async ([beneficiaryKey, apiType]) => {
+          try {
+            const response = await fetch(`http://localhost:5000/api/budget/org-units/${apiType}`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+
+            if (!response.ok) {
+              throw new Error(`Failed to load ${beneficiaryKey} options`);
+            }
+
+            const json = await response.json();
+            const rows = Array.isArray(json?.data) ? json.data : [];
+
+            nextOptions[beneficiaryKey] = rows
+              .map((row: any) => normalizeText(row?.name))
+              .filter(Boolean)
+              .map((name: string) => ({ value: name, label: name }));
+          } catch (error) {
+            nextOptions[beneficiaryKey] = (
+              SUBCATEGORY_OPTIONS[beneficiaryKey as keyof typeof SUBCATEGORY_OPTIONS] || []
+            ).map((name) => ({ value: name, label: name }));
+          }
+        })
+      );
+
+      if (!cancelled) {
+        setSubcategoryOptionsByType(nextOptions);
+      }
+    };
+
+    loadBeneficiaryOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
     setDate(today);
   }, []);
@@ -902,7 +976,11 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
         setMobile(p.mobile || p.user_mobile || p.phone || "");
 
         // --- 2. PREFILL BENEFICIARY & DEPARTMENT (FIXED) ---
-        setBeneficiaryType(p.beneficiary_type || "");
+        const normalizedBeneficiaryType =
+          p.beneficiary_type === 'ProfessionalBodies'
+            ? 'Professional Body'
+            : p.beneficiary_type || '';
+        setBeneficiaryType(normalizedBeneficiaryType);
         
         // Fix for "Value not displayed": Ensure we set the specific value state
         setBeneficiaryValue(p.beneficiary_value || ""); 
@@ -970,7 +1048,7 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
           if (!token) return;
 
           // Calls BudgetController.getFacultyDetails
-          const res = await fetch('http://localhost:5000/api/budget/faculty/details', {
+          const res = await fetch('http://localhost:5000/api/budget/faculty', {
             headers: { Authorization: `Bearer ${token}` }
           });
 
@@ -1217,7 +1295,7 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
         { value: 'Centre', label: 'Centre' },
         { value: 'Cell', label: 'Cell' },
         { value: 'Club', label: 'Club' },
-        { value: 'ProfessionalBodies', label: 'Professional Bodies' },
+        { value: 'Professional Body', label: 'Professional Body' },
         { value: 'Institution', label: 'Institution' }
       ]}
       placeholder=""
@@ -1361,10 +1439,7 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
             setCategoryItem(val);
             setCategorySelections([]);
           }}
-          options={subcategoryList.map(sub => ({
-            value: sub,
-            label: sub
-          }))}
+          options={subcategoryOptions}
           placeholder=""
           isSearchable={true}
           isClearable={false}

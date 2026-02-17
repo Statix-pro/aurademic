@@ -27,8 +27,8 @@ import accessControlRoutes from './modules/accessControl/accessControlRoutes.js'
 import financePageRoutes from './modules/finance/financeRoutes.js';
 
 // ✅ NEW: FinanceCard routes
-import financeCardRoutes from './modules/financeCard/financeCardRoutes.js';
-import guesthouseRoutes from './modules/guesthouse/guesthouseRoutes.js';
+// import financeCardRoutes from './modules/financeCard/financeCardRoutes.js';
+// import guesthouseRoutes from './modules/guesthouse/guesthouseRoutes.js';
 
 import { errorHandler } from './middleware/errorMiddleware.js';
 import path from 'path';
@@ -135,8 +135,8 @@ app.use('/api/finance-requests', financePageRoutes);
 app.use('/api/budget', budgetRoutes);
 
 // ✅ NEW: FinanceCard API
-app.use('/api/finance-dashboard', financeCardRoutes);
-app.use('/api/guesthouse', guesthouseRoutes);
+// app.use('/api/finance-dashboard', financeCardRoutes);
+// app.use('/api/guesthouse', guesthouseRoutes);
 
 // Updates & documents
 app.use('/api/updates', updatesRoutes);
