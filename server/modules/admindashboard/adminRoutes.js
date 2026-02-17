@@ -34,6 +34,10 @@ router.patch(
   adminController.updateJournalSubmissionApproval
 );
 
+router.get('/budgets', adminController.getAllBudgets);
+router.get('/budget-stats', adminController.getBudgetStats);
+
+
 // Journal Request Management routes
 router.get('/journal-requests', canReadAdminDashboard, adminController.getAllJournalRequests);
 router.patch(

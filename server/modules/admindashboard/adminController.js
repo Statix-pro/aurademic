@@ -415,6 +415,55 @@ const adminController = {
       });
     }
   },
+
+  async getAllBudgets(req, res) {
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const perPage = parseInt(req.query.perpage) || 20;
+      const filters = {
+        fiscalYear: req.query.fiscalYear ? parseInt(req.query.fiscalYear) : null,
+        status: req.query.status || null,
+        beneficiaryType: req.query.beneficiaryType || null
+      };
+      
+      const { budgets, total } = await adminModel.getAllBudgets(page, perPage, filters);
+      
+      res.status(200).json({ 
+        success: true,
+        data: budgets, 
+        total,
+        filters
+      });
+    } catch (error) {
+      console.error('Error in getAllBudgets:', error);
+      res.status(500).json({ 
+        success: false,
+        message: 'Error retrieving budgets', 
+        error: error.message 
+      });
+    }
+  },
+
+  async getBudgetStats(req, res) {
+    try {
+      const fiscalYear = req.query.fiscalYear ? parseInt(req.query.fiscalYear) : null;
+      const stats = await adminModel.getBudgetStats(fiscalYear);
+      
+      res.status(200).json({ 
+        success: true,
+        data: stats,
+        fiscalYear: fiscalYear || 'All'
+      });
+    } catch (error) {
+      console.error('Error in getBudgetStats:', error);
+      res.status(500).json({ 
+        success: false,
+        message: 'Error retrieving budget stats', 
+        error: error.message 
+      });
+    }
+  },
+
 };
 
 export default adminController;
