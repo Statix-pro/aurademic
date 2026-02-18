@@ -59,9 +59,7 @@ const formatApprovalFlowString = ({ requiresHod, requiresDof, requiresPrincipal 
 };
 
 class BudgetModel {
-  /* =====================================================
-     0. CONSTANTS & HELPERS
-  ===================================================== */
+
   static getCurrentFinancialYear() {
     const now = new Date();
     const month = now.getMonth() + 1;
@@ -94,9 +92,7 @@ class BudgetModel {
     return grouped;
   }
 
-  /* =====================================================
-     1. UTILITY: Transaction Wrapper
-  ===================================================== */
+
   static async withTransaction(callback) {
     const conn = await db.getConnection();
 
@@ -114,14 +110,14 @@ class BudgetModel {
   }
 
   static async getUserDepartmentByUserId(userId) {
-      const parsedUserId = Number(userId);
-      if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
-          return null;
-      }
+    const parsedUserId = Number(userId);
+    if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+      return null;
+    }
 
-      // ✅ FIXED: Select designation, mobile, and construct full name
-      const [rows] = await db.execute(
-          `SELECT 
+    // FIXED: Select designation, mobile, and construct full name
+    const [rows] = await db.execute(
+      `SELECT 
               d.id, 
               d.name, 
               d.code,
@@ -133,10 +129,68 @@ class BudgetModel {
           WHERE e.user_id = ? AND e.status = 'Active'
           ORDER BY e.id ASC
           LIMIT 1`,
-          [parsedUserId]
-      );
+      [parsedUserId]
+    );
 
-      return rows[0] || null;
+    return rows[0] || null;
+  }
+
+  static async searchApplicant(query = '') {
+    const queryStr = normalizeText(query);
+    let sql;
+    let params = [];
+
+    if (!queryStr) {
+      sql = `SELECT
+        e.id AS employee_id,
+        e.erp_id,
+        CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+        e.designation,
+        d.name AS department,
+        e.email,
+        e.mobile,
+        e.employee_type
+      FROM master_employees e
+      LEFT JOIN master_departments d ON e.department_id = d.id
+      WHERE e.status = 'Active'
+      ORDER BY e.first_name, e.last_name
+      LIMIT 20`;
+    } else {
+      sql = `SELECT
+        e.id AS employee_id,
+        e.erp_id,
+        CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+        e.designation,
+        d.name AS department,
+        e.email,
+        e.mobile,
+        e.employee_type
+      FROM master_employees e
+      LEFT JOIN master_departments d ON e.department_id = d.id
+      WHERE e.status = 'Active'
+        AND (
+          e.first_name LIKE ?
+          OR e.last_name LIKE ?
+          OR CONCAT(e.first_name, ' ', e.last_name) LIKE ?
+          OR e.erp_id LIKE ?
+          OR e.email LIKE ?
+          OR d.name LIKE ?
+        )
+      ORDER BY e.first_name, e.last_name
+      LIMIT 20`;
+
+      params = [
+        `%${queryStr}%`,
+        `%${queryStr}%`,
+        `%${queryStr}%`,
+        `${queryStr}%`,
+        `%${queryStr}%`,
+        `%${queryStr}%`,
+      ];
+    }
+
+    const [rows] = await db.query(sql, params);
+    return rows;
   }
 
   static async getDepartmentByName(name, conn = db) {
@@ -219,9 +273,7 @@ class BudgetModel {
     };
   }
 
-  /* =====================================================
-     1.5 DYNAMIC APPROVAL FLOW RESOLVER
-  ===================================================== */
+
   static async resolveApprovalFlow(beneficiaryType, entityTypeCode = null, conn = db) {
     const normalizedBeneficiaryType = normalizeText(beneficiaryType);
 
@@ -231,25 +283,25 @@ class BudgetModel {
 
     const [rows] = entityTypeCode
       ? await conn.execute(
-          `SELECT requires_hod, requires_dof, requires_principal
+        `SELECT requires_hod, requires_dof, requires_principal
            FROM approval_flow_config
            WHERE beneficiary_type = ?
              AND entity_type_code = ?
              AND module IN ('BUDGET', 'BOTH')
              AND is_active = 1
            LIMIT 1`,
-          [normalizedBeneficiaryType, entityTypeCode]
-        )
+        [normalizedBeneficiaryType, entityTypeCode]
+      )
       : await conn.execute(
-          `SELECT requires_hod, requires_dof, requires_principal
+        `SELECT requires_hod, requires_dof, requires_principal
            FROM approval_flow_config
            WHERE beneficiary_type = ?
              AND entity_type_code IS NULL
              AND module IN ('BUDGET', 'BOTH')
              AND is_active = 1
            LIMIT 1`,
-          [normalizedBeneficiaryType]
-        );
+        [normalizedBeneficiaryType]
+      );
 
     if (rows.length > 0) {
       return {
@@ -266,9 +318,7 @@ class BudgetModel {
     return { requiresHod: 0, requiresDof: 1, requiresPrincipal: 1 };
   }
 
-  /* =====================================================
-     2. CREATE FULL PROPOSAL
-  ===================================================== */
+
   static async create(payload) {
     return this.withTransaction(async (conn) => {
       const calculatedTotal = (payload.lines || []).reduce((sum, line) => {
@@ -377,9 +427,7 @@ class BudgetModel {
     });
   }
 
-  /* =====================================================
-     3. GET FULL PROPOSAL
-  ===================================================== */
+
   static async getFull(proposalId) {
     const master = await this.getBudgetById(proposalId);
 
@@ -420,9 +468,7 @@ class BudgetModel {
     };
   }
 
-  /* =====================================================
-     4. UPDATE PROPOSAL (Draft/Returned Only)
-  ===================================================== */
+
   static async update(proposalId, payload) {
     const proposal = await this.getBudgetById(proposalId);
 
@@ -495,9 +541,7 @@ class BudgetModel {
     });
   }
 
-  /* =====================================================
-     4.5 DELETE PROPOSAL
-  ===================================================== */
+
   static async delete(proposalId) {
     return this.withTransaction(async (conn) => {
       await conn.execute(
@@ -517,108 +561,104 @@ class BudgetModel {
     });
   }
 
-  /* =====================================================
-     5. APPROVAL PROCESS
-  ===================================================== */
+
   static async processApproval(proposalId, { role, decision, feedback, approverUserId, approverEmail }) {
     if (!['hod', 'dof', 'principal'].includes(role)) {
-        throw new Error('Invalid role');
+      throw new Error('Invalid role');
     }
     if (!['approved', 'rejected', 'returned'].includes(decision)) {
-        throw new Error('Invalid decision');
+      throw new Error('Invalid decision');
     }
 
     const proposal = await this.getBudgetById(proposalId);
     if (!proposal) {
-        throw new Error('Proposal not found');
+      throw new Error('Proposal not found');
     }
 
     if (proposal.current_stage !== role) {
-        throw new Error(`Stage mismatch: expected ${role}, got ${proposal.current_stage}`);
+      throw new Error(`Stage mismatch: expected ${role}, got ${proposal.current_stage}`);
     }
 
     // Determine next state
     let newStatus = decision;
     let nextStage = role;
-    
+
     const flowStages = normalizeText(proposal.approval_flow).split('_');
     const requiresPrincipalStage = flowStages.includes('principal');
     const flow = APPROVAL_FLOW[role];
 
     if (decision === 'approved') {
-        newStatus = flow.approve;
-        nextStage = flow.next;
+      newStatus = flow.approve;
+      nextStage = flow.next;
 
-        // ✅ AUTO-APPROVAL LOGIC
-        if (role === 'dof') {
-            if (requiresPrincipalStage) {
-                // If Principal is required, AUTO-APPROVE and finish
-                newStatus = 'completed'; 
-                nextStage = 'completed';
-            } else {
-                // If Principal is NOT required, just finish
-                newStatus = 'completed';
-                nextStage = 'completed';
-            }
-        } 
-        // Logic for final manual principal approval (if auto-approve fails/disabled)
-        else if (role === 'principal') {
-             newStatus = 'completed';
-             nextStage = 'completed';
+      // AUTO-APPROVAL LOGIC
+      if (role === 'dof') {
+        if (requiresPrincipalStage) {
+          // If Principal is required, AUTO-APPROVE and finish
+          newStatus = 'completed';
+          nextStage = 'completed';
+        } else {
+          // If Principal is NOT required, just finish
+          newStatus = 'completed';
+          nextStage = 'completed';
         }
+      }
+      // Logic for final manual principal approval (if auto-approve fails/disabled)
+      else if (role === 'principal') {
+        newStatus = 'completed';
+        nextStage = 'completed';
+      }
     } else if (decision === 'rejected') {
-        newStatus = flow.reject;
+      newStatus = flow.reject;
     } else {
-        newStatus = flow.returned;
-        nextStage = role; // Stay on current stage if returned
+      newStatus = flow.returned;
+      nextStage = role; // Stay on current stage if returned
     }
 
     // Database Update
     return this.withTransaction(async (conn) => {
-        await conn.execute(
-            `UPDATE budget_proposals 
+      await conn.execute(
+        `UPDATE budget_proposals 
              SET status = ?, current_stage = ?, updated_at = NOW() 
              WHERE id = ?`,
-            [newStatus, nextStage, proposalId]
-        );
+        [newStatus, nextStage, proposalId]
+      );
 
-        if (decision !== 'approved' && !normalizeText(feedback)) {
-            throw new Error('Feedback required for reject/return');
-        }
+      if (decision !== 'approved' && !normalizeText(feedback)) {
+        throw new Error('Feedback required for reject/return');
+      }
 
-        // 1. Insert the ACTUAL approval (DoF/HOD/Principal)
-        await conn.execute(
-            `INSERT INTO budget_proposal_approvals (
+      // 1. Insert the ACTUAL approval (DoF/HOD/Principal)
+      await conn.execute(
+        `INSERT INTO budget_proposal_approvals (
                 budget_proposal_id, role, approver_user_id, approver_email, 
                 decision, feedback, allows_edit
             ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [
-                proposalId,
-                role,
-                approverUserId,
-                approverEmail || '',
-                decision,
-                feedback || '',
-                decision === 'returned' ? 1 : 0,
-            ]
-        );
+        [
+          proposalId,
+          role,
+          approverUserId,
+          approverEmail || '',
+          decision,
+          feedback || '',
+          decision === 'returned' ? 1 : 0,
+        ]
+      );
 
-        // 2. Insert AUTO-APPROVAL for Principal (Only if DoF Approved + Principal Required)
-        if (role === 'dof' && decision === 'approved' && requiresPrincipalStage) {
-            await conn.execute(
-                `INSERT INTO budget_proposal_approvals (
+      // 2. Insert AUTO-APPROVAL for Principal (Only if DoF Approved + Principal Required)
+      if (role === 'dof' && decision === 'approved' && requiresPrincipalStage) {
+        await conn.execute(
+          `INSERT INTO budget_proposal_approvals (
                     budget_proposal_id, role, approver_user_id, approver_email, 
                     decision, feedback, allows_edit, decided_at
                 ) VALUES (?, 'principal', ?, ?, 'approved', 'Auto-approved after DoF clearance', 0, NOW())`,
-                [proposalId, approverUserId, 'system-auto@ksrct.ac.in']
-            );
-        }
+          [proposalId, approverUserId, 'system-auto@ksrct.ac.in']
+        );
+      }
     });
-}
+  }
 
-  /* =====================================================
-     6. DASHBOARD: USER/HOD/DOF/PRINCIPAL LISTS
-  ===================================================== */
+
   static async listBudgets({
     userId,
     userEmail,
@@ -734,9 +774,7 @@ class BudgetModel {
     };
   }
 
-  /* =====================================================
-     7. DASHBOARD AGGREGATES
-  ===================================================== */
+
   static async dashboardAggregates({ department, departmentId, role, fiscalYear }) {
     const currentFY = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
     const params = [currentFY];
@@ -1134,9 +1172,6 @@ class BudgetModel {
     });
   }
 
-  /* =====================================================
-     9. PRIVATE HELPERS
-  ===================================================== */
   static async #insertBudgetLine(proposalId, line, conn) {
     const [result] = await conn.execute(
       `INSERT INTO budget_proposal_lines (
@@ -1169,12 +1204,9 @@ class BudgetModel {
     );
   }
 
-  /* =====================================================
-    10. GET BUDGET BY ID
-  ===================================================== */
   static async getBudgetById(proposalId) {
-      const [rows] = await db.execute(
-          `SELECT 
+    const [rows] = await db.execute(
+      `SELECT 
               bp.*, 
               DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
               md.name AS department, 
@@ -1195,16 +1227,12 @@ class BudgetModel {
           -- ✅ ADD THIS JOIN TO GET THE DATA
           LEFT JOIN master_employees emp ON bp.user_id = emp.user_id 
           WHERE bp.id = ?`,
-          [proposalId]
-      );
+      [proposalId]
+    );
 
-      return rows[0] || null;
+    return rows[0] || null;
   }
 
-
-  /* =====================================================
-     11. VALIDATION HELPERS
-  ===================================================== */
   static async validateUserAccess(proposalId, userId, userEmail, role, department, departmentId) {
     const proposal = await this.getBudgetById(proposalId);
 
@@ -1248,9 +1276,6 @@ class BudgetModel {
     }
   }
 
-  /* =====================================================
-     12. APPROVAL FLOW CONFIG MANAGEMENT
-  ===================================================== */
   static async getApprovalFlowConfigs() {
     const [rows] = await db.execute(
       `SELECT afc.*, met.name AS entity_type_name
@@ -1277,9 +1302,6 @@ class BudgetModel {
     return result.affectedRows > 0;
   }
 
-  /* =====================================================
-     13. STATISTICS & REPORTING
-  ===================================================== */
   static async getBudgetStatsByFY(fiscalYear) {
     const fy = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
 
@@ -1329,9 +1351,6 @@ class BudgetModel {
     };
   }
 
-  /* =====================================================
-     14. MONTH-WISE ALLOCATION REPORT
-  ===================================================== */
   static async getMonthlyAllocations(proposalId) {
     const [rows] = await db.execute(
       `SELECT
@@ -1349,9 +1368,6 @@ class BudgetModel {
     return rows;
   }
 
-  /* =====================================================
-     15. EXPORT DATA
-  ===================================================== */
   static async getProposalDataForExport(proposalId) {
     const master = await this.getBudgetById(proposalId);
 

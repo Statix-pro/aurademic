@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Badge, Button, Form, Spinner, Table } from 'react-bootstrap';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import Navbar from '../../../shared/components/layout/navbar/navbar';
-import { useAuth } from '../../../contexts/AuthContext';
 import './AccessControlPage.css';
 
 interface Permission {
@@ -66,8 +65,19 @@ const getPermissionGroupKey = (permission: Permission): string => {
   return permission.module_key;
 };
 
+const getRoleBadgeClassName = (roleCode: string): string => {
+  if (roleCode === 'super_admin') {
+    return 'assigned-role-tag assigned-role-tag-super-admin';
+  }
+
+  if (roleCode === 'admin') {
+    return 'assigned-role-tag assigned-role-tag-admin';
+  }
+
+  return 'assigned-role-tag assigned-role-tag-default';
+};
+
 const AccessControlPage: React.FC = () => {
-  const { user } = useAuth();
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<AccessUser[]>([]);
@@ -93,8 +103,6 @@ const AccessControlPage: React.FC = () => {
   const [roleDescription, setRoleDescription] = useState('');
   const [selectedPermissionKeys, setSelectedPermissionKeys] = useState<string[]>([]);
 
-  const currentUserId = Number(user?.id);
-
   const permissionsByModule = useMemo(() => {
     const grouped: Record<string, Permission[]> = {};
 
@@ -111,8 +119,15 @@ const AccessControlPage: React.FC = () => {
     return grouped;
   }, [permissions]);
 
-  const fetchAccessControlData = async (searchValue = '') => {
-    setLoading(true);
+  const fetchAccessControlData = async (
+    searchValue = '',
+    options: { showPageLoader?: boolean } = {}
+  ) => {
+    const { showPageLoader = false } = options;
+
+    if (showPageLoader) {
+      setLoading(true);
+    }
     setError('');
 
     try {
@@ -173,12 +188,14 @@ const AccessControlPage: React.FC = () => {
         'Failed to load access control data'
       );
     } finally {
-      setLoading(false);
+      if (showPageLoader) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchAccessControlData();
+    void fetchAccessControlData('', { showPageLoader: true });
   }, []);
 
   const toggleCreateRolePermissionSelection = (permissionKey: string) => {
@@ -406,50 +423,7 @@ const AccessControlPage: React.FC = () => {
     }
   };
 
-  const toggleSuperAdmin = async (targetUser: AccessUser) => {
-    if (
-      targetUser.id === currentUserId &&
-      targetUser.is_super_admin &&
-      users.filter((rowUser) => rowUser.is_super_admin).length <= 1
-    ) {
-      setError(
-        'Cannot remove Super Admin from your account while you are the only Super Admin.'
-      );
-      return;
-    }
-
-    setSavingUserId(targetUser.id);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      await authenticityUtility.put(
-        `/access-control/users/${targetUser.id}/super-admin`,
-        {
-          enabled: !targetUser.is_super_admin,
-        }
-      );
-
-      setSuccessMessage('Super Admin access updated successfully.');
-      await fetchAccessControlData(search);
-    } catch (err: unknown) {
-      console.error('Failed to update super admin access', err);
-      const errorObj = err as {
-        response?: { data?: { message?: string } };
-        message?: string;
-      };
-      setError(
-        errorObj.response?.data?.message ||
-        errorObj.message ||
-        'Failed to update Super Admin access'
-      );
-    } finally {
-      setSavingUserId(null);
-    }
-  };
-
-  const handleSearchSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const runUserSearch = async () => {
     await fetchAccessControlData(search);
   };
 
@@ -668,17 +642,27 @@ const AccessControlPage: React.FC = () => {
             <section className="access-card mt-4">
               <div className="users-header-row">
                 <h4>User Role Assignment</h4>
-                <Form onSubmit={handleSearchSubmit} className="search-form">
+                <div className="search-form">
                   <Form.Control
                     type="text"
                     placeholder="Search by name or email"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void runUserSearch();
+                      }
+                    }}
                   />
-                  <Button type="submit" variant="outline-primary">
+                  <Button
+                    type="button"
+                    variant="outline-primary"
+                    onClick={() => void runUserSearch()}
+                  >
                     Search
                   </Button>
-                </Form>
+                </div>
               </div>
 
               <Table bordered hover responsive className="mt-3">
@@ -686,8 +670,7 @@ const AccessControlPage: React.FC = () => {
                   <tr>
                     <th>User</th>
                     <th>Roles (multiple allowed)</th>
-                    <th>Admin Access</th>
-                    <th>Super Admin</th>
+                    <th>Assigned Roles</th>
                     <th>Save Roles</th>
                   </tr>
                 </thead>
@@ -723,26 +706,22 @@ const AccessControlPage: React.FC = () => {
                         </td>
 
                         <td>
-                          {accessUser.is_admin ? (
-                            <Badge bg="success">Admin</Badge>
+                          {accessUser.roles.length > 0 ? (
+                            <div className="d-flex flex-wrap gap-1">
+                              {accessUser.roles.map((role) => (
+                                <span
+                                  key={`${accessUser.id}-${role.role_code}`}
+                                  className={getRoleBadgeClassName(role.role_code)}
+                                >
+                                  {role.role_name}
+                                </span>
+                              ))}
+                            </div>
                           ) : (
-                            <Badge bg="secondary">User</Badge>
+                            <span className="assigned-role-tag assigned-role-tag-empty">
+                              No roles assigned
+                            </span>
                           )}
-                        </td>
-
-                        <td>
-                          <Button
-                            size="sm"
-                            variant={
-                              accessUser.is_super_admin ? 'danger' : 'outline-success'
-                            }
-                            onClick={() => toggleSuperAdmin(accessUser)}
-                            disabled={savingUserId === accessUser.id}
-                          >
-                            {accessUser.is_super_admin
-                              ? 'Remove Super Admin'
-                              : 'Make Super Admin'}
-                          </Button>
                         </td>
 
                         <td>
@@ -760,7 +739,7 @@ const AccessControlPage: React.FC = () => {
 
                   {users.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="text-center">
+                      <td colSpan={4} className="text-center">
                         No users found for this search.
                       </td>
                     </tr>
