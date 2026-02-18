@@ -281,3 +281,17 @@ input[type="number"]::-webkit-inner-spin-button {
   margin: 0;
 }
 
+.action-dropdown-arrow.open {
+  transform: rotate(180deg) !important;  /* ← EXACT 180° rotation like Select */
+}
+
+.action-dropdown-arrow:hover {
+  stroke: #0069ab !important;  /* ← Blue on hover like Select */
+}
+.card-toggle-arrow.open {
+  transform: rotate(180deg) !important;
+}
+
+.card-toggle-arrow:hover {
+  stroke: #0056b3 !important;  /* Darker blue on hover */
+}

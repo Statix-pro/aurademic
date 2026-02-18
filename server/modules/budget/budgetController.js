@@ -118,42 +118,50 @@ class BudgetController {
   }
 
   /* =====================================================
-     1. FACULTY AUTO-FILL
+    1. FACULTY AUTO-FILL
   ===================================================== */
   static async getFacultyDetails(req, res) {
-    try {
-      const userId = BudgetController.getUserId(req);
+      try {
+          const userId = BudgetController.getUserId(req);
+          if (!userId) {
+              return res.status(401).json({
+                  success: false,
+                  message: 'Authentication required',
+              });
+          }
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Authentication required',
-        });
+          // 1. Get rich employee data from DB (includes designation, mobile, full_name)
+          const empData = await BudgetModel.getUserDepartmentByUserId(userId);
+          
+          // 2. Fallback to token data if DB data is missing
+          const department = empData?.name || await BudgetController.resolveUserDepartment(req);
+          const role = BudgetController.resolveAccessRoleFromPermissions(req);
+
+          return res.json({
+              success: true,
+              data: {
+                  employee_id: userId,
+                  user_id: userId,
+                  // ✅ Use DB full_name if available, else token name
+                  name: empData?.full_name || req.user?.name || '', 
+                  email: req.user?.email || '',
+                  department,
+                  // ✅ Pass these new fields to frontend
+                  designation: empData?.designation || '',
+                  mobile: empData?.mobile || '',
+                  role,
+                  roles: Array.isArray(req.user?.roles) ? req.user.roles : [],
+              },
+          });
+      } catch (error) {
+          console.error('Faculty details error:', error);
+          return res.status(500).json({
+              success: false,
+              message: 'Failed to fetch faculty details',
+          });
       }
-
-      const department = await BudgetController.resolveUserDepartment(req);
-      const role = BudgetController.resolveAccessRoleFromPermissions(req);
-
-      return res.json({
-        success: true,
-        data: {
-          employee_id: userId,
-          user_id: userId,
-          name: req.user?.name || '',
-          email: req.user?.email || '',
-          department,
-          role,
-          roles: Array.isArray(req.user?.roles) ? req.user.roles : [],
-        },
-      });
-    } catch (error) {
-      console.error('Faculty details error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch faculty details',
-      });
-    }
   }
+
 
   /* =====================================================
      2. GET ORG UNITS BY TYPE (COMPAT)
