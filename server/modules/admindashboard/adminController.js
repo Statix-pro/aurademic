@@ -420,26 +420,73 @@ const adminController = {
     try {
       const page = parseInt(req.query.page) || 1;
       const perPage = parseInt(req.query.perpage) || 20;
+
+      // Validate fiscalYear
+      let fiscalYear = null;
+      if (req.query.fiscalYear) {
+        fiscalYear = parseInt(req.query.fiscalYear);
+        if (isNaN(fiscalYear)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid fiscalYear',
+          });
+        }
+      }
+
+      // Validate status - allow only alphanumeric characters and underscores
+      let status = null;
+      if (req.query.status) {
+        if (
+          typeof req.query.status !== 'string' ||
+          !/^[a-zA-Z0-9_]+$/.test(req.query.status)
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid status format',
+          });
+        }
+        status = req.query.status;
+      }
+
+      // Validate beneficiaryType - allow alphanumeric, underscores and spaces
+      let beneficiaryType = null;
+      if (req.query.beneficiaryType) {
+        if (
+          typeof req.query.beneficiaryType !== 'string' ||
+          !/^[a-zA-Z0-9_ ]+$/.test(req.query.beneficiaryType)
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid beneficiaryType format',
+          });
+        }
+        beneficiaryType = req.query.beneficiaryType;
+      }
+
       const filters = {
-        fiscalYear: req.query.fiscalYear ? parseInt(req.query.fiscalYear) : null,
-        status: req.query.status || null,
-        beneficiaryType: req.query.beneficiaryType || null
+        fiscalYear,
+        status,
+        beneficiaryType,
       };
-      
-      const { budgets, total } = await adminModel.getAllBudgets(page, perPage, filters);
-      
-      res.status(200).json({ 
-        success: true,
-        data: budgets, 
-        total,
+
+      const { budgets, total } = await adminModel.getAllBudgets(
+        page,
+        perPage,
         filters
+      );
+
+      res.status(200).json({
+        success: true,
+        data: budgets,
+        total,
+        filters,
       });
     } catch (error) {
       console.error('Error in getAllBudgets:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        message: 'Error retrieving budgets', 
-        error: error.message 
+        message: 'Error retrieving budgets',
+        error: error.message,
       });
     }
   },
@@ -448,18 +495,18 @@ const adminController = {
     try {
       const fiscalYear = req.query.fiscalYear ? parseInt(req.query.fiscalYear) : null;
       const stats = await adminModel.getBudgetStats(fiscalYear);
-      
-      res.status(200).json({ 
+
+      res.status(200).json({
         success: true,
         data: stats,
         fiscalYear: fiscalYear || 'All'
       });
     } catch (error) {
       console.error('Error in getBudgetStats:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        message: 'Error retrieving budget stats', 
-        error: error.message 
+        message: 'Error retrieving budget stats',
+        error: error.message
       });
     }
   },
