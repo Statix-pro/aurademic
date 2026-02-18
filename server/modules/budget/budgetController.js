@@ -117,55 +117,69 @@ class BudgetController {
     return department ? Number(department.id) : null;
   }
 
-  /* =====================================================
-    1. FACULTY AUTO-FILL
-  ===================================================== */
+
   static async getFacultyDetails(req, res) {
-      try {
-          const userId = BudgetController.getUserId(req);
-          if (!userId) {
-              return res.status(401).json({
-                  success: false,
-                  message: 'Authentication required',
-              });
-          }
-
-          // 1. Get rich employee data from DB (includes designation, mobile, full_name)
-          const empData = await BudgetModel.getUserDepartmentByUserId(userId);
-          
-          // 2. Fallback to token data if DB data is missing
-          const department = empData?.name || await BudgetController.resolveUserDepartment(req);
-          const role = BudgetController.resolveAccessRoleFromPermissions(req);
-
-          return res.json({
-              success: true,
-              data: {
-                  employee_id: userId,
-                  user_id: userId,
-                  // ✅ Use DB full_name if available, else token name
-                  name: empData?.full_name || req.user?.name || '', 
-                  email: req.user?.email || '',
-                  department,
-                  // ✅ Pass these new fields to frontend
-                  designation: empData?.designation || '',
-                  mobile: empData?.mobile || '',
-                  role,
-                  roles: Array.isArray(req.user?.roles) ? req.user.roles : [],
-              },
-          });
-      } catch (error) {
-          console.error('Faculty details error:', error);
-          return res.status(500).json({
-              success: false,
-              message: 'Failed to fetch faculty details',
-          });
+    try {
+      const userId = BudgetController.getUserId(req);
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required',
+        });
       }
+
+      // 1. Get rich employee data from DB (includes designation, mobile, full_name)
+      const empData = await BudgetModel.getUserDepartmentByUserId(userId);
+
+      // 2. Fallback to token data if DB data is missing
+      const department = empData?.name || await BudgetController.resolveUserDepartment(req);
+      const role = BudgetController.resolveAccessRoleFromPermissions(req);
+
+      return res.json({
+        success: true,
+        data: {
+          employee_id: userId,
+          user_id: userId,
+          // Use DB full_name if available, else token name
+          name: empData?.full_name || req.user?.name || '',
+          email: req.user?.email || '',
+          department,
+          // Pass these new fields to frontend
+          designation: empData?.designation || '',
+          mobile: empData?.mobile || '',
+          role,
+          roles: Array.isArray(req.user?.roles) ? req.user.roles : [],
+        },
+      });
+    } catch (error) {
+      console.error('Faculty details error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch faculty details',
+      });
+    }
   }
 
+  static async searchApplicant(req, res) {
+    try {
+      const { q } = req.query;
+      const results = await BudgetModel.searchApplicant(q || '');
 
-  /* =====================================================
-     2. GET ORG UNITS BY TYPE (COMPAT)
-  ===================================================== */
+      return res.status(200).json({
+        success: true,
+        status: 'success',
+        data: results,
+      });
+    } catch (error) {
+      console.error('Budget applicant search error:', error);
+      return res.status(500).json({
+        success: false,
+        status: 'error',
+        message: error.message || 'Failed to search applicants',
+      });
+    }
+  }
+
   static async getOrgUnits(req, res) {
     try {
       const mappedType = BudgetController.normalizeEntityTypeParam(req.params.type);
@@ -194,9 +208,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     3. GET ALL ORG UNITS
-  ===================================================== */
   static async getAllOrgUnits(req, res) {
     try {
       const units = await BudgetModel.getAllOrgUnits();
@@ -227,9 +238,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     4. ENTITY MASTER APIs
-  ===================================================== */
   static async getEntitiesByType(req, res) {
     try {
       const mappedType = BudgetController.normalizeEntityTypeParam(req.params.type);
@@ -429,9 +437,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     5. APPROVAL FLOW CONFIGS
-  ===================================================== */
   static async getApprovalFlows(req, res) {
     try {
       const configs = await BudgetModel.getApprovalFlowConfigs();
@@ -449,9 +454,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     6. CREATE PROPOSAL
-  ===================================================== */
   static async create(req, res) {
     try {
       const payload = req.body || {};
@@ -557,9 +559,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     7. UPDATE PROPOSAL
-  ===================================================== */
   static async update(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
@@ -631,9 +630,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     8. DELETE PROPOSAL
-  ===================================================== */
   static async deleteProposal(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
@@ -684,9 +680,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     9. GET SINGLE PROPOSAL
-  ===================================================== */
   static async get(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
@@ -742,9 +735,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     10. USER DASHBOARD
-  ===================================================== */
   static async getMyBudgets(req, res) {
     try {
       const { page = 1, limit = 10, status, fiscalYear } = req.query;
@@ -776,9 +766,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     11. HOD DASHBOARD
-  ===================================================== */
   static async getHodBudgets(req, res) {
     try {
       const department = await BudgetController.resolveUserDepartment(req);
@@ -819,9 +806,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     12. DOF DASHBOARD
-  ===================================================== */
   static async getDofBudgets(req, res) {
     try {
       const { page = 1, limit = 10, status, fiscalYear } = req.query;
@@ -849,9 +833,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     13. PRINCIPAL DASHBOARD
-  ===================================================== */
   static async getPrincipalBudgets(req, res) {
     try {
       const { page = 1, limit = 10, status, fiscalYear } = req.query;
@@ -879,9 +860,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     14. DASHBOARD AGGREGATES
-  ===================================================== */
   static async getAggregates(req, res) {
     try {
       const { fiscalYear } = req.query;
@@ -905,9 +883,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     15. PROCESS APPROVAL
-  ===================================================== */
   static async approve(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
@@ -1013,9 +988,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     16. ADMIN FULL LIST
-  ===================================================== */
   static async adminList(req, res) {
     try {
       const { page = 1, limit = 20, status, fiscalYear } = req.query;
@@ -1046,9 +1018,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     17. ADMIN SEARCH
-  ===================================================== */
   static async search(req, res) {
     try {
       const { q, status, fiscalYear } = req.query;
@@ -1091,9 +1060,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     18. FILE UPLOAD
-  ===================================================== */
   static async uploadFiles(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
@@ -1133,10 +1099,10 @@ class BudgetController {
           proposalId,
           sanctionLetter: req.files?.sanctionLetter?.[0]
             ? {
-                filename: req.files.sanctionLetter[0].originalname,
-                path: req.files.sanctionLetter[0].path,
-                size: req.files.sanctionLetter[0].size,
-              }
+              filename: req.files.sanctionLetter[0].originalname,
+              path: req.files.sanctionLetter[0].path,
+              size: req.files.sanctionLetter[0].size,
+            }
             : null,
           attachments:
             req.files?.attachments?.map((file) => ({
@@ -1157,9 +1123,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     19. GET PROPOSAL HISTORY
-  ===================================================== */
   static async getHistory(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
@@ -1226,9 +1189,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     18. MONTH ALLOCATIONS REPORT
-  ===================================================== */
   static async getMonthAllocations(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
@@ -1277,9 +1237,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     19. BULK EXPORT
-  ===================================================== */
   static async export(req, res) {
     try {
       const { fiscalYear, status, format = 'csv' } = req.query;
@@ -1297,10 +1254,8 @@ class BudgetController {
         const csvRows = budgets.budgets
           .map(
             (budget) =>
-              `${budget.proposal_ref},${budget.fiscal_year},${budget.beneficiary_type},"${
-                budget.beneficiary_value || ''
-              }",${budget.department || ''},${budget.total_amount},${budget.status},${budget.current_stage},${
-                budget.created_date
+              `${budget.proposal_ref},${budget.fiscal_year},${budget.beneficiary_type},"${budget.beneficiary_value || ''
+              }",${budget.department || ''},${budget.total_amount},${budget.status},${budget.current_stage},${budget.created_date
               }`
           )
           .join('\n');
@@ -1329,9 +1284,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     20. STATS SUMMARY
-  ===================================================== */
   static async getStats(req, res) {
     try {
       const { fiscalYear } = req.query;
@@ -1352,9 +1304,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     21. QUICK STATUS CHECK
-  ===================================================== */
   static async getStatus(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
@@ -1418,9 +1367,6 @@ class BudgetController {
     }
   }
 
-  /* =====================================================
-     22. UPDATE APPROVAL FLOW CONFIG
-  ===================================================== */
   static async updateFlowConfig(req, res) {
     try {
       const configId = Number.parseInt(req.params.id, 10);

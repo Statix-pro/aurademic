@@ -27,14 +27,10 @@ const canProcessWorkflow = permissionMiddleware([
 const canViewBudgetAdmin = permissionMiddleware([BUDGET_PERMISSIONS.adminView]);
 const canManageBudgetAdmin = permissionMiddleware([BUDGET_PERMISSIONS.adminManage]);
 
-/* =====================================================
-   GLOBAL AUTH
-===================================================== */
+
 router.use(authMiddleware);
 
-/* =====================================================
-   0. HEALTH CHECK
-===================================================== */
+
 router.get('/health', (req, res) => {
   res.json({
     success: true,
@@ -44,26 +40,22 @@ router.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     user: req.user
       ? {
-          id: req.user.id,
-          permissions: req.user.permissions || [],
-          roles: req.user.roles || [],
-          department: req.user.department || null,
-        }
+        id: req.user.id,
+        permissions: req.user.permissions || [],
+        roles: req.user.roles || [],
+        department: req.user.department || null,
+      }
       : null,
   });
 });
 
-/* =====================================================
-   1. FORM SUPPORT & METADATA
-===================================================== */
+
 router.get('/faculty', canAccessAnyBudget, BudgetController.getFacultyDetails);
+router.get('/search-applicant', canAccessAnyBudget, BudgetController.searchApplicant);
 router.get('/approval-flows', canViewBudgetAdmin, BudgetController.getApprovalFlows);
 router.get('/org-units', canAccessAnyBudget, BudgetController.getAllOrgUnits);
 router.get('/org-units/:type', canAccessAnyBudget, BudgetController.getOrgUnits);
 
-/* =====================================================
-   1.1 ENTITY MASTER (RBAC)
-===================================================== */
 router.get('/entities/:type', canManageBudgetAdmin, BudgetController.getEntitiesByType);
 router.post('/entities/:type', canManageBudgetAdmin, BudgetController.createEntity);
 router.put('/entities/:type/:id(\\d+)', canManageBudgetAdmin, BudgetController.updateEntity);
@@ -79,9 +71,6 @@ router.put(
   BudgetController.updateEntityContacts
 );
 
-/* =====================================================
-   2. DASHBOARDS
-===================================================== */
 router.get('/my', canManageProposal, BudgetController.getMyBudgets);
 router.get('/hod', canAccessHodQueue, BudgetController.getHodBudgets);
 router.get('/dof', canAccessDofQueue, BudgetController.getDofBudgets);
@@ -89,27 +78,14 @@ router.get('/principal', canAccessPrincipalQueue, BudgetController.getPrincipalB
 router.get('/aggregates', canViewBudgetAdmin, BudgetController.getAggregates);
 router.get('/stats', canViewBudgetAdmin, BudgetController.getStats);
 
-/* =====================================================
-   3. ADMIN & REPORTING
-===================================================== */
 router.get('/admin', canViewBudgetAdmin, BudgetController.adminList);
 router.get('/export', canViewBudgetAdmin, BudgetController.export);
 router.get('/search', canViewBudgetAdmin, BudgetController.search);
 
-/* =====================================================
-   4. ADMIN CONFIG MANAGEMENT
-===================================================== */
 router.patch('/admin/flow/:id(\\d+)', canManageBudgetAdmin, BudgetController.updateFlowConfig);
-
-/* =====================================================
-   5. CREATE & UPDATE OPERATIONS
-===================================================== */
 router.post('/', canManageProposal, BudgetController.create);
 router.put('/:id(\\d+)', canManageProposal, BudgetController.update);
 
-/* =====================================================
-   6. PER-PROPOSAL OPERATIONS
-===================================================== */
 router.get('/:id(\\d+)/history', canAccessAnyBudget, BudgetController.getHistory);
 router.get('/:id(\\d+)/allocations', canAccessAnyBudget, BudgetController.getMonthAllocations);
 router.get('/:id(\\d+)/status', canAccessAnyBudget, BudgetController.getStatus);
@@ -128,14 +104,8 @@ router.post(
   BudgetController.uploadFiles
 );
 
-/* =====================================================
-   7. GET SINGLE PROPOSAL (ALWAYS LAST)
-===================================================== */
 router.get('/:id(\\d+)', canAccessAnyBudget, BudgetController.get);
 
-/* =====================================================
-   ERROR HANDLER
-===================================================== */
 router.use((err, req, res, next) => {
   console.error('Budget routes error:', err);
   res.status(err.status || 500).json({

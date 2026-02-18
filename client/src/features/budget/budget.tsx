@@ -1,15 +1,25 @@
-// budget.tsx - Complete Fixed Version
+
 import React, { useState, useEffect } from 'react';
-import { useParams, useSearchParams, useLocation, useNavigate } from "react-router-dom";
+import { useParams, useLocation, useNavigate } from "react-router-dom";
 import Navbar from '../.././shared/components/layout/navbar/navbar';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
-import Select, { MultiValue, SingleValue } from 'react-select';
+import Select from 'react-select';
 import './budget.css';
 
-// ==================== INTERFACES ====================
 interface SelectOption {
   value: string;
   label: string;
+}
+
+interface BudgetHeadSelectOption extends SelectOption {
+  budgetHead: string;
+  subHead?: string;
+  optionType: 'budget-head' | 'head-sub-head';
+}
+
+interface BudgetHeadSelectGroup {
+  label: string;
+  options: BudgetHeadSelectOption[];
 }
 
 const normalizeText = (value: string | null | undefined): string =>
@@ -29,7 +39,16 @@ interface BudgetHeadGroup {
   options: string[];
 }
 
-// ==================== CONSTANTS ====================
+interface ApplicantSearchResult {
+  employee_id: number;
+  name: string;
+  designation: string;
+  department: string;
+  email: string;
+  mobile: string;
+}
+
+
 const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
   {
     label: 'Non-Recurring',
@@ -506,6 +525,10 @@ const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
   'Professional Body': 'PROFESSIONAL_BODY',
 };
 
+const BUDGET_HEAD_SUB_HEAD_CATALOG = Object.entries(SUB_HEAD_BY_BUDGET_HEAD).flatMap(
+  ([budgetHead, subHeads]) => subHeads.map((subHead) => ({ budgetHead, subHead }))
+);
+
 const MONTH_KEYS = [
   'Apr',
   'May',
@@ -536,10 +559,15 @@ const EMPTY_MONTHS: Record<string, string> = {
   Mar: '',
 };
 
-// ==================== COMPONENT ====================
+
 const Budget: React.FC = () => {
   // Form state
   const [applicantName, setApplicantName] = useState('');
+  const [applicantSearchQuery, setApplicantSearchQuery] = useState('');
+  const [applicantSearchResults, setApplicantSearchResults] = useState<ApplicantSearchResult[]>(
+    []
+  );
+  const [showApplicantDropdown, setShowApplicantDropdown] = useState(false);
   const [date, setDate] = useState('');
   const [department, setDepartment] = useState('');
   const [designation, setDesignation] = useState('');
@@ -551,21 +579,19 @@ const Budget: React.FC = () => {
   const [categorySelections, setCategorySelections] = useState<SelectOption[]>([]);
   const [categoryItem, setCategoryItem] = useState('');
   const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
-  const { id } = useParams(); // /budget/:id
-  const [searchParams] = useSearchParams();
+  const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  // 1. Is it Edit Mode? Only if URL contains "/edit" AND we have an ID
+
   const isEditMode = location.pathname.includes('/edit') && !!id;
 
-  // 2. Is it View Mode? If we have an ID but NOT in Edit Mode
+
   const isViewMode = !!id && !location.pathname.includes('/edit');
 
-  // 3. Is it New Mode? If no ID
+
   const isNewMode = !id;
 
-  // 4. Combined Editable Flag
-  // Allows editing if: (New Mode) OR (Edit Mode AND Status allows it - set later)
+
   const [isEditable, setIsEditable] = useState(isNewMode);
   const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(!id);
 
@@ -577,12 +603,12 @@ const Budget: React.FC = () => {
     return `${fyStart}-${String(fyStart + 1).slice(2)}`;
   };
 
-  // ✅ 2. Define State NEXT (This holds the value)
+
   const [explicitFiscalYear, setExplicitFiscalYear] = useState<string>(
     location.state?.fiscalYear || getCurrentFY()
   );
 
-  // Budget lines state
+
   const [budgetLines, setBudgetLines] = useState<BudgetLine[]>([
     {
       budgetHead: '',
@@ -596,7 +622,7 @@ const Budget: React.FC = () => {
 
   const [expandedRows, setExpandedRows] = useState<number[]>([0]);
 
-  // Helper functions
+
   const getSubcategoryLabel = (type: string): string => {
     if (!type) return 'Sub category';
     if (type.includes(' ')) return type;
@@ -644,7 +670,7 @@ const Budget: React.FC = () => {
     }),
   };
 
-  // Budget line operations
+
   const getSubHeads = (head: string) => SUB_HEAD_BY_BUDGET_HEAD[head] || [];
 
   const updateLine = (index: number, field: keyof BudgetLine, value: string) => {
@@ -655,7 +681,7 @@ const Budget: React.FC = () => {
         [field]: value,
       };
 
-      // Clear subHead when budgetHead changes
+
       if (field === 'budgetHead' && value !== updated[index].budgetHead) {
         updated[index].subHead = '';
       }
@@ -722,40 +748,122 @@ const Budget: React.FC = () => {
   const hasZeroAmountLine = (lines: BudgetLine[]) =>
     lines.some((line) => Number(line.amount || 0) === 0);
 
-  // CORRECT NAME from your file (line 29)
-  const getFilteredBudgetHeads = (search: string): string[] => {
-    const query = search.toLowerCase();
-    return BUDGET_HEAD_GROUPS.flatMap(group =>
-      group.options.filter(opt => opt.toLowerCase().includes(query))
-    );
-  };
-  // At top of component, after budgetLines state
   const [budgetHeadFilter, setBudgetHeadFilter] = useState<Record<number, string>>({});
-  const [budgetHeadFilters, setBudgetHeadFilters] = useState<Record<number, string>>({});
 
-  // Helper: returns filtered options for one row
-  const getFilteredBudgetHeadGroups = (rowIndex: number) => {
-    const query = (budgetHeadFilter[rowIndex] || '').toLowerCase();
-    if (!query) return BUDGET_HEAD_GROUPS;
+  const handleApplicantSearch = async (query: string) => {
+    setApplicantSearchQuery(query);
 
-    return BUDGET_HEAD_GROUPS.map(group => ({
-      ...group,
-      options: group.options.filter(opt =>
-        opt.toLowerCase().includes(query)
-      ),
-    })).filter(group => group.options.length > 0);
+    try {
+      const response = await authenticityUtility.get(
+        `/budget/search-applicant?q=${encodeURIComponent(query)}`
+      ) as { success?: boolean; status?: string; data?: ApplicantSearchResult[] };
+
+      if (response.status === 'success' || response.success) {
+        setApplicantSearchResults(Array.isArray(response.data) ? response.data : []);
+        setShowApplicantDropdown(true);
+      }
+    } catch (error) {
+      console.error('Error searching applicant:', error);
+      setApplicantSearchResults([]);
+      setShowApplicantDropdown(false);
+    }
+  };
+
+  const handleSelectApplicant = (emp: ApplicantSearchResult) => {
+    setApplicantName((emp.name || '').trim());
+    setApplicantSearchQuery((emp.name || '').trim());
+    setDepartment(emp.department || '');
+    setDesignation(emp.designation || '');
+    setEmail(emp.email || '');
+    setMobile(emp.mobile || '');
+    setShowApplicantDropdown(false);
+  };
+
+  const getBudgetHeadSelectGroups = (rowIndex: number): BudgetHeadSelectGroup[] => {
+    const query = normalizeText(budgetHeadFilter[rowIndex]).toLowerCase();
+
+    const headGroups: BudgetHeadSelectGroup[] = BUDGET_HEAD_GROUPS
+      .map((group) => ({
+        label: group.label,
+        options: group.options
+          .filter((head) => !query || head.toLowerCase().includes(query))
+          .map(
+            (head) =>
+              ({
+                value: `head:${head}`,
+                label: head,
+                budgetHead: head,
+                optionType: 'budget-head',
+              }) as BudgetHeadSelectOption
+          ),
+      }))
+      .filter((group) => group.options.length > 0);
+
+    if (!query) {
+      return headGroups;
+    }
+
+    const quickMatches: BudgetHeadSelectOption[] = BUDGET_HEAD_SUB_HEAD_CATALOG
+      .filter(
+        ({ budgetHead, subHead }) =>
+          subHead.toLowerCase().includes(query) ||
+          budgetHead.toLowerCase().includes(query)
+      )
+      .slice(0, 12)
+      .map(
+        ({ budgetHead, subHead }) =>
+          ({
+            value: `match:${budgetHead}:${subHead}`,
+            label: `${subHead} (${budgetHead})`,
+            budgetHead,
+            subHead,
+            optionType: 'head-sub-head',
+          }) as BudgetHeadSelectOption
+      );
+
+    if (quickMatches.length === 0) {
+      return headGroups;
+    }
+
+    return [
+      {
+        label: 'Quick Match',
+        options: quickMatches,
+      },
+      ...headGroups,
+    ];
+  };
+
+  const handleBudgetHeadSelect = (
+    rowIndex: number,
+    selectedOption: BudgetHeadSelectOption | null
+  ) => {
+    if (!selectedOption) {
+      updateLine(rowIndex, 'budgetHead', '');
+      updateLine(rowIndex, 'subHead', '');
+      setBudgetHeadFilter((prev) => ({ ...prev, [rowIndex]: '' }));
+      return;
+    }
+
+    updateLine(rowIndex, 'budgetHead', selectedOption.budgetHead);
+
+    if (selectedOption.optionType === 'head-sub-head' && selectedOption.subHead) {
+      updateLine(rowIndex, 'subHead', selectedOption.subHead);
+    }
+
+    setBudgetHeadFilter((prev) => ({ ...prev, [rowIndex]: '' }));
   };
 
 
-  // ==================== SUBMIT HANDLER (UPGRADED + BACKEND SAFE) ====================
+
   const handleSubmitBudget = async () => {
-    // 1️⃣ Basic Validation
+
     if (!budgetLines.length) {
       alert('Please add at least one budget line.');
       return;
     }
 
-    // Validate required fields inside each line
+
     for (let i = 0; i < budgetLines.length; i++) {
       const line = budgetLines[i];
       if (!line.budgetHead?.trim()) {
@@ -768,7 +876,7 @@ const Budget: React.FC = () => {
       }
     }
 
-    // 2️⃣ Map Lines
+
     const formattedLines = budgetLines.map((line) => ({
       budget_head: line.budgetHead?.trim(),
       sub_head: line.subHead?.trim() || '',
@@ -780,21 +888,29 @@ const Budget: React.FC = () => {
       month_allocations: line.monthAmounts || {},
     }));
 
-    // ✅ 3️⃣ CALCULATE FISCAL YEAR INT
-    // Convert to String first to prevent errors if it's already a number
+
     const safeFY = String(explicitFiscalYear);
     const fiscalYearInt = parseInt(safeFY.split("-")[0]);
 
-    // Debug check
+
     if (isNaN(fiscalYearInt)) {
       alert("Error: Invalid Fiscal Year calculated. Please refresh.");
       return;
     }
 
-    // 4️⃣ Construct Payload (Included fiscal_year)
+
+    if (
+      isNewMode &&
+      applicantSearchQuery.trim() &&
+      applicantSearchQuery.trim() !== applicantName.trim()
+    ) {
+      alert('Please select an applicant from the search results.');
+      return;
+    }
+
     const payload = {
       request_date: date,
-      fiscal_year: fiscalYearInt, // 👈 THIS WAS MISSING OR INVALID
+      fiscal_year: fiscalYearInt,
       beneficiary_type: beneficiaryType?.trim(),
       beneficiary_value:
         beneficiaryType === 'Faculty'
@@ -808,11 +924,11 @@ const Budget: React.FC = () => {
     };
 
     try {
-      console.log('🚀 Submitting Payload:', payload); // Check console to see if fiscal_year is there
+
 
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       if (!token) {
-        alert('❌ Authentication Error: You are not logged in.');
+        alert('Authentication Error: You are not logged in.');
         return;
       }
 
@@ -821,7 +937,7 @@ const Budget: React.FC = () => {
         ? `/budget/${id}`
         : '/budget';
 
-      // authenticityUtility.post/put returns the response data directly
+
       const result = await (authenticityUtility as any)[httpMethod](endpoint, payload);
 
       if (!result.success) {
@@ -830,31 +946,34 @@ const Budget: React.FC = () => {
 
       alert(
         isEditMode
-          ? `✅ Budget updated successfully!`
-          : `✅ Budget submitted successfully! Reference: ${result.data.proposalRef}`
+          ? `Budget updated successfully!`
+          : `Budget submitted successfully! Reference: ${result.data.proposalRef}`
       );
 
-      // Reset form if new
+
       if (!isEditMode) {
         setBudgetLines([{
           budgetHead: '', subHead: '', amount: '', qty: '1', monthAmounts: { ...EMPTY_MONTHS }, description: '',
         }]);
         setExpandedRows([0]);
+        setApplicantSearchQuery('');
+        setApplicantSearchResults([]);
+        setShowApplicantDropdown(false);
         setApplicantName(''); setDepartment(''); setDesignation(''); setEmail(''); setMobile('');
         setBeneficiaryType(''); setBeneficiaryValue(''); setCategoryItem('');
         const today = new Date().toISOString().split('T')[0];
         setDate(today);
       }
 
-      navigate("/budgetcard"); // Or whatever your dashboard route is, e.g., "/budget-dashboard"
+      navigate("/budgetcard");
     } catch (error: any) {
-      console.error('❌ Submit error:', error);
+      console.error('Submit error:', error);
       alert(`Failed to submit: ${error.response?.data?.message || error.message}`);
     }
   };
 
 
-  // ==================== EFFECTS ====================
+
   useEffect(() => {
     let cancelled = false;
 
@@ -905,9 +1024,7 @@ const Budget: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => {
-    console.log('Expanded rows:', expandedRows, 'Lines count:', budgetLines.length);
-  }, [expandedRows, budgetLines.length]);
+
 
   useEffect(() => {
     if (beneficiaryType === 'Institution') {
@@ -922,7 +1039,7 @@ const Budget: React.FC = () => {
     }
   }, [beneficiaryType, applicantName]);
 
-  // ✅ LOAD PROPOSAL DATA FOR VIEW/EDIT MODE
+
   useEffect(() => {
     if (!id) return;
 
@@ -945,34 +1062,34 @@ const Budget: React.FC = () => {
           return;
         }
 
-        // --- 1. PREFILL APPLICANT DETAILS (FIXED) ---
-        // We check multiple possible keys because backend joins might name them differently
+
         setApplicantName(p.applicant_name || p.user_name || p.name || "");
+        setApplicantSearchQuery(p.applicant_name || p.user_name || p.name || "");
         setEmail(p.user_email || p.email || "");
 
-        // MISSING FIELDS ADDED HERE:
+
         setDesignation(p.designation || p.user_designation || "");
         setMobile(p.mobile || p.user_mobile || p.phone || "");
 
-        // --- 2. PREFILL BENEFICIARY & DEPARTMENT (FIXED) ---
+
         const normalizedBeneficiaryType =
           p.beneficiary_type === 'ProfessionalBodies'
             ? 'Professional Body'
             : p.beneficiary_type || '';
         setBeneficiaryType(normalizedBeneficiaryType);
 
-        // Fix for "Value not displayed": Ensure we set the specific value state
+
         setBeneficiaryValue(p.beneficiary_value || "");
-        // Also set 'categoryItem' if your UI uses that for the second dropdown
+
         setCategoryItem(p.beneficiary_value || "");
 
-        // Fix for Department: Fallback to user_department if proposal department is empty
+
         setDepartment(p.department || p.user_department || "");
 
         // Date
         setDate((p.request_date || "").split("T")[0]);
 
-        // --- 3. PREFILL BUDGET LINES (Existing Logic) ---
+
         const apiLines = Array.isArray(data.lines) ? data.lines : [];
         const apiAllocations = data.allocations || {};
 
@@ -992,16 +1109,16 @@ const Budget: React.FC = () => {
           setBudgetLines(mappedLines);
         }
 
-        // --- 4. SET EDITABLE STATE ---
+
         const editableStatuses = ['draft', 'hod_returned', 'dof_returned', 'submitted'];
         const isStatusEditable = editableStatuses.includes((p.status || '').toLowerCase());
         const isEditURL = location.pathname.includes('/edit');
 
         if (!isEditURL) {
           setIsEditable(false);
-          setExpandedRows(mappedLines.map((_, idx) => idx)); // Auto-expand in view
+          setExpandedRows(mappedLines.map((_, idx) => idx));
         } else if (isEditURL && !isStatusEditable) {
-          alert(`⚠️ This proposal cannot be edited because it is currently '${p.status}'. Switching to View mode.`);
+          alert(`This proposal cannot be edited because it is currently '${p.status}'. Switching to View mode.`);
           setIsEditable(false);
           navigate(`/budget/${id}`);
         } else {
@@ -1016,9 +1133,9 @@ const Budget: React.FC = () => {
     loadProposal();
   }, [id, location.pathname, navigate]);
 
-  // ✅ AUTO-FILL USER DETAILS (New Form Only)
+
   useEffect(() => {
-    // Only run if it's a new form (no ID) and name is empty
+
     if (id || applicantName) return;
 
     const fetchUserDetails = async () => {
@@ -1026,15 +1143,16 @@ const Budget: React.FC = () => {
         const token = localStorage.getItem("token") || sessionStorage.getItem("token");
         if (!token) return;
 
-        // ✅ Correct Path: Matches router.get('/faculty', ...)
+
         const json = await authenticityUtility.get('/budget/faculty') as any;
 
         if (json.success && json.data) {
           setApplicantName(json.data.name || '');
+          setApplicantSearchQuery(json.data.name || '');
           setDepartment(json.data.department || '');
           setEmail(json.data.email || '');
 
-          // ✅ Add these since we updated the backend to provide them
+
           if (json.data.designation) setDesignation(json.data.designation);
           if (json.data.mobile) setMobile(json.data.mobile);
         }
@@ -1048,14 +1166,14 @@ const Budget: React.FC = () => {
 
 
 
-  // ==================== RENDER ====================
+
   return (
     <div className="budgetPage">
       <Navbar />
       <fieldset disabled={isViewMode} style={{ border: 0, padding: 0, margin: 0 }}>
-        {/* Card 1: Applicant Details (Collapsible Preview) */}
+
         <div className="budgetCard">
-          {/* Header - Always visible */}
+
           <div
             className="cardHeader"
             style={{
@@ -1073,20 +1191,20 @@ const Budget: React.FC = () => {
               Applicant Details
             </h5>
 
-            {/* Toggle Arrow - EXACT match to table arrows */}
+
             <svg
               width="12"
               height="8"
               viewBox="0 0 12 8"
               className={`card-toggle-arrow ${isApplicantCardOpen ? 'open' : ''}`}
               style={{
-                transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',  // Same smooth animation
+                transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 cursor: 'pointer'
               }}
             >
               <polyline
                 points="1.5,1.5 6,5.5 10.5,1.5"
-                stroke="#0069ab"    // Blue to match header color
+                stroke="#0069ab"
                 strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -1096,10 +1214,10 @@ const Budget: React.FC = () => {
 
           </div>
 
-          {/* Body Content */}
+
           <div className="cardContent" style={{ padding: '20px' }}>
 
-            {/* STATE 1: COLLAPSED PREVIEW (Only Name & Date) */}
+
             {!isApplicantCardOpen && (
               <div className="row">
                 <div className="col-md-7">
@@ -1110,11 +1228,11 @@ const Budget: React.FC = () => {
                     <input
                       type="text"
                       value={applicantName}
-                      disabled={true} // Preview is read-only or disabled to indicate "click header to edit"
+                      disabled={true}
                       placeholder="Enter full name"
                       className="budget-input"
                       style={{ backgroundColor: '#fff', border: '1px solid #e0e0e0', cursor: 'pointer' }}
-                      onClick={() => setIsApplicantCardOpen(true)} // Click input to open full form
+                      onClick={() => setIsApplicantCardOpen(true)}
                       readOnly
                     />
                   </div>
@@ -1125,7 +1243,7 @@ const Budget: React.FC = () => {
                       Date
                     </label>
                     <input
-                      type="date" // Use text for better formatting in preview if preferred
+                      type="date"
                       value={date}
                       disabled={true}
                       className="budget-input"
@@ -1138,26 +1256,104 @@ const Budget: React.FC = () => {
               </div>
             )}
 
-            {/* STATE 2: EXPANDED FULL FORM */}
+
             {isApplicantCardOpen && (
               <>
                 <div className="row mb-3" style={{ marginBottom: '15px' }}>
                   <div className="col-md-7">
-                    <div className="formGroup">
+                    <div className="formGroup" style={{ position: 'relative' }}>
                       <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
                         Applicant Name
                       </label>
                       <input
                         type="text"
-                        value={applicantName}
-                        onChange={(e) => setApplicantName(e.target.value)}
+                        value={applicantSearchQuery}
+                        onChange={(e) => handleApplicantSearch(e.target.value)}
                         disabled={!isEditable}
-                        placeholder="Enter full name"
+                        placeholder="Search employee by name or ERP ID"
                         className="budget-input"
-                        onFocus={(e) => { e.currentTarget.style.borderColor = '#0069ab'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)'; }}
-                        onBlur={(e) => { e.currentTarget.style.borderColor = '#e0e0e0'; e.currentTarget.style.boxShadow = 'none'; }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = '#0069ab';
+                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                          if (isEditable && !showApplicantDropdown) {
+                            void handleApplicantSearch(applicantSearchQuery);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = '#e0e0e0';
+                          e.currentTarget.style.boxShadow = 'none';
+                          setTimeout(() => setShowApplicantDropdown(false), 200);
+                        }}
                         required
                       />
+                      {isEditable && showApplicantDropdown && applicantSearchResults.length > 0 && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            backgroundColor: '#fff',
+                            border: '1px solid #e0e0e0',
+                            borderRadius: '12px',
+                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                            zIndex: 1000,
+                            maxHeight: '250px',
+                            overflowY: 'auto',
+                            marginTop: '4px',
+                          }}
+                        >
+                          {applicantSearchResults.map((emp) => (
+                            <div
+                              key={emp.employee_id}
+                              onMouseDown={(evt) => {
+                                evt.preventDefault();
+                                handleSelectApplicant(emp);
+                              }}
+                              style={{
+                                padding: '10px 15px',
+                                cursor: 'pointer',
+                                borderBottom: '1px solid #f0f0f0',
+                                transition: 'background-color 0.2s',
+                              }}
+                              onMouseEnter={(evt) => {
+                                evt.currentTarget.style.backgroundColor = '#f8f9fa';
+                              }}
+                              onMouseLeave={(evt) => {
+                                evt.currentTarget.style.backgroundColor = '#fff';
+                              }}
+                            >
+                              <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
+                              <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                                {emp.designation} | {emp.department}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {isEditable &&
+                        showApplicantDropdown &&
+                        applicantSearchQuery.length >= 2 &&
+                        applicantSearchResults.length === 0 && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              backgroundColor: '#fff',
+                              border: '1px solid #e0e0e0',
+                              borderRadius: '12px',
+                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                              zIndex: 1000,
+                              marginTop: '4px',
+                            }}
+                          >
+                            <div style={{ padding: '10px 15px', color: '#6c757d' }}>
+                              No employees found
+                            </div>
+                          </div>
+                        )}
                     </div>
                   </div>
                   <div className="col-md-5">
@@ -1262,8 +1458,7 @@ const Budget: React.FC = () => {
           </div>
         </div>
 
-        {/* Card 2: Beneficiary Details - Description Box Removed */}
-        {/* Card 2: Beneficiary Details */}
+
         <div className="budgetCard">
           <div className="cardContent">
             <div className="row mb-3" style={{ marginBottom: '15px' }}>
@@ -1304,8 +1499,8 @@ const Budget: React.FC = () => {
                         control: (base: any, state: any) => ({
                           ...base,
                           minHeight: '36px',
-                          height: 36,                     // ← FIXED: Number, not string
-                          borderRadius: 12,               // ← FIXED: Number
+                          height: 36,
+                          borderRadius: 12,
                           border: state.isFocused
                             ? '1px solid #0069ab'
                             : '1px solid #e0e0e0',
@@ -1487,7 +1682,7 @@ const Budget: React.FC = () => {
         </div>
 
 
-        {/* Card 3: Budget Table */}
+
         <div className="budgetCard">
           <div className="cardContent">
             <div
@@ -1524,7 +1719,7 @@ const Budget: React.FC = () => {
 
                     return (
                       <React.Fragment key={idx}>
-                        {/* Main row */}
+
                         <tr>
                           <td className="centerTd">{idx + 1}</td>
                           <td>
@@ -1532,23 +1727,38 @@ const Budget: React.FC = () => {
                               className="tableSelect"
                               value={
                                 line.budgetHead
-                                  ? { value: line.budgetHead, label: line.budgetHead } as SelectOption
+                                  ? ({
+                                      value: `head:${line.budgetHead}`,
+                                      label: line.budgetHead,
+                                      budgetHead: line.budgetHead,
+                                      optionType: 'budget-head',
+                                    } as BudgetHeadSelectOption)
                                   : null
                               }
-                              onChange={(selected: any) => {
-                                const val = selected?.value || '';
-                                updateLine(idx, 'budgetHead', val);
+                              onChange={(selected: any) =>
+                                handleBudgetHeadSelect(
+                                  idx,
+                                  (selected as BudgetHeadSelectOption) || null
+                                )
+                              }
+                              onInputChange={(inputValue: string, meta: any) => {
+                                if (meta?.action === 'input-change') {
+                                  setBudgetHeadFilter((prev) => ({
+                                    ...prev,
+                                    [idx]: inputValue,
+                                  }));
+                                } else if (meta?.action === 'menu-close') {
+                                  setBudgetHeadFilter((prev) => ({
+                                    ...prev,
+                                    [idx]: '',
+                                  }));
+                                }
+                                return inputValue;
                               }}
-                              options={BUDGET_HEAD_GROUPS.map(group => ({
-                                label: group.label,
-                                options: group.options.map(opt => ({
-                                  value: opt,
-                                  label: opt
-                                } as SelectOption))
-                              }))}
-                              placeholder=""
+                              options={getBudgetHeadSelectGroups(idx)}
+                              placeholder="Select or type"
                               isSearchable={true}
-                              isClearable={false}
+                              isClearable={true}
                               isDisabled={!isEditable}
                               maxMenuHeight={200}
                               menuPlacement="auto"
@@ -1569,18 +1779,31 @@ const Budget: React.FC = () => {
                                 control: (base: any, state: any) => ({
                                   ...base,
                                   minHeight: '38px !important',
-                                  height: '38px !important',           // ← FIXED: Force single height
+                                  height: '38px !important',
                                   borderRadius: '4px',
-                                  border: state.isFocused             // ← FIXED: Single clean border
+                                  border: state.isFocused
                                     ? '2px solid #0069ab'
                                     : '1px solid #e0e0e0',
-                                  boxShadow: 'none !important',       // ← FIXED: No double border/shadow
+                                  boxShadow: 'none !important',
                                   backgroundColor: '#fff'
                                 }),
                                 dropdownIndicator: (base: any, state: any) => ({
                                   ...base,
-                                  padding: '4px 8px',
+                                  padding: '4px 2px',
                                   transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                                }),
+                                clearIndicator: (base: any) => ({
+                                  ...base,
+                                  padding: '4px 2px',
+                                  color: '#9aa3af',
+                                  ':hover': {
+                                    color: '#9aa3af',
+                                  },
+                                }),
+                                indicatorsContainer: (base: any) => ({
+                                  ...base,
+                                  paddingRight: '2px',
+                                  gap: '0px',
                                 }),
                                 indicatorSeparator: () => ({ display: 'none' }),
                                 menu: (base: any) => ({
@@ -1632,13 +1855,13 @@ const Budget: React.FC = () => {
                               styles={{
                                 control: (base: any, state: any) => ({
                                   ...base,
-                                  minHeight: '38px !important',       // ← FIXED: Single height
-                                  height: '38px !important',          // ← FIXED: Single height
+                                  minHeight: '38px !important',
+                                  height: '38px !important',
                                   borderRadius: '4px',
-                                  border: state.isFocused             // ← FIXED: Single clean border
+                                  border: state.isFocused
                                     ? '2px solid #0069ab'
                                     : '1px solid #e0e0e0',
-                                  boxShadow: 'none !important',       // ← FIXED: No double border
+                                  boxShadow: 'none !important',
                                   backgroundColor: '#fff'
                                 }),
                                 dropdownIndicator: (base: any, state: any) => ({
@@ -1692,11 +1915,11 @@ const Budget: React.FC = () => {
                           </td>
                           <td className="centerTd totalCell">₹ {total}</td>
 
-                          {/* Actions column */}
+
                           <td
                             className="centerTd"
                             style={{
-                              padding: '8px 4px !important',  // ← Match table cell padding
+                              padding: '8px 4px !important',
                               textAlign: 'center',
                               verticalAlign: 'middle',
                               display: 'flex',
@@ -1706,7 +1929,7 @@ const Budget: React.FC = () => {
                               gap: '2px'
                             }}
                           >
-                            {/* Arrow - EXACT budget head dropdown match */}
+
                             <button
                               type="button"
                               onClick={() => toggleRowSchedule(idx)}
@@ -1714,7 +1937,7 @@ const Budget: React.FC = () => {
                               style={{
                                 width: '24px',
                                 height: '24px',
-                                padding: 0,           // ← Zero padding for perfect centering
+                                padding: 0,
                                 border: 'none',
                                 background: 'transparent',
                                 borderRadius: '3px',
@@ -1731,7 +1954,7 @@ const Budget: React.FC = () => {
                                 viewBox="0 0 10 8"
                                 className={`action-dropdown-arrow ${expandedRows.includes(idx) ? 'open' : ''}`}
                                 style={{
-                                  transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',  // ← EXACT Select animation
+                                  transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                                   transformOrigin: 'center'
                                 }}
                               >
@@ -1794,7 +2017,7 @@ const Budget: React.FC = () => {
                           </td>
                         </tr>
 
-                        {/* Expanded schedule row */}
+
                         {expandedRows.includes(idx) && (
                           <tr>
                             <td colSpan={7}>
@@ -1851,7 +2074,7 @@ const Budget: React.FC = () => {
                                     alignItems: 'flex-start',
                                   }}
                                 >
-                                  {/* Left: month inputs */}
+
                                   <div className="monthGrid">
                                     {MONTH_KEYS.map((month) => (
                                       <div key={month} className="monthBox">
@@ -1874,7 +2097,7 @@ const Budget: React.FC = () => {
                                     ))}
                                   </div>
 
-                                  {/* Right: totals and remaining */}
+
                                   <div
                                     className="monthSummaryBox"
                                     style={{
@@ -1926,7 +2149,7 @@ const Budget: React.FC = () => {
                                       }}
                                     />
 
-                                    {/* Color-coded remaining box */}
+
                                     <div
                                       style={{
                                         display: 'flex',
@@ -2009,7 +2232,7 @@ const Budget: React.FC = () => {
           </div>
         </div>
       </fieldset>
-      {/* Submit Button */}
+
       {!isViewMode && (
         <div
           style={{

@@ -126,6 +126,35 @@
   padding-right: 4px;
 }
 
+.assigned-role-tag {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 999px;
+}
+
+.assigned-role-tag-default {
+  background-color: #e7f1ff !important;
+  color: #084298 !important;
+}
+
+.assigned-role-tag-admin {
+  background-color: #d1e7dd !important;
+  color: #0f5132 !important;
+}
+
+.assigned-role-tag-super-admin {
+  background-color: #f8d7da !important;
+  color: #842029 !important;
+}
+
+.assigned-role-tag-empty {
+  background-color: #e9ecef !important;
+  color: #495057 !important;
+}
+
 @media (max-width: 768px) {
   .access-control-wrapper {
     padding: 16px;
