@@ -3,13 +3,19 @@ import rateLimit from 'express-rate-limit';
 import accessControlController from './accessControlController.js';
 import {
   authMiddleware,
+  permissionMiddleware,
   superAdminMiddleware,
 } from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.use(authMiddleware);
-router.use(superAdminMiddleware);
+
+const canReadAccessControl = permissionMiddleware([
+  'access_control.read',
+  'access_control.manage',
+]);
+const canManageAccessControl = permissionMiddleware(['access_control.manage']);
 
 // Rate limiter: 100 requests per 15 minutes
 const limiter = rateLimit({
@@ -20,22 +26,35 @@ const limiter = rateLimit({
 
 router.use(limiter);
 
-router.get('/permissions', accessControlController.getPermissions);
-router.post('/permissions', accessControlController.createPermission);
-router.put('/permissions/:permissionId', accessControlController.updatePermission);
-router.delete('/permissions/:permissionId', accessControlController.deletePermission);
+router.get('/permissions', canReadAccessControl, accessControlController.getPermissions);
+router.post('/permissions', canManageAccessControl, accessControlController.createPermission);
+router.put(
+  '/permissions/:permissionId',
+  canManageAccessControl,
+  accessControlController.updatePermission
+);
+router.delete(
+  '/permissions/:permissionId',
+  canManageAccessControl,
+  accessControlController.deletePermission
+);
 
-router.get('/roles', accessControlController.getRoles);
-router.post('/roles', accessControlController.createRole);
-router.put('/roles/:roleId', accessControlController.updateRole);
-router.delete('/roles/:roleId', accessControlController.deleteRole);
+router.get('/roles', canReadAccessControl, accessControlController.getRoles);
+router.post('/roles', canManageAccessControl, accessControlController.createRole);
+router.put('/roles/:roleId', canManageAccessControl, accessControlController.updateRole);
+router.delete('/roles/:roleId', canManageAccessControl, accessControlController.deleteRole);
 router.put(
   '/roles/:roleId/permissions',
+  canManageAccessControl,
   accessControlController.updateRolePermissions
 );
 
-router.get('/users', accessControlController.getUsers);
-router.put('/users/:userId/roles', accessControlController.updateUserRoles);
-router.put('/users/:userId/super-admin', accessControlController.setUserSuperAdmin);
+router.get('/users', canReadAccessControl, accessControlController.getUsers);
+router.put('/users/:userId/roles', canManageAccessControl, accessControlController.updateUserRoles);
+router.put(
+  '/users/:userId/super-admin',
+  superAdminMiddleware,
+  accessControlController.setUserSuperAdmin
+);
 
 export default router;
