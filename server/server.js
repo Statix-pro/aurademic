@@ -3,7 +3,7 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import cors from 'cors';
 
-// Existing routes
+// routes
 import journalRoutes from './modules/journal/journalRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
 import adminRoutes from './modules/admindashboard/adminRoutes.js';
@@ -11,11 +11,10 @@ import authRoutes from './modules/auth/authRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
 import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
 import editRequestRoutes from './modules/editRequest/editRequestRoutes.js';
-// Budget (NEW)
 import budgetRoutes from './modules/budget/budgetRoutes.js';
 
 
-// Events
+// Events routes
 import eventRoutes from './modules/events/events/eventRoutes.js';
 import preEventRoutes from './modules/events/preevents/preEventRoutes.js';
 import financeRoutes from './modules/events/finance/financeRoutes.js';
@@ -23,10 +22,10 @@ import updatesRoutes from './modules/events/updates/updatesRoutes.js';
 import documentsRoutes from './modules/events/documents/documentsRoutes.js';
 import accessControlRoutes from './modules/accessControl/accessControlRoutes.js';
 
-// Finance page (existing)
+// Finance page
 import financePageRoutes from './modules/finance/financeRoutes.js';
 
-// ✅ NEW: FinanceCard routes
+// FinanceCard routes
 // import financeCardRoutes from './modules/financeCard/financeCardRoutes.js';
 // import guesthouseRoutes from './modules/guesthouse/guesthouseRoutes.js';
 
@@ -131,10 +130,10 @@ app.use('/api/finance', financeRoutes);
 // Existing finance page
 app.use('/api/finance-requests', financePageRoutes);
 
-// ✅ NEW: Budget routes
+// Budget routes
 app.use('/api/budget', budgetRoutes);
 
-// ✅ NEW: FinanceCard API
+// FinanceCard API
 // app.use('/api/finance-dashboard', financeCardRoutes);
 // app.use('/api/guesthouse', guesthouseRoutes);
 

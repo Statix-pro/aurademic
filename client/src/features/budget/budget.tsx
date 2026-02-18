@@ -1,7 +1,8 @@
 // budget.tsx - Complete Fixed Version
 import React, { useState, useEffect } from 'react';
-import { useParams, useSearchParams, useLocation, useNavigate} from "react-router-dom";
+import { useParams, useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import Navbar from '../.././shared/components/layout/navbar/navbar';
+import authenticityUtility from '../../shared/utils/authenticityUtility';
 import Select, { MultiValue, SingleValue } from 'react-select';
 import './budget.css';
 
@@ -565,9 +566,9 @@ const Budget: React.FC = () => {
 
   // 4. Combined Editable Flag
   // Allows editing if: (New Mode) OR (Edit Mode AND Status allows it - set later)
-  const [isEditable, setIsEditable] = useState(isNewMode); 
-  const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(!id); 
-  
+  const [isEditable, setIsEditable] = useState(isNewMode);
+  const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(!id);
+
   const getCurrentFY = () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -623,9 +624,9 @@ const Budget: React.FC = () => {
     fetchedSubcategoryOptions.length > 0
       ? fetchedSubcategoryOptions
       : fallbackSubcategoryList.map((value) => ({
-          value,
-          label: value,
-        }));
+        value,
+        label: value,
+      }));
 
   const hasSubcategories = subcategoryList.length > 0;
 
@@ -721,29 +722,29 @@ const Budget: React.FC = () => {
   const hasZeroAmountLine = (lines: BudgetLine[]) =>
     lines.some((line) => Number(line.amount || 0) === 0);
 
- // CORRECT NAME from your file (line 29)
-const getFilteredBudgetHeads = (search: string): string[] => {
-  const query = search.toLowerCase();
-  return BUDGET_HEAD_GROUPS.flatMap(group => 
-    group.options.filter(opt => opt.toLowerCase().includes(query))
-  );
-};
-// At top of component, after budgetLines state
-const [budgetHeadFilter, setBudgetHeadFilter] = useState<Record<number, string>>({});
-const [budgetHeadFilters, setBudgetHeadFilters] = useState<Record<number, string>>({});
+  // CORRECT NAME from your file (line 29)
+  const getFilteredBudgetHeads = (search: string): string[] => {
+    const query = search.toLowerCase();
+    return BUDGET_HEAD_GROUPS.flatMap(group =>
+      group.options.filter(opt => opt.toLowerCase().includes(query))
+    );
+  };
+  // At top of component, after budgetLines state
+  const [budgetHeadFilter, setBudgetHeadFilter] = useState<Record<number, string>>({});
+  const [budgetHeadFilters, setBudgetHeadFilters] = useState<Record<number, string>>({});
 
-// Helper: returns filtered options for one row
-const getFilteredBudgetHeadGroups = (rowIndex: number) => {
-  const query = (budgetHeadFilter[rowIndex] || '').toLowerCase();
-  if (!query) return BUDGET_HEAD_GROUPS;
+  // Helper: returns filtered options for one row
+  const getFilteredBudgetHeadGroups = (rowIndex: number) => {
+    const query = (budgetHeadFilter[rowIndex] || '').toLowerCase();
+    if (!query) return BUDGET_HEAD_GROUPS;
 
-  return BUDGET_HEAD_GROUPS.map(group => ({
-    ...group,
-    options: group.options.filter(opt =>
-      opt.toLowerCase().includes(query)
-    ),
-  })).filter(group => group.options.length > 0);
-};
+    return BUDGET_HEAD_GROUPS.map(group => ({
+      ...group,
+      options: group.options.filter(opt =>
+        opt.toLowerCase().includes(query)
+      ),
+    })).filter(group => group.options.length > 0);
+  };
 
 
   // ==================== SUBMIT HANDLER (UPGRADED + BACKEND SAFE) ====================
@@ -781,7 +782,7 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
 
     // ✅ 3️⃣ CALCULATE FISCAL YEAR INT
     // Convert to String first to prevent errors if it's already a number
-    const safeFY = String(explicitFiscalYear); 
+    const safeFY = String(explicitFiscalYear);
     const fiscalYearInt = parseInt(safeFY.split("-")[0]);
 
     // Debug check
@@ -799,8 +800,8 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
         beneficiaryType === 'Faculty'
           ? applicantName?.trim()
           : beneficiaryType === 'Institution'
-          ? 'K.S.Rangasamy College of Technology'
-          : categoryItem?.trim(),
+            ? 'K.S.Rangasamy College of Technology'
+            : categoryItem?.trim(),
       department: department?.trim(),
       proposal_description: '',
       lines: formattedLines,
@@ -815,23 +816,15 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
         return;
       }
 
-      const httpMethod = isEditMode ? 'PUT' : 'POST';
+      const httpMethod = isEditMode ? 'put' : 'post';
       const endpoint = isEditMode
-        ? `http://localhost:5000/api/budget/${id}`
-        : 'http://localhost:5000/api/budget';
+        ? `/budget/${id}`
+        : '/budget';
 
-      const response = await fetch(endpoint, {
-        method: httpMethod,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
+      // authenticityUtility.post/put returns the response data directly
+      const result = await (authenticityUtility as any)[httpMethod](endpoint, payload);
 
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
+      if (!result.success) {
         throw new Error(result.message || 'Submission failed on server');
       }
 
@@ -844,7 +837,7 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
       // Reset form if new
       if (!isEditMode) {
         setBudgetLines([{
-           budgetHead: '', subHead: '', amount: '', qty: '1', monthAmounts: { ...EMPTY_MONTHS }, description: '',
+          budgetHead: '', subHead: '', amount: '', qty: '1', monthAmounts: { ...EMPTY_MONTHS }, description: '',
         }]);
         setExpandedRows([0]);
         setApplicantName(''); setDepartment(''); setDesignation(''); setEmail(''); setMobile('');
@@ -856,7 +849,7 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
       navigate("/budgetcard"); // Or whatever your dashboard route is, e.g., "/budget-dashboard"
     } catch (error: any) {
       console.error('❌ Submit error:', error);
-      alert(`Failed to submit: ${error.message}`);
+      alert(`Failed to submit: ${error.response?.data?.message || error.message}`);
     }
   };
 
@@ -874,17 +867,7 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
       await Promise.all(
         Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).map(async ([beneficiaryKey, apiType]) => {
           try {
-            const response = await fetch(`http://localhost:5000/api/budget/org-units/${apiType}`, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            });
-
-            if (!response.ok) {
-              throw new Error(`Failed to load ${beneficiaryKey} options`);
-            }
-
-            const json = await response.json();
+            const json = await authenticityUtility.get(`/budget/org-units/${apiType}`) as any;
             const rows = Array.isArray(json?.data) ? json.data : [];
 
             nextOptions[beneficiaryKey] = rows
@@ -948,12 +931,8 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
         const token = localStorage.getItem("token") || sessionStorage.getItem("token");
         if (!token) return;
 
-        const res = await fetch(`http://localhost:5000/api/budget/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const json = await res.json();
-        if (!res.ok || !json?.success) {
+        const json = await authenticityUtility.get(`/budget/${id}`) as any;
+        if (!json?.success) {
           console.error("Failed to load proposal", json);
           return;
         }
@@ -970,9 +949,9 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
         // We check multiple possible keys because backend joins might name them differently
         setApplicantName(p.applicant_name || p.user_name || p.name || "");
         setEmail(p.user_email || p.email || "");
-        
+
         // MISSING FIELDS ADDED HERE:
-        setDesignation(p.designation || p.user_designation || ""); 
+        setDesignation(p.designation || p.user_designation || "");
         setMobile(p.mobile || p.user_mobile || p.phone || "");
 
         // --- 2. PREFILL BENEFICIARY & DEPARTMENT (FIXED) ---
@@ -981,15 +960,15 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
             ? 'Professional Body'
             : p.beneficiary_type || '';
         setBeneficiaryType(normalizedBeneficiaryType);
-        
+
         // Fix for "Value not displayed": Ensure we set the specific value state
-        setBeneficiaryValue(p.beneficiary_value || ""); 
+        setBeneficiaryValue(p.beneficiary_value || "");
         // Also set 'categoryItem' if your UI uses that for the second dropdown
-        setCategoryItem(p.beneficiary_value || ""); 
+        setCategoryItem(p.beneficiary_value || "");
 
         // Fix for Department: Fallback to user_department if proposal department is empty
-        setDepartment(p.department || p.user_department || ""); 
-        
+        setDepartment(p.department || p.user_department || "");
+
         // Date
         setDate((p.request_date || "").split("T")[0]);
 
@@ -1037,7 +1016,7 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
     loadProposal();
   }, [id, location.pathname, navigate]);
 
-      // ✅ AUTO-FILL USER DETAILS (New Form Only)
+  // ✅ AUTO-FILL USER DETAILS (New Form Only)
   useEffect(() => {
     // Only run if it's a new form (no ID) and name is empty
     if (id || applicantName) return;
@@ -1048,16 +1027,13 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
         if (!token) return;
 
         // ✅ Correct Path: Matches router.get('/faculty', ...)
-        const res = await fetch('http://localhost:5000/api/budget/faculty', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const json = await authenticityUtility.get('/budget/faculty') as any;
 
-        const json = await res.json();
         if (json.success && json.data) {
           setApplicantName(json.data.name || '');
           setDepartment(json.data.department || '');
           setEmail(json.data.email || '');
-          
+
           // ✅ Add these since we updated the backend to provide them
           if (json.data.designation) setDesignation(json.data.designation);
           if (json.data.mobile) setMobile(json.data.mobile);
@@ -1068,7 +1044,7 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
     };
 
     fetchUserDetails();
-  }, [id, applicantName]); 
+  }, [id, applicantName]);
 
 
 
@@ -1077,16 +1053,16 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
     <div className="budgetPage">
       <Navbar />
       <fieldset disabled={isViewMode} style={{ border: 0, padding: 0, margin: 0 }}>
-             {/* Card 1: Applicant Details (Collapsible Preview) */}
+        {/* Card 1: Applicant Details (Collapsible Preview) */}
         <div className="budgetCard">
           {/* Header - Always visible */}
-          <div 
-            className="cardHeader" 
+          <div
+            className="cardHeader"
             style={{
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              cursor: 'pointer', 
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              cursor: 'pointer',
               padding: '15px 20px',
               borderBottom: '1px solid #e0e0e0',
               transition: 'all 0.3s ease'
@@ -1096,22 +1072,22 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
             <h5 style={{ margin: 0, fontSize: '16px', color: '#0069ab', fontWeight: '600' }}>
               Applicant Details
             </h5>
-            
+
             {/* Toggle Arrow - EXACT match to table arrows */}
-            <svg 
-              width="12" 
-              height="8" 
-              viewBox="0 0 12 8" 
+            <svg
+              width="12"
+              height="8"
+              viewBox="0 0 12 8"
               className={`card-toggle-arrow ${isApplicantCardOpen ? 'open' : ''}`}
               style={{
                 transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',  // Same smooth animation
                 cursor: 'pointer'
               }}
             >
-              <polyline 
-                points="1.5,1.5 6,5.5 10.5,1.5" 
+              <polyline
+                points="1.5,1.5 6,5.5 10.5,1.5"
                 stroke="#0069ab"    // Blue to match header color
-                strokeWidth="1.5" 
+                strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 fill="none"
@@ -1122,44 +1098,44 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
 
           {/* Body Content */}
           <div className="cardContent" style={{ padding: '20px' }}>
-            
+
             {/* STATE 1: COLLAPSED PREVIEW (Only Name & Date) */}
             {!isApplicantCardOpen && (
-               <div className="row">
-                  <div className="col-md-7">
-                    <div className="formGroup" style={{ marginBottom: 0 }}>
-                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-                        Applicant Name
-                      </label>
-                      <input
-                        type="text"
-                        value={applicantName}
-                        disabled={true} // Preview is read-only or disabled to indicate "click header to edit"
-                        placeholder="Enter full name"
-                        className="budget-input"
-                        style={{ backgroundColor: '#fff', border: '1px solid #e0e0e0', cursor: 'pointer' }}
-                        onClick={() => setIsApplicantCardOpen(true)} // Click input to open full form
-                        readOnly
-                      />
-                    </div>
+              <div className="row">
+                <div className="col-md-7">
+                  <div className="formGroup" style={{ marginBottom: 0 }}>
+                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                      Applicant Name
+                    </label>
+                    <input
+                      type="text"
+                      value={applicantName}
+                      disabled={true} // Preview is read-only or disabled to indicate "click header to edit"
+                      placeholder="Enter full name"
+                      className="budget-input"
+                      style={{ backgroundColor: '#fff', border: '1px solid #e0e0e0', cursor: 'pointer' }}
+                      onClick={() => setIsApplicantCardOpen(true)} // Click input to open full form
+                      readOnly
+                    />
                   </div>
-                  <div className="col-md-5">
-                    <div className="formGroup" style={{ marginBottom: 0 }}>
-                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-                        Date
-                      </label>
-                      <input
-                        type="date" // Use text for better formatting in preview if preferred
-                        value={date}
-                        disabled={true}
-                        className="budget-input"
-                        style={{ backgroundColor: '#fff', border: '1px solid #e0e0e0', cursor: 'pointer' }}
-                        onClick={() => setIsApplicantCardOpen(true)}
-                        readOnly
-                      />
-                    </div>
+                </div>
+                <div className="col-md-5">
+                  <div className="formGroup" style={{ marginBottom: 0 }}>
+                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                      Date
+                    </label>
+                    <input
+                      type="date" // Use text for better formatting in preview if preferred
+                      value={date}
+                      disabled={true}
+                      className="budget-input"
+                      style={{ backgroundColor: '#fff', border: '1px solid #e0e0e0', cursor: 'pointer' }}
+                      onClick={() => setIsApplicantCardOpen(true)}
+                      readOnly
+                    />
                   </div>
-               </div>
+                </div>
+              </div>
             )}
 
             {/* STATE 2: EXPANDED FULL FORM */}
@@ -1287,224 +1263,224 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
         </div>
 
         {/* Card 2: Beneficiary Details - Description Box Removed */}
-              {/* Card 2: Beneficiary Details */}
+        {/* Card 2: Beneficiary Details */}
         <div className="budgetCard">
           <div className="cardContent">
             <div className="row mb-3" style={{ marginBottom: '15px' }}>
               <div className="col-md-6">
                 <div className="form-group">
-  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-    Beneficiary
-  </label>
-  <div style={{ position: 'relative', zIndex: 1000 }}>
-    <Select
-      value={beneficiaryType ? { value: beneficiaryType, label: beneficiaryType } as SelectOption : null}
-      onChange={(selected: any) => {
-        const val = selected?.value || '';
-        setBeneficiaryType(val);
-        setCategoryItem('');
-        setCategorySelections([]);
-        if (val === 'Institution') {
-          setBeneficiaryValue('K.S.Rangasamy College of Technology');
-        } else {
-          setBeneficiaryValue('');
-        }
-      }}
-      options={[
-        { value: 'Faculty', label: 'Faculty' },
-        { value: 'Department', label: 'Department' },
-        { value: 'Centre', label: 'Centre' },
-        { value: 'Cell', label: 'Cell' },
-        { value: 'Club', label: 'Club' },
-        { value: 'Professional Body', label: 'Professional Body' },
-        { value: 'Institution', label: 'Institution' }
-      ]}
-      placeholder=""
-      isSearchable={true}
-      isClearable={false}
-      menuPosition="fixed"
-      menuPlacement="auto"
-      styles={{
-        control: (base: any, state: any) => ({
-          ...base,
-          minHeight: '36px',
-          height: 36,                     // ← FIXED: Number, not string
-          borderRadius: 12,               // ← FIXED: Number
-          border: state.isFocused 
-            ? '1px solid #0069ab' 
-            : '1px solid #e0e0e0',
-          backgroundColor: '#fcfdff',
-          boxShadow: state.isFocused 
-            ? '0 0 0 3px rgba(0, 105, 171, 0.15)'
-            : 'none'
-        }),
-        dropdownIndicator: (base: any, state: any) => ({
-          ...base,
-          padding: '0 15px',
-          color: '#666', transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
-        }),
-        indicatorSeparator: () => ({ display: 'none' }),
-        valueContainer: (base: any) => ({
-          ...base,
-          padding: '2px 15px',
-          color: '#333'
-        }),
-        singleValue: (base: any) => ({
-          ...base,
-          color: '#333',
-          fontSize: '0.95rem'
-        }),
-        input: (base: any) => ({
-          ...base,
-          color: '#333',
-          padding: '0 15px'
-        }),
-        menu: (base: any) => ({
-          ...base,
-          zIndex: 999999,
-          backgroundColor: 'white',
-          borderRadius: 12,
-          boxShadow: '0 8px 25px rgba(0,0,0,0.15)'
-        }),
-        option: (base: any, state: any) => ({
-          ...base,
-          padding: '10px 15px',
-          backgroundColor: state.isSelected 
-            ? '#0069ab' 
-            : state.isFocused 
-            ? 'rgba(0,105,171,0.1)' 
-            : 'white',
-          color: state.isSelected ? 'white' : '#333'
-        })
-      }}
-    />
-  </div>
-</div>
+                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                    Beneficiary
+                  </label>
+                  <div style={{ position: 'relative', zIndex: 1000 }}>
+                    <Select
+                      value={beneficiaryType ? { value: beneficiaryType, label: beneficiaryType } as SelectOption : null}
+                      onChange={(selected: any) => {
+                        const val = selected?.value || '';
+                        setBeneficiaryType(val);
+                        setCategoryItem('');
+                        setCategorySelections([]);
+                        if (val === 'Institution') {
+                          setBeneficiaryValue('K.S.Rangasamy College of Technology');
+                        } else {
+                          setBeneficiaryValue('');
+                        }
+                      }}
+                      options={[
+                        { value: 'Faculty', label: 'Faculty' },
+                        { value: 'Department', label: 'Department' },
+                        { value: 'Centre', label: 'Centre' },
+                        { value: 'Cell', label: 'Cell' },
+                        { value: 'Club', label: 'Club' },
+                        { value: 'Professional Body', label: 'Professional Body' },
+                        { value: 'Institution', label: 'Institution' }
+                      ]}
+                      placeholder=""
+                      isSearchable={true}
+                      isClearable={false}
+                      menuPosition="fixed"
+                      menuPlacement="auto"
+                      styles={{
+                        control: (base: any, state: any) => ({
+                          ...base,
+                          minHeight: '36px',
+                          height: 36,                     // ← FIXED: Number, not string
+                          borderRadius: 12,               // ← FIXED: Number
+                          border: state.isFocused
+                            ? '1px solid #0069ab'
+                            : '1px solid #e0e0e0',
+                          backgroundColor: '#fcfdff',
+                          boxShadow: state.isFocused
+                            ? '0 0 0 3px rgba(0, 105, 171, 0.15)'
+                            : 'none'
+                        }),
+                        dropdownIndicator: (base: any, state: any) => ({
+                          ...base,
+                          padding: '0 15px',
+                          color: '#666', transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                        }),
+                        indicatorSeparator: () => ({ display: 'none' }),
+                        valueContainer: (base: any) => ({
+                          ...base,
+                          padding: '2px 15px',
+                          color: '#333'
+                        }),
+                        singleValue: (base: any) => ({
+                          ...base,
+                          color: '#333',
+                          fontSize: '0.95rem'
+                        }),
+                        input: (base: any) => ({
+                          ...base,
+                          color: '#333',
+                          padding: '0 15px'
+                        }),
+                        menu: (base: any) => ({
+                          ...base,
+                          zIndex: 999999,
+                          backgroundColor: 'white',
+                          borderRadius: 12,
+                          boxShadow: '0 8px 25px rgba(0,0,0,0.15)'
+                        }),
+                        option: (base: any, state: any) => ({
+                          ...base,
+                          padding: '10px 15px',
+                          backgroundColor: state.isSelected
+                            ? '#0069ab'
+                            : state.isFocused
+                              ? 'rgba(0,105,171,0.1)'
+                              : 'white',
+                          color: state.isSelected ? 'white' : '#333'
+                        })
+                      }}
+                    />
+                  </div>
+                </div>
 
               </div>
 
               <div className="col-md-6">
-  {beneficiaryType === 'Faculty' ? (
-    <div className="form-group" style={{ height: '72px', display: 'flex', flexDirection: 'column' }}>
-      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
-        Faculty Name
-      </label>
-      <input
-        type="text"
-        value={beneficiaryValue || ''}
-        onChange={(e) => setBeneficiaryValue(e.target.value)}
-        placeholder="Applicant name"
-        style={{ 
-          borderRadius: '12px', 
-          border: '1px solid #e0e0e0', 
-          padding: '10px 15px', 
-          fontSize: '0.95rem', 
-          width: '100%', 
-          flex: 1, 
-          backgroundColor: '#fcfdff', 
-          transition: 'all 0.3s ease', 
-          outline: 'none' 
-        }}
-        onFocus={(e) => { 
-          e.currentTarget.style.borderColor = '#0069ab'; 
-          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)'; 
-        }}
-        onBlur={(e) => { 
-          e.currentTarget.style.borderColor = '#e0e0e0'; 
-          e.currentTarget.style.boxShadow = 'none'; 
-        }}
-        required
-      />
-    </div>
-  ) : beneficiaryType === 'Institution' ? (
-    <div className="form-group" style={{ height: '72px', display: 'flex', flexDirection: 'column' }}>
-      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
-        Institution
-      </label>
-      <input
-        type="text"
-        value={beneficiaryValue || ''}
-        onChange={(e) => setBeneficiaryValue(e.target.value)}
-        placeholder="K.S.Rangasamy College of Technology"
-        readOnly={true}
-        style={{ 
-          borderRadius: '12px', 
-          border: '1px solid #e0e0e0', 
-          padding: '10px 15px', 
-          fontSize: '0.95rem', 
-          width: '100%', 
-          flex: 1, 
-          backgroundColor: '#e9ecef', 
-          color: '#495057',
-          cursor: 'not-allowed',
-          transition: 'all 0.3s ease', 
-          outline: 'none' 
-        }}
-        required
-      />
-    </div>
-  ) : subcategoryList.length > 0 ? (
-    <div className="form-group" style={{ height: '72px', display: 'flex', flexDirection: 'column' }}>
-      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
-        {getSubcategoryLabel(beneficiaryType)}
-      </label>
-      <div style={{ position: 'relative', zIndex: 1000, flex: 1 }}>
-        <Select
-          value={
-            categoryItem 
-              ? { value: categoryItem, label: categoryItem } as SelectOption
-              : null
-          }
-          onChange={(selected: any) => {
-            const val = selected?.value || '';
-            setCategoryItem(val);
-            setCategorySelections([]);
-          }}
-          options={subcategoryOptions}
-          placeholder=""
-          isSearchable={true}
-          isClearable={false}
-          menuPosition="fixed"
-          menuPlacement="auto"
-          styles={{
-            control: (base: any, state: any) => ({
-              ...base,
-              minHeight: '100%',
-              height: '100%',
-              borderRadius: 12,
-              border: state.isFocused 
-                ? '1px solid #0069ab' 
-                : '1px solid #e0e0e0',
-              boxShadow: state.isFocused 
-                ? '0 0 0 3px rgba(0, 105, 171, 0.15)'
-                : 'none',
-              backgroundColor: '#fcfdff',
-              fontSize: '0.95rem',
-              fontFamily: 'inherit'
-            }),
-            dropdownIndicator: (base: any, state: any) => ({
-              ...base,
-              padding: '0 15px',
-              transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
-            }),
-            indicatorSeparator: () => ({ display: 'none' }),
-            valueContainer: (base: any) => ({
-              ...base,
-              padding: '2px 15px'
-            }),
-            option: (base: any, state: any) => ({
-              ...base,
-              padding: '10px 15px',
-              backgroundColor: state.isSelected ? '#0069ab' : state.isFocused ? 'rgba(0,105,171,0.1)' : '#fff'
-            })
-          }}
-        />
-      </div>
-    </div>
-  ) : (
-    <div style={{ height: '72px' }} />
-  )}
-</div>
+                {beneficiaryType === 'Faculty' ? (
+                  <div className="form-group" style={{ height: '72px', display: 'flex', flexDirection: 'column' }}>
+                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
+                      Faculty Name
+                    </label>
+                    <input
+                      type="text"
+                      value={beneficiaryValue || ''}
+                      onChange={(e) => setBeneficiaryValue(e.target.value)}
+                      placeholder="Applicant name"
+                      style={{
+                        borderRadius: '12px',
+                        border: '1px solid #e0e0e0',
+                        padding: '10px 15px',
+                        fontSize: '0.95rem',
+                        width: '100%',
+                        flex: 1,
+                        backgroundColor: '#fcfdff',
+                        transition: 'all 0.3s ease',
+                        outline: 'none'
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = '#0069ab';
+                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#e0e0e0';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                      required
+                    />
+                  </div>
+                ) : beneficiaryType === 'Institution' ? (
+                  <div className="form-group" style={{ height: '72px', display: 'flex', flexDirection: 'column' }}>
+                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
+                      Institution
+                    </label>
+                    <input
+                      type="text"
+                      value={beneficiaryValue || ''}
+                      onChange={(e) => setBeneficiaryValue(e.target.value)}
+                      placeholder="K.S.Rangasamy College of Technology"
+                      readOnly={true}
+                      style={{
+                        borderRadius: '12px',
+                        border: '1px solid #e0e0e0',
+                        padding: '10px 15px',
+                        fontSize: '0.95rem',
+                        width: '100%',
+                        flex: 1,
+                        backgroundColor: '#e9ecef',
+                        color: '#495057',
+                        cursor: 'not-allowed',
+                        transition: 'all 0.3s ease',
+                        outline: 'none'
+                      }}
+                      required
+                    />
+                  </div>
+                ) : subcategoryList.length > 0 ? (
+                  <div className="form-group" style={{ height: '72px', display: 'flex', flexDirection: 'column' }}>
+                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
+                      {getSubcategoryLabel(beneficiaryType)}
+                    </label>
+                    <div style={{ position: 'relative', zIndex: 1000, flex: 1 }}>
+                      <Select
+                        value={
+                          categoryItem
+                            ? { value: categoryItem, label: categoryItem } as SelectOption
+                            : null
+                        }
+                        onChange={(selected: any) => {
+                          const val = selected?.value || '';
+                          setCategoryItem(val);
+                          setCategorySelections([]);
+                        }}
+                        options={subcategoryOptions}
+                        placeholder=""
+                        isSearchable={true}
+                        isClearable={false}
+                        menuPosition="fixed"
+                        menuPlacement="auto"
+                        styles={{
+                          control: (base: any, state: any) => ({
+                            ...base,
+                            minHeight: '100%',
+                            height: '100%',
+                            borderRadius: 12,
+                            border: state.isFocused
+                              ? '1px solid #0069ab'
+                              : '1px solid #e0e0e0',
+                            boxShadow: state.isFocused
+                              ? '0 0 0 3px rgba(0, 105, 171, 0.15)'
+                              : 'none',
+                            backgroundColor: '#fcfdff',
+                            fontSize: '0.95rem',
+                            fontFamily: 'inherit'
+                          }),
+                          dropdownIndicator: (base: any, state: any) => ({
+                            ...base,
+                            padding: '0 15px',
+                            transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                          }),
+                          indicatorSeparator: () => ({ display: 'none' }),
+                          valueContainer: (base: any) => ({
+                            ...base,
+                            padding: '2px 15px'
+                          }),
+                          option: (base: any, state: any) => ({
+                            ...base,
+                            padding: '10px 15px',
+                            backgroundColor: state.isSelected ? '#0069ab' : state.isFocused ? 'rgba(0,105,171,0.1)' : '#fff'
+                          })
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ height: '72px' }} />
+                )}
+              </div>
 
             </div>
           </div>
@@ -1551,144 +1527,144 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
                         {/* Main row */}
                         <tr>
                           <td className="centerTd">{idx + 1}</td>
-               <td>
-  <Select
-    className="tableSelect"
-    value={
-      line.budgetHead 
-        ? { value: line.budgetHead, label: line.budgetHead } as SelectOption
-        : null
-    }
-    onChange={(selected: any) => {
-      const val = selected?.value || '';
-      updateLine(idx, 'budgetHead', val);
-    }}
-    options={BUDGET_HEAD_GROUPS.map(group => ({
-      label: group.label,
-      options: group.options.map(opt => ({
-        value: opt,
-        label: opt
-      } as SelectOption))
-    }))}
-    placeholder=""
-    isSearchable={true}
-    isClearable={false}
-    isDisabled={!isEditable}
-    maxMenuHeight={200}
-    menuPlacement="auto"
-    formatGroupLabel={(group: any) => (
-      <div style={{
-        fontWeight: 'bold',
-        fontSize: '13px',
-        color: '#495057',
-        padding: '10px 12px 6px',
-        background: '#e9ecef',
-        borderBottom: '1px solid #dee2e6',
-        marginBottom: '4px'
-      }}>
-        {group.label}
-      </div>
-    )}
-    styles={{
-      control: (base: any, state: any) => ({
-        ...base,
-        minHeight: '38px !important',
-        height: '38px !important',           // ← FIXED: Force single height
-        borderRadius: '4px',
-        border: state.isFocused             // ← FIXED: Single clean border
-          ? '2px solid #0069ab' 
-          : '1px solid #e0e0e0',
-        boxShadow: 'none !important',       // ← FIXED: No double border/shadow
-        backgroundColor: '#fff'
-      }),
-      dropdownIndicator: (base: any, state: any) => ({
-        ...base,
-        padding: '4px 8px',
-        transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
-      }),
-      indicatorSeparator: () => ({ display: 'none' }),
-      menu: (base: any) => ({
-        ...base,
-        marginTop: '2px',
-        zIndex: 9999,
-        borderRadius: '4px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-      }),
-      groupHeading: (base: any) => ({
-        ...base,
-        fontWeight: 'bold',
-        fontSize: '13px'
-      }),
-      option: (base: any, state: any) => ({
-        ...base,
-        padding: '8px 12px',
-        backgroundColor: state.isSelected 
-          ? '#0069ab' 
-          : state.isFocused 
-          ? 'rgba(0,105,171,0.1)' 
-          : 'white'
-      })
-    }}
-  />
-</td>
+                          <td>
+                            <Select
+                              className="tableSelect"
+                              value={
+                                line.budgetHead
+                                  ? { value: line.budgetHead, label: line.budgetHead } as SelectOption
+                                  : null
+                              }
+                              onChange={(selected: any) => {
+                                const val = selected?.value || '';
+                                updateLine(idx, 'budgetHead', val);
+                              }}
+                              options={BUDGET_HEAD_GROUPS.map(group => ({
+                                label: group.label,
+                                options: group.options.map(opt => ({
+                                  value: opt,
+                                  label: opt
+                                } as SelectOption))
+                              }))}
+                              placeholder=""
+                              isSearchable={true}
+                              isClearable={false}
+                              isDisabled={!isEditable}
+                              maxMenuHeight={200}
+                              menuPlacement="auto"
+                              formatGroupLabel={(group: any) => (
+                                <div style={{
+                                  fontWeight: 'bold',
+                                  fontSize: '13px',
+                                  color: '#495057',
+                                  padding: '10px 12px 6px',
+                                  background: '#e9ecef',
+                                  borderBottom: '1px solid #dee2e6',
+                                  marginBottom: '4px'
+                                }}>
+                                  {group.label}
+                                </div>
+                              )}
+                              styles={{
+                                control: (base: any, state: any) => ({
+                                  ...base,
+                                  minHeight: '38px !important',
+                                  height: '38px !important',           // ← FIXED: Force single height
+                                  borderRadius: '4px',
+                                  border: state.isFocused             // ← FIXED: Single clean border
+                                    ? '2px solid #0069ab'
+                                    : '1px solid #e0e0e0',
+                                  boxShadow: 'none !important',       // ← FIXED: No double border/shadow
+                                  backgroundColor: '#fff'
+                                }),
+                                dropdownIndicator: (base: any, state: any) => ({
+                                  ...base,
+                                  padding: '4px 8px',
+                                  transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                                }),
+                                indicatorSeparator: () => ({ display: 'none' }),
+                                menu: (base: any) => ({
+                                  ...base,
+                                  marginTop: '2px',
+                                  zIndex: 9999,
+                                  borderRadius: '4px',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                                }),
+                                groupHeading: (base: any) => ({
+                                  ...base,
+                                  fontWeight: 'bold',
+                                  fontSize: '13px'
+                                }),
+                                option: (base: any, state: any) => ({
+                                  ...base,
+                                  padding: '8px 12px',
+                                  backgroundColor: state.isSelected
+                                    ? '#0069ab'
+                                    : state.isFocused
+                                      ? 'rgba(0,105,171,0.1)'
+                                      : 'white'
+                                })
+                              }}
+                            />
+                          </td>
 
-<td>
-  <Select
-    className="tableSelect"
-    value={
-      line.subHead 
-        ? { value: line.subHead, label: line.subHead } as SelectOption
-        : null
-    }
-    onChange={(selected: any) => {
-      const val = selected?.value || '';
-      updateLine(idx, 'subHead', val);
-    }}
-    options={getSubHeads(line.budgetHead).map(sub => ({
-      value: sub,
-      label: sub
-    }))}
-    placeholder=""
-    isSearchable={true}
-    isClearable={false}
-    isDisabled={!line.budgetHead || !isEditable}
-    maxMenuHeight={200}
-    styles={{
-      control: (base: any, state: any) => ({
-        ...base,
-        minHeight: '38px !important',       // ← FIXED: Single height
-        height: '38px !important',          // ← FIXED: Single height
-        borderRadius: '4px',
-        border: state.isFocused             // ← FIXED: Single clean border
-          ? '2px solid #0069ab' 
-          : '1px solid #e0e0e0',
-        boxShadow: 'none !important',       // ← FIXED: No double border
-        backgroundColor: '#fff'
-      }),
-      dropdownIndicator: (base: any, state: any) => ({
-        ...base,
-        padding: '4px 8px',
-        transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
-      }),
-      indicatorSeparator: () => ({ display: 'none' }),
-      menu: (base: any) => ({
-        ...base,
-        marginTop: '2px',
-        zIndex: 9999,
-        borderRadius: '4px'
-      }),
-      option: (base: any, state: any) => ({
-        ...base,
-        padding: '8px 12px',
-        backgroundColor: state.isSelected 
-          ? '#0069ab' 
-          : state.isFocused 
-          ? 'rgba(0,105,171,0.1)' 
-          : 'white'
-      })
-    }}
-  />
-</td>
+                          <td>
+                            <Select
+                              className="tableSelect"
+                              value={
+                                line.subHead
+                                  ? { value: line.subHead, label: line.subHead } as SelectOption
+                                  : null
+                              }
+                              onChange={(selected: any) => {
+                                const val = selected?.value || '';
+                                updateLine(idx, 'subHead', val);
+                              }}
+                              options={getSubHeads(line.budgetHead).map(sub => ({
+                                value: sub,
+                                label: sub
+                              }))}
+                              placeholder=""
+                              isSearchable={true}
+                              isClearable={false}
+                              isDisabled={!line.budgetHead || !isEditable}
+                              maxMenuHeight={200}
+                              styles={{
+                                control: (base: any, state: any) => ({
+                                  ...base,
+                                  minHeight: '38px !important',       // ← FIXED: Single height
+                                  height: '38px !important',          // ← FIXED: Single height
+                                  borderRadius: '4px',
+                                  border: state.isFocused             // ← FIXED: Single clean border
+                                    ? '2px solid #0069ab'
+                                    : '1px solid #e0e0e0',
+                                  boxShadow: 'none !important',       // ← FIXED: No double border
+                                  backgroundColor: '#fff'
+                                }),
+                                dropdownIndicator: (base: any, state: any) => ({
+                                  ...base,
+                                  padding: '4px 8px',
+                                  transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                                }),
+                                indicatorSeparator: () => ({ display: 'none' }),
+                                menu: (base: any) => ({
+                                  ...base,
+                                  marginTop: '2px',
+                                  zIndex: 9999,
+                                  borderRadius: '4px'
+                                }),
+                                option: (base: any, state: any) => ({
+                                  ...base,
+                                  padding: '8px 12px',
+                                  backgroundColor: state.isSelected
+                                    ? '#0069ab'
+                                    : state.isFocused
+                                      ? 'rgba(0,105,171,0.1)'
+                                      : 'white'
+                                })
+                              }}
+                            />
+                          </td>
 
                           <td>
                             <input
@@ -1717,8 +1693,8 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
                           <td className="centerTd totalCell">₹ {total}</td>
 
                           {/* Actions column */}
-                          <td 
-                            className="centerTd" 
+                          <td
+                            className="centerTd"
                             style={{
                               padding: '8px 4px !important',  // ← Match table cell padding
                               textAlign: 'center',
@@ -1726,12 +1702,12 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              height: '80px', 
+                              height: '80px',
                               gap: '2px'
                             }}
                           >
                             {/* Arrow - EXACT budget head dropdown match */}
-                            <button 
+                            <button
                               type="button"
                               onClick={() => toggleRowSchedule(idx)}
                               title="Month schedule"
@@ -1749,20 +1725,20 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
                                 transition: 'background 0.2s ease'
                               }}
                             >
-                              <svg 
-                                width="10" 
-                                height="8" 
-                                viewBox="0 0 10 8" 
+                              <svg
+                                width="10"
+                                height="8"
+                                viewBox="0 0 10 8"
                                 className={`action-dropdown-arrow ${expandedRows.includes(idx) ? 'open' : ''}`}
                                 style={{
                                   transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',  // ← EXACT Select animation
                                   transformOrigin: 'center'
                                 }}
                               >
-                                <polyline 
-                                  points="1,1 5,5 9,1" 
-                                  stroke="#666" 
-                                  strokeWidth="1.5" 
+                                <polyline
+                                  points="1,1 5,5 9,1"
+                                  stroke="#666"
+                                  strokeWidth="1.5"
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
                                   fill="none"
@@ -1965,22 +1941,22 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
                                           remaining === 0
                                             ? '#d4edda'
                                             : remaining > 0
-                                            ? '#fff3cd'
-                                            : '#f8d7da',
+                                              ? '#fff3cd'
+                                              : '#f8d7da',
                                         borderColor:
                                           remaining === 0
                                             ? '#c3e6cb'
                                             : remaining > 0
-                                            ? '#ffeaa7'
-                                            : '#f5c6cb',
+                                              ? '#ffeaa7'
+                                              : '#f5c6cb',
                                       }}
                                     >
                                       <span>
                                         {remaining === 0
                                           ? 'Remaining:'
                                           : remaining > 0
-                                          ? 'Remaining:'
-                                          : 'Over:'}
+                                            ? 'Remaining:'
+                                            : 'Over:'}
                                       </span>
                                       <span
                                         style={{
@@ -1988,8 +1964,8 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
                                             remaining === 0
                                               ? '#155724'
                                               : remaining > 0
-                                              ? '#856404'
-                                              : '#721c24',
+                                                ? '#856404'
+                                                : '#721c24',
                                         }}
                                       >
                                         ₹ {Math.abs(remaining)}
@@ -2006,8 +1982,8 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
                                       {remaining === 0
                                         ? 'Perfect match!'
                                         : remaining > 0
-                                        ? 'Distribute remaining across months'
-                                        : 'Reduce some month amounts'}
+                                          ? 'Distribute remaining across months'
+                                          : 'Reduce some month amounts'}
                                     </div>
                                   </div>
                                 </div>
