@@ -22,7 +22,13 @@ import EventEntry from '../features/events/components/EventEntry';
 import PublicationsPage from '../features/user-dashboard/publicationspage/PublicationsPage';
 import ProjectsPage from '../features/user-dashboard/projectpage/ProjectsPage';
 import Storybook from '../features/storybook/Storybook';
-import FinanceApprovalForm from '../features/finance/financeapproval';
+import FinanceApproval from '../features/finance/financeapproval';
+import FinanceCard from '../features/user-dashboard/financecard/financecard';
+import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
+import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
+import Budget from '../features/budget/budget';
+import BudgetDashboard from '../features/user-dashboard/budgetdashboard/budgetdashboard';
+import AdminBudget from '../features/admin/components/budget/adminbudget';
 import UnderConstruction from '../shared/components/ui/UnderConstruction';
 import ProfilePage from '../features/profile/ProfilePage';
 import AccessControlPage from '../features/admin/accessControl/AccessControlPage';
@@ -192,10 +198,22 @@ function App() {
               />
               <Route path="/storybook" element={<Storybook />} />
 
-              <Route path="/finance-approval" element={<FinanceApprovalForm />} />
+              {/* Finance & Guesthouse Routes */}
+              <Route path="/finance/new" element={<FinanceApproval />} />
+              <Route path="/financecard" element={<FinanceCard />} />
+              <Route path="/guesthouse-booking" element={<GuestHouseBooking />} />
+              <Route path="/guestHouse-dashboard" element={<GuestHouseDashboard />} />
+
+              {/* ✅ BUDGET ROUTES (FIXED) */}
+              <Route path="/budgetcard" element={<BudgetDashboard />} />
+              <Route path="/budget/new" element={<Budget />} />
+              <Route path="/budget/:id" element={<Budget />} />       {/* View Route */}
+              <Route path="/budget/:id/edit" element={<Budget />} />  {/* Edit Route */}
+
+              <Route path="/admin/budget" element={<AdminBudget />} />
 
               {/* Under Construction Pages */}
-              <Route path="/guesthouse-booking" element={<ProtectedRoute><UnderConstruction pageName="Guest House Booking" /></ProtectedRoute>} />
+
               <Route path="/vehicle-booking" element={<ProtectedRoute><UnderConstruction pageName="Vehicle Booking" /></ProtectedRoute>} />
               <Route path="/hall-booking" element={<ProtectedRoute><UnderConstruction pageName="Hall Booking" /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
