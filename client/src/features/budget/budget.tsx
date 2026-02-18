@@ -1037,35 +1037,39 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
     loadProposal();
   }, [id, location.pathname, navigate]);
 
-       // ✅ AUTO-FILL USER DETAILS (New Form Only)
-    useEffect(() => {
-      // Only run if it's a new form (no ID) and name is empty
-      if (id || applicantName) return;
+      // ✅ AUTO-FILL USER DETAILS (New Form Only)
+  useEffect(() => {
+    // Only run if it's a new form (no ID) and name is empty
+    if (id || applicantName) return;
 
-      const fetchUserDetails = async () => {
-        try {
-          const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-          if (!token) return;
+    const fetchUserDetails = async () => {
+      try {
+        const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+        if (!token) return;
 
-          // Calls BudgetController.getFacultyDetails
-          const res = await fetch('http://localhost:5000/api/budget/faculty', {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+        // ✅ Correct Path: Matches router.get('/faculty', ...)
+        const res = await fetch('http://localhost:5000/api/budget/faculty', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
 
-          const json = await res.json();
-          if (json.success && json.data) {
-            setApplicantName(json.data.name || '');
-            setDepartment(json.data.department || '');
-            setEmail(json.data.email || '');
-            // If role is HOD/Principal, you might want to auto-set designation too if available
-          }
-        } catch (error) {
-          console.error("Failed to auto-fill user details", error);
+        const json = await res.json();
+        if (json.success && json.data) {
+          setApplicantName(json.data.name || '');
+          setDepartment(json.data.department || '');
+          setEmail(json.data.email || '');
+          
+          // ✅ Add these since we updated the backend to provide them
+          if (json.data.designation) setDesignation(json.data.designation);
+          if (json.data.mobile) setMobile(json.data.mobile);
         }
-      };
+      } catch (error) {
+        console.error("Failed to auto-fill user details", error);
+      }
+    };
 
-      fetchUserDetails();
-    }, [id, applicantName]); // Run once when component mounts (if fields empty)
+    fetchUserDetails();
+  }, [id, applicantName]); 
+
 
 
   // ==================== RENDER ====================
@@ -1077,26 +1081,43 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
         <div className="budgetCard">
           {/* Header - Always visible */}
           <div 
-             className="cardHeader" 
-             style={{
-               display: 'flex', 
-               justifyContent: 'space-between', 
-               alignItems: 'center', 
-               cursor: 'pointer', 
-               padding: '15px 20px',
-               borderBottom: '1px solid #e0e0e0', // Keep separator line always
-               transition: 'all 0.3s ease'
-             }}
-             onClick={() => setIsApplicantCardOpen(!isApplicantCardOpen)}
+            className="cardHeader" 
+            style={{
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              cursor: 'pointer', 
+              padding: '15px 20px',
+              borderBottom: '1px solid #e0e0e0',
+              transition: 'all 0.3s ease'
+            }}
+            onClick={() => setIsApplicantCardOpen(!isApplicantCardOpen)}
           >
-             <h5 style={{ margin: 0, fontSize: '16px', color: '#0069ab', fontWeight: '600' }}>
-                Applicant Details
-             </h5>
-             
-             {/* Toggle Arrow */}
-             <span style={{ fontSize: '14px', color: '#0069ab', transform: isApplicantCardOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s' }}>
-               ▼
-             </span>
+            <h5 style={{ margin: 0, fontSize: '16px', color: '#0069ab', fontWeight: '600' }}>
+              Applicant Details
+            </h5>
+            
+            {/* Toggle Arrow - EXACT match to table arrows */}
+            <svg 
+              width="12" 
+              height="8" 
+              viewBox="0 0 12 8" 
+              className={`card-toggle-arrow ${isApplicantCardOpen ? 'open' : ''}`}
+              style={{
+                transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',  // Same smooth animation
+                cursor: 'pointer'
+              }}
+            >
+              <polyline 
+                points="1.5,1.5 6,5.5 10.5,1.5" 
+                stroke="#0069ab"    // Blue to match header color
+                strokeWidth="1.5" 
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            </svg>
+
           </div>
 
           {/* Body Content */}
@@ -1696,16 +1717,57 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
                           <td className="centerTd totalCell">₹ {total}</td>
 
                           {/* Actions column */}
-                          <td className="centerTd">
-                            <button
+                          <td 
+                            className="centerTd" 
+                            style={{
+                              padding: '8px 4px !important',  // ← Match table cell padding
+                              textAlign: 'center',
+                              verticalAlign: 'middle',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              height: '80px', 
+                              gap: '2px'
+                            }}
+                          >
+                            {/* Arrow - EXACT budget head dropdown match */}
+                            <button 
                               type="button"
-                              className={`tableIconBtn ${
-                                expandedRows.includes(idx) ? 'active' : ''
-                              }`}
                               onClick={() => toggleRowSchedule(idx)}
                               title="Month schedule"
+                              style={{
+                                width: '24px',
+                                height: '24px',
+                                padding: 0,           // ← Zero padding for perfect centering
+                                border: 'none',
+                                background: 'transparent',
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'background 0.2s ease'
+                              }}
                             >
-                              {expandedRows.includes(idx) ? '▲' : '▼'}
+                              <svg 
+                                width="10" 
+                                height="8" 
+                                viewBox="0 0 10 8" 
+                                className={`action-dropdown-arrow ${expandedRows.includes(idx) ? 'open' : ''}`}
+                                style={{
+                                  transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',  // ← EXACT Select animation
+                                  transformOrigin: 'center'
+                                }}
+                              >
+                                <polyline 
+                                  points="1,1 5,5 9,1" 
+                                  stroke="#666" 
+                                  strokeWidth="1.5" 
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  fill="none"
+                                />
+                              </svg>
                             </button>
                             <button
                               type="button"
@@ -1942,10 +2004,10 @@ const getFilteredBudgetHeadGroups = (rowIndex: number) => {
                                       }}
                                     >
                                       {remaining === 0
-                                        ? '✅ Perfect match!'
+                                        ? 'Perfect match!'
                                         : remaining > 0
-                                        ? '📊 Distribute remaining across months'
-                                        : '⚠️ Reduce some month amounts'}
+                                        ? 'Distribute remaining across months'
+                                        : 'Reduce some month amounts'}
                                     </div>
                                   </div>
                                 </div>

@@ -8,7 +8,7 @@ const APPROVAL_FLOW = {
   principal: { approve: 'principal_approved', reject: 'principal_rejected', next: 'completed' },
 };
 
-const EDITABLE_STATES = ['draft', 'hod_returned', 'dof_returned'];
+const EDITABLE_STATES = ['draft', 'submitted', 'hod_returned', 'dof_returned', 'principal_returned'];
 
 const ENTITY_TYPE_BY_BENEFICIARY = Object.freeze({
   Centre: 'CENTRE',
@@ -114,23 +114,29 @@ class BudgetModel {
   }
 
   static async getUserDepartmentByUserId(userId) {
-    const parsedUserId = Number(userId);
+      const parsedUserId = Number(userId);
+      if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+          return null;
+      }
 
-    if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
-      return null;
-    }
+      // ✅ FIXED: Select designation, mobile, and construct full name
+      const [rows] = await db.execute(
+          `SELECT 
+              d.id, 
+              d.name, 
+              d.code,
+              e.designation,
+              e.mobile,
+              CONCAT(e.first_name, ' ', COALESCE(e.last_name, '')) AS full_name
+          FROM master_employees e
+          JOIN master_departments d ON e.department_id = d.id
+          WHERE e.user_id = ? AND e.status = 'Active'
+          ORDER BY e.id ASC
+          LIMIT 1`,
+          [parsedUserId]
+      );
 
-    const [rows] = await db.execute(
-      `SELECT d.id, d.name, d.code
-       FROM master_employees e
-       JOIN master_departments d ON e.department_id = d.id
-       WHERE e.user_id = ? AND e.status = 'Active'
-       ORDER BY e.id ASC
-       LIMIT 1`,
-      [parsedUserId]
-    );
-
-    return rows[0] || null;
+      return rows[0] || null;
   }
 
   static async getDepartmentByName(name, conn = db) {
@@ -516,102 +522,99 @@ class BudgetModel {
   ===================================================== */
   static async processApproval(proposalId, { role, decision, feedback, approverUserId, approverEmail }) {
     if (!['hod', 'dof', 'principal'].includes(role)) {
-      throw new Error('Invalid role');
+        throw new Error('Invalid role');
     }
-
     if (!['approved', 'rejected', 'returned'].includes(decision)) {
-      throw new Error('Invalid decision');
+        throw new Error('Invalid decision');
     }
 
     const proposal = await this.getBudgetById(proposalId);
-
     if (!proposal) {
-      throw new Error('Proposal not found');
+        throw new Error('Proposal not found');
     }
 
     if (proposal.current_stage !== role) {
-      throw new Error(`Stage mismatch: expected ${role}, got ${proposal.current_stage}`);
+        throw new Error(`Stage mismatch: expected ${role}, got ${proposal.current_stage}`);
     }
 
+    // Determine next state
     let newStatus = decision;
     let nextStage = role;
-    const requiresPrincipalStage = normalizeText(proposal.approval_flow).split('_').includes('principal');
-
+    
+    const flowStages = normalizeText(proposal.approval_flow).split('_');
+    const requiresPrincipalStage = flowStages.includes('principal');
     const flow = APPROVAL_FLOW[role];
 
     if (decision === 'approved') {
-      newStatus = flow.approve;
-      nextStage = flow.next;
+        newStatus = flow.approve;
+        nextStage = flow.next;
+
+        // ✅ AUTO-APPROVAL LOGIC
+        if (role === 'dof') {
+            if (requiresPrincipalStage) {
+                // If Principal is required, AUTO-APPROVE and finish
+                newStatus = 'completed'; 
+                nextStage = 'completed';
+            } else {
+                // If Principal is NOT required, just finish
+                newStatus = 'completed';
+                nextStage = 'completed';
+            }
+        } 
+        // Logic for final manual principal approval (if auto-approve fails/disabled)
+        else if (role === 'principal') {
+             newStatus = 'completed';
+             nextStage = 'completed';
+        }
     } else if (decision === 'rejected') {
-      newStatus = flow.reject;
+        newStatus = flow.reject;
     } else {
-      newStatus = flow.returned;
-      nextStage = role;
+        newStatus = flow.returned;
+        nextStage = role; // Stay on current stage if returned
     }
 
-    if (role === 'dof' && decision === 'approved') {
-      if (requiresPrincipalStage) {
-        newStatus = 'principal_approved';
-        nextStage = 'completed';
-      } else {
-        newStatus = 'dof_approved';
-        nextStage = 'completed';
-      }
-    } else if (role === 'principal' && decision === 'approved') {
-      newStatus = 'principal_approved';
-      nextStage = 'completed';
-    }
-
+    // Database Update
     return this.withTransaction(async (conn) => {
-      await conn.execute(
-        `UPDATE budget_proposals
-         SET status = ?, current_stage = ?, updated_at = NOW()
-         WHERE id = ?`,
-        [newStatus, nextStage, proposalId]
-      );
-
-      if (decision !== 'approved' && !normalizeText(feedback)) {
-        throw new Error('Feedback required for reject/return');
-      }
-
-      await conn.execute(
-        `INSERT INTO budget_proposal_approvals (
-          budget_proposal_id,
-          role,
-          approver_user_id,
-          approver_email,
-          decision,
-          feedback,
-          allows_edit
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          proposalId,
-          role,
-          approverUserId,
-          approverEmail || '',
-          decision,
-          feedback || '',
-          decision === 'returned' ? 1 : 0,
-        ]
-      );
-
-      if (role === 'dof' && decision === 'approved' && requiresPrincipalStage) {
         await conn.execute(
-          `INSERT INTO budget_proposal_approvals (
-            budget_proposal_id,
-            role,
-            approver_user_id,
-            approver_email,
-            decision,
-            feedback,
-            allows_edit,
-            decided_at
-          ) VALUES (?, 'principal', ?, ?, 'approved', 'Auto-approved after DoF clearance', 0, NOW())`,
-          [proposalId, approverUserId, 'system-auto@ksrct.ac.in']
+            `UPDATE budget_proposals 
+             SET status = ?, current_stage = ?, updated_at = NOW() 
+             WHERE id = ?`,
+            [newStatus, nextStage, proposalId]
         );
-      }
+
+        if (decision !== 'approved' && !normalizeText(feedback)) {
+            throw new Error('Feedback required for reject/return');
+        }
+
+        // 1. Insert the ACTUAL approval (DoF/HOD/Principal)
+        await conn.execute(
+            `INSERT INTO budget_proposal_approvals (
+                budget_proposal_id, role, approver_user_id, approver_email, 
+                decision, feedback, allows_edit
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+                proposalId,
+                role,
+                approverUserId,
+                approverEmail || '',
+                decision,
+                feedback || '',
+                decision === 'returned' ? 1 : 0,
+            ]
+        );
+
+        // 2. Insert AUTO-APPROVAL for Principal (Only if DoF Approved + Principal Required)
+        if (role === 'dof' && decision === 'approved' && requiresPrincipalStage) {
+            await conn.execute(
+                `INSERT INTO budget_proposal_approvals (
+                    budget_proposal_id, role, approver_user_id, approver_email, 
+                    decision, feedback, allows_edit, decided_at
+                ) VALUES (?, 'principal', ?, ?, 'approved', 'Auto-approved after DoF clearance', 0, NOW())`,
+                [proposalId, approverUserId, 'system-auto@ksrct.ac.in']
+            );
+        }
     });
-  }
+}
 
   /* =====================================================
      6. DASHBOARD: USER/HOD/DOF/PRINCIPAL LISTS
@@ -1167,28 +1170,37 @@ class BudgetModel {
   }
 
   /* =====================================================
-     10. GET BUDGET BY ID
+    10. GET BUDGET BY ID
   ===================================================== */
   static async getBudgetById(proposalId) {
-    const [rows] = await db.execute(
-      `SELECT bp.*,
+      const [rows] = await db.execute(
+          `SELECT 
+              bp.*, 
               DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
-              md.name AS department,
+              md.name AS department, 
               md.code AS department_code,
-              me.name AS org_unit_name,
+              me.name AS org_unit_name, 
               me.code AS org_unit_code,
               met.name AS org_unit_type,
-              met.code AS org_unit_type_code
-       FROM budget_proposals bp
-       LEFT JOIN master_departments md ON bp.department_id = md.id
-       LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
-       LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
-       WHERE bp.id = ?`,
-      [proposalId]
-    );
+              met.code AS org_unit_type_code,
+              -- ✅ FETCH MISSING FIELDS FROM EMPLOYEE TABLE
+              emp.designation,
+              emp.mobile,
+              CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS user_name,
+              CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS name
+          FROM budget_proposals bp
+          LEFT JOIN master_departments md ON bp.department_id = md.id
+          LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+          LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
+          -- ✅ ADD THIS JOIN TO GET THE DATA
+          LEFT JOIN master_employees emp ON bp.user_id = emp.user_id 
+          WHERE bp.id = ?`,
+          [proposalId]
+      );
 
-    return rows[0] || null;
+      return rows[0] || null;
   }
+
 
   /* =====================================================
      11. VALIDATION HELPERS
