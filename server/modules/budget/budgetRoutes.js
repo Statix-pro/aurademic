@@ -6,7 +6,6 @@ import upload from '../../middleware/uploadMiddleware.js';
 const router = express.Router();
 
 const BUDGET_PERMISSIONS = Object.freeze({
-  proposalManage: 'budget.proposal.manage',
   workflowHod: 'budget.workflow.hod',
   workflowDof: 'budget.workflow.dof',
   workflowPrincipal: 'budget.workflow.principal',
@@ -14,8 +13,7 @@ const BUDGET_PERMISSIONS = Object.freeze({
   adminManage: 'budget.admin.manage',
 });
 
-const canAccessAnyBudget = permissionMiddleware(Object.values(BUDGET_PERMISSIONS));
-const canManageProposal = permissionMiddleware([BUDGET_PERMISSIONS.proposalManage]);
+
 const canAccessHodQueue = permissionMiddleware([BUDGET_PERMISSIONS.workflowHod]);
 const canAccessDofQueue = permissionMiddleware([BUDGET_PERMISSIONS.workflowDof]);
 const canAccessPrincipalQueue = permissionMiddleware([BUDGET_PERMISSIONS.workflowPrincipal]);
@@ -30,31 +28,11 @@ const canManageBudgetAdmin = permissionMiddleware([BUDGET_PERMISSIONS.adminManag
 
 router.use(authMiddleware);
 
-
-router.get('/health', (req, res) => {
-  res.json({
-    success: true,
-    module: 'budget',
-    version: 'v10.0',
-    schema: 'master_entities_budget_v1',
-    timestamp: new Date().toISOString(),
-    user: req.user
-      ? {
-        id: req.user.id,
-        permissions: req.user.permissions || [],
-        roles: req.user.roles || [],
-        department: req.user.department || null,
-      }
-      : null,
-  });
-});
-
-
-router.get('/faculty', canAccessAnyBudget, BudgetController.getFacultyDetails);
-router.get('/search-applicant', canAccessAnyBudget, BudgetController.searchApplicant);
+router.get('/faculty', BudgetController.getFacultyDetails);
+router.get('/search-applicant', BudgetController.searchApplicant);
 router.get('/approval-flows', canViewBudgetAdmin, BudgetController.getApprovalFlows);
-router.get('/org-units', canAccessAnyBudget, BudgetController.getAllOrgUnits);
-router.get('/org-units/:type', canAccessAnyBudget, BudgetController.getOrgUnits);
+router.get('/org-units', BudgetController.getAllOrgUnits);
+router.get('/org-units/:type', BudgetController.getOrgUnits);
 
 router.get('/entities/:type', canManageBudgetAdmin, BudgetController.getEntitiesByType);
 router.post('/entities/:type', canManageBudgetAdmin, BudgetController.createEntity);
@@ -71,7 +49,7 @@ router.put(
   BudgetController.updateEntityContacts
 );
 
-router.get('/my', canManageProposal, BudgetController.getMyBudgets);
+router.get('/my', BudgetController.getMyBudgets);
 router.get('/hod', canAccessHodQueue, BudgetController.getHodBudgets);
 router.get('/dof', canAccessDofQueue, BudgetController.getDofBudgets);
 router.get('/principal', canAccessPrincipalQueue, BudgetController.getPrincipalBudgets);
@@ -83,20 +61,19 @@ router.get('/export', canViewBudgetAdmin, BudgetController.export);
 router.get('/search', canViewBudgetAdmin, BudgetController.search);
 
 router.patch('/admin/flow/:id(\\d+)', canManageBudgetAdmin, BudgetController.updateFlowConfig);
-router.post('/', canManageProposal, BudgetController.create);
-router.put('/:id(\\d+)', canManageProposal, BudgetController.update);
+router.post('/', BudgetController.create);
+router.put('/:id(\\d+)', BudgetController.update);
 
-router.get('/:id(\\d+)/history', canAccessAnyBudget, BudgetController.getHistory);
-router.get('/:id(\\d+)/allocations', canAccessAnyBudget, BudgetController.getMonthAllocations);
-router.get('/:id(\\d+)/status', canAccessAnyBudget, BudgetController.getStatus);
+router.get('/:id(\\d+)/history', BudgetController.getHistory);
+router.get('/:id(\\d+)/allocations', BudgetController.getMonthAllocations);
+router.get('/:id(\\d+)/status', BudgetController.getStatus);
 
 router.patch('/:id(\\d+)/approval', canProcessWorkflow, BudgetController.approve);
 
-router.delete('/:id(\\d+)', canManageProposal, BudgetController.deleteProposal);
+router.delete('/:id(\\d+)', BudgetController.deleteProposal);
 
 router.post(
   '/:id(\\d+)/upload',
-  canManageProposal,
   upload.fields([
     { name: 'sanctionLetter', maxCount: 1 },
     { name: 'attachments', maxCount: 5 },
@@ -104,15 +81,7 @@ router.post(
   BudgetController.uploadFiles
 );
 
-router.get('/:id(\\d+)', canAccessAnyBudget, BudgetController.get);
+router.get('/:id(\\d+)', BudgetController.get);
 
-router.use((err, req, res, next) => {
-  console.error('Budget routes error:', err);
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'Internal server error',
-    error: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-  });
-});
 
 export default router;
