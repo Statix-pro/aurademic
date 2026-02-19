@@ -59,13 +59,13 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Furniture & Fixtures',
       'Vehicles',
       'Equipment',
-      'Accessories & Kits',
+      'Accessories & Kits','Library Books'
     ],
   },
   { label: 'Recurring', options: [] },
   {
     label: 'Maintenance & Spares',
-    options: ['Maintenance Charges', 'Spares', 'Annual Maintenance Charges'],
+    options: ['Maintenance Charges', 'Spares'],
   },
   {
     label: 'Operational',
@@ -73,26 +73,27 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Consumables',
       'Software',
       'Membership & Subscriptions',
-      'Student Essentials',
+      'College Essentials',
       'Printing & Stationery',
       'Postal Expenses',
       'Local Conveyance',
     ],
   },
   {
-    label: 'Events & Engagement',
-    options: ['Events & Competitions', 'Meetings & Audits'],
+    label: 'Events & Competitions',
+    options: ['Academic Events','College Events','Conferences & Conclaves','Association Activities','Outreach Event','Cultural & Celebrations','Sports'
+    ,'Competitions'],
+  },
+  {
+    label: 'Meetings & Audits',
+    options: [
+      'Institutional Governance Meetings','Academic Governance Meetings','Institutional Audits','Government Meetings',
+    ],
   },
   {
     label: 'Academics',
     options: [
-      'Faculty Empowerment',
-      'Staff Empowerment',
-      'Sudent Empowerment',
-      'Student Capacity Building',
-      'Learning Resources',
-      'Accreditation Expenses',
-      'Professional Body Expenses',
+      'Faculty Empowerment','Staff Empowerment','Sudent Empowerment','Student Capacity Building','Accreditation Expenses','Examination Expenses',
     ],
   },
   {
@@ -103,12 +104,13 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
     label: 'General',
     options: [
       'Research & Development',
-      'Administrative Expenses',
+      'Administrative Expenses','Licenses & Taxes',
       'Salary',
       'Bills & Payments',
       'Miscellaneous Expenses',
     ],
   },
+   
 ];
 
 const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
@@ -117,7 +119,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Partition Works',
     'False Ceiling Works',
     'Plumbing Works',
-    'Canopy',
+    'Canopy','Water Cooler'
   ],
   'Electrical Infrastructure': [
     'Electrical Wiring',
@@ -125,7 +127,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Lift Installation',
     'Air Conditioner',
     'UPS & Inverter',
-    'Battery',
+    'Battery','Generator'
   ],
   'IT Infrastructure': [
     'Hardwares',
@@ -136,7 +138,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Network Materials',
     'Laptops',
     'Interactive Displays',
-    'Desktops',
+    'Desktops Computers',
     'CCTV Materials',
     'Television',
     'Projectors',
@@ -161,7 +163,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Lab Equipment',
     'Consultancy Equipment',
     'Research Equipment',
-    'Equipment Upgrade',
+    'Equipment Upgrade','Sports Equipment','Office Equipment'
   ],
   'Accessories & Kits': [
     'Power Tools',
@@ -169,7 +171,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Drilling Machine',
     'Drone Kit',
   ],
-  'Maintenance Charges': [
+  'Maintenance Charges': ['Annual Maintenance Charges', 'Equipment Maintenance',
+    'Software Maintenance',
     'Building Maintenance',
     'Computer Maintenance',
     'Electrical Maintenance',
@@ -177,13 +180,13 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Plumbing Maintenance',
     'Vehicle Maintenance',
     'Garden Maintenance',
-    'Equipment Maintenance',
-    'Infrastructure Maintenance',
+       'Infrastructure Maintenance',
     'AC Maintenance',
     'UPS Maintenance',
     'Lift Maintenance',
     'Printer Maintenance',
-    'Painting',
+    'Painting','Playground Maintenance','Office Maintenance',
+'Housekeeping Expenses','General Repairs'
   ],
   Spares: ['Printer Donors', 'SMPS', 'Chargers'],
   'Annual Maintenance Charges': ['Equipment Maintenance', 'Software Maintenance'],
@@ -225,7 +228,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'E-Resources',
     'Data Subscription Charges',
   ],
-  'Student Essentials': ['Note Books', 'Log Books', 'ID Card', 'Others'],
+  'College Essentials': ['Books','Note Books', 'Log Books', 'ID Card', 'Others'],
   'Printing & Stationery': [
     'Banner',
     'Pamphlet',
@@ -234,7 +237,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Certificates',
     'Diary',
     'Calendar',
-    'Visitng Card',
+    'Visiting Card',
     'Seal/ Stamp Pad',
     'Pen/ Pencil/ Eraser',
     'Stapler/ Punching Machine',
@@ -255,36 +258,20 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Beta',
     'Others',
   ],
-  'Events & Competitions': [
-    'Remuneration',
-    'Travel',
-    'Accommodation',
-    'Memento & Gifts',
-    'Food & Refreshment',
-    'A/V Arrangements',
-    'Stationary',
-    'Printing',
-    'Prizes',
-    'Publication Charges',
-    'Promotions',
-    'Decorations',
-    'Event Logistics',
-    'Registration Kit',
-    'Give away',
-    'T-Shirt',
-    'Bag',
-    'Others',
-  ],
-  'Meetings & Audits': [
-    'Remuneration',
-    'Travel',
-    'Accommodation',
-    'Memento & Gifts',
-    'Food & Refreshment',
-    'Stationary',
-    'Printing',
-    'Others',
-  ],
+  'Conferences & Conclaves':['National Conference','International Conference','Conclave','Convention','Networking Event','Industry Interaction'],
+   'Association Activities':['Association Function','Alumni Meeting','Alumni Interaction','Parents Meeting'],
+   'Outreach Event':['School Visit','Awareness Program','Campaigns','Mini Marathon','Education Fair','Rally'],
+   'Cultural & Celebrations':['Celebration Day','Festival Celebrations','Harmonicks','Hostel Day'],
+   'Sports':['Sports Meet','Sports Day'],
+   'Competitions':['Hackathons','Competitions','Club Activities','Project Expo','Ideathon','Start-up meet'],
+
+  'Institutional Governance Meetings':['Governing Body Meeting','Research Advisory Board Meeting','Finance Committee Meeting','Result Passing Board Meeting','Examination Committee Meeting'
+   ,'Placement Meeting'],
+ 
+   'Academic Governance Meetings':['Academic Council Meeting','Standing Committee Meeting',
+    'Board of Studies Meeting','DAB Meeting'],
+    'Institutional Audits':['Academic Audit','Administrative Audit','Energy & Green Audit'],
+    'Government Meetings':['Government Meetings'],
   'Faculty Empowerment': [
     'Registration fee',
     'Travel Allowance',
@@ -294,7 +281,31 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Membership Fees',
     'Incentives',
     'Leadership Meet',
-    'Faculty Welfare',
+    'Faculty Welfare','Medical Expenses'
+  ],
+
+  'Academic Events':[
+    'Seminar',
+'Webinar',
+'Guest Lecture',
+'Workshop',
+'Hands-on Training',
+'FDP (Faculty Development Programme)',
+'STTP (Short-Term Training Programme)',
+'MoU Inking',
+'Industry Visit',
+'Expert Visit'
+  ],
+
+  'College Events': [
+    'Annual Day',
+'Graduation Day',
+'Student Induction Programme',
+'Orientation Session',
+'Dakshaa',
+'Science Day',
+'Womens Day',
+'Founder Day'
   ],
   'Staff Empowerment': [
     'Registration fee',
@@ -303,7 +314,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Accommodation',
     'Daily Allowance',
     'Incentives',
-    'Staff Welfare',
+    'Staff Welfare','Medical Expenses'
   ],
   'Sudent Empowerment': [
     'Registration fee',
@@ -333,19 +344,24 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Language Proficiency Courses',
     'Others',
   ],
-  'Learning Resources': ['Text Books', 'E-Resources'],
+  
   'Accreditation Expenses': [
     'NAAC Fees',
     'NBA Fees',
     'NAAC Inspection',
     'NBA Inspection',
   ],
+  'Examination Expenses': [
+    'Autonomous Exam Remuneration','Online Exam Remuneration',
+ 'Government Exam Remuneration',
+  ],
   'Advertisement & Branding': ['News Paper Advertisement', 'Digital Promotion'],
   'Public Relations': [
     'Press & Media',
     'Promotions',
     'Branding',
-    'Corporate Gift',
+    'Corporate Gift','Sponsorship',
+    'CSR Activity'
   ],
   Admissions: [
     'Stalls',
@@ -373,48 +389,39 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Consortium Fees',
     'Inspection Expenses',
     'Autonomous Charges',
-    'DTCP Approval',
-    'Licenses & Taxes',
-    'Insurance Charges',
-    'Water Charges',
-    'Stamp Charges',
+        'Insurance Charges',
+     'Stamp Charges','Audit Fees',
     'Flag Day Expenses',
     'Fee Fixation Expenses',
     'Scholarship Expenses',
     'International Travel',
-    'Testing Charges',
+    'Testing Charges','Legal Expenses'
   ],
-  Salary: [
+  'Licenses & Taxes' :['DTCP Approval','Water Tax','Road Tax','Property Tax','Building Tax'],
+  'Salary:': [
     'Monthly Salary',
     'Provident Fund',
     'Emoluments',
     'Professional Payments',
-    'Wages',
+    'Wages','ESI Scheme','Allowances'
   ],
   'Bills & Payments': [
     'Electricity Charges',
     'Internet Charges',
-    'Telephone Charges',
+    'Telephone Charges','Diesel Expenses'
   ],
   'Miscellaneous Expenses': [
     'Bank Charges',
     'Bank Interest',
     'Loan Processing Charges',
-    'Generator & Fuel',
-    'Guest House',
-    'Fire Extinguisher',
     'General Expenses',
     'Sewage Treatment',
-    'Farm Expenses',
     'Laundry Service',
-    'House Keeping',
-    'RO & Mineral Water',
-    'Audit Fees',
-    'Office Expenses',
+    'RO  Mineral Water',
     'Pooja Expenses',
     'Fire Extinguisher',
     'First Aid Kit Expenses',
-    'Irrecovable Fee',
+    'Irrecovable Fee','Legal Expenses','Others'
   ],
 };
 
@@ -887,7 +894,7 @@ const Budget: React.FC = () => {
         `${line.budgetHead} - ${line.subHead || ''}`,
       month_allocations: line.monthAmounts || {},
     }));
-
+  
 
     const safeFY = String(explicitFiscalYear);
     const fiscalYearInt = parseInt(safeFY.split("-")[0]);
@@ -1164,6 +1171,14 @@ const Budget: React.FC = () => {
     fetchUserDetails();
   }, [id, applicantName]);
 
+ const formatINR = (value: number | string): string => {
+  const num = Number(value || 0);
+  if (isNaN(num)) return '0';
+  return num.toLocaleString('en-IN', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  });
+};
 
 
 
@@ -1462,7 +1477,7 @@ const Budget: React.FC = () => {
         <div className="budgetCard">
           <div className="cardContent">
             <div className="row mb-3" style={{ marginBottom: '15px' }}>
-              <div className="col-md-6">
+              <div className="col-md-4">
                 <div className="form-group">
                   <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
                     Beneficiary
@@ -1554,7 +1569,7 @@ const Budget: React.FC = () => {
 
               </div>
 
-              <div className="col-md-6">
+              <div className="col-md-8">
                 {beneficiaryType === 'Faculty' ? (
                   <div className="form-group" style={{ height: '72px', display: 'flex', flexDirection: 'column' }}>
                     <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
@@ -1707,8 +1722,8 @@ const Budget: React.FC = () => {
                     <th style={{ width: '25%' }}>Sub Head</th>
                     <th style={{ width: '12%' }}>Amount</th>
                     <th style={{ width: '8%' }}>Qty</th>
-                    <th style={{ width: '10%' }}>₹Total</th>
-                    <th style={{ width: '15%' }}>Actions</th>
+                    <th style={{ width: '15%' }}>Total (₹)</th>
+                    <th style={{ width: '13%' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1722,13 +1737,13 @@ const Budget: React.FC = () => {
 
                         <tr>
                           <td className="centerTd">{idx + 1}</td>
-                          <td>
+                        <td>
                             <Select
                               className="tableSelect"
                               value={
                                 line.budgetHead
                                   ? ({
-                                      value: `head:${line.budgetHead}`,
+                                      value: line.budgetHead,
                                       label: line.budgetHead,
                                       budgetHead: line.budgetHead,
                                       optionType: 'budget-head',
@@ -1736,22 +1751,13 @@ const Budget: React.FC = () => {
                                   : null
                               }
                               onChange={(selected: any) =>
-                                handleBudgetHeadSelect(
-                                  idx,
-                                  (selected as BudgetHeadSelectOption) || null
-                                )
+                                handleBudgetHeadSelect(idx, selected as BudgetHeadSelectOption)
                               }
                               onInputChange={(inputValue: string, meta: any) => {
                                 if (meta?.action === 'input-change') {
-                                  setBudgetHeadFilter((prev) => ({
-                                    ...prev,
-                                    [idx]: inputValue,
-                                  }));
+                                  setBudgetHeadFilter((prev) => ({ ...prev, [idx]: inputValue }));
                                 } else if (meta?.action === 'menu-close') {
-                                  setBudgetHeadFilter((prev) => ({
-                                    ...prev,
-                                    [idx]: '',
-                                  }));
+                                  setBudgetHeadFilter((prev) => ({ ...prev, [idx]: '' }));
                                 }
                                 return inputValue;
                               }}
@@ -1763,15 +1769,17 @@ const Budget: React.FC = () => {
                               maxMenuHeight={200}
                               menuPlacement="auto"
                               formatGroupLabel={(group: any) => (
-                                <div style={{
-                                  fontWeight: 'bold',
-                                  fontSize: '13px',
-                                  color: '#495057',
-                                  padding: '10px 12px 6px',
-                                  background: '#e9ecef',
-                                  borderBottom: '1px solid #dee2e6',
-                                  marginBottom: '4px'
-                                }}>
+                                <div
+                                  style={{
+                                    fontWeight: 'bold',
+                                    fontSize: '13px',
+                                    color: '#495057',
+                                    padding: '10px 12px 6px',
+                                    background: '#e9ecef',
+                                    borderBottom: '1px solid #dee2e6',
+                                    marginBottom: '4px',
+                                  }}
+                                >
                                   {group.label}
                                 </div>
                               )}
@@ -1781,24 +1789,23 @@ const Budget: React.FC = () => {
                                   minHeight: '38px !important',
                                   height: '38px !important',
                                   borderRadius: '4px',
-                                  border: state.isFocused
-                                    ? '2px solid #0069ab'
-                                    : '1px solid #e0e0e0',
+                                  // Removed border to eliminate double-border effect
+                                  border: 'none',
                                   boxShadow: 'none !important',
-                                  backgroundColor: '#fff'
+                                  backgroundColor: 'transparent', // Changed to transparent to match cell
                                 }),
                                 dropdownIndicator: (base: any, state: any) => ({
                                   ...base,
                                   padding: '4px 2px',
-                                  transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                                  transform: state.selectProps.menuIsOpen
+                                    ? 'rotate(180deg)'
+                                    : 'rotate(0deg)',
                                 }),
                                 clearIndicator: (base: any) => ({
                                   ...base,
                                   padding: '4px 2px',
                                   color: '#9aa3af',
-                                  ':hover': {
-                                    color: '#9aa3af',
-                                  },
+                                  ':hover': { color: '#9aa3af' },
                                 }),
                                 indicatorsContainer: (base: any) => ({
                                   ...base,
@@ -1811,12 +1818,12 @@ const Budget: React.FC = () => {
                                   marginTop: '2px',
                                   zIndex: 9999,
                                   borderRadius: '4px',
-                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                                 }),
                                 groupHeading: (base: any) => ({
                                   ...base,
                                   fontWeight: 'bold',
-                                  fontSize: '13px'
+                                  fontSize: '13px',
                                 }),
                                 option: (base: any, state: any) => ({
                                   ...base,
@@ -1824,28 +1831,31 @@ const Budget: React.FC = () => {
                                   backgroundColor: state.isSelected
                                     ? '#0069ab'
                                     : state.isFocused
-                                      ? 'rgba(0,105,171,0.1)'
-                                      : 'white'
-                                })
+                                    ? 'rgba(0,105,171,0.1)'
+                                    : 'white',
+                                }),
                               }}
                             />
+
+
                           </td>
+
 
                           <td>
                             <Select
                               className="tableSelect"
                               value={
                                 line.subHead
-                                  ? { value: line.subHead, label: line.subHead } as SelectOption
+                                  ? ({ value: line.subHead, label: line.subHead } as SelectOption)
                                   : null
                               }
                               onChange={(selected: any) => {
-                                const val = selected?.value || '';
+                                const val = selected?.value;
                                 updateLine(idx, 'subHead', val);
                               }}
-                              options={getSubHeads(line.budgetHead).map(sub => ({
+                              options={getSubHeads(line.budgetHead).map((sub) => ({
                                 value: sub,
-                                label: sub
+                                label: sub,
                               }))}
                               placeholder=""
                               isSearchable={true}
@@ -1858,23 +1868,24 @@ const Budget: React.FC = () => {
                                   minHeight: '38px !important',
                                   height: '38px !important',
                                   borderRadius: '4px',
-                                  border: state.isFocused
-                                    ? '2px solid #0069ab'
-                                    : '1px solid #e0e0e0',
+                                  // Removed border to eliminate double-border effect
+                                  border: 'none',
                                   boxShadow: 'none !important',
-                                  backgroundColor: '#fff'
+                                  backgroundColor: 'transparent', // Changed to transparent
                                 }),
                                 dropdownIndicator: (base: any, state: any) => ({
                                   ...base,
                                   padding: '4px 8px',
-                                  transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                                  transform: state.selectProps.menuIsOpen
+                                    ? 'rotate(180deg)'
+                                    : 'rotate(0deg)',
                                 }),
                                 indicatorSeparator: () => ({ display: 'none' }),
                                 menu: (base: any) => ({
                                   ...base,
                                   marginTop: '2px',
                                   zIndex: 9999,
-                                  borderRadius: '4px'
+                                  borderRadius: '4px',
                                 }),
                                 option: (base: any, state: any) => ({
                                   ...base,
@@ -1882,12 +1893,15 @@ const Budget: React.FC = () => {
                                   backgroundColor: state.isSelected
                                     ? '#0069ab'
                                     : state.isFocused
-                                      ? 'rgba(0,105,171,0.1)'
-                                      : 'white'
-                                })
+                                    ? 'rgba(0,105,171,0.1)'
+                                    : 'white',
+                                }),
                               }}
                             />
+
+
                           </td>
+
 
                           <td>
                             <input
@@ -1913,7 +1927,8 @@ const Budget: React.FC = () => {
                               onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                             />
                           </td>
-                          <td className="centerTd totalCell">₹ {total}</td>
+                         <td className="centerTd totalCell">{formatINR(total)}</td>
+
 
 
                           <td
@@ -1977,8 +1992,9 @@ const Budget: React.FC = () => {
                                 budgetLines.forEach((line) => {
                                   if (!line.budgetHead) missing.push('Budget Head');
                                   if (!line.subHead) missing.push('Sub Head');
-                                  if (!line.description?.trim())
-                                    missing.push('Description');
+                                  if (!line.description?.trim()) missing.push('Description');
+                                  // Added: Check if Amount is missing or zero
+                                  if (Number(line.amount || 0) <= 0) missing.push('Amount');
                                   if (
                                     Math.abs(
                                       lineTotal(line) - lineMonthsTotal(line)
@@ -1999,11 +2015,13 @@ const Budget: React.FC = () => {
                                   Math.abs(
                                     lineTotal(line) - lineMonthsTotal(line)
                                   ) > 0.01 ||
-                                  hasZeroAmountLine(budgetLines)
+                                  // Added: Direct check for amount on the current line (replaces inefficient hasZeroAmountLine call)
+                                  Number(line.amount || 0) <= 0
                               )}
-                            >
+                             >
                               +
                             </button>
+
 
                             <button
                               type="button"
@@ -2109,7 +2127,7 @@ const Budget: React.FC = () => {
                                       fontSize: '13px',
                                     }}
                                   >
-                                    <div
+                                   <div
                                       style={{
                                         marginBottom: '12px',
                                         fontWeight: '600',
@@ -2127,7 +2145,7 @@ const Budget: React.FC = () => {
                                       }}
                                     >
                                       <span>Total Budget:</span>
-                                      <strong>₹ {total}</strong>
+                                      <strong>₹ {formatINR(total)}</strong>
                                     </div>
 
                                     <div
@@ -2138,8 +2156,9 @@ const Budget: React.FC = () => {
                                       }}
                                     >
                                       <span>Months Total:</span>
-                                      <strong>₹ {monthsTotal}</strong>
+                                      <strong>₹ {formatINR(monthsTotal)}</strong>
                                     </div>
+
 
                                     <div
                                       style={{
@@ -2164,22 +2183,22 @@ const Budget: React.FC = () => {
                                           remaining === 0
                                             ? '#d4edda'
                                             : remaining > 0
-                                              ? '#fff3cd'
-                                              : '#f8d7da',
+                                            ? '#fff3cd'
+                                            : '#f8d7da',
                                         borderColor:
                                           remaining === 0
                                             ? '#c3e6cb'
                                             : remaining > 0
-                                              ? '#ffeaa7'
-                                              : '#f5c6cb',
+                                            ? '#ffeaa7'
+                                            : '#f5c6cb',
                                       }}
                                     >
                                       <span>
                                         {remaining === 0
                                           ? 'Remaining:'
                                           : remaining > 0
-                                            ? 'Remaining:'
-                                            : 'Over:'}
+                                          ? 'Remaining:'
+                                          : 'Over:'}
                                       </span>
                                       <span
                                         style={{
@@ -2187,11 +2206,11 @@ const Budget: React.FC = () => {
                                             remaining === 0
                                               ? '#155724'
                                               : remaining > 0
-                                                ? '#856404'
-                                                : '#721c24',
+                                              ? '#856404'
+                                              : '#721c24',
                                         }}
                                       >
-                                        ₹ {Math.abs(remaining)}
+                                        ₹ {formatINR(Math.abs(remaining))}
                                       </span>
                                     </div>
 
@@ -2205,9 +2224,10 @@ const Budget: React.FC = () => {
                                       {remaining === 0
                                         ? 'Perfect match!'
                                         : remaining > 0
-                                          ? 'Distribute remaining across months'
-                                          : 'Reduce some month amounts'}
+                                        ? 'Distribute remaining across months'
+                                        : 'Reduce some month amounts'}
                                     </div>
+
                                   </div>
                                 </div>
                               </div>
@@ -2221,9 +2241,10 @@ const Budget: React.FC = () => {
                 <tfoot>
                   <tr>
                     <td colSpan={5} className="totalLabelCell">
-                      Total Budget
+                      Total Budget (₹)
                     </td>
-                    <td className="totalValueCell">₹ {grandTotal}</td>
+                    <td className="totalValueCell">{formatINR(grandTotal)}</td>
+
                     <td />
                   </tr>
                 </tfoot>
