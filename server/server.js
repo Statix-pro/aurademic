@@ -1,9 +1,12 @@
 import './config/env.js';
 import express from 'express';
 import morgan from 'morgan';
+import helmet from 'helmet';
 // import rateLimit from 'express-rate-limit';
 import cors from 'cors';
 import logger, { morganStream } from './config/logger.js';
+import requestId from './middleware/requestId.js';
+import { initSentry } from './config/sentry.js';
 
 // routes
 import journalRoutes from './modules/journal/journalRoutes.js';
@@ -43,6 +46,12 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+//  Trust proxy headers when behind IIS / reverse proxy
+app.set("trust proxy", true);
+
+// Initialize Sentry (must be called before routes are registered)
+initSentry(app);
+
 /* ================= CORS ================= */
 
 const corsOptions = {
@@ -58,8 +67,10 @@ const corsOptions = {
 
 /* ================= MIDDLEWARE ================= */
 
+app.use(helmet());
 app.use(cors(corsOptions));
-app.use(morgan('combined', { stream: morganStream }));
+app.use(requestId);
+app.use(morgan(':method :url :status :res[content-length] - :response-time ms :req[x-request-id]', { stream: morganStream }));
 
 // const globalLimiter = rateLimit({
 //   windowMs: 15 * 60 * 1000,
@@ -109,6 +120,17 @@ const createUploadDirectories = () => {
 };
 
 createUploadDirectories();
+
+/* ================= HEALTH CHECK ================= */
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+  });
+});
 
 /* ================= API ROUTES ================= */
 
