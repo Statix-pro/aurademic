@@ -59,7 +59,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Furniture & Fixtures',
       'Vehicles',
       'Equipment',
-      'Accessories & Kits','Library Books'
+      'Accessories & Kits', 'Library Books'
     ],
   },
   { label: 'Recurring', options: [] },
@@ -81,19 +81,19 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
   },
   {
     label: 'Events & Competitions',
-    options: ['Academic Events','College Events','Conferences & Conclaves','Association Activities','Outreach Event','Cultural & Celebrations','Sports'
-    ,'Competitions'],
+    options: ['Academic Events', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Event', 'Cultural & Celebrations', 'Sports'
+      , 'Competitions'],
   },
   {
     label: 'Meetings & Audits',
     options: [
-      'Institutional Governance Meetings','Academic Governance Meetings','Institutional Audits','Government Meetings',
+      'Institutional Governance Meetings', 'Academic Governance Meetings', 'Institutional Audits', 'Government Meetings',
     ],
   },
   {
     label: 'Academics',
     options: [
-      'Faculty Empowerment','Staff Empowerment','Sudent Empowerment','Student Capacity Building','Accreditation Expenses','Examination Expenses',
+      'Faculty Empowerment', 'Staff Empowerment', 'Sudent Empowerment', 'Student Capacity Building', 'Accreditation Expenses', 'Examination Expenses',
     ],
   },
   {
@@ -104,13 +104,13 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
     label: 'General',
     options: [
       'Research & Development',
-      'Administrative Expenses','Licenses & Taxes',
+      'Administrative Expenses', 'Licenses & Taxes',
       'Salary',
       'Bills & Payments',
       'Miscellaneous Expenses',
     ],
   },
-   
+
 ];
 
 const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
@@ -119,7 +119,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Partition Works',
     'False Ceiling Works',
     'Plumbing Works',
-    'Canopy','Water Cooler'
+    'Canopy', 'Water Cooler'
   ],
   'Electrical Infrastructure': [
     'Electrical Wiring',
@@ -127,7 +127,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Lift Installation',
     'Air Conditioner',
     'UPS & Inverter',
-    'Battery','Generator'
+    'Battery', 'Generator'
   ],
   'IT Infrastructure': [
     'Hardwares',
@@ -163,7 +163,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Lab Equipment',
     'Consultancy Equipment',
     'Research Equipment',
-    'Equipment Upgrade','Sports Equipment','Office Equipment'
+    'Equipment Upgrade', 'Sports Equipment', 'Office Equipment'
   ],
   'Accessories & Kits': [
     'Power Tools',
@@ -180,13 +180,13 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Plumbing Maintenance',
     'Vehicle Maintenance',
     'Garden Maintenance',
-       'Infrastructure Maintenance',
+    'Infrastructure Maintenance',
     'AC Maintenance',
     'UPS Maintenance',
     'Lift Maintenance',
     'Printer Maintenance',
-    'Painting','Playground Maintenance','Office Maintenance',
-'Housekeeping Expenses','General Repairs'
+    'Painting', 'Playground Maintenance', 'Office Maintenance',
+    'Housekeeping Expenses', 'General Repairs'
   ],
   Spares: ['Printer Donors', 'SMPS', 'Chargers'],
   'Annual Maintenance Charges': ['Equipment Maintenance', 'Software Maintenance'],
@@ -228,7 +228,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'E-Resources',
     'Data Subscription Charges',
   ],
-  'College Essentials': ['Books','Note Books', 'Log Books', 'ID Card', 'Others'],
+  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Others'],
   'Printing & Stationery': [
     'Banner',
     'Pamphlet',
@@ -258,20 +258,20 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Beta',
     'Others',
   ],
-  'Conferences & Conclaves':['National Conference','International Conference','Conclave','Convention','Networking Event','Industry Interaction'],
-   'Association Activities':['Association Function','Alumni Meeting','Alumni Interaction','Parents Meeting'],
-   'Outreach Event':['School Visit','Awareness Program','Campaigns','Mini Marathon','Education Fair','Rally'],
-   'Cultural & Celebrations':['Celebration Day','Festival Celebrations','Harmonicks','Hostel Day'],
-   'Sports':['Sports Meet','Sports Day'],
-   'Competitions':['Hackathons','Competitions','Club Activities','Project Expo','Ideathon','Start-up meet'],
+  'Conferences & Conclaves': ['National Conference', 'International Conference', 'Conclave', 'Convention', 'Networking Event', 'Industry Interaction'],
+  'Association Activities': ['Association Function', 'Alumni Meeting', 'Alumni Interaction', 'Parents Meeting'],
+  'Outreach Event': ['School Visit', 'Awareness Program', 'Campaigns', 'Mini Marathon', 'Education Fair', 'Rally'],
+  'Cultural & Celebrations': ['Celebration Day', 'Festival Celebrations', 'Harmonicks', 'Hostel Day'],
+  'Sports': ['Sports Meet', 'Sports Day'],
+  'Competitions': ['Hackathons', 'Competitions', 'Club Activities', 'Project Expo', 'Ideathon', 'Start-up meet'],
 
-  'Institutional Governance Meetings':['Governing Body Meeting','Research Advisory Board Meeting','Finance Committee Meeting','Result Passing Board Meeting','Examination Committee Meeting'
-   ,'Placement Meeting'],
- 
-   'Academic Governance Meetings':['Academic Council Meeting','Standing Committee Meeting',
-    'Board of Studies Meeting','DAB Meeting'],
-    'Institutional Audits':['Academic Audit','Administrative Audit','Energy & Green Audit'],
-    'Government Meetings':['Government Meetings'],
+  'Institutional Governance Meetings': ['Governing Body Meeting', 'Research Advisory Board Meeting', 'Finance Committee Meeting', 'Result Passing Board Meeting', 'Examination Committee Meeting'
+    , 'Placement Meeting'],
+
+  'Academic Governance Meetings': ['Academic Council Meeting', 'Standing Committee Meeting',
+    'Board of Studies Meeting', 'DAB Meeting'],
+  'Institutional Audits': ['Academic Audit', 'Administrative Audit', 'Energy & Green Audit'],
+  'Government Meetings': ['Government Meetings'],
   'Faculty Empowerment': [
     'Registration fee',
     'Travel Allowance',
@@ -281,31 +281,31 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Membership Fees',
     'Incentives',
     'Leadership Meet',
-    'Faculty Welfare','Medical Expenses'
+    'Faculty Welfare', 'Medical Expenses'
   ],
 
-  'Academic Events':[
+  'Academic Events': [
     'Seminar',
-'Webinar',
-'Guest Lecture',
-'Workshop',
-'Hands-on Training',
-'FDP (Faculty Development Programme)',
-'STTP (Short-Term Training Programme)',
-'MoU Inking',
-'Industry Visit',
-'Expert Visit'
+    'Webinar',
+    'Guest Lecture',
+    'Workshop',
+    'Hands-on Training',
+    'FDP (Faculty Development Programme)',
+    'STTP (Short-Term Training Programme)',
+    'MoU Inking',
+    'Industry Visit',
+    'Expert Visit'
   ],
 
   'College Events': [
     'Annual Day',
-'Graduation Day',
-'Student Induction Programme',
-'Orientation Session',
-'Dakshaa',
-'Science Day',
-'Womens Day',
-'Founder Day'
+    'Graduation Day',
+    'Student Induction Programme',
+    'Orientation Session',
+    'Dakshaa',
+    'Science Day',
+    'Womens Day',
+    'Founder Day'
   ],
   'Staff Empowerment': [
     'Registration fee',
@@ -314,7 +314,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Accommodation',
     'Daily Allowance',
     'Incentives',
-    'Staff Welfare','Medical Expenses'
+    'Staff Welfare', 'Medical Expenses'
   ],
   'Sudent Empowerment': [
     'Registration fee',
@@ -344,7 +344,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Language Proficiency Courses',
     'Others',
   ],
-  
+
   'Accreditation Expenses': [
     'NAAC Fees',
     'NBA Fees',
@@ -352,15 +352,15 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'NBA Inspection',
   ],
   'Examination Expenses': [
-    'Autonomous Exam Remuneration','Online Exam Remuneration',
- 'Government Exam Remuneration',
+    'Autonomous Exam Remuneration', 'Online Exam Remuneration',
+    'Government Exam Remuneration',
   ],
   'Advertisement & Branding': ['News Paper Advertisement', 'Digital Promotion'],
   'Public Relations': [
     'Press & Media',
     'Promotions',
     'Branding',
-    'Corporate Gift','Sponsorship',
+    'Corporate Gift', 'Sponsorship',
     'CSR Activity'
   ],
   Admissions: [
@@ -389,26 +389,26 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Consortium Fees',
     'Inspection Expenses',
     'Autonomous Charges',
-        'Insurance Charges',
-     'Stamp Charges','Audit Fees',
+    'Insurance Charges',
+    'Stamp Charges', 'Audit Fees',
     'Flag Day Expenses',
     'Fee Fixation Expenses',
     'Scholarship Expenses',
     'International Travel',
-    'Testing Charges','Legal Expenses'
+    'Testing Charges', 'Legal Expenses'
   ],
-  'Licenses & Taxes' :['DTCP Approval','Water Tax','Road Tax','Property Tax','Building Tax'],
+  'Licenses & Taxes': ['DTCP Approval', 'Water Tax', 'Road Tax', 'Property Tax', 'Building Tax'],
   'Salary:': [
     'Monthly Salary',
     'Provident Fund',
     'Emoluments',
     'Professional Payments',
-    'Wages','ESI Scheme','Allowances'
+    'Wages', 'ESI Scheme', 'Allowances'
   ],
   'Bills & Payments': [
     'Electricity Charges',
     'Internet Charges',
-    'Telephone Charges','Diesel Expenses'
+    'Telephone Charges', 'Diesel Expenses'
   ],
   'Miscellaneous Expenses': [
     'Bank Charges',
@@ -421,7 +421,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Pooja Expenses',
     'Fire Extinguisher',
     'First Aid Kit Expenses',
-    'Irrecovable Fee','Legal Expenses','Others'
+    'Irrecovable Fee', 'Legal Expenses', 'Others'
   ],
 };
 
@@ -894,7 +894,7 @@ const Budget: React.FC = () => {
         `${line.budgetHead} - ${line.subHead || ''}`,
       month_allocations: line.monthAmounts || {},
     }));
-  
+
 
     const safeFY = String(explicitFiscalYear);
     const fiscalYearInt = parseInt(safeFY.split("-")[0]);
@@ -1171,14 +1171,14 @@ const Budget: React.FC = () => {
     fetchUserDetails();
   }, [id, applicantName]);
 
- const formatINR = (value: number | string): string => {
-  const num = Number(value || 0);
-  if (isNaN(num)) return '0';
-  return num.toLocaleString('en-IN', {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 0,
-  });
-};
+  const formatINR = (value: number | string): string => {
+    const num = Number(value || 0);
+    if (isNaN(num)) return '0';
+    return num.toLocaleString('en-IN', {
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 0,
+    });
+  };
 
 
 
@@ -1737,17 +1737,17 @@ const Budget: React.FC = () => {
 
                         <tr>
                           <td className="centerTd">{idx + 1}</td>
-                        <td>
+                          <td>
                             <Select
                               className="tableSelect"
                               value={
                                 line.budgetHead
                                   ? ({
-                                      value: line.budgetHead,
-                                      label: line.budgetHead,
-                                      budgetHead: line.budgetHead,
-                                      optionType: 'budget-head',
-                                    } as BudgetHeadSelectOption)
+                                    value: line.budgetHead,
+                                    label: line.budgetHead,
+                                    budgetHead: line.budgetHead,
+                                    optionType: 'budget-head',
+                                  } as BudgetHeadSelectOption)
                                   : null
                               }
                               onChange={(selected: any) =>
@@ -1831,8 +1831,8 @@ const Budget: React.FC = () => {
                                   backgroundColor: state.isSelected
                                     ? '#0069ab'
                                     : state.isFocused
-                                    ? 'rgba(0,105,171,0.1)'
-                                    : 'white',
+                                      ? 'rgba(0,105,171,0.1)'
+                                      : 'white',
                                 }),
                               }}
                             />
@@ -1893,8 +1893,8 @@ const Budget: React.FC = () => {
                                   backgroundColor: state.isSelected
                                     ? '#0069ab'
                                     : state.isFocused
-                                    ? 'rgba(0,105,171,0.1)'
-                                    : 'white',
+                                      ? 'rgba(0,105,171,0.1)'
+                                      : 'white',
                                 }),
                               }}
                             />
@@ -1927,7 +1927,7 @@ const Budget: React.FC = () => {
                               onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                             />
                           </td>
-                         <td className="centerTd totalCell">{formatINR(total)}</td>
+                          <td className="centerTd totalCell">{formatINR(total)}</td>
 
 
 
@@ -2018,7 +2018,7 @@ const Budget: React.FC = () => {
                                   // Added: Direct check for amount on the current line (replaces inefficient hasZeroAmountLine call)
                                   Number(line.amount || 0) <= 0
                               )}
-                             >
+                            >
                               +
                             </button>
 
@@ -2127,7 +2127,7 @@ const Budget: React.FC = () => {
                                       fontSize: '13px',
                                     }}
                                   >
-                                   <div
+                                    <div
                                       style={{
                                         marginBottom: '12px',
                                         fontWeight: '600',
@@ -2183,22 +2183,22 @@ const Budget: React.FC = () => {
                                           remaining === 0
                                             ? '#d4edda'
                                             : remaining > 0
-                                            ? '#fff3cd'
-                                            : '#f8d7da',
+                                              ? '#fff3cd'
+                                              : '#f8d7da',
                                         borderColor:
                                           remaining === 0
                                             ? '#c3e6cb'
                                             : remaining > 0
-                                            ? '#ffeaa7'
-                                            : '#f5c6cb',
+                                              ? '#ffeaa7'
+                                              : '#f5c6cb',
                                       }}
                                     >
                                       <span>
                                         {remaining === 0
                                           ? 'Remaining:'
                                           : remaining > 0
-                                          ? 'Remaining:'
-                                          : 'Over:'}
+                                            ? 'Remaining:'
+                                            : 'Over:'}
                                       </span>
                                       <span
                                         style={{
@@ -2206,8 +2206,8 @@ const Budget: React.FC = () => {
                                             remaining === 0
                                               ? '#155724'
                                               : remaining > 0
-                                              ? '#856404'
-                                              : '#721c24',
+                                                ? '#856404'
+                                                : '#721c24',
                                         }}
                                       >
                                         ₹ {formatINR(Math.abs(remaining))}
@@ -2224,8 +2224,8 @@ const Budget: React.FC = () => {
                                       {remaining === 0
                                         ? 'Perfect match!'
                                         : remaining > 0
-                                        ? 'Distribute remaining across months'
-                                        : 'Reduce some month amounts'}
+                                          ? 'Distribute remaining across months'
+                                          : 'Reduce some month amounts'}
                                     </div>
 
                                   </div>

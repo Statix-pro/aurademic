@@ -1,6 +1,6 @@
 import './config/env.js';
 import express from 'express';
-import rateLimit from 'express-rate-limit';
+// import rateLimit from 'express-rate-limit';
 import cors from 'cors';
 
 // routes
@@ -58,15 +58,15 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Global Rate Limiter: 3000 requests per 15 minutes
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 3000,
-  message: 'Too many requests from this IP, please try again after 15 minutes',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use(globalLimiter);
+
+// const globalLimiter = rateLimit({
+//   windowMs: 15 * 60 * 1000,
+//   max: 3000,
+//   message: 'Too many requests from this IP, please try again after 15 minutes',
+//   standardHeaders: true,
+//   legacyHeaders: false,
+// });
+// app.use(globalLimiter);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
