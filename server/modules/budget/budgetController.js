@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 import BudgetModel from './budgetModel.js';
 
 const VALID_BENEFICIARY_TYPES = [
@@ -152,7 +153,7 @@ class BudgetController {
         },
       });
     } catch (error) {
-      console.error('Faculty details error:', error);
+      logger.error('Faculty details error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch faculty details',
@@ -171,7 +172,7 @@ class BudgetController {
         data: results,
       });
     } catch (error) {
-      console.error('Budget applicant search error:', error);
+      logger.error('Budget applicant search error:', error);
       return res.status(500).json({
         success: false,
         status: 'error',
@@ -200,7 +201,7 @@ class BudgetController {
         count: units.length,
       });
     } catch (error) {
-      console.error('Get org units error:', error);
+      logger.error('Get org units error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch org units',
@@ -230,7 +231,7 @@ class BudgetController {
         count: units.length,
       });
     } catch (error) {
-      console.error('Get all org units error:', error);
+      logger.error('Get all org units error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch all org units',
@@ -259,7 +260,7 @@ class BudgetController {
         count: data.length,
       });
     } catch (error) {
-      console.error('Get entities by type error:', error);
+      logger.error('Get entities by type error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch entities',
@@ -285,7 +286,7 @@ class BudgetController {
         data: entity,
       });
     } catch (error) {
-      console.error('Create entity error:', error);
+      logger.error('Create entity error:', error);
       return res.status(400).json({
         success: false,
         message: error.message || 'Failed to create entity',
@@ -319,7 +320,7 @@ class BudgetController {
         data: entity,
       });
     } catch (error) {
-      console.error('Update entity error:', error);
+      logger.error('Update entity error:', error);
       return res.status(400).json({
         success: false,
         message: error.message || 'Failed to update entity',
@@ -360,7 +361,7 @@ class BudgetController {
         message: 'Entity deleted successfully',
       });
     } catch (error) {
-      console.error('Delete entity error:', error);
+      logger.error('Delete entity error:', error);
       return res.status(400).json({
         success: false,
         message: error.message || 'Failed to delete entity',
@@ -394,7 +395,7 @@ class BudgetController {
         data: contacts,
       });
     } catch (error) {
-      console.error('Get entity contacts error:', error);
+      logger.error('Get entity contacts error:', error);
       return res.status(400).json({
         success: false,
         message: error.message || 'Failed to fetch entity contacts',
@@ -429,7 +430,7 @@ class BudgetController {
         data: updatedContacts,
       });
     } catch (error) {
-      console.error('Update entity contacts error:', error);
+      logger.error('Update entity contacts error:', error);
       return res.status(400).json({
         success: false,
         message: error.message || 'Failed to update contacts',
@@ -446,7 +447,7 @@ class BudgetController {
         data: configs,
       });
     } catch (error) {
-      console.error('Get approval flows error:', error);
+      logger.error('Get approval flows error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch approval flow configs',
@@ -550,7 +551,7 @@ class BudgetController {
         },
       });
     } catch (error) {
-      console.error('Create budget error:', error);
+      logger.error('Create budget error:', error);
       return res.status(400).json({
         success: false,
         message: error.message || 'Failed to create budget proposal',
@@ -614,7 +615,7 @@ class BudgetController {
         message: 'Budget proposal updated successfully',
       });
     } catch (error) {
-      console.error('Update budget error:', error);
+      logger.error('Update budget error:', error);
 
       if (error.message.includes('Cannot edit')) {
         return res.status(403).json({
@@ -672,7 +673,7 @@ class BudgetController {
         message: 'Budget proposal deleted successfully',
       });
     } catch (error) {
-      console.error('Delete budget error:', error);
+      logger.error('Delete budget error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to delete proposal',
@@ -727,7 +728,7 @@ class BudgetController {
         data: budget,
       });
     } catch (error) {
-      console.error('Get budget error:', error);
+      logger.error('Get budget error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch proposal',
@@ -758,7 +759,7 @@ class BudgetController {
         currentFiscalYear: BudgetModel.getCurrentFinancialYear(),
       });
     } catch (error) {
-      console.error('My budgets error:', error);
+      logger.error('My budgets error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch your budgets',
@@ -798,7 +799,7 @@ class BudgetController {
         currentFiscalYear: BudgetModel.getCurrentFinancialYear(),
       });
     } catch (error) {
-      console.error('HOD budgets error:', error);
+      logger.error('HOD budgets error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch HOD budgets',
@@ -825,7 +826,7 @@ class BudgetController {
         currentFiscalYear: BudgetModel.getCurrentFinancialYear(),
       });
     } catch (error) {
-      console.error('DoF budgets error:', error);
+      logger.error('DoF budgets error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch DoF budgets',
@@ -852,7 +853,7 @@ class BudgetController {
         currentFiscalYear: BudgetModel.getCurrentFinancialYear(),
       });
     } catch (error) {
-      console.error('Principal budgets error:', error);
+      logger.error('Principal budgets error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch Principal budgets',
@@ -875,7 +876,7 @@ class BudgetController {
         currentFiscalYear: BudgetModel.getCurrentFinancialYear(),
       });
     } catch (error) {
-      console.error('Aggregates error:', error);
+      logger.error('Aggregates error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch aggregates',
@@ -968,7 +969,7 @@ class BudgetController {
         },
       });
     } catch (error) {
-      console.error('Approval error:', error);
+      logger.error('Approval error:', error);
 
       if (
         error.message.includes('Stage mismatch') ||
@@ -1010,7 +1011,7 @@ class BudgetController {
         },
       });
     } catch (error) {
-      console.error('Admin list error:', error);
+      logger.error('Admin list error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch admin budgets',
@@ -1052,7 +1053,7 @@ class BudgetController {
         filters: req.query,
       });
     } catch (error) {
-      console.error('Search error:', error);
+      logger.error('Search error:', error);
       return res.status(500).json({
         success: false,
         message: 'Search failed',
@@ -1114,7 +1115,7 @@ class BudgetController {
         },
       });
     } catch (error) {
-      console.error('Upload error:', error);
+      logger.error('Upload error:', error);
       return res.status(500).json({
         success: false,
         message: 'File upload failed',
@@ -1181,7 +1182,7 @@ class BudgetController {
         },
       });
     } catch (error) {
-      console.error('Get history error:', error);
+      logger.error('Get history error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch proposal history',
@@ -1229,7 +1230,7 @@ class BudgetController {
         data: allocations,
       });
     } catch (error) {
-      console.error('Get allocations error:', error);
+      logger.error('Get allocations error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch month allocations',
@@ -1276,7 +1277,7 @@ class BudgetController {
         filters: { fiscalYear, status },
       });
     } catch (error) {
-      console.error('Export error:', error);
+      logger.error('Export error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to export budgets',
@@ -1296,7 +1297,7 @@ class BudgetController {
         fiscalYear: fy,
       });
     } catch (error) {
-      console.error('Stats error:', error);
+      logger.error('Stats error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch stats',
@@ -1359,7 +1360,7 @@ class BudgetController {
         },
       });
     } catch (error) {
-      console.error('Get status error:', error);
+      logger.error('Get status error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch status',
@@ -1407,7 +1408,7 @@ class BudgetController {
         message: 'Approval flow config updated successfully',
       });
     } catch (error) {
-      console.error('Update flow config error:', error);
+      logger.error('Update flow config error:', error);
       return res.status(500).json({
         success: false,
         message: 'Failed to update approval flow config',

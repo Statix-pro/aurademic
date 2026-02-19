@@ -2,6 +2,7 @@ import express from 'express';
 import researchProjectController from './projectController.js';
 import upload from '../../middleware/uploadMiddleware.js';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
+import asyncHandler from '../../middleware/asyncHandler.js';
 
 const router = express.Router();
 
@@ -10,129 +11,124 @@ router.use(authMiddleware);
 // Add these new routes before the existing project routes
 router.get(
   '/project-options/agencies/search',
-  researchProjectController.searchAgencies
+  asyncHandler(researchProjectController.searchAgencies)
 );
 router.get(
   '/project-options/schemes/search',
-  researchProjectController.searchSchemes
+  asyncHandler(researchProjectController.searchSchemes)
 );
 router.get(
   '/project-options/agency-types/search',
-  researchProjectController.searchAgencyTypes
+  asyncHandler(researchProjectController.searchAgencyTypes)
 );
 
 // Project Request routes
 router.post(
   '/project-requests',
-  researchProjectController.createProjectRequest
+  asyncHandler(researchProjectController.createProjectRequest)
 );
 router.get(
   '/project-requests',
-  researchProjectController.getUserProjectRequests
+  asyncHandler(researchProjectController.getUserProjectRequests)
 );
 router.get(
   '/project-requests/:id',
-  researchProjectController.getProjectRequest
+  asyncHandler(researchProjectController.getProjectRequest)
 );
 
 // Research Project CRUD operations
-router.post('/projects', researchProjectController.createProject);
-router.get('/projects/:id', researchProjectController.getProjectDetails);
-router.put('/projects/:id', researchProjectController.updateProject);
-router.delete('/projects/:id', researchProjectController.deleteProject);
+router.post('/projects', asyncHandler(researchProjectController.createProject));
+router.get('/projects/:id', asyncHandler(researchProjectController.getProjectDetails));
+router.put('/projects/:id', asyncHandler(researchProjectController.updateProject));
+router.delete('/projects/:id', asyncHandler(researchProjectController.deleteProject));
 
 // Author operations
-router.post('/projects/:id/authors', researchProjectController.addAuthor);
-router.get('/projects/:id/authors', researchProjectController.getAuthors);
+router.post('/projects/:id/authors', asyncHandler(researchProjectController.addAuthor));
+router.get('/projects/:id/authors', asyncHandler(researchProjectController.getAuthors));
 // Route to remove an author from a project
-router.delete('/projects/:id/authors', researchProjectController.removeAuthor);
+router.delete('/projects/:id/authors', asyncHandler(researchProjectController.removeAuthor));
 
 // Financial contribution operations
 router.post(
   '/projects/:id/contributions',
-  researchProjectController.addFinancialContribution
+  asyncHandler(researchProjectController.addFinancialContribution)
 );
 router.get(
   '/projects/:id/contributions',
-  researchProjectController.getFinancialContributions
+  asyncHandler(researchProjectController.getFinancialContributions)
 );
 router.delete(
   '/projects/:id/contributions/:contributionId',
-  researchProjectController.deleteFinancialContribution
+  asyncHandler(researchProjectController.deleteFinancialContribution)
 );
 
 // Grant disbursement operations
 router.post(
   '/projects/:id/grant-disbursements',
-  researchProjectController.addGrantDisbursement
+  asyncHandler(researchProjectController.addGrantDisbursement)
 );
 router.get(
   '/projects/:id/grant-disbursements',
-  researchProjectController.getGrantDisbursements
+  asyncHandler(researchProjectController.getGrantDisbursements)
 );
 router.put(
   '/projects/:id/grant-disbursements/:disbursementId',
-  researchProjectController.updateGrantDisbursement
+  asyncHandler(researchProjectController.updateGrantDisbursement)
 );
 router.delete(
   '/projects/:id/grant-disbursements/:disbursementId',
-  researchProjectController.deleteGrantDisbursement
+  asyncHandler(researchProjectController.deleteGrantDisbursement)
 );
 // Project details operations
 router.post(
   '/projects/:id/details',
-  researchProjectController.addProjectDetails
+  asyncHandler(researchProjectController.addProjectDetails)
 );
 router.get(
   '/projects/:id/details',
-  researchProjectController.getProjectDetails
+  asyncHandler(researchProjectController.getProjectDetails)
 );
 
 // Collaboration operations
 router.post(
   '/projects/:id/collaborations',
-  researchProjectController.addCollaboration
+  asyncHandler(researchProjectController.addCollaboration)
 );
 router.get(
   '/projects/:id/collaborations',
-  researchProjectController.getCollaborations
+  asyncHandler(researchProjectController.getCollaborations)
 );
 router.put(
   '/projects/:id/collaborations/:collabId',
-  researchProjectController.updateCollaboration
+  asyncHandler(researchProjectController.updateCollaboration)
 );
 router.delete(
   '/projects/:id/collaborations/:collabId',
-  researchProjectController.deleteCollaboration
+  asyncHandler(researchProjectController.deleteCollaboration)
 );
 // File upload
 router.post(
   '/projects/:id/upload',
   upload.single('file'),
-  researchProjectController.uploadFile
+  asyncHandler(researchProjectController.uploadFile)
 );
 // Journal article upload route
 router.post(
   '/projects/:id/upload-journal',
   upload.single('file'),
-  researchProjectController.uploadFile
+  asyncHandler(researchProjectController.uploadFile)
 );
-// router.post('/projects/:id/jousrnal-article/upload', upload.single('file'), );
 
 //  Grant Disbursement File Uploads
 router.post(
   '/projects/:projectId/grant-disbursements/:disbursementId/upload-sanction',
   upload.single('file'),
-  researchProjectController.uploadDisbursementSanctionLetter
+  asyncHandler(researchProjectController.uploadDisbursementSanctionLetter)
 );
 router.post(
   '/projects/:projectId/grant-disbursements/:disbursementId/upload-ucsoe',
   upload.single('file'),
-  researchProjectController.uploadDisbursementUcAndSoe
+  asyncHandler(researchProjectController.uploadDisbursementUcAndSoe)
 );
-// router.post('/projects/:id/upload',
-//     upload.single('file'),
-//     multerErrorHandler,
-//     researchProjectController.uploadFile
-// );
+
 export default router;

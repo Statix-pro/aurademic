@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 // userDashboardController.js
 import userDashboardModel from './userDashboardModel.js';
 import BudgetModel from '../budget/budgetModel.js';
@@ -11,7 +12,7 @@ const userDashboardController = {
         data: stats,
       });
     } catch (error) {
-      console.error('Error getting dashboard stats:', error);
+      logger.error('Error getting dashboard stats:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to fetch dashboard statistics',
@@ -33,7 +34,7 @@ const userDashboardController = {
         data: profile,
       });
     } catch (error) {
-      console.error('Error getting user profile:', error);
+      logger.error('Error getting user profile:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to fetch user profile',
@@ -64,7 +65,7 @@ const userDashboardController = {
         },
       });
     } catch (error) {
-      console.error('Error getting user projects:', error);
+      logger.error('Error getting user projects:', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to fetch projects',
@@ -108,7 +109,7 @@ const userDashboardController = {
         },
       });
     } catch (error) {
-      console.error('Controller error:', error);
+      logger.error('Controller error:', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to fetch journals',
@@ -125,7 +126,7 @@ const userDashboardController = {
       );
 
       // Log the full project data for debugging
-      // console.log('Project Data:', project);
+      // logger.debug('Project Data:', project);
 
       if (!project) {
         return res.status(404).json({
@@ -139,7 +140,7 @@ const userDashboardController = {
         data: project,
       });
     } catch (error) {
-      console.error('Error getting project details:', error);
+      logger.error('Error getting project details:', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to fetch project details',
@@ -167,7 +168,7 @@ const userDashboardController = {
         data: journal,
       });
     } catch (error) {
-      console.error('Error getting journal details:', error);
+      logger.error('Error getting journal details:', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to fetch journal details',
@@ -199,7 +200,7 @@ const userDashboardController = {
         });
       }
 
-      console.error('Error deleting journal:', error);
+      logger.error('Error deleting journal:', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to delete journal',
@@ -228,7 +229,7 @@ const userDashboardController = {
         currentFiscalYear: BudgetModel.getCurrentFinancialYear()
       });
     } catch (error) {
-      console.error('Error fetching user budgets:', error);
+      logger.error('Error fetching user budgets:', error);
       res.status(500).json({ 
         status: 'error', 
         message: 'Failed to fetch budgets',

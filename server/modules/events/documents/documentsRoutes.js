@@ -15,6 +15,7 @@ import {
   requestEdit,
   deleteUpload,
 } from './documentsController.js';
+import asyncHandler from '../../../middleware/asyncHandler.js';
 
 const router = express.Router();
 
@@ -35,27 +36,27 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // Documents + Participants APIs
-router.get('/:eventId', getDocumentsAndParticipants); // Get all docs & participants for event
-router.put('/:eventId/doc/:docName', updateDocument); // Update doc toggle (fixed route)
-router.post('/:eventId/participant', upsertParticipant); // Add/Update participant
-router.delete('/participant/:participantId', deleteParticipant); // Delete participant (fixed param)
+router.get('/:eventId', asyncHandler(getDocumentsAndParticipants)); // Get all docs & participants for event
+router.put('/:eventId/doc/:docName', asyncHandler(updateDocument)); // Update doc toggle (fixed route)
+router.post('/:eventId/participant', asyncHandler(upsertParticipant)); // Add/Update participant
+router.delete('/participant/:participantId', asyncHandler(deleteParticipant)); // Delete participant (fixed param)
 
 // File Upload APIs
 router.post(
   '/:eventId/doc/:docName/upload',
   upload.single('file'),
-  uploadDocumentFile
+  asyncHandler(uploadDocumentFile)
 ); // Upload document file
 
 // Important Links APIs
-router.get('/:eventId/links', getImportantLinks); // Get important links
-router.put('/:eventId/links', updateImportantLinks); // Update important links
+router.get('/:eventId/links', asyncHandler(getImportantLinks)); // Get important links
+router.put('/:eventId/links', asyncHandler(updateImportantLinks)); // Update important links
 
 // Approval & Edit Request APIs
-router.post('/:eventId/submit', submitForApproval); // Submit for approval
-router.post('/:eventId/edit-request', requestEdit); // Request edit
+router.post('/:eventId/submit', asyncHandler(submitForApproval)); // Submit for approval
+router.post('/:eventId/edit-request', asyncHandler(requestEdit)); // Request edit
 
 // Upload Management
-router.delete('/upload/:uploadId', deleteUpload); // Delete upload file
+router.delete('/upload/:uploadId', asyncHandler(deleteUpload)); // Delete upload file
 
 export default router;

@@ -1,3 +1,4 @@
+import logger from '../../../config/logger.js';
 import eventDb from '../../../config/connection.js';
 
 // Utility: run queries
@@ -14,7 +15,7 @@ export const getPreEvents = async (req, res) => {
     );
     res.status(200).json(events);
   } catch (err) {
-    console.error('❌ Error in getPreEvents:', err.message);
+    logger.error('❌ Error in getPreEvents:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -93,8 +94,8 @@ export const getPreEventById = async (req, res) => {
 
     res.status(200).json(result);
   } catch (err) {
-    console.error('❌ Error in getPreEventById:', err.message);
-    console.error('❌ Full error:', err);
+    logger.error('❌ Error in getPreEventById:', err.message);
+    logger.error('❌ Full error:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -262,8 +263,8 @@ export const createPreEvent = async (req, res) => {
     });
   } catch (err) {
     await conn.rollback();
-    console.error('❌ Transaction rolled back due to error:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Transaction rolled back due to error:', err.message);
+    logger.error('❌ Full error details:', err);
     res.status(500).json({
       error: err.message,
       details:
@@ -446,11 +447,11 @@ export const updatePreEvent = async (req, res) => {
     });
   } catch (err) {
     await conn.rollback();
-    console.error(
+    logger.error(
       '❌ Update transaction rolled back due to error:',
       err.message
     );
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Full error details:', err);
     res.status(500).json({
       error: err.message,
       details:
@@ -477,7 +478,7 @@ export const deletePreEvent = async (req, res) => {
       message: 'Pre-event deleted successfully',
     });
   } catch (err) {
-    console.error('❌ Error in deletePreEvent:', err.message);
+    logger.error('❌ Error in deletePreEvent:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -536,7 +537,7 @@ export const getDropdownOptions = async (req, res) => {
 
     res.status(200).json(options);
   } catch (err) {
-    console.error('❌ Error in getDropdownOptions:', err.message);
+    logger.error('❌ Error in getDropdownOptions:', err.message);
     res.status(500).json({ error: err.message });
   }
 };

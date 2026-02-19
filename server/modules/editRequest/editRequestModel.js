@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 import db from '../../config/connection.js';
 
 const editRequestModel = {
@@ -33,7 +34,7 @@ const editRequestModel = {
       const [result] = await db.query(query, [status, requestId]);
       return result;
     } catch (error) {
-      console.error('Error in updateEditRequestStatus:', error);
+      logger.error('Error in updateEditRequestStatus:', error);
       throw error;
     }
   },
@@ -46,7 +47,7 @@ const editRequestModel = {
       );
       return result;
     } catch (error) {
-      console.error('Error in updateEditRequestStatusByEntity:', error);
+      logger.error('Error in updateEditRequestStatusByEntity:', error);
       throw error;
     }
   },

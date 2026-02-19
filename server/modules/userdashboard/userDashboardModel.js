@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 // userDashboardModel.js
 import db from '../../config/connection.js';
 
@@ -83,7 +84,7 @@ const userDashboardModel = {
       const [[user]] = await db.query(userQuery, [userId]);
 
       if (!user?.email) {
-        console.error('No user found with ID:', userId);
+        logger.error('No user found with ID:', userId);
         return { projects: [], total: 0 };
       }
 
@@ -140,7 +141,7 @@ const userDashboardModel = {
 
       return { projects, total };
     } catch (error) {
-      console.error('Database error in getUserProjects:', error);
+      logger.error('Database error in getUserProjects:', error);
       throw error;
     }
   },
@@ -153,7 +154,7 @@ const userDashboardModel = {
       const [[user]] = await db.query(userQuery, [userId]);
 
       if (!user?.email) {
-        console.error('No user found with ID:', userId);
+        logger.error('No user found with ID:', userId);
         return { journals: [], total: 0 };
       }
 
@@ -257,7 +258,7 @@ const userDashboardModel = {
         total: countResult.total || 0,
       };
     } catch (error) {
-      console.error('Database error in getUserJournals:', error);
+      logger.error('Database error in getUserJournals:', error);
       throw error;
     }
   },
@@ -269,7 +270,7 @@ const userDashboardModel = {
       const [[user]] = await db.query(userQuery, [userId]);
 
       if (!user?.email) {
-        console.error('No user found with ID:', userId);
+        logger.error('No user found with ID:', userId);
         return null;
       }
 
@@ -406,14 +407,14 @@ const userDashboardModel = {
             result[0][field] = [];
           }
         } catch (e) {
-          console.error(`Error parsing ${field}:`, e);
+          logger.error(`Error parsing ${field}:`, e);
           result[0][field] = [];
         }
       });
 
       return result[0];
     } catch (error) {
-      console.error('Database error in getProjectDetails:', error);
+      logger.error('Database error in getProjectDetails:', error);
       throw error;
     }
   },
@@ -507,7 +508,7 @@ const userDashboardModel = {
         can_delete: Boolean(rows[0].can_delete),
       };
     } catch (error) {
-      console.error('Database error in getJournalDetails:', error);
+      logger.error('Database error in getJournalDetails:', error);
       throw error;
     }
   },

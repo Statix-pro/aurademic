@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 import formOptionsModel from './formOptionsModel.js';
 
 const formOptionsController = {
@@ -9,7 +10,7 @@ const formOptionsController = {
         data: journals,
       });
     } catch (error) {
-      console.error('Error in getAllOptions:', error);
+      logger.error('Error in getAllOptions:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -25,7 +26,7 @@ const formOptionsController = {
         data: newJournal,
       });
     } catch (error) {
-      console.error('Error in addOption:', error);
+      logger.error('Error in addOption:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -50,7 +51,7 @@ const formOptionsController = {
         });
       }
     } catch (error) {
-      console.error('Error in updateOption:', error);
+      logger.error('Error in updateOption:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -75,7 +76,7 @@ const formOptionsController = {
         });
       }
     } catch (error) {
-      console.error('Error in deleteOption:', error);
+      logger.error('Error in deleteOption:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,

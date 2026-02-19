@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 import financeModel from './financeModel.js';
 
 const financeController = {
@@ -31,7 +32,7 @@ const financeController = {
         data: { id: financeId },
       });
     } catch (error) {
-      console.error('Error in createFinanceRequest:', error);
+      logger.error('Error in createFinanceRequest:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -81,7 +82,7 @@ const financeController = {
         });
       }
     } catch (error) {
-      console.error('Error in updateFinanceRequest:', error);
+      logger.error('Error in updateFinanceRequest:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -116,7 +117,7 @@ const financeController = {
         },
       });
     } catch (error) {
-      console.error('Error in getFinanceRequest:', error);
+      logger.error('Error in getFinanceRequest:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -143,7 +144,7 @@ const financeController = {
         data: rows,
       });
     } catch (error) {
-      console.error('Error in listFinanceRequests:', error);
+      logger.error('Error in listFinanceRequests:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -181,7 +182,7 @@ const financeController = {
         message: 'Budget breakup added successfully',
       });
     } catch (error) {
-      console.error('Error in addBudgetBreakup:', error);
+      logger.error('Error in addBudgetBreakup:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -203,7 +204,7 @@ const financeController = {
         data: budget,
       });
     } catch (error) {
-      console.error('Error in getBudgetBreakup:', error);
+      logger.error('Error in getBudgetBreakup:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -248,7 +249,7 @@ const financeController = {
         message: 'Status updated successfully',
       });
     } catch (error) {
-      console.error('Error in addStatusUpdate:', error);
+      logger.error('Error in addStatusUpdate:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -270,7 +271,7 @@ const financeController = {
         data: updates,
       });
     } catch (error) {
-      console.error('Error in getStatusUpdates:', error);
+      logger.error('Error in getStatusUpdates:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -311,7 +312,7 @@ const financeController = {
         data: employee,
       });
     } catch (error) {
-      console.error('Error in getCurrentEmployeeInfo:', error);
+      logger.error('Error in getCurrentEmployeeInfo:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -334,7 +335,7 @@ const financeController = {
         data: results,
       });
     } catch (error) {
-      console.error('Error in searchApplicant:', error);
+      logger.error('Error in searchApplicant:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,

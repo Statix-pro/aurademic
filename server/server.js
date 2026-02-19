@@ -1,7 +1,9 @@
 import './config/env.js';
 import express from 'express';
+import morgan from 'morgan';
 // import rateLimit from 'express-rate-limit';
 import cors from 'cors';
+import logger, { morganStream } from './config/logger.js';
 
 // routes
 import journalRoutes from './modules/journal/journalRoutes.js';
@@ -57,7 +59,7 @@ const corsOptions = {
 /* ================= MIDDLEWARE ================= */
 
 app.use(cors(corsOptions));
-
+app.use(morgan('combined', { stream: morganStream }));
 
 // const globalLimiter = rateLimit({
 //   windowMs: 15 * 60 * 1000,
@@ -74,15 +76,12 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 if (process.env.NODE_ENV !== 'production') {
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
-  console.log('Swagger UI available at /api-docs');
+  logger.info('Swagger UI available at /api-docs');
 }
 
 /* ================= STATIC FILES ================= */
 
-console.log(
-  'Attempting to serve static files from:',
-  path.join(__dirname, '..', 'uploads')
-);
+logger.info('Serving static files from: %s', path.join(__dirname, '..', 'uploads'));
 
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
@@ -161,7 +160,8 @@ app.use(errorHandler);
 
 const port = process.env.PORT || 5000;
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-  console.log('- /api/finance-cards (FinanceCard API)');
-  console.log('- /api-docs (Swagger API docs)');
+  logger.info(`Server running on port ${port}`);
+  logger.info('Available routes:');
+  logger.info('  - /api/finance-cards (FinanceCard API)');
+  logger.info('  - /api-docs (Swagger API docs)');
 });

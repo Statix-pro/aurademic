@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 import journalModel from './journalModel.js';
 import path from 'path';
 import fs from 'fs';
@@ -82,7 +83,7 @@ const journalController = {
         data: journal,
       });
     } catch (error) {
-      console.error('Error in createJournal:', error);
+      logger.error('Error in createJournal:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -93,24 +94,24 @@ const journalController = {
   async getJournal(req, res) {
     try {
       const id = req.params.id;
-      // console.log('Fetching journal with ID:', id);
+      // logger.debug('Fetching journal with ID:', id);
       const journal = await journalModel.getCompleteJournalDetails(id);
 
       if (journal) {
-        // console.log('Found journal:', journal);
+        // logger.debug('Found journal:', journal);
         res.status(200).json({
           status: 'success',
           data: journal,
         });
       } else {
-        // console.log('No journal found with ID:', id);
+        // logger.debug('No journal found with ID:', id);
         res.status(404).json({
           status: 'error',
           message: 'Journal not found',
         });
       }
     } catch (error) {
-      console.error('Error in getJournal:', error);
+      logger.error('Error in getJournal:', error);
       res.status(500).json({
         status: 'error',
         message: 'Error retrieving journal',
@@ -306,7 +307,7 @@ const journalController = {
         res.status(404).json({ message: 'Journal not found' });
       }
     } catch (error) {
-      console.error('Update error:', error);
+      logger.error('Update error:', error);
       res.status(500).json({
         message: 'Error updating journal',
         error: error.message,
@@ -332,7 +333,7 @@ const journalController = {
         res.status(404).json({ message: 'Author not found' });
       }
     } catch (error) {
-      console.error('Error in updateAuthor:', error);
+      logger.error('Error in updateAuthor:', error);
       res
         .status(500)
         .json({ message: 'Error updating author', error: error.message });
@@ -444,7 +445,7 @@ const journalController = {
           data: result,
         });
     } catch (error) {
-      console.error('Error adding author:', error);
+      logger.error('Error adding author:', error);
       res
         .status(500)
         .json({
@@ -479,7 +480,7 @@ const journalController = {
         res.status(200).json([]); // Return empty array instead of 404
       }
     } catch (error) {
-      console.error('Controller error:', error);
+      logger.error('Controller error:', error);
       res
         .status(500)
         .json({ message: 'Error searching for author', error: error.message });
@@ -561,7 +562,7 @@ const journalController = {
         filePath: dbFilePath,
       });
     } catch (error) {
-      console.error('File upload error:', error);
+      logger.error('File upload error:', error);
       res.status(500).json({
         success: false, // Not nested
         message: 'Error uploading file',
@@ -582,7 +583,7 @@ const journalController = {
         data: journals,
       });
     } catch (error) {
-      console.error('Error in searchJournals:', error);
+      logger.error('Error in searchJournals:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -632,7 +633,7 @@ const journalController = {
         data: request,
       });
     } catch (error) {
-      console.error('Error in createJournalRequest:', error);
+      logger.error('Error in createJournalRequest:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -650,7 +651,7 @@ const journalController = {
         data: requests,
       });
     } catch (error) {
-      console.error('Error in getUserJournalRequests:', error);
+      logger.error('Error in getUserJournalRequests:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -677,7 +678,7 @@ const journalController = {
         data: request,
       });
     } catch (error) {
-      console.error('Error in getJournalRequest:', error);
+      logger.error('Error in getJournalRequest:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -723,7 +724,7 @@ const journalController = {
         data: { id: statusUpdateId },
       });
     } catch (error) {
-      console.error('Error in createStatusUpdate:', error);
+      logger.error('Error in createStatusUpdate:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -752,7 +753,7 @@ const journalController = {
         data: statusUpdates,
       });
     } catch (error) {
-      console.error('Error in getStatusUpdates:', error);
+      logger.error('Error in getStatusUpdates:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -783,7 +784,7 @@ const journalController = {
         res.status(404).json({ message: 'Status update not found' });
       }
     } catch (error) {
-      console.error('Error in updateStatusUpdateAdminReply:', error);
+      logger.error('Error in updateStatusUpdateAdminReply:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,

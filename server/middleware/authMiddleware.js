@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import accessControlModel from '../modules/accessControl/accessControlModel.js';
+import logger from '../config/logger.js';
 
 const extractToken = (req) => {
   const authHeader = req.headers.authorization;
@@ -205,7 +206,7 @@ export const adminAuthMiddleware = async (req, res, next) => {
 
     return next();
   } catch (error) {
-    console.error('Admin token validation error:', error);
+    logger.error('Admin token validation error:', error);
 
     return res.status(401).json({
       message: 'Invalid token',
@@ -230,7 +231,7 @@ export const superAdminMiddleware = async (req, res, next) => {
 
     return next();
   } catch (error) {
-    console.error('Super admin validation error:', error);
+    logger.error('Super admin validation error:', error);
 
     return res.status(401).json({
       message: 'Invalid token',
@@ -283,7 +284,7 @@ export const permissionMiddleware = (
 
       return next();
     } catch (error) {
-      console.error('Permission validation error:', error);
+      logger.error('Permission validation error:', error);
 
       return res.status(500).json({
         message: 'Failed to validate permissions',

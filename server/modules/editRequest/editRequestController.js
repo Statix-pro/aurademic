@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 import editRequestModel from './editRequestModel.js';
 import journalModel from '../journal/journalModel.js';
 import projectModel from '../project/projectModel.js';
@@ -111,7 +112,7 @@ const editRequestController = {
         });
       }
     } catch (error) {
-      console.error('Error creating edit request:', error);
+      logger.error('Error creating edit request:', error);
       res.status(500).json({ success: false, message: 'Server error.' });
     }
   },
@@ -145,7 +146,7 @@ const editRequestController = {
         data: request ? { status: request.status } : { status: 'none' },
       });
     } catch (error) {
-      console.error('Error checking edit request status:', error);
+      logger.error('Error checking edit request status:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to check edit request status',
@@ -183,7 +184,7 @@ const editRequestController = {
       );
 
       if (result.affectedRows === 0) {
-        // console.log('Edit request not found or status already updated for entityId:', entityId);
+        // logger.debug('Edit request not found or status already updated for entityId:', entityId);
         return res.status(404).json({
           success: false,
           message: 'Edit request not found or status already updated.',
@@ -195,7 +196,7 @@ const editRequestController = {
       };
       res.status(200).json(responseData);
     } catch (error) {
-      console.error('Error updating edit request status:', error);
+      logger.error('Error updating edit request status:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to update edit request status.',
@@ -222,7 +223,7 @@ const editRequestController = {
         message: 'Edit request approved.',
       });
     } catch (error) {
-      console.error('Error approving edit request:', error);
+      logger.error('Error approving edit request:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to approve edit request.',
@@ -250,7 +251,7 @@ const editRequestController = {
         message: 'Edit request rejected.',
       });
     } catch (error) {
-      console.error('Error rejecting edit request:', error);
+      logger.error('Error rejecting edit request:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to reject edit request.',

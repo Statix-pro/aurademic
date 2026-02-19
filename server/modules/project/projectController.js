@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 import researchProjectModel from './projectModel.js';
 import path from 'path';
 import fs from 'fs';
@@ -9,7 +10,7 @@ const researchProjectController = {
   async createProject(req, res) {
     try {
       const projectData = req.body;
-      // console.log("Received project data:", projectData);
+      // logger.debug("Received project data:", projectData);
 
       // Look up or create agency ID
       let agencyId;
@@ -80,7 +81,7 @@ const researchProjectController = {
         try {
           project_details = JSON.parse(project_details);
         } catch (error) {
-          console.error('Error parsing project_details JSON:', error);
+          logger.error('Error parsing project_details JSON:', error);
           return res
             .status(400)
             .json({ message: 'Invalid format for project_details field' });
@@ -97,7 +98,7 @@ const researchProjectController = {
             outcome: outcome,
           };
         } catch (error) {
-          console.error('Error parsing outcome JSON:', error);
+          logger.error('Error parsing outcome JSON:', error);
           return res
             .status(400)
             .json({ message: 'Invalid format for outcome field' });
@@ -107,7 +108,7 @@ const researchProjectController = {
         try {
           documents = JSON.parse(documents);
         } catch (error) {
-          console.error('Error parsing documents JSON:', error);
+          logger.error('Error parsing documents JSON:', error);
           return res
             .status(400)
             .json({ message: 'Invalid format for documents field' });
@@ -118,7 +119,7 @@ const researchProjectController = {
         try {
           grant_disbursements = JSON.parse(grant_disbursements);
         } catch (error) {
-          console.error('Error parsing grant disbursements JSON:', error);
+          logger.error('Error parsing grant disbursements JSON:', error);
           return res
             .status(400)
             .json({ message: 'Invalid format for grant disbursements field' });
@@ -130,7 +131,7 @@ const researchProjectController = {
         try {
           financialContributions = JSON.parse(financialContributions);
         } catch (error) {
-          console.error('Error parsing financial contributions JSON:', error);
+          logger.error('Error parsing financial contributions JSON:', error);
           return res
             .status(400)
             .json({
@@ -143,7 +144,7 @@ const researchProjectController = {
         try {
           collaborations = JSON.parse(collaborations);
         } catch (error) {
-          console.error('Error parsing collaborations JSON:', error);
+          logger.error('Error parsing collaborations JSON:', error);
           return res
             .status(400)
             .json({ message: 'Invalid format for collaborations field' });
@@ -209,7 +210,7 @@ const researchProjectController = {
                 formattedContribution
               );
             } catch (error) {
-              console.error('Error adding financial contribution:', error);
+              logger.error('Error adding financial contribution:', error);
             }
           }
         }
@@ -222,7 +223,7 @@ const researchProjectController = {
             try {
               await researchProjectModel.addCollaboration(projectId, collab);
             } catch (error) {
-              console.error('Error adding collaboration:', error);
+              logger.error('Error adding collaboration:', error);
             }
           }
         }
@@ -236,7 +237,7 @@ const researchProjectController = {
             project_details
           );
         } catch (error) {
-          console.error('Error adding project details:', error);
+          logger.error('Error adding project details:', error);
         }
       }
 
@@ -267,7 +268,7 @@ const researchProjectController = {
                 disbursementData
               );
             } catch (error) {
-              console.error(`Error adding grant disbursement:`, error);
+              logger.error(`Error adding grant disbursement:`, error);
             }
           }
         }
@@ -283,7 +284,7 @@ const researchProjectController = {
                 file_path: docData.filePath,
               });
             } catch (error) {
-              console.error('Error adding document:', error);
+              logger.error('Error adding document:', error);
             }
           }
         }
@@ -294,7 +295,7 @@ const researchProjectController = {
         id: projectId,
       });
     } catch (error) {
-      console.error('Error creating research project:', error);
+      logger.error('Error creating research project:', error);
       res.status(500).json({
         message: 'Error creating research project',
         error: error.message,
@@ -377,7 +378,7 @@ const researchProjectController = {
         res.status(404).json({ message: 'Research project not found' });
       }
     } catch (error) {
-      console.error('Error during project update:', {
+      logger.error('Error during project update:', {
         message: error.message,
         stack: error.stack,
         requestData: req.body,
@@ -433,7 +434,7 @@ const researchProjectController = {
         id: result.authorId,
       });
     } catch (error) {
-      console.error('Error in addAuthor:', error);
+      logger.error('Error in addAuthor:', error);
       res.status(500).json({
         message: 'Error adding author to project',
         error: error.message,
@@ -510,7 +511,7 @@ const researchProjectController = {
         data: result,
       });
     } catch (error) {
-      console.error('Error in addFinancialContribution:', error);
+      logger.error('Error in addFinancialContribution:', error);
       res.status(500).json({
         message: 'Error adding financial contribution',
         error: error.message,
@@ -560,7 +561,7 @@ const researchProjectController = {
         message: 'Financial contribution deleted successfully!',
       });
     } catch (error) {
-      console.error('Error deleting financial contribution:', error);
+      logger.error('Error deleting financial contribution:', error);
       res
         .status(500)
         .json({
@@ -588,7 +589,7 @@ const researchProjectController = {
         data: result,
       });
     } catch (error) {
-      console.error('Error in addCollaboration:', error);
+      logger.error('Error in addCollaboration:', error);
       res.status(500).json({
         message: 'Error adding collaboration',
         error: error.message,
@@ -610,7 +611,7 @@ const researchProjectController = {
         result,
       });
     } catch (error) {
-      console.error('Error updating collaboration:', error);
+      logger.error('Error updating collaboration:', error);
       res
         .status(500)
         .json({
@@ -654,7 +655,7 @@ const researchProjectController = {
         message: 'Collaboration deleted successfully!',
       });
     } catch (error) {
-      console.error('Error deleting collaboration:', error);
+      logger.error('Error deleting collaboration:', error);
       res
         .status(500)
         .json({
@@ -730,7 +731,7 @@ const researchProjectController = {
           data: result,
         });
     } catch (error) {
-      console.error('Error in addGrantDisbursement:', error);
+      logger.error('Error in addGrantDisbursement:', error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -767,7 +768,7 @@ const researchProjectController = {
         data: result,
       });
     } catch (error) {
-      console.error('Error updating grant disbursement:', error);
+      logger.error('Error updating grant disbursement:', error);
       res.status(500).json({
         message: 'Error updating grant disbursement',
         error: error.message,
@@ -802,7 +803,7 @@ const researchProjectController = {
           .json({ success: false, message: 'Grant disbursement not found' });
       }
     } catch (error) {
-      console.error('Error deleting grant disbursement:', error);
+      logger.error('Error deleting grant disbursement:', error);
       res.status(500).json({
         success: false,
         message: 'Error deleting grant disbursement',
@@ -848,13 +849,13 @@ const researchProjectController = {
         // Rename (move) the file.  Keep the multer-generated name.
         await fs.promises.rename(file.path, finalPath);
       } catch (moveError) {
-        console.error('Error moving file (rename failed):', moveError);
+        logger.error('Error moving file (rename failed):', moveError);
 
         try {
           await fs.promises.copyFile(file.path, finalPath);
           await fs.promises.unlink(file.path);
         } catch (copyError) {
-          console.error('Error copying/deleting file:', copyError);
+          logger.error('Error copying/deleting file:', copyError);
           return res.status(500).json({
             message: 'Error saving file (copy/delete failed)',
             error: copyError.message,
@@ -889,14 +890,14 @@ const researchProjectController = {
         ];
         if (!allowedDocTypes.includes(document_typeFromRequest)) {
           // Now this comparison will work
-          console.error(
+          logger.error(
             `Invalid document_type '${document_typeFromRequest}' for project_documents table.`
           );
           // ... cleanup and error response ...
           try {
             await fs.promises.unlink(finalPath);
           } catch (unlinkErr) {
-            console.error('Error deleting orphaned file:', unlinkErr);
+            logger.error('Error deleting orphaned file:', unlinkErr);
           }
           return res
             .status(400)
@@ -917,7 +918,7 @@ const researchProjectController = {
         filePath: dbFilePath,
       });
     } catch (error) {
-      console.error('File upload error (outer catch):', error);
+      logger.error('File upload error (outer catch):', error);
       res.status(500).json({
         message: 'Error uploading file',
         error: error.message,
@@ -930,12 +931,12 @@ const researchProjectController = {
     try {
       const { projectId, disbursementId } = req.params; // disbursementId is a string here
       // In both upload functions, at the very start:
-      console.log(
+      logger.debug(
         'Upload request received for Sanction Letter:',
         req.file?.originalname
       );
-      console.log('Request params (Sanction Letter):', req.params);
-      console.log('File object (Sanction Letter):', req.file);
+      logger.debug('Request params (Sanction Letter):', req.params);
+      logger.debug('File object (Sanction Letter):', req.file);
 
       if (!req.file) {
         return res
@@ -945,7 +946,7 @@ const researchProjectController = {
       // Convert disbursementId to integer for database operations if it's a number column
       const numericDisbursementId = parseInt(disbursementId, 10);
       if (isNaN(numericDisbursementId)) {
-        console.error(
+        logger.error(
           'Invalid disbursement ID (Sanction Letter):',
           disbursementId
         );
@@ -958,7 +959,7 @@ const researchProjectController = {
 
       const file = req.file;
       const multerFilename = file.filename;
-      console.log('Using filename (Sanction Letter):', multerFilename);
+      logger.debug('Using filename (Sanction Letter):', multerFilename);
 
       const uploadDir = path.join(process.cwd(), 'uploads', 'sanctionLetter');
       const finalPath = path.join(uploadDir, multerFilename);
@@ -970,7 +971,7 @@ const researchProjectController = {
       try {
         await fs.promises.rename(file.path, finalPath);
       } catch (moveError) {
-        console.error(
+        logger.error(
           'Error moving file (Sanction Letter), attempting copy/delete:',
           moveError
         );
@@ -978,7 +979,7 @@ const researchProjectController = {
           await fs.promises.copyFile(file.path, finalPath);
           await fs.promises.unlink(file.path);
         } catch (copyError) {
-          console.error(
+          logger.error(
             'Error in copy/delete fallback (Sanction Letter):',
             copyError
           );
@@ -994,7 +995,7 @@ const researchProjectController = {
 
       const dbFilePath = `/uploads/sanctionLetter/${multerFilename}`; // Make sure this path is what you intend to store
 
-      console.log(
+      logger.debug(
         'About to update DB for Sanction Letter with disbursementId:',
         numericDisbursementId,
         'and path:',
@@ -1007,7 +1008,7 @@ const researchProjectController = {
           sanction_letter_path: dbFilePath,
         }
       );
-      console.log('DB update result (Sanction Letter):', updateResult);
+      logger.debug('DB update result (Sanction Letter):', updateResult);
 
       if (updateResult.affectedRows === 0) {
         console.warn(
@@ -1015,7 +1016,7 @@ const researchProjectController = {
           numericDisbursementId
         );
         // Optionally, you might want to delete the uploaded file if the DB update fails
-        // try { await fs.promises.unlink(finalPath); } catch (e) { console.error('Failed to delete orphaned file:', finalPath, e); }
+        // try { await fs.promises.unlink(finalPath); } catch (e) { logger.error('Failed to delete orphaned file:', finalPath, e); }
         // return res.status(404).json({ message: 'Grant disbursement record not found for Sanction Letter.' });
       }
 
@@ -1024,7 +1025,7 @@ const researchProjectController = {
         filePath: dbFilePath,
       });
     } catch (error) {
-      console.error('Disbursement Sanction Letter upload error:', error);
+      logger.error('Disbursement Sanction Letter upload error:', error);
       res.status(500).json({
         message: 'Error uploading Sanction Letter',
         error: error.message,
@@ -1035,12 +1036,12 @@ const researchProjectController = {
   async uploadDisbursementUcAndSoe(req, res) {
     try {
       const { projectId, disbursementId } = req.params; // disbursementId is a string here
-      console.log(
+      logger.debug(
         'Upload request received for UC & SoE:',
         req.file?.originalname
       );
-      console.log('Request params (UC & SoE):', req.params);
-      console.log('File object (UC & SoE):', req.file);
+      logger.debug('Request params (UC & SoE):', req.params);
+      logger.debug('File object (UC & SoE):', req.file);
 
       if (!req.file) {
         return res
@@ -1050,7 +1051,7 @@ const researchProjectController = {
       // Convert disbursementId to integer
       const numericDisbursementId = parseInt(disbursementId, 10);
       if (isNaN(numericDisbursementId)) {
-        console.error('Invalid disbursement ID (UC & SoE):', disbursementId);
+        logger.error('Invalid disbursement ID (UC & SoE):', disbursementId);
         return res
           .status(400)
           .json({ message: 'Invalid disbursement ID format for UC & SoE.' });
@@ -1058,7 +1059,7 @@ const researchProjectController = {
 
       const file = req.file;
       const multerFilename = file.filename;
-      console.log('Using filename (UC & SoE):', multerFilename);
+      logger.debug('Using filename (UC & SoE):', multerFilename);
 
       const uploadDir = path.join(process.cwd(), 'uploads', 'ucAndSoE');
       const finalPath = path.join(uploadDir, multerFilename);
@@ -1070,7 +1071,7 @@ const researchProjectController = {
       try {
         await fs.promises.rename(file.path, finalPath);
       } catch (moveError) {
-        console.error(
+        logger.error(
           'Error moving file (UC & SoE), attempting copy/delete:',
           moveError
         );
@@ -1078,7 +1079,7 @@ const researchProjectController = {
           await fs.promises.copyFile(file.path, finalPath);
           await fs.promises.unlink(file.path);
         } catch (copyError) {
-          console.error('Error in copy/delete fallback (UC & SoE):', copyError);
+          logger.error('Error in copy/delete fallback (UC & SoE):', copyError);
           return res
             .status(500)
             .json({
@@ -1090,7 +1091,7 @@ const researchProjectController = {
 
       const dbFilePath = `/uploads/ucAndSoE/${multerFilename}`; // Make sure this path is what you intend to store
 
-      console.log(
+      logger.debug(
         'About to update DB for UC & SoE with disbursementId:',
         numericDisbursementId,
         'and path:',
@@ -1102,7 +1103,7 @@ const researchProjectController = {
           uc_and_soe_path: dbFilePath,
         }
       );
-      console.log('DB update result (UC & SoE):', updateResult);
+      logger.debug('DB update result (UC & SoE):', updateResult);
 
       if (updateResult.affectedRows === 0) {
         console.warn(
@@ -1110,7 +1111,7 @@ const researchProjectController = {
           numericDisbursementId
         );
         // Optionally, you might want to delete the uploaded file if the DB update fails
-        // try { await fs.promises.unlink(finalPath); } catch (e) { console.error('Failed to delete orphaned file:', finalPath, e); }
+        // try { await fs.promises.unlink(finalPath); } catch (e) { logger.error('Failed to delete orphaned file:', finalPath, e); }
         // return res.status(404).json({ message: 'Grant disbursement record not found for UC & SoE.' });
       }
 
@@ -1119,7 +1120,7 @@ const researchProjectController = {
         filePath: dbFilePath,
       });
     } catch (error) {
-      console.error('Disbursement UC & SoE upload error:', error);
+      logger.error('Disbursement UC & SoE upload error:', error);
       res.status(500).json({
         message: 'Error uploading UC & SoE',
         error: error.message,
@@ -1133,7 +1134,7 @@ const researchProjectController = {
       const agencies = await researchProjectModel.searchAgencies(query);
       res.json(agencies);
     } catch (error) {
-      console.error('Error searching agencies:', error);
+      logger.error('Error searching agencies:', error);
       res.status(500).json({ error: 'Error searching agencies' });
     }
   },
@@ -1144,7 +1145,7 @@ const researchProjectController = {
       const schemes = await researchProjectModel.searchSchemes(query);
       res.json(schemes);
     } catch (error) {
-      console.error('Error searching schemes:', error);
+      logger.error('Error searching schemes:', error);
       res.status(500).json({ error: 'Error searching schemes' });
     }
   },
@@ -1155,7 +1156,7 @@ const researchProjectController = {
       const agencyTypes = await researchProjectModel.searchAgencyTypes(query);
       res.json(agencyTypes);
     } catch (error) {
-      console.error('Error searching agency types:', error);
+      logger.error('Error searching agency types:', error);
       res.status(500).json({ error: 'Error searching agency types' });
     }
   },
@@ -1196,7 +1197,7 @@ const researchProjectController = {
         data: request,
       });
     } catch (error) {
-      console.error('Error in createProjectRequest:', error);
+      logger.error('Error in createProjectRequest:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -1215,7 +1216,7 @@ const researchProjectController = {
         data: requests,
       });
     } catch (error) {
-      console.error('Error in getUserProjectRequests:', error);
+      logger.error('Error in getUserProjectRequests:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -1242,7 +1243,7 @@ const researchProjectController = {
         data: request,
       });
     } catch (error) {
-      console.error('Error in getProjectRequest:', error);
+      logger.error('Error in getProjectRequest:', error);
       res.status(500).json({
         status: 'error',
         message: error.message,
@@ -1259,7 +1260,7 @@ const researchProjectController = {
       );
 
       // Log the full project data for debugging
-      // console.log('Project Data:', project);
+      // logger.debug('Project Data:', project);
 
       if (!project) {
         return res.status(404).json({
@@ -1273,7 +1274,7 @@ const researchProjectController = {
         data: project,
       });
     } catch (error) {
-      console.error('Error getting project details:', error);
+      logger.error('Error getting project details:', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to fetch project details',

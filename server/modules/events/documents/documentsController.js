@@ -1,3 +1,4 @@
+import logger from '../../../config/logger.js';
 import eventDb from '../../../config/connection.js';
 import path from 'path';
 import fs from 'fs';
@@ -74,8 +75,8 @@ export const getDocumentsAndParticipants = async (req, res) => {
       participants: transformedParticipants,
     });
   } catch (err) {
-    console.error('❌ Error in getDocumentsAndParticipants:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Error in getDocumentsAndParticipants:', err.message);
+    logger.error('❌ Full error details:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -151,8 +152,8 @@ export const updateDocument = async (req, res) => {
 
     res.json(response);
   } catch (err) {
-    console.error('❌ Error in updateDocument:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Error in updateDocument:', err.message);
+    logger.error('❌ Full error details:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -243,8 +244,8 @@ export const upsertParticipant = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('❌ Error in upsertParticipant:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Error in upsertParticipant:', err.message);
+    logger.error('❌ Full error details:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -308,8 +309,8 @@ export const deleteParticipant = async (req, res) => {
       remainingParticipants: transformedParticipants,
     });
   } catch (err) {
-    console.error('❌ Error in deleteParticipant:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Error in deleteParticipant:', err.message);
+    logger.error('❌ Full error details:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -392,8 +393,8 @@ export const uploadDocumentFile = async (req, res) => {
 
     res.status(201).json(response);
   } catch (err) {
-    console.error('❌ Error in uploadDocumentFile:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Error in uploadDocumentFile:', err.message);
+    logger.error('❌ Full error details:', err);
 
     // Clean up uploaded file in case of error
     if (req.file && req.file.filename) {
@@ -447,8 +448,8 @@ export const getImportantLinks = async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error('❌ Error in getImportantLinks:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Error in getImportantLinks:', err.message);
+    logger.error('❌ Full error details:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -582,8 +583,8 @@ export const submitForApproval = async (req, res) => {
       submittedAt: new Date().toISOString(),
     });
   } catch (err) {
-    console.error('❌ Error in submitForApproval:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Error in submitForApproval:', err.message);
+    logger.error('❌ Full error details:', err);
 
     // Handle case where status column doesn't exist yet
     if (
@@ -652,8 +653,8 @@ export const requestEdit = async (req, res) => {
       requestedAt: new Date().toISOString(),
     });
   } catch (err) {
-    console.error('❌ Error in requestEdit:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Error in requestEdit:', err.message);
+    logger.error('❌ Full error details:', err);
 
     // Handle case where status column doesn't exist yet
     if (
@@ -729,8 +730,8 @@ export const getEventStatus = async (req, res) => {
 
     res.json(response);
   } catch (err) {
-    console.error('❌ Error in getEventStatus:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Error in getEventStatus:', err.message);
+    logger.error('❌ Full error details:', err);
 
     // Handle case where status column doesn't exist yet
     if (
@@ -820,8 +821,8 @@ export const deleteUpload = async (req, res) => {
       clearedDocumentReferences: referencingDocs.length,
     });
   } catch (err) {
-    console.error('❌ Error in deleteUpload:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Error in deleteUpload:', err.message);
+    logger.error('❌ Full error details:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -869,8 +870,8 @@ export const getUploadDetails = async (req, res) => {
 
     res.json(response);
   } catch (err) {
-    console.error('❌ Error in getUploadDetails:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Error in getUploadDetails:', err.message);
+    logger.error('❌ Full error details:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -914,7 +915,7 @@ export const getDocumentByName = async (req, res) => {
 
     res.json(response);
   } catch (err) {
-    console.error('❌ Error in getDocumentByName:', err.message);
+    logger.error('❌ Error in getDocumentByName:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -970,7 +971,7 @@ export const bulkUpdateDocuments = async (req, res) => {
     });
   } catch (err) {
     await conn.rollback();
-    console.error('❌ Error in bulkUpdateDocuments:', err.message);
+    logger.error('❌ Error in bulkUpdateDocuments:', err.message);
     res.status(500).json({ error: err.message });
   } finally {
     conn.release();

@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 import authModel from './authModel.js';
@@ -10,7 +11,7 @@ const authController = {
 
       // Confirm if credential is present
       if (!credential) {
-        console.error('Missing credential in request body');
+        logger.error('Missing credential in request body');
         return res.status(400).json({
           error: 'Missing credentials',
           details: 'No Google credential provided in request',
@@ -25,7 +26,7 @@ const authController = {
           audience: process.env.GOOGLE_CLIENT_ID,
         });
       } catch (verifyError) {
-        console.error('Token verification failed:', verifyError);
+        logger.error('Token verification failed:', verifyError);
         return res.status(401).json({
           error: 'Invalid token',
           details: verifyError.message,
@@ -58,7 +59,7 @@ const authController = {
 
       return res.json({ token, user });
     } catch (error) {
-      console.error('Authentication error:', error);
+      logger.error('Authentication error:', error);
       return res.status(500).json({
         error: 'Authentication failed',
         details: error.message,

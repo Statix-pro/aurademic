@@ -3,6 +3,7 @@ import * as updatesController from './updatesController.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import asyncHandler from '../../../middleware/asyncHandler.js';
 
 const router = express.Router();
 
@@ -22,32 +23,32 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // Event updates
-router.get('/events/:id', updatesController.getEventDetails);
-router.put('/events/:id/publicity', updatesController.updatePublicity);
+router.get('/events/:id', asyncHandler(updatesController.getEventDetails));
+router.put('/events/:id/publicity', asyncHandler(updatesController.updatePublicity));
 
 // Resource persons
 router.post(
   '/events/:id/resource_persons',
-  updatesController.addResourcePerson
+  asyncHandler(updatesController.addResourcePerson)
 );
 router.put(
   '/events/:id/resource_persons/:pid',
-  updatesController.updateResourcePerson
+  asyncHandler(updatesController.updateResourcePerson)
 );
 router.delete(
   '/events/:id/resource_persons/:pid',
-  updatesController.deleteResourcePerson
+  asyncHandler(updatesController.deleteResourcePerson)
 );
 
 // Letters
-router.put('/events/:id/letters', updatesController.upsertLetter);
+router.put('/events/:id/letters', asyncHandler(updatesController.upsertLetter));
 
 // Uploads
 router.post(
   '/events/:id/uploads',
   upload.single('file'),
-  updatesController.handleUpload
+  asyncHandler(updatesController.handleUpload)
 );
-router.delete('/uploads/:uid', updatesController.deleteUpload);
+router.delete('/uploads/:uid', asyncHandler(updatesController.deleteUpload));
 
 export default router;

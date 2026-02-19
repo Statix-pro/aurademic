@@ -4,6 +4,7 @@ import {
   adminAuthMiddleware,
   permissionMiddleware,
 } from '../../middleware/authMiddleware.js';
+import asyncHandler from '../../middleware/asyncHandler.js';
 
 const router = express.Router();
 
@@ -22,79 +23,79 @@ const canEditFormOptions = permissionMiddleware([
 ]);
 
 // Form options CRUD operations
-router.get('/journals', canReadFormOptions, formOptionsController.getAllOptions);
-router.post('/journals', canEditFormOptions, formOptionsController.addOption);
-router.put('/journals/:id', canEditFormOptions, formOptionsController.updateOption);
+router.get('/journals', canReadFormOptions, asyncHandler(formOptionsController.getAllOptions));
+router.post('/journals', canEditFormOptions, asyncHandler(formOptionsController.addOption));
+router.put('/journals/:id', canEditFormOptions, asyncHandler(formOptionsController.updateOption));
 router.delete(
   '/journals/:id',
   canEditFormOptions,
-  formOptionsController.deleteOption
+  asyncHandler(formOptionsController.deleteOption)
 );
 
 // Project Agency Options routes
 router.get(
   '/project-options/agencies',
   canReadFormOptions,
-  formOptionsController.getProjectAgencyOptions
+  asyncHandler(formOptionsController.getProjectAgencyOptions)
 );
 router.post(
   '/project-options/agencies',
   canEditFormOptions,
-  formOptionsController.addProjectAgencyOption
+  asyncHandler(formOptionsController.addProjectAgencyOption)
 );
 router.put(
   '/project-options/agencies/:id',
   canEditFormOptions,
-  formOptionsController.updateProjectAgencyOption
+  asyncHandler(formOptionsController.updateProjectAgencyOption)
 );
 router.delete(
   '/project-options/agencies/:id',
   canEditFormOptions,
-  formOptionsController.deleteProjectAgencyOption
+  asyncHandler(formOptionsController.deleteProjectAgencyOption)
 );
 
 // Project Scheme Options routes
 router.get(
   '/project-options/schemes',
   canReadFormOptions,
-  formOptionsController.getProjectSchemeOptions
+  asyncHandler(formOptionsController.getProjectSchemeOptions)
 );
 router.post(
   '/project-options/schemes',
   canEditFormOptions,
-  formOptionsController.addProjectSchemeOption
+  asyncHandler(formOptionsController.addProjectSchemeOption)
 );
 router.put(
   '/project-options/schemes/:id',
   canEditFormOptions,
-  formOptionsController.updateProjectSchemeOption
+  asyncHandler(formOptionsController.updateProjectSchemeOption)
 );
 router.delete(
   '/project-options/schemes/:id',
   canEditFormOptions,
-  formOptionsController.deleteProjectSchemeOption
+  asyncHandler(formOptionsController.deleteProjectSchemeOption)
 );
 
 // Project Agency Type Options routes
 router.get(
   '/project-options/agency-types',
   canReadFormOptions,
-  formOptionsController.getProjectAgencyTypeOptions
+  asyncHandler(formOptionsController.getProjectAgencyTypeOptions)
 );
 router.post(
   '/project-options/agency-types',
   canEditFormOptions,
-  formOptionsController.addProjectAgencyTypeOption
+  asyncHandler(formOptionsController.addProjectAgencyTypeOption)
 );
 router.put(
   '/project-options/agency-types/:id',
   canEditFormOptions,
-  formOptionsController.updateProjectAgencyTypeOption
+  asyncHandler(formOptionsController.updateProjectAgencyTypeOption)
 );
 router.delete(
   '/project-options/agency-types/:id',
   canEditFormOptions,
-  formOptionsController.deleteProjectAgencyTypeOption
+  asyncHandler(formOptionsController.deleteProjectAgencyTypeOption)
 );
 
 export default router;

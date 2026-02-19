@@ -1,3 +1,4 @@
+import logger from '../../../config/logger.js';
 import eventDb from '../../../config/connection.js';
 
 async function query(sql, params = []) {
@@ -13,7 +14,7 @@ export const getFinanceRecords = async (req, res) => {
     );
     res.status(200).json(records);
   } catch (err) {
-    console.error('❌ Error fetching finance records:', err.message);
+    logger.error('❌ Error fetching finance records:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -99,7 +100,7 @@ export const getFinanceById = async (req, res) => {
 
     res.status(200).json(response);
   } catch (err) {
-    console.error('❌ Error fetching finance by id:', err.message);
+    logger.error('❌ Error fetching finance by id:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -226,8 +227,8 @@ export const createFinance = async (req, res) => {
     });
   } catch (err) {
     await conn.rollback();
-    console.error('❌ Error creating finance record:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Error creating finance record:', err.message);
+    logger.error('❌ Full error details:', err);
     res.status(500).json({
       error: err.message,
       details:
@@ -376,8 +377,8 @@ export const updateFinance = async (req, res) => {
     });
   } catch (err) {
     await conn.rollback();
-    console.error('❌ Error updating finance record:', err.message);
-    console.error('❌ Full error details:', err);
+    logger.error('❌ Error updating finance record:', err.message);
+    logger.error('❌ Full error details:', err);
     res.status(500).json({
       error: err.message,
       details:
@@ -404,7 +405,7 @@ export const deleteFinance = async (req, res) => {
       message: 'Finance record deleted successfully',
     });
   } catch (err) {
-    console.error('❌ Error deleting finance record:', err.message);
+    logger.error('❌ Error deleting finance record:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -435,7 +436,7 @@ export const handleFinanceFileUpload = async (req, res) => {
       message: 'File uploaded successfully',
     });
   } catch (err) {
-    console.error('❌ Error handling file upload:', err.message);
+    logger.error('❌ Error handling file upload:', err.message);
     res.status(500).json({ error: err.message });
   }
 };

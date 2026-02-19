@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 import db from '../../config/connection.js';
 
 const formOptionsModel = {
@@ -19,7 +20,7 @@ const formOptionsModel = {
       );
       return { id: result.insertId, ...journal };
     } catch (error) {
-      console.error('Database error in addJournalOption:', error);
+      logger.error('Database error in addJournalOption:', error);
       throw new Error(`Error adding journal option: ${error.message}`);
     }
   },
@@ -31,7 +32,7 @@ const formOptionsModel = {
       );
       return rows;
     } catch (error) {
-      console.error('Database error in getJournalOptions:', error);
+      logger.error('Database error in getJournalOptions:', error);
       throw new Error(`Error getting journal options: ${error.message}`);
     }
   },
@@ -56,7 +57,7 @@ const formOptionsModel = {
       );
       return result.affectedRows > 0;
     } catch (error) {
-      console.error('Database error in updateJournalOption:', error);
+      logger.error('Database error in updateJournalOption:', error);
       throw new Error(`Error updating journal option: ${error.message}`);
     }
   },
@@ -69,7 +70,7 @@ const formOptionsModel = {
       );
       return result.affectedRows > 0;
     } catch (error) {
-      console.error('Database error in deleteJournalOption:', error);
+      logger.error('Database error in deleteJournalOption:', error);
       throw new Error(`Error deleting journal option: ${error.message}`);
     }
   },

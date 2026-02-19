@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 import db from '../../config/connection.js';
 
 const researchProjectModel = {
@@ -58,8 +59,8 @@ const researchProjectModel = {
 
   async update(id, projectData) {
     try {
-      console.log('Updating project with ID:', id);
-      console.log('Project data for update:', projectData);
+      logger.debug('Updating project with ID:', id);
+      logger.debug('Project data for update:', projectData);
       // Define the list of columns allowed in the research_projects table
       const allowedFields = [
         'project_category',
@@ -131,7 +132,7 @@ const researchProjectModel = {
       );
       return result;
     } catch (error) {
-      console.error('Error during project update in model:', {
+      logger.error('Error during project update in model:', {
         message: error.message,
         stack: error.stack,
         projectId: id,
@@ -149,7 +150,7 @@ const researchProjectModel = {
       );
       return result;
     } catch (error) {
-      console.error('Error during project update in model:', {
+      logger.error('Error during project update in model:', {
         message: error.message,
         stack: error.stack,
         projectId: id,
@@ -230,7 +231,7 @@ const researchProjectModel = {
 
       return insertedContribution[0];
     } catch (error) {
-      console.error('Detailed error:', error);
+      logger.error('Detailed error:', error);
       throw new Error(`Error adding financial contribution: ${error.message}`);
     }
   },
@@ -487,7 +488,7 @@ const researchProjectModel = {
     try {
       // Prepare data with null handling
       // disbursementId is expected to be a number here
-      console.log(
+      logger.debug(
         `Model: Updating grant disbursement ID: ${disbursementId} with data:`,
         disbursementData
       );
@@ -513,14 +514,14 @@ const researchProjectModel = {
           disbursementData.uc_and_soe_path ?? null;
 
       if (Object.keys(validUpdateData).length === 0) {
-        console.log(
+        logger.debug(
           'Model: No valid fields to update for grant disbursement.',
           disbursementData
         );
         return { affectedRows: 0, message: 'No fields to update.' };
       }
 
-      console.log(
+      logger.debug(
         `Model: Executing UPDATE for project_grant_disbursements SET ? WHERE id = ? with data:`,
         validUpdateData,
         `and ID:`,
@@ -532,11 +533,11 @@ const researchProjectModel = {
         [validUpdateData, disbursementId]
       );
 
-      console.log('Model: SQL Update result:', result);
+      logger.debug('Model: SQL Update result:', result);
       return result;
     } catch (error) {
-      console.error('Error in model updateGrantDisbursement:', error);
-      console.error('Failed data:', { disbursementId, disbursementData });
+      logger.error('Error in model updateGrantDisbursement:', error);
+      logger.error('Failed data:', { disbursementId, disbursementData });
       throw new Error(
         `Error updating grant disbursement in model: ${error.message}`
       );
@@ -577,12 +578,12 @@ const researchProjectModel = {
         ]
       );
 
-      console.log(
+      logger.debug(
         `Successfully added grant disbursement with ID: ${result.insertId}`
       );
       return result;
     } catch (error) {
-      console.error('Error in addGrantDisbursement:', error);
+      logger.error('Error in addGrantDisbursement:', error);
       throw new Error(`Error adding grant disbursement: ${error.message}`);
     }
   },
@@ -637,7 +638,7 @@ const researchProjectModel = {
   },
   // async getGrantDisbursementByUniqueKey(projectId, uniqueKey) {
   //     try {
-  //         console.log(`Checking for grant disbursement with projectId: ${projectId} and key: ${uniqueKey}`);
+  //         logger.debug(`Checking for grant disbursement with projectId: ${projectId} and key: ${uniqueKey}`);
 
   //         // Split the unique key into its components and handle the date properly
   //         const [fiscal_year, agency, amountStr, ...dateParts] = uniqueKey.split('-');
@@ -659,10 +660,10 @@ const researchProjectModel = {
   //             [projectId, fiscal_year, fiscal_year, agency, agency, amount, amount, disbursement_date, disbursement_date]
   //         );
 
-  //         console.log("Result of getGrantDisbursementByUniqueKey query:", rows[0]);
+  //         logger.debug("Result of getGrantDisbursementByUniqueKey query:", rows[0]);
   //         return rows[0];
   //     } catch (error) {
-  //         console.error("Error in getGrantDisbursementByUniqueKey:", error);
+  //         logger.error("Error in getGrantDisbursementByUniqueKey:", error);
   //         throw new Error(`Error retrieving grant disbursement: ${error.message}`);
   //     }
   // },
@@ -683,7 +684,7 @@ const researchProjectModel = {
         file_path: documentData.file_path,
       };
 
-      console.log('Adding document to database:', document);
+      logger.debug('Adding document to database:', document);
 
       const [result] = await db.query(
         'INSERT INTO project_documents (project_id, document_type, file_path) VALUES (?, ?, ?)',
@@ -696,7 +697,7 @@ const researchProjectModel = {
         [result.insertId]
       );
 
-      console.log('Saved document:', savedDocument[0]);
+      logger.debug('Saved document:', savedDocument[0]);
 
       if (!savedDocument[0]) {
         throw new Error('Document was not saved properly');
@@ -704,7 +705,7 @@ const researchProjectModel = {
 
       return result;
     } catch (error) {
-      console.error('Error in addDocument:', error);
+      logger.error('Error in addDocument:', error);
       throw new Error(`Error adding document: ${error.message}`);
     }
   },
@@ -1226,7 +1227,7 @@ const researchProjectModel = {
       const [[user]] = await db.query(userQuery, [userId]);
 
       if (!user?.email) {
-        console.error('No user found with ID:', userId);
+        logger.error('No user found with ID:', userId);
         return null;
       }
 
@@ -1368,14 +1369,14 @@ const researchProjectModel = {
             result[0][field] = [];
           }
         } catch (e) {
-          console.error(`Error parsing ${field}:`, e);
+          logger.error(`Error parsing ${field}:`, e);
           result[0][field] = [];
         }
       });
 
       return result[0];
     } catch (error) {
-      console.error('Database error in getProjectDetails:', error);
+      logger.error('Database error in getProjectDetails:', error);
       throw error;
     }
   },

@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 import db from '../../config/connection.js';
 
 const journalModel = {
@@ -513,7 +514,7 @@ const journalModel = {
       const [rows] = await db.query(sql, params);
       return rows;
     } catch (error) {
-      console.error('Database error in searchAuthor:', error);
+      logger.error('Database error in searchAuthor:', error);
       throw new Error(`Error searching for author: ${error.message} `);
     }
   },

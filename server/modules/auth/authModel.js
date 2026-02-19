@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 // import db from '../../config/connection.js';
 // const authModel = {
 //     async findOrCreateUser(userData) {
@@ -155,7 +156,7 @@ const authModel = {
         }
       } catch (employeeError) {
         // Log error but don't prevent login if employee lookup fails
-        console.error(
+        logger.error(
           `Error fetching employee data for email ${user.email}:`,
           employeeError
         );
@@ -185,7 +186,7 @@ const authModel = {
         google_scholar_id: employeeData?.google_scholar_id || null,
       };
     } catch (error) {
-      console.error('Database operation failed:', error);
+      logger.error('Database operation failed:', error);
       throw new Error(`Database error: ${error.message}`);
     }
   },
@@ -197,7 +198,7 @@ const authModel = {
         [userId]
       );
     } catch (error) {
-      console.error('Failed to update last login:', error);
+      logger.error('Failed to update last login:', error);
       throw new Error(`Failed to update last login: ${error.message}`);
     }
   },

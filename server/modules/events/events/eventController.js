@@ -1,3 +1,4 @@
+import logger from '../../../config/logger.js';
 import eventDb from '../../../config/connection.js';
 
 // Helper query function

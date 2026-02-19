@@ -5,6 +5,7 @@ import {
   adminAuthMiddleware,
   permissionMiddleware,
 } from '../../middleware/authMiddleware.js';
+import asyncHandler from '../../middleware/asyncHandler.js';
 
 const router = express.Router();
 
@@ -23,67 +24,67 @@ const canApproveAdminWorkflow = permissionMiddleware([
 ]);
 
 // Dashboard routes
-router.get('/dashboard', canReadAdminDashboard, adminController.getDashboard);
-router.get('/projects', canReadAdminDashboard, adminController.getAllProjects);
-router.get('/journals', canReadAdminDashboard, adminController.getAllJournals);
-router.get('/projects/:id', canReadAdminDashboard, adminController.getProjectDetails);
-router.get('/journals/:id', canReadAdminDashboard, adminController.getJournalDetails);
+router.get('/dashboard', canReadAdminDashboard, asyncHandler(adminController.getDashboard));
+router.get('/projects', canReadAdminDashboard, asyncHandler(adminController.getAllProjects));
+router.get('/journals', canReadAdminDashboard, asyncHandler(adminController.getAllJournals));
+router.get('/projects/:id', canReadAdminDashboard, asyncHandler(adminController.getProjectDetails));
+router.get('/journals/:id', canReadAdminDashboard, asyncHandler(adminController.getJournalDetails));
 router.patch(
   '/journals/:id/submission-approval',
   canApproveAdminWorkflow,
-  adminController.updateJournalSubmissionApproval
+  asyncHandler(adminController.updateJournalSubmissionApproval)
 );
 
-router.get('/budgets', adminController.getAllBudgets);
-router.get('/budget-stats', adminController.getBudgetStats);
+router.get('/budgets', asyncHandler(adminController.getAllBudgets));
+router.get('/budget-stats', asyncHandler(adminController.getBudgetStats));
 
 
 // Journal Request Management routes
-router.get('/journal-requests', canReadAdminDashboard, adminController.getAllJournalRequests);
+router.get('/journal-requests', canReadAdminDashboard, asyncHandler(adminController.getAllJournalRequests));
 router.patch(
   '/journal-requests/:id/approve',
   canApproveAdminWorkflow,
-  adminController.approveJournalRequest
+  asyncHandler(adminController.approveJournalRequest)
 );
 router.patch(
   '/journal-requests/:id/reject',
   canApproveAdminWorkflow,
-  adminController.rejectJournalRequest
+  asyncHandler(adminController.rejectJournalRequest)
 );
 
 // Project Request Management routes
-router.get('/project-requests', canReadAdminDashboard, adminController.getAllProjectRequests);
+router.get('/project-requests', canReadAdminDashboard, asyncHandler(adminController.getAllProjectRequests));
 router.patch(
   '/project-requests/:id/approve',
   canApproveAdminWorkflow,
-  adminController.approveProjectRequest
+  asyncHandler(adminController.approveProjectRequest)
 );
 router.patch(
   '/project-requests/:id/reject',
   canApproveAdminWorkflow,
-  adminController.rejectProjectRequest
+  asyncHandler(adminController.rejectProjectRequest)
 );
 
 // Journal Status Update Management routes
 router.get(
   '/journal-status-updates',
   canReadAdminDashboard,
-  adminController.getAllJournalStatusUpdates
+  asyncHandler(adminController.getAllJournalStatusUpdates)
 );
 router.get(
   '/journals/:id/status-updates',
   canReadAdminDashboard,
-  adminController.getJournalStatusUpdates
+  asyncHandler(adminController.getJournalStatusUpdates)
 );
 router.get(
   '/journals/:id/with-status-updates',
   canReadAdminDashboard,
-  adminController.getJournalWithStatusUpdates
+  asyncHandler(adminController.getJournalWithStatusUpdates)
 );
 router.patch(
   '/status-updates/:statusUpdateId/admin-reply',
   canApproveAdminWorkflow,
-  adminController.updateStatusUpdateAdminReply
+  asyncHandler(adminController.updateStatusUpdateAdminReply)
 );
 
 export default router;

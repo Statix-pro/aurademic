@@ -1,3 +1,4 @@
+import logger from '../../../config/logger.js';
 import eventDb from '../../../config/connection.js';
 import path from 'path';
 import fs from 'fs';
@@ -166,7 +167,7 @@ export const getEventDetails = async (req, res) => {
 
     res.json(response);
   } catch (err) {
-    console.error('❌ Error in getEventDetails:', err.message);
+    logger.error('❌ Error in getEventDetails:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -235,7 +236,7 @@ export const updatePublicity = async (req, res) => {
       publicity: updated,
     });
   } catch (err) {
-    console.error('❌ Error in updatePublicity:', err.message);
+    logger.error('❌ Error in updatePublicity:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -276,7 +277,7 @@ export const addResourcePerson = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('❌ Error in addResourcePerson:', err.message);
+    logger.error('❌ Error in addResourcePerson:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -328,7 +329,7 @@ export const updateResourcePerson = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('❌ Error in updateResourcePerson:', err.message);
+    logger.error('❌ Error in updateResourcePerson:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -347,7 +348,7 @@ export const deleteResourcePerson = async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('❌ Error in deleteResourcePerson:', err.message);
+    logger.error('❌ Error in deleteResourcePerson:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -425,7 +426,7 @@ export const upsertLetter = async (req, res) => {
       });
     }
   } catch (err) {
-    console.error('❌ Error in upsertLetter:', err.message);
+    logger.error('❌ Error in upsertLetter:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -468,7 +469,7 @@ export const upsertDocument = async (req, res) => {
       res.status(201).json({ success: true, document: inserted });
     }
   } catch (err) {
-    console.error('❌ Error in upsertDocument:', err.message);
+    logger.error('❌ Error in upsertDocument:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -510,7 +511,7 @@ export const upsertParticipant = async (req, res) => {
       res.status(201).json({ success: true, participant: inserted });
     }
   } catch (err) {
-    console.error('❌ Error in upsertParticipant:', err.message);
+    logger.error('❌ Error in upsertParticipant:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -565,7 +566,7 @@ export const upsertImportantLinks = async (req, res) => {
     )[0];
     res.json({ success: true, importantLinks: updated });
   } catch (err) {
-    console.error('❌ Error in upsertImportantLinks:', err.message);
+    logger.error('❌ Error in upsertImportantLinks:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -590,7 +591,7 @@ export const addYouTubeLink = async (req, res) => {
     )[0];
     res.status(201).json({ success: true, youtubeLink: inserted });
   } catch (err) {
-    console.error('❌ Error in addYouTubeLink:', err.message);
+    logger.error('❌ Error in addYouTubeLink:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -620,7 +621,7 @@ export const handleUpload = async (req, res) => {
       url: `/uploads/${inserted.filename}`,
     });
   } catch (err) {
-    console.error('❌ Error in handleUpload:', err.message);
+    logger.error('❌ Error in handleUpload:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -643,7 +644,7 @@ export const deleteUpload = async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('❌ Error in deleteUpload:', err.message);
+    logger.error('❌ Error in deleteUpload:', err.message);
     res.status(500).json({ error: err.message });
   }
 };

@@ -1,3 +1,4 @@
+import logger from '../../config/logger.js';
 // adminController.js
 import adminModel from './adminModel.js';
 
@@ -7,7 +8,7 @@ const adminController = {
       const stats = await adminModel.getDashboardStats();
       res.status(200).json({ data: stats });
     } catch (error) {
-      console.error('Error in getDashboard:', error);
+      logger.error('Error in getDashboard:', error);
       res.status(500).json({
         message: 'Error retrieving dashboard stats',
         error: error.message,
@@ -29,7 +30,7 @@ const adminController = {
       }
       res.status(200).json({ data: projects, total });
     } catch (error) {
-      console.error('Error in getAllProjects:', error);
+      logger.error('Error in getAllProjects:', error);
       res.status(500).json({
         message: 'Error retrieving projects',
         error: error.message,
@@ -50,7 +51,7 @@ const adminController = {
 
       res.status(200).json({ data: project });
     } catch (error) {
-      console.error('Error in getProjectDetails:', error);
+      logger.error('Error in getProjectDetails:', error);
       res.status(500).json({
         message: 'Error retrieving project details',
         error: error.message,
@@ -73,7 +74,7 @@ const adminController = {
       }
       res.status(200).json({ data: journals, total });
     } catch (error) {
-      console.error('Error in getAllJournals:', error);
+      logger.error('Error in getAllJournals:', error);
       res.status(500).json({
         message: 'Error retrieving journals',
         error: error.message,
@@ -94,7 +95,7 @@ const adminController = {
 
       res.status(200).json({ data: journal });
     } catch (error) {
-      console.error('Error in getJournalDetails:', error);
+      logger.error('Error in getJournalDetails:', error);
       res.status(500).json({
         message: 'Error retrieving journal details',
         error: error.message,
@@ -137,7 +138,7 @@ const adminController = {
         data: updatedJournal,
       });
     } catch (error) {
-      console.error('Error in updateJournalSubmissionApproval:', error);
+      logger.error('Error in updateJournalSubmissionApproval:', error);
       return res.status(500).json({
         message: 'Error updating journal submission approval',
         error: error.message,
@@ -151,7 +152,7 @@ const adminController = {
       const requests = await adminModel.getAllJournalRequests();
       res.status(200).json({ data: requests });
     } catch (error) {
-      console.error('Error in getAllJournalRequests:', error);
+      logger.error('Error in getAllJournalRequests:', error);
       res.status(500).json({
         message: 'Error retrieving journal requests',
         error: error.message,
@@ -180,7 +181,7 @@ const adminController = {
         data: result,
       });
     } catch (error) {
-      console.error('Error in approveJournalRequest:', error);
+      logger.error('Error in approveJournalRequest:', error);
       res.status(500).json({
         message: 'Error approving journal request',
         error: error.message,
@@ -209,7 +210,7 @@ const adminController = {
         data: result,
       });
     } catch (error) {
-      console.error('Error in rejectJournalRequest:', error);
+      logger.error('Error in rejectJournalRequest:', error);
       res.status(500).json({
         message: 'Error rejecting journal request',
         error: error.message,
@@ -238,7 +239,7 @@ const adminController = {
         data: result,
       });
     } catch (error) {
-      console.error('Error in rejectJournalRequest:', error);
+      logger.error('Error in rejectJournalRequest:', error);
       res.status(500).json({
         message: 'Error rejecting journal request',
         error: error.message,
@@ -252,7 +253,7 @@ const adminController = {
       const requests = await adminModel.getAllProjectRequests();
       res.status(200).json({ data: requests });
     } catch (error) {
-      console.error('Error in getAllProjectRequests:', error);
+      logger.error('Error in getAllProjectRequests:', error);
       res.status(500).json({
         message: 'Error retrieving project requests',
         error: error.message,
@@ -281,7 +282,7 @@ const adminController = {
         data: result,
       });
     } catch (error) {
-      console.error('Error in approveProjectRequest:', error);
+      logger.error('Error in approveProjectRequest:', error);
       res.status(500).json({
         message: 'Error approving project request',
         error: error.message,
@@ -310,7 +311,7 @@ const adminController = {
         data: result,
       });
     } catch (error) {
-      console.error('Error in rejectProjectRequest:', error);
+      logger.error('Error in rejectProjectRequest:', error);
       res.status(500).json({
         message: 'Error rejecting project request',
         error: error.message,
@@ -330,7 +331,7 @@ const adminController = {
 
       res.status(200).json({ data: statusUpdates, total });
     } catch (error) {
-      console.error('Error in getAllJournalStatusUpdates:', error);
+      logger.error('Error in getAllJournalStatusUpdates:', error);
       res.status(500).json({
         message: 'Error retrieving journal status updates',
         error: error.message,
@@ -345,7 +346,7 @@ const adminController = {
 
       res.status(200).json({ data: statusUpdates });
     } catch (error) {
-      console.error('Error in getJournalStatusUpdates:', error);
+      logger.error('Error in getJournalStatusUpdates:', error);
       res.status(500).json({
         message: 'Error retrieving journal status updates',
         error: error.message,
@@ -380,7 +381,7 @@ const adminController = {
         });
       }
     } catch (error) {
-      console.error('Error in updateStatusUpdateAdminReply:', error);
+      logger.error('Error in updateStatusUpdateAdminReply:', error);
       res.status(500).json({
         message: 'Error updating admin reply',
         error: error.message,
@@ -408,7 +409,7 @@ const adminController = {
         },
       });
     } catch (error) {
-      console.error('Error in getJournalWithStatusUpdates:', error);
+      logger.error('Error in getJournalWithStatusUpdates:', error);
       res.status(500).json({
         message: 'Error retrieving journal with status updates',
         error: error.message,
@@ -482,7 +483,7 @@ const adminController = {
         filters,
       });
     } catch (error) {
-      console.error('Error in getAllBudgets:', error);
+      logger.error('Error in getAllBudgets:', error);
       res.status(500).json({
         success: false,
         message: 'Error retrieving budgets',
@@ -502,7 +503,7 @@ const adminController = {
         fiscalYear: fiscalYear || 'All'
       });
     } catch (error) {
-      console.error('Error in getBudgetStats:', error);
+      logger.error('Error in getBudgetStats:', error);
       res.status(500).json({
         success: false,
         message: 'Error retrieving budget stats',

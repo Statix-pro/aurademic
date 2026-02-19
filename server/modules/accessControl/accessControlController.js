@@ -1,7 +1,8 @@
+import logger from '../../config/logger.js';
 import accessControlModel from './accessControlModel.js';
 
 const handleError = (res, error, fallbackMessage) => {
-  console.error(fallbackMessage, error);
+  logger.error(fallbackMessage, error);
 
   return res.status(error.statusCode || 500).json({
     status: 'error',

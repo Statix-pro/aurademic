@@ -5,6 +5,7 @@ import {
   adminAuthMiddleware,
   permissionMiddleware,
 } from '../../middleware/authMiddleware.js';
+import asyncHandler from '../../middleware/asyncHandler.js';
 
 const router = express.Router();
 
@@ -19,15 +20,15 @@ router.use(authMiddleware);
 // Edit request operations
 router.post(
   '/edit-requests/:entityType/:entityId',
-  editRequestController.createEditRequest
+  asyncHandler(editRequestController.createEditRequest)
 ); // User requests edit access
 router.get(
   '/edit-requests/:entityType/:entityId',
-  editRequestController.checkEditRequestStatus
+  asyncHandler(editRequestController.checkEditRequestStatus)
 ); // User checks edit request status
 router.patch(
   '/edit-requests/:entityType/:entityId',
-  editRequestController.updateEditRequestStatus
+  asyncHandler(editRequestController.updateEditRequestStatus)
 ); // User sets status to 'none' after submission
 
 // Admin routes - still under /admin prefix
@@ -35,13 +36,13 @@ router.patch(
   '/admin/edit-requests/:requestId/approve',
   adminAuthMiddleware,
   canApproveAdminWorkflow,
-  editRequestController.approveEditRequest
+  asyncHandler(editRequestController.approveEditRequest)
 ); // Admin approves request
 router.patch(
   '/admin/edit-requests/:requestId/reject',
   adminAuthMiddleware,
   canApproveAdminWorkflow,
-  editRequestController.rejectEditRequest
+  asyncHandler(editRequestController.rejectEditRequest)
 ); // Admin rejects request
 
 export default router;
