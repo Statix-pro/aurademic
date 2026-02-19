@@ -130,5 +130,9 @@ router.post(
   upload.single('file'),
   asyncHandler(researchProjectController.uploadDisbursementUcAndSoe)
 );
-
+// router.post('/projects/:id/upload',
+//     upload.single('file'),
+//     multerErrorHandler,
+//     researchProjectController.uploadFile
+// );
 export default router;
