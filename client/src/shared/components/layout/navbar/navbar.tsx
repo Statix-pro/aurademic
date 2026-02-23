@@ -7,6 +7,7 @@ import { useAuth } from "../../../../contexts/AuthContext";
 import {
   canAccessAdminArea,
   canManageAccessControl,
+  isSuperAdmin,
 } from "../../../utils/permissionUtils";
 
 const Navbar: React.FC = () => {
@@ -16,6 +17,7 @@ const Navbar: React.FC = () => {
   const navbarRef = useRef<HTMLElement>(null);
   const showAdminMenu = canAccessAdminArea(user);
   const showAccessControl = canManageAccessControl(user);
+  const showBudgetWorkflow = isSuperAdmin(user);
 
   const toggleDropdown = (menuName: string) => {
     setActiveMenu((prev) => (prev === menuName ? null : menuName));
@@ -302,6 +304,18 @@ const Navbar: React.FC = () => {
                 >
                   <li>Dashboard</li>
                 </Link>
+                {showBudgetWorkflow && (
+                  <Link
+                    to="/admin/budget"
+                    className="dropdown-li"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      document.body.classList.remove('menu-open');
+                    }}
+                  >
+                    <li>Budget Workflow</li>
+                  </Link>
+                )}
                 {showAccessControl && (
                   <Link
                     to="/access-control"

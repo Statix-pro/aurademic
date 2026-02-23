@@ -21,6 +21,35 @@ const ENTITY_TYPE_BY_BENEFICIARY = Object.freeze({
 
 const normalizeText = (value) => String(value || '').trim();
 
+const normalizeBeneficiaryType = (beneficiaryType) => {
+  const normalized = normalizeText(beneficiaryType);
+
+  if (normalized === 'Professional Bodies' || normalized === 'ProfessionalBodies') {
+    return 'Professional Body';
+  }
+
+  return normalized;
+};
+
+const ENTITY_BENEFICIARY_TYPES = Object.freeze(['Centre', 'Cell', 'Club', 'Professional Body']);
+const ENTITY_BENEFICIARY_SQL_VALUES = Object.freeze([
+  'Centre',
+  'Cell',
+  'Club',
+  'Professional Body',
+  'Professional Bodies',
+  'ProfessionalBodies',
+]);
+const LEVEL1_ROUTE_TYPE = Object.freeze({
+  departmentHod: 'department_hod',
+  entityContact: 'entity_contact',
+});
+const LEVEL1_ASSIGNMENT_STATUS = Object.freeze({
+  assigned: 'assigned',
+  unassigned: 'unassigned',
+});
+const WORKFLOW_STAGES = Object.freeze(['hod', 'dof', 'principal']);
+
 const normalizeEntityTypeCode = (value) => {
   const raw = normalizeText(value)
     .toUpperCase()
@@ -75,7 +104,193 @@ class BudgetModel {
   }
 
   static beneficiaryTypeToEntityTypeCode(beneficiaryType) {
-    return ENTITY_TYPE_BY_BENEFICIARY[beneficiaryType] || null;
+    return ENTITY_TYPE_BY_BENEFICIARY[normalizeBeneficiaryType(beneficiaryType)] || null;
+  }
+
+  static normalizeBeneficiaryType(beneficiaryType) {
+    return normalizeBeneficiaryType(beneficiaryType);
+  }
+
+  static isEntityBeneficiaryType(beneficiaryType) {
+    return ENTITY_BENEFICIARY_TYPES.includes(normalizeBeneficiaryType(beneficiaryType));
+  }
+
+  static resolveLevel1Route(proposalOrPayload = {}) {
+    const beneficiaryType = normalizeBeneficiaryType(proposalOrPayload?.beneficiary_type);
+    const parsedDepartmentId = Number(proposalOrPayload?.department_id);
+    const parsedEntityId = Number(proposalOrPayload?.beneficiary_entity_id);
+    const departmentId =
+      Number.isInteger(parsedDepartmentId) && parsedDepartmentId > 0 ? parsedDepartmentId : null;
+    const entityId = Number.isInteger(parsedEntityId) && parsedEntityId > 0 ? parsedEntityId : null;
+
+    if (this.isEntityBeneficiaryType(beneficiaryType)) {
+      return {
+        routeType: LEVEL1_ROUTE_TYPE.entityContact,
+        departmentId: null,
+        entityId,
+      };
+    }
+
+    if (['Faculty', 'Department'].includes(beneficiaryType)) {
+      return {
+        routeType: LEVEL1_ROUTE_TYPE.departmentHod,
+        departmentId,
+        entityId: null,
+      };
+    }
+
+    return {
+      routeType: null,
+      departmentId,
+      entityId,
+    };
+  }
+
+  static #pickEntityLevel1Contact(contacts = []) {
+    if (!Array.isArray(contacts) || contacts.length === 0) {
+      return null;
+    }
+
+    const normalizedContacts = contacts
+      .map((contact) => ({
+        id: Number(contact.id),
+        role: normalizeText(contact.role).toLowerCase(),
+        email: normalizeText(contact.email).toLowerCase(),
+        is_primary: Number(contact.is_primary) === 1,
+      }))
+      .filter((contact) => contact.email.length > 0);
+
+    if (!normalizedContacts.length) {
+      return null;
+    }
+
+    const byRoleHod = normalizedContacts.find((contact) => contact.role === 'hod');
+    if (byRoleHod) {
+      return byRoleHod;
+    }
+
+    const byRoleOffice = normalizedContacts.find((contact) => contact.role === 'office');
+    if (byRoleOffice) {
+      return byRoleOffice;
+    }
+
+    const primaryContact = normalizedContacts.find((contact) => contact.is_primary);
+    if (primaryContact) {
+      return primaryContact;
+    }
+
+    return normalizedContacts[0];
+  }
+
+  static async resolveEntityLevel1Assignee(entityId, conn = db) {
+    const parsedEntityId = Number(entityId);
+
+    if (!Number.isInteger(parsedEntityId) || parsedEntityId <= 0) {
+      return null;
+    }
+
+    const [rows] = await conn.execute(
+      `SELECT id, role, email, is_primary
+       FROM master_entity_contacts
+       WHERE entity_id = ?
+       ORDER BY id ASC`,
+      [parsedEntityId]
+    );
+
+    const selectedContact = this.#pickEntityLevel1Contact(rows);
+
+    if (!selectedContact) {
+      return null;
+    }
+
+    return {
+      id: selectedContact.id,
+      role: selectedContact.role,
+      email: selectedContact.email,
+      is_primary: selectedContact.is_primary,
+    };
+  }
+
+  static resolveLevel1AssignmentStatus({ routeType, assigneeEmail } = {}) {
+    if (routeType === LEVEL1_ROUTE_TYPE.entityContact && !normalizeText(assigneeEmail)) {
+      return LEVEL1_ASSIGNMENT_STATUS.unassigned;
+    }
+
+    return LEVEL1_ASSIGNMENT_STATUS.assigned;
+  }
+
+  static async #resolveEntityAssigneeMap(entityIds = [], conn = db) {
+    const uniqueEntityIds = [
+      ...new Set(
+        entityIds
+          .map((entityId) => Number(entityId))
+          .filter((entityId) => Number.isInteger(entityId) && entityId > 0)
+      ),
+    ];
+
+    const assigneeMap = new Map();
+
+    if (!uniqueEntityIds.length) {
+      return assigneeMap;
+    }
+
+    const [rows] = await conn.query(
+      `SELECT entity_id, id, role, email, is_primary
+       FROM master_entity_contacts
+       WHERE entity_id IN (?)
+       ORDER BY entity_id ASC, id ASC`,
+      [uniqueEntityIds]
+    );
+
+    const groupedContacts = new Map();
+
+    for (const row of rows) {
+      const entityId = Number(row.entity_id);
+      if (!groupedContacts.has(entityId)) {
+        groupedContacts.set(entityId, []);
+      }
+      groupedContacts.get(entityId).push(row);
+    }
+
+    for (const [entityId, contacts] of groupedContacts.entries()) {
+      const selectedContact = this.#pickEntityLevel1Contact(contacts);
+      if (selectedContact) {
+        assigneeMap.set(entityId, selectedContact);
+      }
+    }
+
+    return assigneeMap;
+  }
+
+  static async #attachLevel1AssignmentMetadata(rows = [], conn = db) {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return [];
+    }
+
+    const entityIds = rows
+      .filter((row) => this.isEntityBeneficiaryType(row?.beneficiary_type))
+      .map((row) => Number(row?.beneficiary_entity_id))
+      .filter((entityId) => Number.isInteger(entityId) && entityId > 0);
+    const entityAssigneeMap = await this.#resolveEntityAssigneeMap(entityIds, conn);
+
+    return rows.map((row) => {
+      const level1Route = this.resolveLevel1Route(row);
+      const entityAssignee =
+        level1Route.routeType === LEVEL1_ROUTE_TYPE.entityContact
+          ? entityAssigneeMap.get(level1Route.entityId) || null
+          : null;
+      const assigneeEmail = entityAssignee?.email || null;
+
+      return {
+        ...row,
+        level1_route_type: level1Route.routeType,
+        level1_assignee_email: assigneeEmail,
+        level1_assignment_status: this.resolveLevel1AssignmentStatus({
+          routeType: level1Route.routeType,
+          assigneeEmail,
+        }),
+      };
+    });
   }
 
   static groupAllocationsByLine(allocations) {
@@ -275,7 +490,7 @@ class BudgetModel {
 
 
   static async resolveApprovalFlow(beneficiaryType, entityTypeCode = null, conn = db) {
-    const normalizedBeneficiaryType = normalizeText(beneficiaryType);
+    const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
 
     if (!normalizedBeneficiaryType) {
       return { requiresHod: 0, requiresDof: 1, requiresPrincipal: 1 };
@@ -303,19 +518,22 @@ class BudgetModel {
         [normalizedBeneficiaryType]
       );
 
-    if (rows.length > 0) {
-      return {
+    const resolvedFlow = rows.length > 0
+      ? {
         requiresHod: Number(rows[0].requires_hod) ? 1 : 0,
         requiresDof: Number(rows[0].requires_dof) ? 1 : 0,
         requiresPrincipal: Number(rows[0].requires_principal) ? 1 : 0,
-      };
+      }
+      : ['Faculty', 'Department'].includes(normalizedBeneficiaryType)
+        ? { requiresHod: 1, requiresDof: 1, requiresPrincipal: 1 }
+        : { requiresHod: 0, requiresDof: 1, requiresPrincipal: 1 };
+
+    // Entity beneficiaries must always pass through Level 1 before DoF/Principal.
+    if (this.isEntityBeneficiaryType(normalizedBeneficiaryType)) {
+      resolvedFlow.requiresHod = 1;
     }
 
-    if (['Faculty', 'Department'].includes(normalizedBeneficiaryType)) {
-      return { requiresHod: 1, requiresDof: 1, requiresPrincipal: 1 };
-    }
-
-    return { requiresHod: 0, requiresDof: 1, requiresPrincipal: 1 };
+    return resolvedFlow;
   }
 
 
@@ -354,6 +572,19 @@ class BudgetModel {
       const flow = await this.resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn);
       const initialStage = flow.requiresHod ? 'hod' : flow.requiresDof ? 'dof' : 'principal';
       const approvalFlowString = formatApprovalFlowString(flow);
+      const level1Route = this.resolveLevel1Route({
+        ...payload,
+        department_id: departmentId,
+        beneficiary_entity_id: beneficiaryEntityId,
+      });
+      const level1EntityAssignee =
+        level1Route.routeType === LEVEL1_ROUTE_TYPE.entityContact
+          ? await this.resolveEntityLevel1Assignee(level1Route.entityId, conn)
+          : null;
+      const level1AssignmentStatus = this.resolveLevel1AssignmentStatus({
+        routeType: level1Route.routeType,
+        assigneeEmail: level1EntityAssignee?.email || null,
+      });
 
       const [proposalResult] = await conn.execute(
         `INSERT INTO budget_proposals (
@@ -423,6 +654,9 @@ class BudgetModel {
         approvalFlow: approvalFlowString,
         departmentId,
         beneficiaryEntityId,
+        level1RouteType: level1Route.routeType,
+        level1AssigneeEmail: level1EntityAssignee?.email || null,
+        level1AssignmentStatus,
       };
     });
   }
@@ -482,11 +716,16 @@ class BudgetModel {
 
     return this.withTransaction(async (conn) => {
       const departmentId = await this.#resolveDepartmentId(conn, payload);
-      const { beneficiaryEntityId } = await this.#resolveBeneficiaryEntity(
+      const { entityTypeCode, beneficiaryEntityId } = await this.#resolveBeneficiaryEntity(
         conn,
         payload.beneficiary_type,
         payload.beneficiary_value
       );
+      const flow = await this.resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn);
+      const approvalFlowString = formatApprovalFlowString(flow);
+      const initialStage = flow.requiresHod ? 'hod' : flow.requiresDof ? 'dof' : 'principal';
+      const nextCurrentStage =
+        ['draft', 'submitted'].includes(proposal.status) ? initialStage : proposal.current_stage;
 
       const calculatedTotal = (payload.lines || []).reduce((sum, line) => {
         const amount = Number(line.unit_amount) || 0;
@@ -500,6 +739,8 @@ class BudgetModel {
              beneficiary_value = ?,
              beneficiary_entity_id = ?,
              department_id = ?,
+             approval_flow = ?,
+             current_stage = ?,
              proposal_description = ?,
              total_amount = ?,
              updated_at = NOW()
@@ -509,6 +750,8 @@ class BudgetModel {
           payload.beneficiary_value || null,
           beneficiaryEntityId,
           departmentId,
+          approvalFlowString,
+          nextCurrentStage,
           payload.proposal_description || null,
           calculatedTotal,
           proposalId,
@@ -669,6 +912,8 @@ class BudgetModel {
     limit = 10,
     status,
     fiscalYear,
+    q,
+    departmentFilter,
   }) {
     const pPage = Number.parseInt(page, 10) || 1;
     const pLimit = Number.parseInt(limit, 10) || 10;
@@ -682,6 +927,7 @@ class BudgetModel {
         bp.fiscal_year,
         bp.employee_id,
         bp.user_id,
+        CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, '')) AS faculty_name,
         DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
         bp.beneficiary_type,
         bp.beneficiary_value,
@@ -705,6 +951,7 @@ class BudgetModel {
       LEFT JOIN master_departments md ON bp.department_id = md.id
       LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
       LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
+      LEFT JOIN master_employees req_emp ON bp.user_id = req_emp.user_id AND req_emp.status = 'Active'
       LEFT JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
       LEFT JOIN budget_proposal_approvals bpa ON bp.id = bpa.budget_proposal_id
     `;
@@ -716,15 +963,44 @@ class BudgetModel {
     switch (safeRole) {
       case 'hod': {
         where.push('bp.current_stage = "hod"');
+        const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
+        const hodScope = [];
 
         if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
-          where.push('bp.department_id = ?');
+          hodScope.push('(bp.beneficiary_type IN ("Faculty", "Department") AND bp.department_id = ?)');
           params.push(Number(departmentId));
         } else if (normalizeText(department)) {
-          where.push('md.name = ?');
+          hodScope.push('(bp.beneficiary_type IN ("Faculty", "Department") AND md.name = ?)');
           params.push(normalizeText(department));
-        } else {
+        }
+
+        if (normalizedUserEmail) {
+          const entityTypePlaceholders = ENTITY_BENEFICIARY_SQL_VALUES.map(() => '?').join(', ');
+          hodScope.push(`(
+            bp.beneficiary_type IN (${entityTypePlaceholders})
+            AND LOWER(TRIM((
+              SELECT mec.email
+              FROM master_entity_contacts mec
+              WHERE mec.entity_id = bp.beneficiary_entity_id
+              ORDER BY
+                CASE
+                  WHEN LOWER(TRIM(mec.role)) = 'hod' THEN 0
+                  WHEN LOWER(TRIM(mec.role)) = 'office' THEN 1
+                  WHEN mec.is_primary = 1 THEN 2
+                  ELSE 3
+                END,
+                mec.is_primary DESC,
+                mec.id ASC
+              LIMIT 1
+            ))) = ?
+          )`);
+          params.push(...ENTITY_BENEFICIARY_SQL_VALUES, normalizedUserEmail);
+        }
+
+        if (!hodScope.length) {
           where.push('1 = 0');
+        } else {
+          where.push(`(${hodScope.join(' OR ')})`);
         }
         break;
       }
@@ -753,6 +1029,31 @@ class BudgetModel {
       params.push(normalizeText(status));
     }
 
+    if (normalizeText(departmentFilter)) {
+      where.push('md.name = ?');
+      params.push(normalizeText(departmentFilter));
+    }
+
+    if (normalizeText(q)) {
+      const searchPattern = `%${normalizeText(q)}%`;
+      where.push(`(
+        bp.proposal_ref LIKE ?
+        OR bp.beneficiary_value LIKE ?
+        OR md.name LIKE ?
+        OR me.name LIKE ?
+        OR req_emp.first_name LIKE ?
+        OR req_emp.last_name LIKE ?
+      )`);
+      params.push(
+        searchPattern,
+        searchPattern,
+        searchPattern,
+        searchPattern,
+        searchPattern,
+        searchPattern
+      );
+    }
+
     sql += ` WHERE ${where.join(' AND ')}
              GROUP BY bp.id, md.name, md.code, me.name, me.code, met.name, met.code
              ORDER BY bp.created_at DESC
@@ -761,16 +1062,227 @@ class BudgetModel {
     params.push(Number(pLimit), Number(pOffset));
 
     const [rows] = await db.query(sql, params);
+    const enrichedRows = await this.#attachLevel1AssignmentMetadata(rows);
     const [totalRows] = await db.query('SELECT FOUND_ROWS() AS total');
 
     return {
-      budgets: rows,
+      budgets: enrichedRows,
       pagination: {
         total: Number(totalRows[0].total),
         page: pPage,
         limit: pLimit,
         pages: Math.ceil(Number(totalRows[0].total) / pLimit),
       },
+    };
+  }
+
+  static #mapDecisionToStageState(decision) {
+    const normalizedDecision = normalizeText(decision).toLowerCase();
+
+    if (normalizedDecision === 'approved') {
+      return 'approved';
+    }
+
+    if (normalizedDecision === 'rejected') {
+      return 'rejected';
+    }
+
+    if (normalizedDecision === 'returned') {
+      return 'returned';
+    }
+
+    return 'pending';
+  }
+
+  static async listSuperAdminFlowBudgets({
+    page = 1,
+    limit = 20,
+    status,
+    fiscalYear,
+    q,
+    department,
+  }) {
+    const budgetsResult = await this.listBudgets({
+      role: 'super_admin',
+      page,
+      limit,
+      status,
+      fiscalYear,
+      q,
+      departmentFilter: department,
+    });
+
+    const budgets = Array.isArray(budgetsResult.budgets) ? budgetsResult.budgets : [];
+
+    if (!budgets.length) {
+      return {
+        rows: [],
+        pagination: budgetsResult.pagination,
+      };
+    }
+
+    const proposalIds = budgets
+      .map((budget) => Number(budget.id))
+      .filter((proposalId) => Number.isInteger(proposalId) && proposalId > 0);
+
+    let approvalRows = [];
+
+    if (proposalIds.length > 0) {
+      const [rows] = await db.query(
+        `SELECT
+           bpa.id,
+           bpa.budget_proposal_id,
+           bpa.role,
+           bpa.decision,
+           bpa.feedback,
+           bpa.approver_email,
+           bpa.approver_user_id,
+           bpa.allows_edit,
+           bpa.decided_at,
+           DATE_FORMAT(bpa.decided_at, '%Y-%m-%d %H:%i') AS decided_at_formatted,
+           CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS approver_name
+         FROM budget_proposal_approvals bpa
+         LEFT JOIN master_employees emp ON bpa.approver_user_id = emp.user_id AND emp.status = 'Active'
+         WHERE bpa.budget_proposal_id IN (?)
+         ORDER BY bpa.decided_at ASC, bpa.id ASC`,
+        [proposalIds]
+      );
+      approvalRows = rows;
+    }
+
+    const approvalsByProposal = new Map();
+
+    for (const approval of approvalRows) {
+      const proposalId = Number(approval.budget_proposal_id);
+      if (!approvalsByProposal.has(proposalId)) {
+        approvalsByProposal.set(proposalId, []);
+      }
+      approvalsByProposal.get(proposalId).push(approval);
+    }
+
+    const level1AssigneeEmails = [
+      ...new Set(
+        budgets
+          .map((budget) => normalizeText(budget.level1_assignee_email).toLowerCase())
+          .filter((email) => email.length > 0)
+      ),
+    ];
+
+    const level1AssigneeNameMap = new Map();
+
+    if (level1AssigneeEmails.length > 0) {
+      const [assigneeRows] = await db.query(
+        `SELECT
+           LOWER(TRIM(email)) AS email_key,
+           CONCAT(first_name, ' ', COALESCE(last_name, '')) AS full_name
+         FROM master_employees
+         WHERE status = 'Active'
+           AND LOWER(TRIM(email)) IN (?)`,
+        [level1AssigneeEmails]
+      );
+
+      for (const assignee of assigneeRows) {
+        const emailKey = normalizeText(assignee.email_key).toLowerCase();
+        if (emailKey) {
+          level1AssigneeNameMap.set(emailKey, normalizeText(assignee.full_name) || null);
+        }
+      }
+    }
+
+    const rows = budgets.map((budget) => {
+      const proposalId = Number(budget.id);
+      const proposalApprovals = approvalsByProposal.get(proposalId) || [];
+      const approvalByRole = new Map();
+
+      for (const approval of proposalApprovals) {
+        const roleKey = normalizeText(approval.role).toLowerCase();
+        if (roleKey) {
+          approvalByRole.set(roleKey, approval);
+        }
+      }
+
+      const flowStages = new Set(
+        normalizeText(budget.approval_flow)
+          .split('_')
+          .map((stage) => normalizeText(stage).toLowerCase())
+          .filter(Boolean)
+      );
+      const currentStage = normalizeText(budget.current_stage).toLowerCase();
+      const currentStageIndex = WORKFLOW_STAGES.indexOf(currentStage);
+
+      const buildStage = (stageKey) => {
+        const stageIndex = WORKFLOW_STAGES.indexOf(stageKey);
+        const requiresStage = flowStages.has(stageKey);
+        const approval = approvalByRole.get(stageKey) || null;
+        const stageStatusToken = `${stageKey}_approved`;
+
+        let state = 'pending';
+
+        if (!requiresStage) {
+          state = 'not_required';
+        } else if (approval) {
+          state = this.#mapDecisionToStageState(approval.decision);
+        } else if (
+          stageKey === 'hod' &&
+          budget.level1_assignment_status === LEVEL1_ASSIGNMENT_STATUS.unassigned
+        ) {
+          state = 'unassigned';
+        } else if (currentStage === stageKey) {
+          state = 'pending';
+        } else if (
+          currentStage === 'completed' ||
+          (currentStageIndex >= 0 && stageIndex >= 0 && currentStageIndex > stageIndex) ||
+          normalizeText(budget.status).toLowerCase().includes(stageStatusToken)
+        ) {
+          state = 'approved';
+        }
+
+        let approverEmail = approval?.approver_email
+          ? normalizeText(approval.approver_email).toLowerCase()
+          : null;
+        let approverName = normalizeText(approval?.approver_name) || null;
+
+        if (!approval && stageKey === 'hod' && budget.level1_assignee_email) {
+          approverEmail = normalizeText(budget.level1_assignee_email).toLowerCase();
+          approverName = level1AssigneeNameMap.get(approverEmail) || null;
+        }
+
+        return {
+          state,
+          decision: approval?.decision || null,
+          approverName,
+          approverEmail,
+          decidedAt: approval?.decided_at_formatted || approval?.decided_at || null,
+          isAuto: stageKey === 'principal' && approverEmail === 'system-auto@ksrct.ac.in',
+        };
+      };
+
+      return {
+        proposalId,
+        proposalRef: budget.proposal_ref,
+        fiscalYear: budget.fiscal_year,
+        facultyName: normalizeText(budget.faculty_name) || null,
+        requesterEmail: normalizeText(budget.user_email).toLowerCase() || null,
+        beneficiaryType: budget.beneficiary_type,
+        beneficiaryValue: budget.beneficiary_value,
+        department: budget.department,
+        totalAmount: Number(budget.total_amount || 0),
+        status: budget.status,
+        currentStage: budget.current_stage,
+        approvalFlow: budget.approval_flow,
+        createdDate: budget.created_date,
+        level1_route_type: budget.level1_route_type || null,
+        level1_assignee_email: budget.level1_assignee_email || null,
+        level1_assignment_status: budget.level1_assignment_status || LEVEL1_ASSIGNMENT_STATUS.assigned,
+        hod: buildStage('hod'),
+        financeAdmin: buildStage('dof'),
+        principal: buildStage('principal'),
+      };
+    });
+
+    return {
+      rows,
+      pagination: budgetsResult.pagination,
     };
   }
 
@@ -1254,6 +1766,24 @@ class BudgetModel {
         return pid === uid || emailMatch;
 
       case 'hod': {
+        const level1Route = this.resolveLevel1Route(proposal);
+
+        if (level1Route.routeType === LEVEL1_ROUTE_TYPE.entityContact) {
+          const normalizedApproverEmail = normalizeText(userEmail).toLowerCase();
+
+          if (!normalizedApproverEmail) {
+            return false;
+          }
+
+          const entityAssignee = await this.resolveEntityLevel1Assignee(level1Route.entityId);
+
+          if (!entityAssignee?.email) {
+            return false;
+          }
+
+          return entityAssignee.email === normalizedApproverEmail;
+        }
+
         if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0 && proposal.department_id) {
           return Number(proposal.department_id) === Number(departmentId);
         }
