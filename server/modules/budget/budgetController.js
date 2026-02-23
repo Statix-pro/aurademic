@@ -117,6 +117,25 @@ class BudgetController {
     return department ? Number(department.id) : null;
   }
 
+  static async resolveSubmissionDepartment(req, beneficiaryType, payload = {}) {
+    const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
+    const userDepartment = await BudgetController.resolveUserDepartment(req);
+
+    if (normalizedBeneficiaryType === 'Faculty') {
+      if (!userDepartment) {
+        throw new Error('Department not set for faculty user');
+      }
+
+      return userDepartment;
+    }
+
+    if (normalizedBeneficiaryType === 'Department') {
+      return normalizeText(payload?.beneficiary_value) || null;
+    }
+
+    return userDepartment || null;
+  }
+
 
   static async getFacultyDetails(req, res) {
     try {
@@ -522,8 +541,11 @@ class BudgetController {
         }
       }
 
-      const resolvedDepartment =
-        normalizeText(payload.department) || (await BudgetController.resolveUserDepartment(req)) || null;
+      const resolvedDepartment = await BudgetController.resolveSubmissionDepartment(
+        req,
+        normalizedBeneficiaryType,
+        payload
+      );
 
       const result = await BudgetModel.create({
         ...payload,
@@ -595,6 +617,11 @@ class BudgetController {
       const normalizedBeneficiaryType = payload.beneficiary_type
         ? normalizeBeneficiaryType(payload.beneficiary_type)
         : payload.beneficiary_type;
+      const resolvedDepartment = await BudgetController.resolveSubmissionDepartment(
+        req,
+        normalizedBeneficiaryType,
+        payload
+      );
 
       if (!payload.lines?.length) {
         return res.status(400).json({
@@ -606,7 +633,7 @@ class BudgetController {
       await BudgetModel.update(proposalId, {
         ...payload,
         beneficiary_type: normalizedBeneficiaryType,
-        department: normalizeText(payload.department) || userDepartment || null,
+        department: resolvedDepartment,
       });
 
       return res.json({
@@ -618,6 +645,17 @@ class BudgetController {
 
       if (error.message.includes('Cannot edit')) {
         return res.status(403).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      if (
+        error.message.includes('required') ||
+        error.message.includes('Invalid') ||
+        error.message.includes('not set')
+      ) {
+        return res.status(400).json({
           success: false,
           message: error.message,
         });
@@ -770,11 +808,12 @@ class BudgetController {
     try {
       const department = await BudgetController.resolveUserDepartment(req);
       const departmentId = await BudgetController.resolveUserDepartmentId(req);
+      const userEmail = normalizeText(req.user?.email);
 
-      if (!department && !departmentId) {
+      if (!department && !departmentId && !userEmail) {
         return res.status(400).json({
           success: false,
-          message: 'Department not set for HOD',
+          message: 'HOD queue context unavailable',
         });
       }
 
@@ -783,6 +822,7 @@ class BudgetController {
       const budgets = await BudgetModel.listBudgets({
         department,
         departmentId,
+        userEmail,
         role: 'hod',
         page: Number.parseInt(page, 10),
         limit: Number.parseInt(limit, 10),
@@ -1014,6 +1054,46 @@ class BudgetController {
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch admin budgets',
+      });
+    }
+  }
+
+  static async getSuperAdminFlowDashboard(req, res) {
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        status,
+        fiscalYear,
+        q,
+        department,
+      } = req.query;
+
+      const result = await BudgetModel.listSuperAdminFlowBudgets({
+        page: Number.parseInt(page, 10),
+        limit: Number.parseInt(limit, 10),
+        status: normalizeText(status) || undefined,
+        fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+        q: normalizeText(q) || undefined,
+        department: normalizeText(department) || undefined,
+      });
+
+      return res.json({
+        success: true,
+        data: result.rows,
+        pagination: result.pagination,
+        filters: {
+          status: normalizeText(status) || undefined,
+          fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
+          q: normalizeText(q) || undefined,
+          department: normalizeText(department) || undefined,
+        },
+      });
+    } catch (error) {
+      console.error('Super admin flow dashboard error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch super admin budget flow dashboard',
       });
     }
   }

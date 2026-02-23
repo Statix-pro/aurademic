@@ -210,7 +210,14 @@ function App() {
               <Route path="/budget/:id" element={<Budget />} />       {/* View Route */}
               <Route path="/budget/:id/edit" element={<Budget />} />  {/* Edit Route */}
 
-              <Route path="/admin/budget" element={<AdminBudget />} />
+              <Route
+                path="/admin/budget"
+                element={
+                  <SuperAdminRoute>
+                    <AdminBudget />
+                  </SuperAdminRoute>
+                }
+              />
 
               {/* Under Construction Pages */}
 

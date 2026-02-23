@@ -1,6 +1,10 @@
 import express from 'express';
 import BudgetController from './budgetController.js';
-import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
+import {
+  authMiddleware,
+  permissionMiddleware,
+  superAdminMiddleware,
+} from '../../middleware/authMiddleware.js';
 import upload from '../../middleware/uploadMiddleware.js';
 
 const router = express.Router();
@@ -57,6 +61,7 @@ router.get('/aggregates', canViewBudgetAdmin, BudgetController.getAggregates);
 router.get('/stats', canViewBudgetAdmin, BudgetController.getStats);
 
 router.get('/admin', canViewBudgetAdmin, BudgetController.adminList);
+router.get('/superadmin/flow', superAdminMiddleware, BudgetController.getSuperAdminFlowDashboard);
 router.get('/export', canViewBudgetAdmin, BudgetController.export);
 router.get('/search', canViewBudgetAdmin, BudgetController.search);
 
