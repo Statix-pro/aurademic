@@ -7,6 +7,18 @@ const rename = util.promisify(fs.rename);
 const isRequesterAdmin = (requestUser = {}) =>
   Boolean(requestUser.isAdmin ?? requestUser.is_admin);
 
+const isRequesterSuperAdmin = (requestUser = {}) => {
+  if (Boolean(requestUser.isSuperAdmin ?? requestUser.is_super_admin)) {
+    return true;
+  }
+
+  const roleTokens = Array.isArray(requestUser.roles) ? requestUser.roles : [];
+  return roleTokens.some((role) => String(role || '').trim().toLowerCase() === 'super_admin');
+};
+
+const hasAdminOverride = (requestUser = {}) =>
+  isRequesterAdmin(requestUser) || isRequesterSuperAdmin(requestUser);
+
 const journalController = {
   async createJournal(req, res) {
     try {
@@ -123,7 +135,7 @@ const journalController = {
     try {
       const id = req.params.id;
       const journalData = req.body;
-      const requesterIsAdmin = isRequesterAdmin(req.user);
+      const requesterHasAdminOverride = hasAdminOverride(req.user);
 
       const workflowAccess = await journalModel.getJournalWorkflowAccess(
         id,
@@ -135,7 +147,7 @@ const journalController = {
         return res.status(404).json({ message: 'Journal not found' });
       }
 
-      if (!requesterIsAdmin && !workflowAccess.is_author) {
+      if (!requesterHasAdminOverride && !workflowAccess.is_author) {
         return res.status(403).json({
           message: 'You are not authorized to edit this journal',
         });
@@ -148,7 +160,7 @@ const journalController = {
         approvalStatus === 'rejected' ||
         (approvalStatus === 'approved' && editRequestStatus === 'approved');
 
-      if (!requesterIsAdmin && !canDirectEdit) {
+      if (!requesterHasAdminOverride && !canDirectEdit) {
         return res.status(403).json({
           message:
             'Direct edit is disabled for approved publications. Please request edit access.',
@@ -270,7 +282,7 @@ const journalController = {
       }
 
       if (
-        !requesterIsAdmin &&
+        !requesterHasAdminOverride &&
         (approvalStatus === 'rejected' ||
           (approvalStatus === 'approved' && editRequestStatus === 'approved'))
       ) {
@@ -342,7 +354,7 @@ const journalController = {
   async deleteJournal(req, res) {
     try {
       const id = req.params.id;
-      const requesterIsAdmin = isRequesterAdmin(req.user);
+      const requesterHasAdminOverride = hasAdminOverride(req.user);
 
       const workflowAccess = await journalModel.getJournalWorkflowAccess(
         id,
@@ -354,14 +366,14 @@ const journalController = {
         return res.status(404).json({ message: 'Journal not found' });
       }
 
-      if (!requesterIsAdmin && !workflowAccess.is_author) {
+      if (!requesterHasAdminOverride && !workflowAccess.is_author) {
         return res.status(403).json({
           message: 'You are not authorized to delete this journal',
         });
       }
 
       if (
-        !requesterIsAdmin &&
+        !requesterHasAdminOverride &&
         workflowAccess.status === 'published' &&
         workflowAccess.admin_approval_status === 'approved'
       ) {

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import Navbar from '../.././shared/components/layout/navbar/navbar';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
+import { useAuth } from '../../contexts/AuthContext';
 import Select from 'react-select';
 import './budget.css';
 
@@ -425,104 +426,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   ],
 };
 
-const SUBCATEGORY_OPTIONS: Record<string, string[]> = {
-  Department: [
-    'Artificial Intelligence & Data Science',
-    'Biotechnology',
-    'Civil Engineering',
-    'Computer Science and Business Systems',
-    'Computer Science and Engineering',
-    'Computer Science and Engineering (AI&ML)',
-    'Electrical and Electronics Engineering',
-    'Electronics and Communication Engineering',
-    'Food Technology',
-    'Information Technology',
-    'Mechanical Engineering',
-    'Mechatronics Engineering',
-    'Nano Science and Technology',
-    'Electronics Engineering (VLSI Desing & Technology)',
-    'Textile Technology',
-    'Management Studies',
-    'Master of Computer Applications',
-    'English',
-    'Tamil',
-    'Mathematics',
-    'Physics',
-    'Chemistry',
-    'Library',
-    'Physical Education',
-  ],
-  Centre: [
-    'Centre for Research & Development',
-    'Centre for Sustainable Development Goals',
-    'Centre for Skill Development',
-    'AICTE IDEA Lab',
-    'Career Guidance Academy',
-    'Centre for Student Affairs',
-    'Centre for IT Infrastructure',
-    'KSRCT MSME Business Incubator',
-    'KSRCT ACIC Incubation Foundation',
-  ],
-  Cell: [
-    'Institutions Innovation Council',
-    'Intellectual Property Rights Cell',
-    'Consultancy',
-    'Entrepreneurship Development Cell',
-    'Higher Education Cell',
-    'Alumni Cell',
-    'National Cadet Corps (NCC) - Army Wing',
-    'National Cadet Corps (NCC) - Air Wing',
-    'National Service Scheme (NSS)',
-    'Youth Red Cross (YRC)',
-    'Red Ribbon Club (RRC)',
-    'Unnat Bharat Abhiyan (UBA)',
-    'Autonomous',
-    'Internal Quality Assurance Cell',
-    'Training',
-    'Placement',
-    'Exam Cell',
-    'Admission',
-    'NPTEL',
-    'Women Empowerment Cell',
-    'Press & Media',
-  ],
-  Club: [
-    'Cultural Club',
-    'Readers Club',
-    'NDLI Club',
-    'Service Motto Volunteers',
-    'LifX Club',
-    'Build Club',
-    'Eco Care Club',
-    'Drone Club',
-    'Neomutant Association',
-    'PAC & PMC Club',
-    'Tamil Mandram',
-    'Young Indians',
-    'Rotaract Club',
-  ],
-  'Professional Body': [
-    'ICT Academy',
-    'Indian Society for Technical Education',
-    'The Institution of Engineers (India)',
-    'Institute of Electrical and Electronics Engineers',
-    'Institution of Electronics and Telecommunication Engineers',
-    'Indian Welding Society',
-    'American Society of Mechanical Engineers',
-    'SAE Collegiate Club',
-    'Textile Association of India',
-    'Madras Management Association',
-    'IEEE Engineering in Medicine and Biology Society',
-    'Confederation of Indian Industry',
-    'Indian Concrete Institute',
-    'Indian Geotechnical Society',
-    'Association of Food Scientist & Technologists (India)',
-    'Microbiologists Society, India',
-    'The Indian Society of Heating, Refrigerating and Air Conditioning Engineers (ISHRAE)',
-    'The Indian Institute of Welding (IIW - India)',
-    'The Institute of Indian Foundrymen (IIF)',
-  ],
-};
+
 
 const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
   Department: 'DEPARTMENT',
@@ -586,6 +490,11 @@ const Budget: React.FC = () => {
   const [categorySelections, setCategorySelections] = useState<SelectOption[]>([]);
   const [categoryItem, setCategoryItem] = useState('');
   const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
+  const { user } = useAuth();
+  const isSuperAdminUser = Boolean(user?.is_super_admin) || (
+    Array.isArray(user?.roles) &&
+    user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
+  );
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -640,26 +549,13 @@ const Budget: React.FC = () => {
     return ['Faculty_Team', 'Student_Team'].includes(type);
   };
 
-  const fallbackSubcategoryList = beneficiaryType
-    ? SUBCATEGORY_OPTIONS[beneficiaryType as keyof typeof SUBCATEGORY_OPTIONS] || []
-    : [];
 
-  const fetchedSubcategoryOptions = beneficiaryType
+
+  const subcategoryOptions: SelectOption[] = beneficiaryType
     ? subcategoryOptionsByType[beneficiaryType] || []
     : [];
 
-  const subcategoryList =
-    fetchedSubcategoryOptions.length > 0
-      ? fetchedSubcategoryOptions.map((option) => option.value)
-      : fallbackSubcategoryList;
-
-  const subcategoryOptions: SelectOption[] =
-    fetchedSubcategoryOptions.length > 0
-      ? fetchedSubcategoryOptions
-      : fallbackSubcategoryList.map((value) => ({
-        value,
-        label: value,
-      }));
+  const subcategoryList = subcategoryOptions.map((option) => option.value);
 
   const hasSubcategories = subcategoryList.length > 0;
 
@@ -990,9 +886,8 @@ const Budget: React.FC = () => {
               .filter(Boolean)
               .map((name: string) => ({ value: name, label: name }));
           } catch (error) {
-            nextOptions[beneficiaryKey] = (
-              SUBCATEGORY_OPTIONS[beneficiaryKey as keyof typeof SUBCATEGORY_OPTIONS] || []
-            ).map((name) => ({ value: name, label: name }));
+            console.error(`Failed to fetch options for ${beneficiaryKey}:`, error);
+            nextOptions[beneficiaryKey] = [];
           }
         })
       );
@@ -1106,11 +1001,12 @@ const Budget: React.FC = () => {
         const editableStatuses = ['draft', 'hod_returned', 'dof_returned', 'submitted'];
         const isStatusEditable = editableStatuses.includes((p.status || '').toLowerCase());
         const isEditURL = location.pathname.includes('/edit');
+        const canOverrideEditLock = isSuperAdminUser && isEditURL;
 
         if (!isEditURL) {
           setIsEditable(false);
           setExpandedRows(mappedLines.map((_, idx) => idx));
-        } else if (isEditURL && !isStatusEditable) {
+        } else if (isEditURL && !isStatusEditable && !canOverrideEditLock) {
           alert(`This proposal cannot be edited because it is currently '${p.status}'. Switching to View mode.`);
           setIsEditable(false);
           navigate(`/budget/${id}`);
@@ -1124,7 +1020,7 @@ const Budget: React.FC = () => {
     };
 
     loadProposal();
-  }, [id, location.pathname, navigate]);
+  }, [id, location.pathname, navigate, isSuperAdminUser]);
 
 
   useEffect(() => {

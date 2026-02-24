@@ -166,6 +166,10 @@ const AdminBudget: React.FC = () => {
 
   const canProcessStage = useCallback(
     (stage: string) => {
+      if (isSuperAdmin(user)) {
+        return true;
+      }
+
       const permissionKey = STAGE_PERMISSION_MAP[(stage || "").toLowerCase()];
       if (!permissionKey) return false;
       return hasPermission(user, permissionKey);
