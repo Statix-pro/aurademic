@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import "./budgetdashboard.css";
-import { Eye, Edit2, Plus, Trash2 } from "lucide-react";
+import { Eye, Edit2, Plus, Trash2, Info } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../../shared/components/layout/navbar/Navbar";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
@@ -25,7 +25,10 @@ interface ProposalGroup {
   currentStage: "hod" | "dof" | "principal" | "completed";
   approvalFlow: string;
   createdAt: string;
+  updatedAt: string;
   items: DashboardLineItem[];
+  approvals: any[];
+  edits: any[];
   totalProposed: number;
   totalApproved: number;
 }
@@ -36,6 +39,15 @@ interface ConsolidatedRow {
   additional: number;
   expenditure: number;
   balance: number;
+}
+
+interface LogEvent {
+  key: string;
+  title: string;
+  subtitle?: string;
+  timestamp: number;
+  dateLabel: string;
+  decision?: string;
 }
 
 const BudgetDashboard: React.FC = () => {
@@ -49,29 +61,141 @@ const BudgetDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showBudgetStatusDetail, setShowBudgetStatusDetail] = useState<{ [key: number]: boolean }>({});
+  const [activeLogId, setActiveLogId] = useState<number | null>(null);
+  const [logPopoverStyle, setLogPopoverStyle] = useState<React.CSSProperties>({});
+  const infoTriggerRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const formatFY = (fyStart: number) => `${fyStart}-${String(fyStart + 1).slice(2)}`;
 
-  const getCurrentFY = () => {
+  // Business default for filter: from Feb 1, preselect next FY.
+  const getDefaultFilterFY = () => {
     const now = new Date();
     const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const fyStart = month >= 4 ? year : year - 1;
-    return `${fyStart}-${String(fyStart + 1).slice(2)}`;
+    const monthIndex = now.getMonth(); // 0 = Jan, 1 = Feb
+    const fyStart = monthIndex >= 1 ? year : year - 1;
+    return formatFY(fyStart);
   };
 
-  const [financialYear, setFinancialYear] = useState(getCurrentFY());
+  // Actual running FY (Apr-Mar). Keep this selectable through Mar 31.
+  const getRunningFYStart = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const monthIndex = now.getMonth(); // Apr = 3
+    return monthIndex >= 3 ? year : year - 1;
+  };
 
+  const [financialYear, setFinancialYear] = useState(getDefaultFilterFY());
+  const fyOptions = useMemo(() => {
+    const running = getRunningFYStart();
+    const defaultStart = Number.parseInt(getDefaultFilterFY().split("-")[0], 10);
+    const starts = Array.from(new Set([defaultStart, running, running - 1])).sort((a, b) => b - a);
+    return starts.map((start) => {
+      const value = formatFY(start);
+      return { value, label: `FY ${value}` };
+    });
+  }, []);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveLogId(null);
+      }
+    };
+
+    if (activeLogId !== null) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeLogId]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (activeLogId === null || !popoverRef.current) return;
+      const activeTrigger = infoTriggerRefs.current[activeLogId];
+      if (!activeTrigger) return;
+
+      if (
+        !activeTrigger.contains(e.target as Node) &&
+        !popoverRef.current.contains(e.target as Node)
+      ) {
+        setActiveLogId(null);
+      }
+    };
+
+    if (activeLogId !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [activeLogId]);
+
+  const updatePopoverPosition = (proposalId: number) => {
+    const trigger = infoTriggerRefs.current[proposalId];
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportPadding = 10;
+    const preferredWidth = 320;
+    const estimatedHeight = popoverRef.current?.offsetHeight || 360;
+
+    let left = rect.left;
+    if (left + preferredWidth > window.innerWidth - viewportPadding) {
+      left = window.innerWidth - preferredWidth - viewportPadding;
+    }
+    if (left < viewportPadding) {
+      left = viewportPadding;
+    }
+
+    let top = rect.bottom + 10;
+    if (top + estimatedHeight > window.innerHeight - viewportPadding) {
+      top = rect.top - estimatedHeight - 10;
+    }
+    if (top < viewportPadding) {
+      top = viewportPadding;
+    }
+
+    setLogPopoverStyle({
+      position: 'fixed',
+      top: `${top}px`,
+      left: `${left}px`,
+      width: `${preferredWidth}px`,
+      zIndex: 1000,
+    });
+  };
+
+  // When we open a popover, compute position
+  const handleInfoClick = (proposalId: number) => {
+    if (activeLogId === proposalId) {
+      setActiveLogId(null);
+    } else {
+      setActiveLogId(proposalId);
+      requestAnimationFrame(() => {
+        updatePopoverPosition(proposalId);
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (activeLogId === null) return;
+    const reflowPopover = () => updatePopoverPosition(activeLogId);
+    window.addEventListener('resize', reflowPopover);
+    window.addEventListener('scroll', reflowPopover, true);
+    return () => {
+      window.removeEventListener('resize', reflowPopover);
+      window.removeEventListener('scroll', reflowPopover, true);
+    };
+  }, [activeLogId]);
   // --- Fetch Data ---
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
         setError("");
-
-        const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-        if (!token) {
-          setError("Authentication required.");
-          return;
-        }
 
         const fiscalYearNum = parseInt(financialYear.split("-")[0]);
 
@@ -127,7 +251,10 @@ const BudgetDashboard: React.FC = () => {
             currentStage: master.current_stage,
             approvalFlow: master.approval_flow,
             createdAt: master.created_at,
+            updatedAt: master.updated_at,
             items: items,
+            approvals: data.pendingApprovals || data.approvals || [],
+            edits: data.edits || [],
             totalProposed: items.reduce((sum: number, i: any) => sum + i.proposedAmount, 0),
             totalApproved: items.reduce((sum: number, i: any) => sum + i.approvedAmount, 0)
           };
@@ -195,18 +322,117 @@ const BudgetDashboard: React.FC = () => {
 
   const formatINR = (n: number) => Number(n || 0).toLocaleString("en-IN");
 
+  const normalizeText = (value?: string | null) => String(value || "").trim();
+
+  const formatDateTime = (value?: string) => {
+    if (!value) return "-";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "-";
+    return parsed.toLocaleString("en-IN");
+  };
+
+  const getRoleLabel = (role?: string) => {
+    const normalized = String(role || "").toLowerCase();
+    const map: Record<string, string> = {
+      hod: "HoD",
+      headcfrd: "CFRD",
+      dof: "DoF",
+      principal: "Principal",
+    };
+    return map[normalized] || (role ? role.toUpperCase() : "Approver");
+  };
+
+  const buildLogEvents = (proposal: ProposalGroup): LogEvent[] => {
+    const events: LogEvent[] = [];
+    const createdAtMs = proposal.createdAt ? new Date(proposal.createdAt).getTime() : 0;
+    const updatedAtMs = proposal.updatedAt ? new Date(proposal.updatedAt).getTime() : 0;
+
+    if (createdAtMs) {
+      events.push({
+        key: "submitted",
+        title: "Submitted",
+        subtitle: "Proposal created",
+        timestamp: createdAtMs,
+        dateLabel: formatDateTime(proposal.createdAt),
+        decision: "submitted",
+      });
+    }
+
+    const editLogs = Array.isArray(proposal.edits) ? proposal.edits : [];
+    if (editLogs.length > 0) {
+      editLogs.forEach((edit: any, idx: number) => {
+        const createdAt = edit.created_at || edit.createdAt;
+        const createdMs = createdAt ? new Date(createdAt).getTime() : createdAtMs;
+        let summary = normalizeText(edit.summary);
+
+        if (!summary && edit.details) {
+          try {
+            const parsed = JSON.parse(edit.details);
+            const lines = Array.isArray(parsed?.lines) ? parsed.lines : [];
+            if (lines.length > 0) {
+              const details = lines.map((line: any) => (
+                `Corrections made in Line No. ${line.lineNo}: ${(line.changes || []).join('; ')}`
+              ));
+              summary = details.join(' | ');
+            }
+          } catch {
+            // ignore parse errors, fallback below
+          }
+        }
+
+        if (!summary) return;
+
+        events.push({
+          key: `edit-${edit.id || idx}`,
+          title: "Updated",
+          subtitle: summary,
+          timestamp: createdMs,
+          dateLabel: createdAt ? formatDateTime(createdAt) : "-",
+          decision: "updated",
+        });
+      });
+    }
+
+    (proposal.approvals || []).forEach((app: any, idx: number) => {
+      const feedback = normalizeText(app.feedback);
+      if (feedback === "Auto-approved after DoF clearance") {
+        return;
+      }
+      const decision = String(app.decision || "updated").toLowerCase();
+      const decidedAt = app.decided_at || app.decidedAt || app.decided_at_formatted;
+      const decidedAtMs = decidedAt ? new Date(decidedAt).getTime() : 0;
+      const feedbackNote = feedback ? `Note: ${feedback}` : "";
+      const subtitleParts = [
+        `by ${getRoleLabel(app.role)}`,
+        feedbackNote,
+      ].filter(Boolean);
+
+      events.push({
+        key: `approval-${idx}`,
+        title: decision.charAt(0).toUpperCase() + decision.slice(1),
+        subtitle: subtitleParts.join(" | "),
+        timestamp: decidedAtMs || createdAtMs,
+        dateLabel: decidedAt ? formatDateTime(decidedAt) : "-",
+        decision,
+      });
+    });
+
+    const submitted = events.filter((e) => e.decision === "submitted");
+    const updates = events.filter((e) => e.decision === "updated").sort((a, b) => a.timestamp - b.timestamp);
+    const approvals = events.filter((e) => e.decision !== "submitted" && e.decision !== "updated")
+      .sort((a, b) => a.timestamp - b.timestamp);
+    return [...submitted, ...updates, ...approvals];
+  };
+
   const canAddForCurrentFY = () => {
     const selectedFY = parseInt(financialYear.split("-")[0]);
-    const currentFY = parseInt(getCurrentFY().split("-")[0]);
-    return selectedFY >= currentFY;
+    const runningFY = getRunningFYStart();
+    return selectedFY >= runningFY;
   };
 
   const handleDelete = async (id: number) => {
     if (!window.confirm("Are you sure you want to delete this proposal?")) return;
     try {
-      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-      if (!token) return;
-
       const json = await authenticityUtility.delete(`/budget/${id}`) as any;
       if (json.success) {
         setProposals((prev) => prev.filter((p) => p.proposalId !== id));
@@ -245,26 +471,32 @@ const BudgetDashboard: React.FC = () => {
   }, [proposals, budgetHeadSearch]);
 
   // --- Timeline Logic ---
-  const getTimelineState = (proposal: ProposalGroup, step: 'hod' | 'dof' | 'principal') => {
-    const { status, currentStage } = proposal;
+  const getTimelineState = (proposal: ProposalGroup, step: string) => {
+    const { status, currentStage, approvalFlow } = proposal;
 
     // 1. Rejected
     if (status.includes('rejected')) {
-      if (currentStage === step) return 'rejected'; // Red
-      return 'completed'; // Green (Passed previous stages)
+      if (currentStage === step) return 'rejected';
+
+      const stages = (approvalFlow || "").split('_');
+      const currentIndex = stages.indexOf(currentStage);
+      const stepIndex = stages.indexOf(step);
+      if (stepIndex !== -1 && currentIndex !== -1 && stepIndex < currentIndex) return 'completed';
+      return 'pending';
     }
 
     // 2. Fully Approved
     if (['principal_approved', 'completed'].includes(status)) return 'completed';
 
     // 3. In Progress Logic
-    const stages = ['hod', 'dof', 'principal'];
+    const stages = (approvalFlow || "hod_dof_principal").split('_');
     const currentIndex = stages.indexOf(currentStage);
     const stepIndex = stages.indexOf(step);
 
-    if (stepIndex < currentIndex) return 'completed'; // Past stage (Green)
-    if (stepIndex === currentIndex) return 'current'; // Current stage (Yellow)
-    return 'pending'; // Future stage (Gray)
+    if (stepIndex === -1) return 'pending';
+    if (currentIndex === -1 || stepIndex < currentIndex) return 'completed';
+    if (stepIndex === currentIndex) return 'current';
+    return 'pending';
   };
 
   const getCircleClass = (state: string) => {
@@ -285,6 +517,7 @@ const BudgetDashboard: React.FC = () => {
     }
   };
 
+
   return (
     <>
       <Navbar />
@@ -304,9 +537,11 @@ const BudgetDashboard: React.FC = () => {
                     value={financialYear}
                     onChange={(e) => setFinancialYear(e.target.value)}
                   >
-                    <option value="2026-27">FY 2026-27</option>
-                    <option value="2025-26">FY 2025-26</option>
-                    <option value="2024-25">FY 2024-25</option>
+                    {fyOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                   <input
                     type="text"
@@ -394,48 +629,110 @@ const BudgetDashboard: React.FC = () => {
 
                     {/* Card Header */}
                     <div className="budgetdashboard-proposal-header budgetdashboard-proposal-flat">
-                      <div className="budgetdashboard-proposal-left">{label}</div>
-
-                      <div className="budgetdashboard-actions-global">
-                        {/* Status Pill */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div className="budgetdashboard-proposal-left">{label}</div>
                         <div
-                          className={`budgetdashboard-status-pill budgetdashboard-status-pill--${statusLabel.toLowerCase()}`}
-                          onClick={() => setShowBudgetStatusDetail(prev => ({ ...prev, [proposal.proposalId]: !prev[proposal.proposalId] }))}
+                          className="budgetdashboard-info-trigger"
+                          ref={(el) => { infoTriggerRefs.current[proposal.proposalId] = el; }}
+                          onClick={() => handleInfoClick(proposal.proposalId)}
                         >
-                          {statusLabel}
+                          <Info size={18} color="#6c757d" style={{ cursor: 'pointer' }} />
+                          {activeLogId === proposal.proposalId && (
+                            <div
+                              className="budgetdashboard-log-popover"
+                              style={logPopoverStyle}
+                              ref={popoverRef}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="budgetdashboard-log-header">Submission Logs</div>
+                              <div className="budgetdashboard-log-body">
+                                {new Date(proposal.updatedAt).getTime() >
+                                  new Date(proposal.createdAt).getTime() + 1000 && (
+                                    <div className="budgetdashboard-log-item">
+                                      <span className="log-label">Last Edited:</span>
+                                      <span className="log-value">
+                                        {formatDateTime(proposal.updatedAt)}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                <div className="budgetdashboard-log-approvals">
+                                  {buildLogEvents(proposal).map((event) => (
+                                    <div key={event.key} className="log-approval-item">
+                                      <div className="log-approval-meta">
+                                        <span
+                                          className={`log-decision log-decision--${event.decision || 'approved'
+                                            }`}
+                                        >
+                                          {event.title.toUpperCase()}
+                                        </span>
+                                        <span className="log-role">
+                                          {event.subtitle || 'Status update'}
+                                        </span>
+                                        <span className="log-date">{event.dateLabel}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="budgetdashboard-actions-global" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div
+                            className={`budgetdashboard-status-pill budgetdashboard-status-pill--${statusLabel.toLowerCase()}`}
+                            onClick={() => setShowBudgetStatusDetail(prev => ({ ...prev, [proposal.proposalId]: !prev[proposal.proposalId] }))}
+                          >
+                            {statusLabel}
+                          </div>
+
+                          {/* Timeline (Only if Expanded) */}
+                          {isExpanded && (
+                            <div className="budgetdashboard-status-detail-line" style={{ marginTop: 0, padding: 0 }}>
+                              {(proposal.approvalFlow || "hod_dof_principal").split('_').map((stage, sIdx, array) => {
+                                const labelMap: Record<string, string> = {
+                                  'hod': 'HoD',
+                                  'headcfrd': 'CFRD',
+                                  'dof': 'DoF',
+                                  'principal': 'Principal'
+                                };
+                                const stageState = getTimelineState(proposal, stage);
+                                return (
+                                  <React.Fragment key={stage}>
+                                    <div
+                                      className={`budgetdashboard-status-line-circle ${getCircleClass(stageState)}`}
+                                      title={labelMap[stage] || stage.toUpperCase()}
+                                    />
+                                    {sIdx < array.length - 1 && (
+                                      <div className={`budgetdashboard-status-line-connector ${getConnectorClass(stageState)}`} />
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
 
-                        {/* Timeline (Only if Expanded) */}
-                        {isExpanded && (
-                          <div className="budgetdashboard-status-detail-line">
-                            {/* HoD */}
-                            <div className={`budgetdashboard-status-line-circle ${getCircleClass(hodState)}`} title="HoD" />
-                            <div className={`budgetdashboard-status-line-connector ${getConnectorClass(hodState)}`} />
-
-                            {/* DoF */}
-                            <div className={`budgetdashboard-status-line-circle ${getCircleClass(dofState)}`} title="DoF" />
-                            <div className={`budgetdashboard-status-line-connector ${getConnectorClass(dofState)}`} />
-
-                            {/* Principal */}
-                            <div className={`budgetdashboard-status-line-circle ${getCircleClass(principalState)}`} title="Principal" />
-                          </div>
-                        )}
-
-                        <button title="View" className="budgetdashboard-action-global" onClick={() => navigate(`/budget/${proposal.proposalId}`)}>
-                          <Eye size={16} />
-                        </button>
-                        {/* Edit only if submitted/returned */}
-                        {['submitted', 'hod_returned', 'dof_returned'].includes(proposal.status) && (
-                          <button title="Edit" className="budgetdashboard-action-global" onClick={() => navigate(`/budget/${proposal.proposalId}/edit`)}>
-                            <Edit2 size={16} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button title="View" className="budgetdashboard-action-global" onClick={() => navigate(`/budget/${proposal.proposalId}`)}>
+                            <Eye size={16} />
                           </button>
-                        )}
-                        {/* Delete only if not fully approved */}
-                        {!['principal_approved', 'completed'].includes(proposal.status) && (
-                          <button title="Delete" className="budgetdashboard-action-global" onClick={() => handleDelete(proposal.proposalId)}>
-                            <Trash2 size={14} />
-                          </button>
-                        )}
+                          {/* Edit only if submitted/returned */}
+                          {['submitted', 'hod_returned', 'dof_returned'].includes(proposal.status) && (
+                            <button title="Edit" className="budgetdashboard-action-global" onClick={() => navigate(`/budget/${proposal.proposalId}/edit`)}>
+                              <Edit2 size={16} />
+                            </button>
+                          )}
+                          {/* Delete only if not fully approved */}
+                          {!['principal_approved', 'completed'].includes(proposal.status) && (
+                            <button title="Delete" className="budgetdashboard-action-global" onClick={() => handleDelete(proposal.proposalId)}>
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
 

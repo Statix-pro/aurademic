@@ -336,15 +336,48 @@ class BudgetModel {
               d.id, 
               d.name, 
               d.code,
+              COALESCE(pd_emp.name, pd_dept.name) AS parent_department_name,
               e.designation,
               e.mobile,
               CONCAT(e.first_name, ' ', COALESCE(e.last_name, '')) AS full_name
           FROM master_employees e
           JOIN master_departments d ON e.department_id = d.id
+          LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
+          LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
           WHERE e.user_id = ? AND e.status = 'Active'
           ORDER BY e.id ASC
           LIMIT 1`,
       [parsedUserId]
+    );
+
+    return rows[0] || null;
+  }
+
+  static async getUserDepartmentByEmail(userEmail) {
+    const normalizedEmail = normalizeText(userEmail).toLowerCase();
+
+    if (!normalizedEmail) {
+      return null;
+    }
+
+    const [rows] = await db.execute(
+      `SELECT
+              d.id,
+              d.name,
+              d.code,
+              COALESCE(pd_emp.name, pd_dept.name) AS parent_department_name,
+              e.designation,
+              e.mobile,
+              CONCAT(e.first_name, ' ', COALESCE(e.last_name, '')) AS full_name
+          FROM master_employees e
+          JOIN master_departments d ON e.department_id = d.id
+          LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
+          LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
+          WHERE LOWER(TRIM(e.email)) = ?
+            AND e.status = 'Active'
+          ORDER BY e.id ASC
+          LIMIT 1`,
+      [normalizedEmail]
     );
 
     return rows[0] || null;
@@ -360,13 +393,15 @@ class BudgetModel {
         e.id AS employee_id,
         e.erp_id,
         CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
-        e.designation,
-        d.name AS department,
+        COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
+        COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
         e.email,
         e.mobile,
         e.employee_type
       FROM master_employees e
       LEFT JOIN master_departments d ON e.department_id = d.id
+      LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
+      LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
       WHERE e.status = 'Active'
       ORDER BY e.first_name, e.last_name
       LIMIT 20`;
@@ -375,13 +410,15 @@ class BudgetModel {
         e.id AS employee_id,
         e.erp_id,
         CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
-        e.designation,
-        d.name AS department,
+        COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
+        COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
         e.email,
         e.mobile,
         e.employee_type
       FROM master_employees e
       LEFT JOIN master_departments d ON e.department_id = d.id
+      LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
+      LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
       WHERE e.status = 'Active'
         AND (
           e.first_name LIKE ?
@@ -390,6 +427,8 @@ class BudgetModel {
           OR e.erp_id LIKE ?
           OR e.email LIKE ?
           OR d.name LIKE ?
+          OR pd_emp.name LIKE ?
+          OR pd_dept.name LIKE ?
         )
       ORDER BY e.first_name, e.last_name
       LIMIT 20`;
@@ -399,6 +438,8 @@ class BudgetModel {
         `%${queryStr}%`,
         `%${queryStr}%`,
         `${queryStr}%`,
+        `%${queryStr}%`,
+        `%${queryStr}%`,
         `%${queryStr}%`,
         `%${queryStr}%`,
       ];
@@ -927,7 +968,14 @@ class BudgetModel {
         bp.fiscal_year,
         bp.employee_id,
         bp.user_id,
-        CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, '')) AS faculty_name,
+        MAX(bp.user_email) AS user_email,
+        COALESCE(
+          NULLIF(TRIM(MAX(CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, '')))), ''),
+          NULLIF(TRIM(MAX(u.name)), ''),
+          NULLIF(TRIM(MAX(bp.user_email)), '')
+        ) AS applicant_name,
+        MAX(CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, ''))) AS faculty_name,
+        MAX(u.name) AS user_name,
         DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
         bp.beneficiary_type,
         bp.beneficiary_value,
@@ -952,6 +1000,7 @@ class BudgetModel {
       LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
       LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
       LEFT JOIN master_employees req_emp ON bp.user_id = req_emp.user_id AND req_emp.status = 'Active'
+      LEFT JOIN users u ON bp.user_id = u.id
       LEFT JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
       LEFT JOIN budget_proposal_approvals bpa ON bp.id = bpa.budget_proposal_id
     `;
@@ -962,16 +1011,27 @@ class BudgetModel {
 
     switch (safeRole) {
       case 'hod': {
-        where.push('bp.current_stage = "hod"');
+        where.push('(bp.current_stage = "hod" OR bp.status LIKE "hod_%")');
         const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
+        const normalizedDepartment = normalizeText(department);
+        const departmentBeneficiaryPredicate = "LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'department')";
         const hodScope = [];
 
         if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
-          hodScope.push('(bp.beneficiary_type IN ("Faculty", "Department") AND bp.department_id = ?)');
+          hodScope.push(`(${departmentBeneficiaryPredicate} AND bp.department_id = ?)`);
           params.push(Number(departmentId));
-        } else if (normalizeText(department)) {
-          hodScope.push('(bp.beneficiary_type IN ("Faculty", "Department") AND md.name = ?)');
-          params.push(normalizeText(department));
+        }
+
+        if (normalizedDepartment) {
+          hodScope.push(`(
+            ${departmentBeneficiaryPredicate}
+            AND (
+              LOWER(TRIM(md.name)) = LOWER(TRIM(?))
+              OR LOWER(TRIM(md.code)) = LOWER(TRIM(?))
+              OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(?))
+            )
+          )`);
+          params.push(normalizedDepartment, normalizedDepartment, normalizedDepartment);
         }
 
         if (normalizedUserEmail) {
@@ -1729,7 +1789,11 @@ class BudgetModel {
               met.code AS org_unit_type_code,
               -- ✅ FETCH MISSING FIELDS FROM EMPLOYEE TABLE
               emp.designation,
+              emp.designation AS user_designation,
               emp.mobile,
+              emp.mobile AS user_mobile,
+              COALESCE(emp_parent_dept.name, emp_parent_dept_fallback.name, emp_dept.name) AS user_department,
+              COALESCE(emp_parent_dept.name, emp_parent_dept_fallback.name, emp_dept.name) AS applicant_department,
               CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS user_name,
               CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS name
           FROM budget_proposals bp
@@ -1738,6 +1802,9 @@ class BudgetModel {
           LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
           -- ✅ ADD THIS JOIN TO GET THE DATA
           LEFT JOIN master_employees emp ON bp.user_id = emp.user_id 
+          LEFT JOIN master_departments emp_dept ON emp.department_id = emp_dept.id
+          LEFT JOIN master_departments emp_parent_dept ON emp.parent_department_id = emp_parent_dept.id
+          LEFT JOIN master_departments emp_parent_dept_fallback ON emp_dept.parent_id = emp_parent_dept_fallback.id
           WHERE bp.id = ?`,
       [proposalId]
     );
@@ -1784,12 +1851,31 @@ class BudgetModel {
           return entityAssignee.email === normalizedApproverEmail;
         }
 
+        const normalizedDepartment = normalizeText(department).toLowerCase();
+
         if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0 && proposal.department_id) {
           return Number(proposal.department_id) === Number(departmentId);
         }
 
-        if (proposal.department && normalizeText(department)) {
-          return normalizeText(proposal.department).toLowerCase() === normalizeText(department).toLowerCase();
+        if (normalizedDepartment) {
+          const proposalDepartmentName = normalizeText(proposal.department).toLowerCase();
+          const proposalDepartmentCode = normalizeText(proposal.department_code).toLowerCase();
+          const proposalBeneficiaryValue = normalizeText(proposal.beneficiary_value).toLowerCase();
+          const proposalBeneficiaryType = normalizeBeneficiaryType(proposal.beneficiary_type).toLowerCase();
+
+          if (
+            proposalDepartmentName === normalizedDepartment ||
+            proposalDepartmentCode === normalizedDepartment
+          ) {
+            return true;
+          }
+
+          if (
+            proposalBeneficiaryType === 'department' &&
+            proposalBeneficiaryValue === normalizedDepartment
+          ) {
+            return true;
+          }
         }
 
         return false;

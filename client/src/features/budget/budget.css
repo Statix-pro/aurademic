@@ -18,16 +18,55 @@
   padding: 24px;
 }
 
-.colMd7 { flex: 1 1 58%; max-width: 58%; padding: 0 15px; }
-.colMd5 { flex: 1 1 40%; max-width: 40%; padding: 0 15px; }
-.colMd6 { flex: 1 1 48%; max-width: 48%; padding: 0 15px; }
+.col-md-4,
+.col-md-5,
+.col-md-6,
+.col-md-7,
+.col-md-8 {
+  padding: 0 15px;
+  flex: 1;
+}
+
+.col-md-4 {
+  max-width: 33.333%;
+  flex: 0 0 33.333%;
+}
+
+.col-md-5 {
+  max-width: 41.666%;
+  flex: 0 0 41.666%;
+}
+
+.col-md-6 {
+  max-width: 50%;
+  flex: 0 0 50%;
+}
+
+.col-md-7 {
+  max-width: 58.333%;
+  flex: 0 0 58.333%;
+}
+
+.col-md-8 {
+  max-width: 66.666%;
+  flex: 0 0 66.666%;
+}
 
 @media (max-width: 768px) {
-  .colMd7, .colMd5, .colMd6 { flex: 1 1 100%; max-width: 100%; }
+
+  .col-md-4,
+  .col-md-5,
+  .col-md-6,
+  .col-md-7,
+  .col-md-8 {
+    max-width: 100%;
+    flex: 0 0 100%;
+    margin-bottom: 15px;
+  }
 }
 
 .formGroup {
-  margin-bottom:8px;
+  margin-bottom: 8px;
 }
 
 .formGroup label {
@@ -38,7 +77,8 @@
   display: block;
 }
 
-.formGroup input, .formGroup select {
+.formGroup input,
+.formGroup select {
   width: 100%;
   border-radius: 12px;
   border: 1px solid #e0e0e0;
@@ -49,11 +89,13 @@
   font-family: inherit;
 }
 
-.formGroup input:focus, .formGroup select:focus {
+.formGroup input:focus,
+.formGroup select:focus {
   border-color: #0069ab;
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
   outline: none;
 }
+
 .budgetTableWrap {
   overflow-x: auto;
   border-top: 1px solid #e0e0e0;
@@ -91,9 +133,9 @@
 
 .tableSelect {
   width: 100%;
-  border-radius:8px;
+  border-radius: 12px;
   border: 1px solid #e0e0e0;
-  padding: 8px 10px;
+  padding: 2px 8px;
   font-size: 0.95rem;
   font-family: inherit;
   background-color: #fcfdff;
@@ -164,8 +206,9 @@
   font-weight: 700;
   color: #0069ab;
 }
+
 .monthScheduleWrap {
-  
+
   padding-top: 5px;
 }
 
@@ -236,14 +279,17 @@
   color: #0069ab;
   font-size: 1.1rem;
 }
+
 .submitBudgetBtn:hover:not(:disabled) {
   background-color: #218838 !important;
   transform: translateY(-2px) !important;
 }
+
 .submitBudgetBtn:disabled {
   opacity: 0.6;
   cursor: not-allowed !important;
 }
+
 .rowMonthSchedule {
   display: flex;
   gap: 20px;
@@ -253,10 +299,13 @@
   background: #f8f9fa;
   border-top: 1px solid #dee2e6;
 }
+
 /* Hide number input spinners (all number inputs) */
 input[type="number"] {
-  -moz-appearance: textfield;        /* Firefox */
-  appearance: textfield;             /* Chrome/Edge/Safari */
+  -moz-appearance: textfield;
+  /* Firefox */
+  appearance: textfield;
+  /* Chrome/Edge/Safari */
 }
 
 /* Remove spinner arrows completely */
@@ -281,17 +330,103 @@ input[type="number"]::-webkit-inner-spin-button {
   margin: 0;
 }
 
+/* Responsive Adjustments for Budget Page */
+@media (max-width: 1200px) {
+  .budgetCard {
+    max-width: 95%;
+  }
+}
+
+@media (max-width: 992px) {
+  .monthGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .budgetCard {
+    margin: 10px auto;
+    border-radius: 12px;
+  }
+
+  .cardContent {
+    padding: 16px;
+  }
+
+  .monthGrid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .monthBox {
+    padding: 10px 8px;
+  }
+
+  .monthSummaryBox {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .monthScheduleContent {
+    flex-direction: column !important;
+  }
+
+  .budgetEntryTable th,
+  .budgetEntryTable td {
+    padding: 8px;
+    font-size: 0.85rem;
+  }
+
+  .budgetEntryTable th,
+  .budgetEntryTable td {
+    padding: 8px 6px;
+    font-size: 0.8rem;
+    min-width: 80px;
+    /* Ensure columns don't squash too much */
+  }
+
+  .budgetEntryTable th:nth-child(1),
+  .budgetEntryTable td:nth-child(1) {
+    min-width: 40px;
+    width: 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .monthGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .submitBudgetBtn {
+    width: 100%;
+    padding: 12px 20px !important;
+  }
+
+  .budgetEntryTable th:nth-child(7),
+  .budgetEntryTable td:nth-child(7) {
+    width: 80px;
+  }
+
+  .tableIconBtn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+    margin: 0 2px;
+  }
+}
+
 .action-dropdown-arrow.open {
-  transform: rotate(180deg) !important;  /* ← EXACT 180° rotation like Select */
+  transform: rotate(180deg) !important;
 }
 
 .action-dropdown-arrow:hover {
-  stroke: #0069ab !important;  /* ← Blue on hover like Select */
+  stroke: #0069ab !important;
 }
+
 .card-toggle-arrow.open {
   transform: rotate(180deg) !important;
 }
 
 .card-toggle-arrow:hover {
-  stroke: #0056b3 !important;  /* Darker blue on hover */
+  stroke: #0056b3 !important;
 }

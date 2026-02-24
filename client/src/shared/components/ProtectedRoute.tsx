@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   canAccessAdminArea,
+  canAccessBudgetApproval,
   canManageAccessControl,
 } from "../utils/permissionUtils";
 
@@ -46,6 +47,20 @@ export const SuperAdminRoute: React.FC<RouteProps> = ({ children }) => {
   }
 
   if (!user || !canManageAccessControl(user)) {
+    return <Navigate to="/home" />;
+  }
+
+  return <>{children}</>;
+};
+
+export const BudgetApprovalRoute: React.FC<RouteProps> = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user || !canAccessBudgetApproval(user)) {
     return <Navigate to="/home" />;
   }
 
