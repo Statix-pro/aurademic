@@ -459,7 +459,7 @@ class BudgetModel {
     const [rows] = await conn.execute(
       `SELECT id, name, code
        FROM master_departments
-       WHERE is_active = 1
+       WHERE is_active = 1 AND type = 'Academic'
          AND (
            LOWER(TRIM(name)) = LOWER(TRIM(?))
            OR LOWER(TRIM(code)) = LOWER(TRIM(?))
@@ -744,14 +744,14 @@ class BudgetModel {
   }
 
 
-  static async update(proposalId, payload) {
+  static async update(proposalId, payload, { skipEditStateValidation = false } = {}) {
     const proposal = await this.getBudgetById(proposalId);
 
     if (!proposal) {
       throw new Error('Proposal not found');
     }
 
-    if (!EDITABLE_STATES.includes(proposal.status)) {
+    if (!skipEditStateValidation && !EDITABLE_STATES.includes(proposal.status)) {
       throw new Error(`Cannot edit ${proposal.status} proposals`);
     }
 
@@ -1005,7 +1005,7 @@ class BudgetModel {
       LEFT JOIN budget_proposal_approvals bpa ON bp.id = bpa.budget_proposal_id
     `;
 
-    const where = ['bp.fiscal_year = ?'];
+    const where = ['bp.fiscal_year = ?', 'md.type = "Academic"'];
     const params = [Number(currentFY)];
     const safeRole = this.normalizeBudgetRole(role);
 
@@ -1411,7 +1411,7 @@ class BudgetModel {
     const [rows] = await db.execute(
       `SELECT id, code, name, is_active, sort_order
        FROM master_departments
-       WHERE is_active = 1
+       WHERE is_active = 1 AND type = 'Academic'
        ORDER BY sort_order ASC, name ASC`
     );
 

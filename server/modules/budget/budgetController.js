@@ -52,6 +52,19 @@ class BudgetController {
     return req.user?.id || req.user?.userId || null;
   }
 
+  static isSuperAdmin(req) {
+    if (!req?.user) {
+      return false;
+    }
+
+    if (req.user.is_super_admin || req.user.isSuperAdmin) {
+      return true;
+    }
+
+    const roleTokens = Array.isArray(req.user.roles) ? req.user.roles : [];
+    return roleTokens.some((role) => normalizeText(role).toLowerCase() === 'super_admin');
+  }
+
   static getPermissionSet(req) {
     const permissionTokens = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
     return new Set(permissionTokens.map((token) => normalizeText(token)).filter(Boolean));
@@ -59,6 +72,7 @@ class BudgetController {
 
   static hasPermission(req, permissionKey) {
     if (!permissionKey) return false;
+    if (BudgetController.isSuperAdmin(req)) return true;
     return BudgetController.getPermissionSet(req).has(permissionKey);
   }
 
@@ -68,6 +82,10 @@ class BudgetController {
   }
 
   static resolveAccessRoleFromPermissions(req) {
+    if (BudgetController.isSuperAdmin(req)) {
+      return 'super_admin';
+    }
+
     const permissionSet = BudgetController.getPermissionSet(req);
 
     for (const mapping of BUDGET_SCOPE_PERMISSIONS) {
@@ -609,21 +627,24 @@ class BudgetController {
       const userEmail = normalizeText(req.user?.email);
       const userDepartment = await BudgetController.resolveUserDepartment(req);
       const userDepartmentId = await BudgetController.resolveUserDepartmentId(req);
+      const isSuperAdmin = BudgetController.isSuperAdmin(req);
 
-      const hasAccess = await BudgetModel.validateUserAccess(
-        proposalId,
-        userId,
-        userEmail,
-        'user',
-        userDepartment,
-        userDepartmentId
-      );
+      if (!isSuperAdmin) {
+        const hasAccess = await BudgetModel.validateUserAccess(
+          proposalId,
+          userId,
+          userEmail,
+          'user',
+          userDepartment,
+          userDepartmentId
+        );
 
-      if (!hasAccess) {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied - cannot update this proposal',
-        });
+        if (!hasAccess) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied - cannot update this proposal',
+          });
+        }
       }
 
       const payload = req.body || {};
@@ -647,7 +668,7 @@ class BudgetController {
         ...payload,
         beneficiary_type: normalizedBeneficiaryType,
         department: resolvedDepartment,
-      });
+      }, { skipEditStateValidation: isSuperAdmin });
 
       return res.json({
         success: true,
@@ -690,13 +711,14 @@ class BudgetController {
       }
 
       const userId = BudgetController.getUserId(req);
+      const isSuperAdmin = BudgetController.isSuperAdmin(req);
       const proposal = await BudgetModel.getBudgetById(proposalId);
 
       if (!proposal) {
         return res.status(404).json({ success: false, message: 'Proposal not found' });
       }
 
-      if (Number(proposal.user_id) !== Number(userId)) {
+      if (!isSuperAdmin && Number(proposal.user_id) !== Number(userId)) {
         return res.status(403).json({
           success: false,
           message: 'Only the creator can delete this proposal',
@@ -705,7 +727,7 @@ class BudgetController {
 
       const deletableStatuses = ['submitted', 'draft', 'hod_returned', 'dof_returned'];
 
-      if (!deletableStatuses.includes(proposal.status)) {
+      if (!isSuperAdmin && !deletableStatuses.includes(proposal.status)) {
         return res.status(400).json({
           success: false,
           message: `Cannot delete proposal in '${proposal.status}' status`,
@@ -967,6 +989,7 @@ class BudgetController {
 
       const currentStage = normalizeText(proposal.current_stage).toLowerCase();
       const requiredPermission = WORKFLOW_STAGE_PERMISSION[currentStage];
+      const isSuperAdmin = BudgetController.isSuperAdmin(req);
 
       if (!requiredPermission) {
         return res.status(400).json({
@@ -991,7 +1014,7 @@ class BudgetController {
         proposalId,
         userId,
         userEmail,
-        currentStage,
+        isSuperAdmin ? 'super_admin' : currentStage,
         userDepartment,
         userDepartmentId
       );
@@ -1168,12 +1191,13 @@ class BudgetController {
       const userEmail = normalizeText(req.user?.email);
       const userDepartment = await BudgetController.resolveUserDepartment(req);
       const userDepartmentId = await BudgetController.resolveUserDepartmentId(req);
+      const accessRole = BudgetController.isSuperAdmin(req) ? 'super_admin' : 'user';
 
       const hasAccess = await BudgetModel.validateUserAccess(
         proposalId,
         userId,
         userEmail,
-        'user',
+        accessRole,
         userDepartment,
         userDepartmentId
       );
