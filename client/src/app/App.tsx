@@ -13,6 +13,7 @@ import { AuthProvider } from '../contexts/AuthContext';
 import {
   ProtectedRoute,
   AdminRoute,
+  BudgetApprovalRoute,
   SuperAdminRoute,
 } from '../shared/components/ProtectedRoute';
 import { MsalProvider } from '../shared/components/MsalProvider';
@@ -28,7 +29,7 @@ import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
 import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
 import Budget from '../features/budget/budget';
 import BudgetDashboard from '../features/user-dashboard/budgetdashboard/budgetdashboard';
-import AdminBudget from '../features/admin/components/budget/adminbudget';
+import AdminBudget from '../features/admin/budget/adminbudget';
 import UnderConstruction from '../shared/components/ui/UnderConstruction';
 import ProfilePage from '../features/profile/ProfilePage';
 import AccessControlPage from '../features/admin/accessControl/AccessControlPage';
@@ -213,11 +214,12 @@ function App() {
               <Route
                 path="/admin/budget"
                 element={
-                  <SuperAdminRoute>
+                  <BudgetApprovalRoute>
                     <AdminBudget />
-                  </SuperAdminRoute>
+                  </BudgetApprovalRoute>
                 }
               />
+              <Route path="/adminbudget" element={<Navigate to="/admin/budget" replace />} />
 
               {/* Under Construction Pages */}
 

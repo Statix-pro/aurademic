@@ -97,13 +97,23 @@ class BudgetController {
     }
 
     const userId = BudgetController.getUserId(req);
+    const userEmail = normalizeText(req.user?.email);
 
-    if (!userId) {
-      return null;
+    if (userId) {
+      const departmentByUserId = await BudgetModel.getUserDepartmentByUserId(userId);
+      if (departmentByUserId?.name) {
+        return departmentByUserId.name;
+      }
     }
 
-    const department = await BudgetModel.getUserDepartmentByUserId(userId);
-    return department?.name || null;
+    if (userEmail) {
+      const departmentByEmail = await BudgetModel.getUserDepartmentByEmail(userEmail);
+      if (departmentByEmail?.name) {
+        return departmentByEmail.name;
+      }
+    }
+
+    return null;
   }
 
   static async resolveUserDepartmentId(req) {
@@ -151,7 +161,10 @@ class BudgetController {
       const empData = await BudgetModel.getUserDepartmentByUserId(userId);
 
       // 2. Fallback to token data if DB data is missing
-      const department = empData?.name || await BudgetController.resolveUserDepartment(req);
+      const department =
+        empData?.parent_department_name ||
+        empData?.name ||
+        await BudgetController.resolveUserDepartment(req);
       const role = BudgetController.resolveAccessRoleFromPermissions(req);
 
       return res.json({

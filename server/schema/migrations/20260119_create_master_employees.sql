@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS master_employees (
     -- ========================================
     designation VARCHAR(150) COMMENT 'Professor, Associate Professor, Assistant Professor, etc.',
     department_id INT COMMENT 'FK to master_departments',
+    parent_department_id INT COMMENT 'Employee-level parent department from source data',
     employee_type ENUM('Teaching', 'Non-Teaching', 'Contract', 'Visiting', 'Guest Faculty') DEFAULT 'Teaching',
     
     -- ========================================
@@ -126,6 +127,7 @@ CREATE TABLE IF NOT EXISTS master_employees (
     KEY idx_emp_erp (erp_id),
     KEY idx_emp_email (email),
     KEY idx_emp_dept (department_id),
+    KEY idx_emp_parent_dept (parent_department_id),
     KEY idx_emp_status (status),
     KEY idx_emp_designation (designation),
     KEY idx_emp_name (first_name, last_name),
@@ -137,6 +139,8 @@ CREATE TABLE IF NOT EXISTS master_employees (
     -- FOREIGN KEYS
     -- ========================================
     CONSTRAINT fk_emp_department FOREIGN KEY (department_id) 
+        REFERENCES master_departments(id) ON DELETE SET NULL,
+    CONSTRAINT fk_emp_parent_department FOREIGN KEY (parent_department_id)
         REFERENCES master_departments(id) ON DELETE SET NULL,
     CONSTRAINT fk_emp_user FOREIGN KEY (user_id) 
         REFERENCES users(id) ON DELETE SET NULL
@@ -246,14 +250,15 @@ SELECT
     e.department_id,
     d.name AS department_name,
     d.code AS department_code,
-    pd.name AS parent_department_name,
+    COALESCE(pd_emp.name, pd_dept.name) AS parent_department_name,
     e.status,
     e.doj,
     e.orcid_id,
     e.scopus_id
 FROM master_employees e
 LEFT JOIN master_departments d ON e.department_id = d.id
-LEFT JOIN master_departments pd ON d.parent_id = pd.id;
+LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
+LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id;
 
 
 -- ============================================

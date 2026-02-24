@@ -931,14 +931,6 @@ const Budget: React.FC = () => {
     };
 
     try {
-
-
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      if (!token) {
-        alert('Authentication Error: You are not logged in.');
-        return;
-      }
-
       const httpMethod = isEditMode ? 'put' : 'post';
       const endpoint = isEditMode
         ? `/budget/${id}`
@@ -985,9 +977,6 @@ const Budget: React.FC = () => {
     let cancelled = false;
 
     const loadBeneficiaryOptions = async () => {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      if (!token) return;
-
       const nextOptions: Record<string, SelectOption[]> = {};
 
       await Promise.all(
@@ -1052,9 +1041,6 @@ const Budget: React.FC = () => {
 
     const loadProposal = async () => {
       try {
-        const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-        if (!token) return;
-
         const json = await authenticityUtility.get(`/budget/${id}`) as any;
         if (!json?.success) {
           console.error("Failed to load proposal", json);
@@ -1147,10 +1133,6 @@ const Budget: React.FC = () => {
 
     const fetchUserDetails = async () => {
       try {
-        const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-        if (!token) return;
-
-
         const json = await authenticityUtility.get('/budget/faculty') as any;
 
         if (json.success && json.data) {

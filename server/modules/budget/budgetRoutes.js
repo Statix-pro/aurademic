@@ -26,7 +26,10 @@ const canProcessWorkflow = permissionMiddleware([
   BUDGET_PERMISSIONS.workflowDof,
   BUDGET_PERMISSIONS.workflowPrincipal,
 ]);
-const canViewBudgetAdmin = permissionMiddleware([BUDGET_PERMISSIONS.adminView]);
+const canViewBudgetAdmin = permissionMiddleware([
+  BUDGET_PERMISSIONS.adminView,
+  BUDGET_PERMISSIONS.adminManage,
+]);
 const canManageBudgetAdmin = permissionMiddleware([BUDGET_PERMISSIONS.adminManage]);
 
 
