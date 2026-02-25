@@ -990,6 +990,7 @@ class BudgetController {
       const currentStage = normalizeText(proposal.current_stage).toLowerCase();
       const requiredPermission = WORKFLOW_STAGE_PERMISSION[currentStage];
       const isSuperAdmin = BudgetController.isSuperAdmin(req);
+      const level1Route = BudgetModel.resolveLevel1Route(proposal);
 
       if (!requiredPermission) {
         return res.status(400).json({
@@ -1003,6 +1004,17 @@ class BudgetController {
           success: false,
           message: `Insufficient permission for ${currentStage.toUpperCase()} approval stage`,
         });
+      }
+
+      if (currentStage === 'hod' && level1Route.routeType === 'entity_contact') {
+        const entityAssignee = await BudgetModel.resolveEntityLevel1Assignee(level1Route.entityId);
+
+        if (!entityAssignee?.email && !isSuperAdmin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Entity Level-1 contact is not configured. Super Admin approval required.',
+          });
+        }
       }
 
       const userId = BudgetController.getUserId(req);

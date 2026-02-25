@@ -32,14 +32,6 @@ const normalizeBeneficiaryType = (beneficiaryType) => {
 };
 
 const ENTITY_BENEFICIARY_TYPES = Object.freeze(['Centre', 'Cell', 'Club', 'Professional Body']);
-const ENTITY_BENEFICIARY_SQL_VALUES = Object.freeze([
-  'Centre',
-  'Cell',
-  'Club',
-  'Professional Body',
-  'Professional Bodies',
-  'ProfessionalBodies',
-]);
 const LEVEL1_ROUTE_TYPE = Object.freeze({
   departmentHod: 'department_hod',
   entityContact: 'entity_contact',
@@ -1012,7 +1004,6 @@ class BudgetModel {
     switch (safeRole) {
       case 'hod': {
         where.push('(bp.current_stage = "hod" OR bp.status LIKE "hod_%")');
-        const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
         const normalizedDepartment = normalizeText(department);
         const departmentBeneficiaryPredicate = "LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'department')";
         const hodScope = [];
@@ -1032,29 +1023,6 @@ class BudgetModel {
             )
           )`);
           params.push(normalizedDepartment, normalizedDepartment, normalizedDepartment);
-        }
-
-        if (normalizedUserEmail) {
-          const entityTypePlaceholders = ENTITY_BENEFICIARY_SQL_VALUES.map(() => '?').join(', ');
-          hodScope.push(`(
-            bp.beneficiary_type IN (${entityTypePlaceholders})
-            AND LOWER(TRIM((
-              SELECT mec.email
-              FROM master_entity_contacts mec
-              WHERE mec.entity_id = bp.beneficiary_entity_id
-              ORDER BY
-                CASE
-                  WHEN LOWER(TRIM(mec.role)) = 'hod' THEN 0
-                  WHEN LOWER(TRIM(mec.role)) = 'office' THEN 1
-                  WHEN mec.is_primary = 1 THEN 2
-                  ELSE 3
-                END,
-                mec.is_primary DESC,
-                mec.id ASC
-              LIMIT 1
-            ))) = ?
-          )`);
-          params.push(...ENTITY_BENEFICIARY_SQL_VALUES, normalizedUserEmail);
         }
 
         if (!hodScope.length) {
@@ -1836,19 +1804,7 @@ class BudgetModel {
         const level1Route = this.resolveLevel1Route(proposal);
 
         if (level1Route.routeType === LEVEL1_ROUTE_TYPE.entityContact) {
-          const normalizedApproverEmail = normalizeText(userEmail).toLowerCase();
-
-          if (!normalizedApproverEmail) {
-            return false;
-          }
-
-          const entityAssignee = await this.resolveEntityLevel1Assignee(level1Route.entityId);
-
-          if (!entityAssignee?.email) {
-            return false;
-          }
-
-          return entityAssignee.email === normalizedApproverEmail;
+          return false;
         }
 
         const normalizedDepartment = normalizeText(department).toLowerCase();
