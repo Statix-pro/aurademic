@@ -148,8 +148,20 @@ class BudgetController {
   static async resolveSubmissionDepartment(req, beneficiaryType, payload = {}) {
     const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
     const userDepartment = await BudgetController.resolveUserDepartment(req);
+    const parsedEmployeeId = Number.parseInt(payload?.employee_id, 10);
 
     if (normalizedBeneficiaryType === 'Faculty') {
+      if (Number.isInteger(parsedEmployeeId) && parsedEmployeeId > 0) {
+        const employeeDepartment = await BudgetModel.getEmployeeDepartmentByEmployeeId(parsedEmployeeId);
+        const resolvedFacultyDepartment = normalizeText(
+          employeeDepartment?.parent_department_name || employeeDepartment?.name
+        );
+
+        if (resolvedFacultyDepartment) {
+          return resolvedFacultyDepartment;
+        }
+      }
+
       if (!userDepartment) {
         throw new Error('Department not set for faculty user');
       }
@@ -188,7 +200,7 @@ class BudgetController {
       return res.json({
         success: true,
         data: {
-          employee_id: userId,
+          employee_id: empData?.employee_id || userId,
           user_id: userId,
           // Use DB full_name if available, else token name
           name: empData?.full_name || req.user?.name || '',

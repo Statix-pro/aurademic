@@ -50,6 +50,12 @@ const STAGE_PERMISSION_MAP: Record<string, string> = {
   principal: "budget.workflow.principal",
 };
 
+const STAGE_DISPLAY_MAP: Record<string, string> = {
+  hod: "HOD",
+  dof: "DoF",
+  principal: "Principal",
+};
+
 const TAB_PRIORITY: QueueTabKey[] = ["hod", "dof", "principal", "admin"];
 
 const AdminBudget: React.FC = () => {
@@ -62,6 +68,11 @@ const AdminBudget: React.FC = () => {
   const [idSearch, setIdSearch] = useState("");
   const [applicantSearch, setApplicantSearch] = useState("");
   const [beneficiaryFilter, setBeneficiaryFilter] = useState("All Beneficiary");
+  const [fiscalYear, setFiscalYear] = useState<number>(() => {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    return month >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+  });
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -192,21 +203,22 @@ const AdminBudget: React.FC = () => {
         params: {
           limit: 100,
           status: "",
+          fiscalYear: fiscalYear,
         },
       });
 
       if (response?.success) {
         const normalizedRows: BudgetRequestItem[] = Array.isArray(response.data)
           ? response.data.map((row: any) => ({
-              ...row,
-              applicant_name: String(
-                row?.applicant_name ||
-                  row?.faculty_name ||
-                  row?.user_name ||
-                  row?.user_email ||
-                  ""
-              ).trim(),
-            }))
+            ...row,
+            applicant_name: String(
+              row?.applicant_name ||
+              row?.faculty_name ||
+              row?.user_name ||
+              row?.user_email ||
+              ""
+            ).trim(),
+          }))
           : [];
 
         setData(normalizedRows);
@@ -220,7 +232,7 @@ const AdminBudget: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeQueueTab]);
+  }, [activeQueueTab, fiscalYear]);
 
   useEffect(() => {
     fetchDashboard();
@@ -340,7 +352,7 @@ const AdminBudget: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, idSearch, applicantSearch, beneficiaryFilter, activeQueueTabKey]);
+  }, [statusFilter, idSearch, applicantSearch, beneficiaryFilter, activeQueueTabKey, fiscalYear]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -360,7 +372,9 @@ const AdminBudget: React.FC = () => {
     if (getStatusCategory(item) === "approved") return "Approved";
     if (s.includes("rejected")) return "Reject";
     if (s.includes("returned") || s.includes("return")) return "Return";
-    return "Pending" + (item.current_stage ? ` ${item.current_stage.toUpperCase()}` : "");
+    const stageKey = (item.current_stage || "").toLowerCase();
+    const stageLabel = STAGE_DISPLAY_MAP[stageKey] || (item.current_stage ? item.current_stage.toUpperCase() : "");
+    return "Pending" + (stageLabel ? ` ${stageLabel}` : "");
   };
 
   const stats = useMemo(() => {
@@ -406,6 +420,19 @@ const AdminBudget: React.FC = () => {
               )}
 
               <div className="adminbudget-header-actions">
+                <select
+                  className="adminbudget-control"
+                  value={fiscalYear}
+                  onChange={(e) => setFiscalYear(Number(e.target.value))}
+                  title="Fiscal Year"
+                >
+                  {[2024, 2025, 2026, 2027].map((year) => (
+                    <option key={year} value={year}>
+                      FY {year}-{String(year + 1).slice(2)}
+                    </option>
+                  ))}
+                </select>
+
                 <select
                   className="adminbudget-control"
                   value={beneficiaryFilter}
