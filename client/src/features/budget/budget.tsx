@@ -821,7 +821,6 @@ const Budget: React.FC = () => {
           : beneficiaryType === 'Institution'
             ? 'K.S.Rangasamy College of Technology'
             : categoryItem?.trim(),
-      department: department?.trim(),
       proposal_description: '',
       lines: formattedLines,
     };
@@ -924,9 +923,6 @@ const Budget: React.FC = () => {
       if (applicantName.trim() && !beneficiaryValue) {
         setBeneficiaryValue(applicantName);
       }
-    } else {
-      setBeneficiaryValue('');
-      setCategoryItem('');
     }
   }, [beneficiaryType, applicantName]);
 
