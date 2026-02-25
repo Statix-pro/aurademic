@@ -325,6 +325,7 @@ class BudgetModel {
     // FIXED: Select designation, mobile, and construct full name
     const [rows] = await db.execute(
       `SELECT 
+              e.id AS employee_id,
               d.id, 
               d.name, 
               d.code,
@@ -345,6 +346,33 @@ class BudgetModel {
     return rows[0] || null;
   }
 
+  static async getEmployeeDepartmentByEmployeeId(employeeId) {
+    const parsedEmployeeId = Number(employeeId);
+
+    if (!Number.isInteger(parsedEmployeeId) || parsedEmployeeId <= 0) {
+      return null;
+    }
+
+    const [rows] = await db.execute(
+      `SELECT
+              e.id AS employee_id,
+              d.id AS department_id,
+              d.name,
+              d.code,
+              COALESCE(pd_emp.name, pd_dept.name, d.name) AS parent_department_name
+          FROM master_employees e
+          LEFT JOIN master_departments d ON e.department_id = d.id
+          LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
+          LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
+          WHERE e.id = ?
+            AND e.status = 'Active'
+          LIMIT 1`,
+      [parsedEmployeeId]
+    );
+
+    return rows[0] || null;
+  }
+
   static async getUserDepartmentByEmail(userEmail) {
     const normalizedEmail = normalizeText(userEmail).toLowerCase();
 
@@ -354,6 +382,7 @@ class BudgetModel {
 
     const [rows] = await db.execute(
       `SELECT
+              e.id AS employee_id,
               d.id,
               d.name,
               d.code,

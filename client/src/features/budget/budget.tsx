@@ -475,6 +475,7 @@ const Budget: React.FC = () => {
   // Form state
   const [applicantName, setApplicantName] = useState('');
   const [applicantSearchQuery, setApplicantSearchQuery] = useState('');
+  const [applicantEmployeeId, setApplicantEmployeeId] = useState<number | null>(null);
   const [applicantSearchResults, setApplicantSearchResults] = useState<ApplicantSearchResult[]>(
     []
   );
@@ -655,6 +656,9 @@ const Budget: React.FC = () => {
 
   const handleApplicantSearch = async (query: string) => {
     setApplicantSearchQuery(query);
+    if (query.trim() !== applicantName.trim()) {
+      setApplicantEmployeeId(null);
+    }
 
     try {
       const response = await authenticityUtility.get(
@@ -675,6 +679,7 @@ const Budget: React.FC = () => {
   const handleSelectApplicant = (emp: ApplicantSearchResult) => {
     setApplicantName((emp.name || '').trim());
     setApplicantSearchQuery((emp.name || '').trim());
+    setApplicantEmployeeId(Number.isInteger(Number(emp.employee_id)) ? Number(emp.employee_id) : null);
     setDepartment(emp.department || '');
     setDesignation(emp.designation || '');
     setEmail(emp.email || '');
@@ -814,6 +819,10 @@ const Budget: React.FC = () => {
     const payload = {
       request_date: date,
       fiscal_year: fiscalYearInt,
+      employee_id:
+        Number.isInteger(Number(applicantEmployeeId)) && Number(applicantEmployeeId) > 0
+          ? Number(applicantEmployeeId)
+          : undefined,
       beneficiary_type: beneficiaryType?.trim(),
       beneficiary_value:
         beneficiaryType === 'Faculty'
@@ -851,6 +860,7 @@ const Budget: React.FC = () => {
         }]);
         setExpandedRows([0]);
         setApplicantSearchQuery('');
+        setApplicantEmployeeId(null);
         setApplicantSearchResults([]);
         setShowApplicantDropdown(false);
         setApplicantName(''); setDepartment(''); setDesignation(''); setEmail(''); setMobile('');
@@ -949,6 +959,11 @@ const Budget: React.FC = () => {
 
         setApplicantName(p.applicant_name || p.user_name || p.name || "");
         setApplicantSearchQuery(p.applicant_name || p.user_name || p.name || "");
+        setApplicantEmployeeId(
+          Number.isInteger(Number(p.employee_id)) && Number(p.employee_id) > 0
+            ? Number(p.employee_id)
+            : null
+        );
         setEmail(p.user_email || p.email || "");
 
 
@@ -962,13 +977,22 @@ const Budget: React.FC = () => {
             : p.beneficiary_type || '';
         setBeneficiaryType(normalizedBeneficiaryType);
 
+        const normalizedBeneficiaryValue =
+          normalizedBeneficiaryType === 'Department'
+            ? (p.department || p.beneficiary_value || '')
+            : ['Centre', 'Cell', 'Club', 'Professional Body'].includes(normalizedBeneficiaryType)
+              ? (p.org_unit_name || p.beneficiary_value || '')
+              : (p.beneficiary_value || '');
 
-        setBeneficiaryValue(p.beneficiary_value || "");
+        const normalizedApplicantDepartment =
+          p.applicant_department ||
+          p.user_department ||
+          (normalizedBeneficiaryType === 'Department' ? '' : p.department) ||
+          '';
 
-        setCategoryItem(p.beneficiary_value || "");
-
-
-        setDepartment(p.department || p.user_department || "");
+        setBeneficiaryValue(normalizedBeneficiaryValue);
+        setCategoryItem(normalizedBeneficiaryValue);
+        setDepartment(normalizedApplicantDepartment);
 
         // Date
         setDate((p.request_date || "").split("T")[0]);
@@ -1028,6 +1052,11 @@ const Budget: React.FC = () => {
         const json = await authenticityUtility.get('/budget/faculty') as any;
 
         if (json.success && json.data) {
+          setApplicantEmployeeId(
+            Number.isInteger(Number(json.data.employee_id)) && Number(json.data.employee_id) > 0
+              ? Number(json.data.employee_id)
+              : null
+          );
           setApplicantName(json.data.name || '');
           setApplicantSearchQuery(json.data.name || '');
           setDepartment(json.data.department || '');
