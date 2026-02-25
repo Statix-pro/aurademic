@@ -1032,7 +1032,7 @@ class BudgetModel {
 
     switch (safeRole) {
       case 'hod': {
-        where.push('(bp.current_stage = "hod" OR bp.status LIKE "hod_%")');
+        where.push('(bp.current_stage = "hod" OR bp.status LIKE "hod_%" OR bp.status = "completed")');
         const normalizedDepartment = normalizeText(department);
         const departmentBeneficiaryPredicate = "LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'department')";
         const hodScope = [];
@@ -1062,11 +1062,11 @@ class BudgetModel {
         break;
       }
       case 'dof': {
-        where.push('bp.current_stage IN ("dof", "principal")');
+        where.push('(bp.current_stage IN ("dof", "principal") OR bp.status = "completed")');
         break;
       }
       case 'principal': {
-        where.push('(bp.current_stage = "principal" OR bp.status LIKE "principal_%")');
+        where.push('(bp.current_stage = "principal" OR bp.status LIKE "principal_%" OR bp.status = "completed")');
         break;
       }
       case 'admin':
