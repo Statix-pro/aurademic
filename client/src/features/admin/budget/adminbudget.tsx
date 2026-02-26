@@ -8,7 +8,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { hasPermission, isSuperAdmin } from "../../../shared/utils/permissionUtils";
 
 type ActionType = "return" | "reject" | null;
-type QueueTabKey = "hod" | "dof" | "principal" | "admin";
+type QueueTabKey = "hod" | "coordinator" | "dof" | "principal" | "admin";
 
 interface QueueTab {
   key: QueueTabKey;
@@ -62,7 +62,7 @@ const getLevel1Label = (beneficiaryType: string) => {
   return ENTITY_BENEFICIARY_TYPES.includes(beneficiaryType) ? "Coordinator" : "HOD";
 };
 
-const TAB_PRIORITY: QueueTabKey[] = ["hod", "dof", "principal", "admin"];
+const TAB_PRIORITY: QueueTabKey[] = ["hod", "coordinator", "dof", "principal", "admin"];
 
 const AdminBudget: React.FC = () => {
   const [data, setData] = useState<BudgetRequestItem[]>([]);
@@ -73,11 +73,7 @@ const AdminBudget: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [searchTerm, setSearchTerm] = useState("");
   const [beneficiaryFilter, setBeneficiaryFilter] = useState("All Beneficiary");
-  const [fiscalYear, setFiscalYear] = useState<number>(() => {
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    return month >= 4 ? now.getFullYear() : now.getFullYear() - 1;
-  });
+  const [fiscalYear, setFiscalYear] = useState<number>(2026);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -86,31 +82,57 @@ const AdminBudget: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  /**
+   * Helper to determine if a user belongs to an Academic Department.
+   * If the department name contains entity-specific keywords, we treat them as a Coordinator.
+   */
+  const isAcademicUser = useCallback(() => {
+    const dept = (user as any)?.department || "";
+    if (!dept) return true; // Default to academic if unknown
+
+    const entityKeywords = ["Centre", "Cell", "Club", "Professional Body", "Office", "Admin", "CFRD"];
+    return !entityKeywords.some(keyword => 
+      dept.toLowerCase().includes(keyword.toLowerCase())
+    );
+  }, [user]);
+
   const queueTabs = useMemo<QueueTab[]>(() => {
     const tabs: QueueTab[] = [];
+    const superUser = isSuperAdmin(user);
+    const hasLevel1Permission = hasPermission(user, "budget.workflow.hod");
+    const isAcademic = isAcademicUser();
 
-    if (hasPermission(user, "budget.workflow.hod")) {
-      tabs.push({ key: "hod", label: "HOD / Coordinator", endpoint: "/budget/hod" });
+    // 1. HOD Tab: Visible to Super Admins OR Academic users with Level 1 permission
+    if (superUser || (hasLevel1Permission && isAcademic)) {
+      tabs.push({ key: "hod", label: "HOD", endpoint: "/budget/hod" });
     }
 
-    if (hasPermission(user, "budget.workflow.dof")) {
+    // 2. Coordinator Tab: Visible to Super Admins OR Entity-based users with Level 1 permission
+    if (superUser || (hasLevel1Permission && !isAcademic)) {
+      tabs.push({ key: "coordinator", label: "Coordinator", endpoint: "/budget/coordinator" });
+    }
+
+    // 3. DoF Tab: Visible to Super Admins OR users with Finance permission
+    if (superUser || hasPermission(user, "budget.workflow.dof")) {
       tabs.push({ key: "dof", label: "DoF", endpoint: "/budget/dof" });
     }
 
-    if (hasPermission(user, "budget.workflow.principal")) {
+    // 4. Principal Tab: Visible to Super Admins OR users with Principal permission
+    if (superUser || hasPermission(user, "budget.workflow.principal")) {
       tabs.push({ key: "principal", label: "Principal", endpoint: "/budget/principal" });
     }
 
+    // 5. Master Audit Tab: Visible to Admins and Super Admins for historical tracking
     if (
-      isSuperAdmin(user) ||
+      superUser ||
       hasPermission(user, "budget.admin.view") ||
       hasPermission(user, "budget.admin.manage")
     ) {
-      tabs.push({ key: "admin", label: "Admin", endpoint: "/budget/admin" });
+      tabs.push({ key: "admin", label: "All Proposals", endpoint: "/budget/admin" });
     }
 
     return tabs;
-  }, [user]);
+  }, [user, isAcademicUser]);
 
   const [activeQueueTabKey, setActiveQueueTabKey] = useState<QueueTabKey | null>(null);
 
@@ -156,6 +178,7 @@ const AdminBudget: React.FC = () => {
 
       switch (activeQueueTabKey) {
         case "hod":
+        case "coordinator":
           return s.startsWith("hod_approved");
         case "dof":
           return s.startsWith("dof_approved");
@@ -163,7 +186,7 @@ const AdminBudget: React.FC = () => {
           return s.startsWith("principal_approved");
         case "admin":
         default:
-          return s.includes("approved");
+          return s === "completed";
       }
     },
     [activeQueueTabKey]
@@ -453,6 +476,9 @@ const AdminBudget: React.FC = () => {
                   {BENEFICIARY_OPTIONS.filter((opt) => {
                     if (activeQueueTabKey === "hod") {
                       return ["All Beneficiary", "Faculty", "Department"].includes(opt);
+                    }
+                    if (activeQueueTabKey === "coordinator") {
+                      return ["All Beneficiary", "Centre", "Cell", "Club", "Professional Body"].includes(opt);
                     }
                     return true;
                   }).map((opt) => (

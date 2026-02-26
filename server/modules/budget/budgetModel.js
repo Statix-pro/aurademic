@@ -970,6 +970,7 @@ class BudgetModel {
     department,
     departmentId,
     role,
+    superAdminQueueView = false,
     page = 1,
     limit = 10,
     status,
@@ -1024,53 +1025,88 @@ class BudgetModel {
       LEFT JOIN users u ON bp.user_id = u.id
       LEFT JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
       LEFT JOIN budget_proposal_approvals bpa ON bp.id = bpa.budget_proposal_id
+      LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
     `;
 
-    const where = ['bp.fiscal_year = ?', 'md.type = "Academic"'];
+    const where = ['bp.fiscal_year = ?'];
     const params = [Number(currentFY)];
     const safeRole = this.normalizeBudgetRole(role);
+    const isQueueSuperAdminView = Boolean(superAdminQueueView) && ['hod', 'coordinator', 'dof', 'principal'].includes(safeRole);
 
     switch (safeRole) {
       case 'hod': {
-        where.push('(bp.current_stage = "hod" OR bp.status LIKE "hod_%" OR bp.status = "completed")');
-        const normalizedDepartment = normalizeText(department);
         const departmentBeneficiaryPredicate = "LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'department')";
-        const hodScope = [];
+        where.push(departmentBeneficiaryPredicate);
 
-        if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
-          hodScope.push(`(${departmentBeneficiaryPredicate} AND bp.department_id = ?)`);
-          params.push(Number(departmentId));
-        }
+        if (!isQueueSuperAdminView) {
+          where.push('md.type = "Academic"');
+          // Action Queue Filter for regular HODs
+          where.push('(bp.current_stage = "hod" OR (bp.status LIKE "hod_%" AND bp.status != "completed"))');
 
-        if (normalizedDepartment) {
-          hodScope.push(`(
-            ${departmentBeneficiaryPredicate}
-            AND (
+          const normalizedDepartment = normalizeText(department);
+          const hodScope = [];
+
+          if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
+            hodScope.push('bp.department_id = ?');
+            params.push(Number(departmentId));
+          }
+
+          if (normalizedDepartment) {
+            hodScope.push(`(
               LOWER(TRIM(md.name)) = LOWER(TRIM(?))
               OR LOWER(TRIM(md.code)) = LOWER(TRIM(?))
               OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(?))
-            )
-          )`);
-          params.push(normalizedDepartment, normalizedDepartment, normalizedDepartment);
-        }
+            )`);
+            params.push(normalizedDepartment, normalizedDepartment, normalizedDepartment);
+          }
 
-        if (!hodScope.length) {
-          where.push('1 = 0');
-        } else {
-          where.push(`(${hodScope.join(' OR ')})`);
+          if (!hodScope.length) {
+            where.push('1 = 0');
+          } else {
+            where.push(`(${hodScope.join(' OR ')})`);
+          }
+        }
+        break;
+      }
+      case 'coordinator': {
+        // Coordinator Tab: Centres, Cells, Clubs, etc.
+        const entityBeneficiaryPredicate = "LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')";
+        where.push(entityBeneficiaryPredicate);
+
+        if (!isQueueSuperAdminView) {
+          // Action Queue Filter for regular Coordinators
+          where.push('(bp.current_stage = "hod" OR (bp.status LIKE "hod_%" AND bp.status != "completed"))');
+
+          if (userEmail) {
+            where.push('LOWER(TRIM(mec.email)) = LOWER(TRIM(?))');
+            params.push(userEmail);
+          } else {
+            where.push('1 = 0');
+          }
         }
         break;
       }
       case 'dof': {
-        where.push('(bp.current_stage IN ("dof", "principal") OR bp.status = "completed")');
+        if (isQueueSuperAdminView) {
+          where.push('bp.current_stage = "dof"');
+        } else {
+          // Finance Queue: Needs action OR I already acted on it
+          where.push('(bp.current_stage = "dof" OR (bp.status LIKE "dof_%" AND bp.status != "completed"))');
+        }
         break;
       }
       case 'principal': {
-        where.push('(bp.current_stage = "principal" OR bp.status LIKE "principal_%" OR bp.status = "completed")');
+        if (isQueueSuperAdminView) {
+          where.push('bp.current_stage = "principal"');
+        } else {
+          // Principal Queue: Needs action OR I already acted on it
+          where.push('(bp.current_stage = "principal" OR (bp.status LIKE "principal_%" AND bp.status != "completed"))');
+        }
         break;
       }
       case 'admin':
       case 'super_admin': {
+        // Audit Queue: Big Picture (Show everything)
         break;
       }
       case 'user':
