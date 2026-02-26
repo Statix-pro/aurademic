@@ -71,8 +71,7 @@ const AdminBudget: React.FC = () => {
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>("pending");
-  const [idSearch, setIdSearch] = useState("");
-  const [applicantSearch, setApplicantSearch] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [beneficiaryFilter, setBeneficiaryFilter] = useState("All Beneficiary");
   const [fiscalYear, setFiscalYear] = useState<number>(() => {
     const now = new Date();
@@ -323,19 +322,20 @@ const AdminBudget: React.FC = () => {
   };
 
   const baseFilteredData = useMemo(() => {
-    const id = idSearch.trim().toLowerCase();
-    const name = applicantSearch.trim().toLowerCase();
+    const q = searchTerm.trim().toLowerCase();
     const ben = beneficiaryFilter;
 
     return data.filter((item) => {
-      const matchesId = !id || item.proposal_ref.toLowerCase().includes(id);
-      const matchesApplicant = !name || (item.applicant_name || "").toLowerCase().includes(name);
+      const matchesSearch = !q || 
+        item.proposal_ref.toLowerCase().includes(q) || 
+        (item.applicant_name || "").toLowerCase().includes(q);
+      
       const matchesBeneficiary =
         ben === "All Beneficiary" || item.beneficiary_type.toLowerCase() === ben.toLowerCase();
 
-      return matchesId && matchesApplicant && matchesBeneficiary;
+      return matchesSearch && matchesBeneficiary;
     });
-  }, [data, idSearch, applicantSearch, beneficiaryFilter]);
+  }, [data, searchTerm, beneficiaryFilter]);
 
   const [statsFilter, setStatsFilter] = useState<string>("pending");
 
@@ -358,7 +358,7 @@ const AdminBudget: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, idSearch, applicantSearch, beneficiaryFilter, activeQueueTabKey, fiscalYear]);
+  }, [statusFilter, searchTerm, beneficiaryFilter, activeQueueTabKey, fiscalYear]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -465,17 +465,9 @@ const AdminBudget: React.FC = () => {
                 <input
                   className="adminbudget-control"
                   type="text"
-                  placeholder="Search Budget ID (#B-2026-0001)"
-                  value={idSearch}
-                  onChange={(e) => setIdSearch(e.target.value)}
-                />
-
-                <input
-                  className="adminbudget-control"
-                  type="text"
-                  placeholder="Search Applicant Name"
-                  value={applicantSearch}
-                  onChange={(e) => setApplicantSearch(e.target.value)}
+                  placeholder="Search Budget ID or Applicant"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
             </div>
