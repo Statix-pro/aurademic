@@ -639,14 +639,15 @@ class BudgetController {
       const userEmail = normalizeText(req.user?.email);
       const userDepartment = await BudgetController.resolveUserDepartment(req);
       const userDepartmentId = await BudgetController.resolveUserDepartmentId(req);
-      const isSuperAdmin = BudgetController.isSuperAdmin(req);
+      const userRole = BudgetController.resolveAccessRoleFromPermissions(req);
+      const isPrivileged = ['super_admin', 'admin', 'dof', 'principal'].includes(userRole);
 
-      if (!isSuperAdmin) {
+      if (!isPrivileged) {
         const hasAccess = await BudgetModel.validateUserAccess(
           proposalId,
           userId,
           userEmail,
-          'user',
+          userRole,
           userDepartment,
           userDepartmentId
         );
@@ -680,7 +681,7 @@ class BudgetController {
         ...payload,
         beneficiary_type: normalizedBeneficiaryType,
         department: resolvedDepartment,
-      }, { skipEditStateValidation: isSuperAdmin });
+      }, { skipEditStateValidation: isPrivileged });
 
       return res.json({
         success: true,
@@ -856,8 +857,9 @@ class BudgetController {
       const department = await BudgetController.resolveUserDepartment(req);
       const departmentId = await BudgetController.resolveUserDepartmentId(req);
       const userEmail = normalizeText(req.user?.email);
+      const isSuperAdmin = BudgetController.isSuperAdmin(req);
 
-      if (!department && !departmentId && !userEmail) {
+      if (!isSuperAdmin && !department && !departmentId && !userEmail) {
         return res.status(400).json({
           success: false,
           message: 'HOD queue context unavailable',
@@ -871,6 +873,7 @@ class BudgetController {
         departmentId,
         userEmail,
         role: 'hod',
+        superAdminQueueView: isSuperAdmin,
         page: Number.parseInt(page, 10),
         limit: Number.parseInt(limit, 10),
         status: status || undefined,
@@ -893,12 +896,53 @@ class BudgetController {
     }
   }
 
-  static async getDofBudgets(req, res) {
+  static async getCoordinatorBudgets(req, res) {
     try {
+      const userEmail = normalizeText(req.user?.email);
+      const isSuperAdmin = BudgetController.isSuperAdmin(req);
+
+      if (!isSuperAdmin && !userEmail) {
+        return res.status(400).json({
+          success: false,
+          message: 'Coordinator queue context unavailable',
+        });
+      }
+
       const { page = 1, limit = 10, status, fiscalYear } = req.query;
 
       const budgets = await BudgetModel.listBudgets({
+        userEmail,
+        role: 'coordinator',
+        superAdminQueueView: isSuperAdmin,
+        page: Number.parseInt(page, 10),
+        limit: Number.parseInt(limit, 10),
+        status: status || undefined,
+        fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      });
+
+      return res.json({
+        success: true,
+        data: budgets.budgets,
+        pagination: budgets.pagination,
+        currentFiscalYear: BudgetModel.getCurrentFinancialYear(),
+      });
+    } catch (error) {
+      console.error('Coordinator budgets error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch coordinator budgets',
+      });
+    }
+  }
+
+  static async getDofBudgets(req, res) {
+    try {
+      const { page = 1, limit = 10, status, fiscalYear } = req.query;
+      const isSuperAdmin = BudgetController.isSuperAdmin(req);
+
+      const budgets = await BudgetModel.listBudgets({
         role: 'dof',
+        superAdminQueueView: isSuperAdmin,
         page: Number.parseInt(page, 10),
         limit: Number.parseInt(limit, 10),
         status: status || undefined,
@@ -923,9 +967,11 @@ class BudgetController {
   static async getPrincipalBudgets(req, res) {
     try {
       const { page = 1, limit = 10, status, fiscalYear } = req.query;
+      const isSuperAdmin = BudgetController.isSuperAdmin(req);
 
       const budgets = await BudgetModel.listBudgets({
         role: 'principal',
+        superAdminQueueView: isSuperAdmin,
         page: Number.parseInt(page, 10),
         limit: Number.parseInt(limit, 10),
         status: status || undefined,

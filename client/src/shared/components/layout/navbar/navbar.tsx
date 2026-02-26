@@ -181,6 +181,16 @@ const Navbar: React.FC = () => {
               >
                 <li>Finance</li>
               </Link>
+              <Link
+                to="/budgetcard"
+                className="dropdown-li"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  document.body.classList.remove('menu-open');
+                }}
+              >
+                <li>Budget</li>
+              </Link>
             </ul>
           </li>
 
@@ -356,18 +366,6 @@ const Navbar: React.FC = () => {
               }}
             >
               Task
-            </Link>
-          </li>
-          <li className="nav-item">
-            <Link
-              to="/budgetcard"
-              className="nav-item-wrapper"
-              onClick={() => {
-                setMobileMenuOpen(false);
-                document.body.classList.remove('menu-open');
-              }}
-            >
-              Budget
             </Link>
           </li>
         </ul>

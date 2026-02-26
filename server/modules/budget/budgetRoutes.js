@@ -58,6 +58,7 @@ router.put(
 
 router.get('/my', BudgetController.getMyBudgets);
 router.get('/hod', canAccessHodQueue, BudgetController.getHodBudgets);
+router.get('/coordinator', canAccessHodQueue, BudgetController.getCoordinatorBudgets);
 router.get('/dof', canAccessDofQueue, BudgetController.getDofBudgets);
 router.get('/principal', canAccessPrincipalQueue, BudgetController.getPrincipalBudgets);
 router.get('/aggregates', canViewBudgetAdmin, BudgetController.getAggregates);
