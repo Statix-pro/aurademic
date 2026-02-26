@@ -293,6 +293,7 @@ CREATE TABLE budget_proposal_refs (
   PRIMARY KEY (id),
   UNIQUE KEY uq_budget_proposal_refs_proposal_id (proposal_id),
   UNIQUE KEY uq_budget_proposal_refs_ref (proposal_ref),
+  UNIQUE KEY uq_budget_proposal_refs_year_seq (ref_year, ref_sequence),
   KEY idx_budget_proposal_refs_year (ref_year),
   KEY idx_budget_proposal_refs_sequence (ref_year, ref_sequence),
   CONSTRAINT fk_budget_proposal_refs_proposal FOREIGN KEY (proposal_id)
