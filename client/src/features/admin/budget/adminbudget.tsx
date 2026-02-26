@@ -56,6 +56,12 @@ const STAGE_DISPLAY_MAP: Record<string, string> = {
   principal: "Principal",
 };
 
+const ENTITY_BENEFICIARY_TYPES = ['Centre', 'Cell', 'Club', 'Professional Body'];
+
+const getLevel1Label = (beneficiaryType: string) => {
+  return ENTITY_BENEFICIARY_TYPES.includes(beneficiaryType) ? "Coordinator" : "HOD";
+};
+
 const TAB_PRIORITY: QueueTabKey[] = ["hod", "dof", "principal", "admin"];
 
 const AdminBudget: React.FC = () => {
@@ -85,7 +91,7 @@ const AdminBudget: React.FC = () => {
     const tabs: QueueTab[] = [];
 
     if (hasPermission(user, "budget.workflow.hod")) {
-      tabs.push({ key: "hod", label: "HOD", endpoint: "/budget/hod" });
+      tabs.push({ key: "hod", label: "HOD / Coordinator", endpoint: "/budget/hod" });
     }
 
     if (hasPermission(user, "budget.workflow.dof")) {
@@ -373,8 +379,13 @@ const AdminBudget: React.FC = () => {
     if (s.includes("rejected")) return "Reject";
     if (s.includes("returned") || s.includes("return")) return "Return";
     const stageKey = (item.current_stage || "").toLowerCase();
-    const stageLabel = STAGE_DISPLAY_MAP[stageKey] || (item.current_stage ? item.current_stage.toUpperCase() : "");
-    return "Pending" + (stageLabel ? ` ${stageLabel}` : "");
+    
+    let stageLabel = STAGE_DISPLAY_MAP[stageKey] || (item.current_stage ? item.current_stage.toUpperCase() : "");
+    if (stageKey === 'hod') {
+      stageLabel = getLevel1Label(item.beneficiary_type);
+    }
+    
+    return "Pending " + stageLabel;
   };
 
   const stats = useMemo(() => {
@@ -439,7 +450,12 @@ const AdminBudget: React.FC = () => {
                   onChange={(e) => setBeneficiaryFilter(e.target.value)}
                   title="Beneficiary"
                 >
-                  {BENEFICIARY_OPTIONS.map((opt) => (
+                  {BENEFICIARY_OPTIONS.filter((opt) => {
+                    if (activeQueueTabKey === "hod") {
+                      return ["All Beneficiary", "Faculty", "Department"].includes(opt);
+                    }
+                    return true;
+                  }).map((opt) => (
                     <option key={opt} value={opt}>
                       {opt}
                     </option>
