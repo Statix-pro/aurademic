@@ -1018,7 +1018,7 @@ const Budget: React.FC = () => {
         }
 
 
-        const editableStatuses = ['draft', 'hod_returned', 'dof_returned', 'submitted'];
+        const editableStatuses = ['draft', 'level1_returned', 'dof_returned', 'submitted'];
         const isStatusEditable = editableStatuses.includes((p.status || '').toLowerCase());
         const isEditURL = location.pathname.includes('/edit');
         const canOverrideEditLock = isSuperAdminUser && isEditURL;

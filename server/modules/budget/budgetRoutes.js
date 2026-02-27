@@ -10,7 +10,7 @@ import upload from '../../middleware/uploadMiddleware.js';
 const router = express.Router();
 
 const BUDGET_PERMISSIONS = Object.freeze({
-  workflowHod: 'budget.workflow.hod',
+  workflowLevel1: 'budget.workflow.level1',
   workflowDof: 'budget.workflow.dof',
   workflowPrincipal: 'budget.workflow.principal',
   adminView: 'budget.admin.view',
@@ -18,11 +18,11 @@ const BUDGET_PERMISSIONS = Object.freeze({
 });
 
 
-const canAccessHodQueue = permissionMiddleware([BUDGET_PERMISSIONS.workflowHod]);
+const canAccessLevel1Queue = permissionMiddleware([BUDGET_PERMISSIONS.workflowLevel1]);
 const canAccessDofQueue = permissionMiddleware([BUDGET_PERMISSIONS.workflowDof]);
 const canAccessPrincipalQueue = permissionMiddleware([BUDGET_PERMISSIONS.workflowPrincipal]);
 const canProcessWorkflow = permissionMiddleware([
-  BUDGET_PERMISSIONS.workflowHod,
+  BUDGET_PERMISSIONS.workflowLevel1,
   BUDGET_PERMISSIONS.workflowDof,
   BUDGET_PERMISSIONS.workflowPrincipal,
 ]);
@@ -57,8 +57,8 @@ router.put(
 );
 
 router.get('/my', BudgetController.getMyBudgets);
-router.get('/hod', canAccessHodQueue, BudgetController.getHodBudgets);
-router.get('/coordinator', canAccessHodQueue, BudgetController.getCoordinatorBudgets);
+router.get('/hod', canAccessLevel1Queue, BudgetController.getHodBudgets);
+router.get('/coordinator', canAccessLevel1Queue, BudgetController.getCoordinatorBudgets);
 router.get('/dof', canAccessDofQueue, BudgetController.getDofBudgets);
 router.get('/principal', canAccessPrincipalQueue, BudgetController.getPrincipalBudgets);
 router.get('/aggregates', canViewBudgetAdmin, BudgetController.getAggregates);

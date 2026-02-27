@@ -11,6 +11,7 @@ const LEGACY_ADMIN_PERMISSION_KEYS = [
   'form_options.edit',
   'form_options.manage',
   'budget.proposal.manage',
+  'budget.workflow.level1',
   'budget.admin.view',
   'budget.admin.manage',
   'access_control.read',
@@ -76,9 +77,9 @@ const SYSTEM_PERMISSION_SEED = [
   },
   {
     module_key: 'budget_workflow',
-    action_key: 'hod',
-    permission_key: 'budget.workflow.hod',
-    description: 'View HOD queue and process HOD-stage approvals',
+    action_key: 'level1',
+    permission_key: 'budget.workflow.level1',
+    description: 'View Level-1 queue and process HOD/Coordinator approvals',
     is_system: true,
   },
   {

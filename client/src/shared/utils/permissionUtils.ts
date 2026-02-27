@@ -85,7 +85,7 @@ export const canAccessBudgetApproval = (user?: User | null) => {
   return hasAnyPermission(user, [
     'budget.admin.view',
     'budget.admin.manage',
-    'budget.workflow.hod',
+    'budget.workflow.level1',
     'budget.workflow.dof',
     'budget.workflow.principal',
   ]);
