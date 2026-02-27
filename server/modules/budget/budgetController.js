@@ -15,7 +15,7 @@ const VALID_BENEFICIARY_TYPES = [
 const MUTABLE_ENTITY_TYPES = new Set(['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY']);
 const BUDGET_PERMISSIONS = Object.freeze({
   proposalManage: 'budget.proposal.manage',
-  workflowHod: 'budget.workflow.hod',
+  workflowLevel1: 'budget.workflow.level1',
   workflowDof: 'budget.workflow.dof',
   workflowPrincipal: 'budget.workflow.principal',
   adminView: 'budget.admin.view',
@@ -23,7 +23,7 @@ const BUDGET_PERMISSIONS = Object.freeze({
 });
 
 const WORKFLOW_STAGE_PERMISSION = Object.freeze({
-  hod: BUDGET_PERMISSIONS.workflowHod,
+  level1: BUDGET_PERMISSIONS.workflowLevel1,
   dof: BUDGET_PERMISSIONS.workflowDof,
   principal: BUDGET_PERMISSIONS.workflowPrincipal,
 });
@@ -33,7 +33,7 @@ const BUDGET_SCOPE_PERMISSIONS = Object.freeze([
   { permission: BUDGET_PERMISSIONS.adminView, role: 'admin' },
   { permission: BUDGET_PERMISSIONS.workflowPrincipal, role: 'principal' },
   { permission: BUDGET_PERMISSIONS.workflowDof, role: 'dof' },
-  { permission: BUDGET_PERMISSIONS.workflowHod, role: 'hod' },
+  { permission: BUDGET_PERMISSIONS.workflowLevel1, role: 'hod' },
   { permission: BUDGET_PERMISSIONS.proposalManage, role: 'user' },
 ]);
 
@@ -609,7 +609,7 @@ class BudgetController {
           fiscalYear: result.fyYear,
           approvalFlow: result.approvalFlow,
           initialStage: result.initialStage,
-          requiresHod: result.requiresHod,
+          requiresLevel1: result.requiresLevel1,
           departmentId: result.departmentId,
           beneficiaryEntityId: result.beneficiaryEntityId,
         },
@@ -738,7 +738,7 @@ class BudgetController {
         });
       }
 
-      const deletableStatuses = ['submitted', 'draft', 'hod_returned', 'dof_returned'];
+      const deletableStatuses = ['submitted', 'draft', 'level1_returned', 'dof_returned'];
 
       if (!isSuperAdmin && !deletableStatuses.includes(proposal.status)) {
         return res.status(400).json({
@@ -1064,7 +1064,7 @@ class BudgetController {
         });
       }
 
-      if (currentStage === 'hod' && level1Route.routeType === 'entity_contact') {
+      if (currentStage === 'level1' && level1Route.routeType === 'entity_contact') {
         const entityAssignee = await BudgetModel.resolveEntityLevel1Assignee(level1Route.entityId);
 
         if (!entityAssignee?.email && !isSuperAdmin) {
@@ -1565,19 +1565,19 @@ class BudgetController {
         });
       }
 
-      const requiresHod = Number(req.body?.requiresHod);
+      const requiresLevel1 = Number(req.body?.requiresLevel1);
       const requiresDof = Number(req.body?.requiresDof);
       const requiresPrincipal = Number(req.body?.requiresPrincipal);
 
-      if (![0, 1].includes(requiresHod) || ![0, 1].includes(requiresDof) || ![0, 1].includes(requiresPrincipal)) {
+      if (![0, 1].includes(requiresLevel1) || ![0, 1].includes(requiresDof) || ![0, 1].includes(requiresPrincipal)) {
         return res.status(400).json({
           success: false,
-          message: 'requiresHod, requiresDof, requiresPrincipal must be 0 or 1',
+          message: 'requiresLevel1, requiresDof, requiresPrincipal must be 0 or 1',
         });
       }
 
       const updated = await BudgetModel.updateApprovalFlowConfig(configId, {
-        requiresHod,
+        requiresLevel1,
         requiresDof,
         requiresPrincipal,
       });

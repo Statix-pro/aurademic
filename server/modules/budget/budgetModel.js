@@ -3,12 +3,12 @@ import db from '../../config/connection.js';
 const VALID_MONTHS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
 
 const APPROVAL_FLOW = {
-  hod: { approve: 'hod_approved', reject: 'hod_rejected', returned: 'hod_returned', next: 'dof' },
+  level1: { approve: 'level1_approved', reject: 'level1_rejected', returned: 'level1_returned', next: 'dof' },
   dof: { approve: 'dof_approved', reject: 'dof_rejected', returned: 'dof_returned', next: 'principal' },
   principal: { approve: 'principal_approved', reject: 'principal_rejected', next: 'completed' },
 };
 
-const EDITABLE_STATES = ['draft', 'submitted', 'hod_returned', 'dof_returned', 'principal_returned'];
+const EDITABLE_STATES = ['draft', 'submitted', 'level1_returned', 'dof_returned', 'principal_returned'];
 
 const ENTITY_TYPE_BY_BENEFICIARY = Object.freeze({
   Centre: 'CENTRE',
@@ -40,7 +40,7 @@ const LEVEL1_ASSIGNMENT_STATUS = Object.freeze({
   assigned: 'assigned',
   unassigned: 'unassigned',
 });
-const WORKFLOW_STAGES = Object.freeze(['hod', 'dof', 'principal']);
+const WORKFLOW_STAGES = Object.freeze(['level1', 'dof', 'principal']);
 
 const normalizeEntityTypeCode = (value) => {
   const raw = normalizeText(value)
@@ -69,10 +69,10 @@ const normalizeBudgetRole = (value) => {
   return role;
 };
 
-const formatApprovalFlowString = ({ requiresHod, requiresDof, requiresPrincipal }) => {
+const formatApprovalFlowString = ({ requiresLevel1, requiresDof, requiresPrincipal }) => {
   const stages = [];
 
-  if (requiresHod) stages.push('hod');
+  if (requiresLevel1) stages.push('level1');
   if (requiresDof) stages.push('dof');
   if (requiresPrincipal) stages.push('principal');
 
@@ -555,12 +555,12 @@ class BudgetModel {
     const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
 
     if (!normalizedBeneficiaryType) {
-      return { requiresHod: 0, requiresDof: 1, requiresPrincipal: 1 };
+      return { requiresLevel1: 0, requiresDof: 1, requiresPrincipal: 1 };
     }
 
     const [rows] = entityTypeCode
       ? await conn.execute(
-        `SELECT requires_hod, requires_dof, requires_principal
+        `SELECT requires_level1, requires_dof, requires_principal
            FROM approval_flow_config
            WHERE beneficiary_type = ?
              AND entity_type_code = ?
@@ -570,7 +570,7 @@ class BudgetModel {
         [normalizedBeneficiaryType, entityTypeCode]
       )
       : await conn.execute(
-        `SELECT requires_hod, requires_dof, requires_principal
+        `SELECT requires_level1, requires_dof, requires_principal
            FROM approval_flow_config
            WHERE beneficiary_type = ?
              AND entity_type_code IS NULL
@@ -582,17 +582,17 @@ class BudgetModel {
 
     const resolvedFlow = rows.length > 0
       ? {
-        requiresHod: Number(rows[0].requires_hod) ? 1 : 0,
+        requiresLevel1: Number(rows[0].requires_level1) ? 1 : 0,
         requiresDof: Number(rows[0].requires_dof) ? 1 : 0,
         requiresPrincipal: Number(rows[0].requires_principal) ? 1 : 0,
       }
       : ['Faculty', 'Department'].includes(normalizedBeneficiaryType)
-        ? { requiresHod: 1, requiresDof: 1, requiresPrincipal: 1 }
-        : { requiresHod: 0, requiresDof: 1, requiresPrincipal: 1 };
+        ? { requiresLevel1: 1, requiresDof: 1, requiresPrincipal: 1 }
+        : { requiresLevel1: 0, requiresDof: 1, requiresPrincipal: 1 };
 
     // Entity beneficiaries must always pass through Level 1 before DoF/Principal.
     if (this.isEntityBeneficiaryType(normalizedBeneficiaryType)) {
-      resolvedFlow.requiresHod = 1;
+      resolvedFlow.requiresLevel1 = 1;
     }
 
     return resolvedFlow;
@@ -632,7 +632,7 @@ class BudgetModel {
       );
 
       const flow = await this.resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn);
-      const initialStage = flow.requiresHod ? 'hod' : flow.requiresDof ? 'dof' : 'principal';
+      const initialStage = flow.requiresLevel1 ? 'level1' : flow.requiresDof ? 'dof' : 'principal';
       const approvalFlowString = formatApprovalFlowString(flow);
       const level1Route = this.resolveLevel1Route({
         ...payload,
@@ -711,7 +711,7 @@ class BudgetModel {
         proposalId,
         proposalRef,
         fyYear,
-        requiresHod: flow.requiresHod,
+        requiresLevel1: flow.requiresLevel1,
         initialStage,
         approvalFlow: approvalFlowString,
         departmentId,
@@ -785,7 +785,7 @@ class BudgetModel {
       );
       const flow = await this.resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn);
       const approvalFlowString = formatApprovalFlowString(flow);
-      const initialStage = flow.requiresHod ? 'hod' : flow.requiresDof ? 'dof' : 'principal';
+      const initialStage = flow.requiresLevel1 ? 'level1' : flow.requiresDof ? 'dof' : 'principal';
       const nextCurrentStage =
         ['draft', 'submitted'].includes(proposal.status) ? initialStage : proposal.current_stage;
 
@@ -868,7 +868,7 @@ class BudgetModel {
 
 
   static async processApproval(proposalId, { role, decision, feedback, approverUserId, approverEmail }) {
-    if (!['hod', 'dof', 'principal'].includes(role)) {
+    if (!['level1', 'dof', 'principal'].includes(role)) {
       throw new Error('Invalid role');
     }
     if (!['approved', 'rejected', 'returned'].includes(decision)) {
@@ -933,7 +933,7 @@ class BudgetModel {
         throw new Error('Feedback required for reject/return');
       }
 
-      // 1. Insert the ACTUAL approval (DoF/HOD/Principal)
+      // 1. Insert the ACTUAL approval (DoF/Level-1/Principal)
       await conn.execute(
         `INSERT INTO budget_proposal_approvals (
                 budget_proposal_id, role, approver_user_id, approver_email, 
@@ -1041,7 +1041,7 @@ class BudgetModel {
         if (!isQueueSuperAdminView) {
           where.push('md.type = "Academic"');
           // Action Queue Filter for regular HODs
-          where.push('(bp.current_stage = "hod" OR (bp.status LIKE "hod_%" AND bp.status != "completed"))');
+          where.push('(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed"))');
 
           const normalizedDepartment = normalizeText(department);
           const hodScope = [];
@@ -1075,7 +1075,7 @@ class BudgetModel {
 
         if (!isQueueSuperAdminView) {
           // Action Queue Filter for regular Coordinators
-          where.push('(bp.current_stage = "hod" OR (bp.status LIKE "hod_%" AND bp.status != "completed"))');
+          where.push('(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed"))');
 
           if (userEmail) {
             where.push('LOWER(TRIM(mec.email)) = LOWER(TRIM(?))');
@@ -1316,7 +1316,7 @@ class BudgetModel {
         } else if (approval) {
           state = this.#mapDecisionToStageState(approval.decision);
         } else if (
-          stageKey === 'hod' &&
+          stageKey === 'level1' &&
           budget.level1_assignment_status === LEVEL1_ASSIGNMENT_STATUS.unassigned
         ) {
           state = 'unassigned';
@@ -1335,7 +1335,7 @@ class BudgetModel {
           : null;
         let approverName = normalizeText(approval?.approver_name) || null;
 
-        if (!approval && stageKey === 'hod' && budget.level1_assignee_email) {
+        if (!approval && stageKey === 'level1' && budget.level1_assignee_email) {
           approverEmail = normalizeText(budget.level1_assignee_email).toLowerCase();
           approverName = level1AssigneeNameMap.get(approverEmail) || null;
         }
@@ -1345,6 +1345,7 @@ class BudgetModel {
           decision: approval?.decision || null,
           approverName,
           approverEmail,
+          label: this.resolveStageLabel(stageKey, budget),
           decidedAt: approval?.decided_at_formatted || approval?.decided_at || null,
           isAuto: stageKey === 'principal' && approverEmail === 'system-auto@ksrct.ac.in',
         };
@@ -1367,7 +1368,7 @@ class BudgetModel {
         level1_route_type: budget.level1_route_type || null,
         level1_assignee_email: budget.level1_assignee_email || null,
         level1_assignment_status: budget.level1_assignment_status || LEVEL1_ASSIGNMENT_STATUS.assigned,
-        hod: buildStage('hod'),
+        level1: buildStage('level1'),
         financeAdmin: buildStage('dof'),
         principal: buildStage('principal'),
       };
@@ -1379,6 +1380,27 @@ class BudgetModel {
     };
   }
 
+
+  static resolveStageLabel(stageKey, proposal = {}) {
+    const key = normalizeText(stageKey).toLowerCase();
+    const beneficiaryType = normalizeText(proposal?.beneficiary_type);
+
+    if (key === 'level1') {
+      if (['Faculty', 'Department'].includes(beneficiaryType)) {
+        return 'HOD';
+      }
+      if (this.isEntityBeneficiaryType(beneficiaryType)) {
+        return 'Coordinator';
+      }
+      return 'Level-1';
+    }
+
+    if (key === 'dof') return 'Finance';
+    if (key === 'principal') return 'Principal';
+    if (key === 'completed') return 'Completed';
+
+    return stageKey;
+  }
 
   static async dashboardAggregates({ department, departmentId, role, fiscalYear }) {
     const currentFY = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
@@ -1409,7 +1431,7 @@ class BudgetModel {
       FROM budget_proposals bp
       JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
       ${whereClause}
-        AND bp.status IN ('dof_approved', 'principal_approved', 'completed')
+        AND bp.status IN ('level1_approved', 'dof_approved', 'principal_approved', 'completed')
       GROUP BY bpl.budget_head
     `;
 
@@ -1418,7 +1440,7 @@ class BudgetModel {
       FROM budget_proposals bp
       JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
       ${whereClause}
-        AND bp.status IN ('submitted', 'hod_approved')
+        AND bp.status IN ('submitted', 'level1_approved')
       GROUP BY bpl.budget_head
     `;
 
@@ -1865,11 +1887,21 @@ class BudgetModel {
       case 'user':
         return pid === uid || emailMatch;
 
-      case 'hod': {
+      case 'level1': {
         const level1Route = this.resolveLevel1Route(proposal);
 
         if (level1Route.routeType === LEVEL1_ROUTE_TYPE.entityContact) {
-          return false;
+          const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
+          if (!normalizedUserEmail) return false;
+
+          const [contacts] = await db.execute(
+            `SELECT email FROM master_entity_contacts WHERE entity_id = ?`,
+            [level1Route.entityId]
+          );
+
+          return contacts.some(
+            (c) => normalizeText(c.email).toLowerCase() === normalizedUserEmail
+          );
         }
 
         const normalizedDepartment = normalizeText(department).toLowerCase();
@@ -1925,15 +1957,15 @@ class BudgetModel {
     return rows;
   }
 
-  static async updateApprovalFlowConfig(id, { requiresHod, requiresDof, requiresPrincipal }) {
+  static async updateApprovalFlowConfig(id, { requiresLevel1, requiresDof, requiresPrincipal }) {
     const [result] = await db.execute(
       `UPDATE approval_flow_config
-       SET requires_hod = ?,
+       SET requires_level1 = ?,
            requires_dof = ?,
            requires_principal = ?,
            updated_at = NOW()
        WHERE id = ?`,
-      [requiresHod, requiresDof, requiresPrincipal, id]
+      [requiresLevel1, requiresDof, requiresPrincipal, id]
     );
 
     return result.affectedRows > 0;

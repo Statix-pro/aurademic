@@ -45,13 +45,13 @@ const BENEFICIARY_OPTIONS = [
 ];
 
 const STAGE_PERMISSION_MAP: Record<string, string> = {
-  hod: "budget.workflow.hod",
+  level1: "budget.workflow.level1",
   dof: "budget.workflow.dof",
   principal: "budget.workflow.principal",
 };
 
 const STAGE_DISPLAY_MAP: Record<string, string> = {
-  hod: "HOD",
+  level1: "Level-1",
   dof: "DoF",
   principal: "Principal",
 };
@@ -99,7 +99,7 @@ const AdminBudget: React.FC = () => {
   const queueTabs = useMemo<QueueTab[]>(() => {
     const tabs: QueueTab[] = [];
     const superUser = isSuperAdmin(user);
-    const hasLevel1Permission = hasPermission(user, "budget.workflow.hod");
+    const hasLevel1Permission = hasPermission(user, "budget.workflow.level1");
     const isAcademic = isAcademicUser();
 
     // 1. HOD Tab: Visible to Super Admins OR Academic users with Level 1 permission
@@ -179,7 +179,7 @@ const AdminBudget: React.FC = () => {
       switch (activeQueueTabKey) {
         case "hod":
         case "coordinator":
-          return s.startsWith("hod_approved");
+          return s.startsWith("level1_approved");
         case "dof":
           return s.startsWith("dof_approved");
         case "principal":
@@ -404,7 +404,7 @@ const AdminBudget: React.FC = () => {
     const stageKey = (item.current_stage || "").toLowerCase();
     
     let stageLabel = STAGE_DISPLAY_MAP[stageKey] || (item.current_stage ? item.current_stage.toUpperCase() : "");
-    if (stageKey === 'hod') {
+    if (stageKey === 'level1') {
       stageLabel = getLevel1Label(item.beneficiary_type);
     }
     
