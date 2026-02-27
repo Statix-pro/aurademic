@@ -21,15 +21,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // =========================================================================
-// PRODUCTION CONFIGURATION (Manual Overrides)
-// =========================================================================
-const PROD_DB_CONFIG = {
-    host: '10.1.16.2',
-    user: 'research',
-    password: 'feR5d9kvHFyC',
-    database: 'research'
-};
-// =========================================================================
 
 // Load environment variables (fallback to .env.production if it exists)
 const envFile = fs.existsSync(path.join(__dirname, '..', '.env.production')) ? '.env.production' : '.env.development';
