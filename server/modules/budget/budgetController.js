@@ -122,6 +122,13 @@ class BudgetController {
       if (departmentByUserId?.name) {
         return departmentByUserId.name;
       }
+
+      // Check Multi-Context RBAC Assignments
+      const assignments = await BudgetModel.getUserAssignments(userId);
+      const deptAssignment = assignments.find((a) => a.entity_type === 'DEPARTMENT');
+      if (deptAssignment?.entity_name) {
+        return deptAssignment.entity_name;
+      }
     }
 
     if (userEmail) {
@@ -637,7 +644,7 @@ class BudgetController {
         success: true,
         data: budgets.budgets,
         pagination: budgets.pagination,
-        currentFiscalYear: BudgetModel.getCurrentFinancialYear(),
+        currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
       });
     } catch (error) {
       console.error('My budgets error:', error);
@@ -681,7 +688,7 @@ class BudgetController {
         data: budgets.budgets,
         pagination: budgets.pagination,
         department,
-        currentFiscalYear: BudgetModel.getCurrentFinancialYear(),
+        currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
       });
     } catch (error) {
       console.error('HOD budgets error:', error);
@@ -723,7 +730,7 @@ class BudgetController {
         success: true,
         data: budgets.budgets,
         pagination: budgets.pagination,
-        currentFiscalYear: BudgetModel.getCurrentFinancialYear(),
+        currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
       });
     } catch (error) {
       console.error('Coordinator budgets error:', error);
@@ -752,7 +759,7 @@ class BudgetController {
         success: true,
         data: budgets.budgets,
         pagination: budgets.pagination,
-        currentFiscalYear: BudgetModel.getCurrentFinancialYear(),
+        currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
       });
     } catch (error) {
       console.error('DoF budgets error:', error);
@@ -781,7 +788,7 @@ class BudgetController {
         success: true,
         data: budgets.budgets,
         pagination: budgets.pagination,
-        currentFiscalYear: BudgetModel.getCurrentFinancialYear(),
+        currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
       });
     } catch (error) {
       console.error('Principal budgets error:', error);

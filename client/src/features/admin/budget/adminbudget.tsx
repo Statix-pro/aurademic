@@ -83,7 +83,10 @@ const AdminBudget: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [searchTerm, setSearchTerm] = useState("");
   const [beneficiaryFilter, setBeneficiaryFilter] = useState("All Beneficiary");
-  const [fiscalYear, setFiscalYear] = useState<number>(2026);
+  const [fiscalYear, setFiscalYear] = useState<number>(() => {
+    const d = new Date();
+    return d.getMonth() < 3 ? d.getFullYear() - 1 : d.getFullYear();
+  });
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);

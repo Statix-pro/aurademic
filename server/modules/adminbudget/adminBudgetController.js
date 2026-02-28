@@ -123,6 +123,13 @@ class AdminBudgetController {
       if (departmentByUserId?.name) {
         return departmentByUserId.name;
       }
+
+      // Check Multi-Context RBAC Assignments
+      const assignments = await BudgetModel.getUserAssignments(userId);
+      const deptAssignment = assignments.find((a) => a.entity_type === 'DEPARTMENT');
+      if (deptAssignment?.entity_name) {
+        return deptAssignment.entity_name;
+      }
     }
 
     if (userEmail) {
@@ -419,7 +426,7 @@ class AdminBudgetController {
       return res.json({
         success: true,
         data: aggregates,
-        currentFiscalYear: BudgetModel.getCurrentFinancialYear(),
+        currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
       });
     } catch (error) {
       console.error('Aggregates error:', error);

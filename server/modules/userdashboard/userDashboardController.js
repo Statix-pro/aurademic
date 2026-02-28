@@ -210,7 +210,7 @@ const userDashboardController = {
   async getUserBudgets(req, res) {
     try {
       const { page = 1, perpage = 10, status, fiscalYear } = req.query;
-      
+
       const budgets = await BudgetModel.listBudgets({
         userId: req.user.id,
         userEmail: req.user.email,
@@ -220,19 +220,19 @@ const userDashboardController = {
         status: status || undefined,
         fiscalYear: fiscalYear ? parseInt(fiscalYear) : undefined
       });
-      
-      res.json({ 
-        status: 'success', 
-        data: budgets.budgets, 
+
+      res.json({
+        status: 'success',
+        data: budgets.budgets,
         pagination: budgets.pagination,
-        currentFiscalYear: BudgetModel.getCurrentFinancialYear()
+        currentFiscalYear: fiscalYear ? parseInt(fiscalYear) : BudgetModel.getCurrentFinancialYear()
       });
     } catch (error) {
       console.error('Error fetching user budgets:', error);
-      res.status(500).json({ 
-        status: 'error', 
+      res.status(500).json({
+        status: 'error',
         message: 'Failed to fetch budgets',
-        error: error.message 
+        error: error.message
       });
     }
   },
