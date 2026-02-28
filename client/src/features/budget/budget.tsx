@@ -487,6 +487,11 @@ const Budget: React.FC = () => {
   const [mobile, setMobile] = useState('');
   const [beneficiaryType, setBeneficiaryType] = useState('');
   const [beneficiaryValue, setBeneficiaryValue] = useState('');
+  const [beneficiarySearchQuery, setBeneficiarySearchQuery] = useState('');
+  const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<ApplicantSearchResult[]>(
+    []
+  );
+  const [showBeneficiaryDropdown, setShowBeneficiaryDropdown] = useState(false);
   const [subcategorySelections, setSubcategorySelections] = useState<string[]>([]);
   const [categorySelections, setCategorySelections] = useState<SelectOption[]>([]);
   const [categoryItem, setCategoryItem] = useState('');
@@ -687,6 +692,34 @@ const Budget: React.FC = () => {
     setShowApplicantDropdown(false);
   };
 
+  const handleBeneficiarySearch = async (query: string) => {
+    setBeneficiarySearchQuery(query);
+    if (query.trim() !== beneficiaryValue.trim()) {
+      // Clear the selected employee ID when search changes
+    }
+
+    try {
+      const response = await authenticityUtility.get(
+        `/budget/search-applicant?q=${encodeURIComponent(query)}`
+      ) as { success?: boolean; status?: string; data?: ApplicantSearchResult[] };
+
+      if (response.status === 'success' || response.success) {
+        setBeneficiarySearchResults(Array.isArray(response.data) ? response.data : []);
+        setShowBeneficiaryDropdown(true);
+      }
+    } catch (error) {
+      console.error('Error searching beneficiary:', error);
+      setBeneficiarySearchResults([]);
+      setShowBeneficiaryDropdown(false);
+    }
+  };
+
+  const handleSelectBeneficiary = (emp: ApplicantSearchResult) => {
+    setBeneficiaryValue((emp.name || '').trim());
+    setBeneficiarySearchQuery((emp.name || '').trim());
+    setShowBeneficiaryDropdown(false);
+  };
+
   const getBudgetHeadSelectGroups = (rowIndex: number): BudgetHeadSelectGroup[] => {
     const query = normalizeText(budgetHeadFilter[rowIndex]).toLowerCase();
 
@@ -826,7 +859,7 @@ const Budget: React.FC = () => {
       beneficiary_type: beneficiaryType?.trim(),
       beneficiary_value:
         beneficiaryType === 'Faculty'
-          ? applicantName?.trim()
+          ? beneficiaryValue?.trim()
           : beneficiaryType === 'Institution'
             ? 'K.S.Rangasamy College of Technology'
             : categoryItem?.trim(),
@@ -865,6 +898,7 @@ const Budget: React.FC = () => {
         setShowApplicantDropdown(false);
         setApplicantName(''); setDepartment(''); setDesignation(''); setEmail(''); setMobile('');
         setBeneficiaryType(''); setBeneficiaryValue(''); setCategoryItem('');
+        setBeneficiarySearchQuery(''); setBeneficiarySearchResults([]); setShowBeneficiaryDropdown(false);
         const today = new Date().toISOString().split('T')[0];
         setDate(today);
       }
@@ -932,6 +966,7 @@ const Budget: React.FC = () => {
     } else if (beneficiaryType === 'Faculty') {
       if (applicantName.trim() && !beneficiaryValue) {
         setBeneficiaryValue(applicantName);
+        setBeneficiarySearchQuery(applicantName);
       }
     }
   }, [beneficiaryType, applicantName]);
@@ -976,6 +1011,11 @@ const Budget: React.FC = () => {
             ? 'Professional Body'
             : p.beneficiary_type || '';
         setBeneficiaryType(normalizedBeneficiaryType);
+
+        // For Faculty type, set the search query for editing
+        if (normalizedBeneficiaryType === 'Faculty') {
+          setBeneficiarySearchQuery(p.beneficiary_value || '');
+        }
 
         const normalizedBeneficiaryValue =
           normalizedBeneficiaryType === 'Department'
@@ -1393,6 +1433,9 @@ const Budget: React.FC = () => {
                         setBeneficiaryType(val);
                         setCategoryItem('');
                         setCategorySelections([]);
+                        setBeneficiarySearchQuery('');
+                        setBeneficiarySearchResults([]);
+                        setShowBeneficiaryDropdown(false);
                         if (val === 'Institution') {
                           setBeneficiaryValue('K.S.Rangasamy College of Technology');
                         } else {
@@ -1478,32 +1521,110 @@ const Budget: React.FC = () => {
                     <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
                       Faculty Name
                     </label>
-                    <input
-                      type="text"
-                      value={beneficiaryValue || ''}
-                      onChange={(e) => setBeneficiaryValue(e.target.value)}
-                      placeholder="Applicant name"
-                      style={{
-                        borderRadius: '12px',
-                        border: '1px solid #e0e0e0',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
-                        width: '100%',
-                        flex: 1,
-                        backgroundColor: '#fcfdff',
-                        transition: 'all 0.3s ease',
-                        outline: 'none'
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                      required
-                    />
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <input
+                        type="text"
+                        value={beneficiarySearchQuery || beneficiaryValue || ''}
+                        onChange={(e) => {
+                          setBeneficiaryValue(e.target.value);
+                          setBeneficiarySearchQuery(e.target.value);
+                          handleBeneficiarySearch(e.target.value);
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = '#0069ab';
+                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                          if (isEditable && !showBeneficiaryDropdown) {
+                            void handleBeneficiarySearch(beneficiarySearchQuery);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = '#e0e0e0';
+                          e.currentTarget.style.boxShadow = 'none';
+                          setTimeout(() => setShowBeneficiaryDropdown(false), 200);
+                        }}
+                        placeholder="Search faculty by name or ERP ID"
+                        style={{
+                          borderRadius: '12px',
+                          border: '1px solid #e0e0e0',
+                          padding: '10px 15px',
+                          fontSize: '0.95rem',
+                          width: '100%',
+                          flex: 1,
+                          backgroundColor: '#fcfdff',
+                          transition: 'all 0.3s ease',
+                          outline: 'none'
+                        }}
+                        required
+                      />
+                      {isEditable && showBeneficiaryDropdown && beneficiarySearchResults.length > 0 && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            backgroundColor: '#fff',
+                            border: '1px solid #e0e0e0',
+                            borderRadius: '12px',
+                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                            zIndex: 1001,
+                            maxHeight: '250px',
+                            overflowY: 'auto',
+                            marginTop: '4px',
+                          }}
+                        >
+                          {beneficiarySearchResults.map((emp) => (
+                            <div
+                              key={emp.employee_id}
+                              onMouseDown={(evt) => {
+                                evt.preventDefault();
+                                handleSelectBeneficiary(emp);
+                              }}
+                              style={{
+                                padding: '10px 15px',
+                                cursor: 'pointer',
+                                borderBottom: '1px solid #f0f0f0',
+                                transition: 'background-color 0.2s',
+                              }}
+                              onMouseEnter={(evt) => {
+                                evt.currentTarget.style.backgroundColor = '#f8f9fa';
+                              }}
+                              onMouseLeave={(evt) => {
+                                evt.currentTarget.style.backgroundColor = '#fff';
+                              }}
+                            >
+                              <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
+                              <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                                {emp.designation} | {emp.department}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {isEditable &&
+                        showBeneficiaryDropdown &&
+                        beneficiarySearchQuery.length >= 2 &&
+                        beneficiarySearchResults.length === 0 && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              backgroundColor: '#fff',
+                              border: '1px solid #e0e0e0',
+                              borderRadius: '12px',
+                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                              zIndex: 1001,
+                              marginTop: '4px',
+                            }}
+                          >
+                            <div style={{ padding: '10px 15px', color: '#6c757d' }}>
+                              No employees found
+                            </div>
+                          </div>
+                        )}
+                    </div>
                   </div>
                 ) : beneficiaryType === 'Institution' ? (
                   <div className="form-group" style={{ height: '72px', display: 'flex', flexDirection: 'column' }}>

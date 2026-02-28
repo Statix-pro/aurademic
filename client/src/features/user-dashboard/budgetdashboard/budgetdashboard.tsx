@@ -23,6 +23,7 @@ interface ProposalGroup {
   proposalRef: string;
   status: string; // "submitted", "hod_approved", "dof_approved", "principal_approved", "rejected", "returned"
   currentStage: "hod" | "dof" | "principal" | "completed";
+  beneficiaryType: string;
   approvalFlow: string;
   createdAt: string;
   updatedAt: string;
@@ -248,6 +249,7 @@ const BudgetDashboard: React.FC = () => {
             proposalId: master.id,
             proposalRef: master.proposal_ref,
             status: master.status,
+            beneficiaryType: master.beneficiary_type,
             currentStage: master.current_stage,
             approvalFlow: master.approval_flow,
             createdAt: master.created_at,
@@ -331,10 +333,17 @@ const BudgetDashboard: React.FC = () => {
     return parsed.toLocaleString("en-IN");
   };
 
-  const getRoleLabel = (role?: string) => {
+  const getRoleLabel = (role: string, proposal: ProposalGroup) => {
     const normalized = String(role || "").toLowerCase();
+    if (normalized === 'level1') {
+      const isEntity = ['club', 'cell', 'center', 'professional body'].includes(
+        String(proposal.beneficiaryType || "").toLowerCase().trim()
+      );
+      return isEntity ? "Coordinator" : "HoD";
+    }
     const map: Record<string, string> = {
       hod: "HoD",
+      coordinator: "Coordinator",
       headcfrd: "CFRD",
       dof: "DoF",
       principal: "Principal",
@@ -403,7 +412,7 @@ const BudgetDashboard: React.FC = () => {
       const decidedAtMs = decidedAt ? new Date(decidedAt).getTime() : 0;
       const feedbackNote = feedback ? `Note: ${feedback}` : "";
       const subtitleParts = [
-        `by ${getRoleLabel(app.role)}`,
+        `by ${getRoleLabel(app.role, proposal)}`,
         feedbackNote,
       ].filter(Boolean);
 
@@ -721,7 +730,7 @@ const BudgetDashboard: React.FC = () => {
                             <Eye size={16} />
                           </button>
                           {/* Edit only if submitted/returned */}
-                          {['submitted', 'hod_returned', 'dof_returned'].includes(proposal.status) && (
+                          {['submitted', 'level1_returned', 'hod_returned', 'dof_returned', 'principal_returned'].includes(proposal.status) && (
                             <button title="Edit" className="budgetdashboard-action-global" onClick={() => navigate(`/budget/${proposal.proposalId}/edit`)}>
                               <Edit2 size={16} />
                             </button>

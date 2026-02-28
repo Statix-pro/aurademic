@@ -196,7 +196,7 @@ const accessControlController = {
   async updateUserRoles(req, res) {
     try {
       const { userId } = req.params;
-      const { role_codes } = req.body || {};
+      const { role_codes, entity_roles } = req.body || {};
 
       if (!Array.isArray(role_codes)) {
         return res.status(400).json({
@@ -208,6 +208,7 @@ const accessControlController = {
       const updatedUser = await accessControlModel.updateUserRoles(
         userId,
         role_codes,
+        Array.isArray(entity_roles) ? entity_roles : [],
         req.user?.id || null
       );
 
@@ -245,6 +246,20 @@ const accessControlController = {
       });
     } catch (error) {
       return handleError(res, error, 'Failed to update Super Admin access');
+    }
+  },
+
+  async syncRoles(req, res) {
+    try {
+      const RoleSyncService = await import('./roleSyncService.js');
+      await RoleSyncService.default.syncAllRoles();
+
+      return res.json({
+        status: 'success',
+        message: 'Roles synchronized successfully',
+      });
+    } catch (error) {
+      return handleError(res, error, 'Failed to manually sync roles');
     }
   },
 };

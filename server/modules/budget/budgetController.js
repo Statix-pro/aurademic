@@ -190,7 +190,10 @@ class BudgetController {
       // 1. Get rich employee data from DB (includes designation, mobile, full_name)
       const empData = await BudgetModel.getUserDepartmentByUserId(userId);
 
-      // 2. Fallback to token data if DB data is missing
+      // 2. Fetch Multi-Context RBAC Assignments
+      const assignments = await BudgetModel.getUserAssignments(userId);
+
+      // 3. Fallback to token data if DB data is missing
       const department =
         empData?.parent_department_name ||
         empData?.name ||
@@ -206,7 +209,9 @@ class BudgetController {
           name: empData?.full_name || req.user?.name || '',
           email: req.user?.email || '',
           department,
-          // Pass these new fields to frontend
+          // Pass the new assignments to the frontend
+          assignments,
+          // Additional fallback fields
           designation: empData?.designation || '',
           mobile: empData?.mobile || '',
           role,
@@ -300,221 +305,12 @@ class BudgetController {
     }
   }
 
-  static async getEntitiesByType(req, res) {
-    try {
-      const mappedType = BudgetController.normalizeEntityTypeParam(req.params.type);
 
-      if (!['DEPARTMENT', ...MUTABLE_ENTITY_TYPES].includes(mappedType)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid entity type',
-        });
-      }
 
-      const data = mappedType === 'DEPARTMENT'
-        ? await BudgetModel.getDepartments()
-        : await BudgetModel.getEntitiesByType(mappedType);
 
-      return res.json({
-        success: true,
-        data,
-        count: data.length,
-      });
-    } catch (error) {
-      console.error('Get entities by type error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch entities',
-      });
-    }
-  }
 
-  static async createEntity(req, res) {
-    try {
-      const mappedType = BudgetController.normalizeEntityTypeParam(req.params.type);
 
-      if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Only CENTRE, CELL, CLUB, and PROFESSIONAL_BODY are mutable via this API',
-        });
-      }
 
-      const entity = await BudgetModel.createEntity(mappedType, req.body || {});
-
-      return res.status(201).json({
-        success: true,
-        data: entity,
-      });
-    } catch (error) {
-      console.error('Create entity error:', error);
-      return res.status(400).json({
-        success: false,
-        message: error.message || 'Failed to create entity',
-      });
-    }
-  }
-
-  static async updateEntity(req, res) {
-    try {
-      const mappedType = BudgetController.normalizeEntityTypeParam(req.params.type);
-      const entityId = Number.parseInt(req.params.id, 10);
-
-      if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Only CENTRE, CELL, CLUB, and PROFESSIONAL_BODY are mutable via this API',
-        });
-      }
-
-      if (!Number.isInteger(entityId) || entityId <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid entity id',
-        });
-      }
-
-      const entity = await BudgetModel.updateEntity(mappedType, entityId, req.body || {});
-
-      return res.json({
-        success: true,
-        data: entity,
-      });
-    } catch (error) {
-      console.error('Update entity error:', error);
-      return res.status(400).json({
-        success: false,
-        message: error.message || 'Failed to update entity',
-      });
-    }
-  }
-
-  static async deleteEntity(req, res) {
-    try {
-      const mappedType = BudgetController.normalizeEntityTypeParam(req.params.type);
-      const entityId = Number.parseInt(req.params.id, 10);
-
-      if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Only CENTRE, CELL, CLUB, and PROFESSIONAL_BODY are mutable via this API',
-        });
-      }
-
-      if (!Number.isInteger(entityId) || entityId <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid entity id',
-        });
-      }
-
-      const deleted = await BudgetModel.deleteEntity(mappedType, entityId);
-
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: 'Entity not found',
-        });
-      }
-
-      return res.json({
-        success: true,
-        message: 'Entity deleted successfully',
-      });
-    } catch (error) {
-      console.error('Delete entity error:', error);
-      return res.status(400).json({
-        success: false,
-        message: error.message || 'Failed to delete entity',
-      });
-    }
-  }
-
-  static async getEntityContacts(req, res) {
-    try {
-      const mappedType = BudgetController.normalizeEntityTypeParam(req.params.type);
-      const entityId = Number.parseInt(req.params.id, 10);
-
-      if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Contacts are available only for CENTRE, CELL, CLUB, and PROFESSIONAL_BODY',
-        });
-      }
-
-      if (!Number.isInteger(entityId) || entityId <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid entity id',
-        });
-      }
-
-      const contacts = await BudgetModel.getEntityContacts(mappedType, entityId);
-
-      return res.json({
-        success: true,
-        data: contacts,
-      });
-    } catch (error) {
-      console.error('Get entity contacts error:', error);
-      return res.status(400).json({
-        success: false,
-        message: error.message || 'Failed to fetch entity contacts',
-      });
-    }
-  }
-
-  static async updateEntityContacts(req, res) {
-    try {
-      const mappedType = BudgetController.normalizeEntityTypeParam(req.params.type);
-      const entityId = Number.parseInt(req.params.id, 10);
-      const contacts = Array.isArray(req.body?.contacts) ? req.body.contacts : [];
-
-      if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Contacts are editable only for CENTRE, CELL, CLUB, and PROFESSIONAL_BODY',
-        });
-      }
-
-      if (!Number.isInteger(entityId) || entityId <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid entity id',
-        });
-      }
-
-      const updatedContacts = await BudgetModel.updateEntityContacts(mappedType, entityId, contacts);
-
-      return res.json({
-        success: true,
-        data: updatedContacts,
-      });
-    } catch (error) {
-      console.error('Update entity contacts error:', error);
-      return res.status(400).json({
-        success: false,
-        message: error.message || 'Failed to update contacts',
-      });
-    }
-  }
-
-  static async getApprovalFlows(req, res) {
-    try {
-      const configs = await BudgetModel.getApprovalFlowConfigs();
-
-      return res.json({
-        success: true,
-        data: configs,
-      });
-    } catch (error) {
-      console.error('Get approval flows error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch approval flow configs',
-      });
-    }
-  }
 
   static async create(req, res) {
     try {
@@ -901,7 +697,9 @@ class BudgetController {
       const userEmail = normalizeText(req.user?.email);
       const isSuperAdmin = BudgetController.isSuperAdmin(req);
 
-      if (!isSuperAdmin && !userEmail) {
+      const userId = BudgetController.getUserId(req);
+
+      if (!isSuperAdmin && !userEmail && !userId) {
         return res.status(400).json({
           success: false,
           message: 'Coordinator queue context unavailable',
@@ -911,6 +709,7 @@ class BudgetController {
       const { page = 1, limit = 10, status, fiscalYear } = req.query;
 
       const budgets = await BudgetModel.listBudgets({
+        userId,
         userEmail,
         role: 'coordinator',
         superAdminQueueView: isSuperAdmin,
@@ -993,28 +792,6 @@ class BudgetController {
     }
   }
 
-  static async getAggregates(req, res) {
-    try {
-      const { fiscalYear } = req.query;
-
-      const aggregates = await BudgetModel.dashboardAggregates({
-        role: 'admin',
-        fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
-      });
-
-      return res.json({
-        success: true,
-        data: aggregates,
-        currentFiscalYear: BudgetModel.getCurrentFinancialYear(),
-      });
-    } catch (error) {
-      console.error('Aggregates error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch aggregates',
-      });
-    }
-  }
 
   static async approve(req, res) {
     try {
@@ -1134,117 +911,8 @@ class BudgetController {
     }
   }
 
-  static async adminList(req, res) {
-    try {
-      const { page = 1, limit = 20, status, fiscalYear } = req.query;
 
-      const budgets = await BudgetModel.listBudgets({
-        role: 'admin',
-        page: Number.parseInt(page, 10),
-        limit: Number.parseInt(limit, 10),
-        status,
-        fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
-      });
 
-      return res.json({
-        success: true,
-        data: budgets.budgets,
-        pagination: budgets.pagination,
-        filters: {
-          role: 'admin',
-          fiscalYear: fiscalYear || BudgetModel.getCurrentFinancialYear(),
-        },
-      });
-    } catch (error) {
-      console.error('Admin list error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch admin budgets',
-      });
-    }
-  }
-
-  static async getSuperAdminFlowDashboard(req, res) {
-    try {
-      const {
-        page = 1,
-        limit = 20,
-        status,
-        fiscalYear,
-        q,
-        department,
-      } = req.query;
-
-      const result = await BudgetModel.listSuperAdminFlowBudgets({
-        page: Number.parseInt(page, 10),
-        limit: Number.parseInt(limit, 10),
-        status: normalizeText(status) || undefined,
-        fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
-        q: normalizeText(q) || undefined,
-        department: normalizeText(department) || undefined,
-      });
-
-      return res.json({
-        success: true,
-        data: result.rows,
-        pagination: result.pagination,
-        filters: {
-          status: normalizeText(status) || undefined,
-          fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
-          q: normalizeText(q) || undefined,
-          department: normalizeText(department) || undefined,
-        },
-      });
-    } catch (error) {
-      console.error('Super admin flow dashboard error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch super admin budget flow dashboard',
-      });
-    }
-  }
-
-  static async search(req, res) {
-    try {
-      const { q, status, fiscalYear } = req.query;
-
-      const budgets = await BudgetModel.listBudgets({
-        userId: BudgetController.getUserId(req),
-        userEmail: req.user?.email || '',
-        role: 'admin',
-        fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
-        status,
-        page: 1,
-        limit: 100,
-      });
-
-      let results = budgets.budgets;
-
-      if (q) {
-        const query = String(q).toLowerCase();
-        results = results.filter(
-          (budget) =>
-            budget.proposal_ref?.toLowerCase().includes(query) ||
-            budget.beneficiary_value?.toLowerCase().includes(query) ||
-            budget.department?.toLowerCase().includes(query) ||
-            budget.org_unit_name?.toLowerCase().includes(query)
-        );
-      }
-
-      return res.json({
-        success: true,
-        data: results,
-        count: results.length,
-        filters: req.query,
-      });
-    } catch (error) {
-      console.error('Search error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Search failed',
-      });
-    }
-  }
 
   static async uploadFiles(req, res) {
     try {
@@ -1424,72 +1092,7 @@ class BudgetController {
     }
   }
 
-  static async export(req, res) {
-    try {
-      const { fiscalYear, status, format = 'csv' } = req.query;
 
-      const budgets = await BudgetModel.listBudgets({
-        role: 'admin',
-        fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
-        status,
-        page: 1,
-        limit: 10000,
-      });
-
-      if (format === 'csv') {
-        const csvHeader = 'Ref,FY,Type,Value,Department,Amount,Status,Stage,Created\n';
-        const csvRows = budgets.budgets
-          .map(
-            (budget) =>
-              `${budget.proposal_ref},${budget.fiscal_year},${budget.beneficiary_type},"${budget.beneficiary_value || ''
-              }",${budget.department || ''},${budget.total_amount},${budget.status},${budget.current_stage},${budget.created_date
-              }`
-          )
-          .join('\n');
-
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader(
-          'Content-Disposition',
-          `attachment; filename=budget-export-FY${fiscalYear || BudgetModel.getCurrentFinancialYear()}-${Date.now()}.csv`
-        );
-
-        return res.send(csvHeader + csvRows);
-      }
-
-      return res.json({
-        success: true,
-        data: budgets.budgets,
-        exportedAt: new Date().toISOString(),
-        filters: { fiscalYear, status },
-      });
-    } catch (error) {
-      console.error('Export error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to export budgets',
-      });
-    }
-  }
-
-  static async getStats(req, res) {
-    try {
-      const { fiscalYear } = req.query;
-      const fy = fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear();
-      const stats = await BudgetModel.getBudgetStatsByFY(fy);
-
-      return res.json({
-        success: true,
-        data: stats,
-        fiscalYear: fy,
-      });
-    } catch (error) {
-      console.error('Stats error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch stats',
-      });
-    }
-  }
 
   static async getStatus(req, res) {
     try {
@@ -1554,53 +1157,6 @@ class BudgetController {
     }
   }
 
-  static async updateFlowConfig(req, res) {
-    try {
-      const configId = Number.parseInt(req.params.id, 10);
-
-      if (!Number.isInteger(configId)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid config ID',
-        });
-      }
-
-      const requiresLevel1 = Number(req.body?.requiresLevel1);
-      const requiresDof = Number(req.body?.requiresDof);
-      const requiresPrincipal = Number(req.body?.requiresPrincipal);
-
-      if (![0, 1].includes(requiresLevel1) || ![0, 1].includes(requiresDof) || ![0, 1].includes(requiresPrincipal)) {
-        return res.status(400).json({
-          success: false,
-          message: 'requiresLevel1, requiresDof, requiresPrincipal must be 0 or 1',
-        });
-      }
-
-      const updated = await BudgetModel.updateApprovalFlowConfig(configId, {
-        requiresLevel1,
-        requiresDof,
-        requiresPrincipal,
-      });
-
-      if (!updated) {
-        return res.status(404).json({
-          success: false,
-          message: 'Config not found',
-        });
-      }
-
-      return res.json({
-        success: true,
-        message: 'Approval flow config updated successfully',
-      });
-    } catch (error) {
-      console.error('Update flow config error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to update approval flow config',
-      });
-    }
-  }
 }
 
 export default BudgetController;

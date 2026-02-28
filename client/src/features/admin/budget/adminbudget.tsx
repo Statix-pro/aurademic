@@ -16,6 +16,14 @@ interface QueueTab {
   endpoint: string;
 }
 
+interface RbacAssignment {
+  entity_id: number;
+  entity_type: string;
+  entity_name: string;
+  role: string;
+  permissions: string[];
+}
+
 interface BudgetRequestItem {
   id: number;
   proposal_ref: string;
@@ -59,7 +67,9 @@ const STAGE_DISPLAY_MAP: Record<string, string> = {
 const ENTITY_BENEFICIARY_TYPES = ['Centre', 'Cell', 'Club', 'Professional Body'];
 
 const getLevel1Label = (beneficiaryType: string) => {
-  return ENTITY_BENEFICIARY_TYPES.includes(beneficiaryType) ? "Coordinator" : "HOD";
+  const type = (beneficiaryType || '').toLowerCase();
+  const entityTypes = ENTITY_BENEFICIARY_TYPES.map(t => t.toLowerCase());
+  return entityTypes.includes(type) ? "Coordinator" : "HOD";
 };
 
 const TAB_PRIORITY: QueueTabKey[] = ["hod", "coordinator", "dof", "principal", "admin"];
@@ -82,57 +92,69 @@ const AdminBudget: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  /**
-   * Helper to determine if a user belongs to an Academic Department.
-   * If the department name contains entity-specific keywords, we treat them as a Coordinator.
-   */
-  const isAcademicUser = useCallback(() => {
-    const dept = (user as any)?.department || "";
-    if (!dept) return true; // Default to academic if unknown
+  const [assignments, setAssignments] = useState<RbacAssignment[]>([]);
 
-    const entityKeywords = ["Centre", "Cell", "Club", "Professional Body", "Office", "Admin", "CFRD"];
-    return !entityKeywords.some(keyword => 
-      dept.toLowerCase().includes(keyword.toLowerCase())
-    );
-  }, [user]);
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      try {
+        const response: any = await authenticityUtility.get("/budget/faculty");
+        if (response?.success && Array.isArray(response.data?.assignments)) {
+          setAssignments(response.data.assignments);
+        }
+      } catch (err) {
+        console.error("Failed to fetch assignments:", err);
+      }
+    };
+    fetchAssignments();
+  }, []);
+
+  const [activeAssignmentIndex, setActiveAssignmentIndex] = useState<number>(0);
+  const currentActiveAssignment = useMemo<RbacAssignment | null>(() => {
+    return assignments.length > 0 ? assignments[activeAssignmentIndex] : null;
+  }, [assignments, activeAssignmentIndex]);
 
   const queueTabs = useMemo<QueueTab[]>(() => {
     const tabs: QueueTab[] = [];
     const superUser = isSuperAdmin(user);
-    const hasLevel1Permission = hasPermission(user, "budget.workflow.level1");
-    const isAcademic = isAcademicUser();
 
-    // 1. HOD Tab: Visible to Super Admins OR Academic users with Level 1 permission
-    if (superUser || (hasLevel1Permission && isAcademic)) {
+    // If using the multi-context assignment, check permissions tightly against the active context.
+    // If there's no assignment, fallback gracefully to global permissions for backwards compat temporarily.
+    const hasLevel1Context = currentActiveAssignment?.permissions.includes("budget.workflow.level1") || hasPermission(user, "budget.workflow.level1");
+    const isAcademicContext = currentActiveAssignment
+      ? currentActiveAssignment.entity_type === "DEPARTMENT"
+      : true; // fallback
+
+    // 1. HOD Tab: Visible to Super Admins OR Academic users with Level 1 context permissions
+    if (superUser || (hasLevel1Context && isAcademicContext)) {
       tabs.push({ key: "hod", label: "HOD", endpoint: "/budget/hod" });
     }
 
-    // 2. Coordinator Tab: Visible to Super Admins OR Entity-based users with Level 1 permission
-    if (superUser || (hasLevel1Permission && !isAcademic)) {
+    // 2. Coordinator Tab: Visible to Super Admins OR Entity-based users with Level 1 context permissions
+    if (superUser || (hasLevel1Context && !isAcademicContext)) {
       tabs.push({ key: "coordinator", label: "Coordinator", endpoint: "/budget/coordinator" });
     }
 
-    // 3. DoF Tab: Visible to Super Admins OR users with Finance permission
+    // 3. DoF Tab: Global DoF stage access
     if (superUser || hasPermission(user, "budget.workflow.dof")) {
       tabs.push({ key: "dof", label: "DoF", endpoint: "/budget/dof" });
     }
 
-    // 4. Principal Tab: Visible to Super Admins OR users with Principal permission
+    // 4. Principal Tab: Global Principal stage access
     if (superUser || hasPermission(user, "budget.workflow.principal")) {
       tabs.push({ key: "principal", label: "Principal", endpoint: "/budget/principal" });
     }
 
-    // 5. Master Audit Tab: Visible to Admins and Super Admins for historical tracking
+    // 5. Master Audit Tab: Global admin read access
     if (
       superUser ||
       hasPermission(user, "budget.admin.view") ||
       hasPermission(user, "budget.admin.manage")
     ) {
-      tabs.push({ key: "admin", label: "All Proposals", endpoint: "/budget/admin" });
+      tabs.push({ key: "admin", label: "All Proposals", endpoint: "/adminbudget/admin" });
     }
 
     return tabs;
-  }, [user, isAcademicUser]);
+  }, [user, currentActiveAssignment]);
 
   const [activeQueueTabKey, setActiveQueueTabKey] = useState<QueueTabKey | null>(null);
 
@@ -349,10 +371,10 @@ const AdminBudget: React.FC = () => {
     const ben = beneficiaryFilter;
 
     return data.filter((item) => {
-      const matchesSearch = !q || 
-        item.proposal_ref.toLowerCase().includes(q) || 
+      const matchesSearch = !q ||
+        item.proposal_ref.toLowerCase().includes(q) ||
         (item.applicant_name || "").toLowerCase().includes(q);
-      
+
       const matchesBeneficiary =
         ben === "All Beneficiary" || item.beneficiary_type.toLowerCase() === ben.toLowerCase();
 
@@ -402,13 +424,25 @@ const AdminBudget: React.FC = () => {
     if (s.includes("rejected")) return "Reject";
     if (s.includes("returned") || s.includes("return")) return "Return";
     const stageKey = (item.current_stage || "").toLowerCase();
-    
+
     let stageLabel = STAGE_DISPLAY_MAP[stageKey] || (item.current_stage ? item.current_stage.toUpperCase() : "");
     if (stageKey === 'level1') {
       stageLabel = getLevel1Label(item.beneficiary_type);
     }
-    
+
     return "Pending " + stageLabel;
+  };
+
+  const getRoleLabel = (role: string) => {
+    const map: Record<string, string> = {
+      hod: "HoD",
+      coordinator: "Coordinator",
+      principal: "Principal",
+      dof: "DoF",
+      admin: "Admin",
+      super_admin: "Super Admin"
+    };
+    return map[role.toLowerCase()] || role.charAt(0).toUpperCase() + role.slice(1);
   };
 
   const stats = useMemo(() => {
@@ -434,7 +468,24 @@ const AdminBudget: React.FC = () => {
         <div className="adminbudget-container">
           <div className="adminbudget-card">
             <div className="adminbudget-header">
-              <h5 className="adminbudget-title">Budget Requests</h5>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <h5 className="adminbudget-title mb-0">Budget Requests</h5>
+                {assignments.length > 1 && (
+                  <select
+                    className="adminbudget-control"
+                    value={activeAssignmentIndex}
+                    onChange={(e) => setActiveAssignmentIndex(Number(e.target.value))}
+                    title="Active Context"
+                    style={{ minWidth: "150px" }}
+                  >
+                    {assignments.map((assignment, index) => (
+                      <option key={index} value={index}>
+                        {getRoleLabel(assignment.role)} ({assignment.entity_name})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
 
               {queueTabs.length > 0 && (
                 <div className="adminbudget-role-tabs" role="tablist" aria-label="Budget queues">
