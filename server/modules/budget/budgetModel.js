@@ -346,6 +346,50 @@ class BudgetModel {
     return rows[0] || null;
   }
 
+  static async getUserAssignments(userId) {
+    const parsedUserId = Number(userId);
+    if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+      return [];
+    }
+
+    // Fetch strict mapped contextual assignments mapping to the user
+    // Join with roles and permissions logic to return a flat payload of permissions
+    const [rows] = await db.execute(`
+      SELECT 
+        uer.entity_id, 
+        uer.entity_type, 
+        r.role_code, 
+        p.permission_key AS permission_code,
+        COALESCE(d.name, me.name) as entity_name
+      FROM user_entity_roles uer
+      JOIN roles r ON uer.role_id = r.id
+      JOIN role_permissions rp ON r.id = rp.role_id
+      JOIN permissions p ON rp.permission_id = p.id
+      LEFT JOIN master_departments d ON uer.entity_id = d.id AND uer.entity_type = 'DEPARTMENT'
+      LEFT JOIN master_entities me ON uer.entity_id = me.id AND uer.entity_type != 'DEPARTMENT'
+      WHERE uer.user_id = ?
+    `, [parsedUserId]);
+
+    // Grouping the flat permissions array into structured context objects
+    const assignmentsMap = new Map();
+
+    for (const row of rows) {
+      const key = `${row.entity_type}-${row.entity_id}`;
+      if (!assignmentsMap.has(key)) {
+        assignmentsMap.set(key, {
+          entity_id: row.entity_id,
+          entity_type: row.entity_type,
+          entity_name: row.entity_name || 'Unknown',
+          role: row.role_code,
+          permissions: []
+        });
+      }
+      assignmentsMap.get(key).permissions.push(row.permission_code);
+    }
+
+    return Array.from(assignmentsMap.values());
+  }
+
   static async getEmployeeDepartmentByEmployeeId(employeeId) {
     const parsedEmployeeId = Number(employeeId);
 
@@ -355,17 +399,17 @@ class BudgetModel {
 
     const [rows] = await db.execute(
       `SELECT
-              e.id AS employee_id,
-              d.id AS department_id,
-              d.name,
-              d.code,
-              COALESCE(pd_emp.name, pd_dept.name, d.name) AS parent_department_name
+      e.id AS employee_id,
+        d.id AS department_id,
+          d.name,
+          d.code,
+          COALESCE(pd_emp.name, pd_dept.name, d.name) AS parent_department_name
           FROM master_employees e
           LEFT JOIN master_departments d ON e.department_id = d.id
           LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
           LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
           WHERE e.id = ?
-            AND e.status = 'Active'
+        AND e.status = 'Active'
           LIMIT 1`,
       [parsedEmployeeId]
     );
@@ -382,20 +426,20 @@ class BudgetModel {
 
     const [rows] = await db.execute(
       `SELECT
-              e.id AS employee_id,
-              d.id,
-              d.name,
-              d.code,
-              COALESCE(pd_emp.name, pd_dept.name) AS parent_department_name,
-              e.designation,
-              e.mobile,
-              CONCAT(e.first_name, ' ', COALESCE(e.last_name, '')) AS full_name
+      e.id AS employee_id,
+        d.id,
+        d.name,
+        d.code,
+        COALESCE(pd_emp.name, pd_dept.name) AS parent_department_name,
+          e.designation,
+          e.mobile,
+          CONCAT(e.first_name, ' ', COALESCE(e.last_name, '')) AS full_name
           FROM master_employees e
           JOIN master_departments d ON e.department_id = d.id
           LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
           LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
           WHERE LOWER(TRIM(e.email)) = ?
-            AND e.status = 'Active'
+        AND e.status = 'Active'
           ORDER BY e.id ASC
           LIMIT 1`,
       [normalizedEmail]
@@ -411,14 +455,14 @@ class BudgetModel {
 
     if (!queryStr) {
       sql = `SELECT
-        e.id AS employee_id,
+      e.id AS employee_id,
         e.erp_id,
         CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
-        COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
-        COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
-        e.email,
-        e.mobile,
-        e.employee_type
+          COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
+            COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
+              e.email,
+              e.mobile,
+              e.employee_type
       FROM master_employees e
       LEFT JOIN master_departments d ON e.department_id = d.id
       LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
@@ -428,41 +472,37 @@ class BudgetModel {
       LIMIT 20`;
     } else {
       sql = `SELECT
-        e.id AS employee_id,
+      e.id AS employee_id,
         e.erp_id,
         CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
-        COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
-        COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
-        e.email,
-        e.mobile,
-        e.employee_type
+          COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
+            COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
+              e.email,
+              e.mobile,
+              e.employee_type
       FROM master_employees e
       LEFT JOIN master_departments d ON e.department_id = d.id
       LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
       LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
       WHERE e.status = 'Active'
-        AND (
-          e.first_name LIKE ?
-          OR e.last_name LIKE ?
-          OR CONCAT(e.first_name, ' ', e.last_name) LIKE ?
-          OR e.erp_id LIKE ?
-          OR e.email LIKE ?
-          OR d.name LIKE ?
-          OR pd_emp.name LIKE ?
-          OR pd_dept.name LIKE ?
+      AND(
+        LOWER(e.first_name) LIKE ?
+        OR LOWER(e.last_name) LIKE ?
+        OR LOWER(CONCAT(e.first_name, ' ', COALESCE(e.last_name, ''))) LIKE ?
+        OR LOWER(e.erp_id) LIKE ?
+        OR LOWER(e.email) LIKE ?
         )
       ORDER BY e.first_name, e.last_name
       LIMIT 20`;
 
+      const searchPattern = `%${queryStr.toLowerCase()}%`;
+
       params = [
-        `%${queryStr}%`,
-        `%${queryStr}%`,
-        `%${queryStr}%`,
-        `${queryStr}%`,
-        `%${queryStr}%`,
-        `%${queryStr}%`,
-        `%${queryStr}%`,
-        `%${queryStr}%`,
+        searchPattern,
+        searchPattern,
+        searchPattern,
+        `${queryStr.toLowerCase()}%`,
+        searchPattern,
       ];
     }
 
@@ -481,10 +521,10 @@ class BudgetModel {
       `SELECT id, name, code
        FROM master_departments
        WHERE is_active = 1 AND type = 'Academic'
-         AND (
-           LOWER(TRIM(name)) = LOWER(TRIM(?))
+      AND(
+        LOWER(TRIM(name)) = LOWER(TRIM(?))
            OR LOWER(TRIM(code)) = LOWER(TRIM(?))
-         )
+      )
        ORDER BY CASE WHEN LOWER(TRIM(name)) = LOWER(TRIM(?)) THEN 0 ELSE 1 END
        LIMIT 1`,
       [normalized, normalized, normalized]
@@ -502,7 +542,7 @@ class BudgetModel {
       const department = await this.getDepartmentByName(beneficiaryValue, conn);
 
       if (!department) {
-        throw new Error(`Invalid department beneficiary: ${beneficiaryValue}`);
+        throw new Error(`Invalid department beneficiary: ${beneficiaryValue} `);
       }
 
       return Number(department.id);
@@ -535,13 +575,13 @@ class BudgetModel {
        JOIN master_entity_types met ON me.entity_type_id = met.id
        WHERE me.is_active = 1
          AND met.code = ?
-         AND LOWER(TRIM(me.name)) = LOWER(TRIM(?))
+        AND LOWER(TRIM(me.name)) = LOWER(TRIM(?))
        LIMIT 1`,
       [entityTypeCode, normalizedBeneficiaryValue]
     );
 
     if (!rows.length) {
-      throw new Error(`Invalid beneficiary_value for ${beneficiaryType}: ${normalizedBeneficiaryValue}`);
+      throw new Error(`Invalid beneficiary_value for ${beneficiaryType}: ${normalizedBeneficiaryValue} `);
     }
 
     return {
@@ -563,8 +603,8 @@ class BudgetModel {
         `SELECT requires_level1, requires_dof, requires_principal
            FROM approval_flow_config
            WHERE beneficiary_type = ?
-             AND entity_type_code = ?
-             AND module IN ('BUDGET', 'BOTH')
+        AND entity_type_code = ?
+          AND module IN ('BUDGET', 'BOTH')
              AND is_active = 1
            LIMIT 1`,
         [normalizedBeneficiaryType, entityTypeCode]
@@ -573,7 +613,7 @@ class BudgetModel {
         `SELECT requires_level1, requires_dof, requires_principal
            FROM approval_flow_config
            WHERE beneficiary_type = ?
-             AND entity_type_code IS NULL
+        AND entity_type_code IS NULL
              AND module IN ('BUDGET', 'BOTH')
              AND is_active = 1
            LIMIT 1`,
@@ -617,12 +657,12 @@ class BudgetModel {
       const [seqRows] = await conn.execute(
         `SELECT COALESCE(MAX(ref_sequence), 0) + 1 AS next_seq
          FROM budget_proposal_refs
-         WHERE ref_year = ?`,
+         WHERE ref_year = ? `,
         [fyYear]
       );
 
       const sequence = Number(seqRows[0].next_seq);
-      const proposalRef = `#B-${fyYear}-${String(sequence).padStart(4, '0')}`;
+      const proposalRef = `#B - ${fyYear} -${String(sequence).padStart(4, '0')} `;
 
       const departmentId = await this.#resolveDepartmentId(conn, payload);
       const { entityTypeCode, beneficiaryEntityId } = await this.#resolveBeneficiaryEntity(
@@ -649,7 +689,7 @@ class BudgetModel {
       });
 
       const [proposalResult] = await conn.execute(
-        `INSERT INTO budget_proposals (
+        `INSERT INTO budget_proposals(
           proposal_ref,
           fiscal_year,
           employee_id,
@@ -666,7 +706,7 @@ class BudgetModel {
           status,
           current_stage,
           created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, NOW())`,
+        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, NOW())`,
         [
           proposalRef,
           fyYear,
@@ -688,8 +728,8 @@ class BudgetModel {
       const proposalId = proposalResult.insertId;
 
       await conn.execute(
-        `INSERT INTO budget_proposal_refs (proposal_id, ref_year, ref_sequence, proposal_ref)
-         VALUES (?, ?, ?, ?)`,
+        `INSERT INTO budget_proposal_refs(proposal_id, ref_year, ref_sequence, proposal_ref)
+      VALUES(?, ?, ?, ?)`,
         [proposalId, fyYear, sequence, proposalRef]
       );
 
@@ -733,9 +773,9 @@ class BudgetModel {
 
     const [lines] = await db.execute(
       `SELECT *
-       FROM budget_proposal_lines
+        FROM budget_proposal_lines
        WHERE budget_proposal_id = ?
-       ORDER BY id`,
+        ORDER BY id`,
       [proposalId]
     );
 
@@ -744,7 +784,7 @@ class BudgetModel {
        FROM budget_proposal_lines l
        JOIN budget_line_month_allocations m ON l.id = m.budget_line_id
        WHERE l.budget_proposal_id = ?
-       ORDER BY l.id, FIELD(m.month, ${VALID_MONTHS.map((month) => `'${month}'`).join(',')})`,
+        ORDER BY l.id, FIELD(m.month, ${VALID_MONTHS.map((month) => `'${month}'`).join(',')})`,
       [proposalId]
     );
 
@@ -752,7 +792,7 @@ class BudgetModel {
       `SELECT *, DATE_FORMAT(decided_at, '%Y-%m-%d %H:%i') AS decided_at_formatted
        FROM budget_proposal_approvals
        WHERE budget_proposal_id = ?
-       ORDER BY decided_at`,
+        ORDER BY decided_at`,
       [proposalId]
     );
 
@@ -798,15 +838,15 @@ class BudgetModel {
       await conn.execute(
         `UPDATE budget_proposals
          SET beneficiary_type = ?,
-             beneficiary_value = ?,
-             beneficiary_entity_id = ?,
-             department_id = ?,
-             approval_flow = ?,
-             current_stage = ?,
-             proposal_description = ?,
-             total_amount = ?,
-             updated_at = NOW()
-         WHERE id = ?`,
+        beneficiary_value = ?,
+        beneficiary_entity_id = ?,
+        department_id = ?,
+        approval_flow = ?,
+        current_stage = ?,
+        proposal_description = ?,
+        total_amount = ?,
+        updated_at = NOW()
+         WHERE id = ? `,
         [
           payload.beneficiary_type,
           payload.beneficiary_value || null,
@@ -824,7 +864,7 @@ class BudgetModel {
         `DELETE m
          FROM budget_line_month_allocations m
          JOIN budget_proposal_lines l ON m.budget_line_id = l.id
-         WHERE l.budget_proposal_id = ?`,
+         WHERE l.budget_proposal_id = ? `,
         [proposalId]
       );
 
@@ -853,7 +893,7 @@ class BudgetModel {
         `DELETE m
          FROM budget_line_month_allocations m
          JOIN budget_proposal_lines l ON m.budget_line_id = l.id
-         WHERE l.budget_proposal_id = ?`,
+         WHERE l.budget_proposal_id = ? `,
         [proposalId]
       );
 
@@ -881,7 +921,7 @@ class BudgetModel {
     }
 
     if (proposal.current_stage !== role) {
-      throw new Error(`Stage mismatch: expected ${role}, got ${proposal.current_stage}`);
+      throw new Error(`Stage mismatch: expected ${role}, got ${proposal.current_stage} `);
     }
 
     // Determine next state
@@ -920,12 +960,17 @@ class BudgetModel {
       nextStage = role; // Stay on current stage if returned
     }
 
+    // Determine the descriptive role for logging (e.g., 'hod' or 'coordinator' instead of 'level1')
+    const displayRole = (role === 'level1')
+      ? (this.isEntityBeneficiaryType(proposal.beneficiary_type) ? 'coordinator' : 'hod')
+      : role;
+
     // Database Update
     return this.withTransaction(async (conn) => {
       await conn.execute(
         `UPDATE budget_proposals 
              SET status = ?, current_stage = ?, updated_at = NOW() 
-             WHERE id = ?`,
+             WHERE id = ? `,
         [newStatus, nextStage, proposalId]
       );
 
@@ -935,13 +980,13 @@ class BudgetModel {
 
       // 1. Insert the ACTUAL approval (DoF/Level-1/Principal)
       await conn.execute(
-        `INSERT INTO budget_proposal_approvals (
-                budget_proposal_id, role, approver_user_id, approver_email, 
-                decision, feedback, allows_edit
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO budget_proposal_approvals(
+          budget_proposal_id, role, approver_user_id, approver_email,
+          decision, feedback, allows_edit
+        ) VALUES(?, ?, ?, ?, ?, ?, ?)`,
         [
           proposalId,
-          role,
+          displayRole,
           approverUserId,
           approverEmail || '',
           decision,
@@ -953,10 +998,10 @@ class BudgetModel {
       // 2. Insert AUTO-APPROVAL for Principal (Only if DoF Approved + Principal Required)
       if (role === 'dof' && decision === 'approved' && requiresPrincipalStage) {
         await conn.execute(
-          `INSERT INTO budget_proposal_approvals (
-                    budget_proposal_id, role, approver_user_id, approver_email, 
-                    decision, feedback, allows_edit, decided_at
-                ) VALUES (?, 'principal', ?, ?, 'approved', 'Auto-approved after DoF clearance', 0, NOW())`,
+          `INSERT INTO budget_proposal_approvals(
+          budget_proposal_id, role, approver_user_id, approver_email,
+          decision, feedback, allows_edit, decided_at
+        ) VALUES(?, 'principal', ?, ?, 'approved', 'Auto-approved after DoF clearance', 0, NOW())`,
           [proposalId, approverUserId, 'system-auto@ksrct.ac.in']
         );
       }
@@ -985,38 +1030,38 @@ class BudgetModel {
 
     let sql = `
       SELECT SQL_CALC_FOUND_ROWS
-        bp.id,
+      bp.id,
         bp.proposal_ref,
         bp.fiscal_year,
         bp.employee_id,
         bp.user_id,
         MAX(bp.user_email) AS user_email,
-        COALESCE(
-          NULLIF(TRIM(MAX(CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, '')))), ''),
-          NULLIF(TRIM(MAX(u.name)), ''),
-          NULLIF(TRIM(MAX(bp.user_email)), '')
-        ) AS applicant_name,
-        MAX(CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, ''))) AS faculty_name,
-        MAX(u.name) AS user_name,
-        DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
-        bp.beneficiary_type,
-        bp.beneficiary_value,
-        bp.department_id,
-        md.name AS department,
-        md.code AS department_code,
-        bp.beneficiary_entity_id,
-        me.name AS org_unit_name,
-        me.code AS org_unit_code,
-        met.name AS org_unit_type,
-        met.code AS org_unit_type_code,
-        bp.proposal_description,
-        bp.total_amount,
-        bp.status,
-        bp.current_stage,
-        bp.approval_flow,
-        DATE_FORMAT(bp.created_at, '%Y-%m-%d %H:%i') AS created_date,
-        COUNT(DISTINCT bpl.id) AS line_count,
-        COUNT(DISTINCT bpa.id) AS approval_count
+          COALESCE(
+            NULLIF(TRIM(MAX(CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, '')))), ''),
+            NULLIF(TRIM(MAX(u.name)), ''),
+            NULLIF(TRIM(MAX(bp.user_email)), '')
+          ) AS applicant_name,
+            MAX(CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, ''))) AS faculty_name,
+              MAX(u.name) AS user_name,
+                DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
+                  bp.beneficiary_type,
+                  bp.beneficiary_value,
+                  bp.department_id,
+                  md.name AS department,
+                    md.code AS department_code,
+                      bp.beneficiary_entity_id,
+                      me.name AS org_unit_name,
+                        me.code AS org_unit_code,
+                          met.name AS org_unit_type,
+                            met.code AS org_unit_type_code,
+                              bp.proposal_description,
+                              bp.total_amount,
+                              bp.status,
+                              bp.current_stage,
+                              bp.approval_flow,
+                              DATE_FORMAT(bp.created_at, '%Y-%m-%d %H:%i') AS created_date,
+                                COUNT(DISTINCT bpl.id) AS line_count,
+                                  COUNT(DISTINCT bpa.id) AS approval_count
       FROM budget_proposals bp
       LEFT JOIN master_departments md ON bp.department_id = md.id
       LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
@@ -1026,7 +1071,7 @@ class BudgetModel {
       LEFT JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
       LEFT JOIN budget_proposal_approvals bpa ON bp.id = bpa.budget_proposal_id
       LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
-    `;
+        `;
 
     const where = ['bp.fiscal_year = ?'];
     const params = [Number(currentFY)];
@@ -1053,10 +1098,10 @@ class BudgetModel {
 
           if (normalizedDepartment) {
             hodScope.push(`(
-              LOWER(TRIM(md.name)) = LOWER(TRIM(?))
+          LOWER(TRIM(md.name)) = LOWER(TRIM(?))
               OR LOWER(TRIM(md.code)) = LOWER(TRIM(?))
               OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(?))
-            )`);
+        )`);
             params.push(normalizedDepartment, normalizedDepartment, normalizedDepartment);
           }
 
@@ -1077,9 +1122,26 @@ class BudgetModel {
           // Action Queue Filter for regular Coordinators
           where.push('(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed"))');
 
+          // Check if the user is mapped to specific entities via user_entity_roles
+          // OR if their email is in master_entity_contacts (for backwards compatibility/fallback)
+          const filterConditions = [];
+
+          if (userId) {
+            filterConditions.push(`me.id IN (
+              SELECT entity_id 
+              FROM user_entity_roles 
+              WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY')
+            )`);
+            params.push(Number(userId));
+          }
+
           if (userEmail) {
-            where.push('LOWER(TRIM(mec.email)) = LOWER(TRIM(?))');
+            filterConditions.push('LOWER(TRIM(mec.email)) = LOWER(TRIM(?))');
             params.push(userEmail);
+          }
+
+          if (filterConditions.length > 0) {
+            where.push(`(${filterConditions.join(' OR ')})`);
           } else {
             where.push('1 = 0');
           }
@@ -1088,19 +1150,19 @@ class BudgetModel {
       }
       case 'dof': {
         if (isQueueSuperAdminView) {
-          where.push('bp.current_stage = "dof"');
+          where.push('(bp.current_stage = "dof" OR bp.status LIKE "dof_%" OR bp.status = "completed")');
         } else {
           // Finance Queue: Needs action OR I already acted on it
-          where.push('(bp.current_stage = "dof" OR (bp.status LIKE "dof_%" AND bp.status != "completed"))');
+          where.push('(bp.current_stage = "dof" OR bp.status LIKE "dof_%" OR bp.status = "completed")');
         }
         break;
       }
       case 'principal': {
         if (isQueueSuperAdminView) {
-          where.push('bp.current_stage = "principal"');
+          where.push('(bp.current_stage = "principal" OR bp.status LIKE "principal_%" OR bp.status = "completed")');
         } else {
           // Principal Queue: Needs action OR I already acted on it
-          where.push('(bp.current_stage = "principal" OR (bp.status LIKE "principal_%" AND bp.status != "completed"))');
+          where.push('(bp.current_stage = "principal" OR bp.status LIKE "principal_%" OR bp.status = "completed")');
         }
         break;
       }
@@ -1128,14 +1190,14 @@ class BudgetModel {
     }
 
     if (normalizeText(q)) {
-      const searchPattern = `%${normalizeText(q)}%`;
+      const searchPattern = `% ${normalizeText(q)}% `;
       where.push(`(
-        bp.proposal_ref LIKE ?
-        OR bp.beneficiary_value LIKE ?
-        OR md.name LIKE ?
-        OR me.name LIKE ?
-        OR req_emp.first_name LIKE ?
-        OR req_emp.last_name LIKE ?
+          bp.proposal_ref LIKE ?
+          OR bp.beneficiary_value LIKE ?
+          OR md.name LIKE ?
+          OR me.name LIKE ?
+          OR req_emp.first_name LIKE ?
+          OR req_emp.last_name LIKE ?
       )`);
       params.push(
         searchPattern,
@@ -1150,7 +1212,7 @@ class BudgetModel {
     sql += ` WHERE ${where.join(' AND ')}
              GROUP BY bp.id, md.name, md.code, me.name, me.code, met.name, met.code
              ORDER BY bp.created_at DESC
-             LIMIT ? OFFSET ?`;
+      LIMIT ? OFFSET ? `;
 
     params.push(Number(pLimit), Number(pOffset));
 
@@ -1187,198 +1249,6 @@ class BudgetModel {
     return 'pending';
   }
 
-  static async listSuperAdminFlowBudgets({
-    page = 1,
-    limit = 20,
-    status,
-    fiscalYear,
-    q,
-    department,
-  }) {
-    const budgetsResult = await this.listBudgets({
-      role: 'super_admin',
-      page,
-      limit,
-      status,
-      fiscalYear,
-      q,
-      departmentFilter: department,
-    });
-
-    const budgets = Array.isArray(budgetsResult.budgets) ? budgetsResult.budgets : [];
-
-    if (!budgets.length) {
-      return {
-        rows: [],
-        pagination: budgetsResult.pagination,
-      };
-    }
-
-    const proposalIds = budgets
-      .map((budget) => Number(budget.id))
-      .filter((proposalId) => Number.isInteger(proposalId) && proposalId > 0);
-
-    let approvalRows = [];
-
-    if (proposalIds.length > 0) {
-      const [rows] = await db.query(
-        `SELECT
-           bpa.id,
-           bpa.budget_proposal_id,
-           bpa.role,
-           bpa.decision,
-           bpa.feedback,
-           bpa.approver_email,
-           bpa.approver_user_id,
-           bpa.allows_edit,
-           bpa.decided_at,
-           DATE_FORMAT(bpa.decided_at, '%Y-%m-%d %H:%i') AS decided_at_formatted,
-           CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS approver_name
-         FROM budget_proposal_approvals bpa
-         LEFT JOIN master_employees emp ON bpa.approver_user_id = emp.user_id AND emp.status = 'Active'
-         WHERE bpa.budget_proposal_id IN (?)
-         ORDER BY bpa.decided_at ASC, bpa.id ASC`,
-        [proposalIds]
-      );
-      approvalRows = rows;
-    }
-
-    const approvalsByProposal = new Map();
-
-    for (const approval of approvalRows) {
-      const proposalId = Number(approval.budget_proposal_id);
-      if (!approvalsByProposal.has(proposalId)) {
-        approvalsByProposal.set(proposalId, []);
-      }
-      approvalsByProposal.get(proposalId).push(approval);
-    }
-
-    const level1AssigneeEmails = [
-      ...new Set(
-        budgets
-          .map((budget) => normalizeText(budget.level1_assignee_email).toLowerCase())
-          .filter((email) => email.length > 0)
-      ),
-    ];
-
-    const level1AssigneeNameMap = new Map();
-
-    if (level1AssigneeEmails.length > 0) {
-      const [assigneeRows] = await db.query(
-        `SELECT
-           LOWER(TRIM(email)) AS email_key,
-           CONCAT(first_name, ' ', COALESCE(last_name, '')) AS full_name
-         FROM master_employees
-         WHERE status = 'Active'
-           AND LOWER(TRIM(email)) IN (?)`,
-        [level1AssigneeEmails]
-      );
-
-      for (const assignee of assigneeRows) {
-        const emailKey = normalizeText(assignee.email_key).toLowerCase();
-        if (emailKey) {
-          level1AssigneeNameMap.set(emailKey, normalizeText(assignee.full_name) || null);
-        }
-      }
-    }
-
-    const rows = budgets.map((budget) => {
-      const proposalId = Number(budget.id);
-      const proposalApprovals = approvalsByProposal.get(proposalId) || [];
-      const approvalByRole = new Map();
-
-      for (const approval of proposalApprovals) {
-        const roleKey = normalizeText(approval.role).toLowerCase();
-        if (roleKey) {
-          approvalByRole.set(roleKey, approval);
-        }
-      }
-
-      const flowStages = new Set(
-        normalizeText(budget.approval_flow)
-          .split('_')
-          .map((stage) => normalizeText(stage).toLowerCase())
-          .filter(Boolean)
-      );
-      const currentStage = normalizeText(budget.current_stage).toLowerCase();
-      const currentStageIndex = WORKFLOW_STAGES.indexOf(currentStage);
-
-      const buildStage = (stageKey) => {
-        const stageIndex = WORKFLOW_STAGES.indexOf(stageKey);
-        const requiresStage = flowStages.has(stageKey);
-        const approval = approvalByRole.get(stageKey) || null;
-        const stageStatusToken = `${stageKey}_approved`;
-
-        let state = 'pending';
-
-        if (!requiresStage) {
-          state = 'not_required';
-        } else if (approval) {
-          state = this.#mapDecisionToStageState(approval.decision);
-        } else if (
-          stageKey === 'level1' &&
-          budget.level1_assignment_status === LEVEL1_ASSIGNMENT_STATUS.unassigned
-        ) {
-          state = 'unassigned';
-        } else if (currentStage === stageKey) {
-          state = 'pending';
-        } else if (
-          currentStage === 'completed' ||
-          (currentStageIndex >= 0 && stageIndex >= 0 && currentStageIndex > stageIndex) ||
-          normalizeText(budget.status).toLowerCase().includes(stageStatusToken)
-        ) {
-          state = 'approved';
-        }
-
-        let approverEmail = approval?.approver_email
-          ? normalizeText(approval.approver_email).toLowerCase()
-          : null;
-        let approverName = normalizeText(approval?.approver_name) || null;
-
-        if (!approval && stageKey === 'level1' && budget.level1_assignee_email) {
-          approverEmail = normalizeText(budget.level1_assignee_email).toLowerCase();
-          approverName = level1AssigneeNameMap.get(approverEmail) || null;
-        }
-
-        return {
-          state,
-          decision: approval?.decision || null,
-          approverName,
-          approverEmail,
-          label: this.resolveStageLabel(stageKey, budget),
-          decidedAt: approval?.decided_at_formatted || approval?.decided_at || null,
-          isAuto: stageKey === 'principal' && approverEmail === 'system-auto@ksrct.ac.in',
-        };
-      };
-
-      return {
-        proposalId,
-        proposalRef: budget.proposal_ref,
-        fiscalYear: budget.fiscal_year,
-        facultyName: normalizeText(budget.faculty_name) || null,
-        requesterEmail: normalizeText(budget.user_email).toLowerCase() || null,
-        beneficiaryType: budget.beneficiary_type,
-        beneficiaryValue: budget.beneficiary_value,
-        department: budget.department,
-        totalAmount: Number(budget.total_amount || 0),
-        status: budget.status,
-        currentStage: budget.current_stage,
-        approvalFlow: budget.approval_flow,
-        createdDate: budget.created_date,
-        level1_route_type: budget.level1_route_type || null,
-        level1_assignee_email: budget.level1_assignee_email || null,
-        level1_assignment_status: budget.level1_assignment_status || LEVEL1_ASSIGNMENT_STATUS.assigned,
-        level1: buildStage('level1'),
-        financeAdmin: buildStage('dof'),
-        principal: buildStage('principal'),
-      };
-    });
-
-    return {
-      rows,
-      pagination: budgetsResult.pagination,
-    };
-  }
 
 
   static resolveStageLabel(stageKey, proposal = {}) {
@@ -1402,62 +1272,6 @@ class BudgetModel {
     return stageKey;
   }
 
-  static async dashboardAggregates({ department, departmentId, role, fiscalYear }) {
-    const currentFY = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
-    const params = [currentFY];
-    const where = ['bp.fiscal_year = ?'];
-
-    if (this.normalizeBudgetRole(role) === 'hod') {
-      if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
-        where.push('bp.department_id = ?');
-        params.push(Number(departmentId));
-      } else if (normalizeText(department)) {
-        const departmentRow = await this.getDepartmentByName(department);
-        if (departmentRow) {
-          where.push('bp.department_id = ?');
-          params.push(Number(departmentRow.id));
-        } else {
-          where.push('1 = 0');
-        }
-      } else {
-        where.push('1 = 0');
-      }
-    }
-
-    const whereClause = `WHERE ${where.join(' AND ')}`;
-
-    const approvedSql = `
-      SELECT bpl.budget_head, SUM(bpl.line_total) AS amount
-      FROM budget_proposals bp
-      JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
-      ${whereClause}
-        AND bp.status IN ('level1_approved', 'dof_approved', 'principal_approved', 'completed')
-      GROUP BY bpl.budget_head
-    `;
-
-    const pendingSql = `
-      SELECT bpl.budget_head, SUM(bpl.line_total) AS amount
-      FROM budget_proposals bp
-      JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
-      ${whereClause}
-        AND bp.status IN ('submitted', 'level1_approved')
-      GROUP BY bpl.budget_head
-    `;
-
-    const [[approvedRows], [pendingRows]] = await Promise.all([
-      db.execute(approvedSql, params),
-      db.execute(pendingSql, params),
-    ]);
-
-    return {
-      approved: approvedRows,
-      pending: pendingRows,
-      summary: {
-        totalApproved: approvedRows.reduce((sum, row) => sum + Number(row.amount || 0), 0),
-        totalPending: pendingRows.reduce((sum, row) => sum + Number(row.amount || 0), 0),
-      },
-    };
-  }
 
   /* =====================================================
      8. ORG UNIT / ENTITY HELPERS
@@ -1499,6 +1313,7 @@ class BudgetModel {
     return rows;
   }
 
+
   static async getOrgUnitsByType(typeCode) {
     const normalizedTypeCode = this.normalizeEntityTypeCode(typeCode);
 
@@ -1536,11 +1351,11 @@ class BudgetModel {
 
     const [entityRows] = await db.execute(
       `SELECT me.id,
-              me.code,
-              me.name,
-              me.is_active,
-              met.code AS type_code,
-              met.name AS type_name
+        me.code,
+        me.name,
+        me.is_active,
+        met.code AS type_code,
+          met.name AS type_name
        FROM master_entities me
        JOIN master_entity_types met ON me.entity_type_id = met.id
        WHERE me.is_active = 1
@@ -1573,7 +1388,7 @@ class BudgetModel {
       `SELECT id, role, email, is_primary
        FROM master_entity_contacts
        WHERE entity_id = ?
-       ORDER BY is_primary DESC, role ASC`,
+        ORDER BY is_primary DESC, role ASC`,
       [orgUnitId]
     );
 
@@ -1583,16 +1398,16 @@ class BudgetModel {
   static async #getEntityById(conn, entityId) {
     const [rows] = await conn.execute(
       `SELECT me.id,
-              me.code,
-              me.name,
-              me.is_active,
-              me.sort_order,
-              met.code AS type_code,
-              met.name AS type_name
+        me.code,
+        me.name,
+        me.is_active,
+        me.sort_order,
+        met.code AS type_code,
+          met.name AS type_name
        FROM master_entities me
        JOIN master_entity_types met ON me.entity_type_id = met.id
        WHERE me.id = ?
-       LIMIT 1`,
+        LIMIT 1`,
       [entityId]
     );
 
@@ -1602,16 +1417,16 @@ class BudgetModel {
   static async #assertEntityInType(conn, typeCode, entityId) {
     const [rows] = await conn.execute(
       `SELECT me.id,
-              me.code,
-              me.name,
-              me.is_active,
-              me.sort_order,
-              met.code AS type_code,
-              met.name AS type_name
+        me.code,
+        me.name,
+        me.is_active,
+        me.sort_order,
+        met.code AS type_code,
+          met.name AS type_name
        FROM master_entities me
        JOIN master_entity_types met ON me.entity_type_id = met.id
        WHERE me.id = ? AND met.code = ?
-       LIMIT 1`,
+        LIMIT 1`,
       [entityId, typeCode]
     );
 
@@ -1622,194 +1437,22 @@ class BudgetModel {
     return rows[0];
   }
 
-  static async createEntity(typeCode, payload) {
-    const normalizedTypeCode = this.normalizeEntityTypeCode(typeCode);
 
-    if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
-      throw new Error('Invalid entity type code');
-    }
 
-    const name = normalizeText(payload?.name);
 
-    if (!name) {
-      throw new Error('name is required');
-    }
 
-    const code = normalizeText(payload?.code) || null;
-    const sortOrder = Number.isFinite(Number(payload?.sort_order)) ? Number(payload.sort_order) : 0;
-    const isActive = payload?.is_active === undefined ? 1 : payload.is_active ? 1 : 0;
-
-    return this.withTransaction(async (conn) => {
-      const [typeRows] = await conn.execute(
-        'SELECT id FROM master_entity_types WHERE code = ? LIMIT 1',
-        [normalizedTypeCode]
-      );
-
-      if (!typeRows.length) {
-        throw new Error('Entity type not found');
-      }
-
-      const [insertResult] = await conn.execute(
-        `INSERT INTO master_entities (entity_type_id, code, name, is_active, sort_order)
-         VALUES (?, ?, ?, ?, ?)`,
-        [typeRows[0].id, code, name, isActive, sortOrder]
-      );
-
-      return this.#getEntityById(conn, insertResult.insertId);
-    });
-  }
-
-  static async updateEntity(typeCode, entityId, payload) {
-    const normalizedTypeCode = this.normalizeEntityTypeCode(typeCode);
-
-    if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
-      throw new Error('Invalid entity type code');
-    }
-
-    const parsedEntityId = Number(entityId);
-
-    if (!Number.isInteger(parsedEntityId) || parsedEntityId <= 0) {
-      throw new Error('Invalid entity id');
-    }
-
-    return this.withTransaction(async (conn) => {
-      const existing = await this.#assertEntityInType(conn, normalizedTypeCode, parsedEntityId);
-
-      const nextName =
-        payload?.name !== undefined ? normalizeText(payload.name) : normalizeText(existing.name);
-      const nextCode =
-        payload?.code !== undefined ? normalizeText(payload.code) || null : existing.code || null;
-      const nextSortOrder =
-        payload?.sort_order !== undefined && Number.isFinite(Number(payload.sort_order))
-          ? Number(payload.sort_order)
-          : Number(existing.sort_order || 0);
-      const nextIsActive =
-        payload?.is_active !== undefined ? (payload.is_active ? 1 : 0) : existing.is_active ? 1 : 0;
-
-      if (!nextName) {
-        throw new Error('name is required');
-      }
-
-      await conn.execute(
-        `UPDATE master_entities
-         SET code = ?,
-             name = ?,
-             is_active = ?,
-             sort_order = ?,
-             updated_at = NOW()
-         WHERE id = ?`,
-        [nextCode, nextName, nextIsActive, nextSortOrder, parsedEntityId]
-      );
-
-      return this.#getEntityById(conn, parsedEntityId);
-    });
-  }
-
-  static async deleteEntity(typeCode, entityId) {
-    const normalizedTypeCode = this.normalizeEntityTypeCode(typeCode);
-
-    if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
-      throw new Error('Invalid entity type code');
-    }
-
-    const parsedEntityId = Number(entityId);
-
-    if (!Number.isInteger(parsedEntityId) || parsedEntityId <= 0) {
-      throw new Error('Invalid entity id');
-    }
-
-    return this.withTransaction(async (conn) => {
-      await this.#assertEntityInType(conn, normalizedTypeCode, parsedEntityId);
-      const [result] = await conn.execute('DELETE FROM master_entities WHERE id = ?', [parsedEntityId]);
-      return result.affectedRows > 0;
-    });
-  }
-
-  static async getEntityContacts(typeCode, entityId) {
-    const normalizedTypeCode = this.normalizeEntityTypeCode(typeCode);
-
-    if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
-      throw new Error('Invalid entity type code');
-    }
-
-    const parsedEntityId = Number(entityId);
-
-    if (!Number.isInteger(parsedEntityId) || parsedEntityId <= 0) {
-      throw new Error('Invalid entity id');
-    }
-
-    await this.#assertEntityInType(db, normalizedTypeCode, parsedEntityId);
-
-    const [rows] = await db.execute(
-      `SELECT id, role, email, is_primary
-       FROM master_entity_contacts
-       WHERE entity_id = ?
-       ORDER BY is_primary DESC, role ASC, email ASC`,
-      [parsedEntityId]
-    );
-
-    return rows;
-  }
-
-  static async updateEntityContacts(typeCode, entityId, contacts = []) {
-    const normalizedTypeCode = this.normalizeEntityTypeCode(typeCode);
-
-    if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
-      throw new Error('Invalid entity type code');
-    }
-
-    const parsedEntityId = Number(entityId);
-
-    if (!Number.isInteger(parsedEntityId) || parsedEntityId <= 0) {
-      throw new Error('Invalid entity id');
-    }
-
-    const normalizedContacts = (Array.isArray(contacts) ? contacts : [])
-      .map((contact) => ({
-        role: ['office', 'hod', 'finance', 'generic'].includes(normalizeText(contact?.role).toLowerCase())
-          ? normalizeText(contact.role).toLowerCase()
-          : 'office',
-        email: normalizeText(contact?.email).toLowerCase(),
-        is_primary: contact?.is_primary ? 1 : 0,
-      }))
-      .filter((contact) => contact.email.length > 0);
-
-    return this.withTransaction(async (conn) => {
-      await this.#assertEntityInType(conn, normalizedTypeCode, parsedEntityId);
-
-      await conn.execute('DELETE FROM master_entity_contacts WHERE entity_id = ?', [parsedEntityId]);
-
-      for (const contact of normalizedContacts) {
-        await conn.execute(
-          `INSERT INTO master_entity_contacts (entity_id, role, email, is_primary)
-           VALUES (?, ?, ?, ?)`,
-          [parsedEntityId, contact.role, contact.email, contact.is_primary]
-        );
-      }
-
-      const [rows] = await conn.execute(
-        `SELECT id, role, email, is_primary
-         FROM master_entity_contacts
-         WHERE entity_id = ?
-         ORDER BY is_primary DESC, role ASC, email ASC`,
-        [parsedEntityId]
-      );
-
-      return rows;
-    });
-  }
 
   static async #insertBudgetLine(proposalId, line, conn) {
     const [result] = await conn.execute(
-      `INSERT INTO budget_proposal_lines (
-        budget_proposal_id,
-        budget_head,
-        sub_head,
-        unit_amount,
-        quantity,
-        line_total,
-        line_description
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO budget_proposal_lines(
+          budget_proposal_id,
+          budget_head,
+          sub_head,
+          unit_amount,
+          quantity,
+          line_total,
+          line_description
+        ) VALUES(?, ?, ?, ?, ?, ?, ?)`,
       [
         proposalId,
         line.budget_head,
@@ -1833,34 +1476,34 @@ class BudgetModel {
 
   static async getBudgetById(proposalId) {
     const [rows] = await db.execute(
-      `SELECT 
-              bp.*, 
-              DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
-              md.name AS department, 
-              md.code AS department_code,
-              me.name AS org_unit_name, 
-              me.code AS org_unit_code,
-              met.name AS org_unit_type,
-              met.code AS org_unit_type_code,
-              -- ✅ FETCH MISSING FIELDS FROM EMPLOYEE TABLE
-              emp.designation,
-              emp.designation AS user_designation,
-              emp.mobile,
-              emp.mobile AS user_mobile,
-              COALESCE(emp_parent_dept.name, emp_parent_dept_fallback.name, emp_dept.name) AS user_department,
+      `SELECT
+      bp.*,
+        DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
+          md.name AS department,
+            md.code AS department_code,
+              me.name AS org_unit_name,
+                me.code AS org_unit_code,
+                  met.name AS org_unit_type,
+                    met.code AS org_unit_type_code,
+                      -- ✅ FETCH MISSING FIELDS FROM EMPLOYEE TABLE
+      emp.designation,
+        emp.designation AS user_designation,
+          emp.mobile,
+          emp.mobile AS user_mobile,
+            COALESCE(emp_parent_dept.name, emp_parent_dept_fallback.name, emp_dept.name) AS user_department,
               COALESCE(emp_parent_dept.name, emp_parent_dept_fallback.name, emp_dept.name) AS applicant_department,
-              CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS user_name,
-              CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS name
+                CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS user_name,
+                  CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS name
           FROM budget_proposals bp
           LEFT JOIN master_departments md ON bp.department_id = md.id
           LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
           LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
-          -- ✅ ADD THIS JOIN TO GET THE DATA
+      -- ✅ ADD THIS JOIN TO GET THE DATA
           LEFT JOIN master_employees emp ON bp.user_id = emp.user_id 
           LEFT JOIN master_departments emp_dept ON emp.department_id = emp_dept.id
           LEFT JOIN master_departments emp_parent_dept ON emp.parent_department_id = emp_parent_dept.id
           LEFT JOIN master_departments emp_parent_dept_fallback ON emp_dept.parent_id = emp_parent_dept_fallback.id
-          WHERE bp.id = ?`,
+          WHERE bp.id = ? `,
       [proposalId]
     );
 
@@ -1883,25 +1526,49 @@ class BudgetModel {
       userEmail &&
       normalizeText(proposal.user_email).toLowerCase() === normalizeText(userEmail).toLowerCase();
 
+    // ✅ ALWAYS allow the owner or named user to access their own proposal
+    if (pid === uid || emailMatch) {
+      return true;
+    }
+
     switch (normalizedRole) {
       case 'user':
         return pid === uid || emailMatch;
 
+      case 'hod':
+      case 'coordinator':
       case 'level1': {
         const level1Route = this.resolveLevel1Route(proposal);
 
         if (level1Route.routeType === LEVEL1_ROUTE_TYPE.entityContact) {
           const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
-          if (!normalizedUserEmail) return false;
 
-          const [contacts] = await db.execute(
-            `SELECT email FROM master_entity_contacts WHERE entity_id = ?`,
-            [level1Route.entityId]
-          );
+          // Check master_entity_contacts first
+          if (normalizedUserEmail) {
+            const [contacts] = await db.execute(
+              `SELECT email FROM master_entity_contacts WHERE entity_id = ? `,
+              [level1Route.entityId]
+            );
 
-          return contacts.some(
-            (c) => normalizeText(c.email).toLowerCase() === normalizedUserEmail
-          );
+            if (contacts.some(
+              (c) => normalizeText(c.email).toLowerCase() === normalizedUserEmail
+            )) {
+              return true;
+            }
+          }
+
+          // Fallback: check user_entity_roles
+          if (uid > 0) {
+            const [uerRows] = await db.execute(
+              `SELECT 1 FROM user_entity_roles WHERE user_id = ? AND entity_id = ? LIMIT 1`,
+              [uid, level1Route.entityId]
+            );
+            if (uerRows.length > 0) {
+              return true;
+            }
+          }
+
+          return false;
         }
 
         const normalizedDepartment = normalizeText(department).toLowerCase();
@@ -1945,91 +1612,19 @@ class BudgetModel {
     }
   }
 
-  static async getApprovalFlowConfigs() {
-    const [rows] = await db.execute(
-      `SELECT afc.*, met.name AS entity_type_name
-       FROM approval_flow_config afc
-       LEFT JOIN master_entity_types met ON afc.entity_type_code = met.code
-       WHERE afc.is_active = 1
-       ORDER BY afc.beneficiary_type, met.name`
-    );
 
-    return rows;
-  }
 
-  static async updateApprovalFlowConfig(id, { requiresLevel1, requiresDof, requiresPrincipal }) {
-    const [result] = await db.execute(
-      `UPDATE approval_flow_config
-       SET requires_level1 = ?,
-           requires_dof = ?,
-           requires_principal = ?,
-           updated_at = NOW()
-       WHERE id = ?`,
-      [requiresLevel1, requiresDof, requiresPrincipal, id]
-    );
-
-    return result.affectedRows > 0;
-  }
-
-  static async getBudgetStatsByFY(fiscalYear) {
-    const fy = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
-
-    const [stats] = await db.execute(
-      `SELECT
-         COUNT(DISTINCT bp.id) AS total_proposals,
-         SUM(bp.total_amount) AS total_amount,
-         COUNT(DISTINCT CASE WHEN bp.status LIKE '%_approved' THEN bp.id END) AS approved_count,
-         SUM(CASE WHEN bp.status LIKE '%_approved' THEN bp.total_amount ELSE 0 END) AS approved_amount,
-         COUNT(DISTINCT CASE WHEN bp.status = 'submitted' THEN bp.id END) AS pending_count,
-         SUM(CASE WHEN bp.status = 'submitted' THEN bp.total_amount ELSE 0 END) AS pending_amount,
-         COUNT(DISTINCT CASE WHEN bp.status LIKE '%_rejected' THEN bp.id END) AS rejected_count
-       FROM budget_proposals bp
-       WHERE bp.fiscal_year = ?`,
-      [fy]
-    );
-
-    const [byDepartment] = await db.execute(
-      `SELECT
-         md.name AS department,
-         COUNT(*) AS proposal_count,
-         SUM(bp.total_amount) AS total_amount
-       FROM budget_proposals bp
-       LEFT JOIN master_departments md ON bp.department_id = md.id
-       WHERE bp.fiscal_year = ? AND bp.department_id IS NOT NULL
-       GROUP BY md.name
-       ORDER BY total_amount DESC`,
-      [fy]
-    );
-
-    const [byBeneficiary] = await db.execute(
-      `SELECT
-         bp.beneficiary_type,
-         COUNT(*) AS proposal_count,
-         SUM(bp.total_amount) AS total_amount
-       FROM budget_proposals bp
-       WHERE bp.fiscal_year = ?
-       GROUP BY bp.beneficiary_type
-       ORDER BY proposal_count DESC`,
-      [fy]
-    );
-
-    return {
-      overall: stats[0],
-      byDepartment,
-      byBeneficiaryType: byBeneficiary,
-    };
-  }
 
   static async getMonthlyAllocations(proposalId) {
     const [rows] = await db.execute(
       `SELECT
-         m.month,
-         SUM(m.amount) AS total_amount,
-         COUNT(DISTINCT l.id) AS line_count
+      m.month,
+        SUM(m.amount) AS total_amount,
+          COUNT(DISTINCT l.id) AS line_count
        FROM budget_line_month_allocations m
        JOIN budget_proposal_lines l ON m.budget_line_id = l.id
        WHERE l.budget_proposal_id = ?
-       GROUP BY m.month
+        GROUP BY m.month
        ORDER BY FIELD(m.month, ${VALID_MONTHS.map((month) => `'${month}'`).join(',')})`,
       [proposalId]
     );
@@ -2037,45 +1632,6 @@ class BudgetModel {
     return rows;
   }
 
-  static async getProposalDataForExport(proposalId) {
-    const master = await this.getBudgetById(proposalId);
-
-    if (!master) {
-      return null;
-    }
-
-    const [lines] = await db.execute(
-      `SELECT bpl.*,
-              GROUP_CONCAT(
-                CONCAT(m.month, ':', m.amount)
-                ORDER BY FIELD(m.month, ${VALID_MONTHS.map((month) => `'${month}'`).join(',')})
-                SEPARATOR '|'
-              ) AS month_allocations_str
-       FROM budget_proposal_lines bpl
-       LEFT JOIN budget_line_month_allocations m ON bpl.id = m.budget_line_id
-       WHERE bpl.budget_proposal_id = ?
-       GROUP BY bpl.id`,
-      [proposalId]
-    );
-
-    const [approvals] = await db.execute(
-      `SELECT role,
-              decision,
-              feedback,
-              approver_email,
-              DATE_FORMAT(decided_at, '%Y-%m-%d %H:%i:%s') AS decided_at
-       FROM budget_proposal_approvals
-       WHERE budget_proposal_id = ?
-       ORDER BY decided_at`,
-      [proposalId]
-    );
-
-    return {
-      master,
-      lines,
-      approvals,
-    };
-  }
 }
 
 export default BudgetModel;

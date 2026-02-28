@@ -12,6 +12,7 @@ import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js'
 import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
 import editRequestRoutes from './modules/editRequest/editRequestRoutes.js';
 import budgetRoutes from './modules/budget/budgetRoutes.js';
+import adminBudgetRoutes from './modules/adminbudget/adminBudgetRoutes.js';
 
 
 // Events routes
@@ -132,6 +133,7 @@ app.use('/api/finance-requests', financePageRoutes);
 
 // Budget routes
 app.use('/api/budget', budgetRoutes);
+app.use('/api/adminbudget', adminBudgetRoutes);
 
 // FinanceCard API
 // app.use('/api/finance-dashboard', financeCardRoutes);

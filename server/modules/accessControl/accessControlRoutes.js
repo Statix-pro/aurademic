@@ -57,4 +57,7 @@ router.put(
   accessControlController.setUserSuperAdmin
 );
 
+// manual sync endpoint
+router.post('/sync-roles', canManageAccessControl, accessControlController.syncRoles);
+
 export default router;

@@ -3,7 +3,6 @@ import BudgetController from './budgetController.js';
 import {
   authMiddleware,
   permissionMiddleware,
-  superAdminMiddleware,
 } from '../../middleware/authMiddleware.js';
 import upload from '../../middleware/uploadMiddleware.js';
 
@@ -13,10 +12,7 @@ const BUDGET_PERMISSIONS = Object.freeze({
   workflowLevel1: 'budget.workflow.level1',
   workflowDof: 'budget.workflow.dof',
   workflowPrincipal: 'budget.workflow.principal',
-  adminView: 'budget.admin.view',
-  adminManage: 'budget.admin.manage',
 });
-
 
 const canAccessLevel1Queue = permissionMiddleware([BUDGET_PERMISSIONS.workflowLevel1]);
 const canAccessDofQueue = permissionMiddleware([BUDGET_PERMISSIONS.workflowDof]);
@@ -26,50 +22,20 @@ const canProcessWorkflow = permissionMiddleware([
   BUDGET_PERMISSIONS.workflowDof,
   BUDGET_PERMISSIONS.workflowPrincipal,
 ]);
-const canViewBudgetAdmin = permissionMiddleware([
-  BUDGET_PERMISSIONS.adminView,
-  BUDGET_PERMISSIONS.adminManage,
-]);
-const canManageBudgetAdmin = permissionMiddleware([BUDGET_PERMISSIONS.adminManage]);
-
 
 router.use(authMiddleware);
 
 router.get('/faculty', BudgetController.getFacultyDetails);
 router.get('/search-applicant', BudgetController.searchApplicant);
-router.get('/approval-flows', canViewBudgetAdmin, BudgetController.getApprovalFlows);
 router.get('/org-units', BudgetController.getAllOrgUnits);
 router.get('/org-units/:type', BudgetController.getOrgUnits);
-
-router.get('/entities/:type', canManageBudgetAdmin, BudgetController.getEntitiesByType);
-router.post('/entities/:type', canManageBudgetAdmin, BudgetController.createEntity);
-router.put('/entities/:type/:id(\\d+)', canManageBudgetAdmin, BudgetController.updateEntity);
-router.delete('/entities/:type/:id(\\d+)', canManageBudgetAdmin, BudgetController.deleteEntity);
-router.get(
-  '/entities/:type/:id(\\d+)/contacts',
-  canManageBudgetAdmin,
-  BudgetController.getEntityContacts
-);
-router.put(
-  '/entities/:type/:id(\\d+)/contacts',
-  canManageBudgetAdmin,
-  BudgetController.updateEntityContacts
-);
 
 router.get('/my', BudgetController.getMyBudgets);
 router.get('/hod', canAccessLevel1Queue, BudgetController.getHodBudgets);
 router.get('/coordinator', canAccessLevel1Queue, BudgetController.getCoordinatorBudgets);
 router.get('/dof', canAccessDofQueue, BudgetController.getDofBudgets);
 router.get('/principal', canAccessPrincipalQueue, BudgetController.getPrincipalBudgets);
-router.get('/aggregates', canViewBudgetAdmin, BudgetController.getAggregates);
-router.get('/stats', canViewBudgetAdmin, BudgetController.getStats);
 
-router.get('/admin', canViewBudgetAdmin, BudgetController.adminList);
-router.get('/superadmin/flow', superAdminMiddleware, BudgetController.getSuperAdminFlowDashboard);
-router.get('/export', canViewBudgetAdmin, BudgetController.export);
-router.get('/search', canViewBudgetAdmin, BudgetController.search);
-
-router.patch('/admin/flow/:id(\\d+)', canManageBudgetAdmin, BudgetController.updateFlowConfig);
 router.post('/', BudgetController.create);
 router.put('/:id(\\d+)', BudgetController.update);
 
@@ -91,6 +57,5 @@ router.post(
 );
 
 router.get('/:id(\\d+)', BudgetController.get);
-
 
 export default router;
