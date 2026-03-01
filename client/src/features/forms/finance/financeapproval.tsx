@@ -7,6 +7,9 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './financeapproval.css';
 import KSRCTLogo from '../../../shared/assets/images/ksrct_logo.png';
 import Navbar from '../../../shared/components/layout/navbar/navbar';
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import CustomTagInput from '../../../shared/components/ui/CustomTagInput';
+import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
 interface SelectOption {
   value: string;
   label: string;
@@ -604,6 +607,26 @@ const FinanceApproval: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+    onConfirm?: () => void;
+    showCancel?: boolean;
+    confirmText?: string;
+  }>({
+    show: false,
+    message: "",
+    type: "info"
+  });
+
+  const showAlert = (message: React.ReactNode, type: AlertType = "info", title?: string, showCancel = false, confirmText = "OK", onConfirm?: () => void) => {
+    setAlertConfig({ show: true, message, type, title, onConfirm, showCancel, confirmText });
+  };
+
+  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+
   const componentRef = useRef<HTMLDivElement>(null);
   const getSubHeadOptions = (budgetHead: string): string[] =>
     SUB_HEAD_BY_BUDGET_HEAD[budgetHead] ?? [];
@@ -642,7 +665,7 @@ const FinanceApproval: React.FC = () => {
       setIsLoading(true);
       const element = componentRef.current;
       if (!element) {
-        alert('Preview not available. Please show preview first.');
+        showAlert('Preview not available. Please show preview first.', 'warning');
         return;
       }
 
@@ -682,7 +705,7 @@ const FinanceApproval: React.FC = () => {
       pdf.save('FinanceApprovalRequest.pdf');
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Error generating PDF. Please try again.');
+      showAlert('Error generating PDF. Please try again.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -763,8 +786,8 @@ const FinanceApproval: React.FC = () => {
     fontFamily: 'inherit',
   };
 
-  const handleReset = (): void => {
-    if (window.confirm('Are you sure you want to reset the form?')) {
+  const handleReset = (force = false): void => {
+    const performReset = () => {
       setApplicantName('');
       setDate('');
       setDesignation('');
@@ -792,6 +815,22 @@ const FinanceApproval: React.FC = () => {
       setIsBudgetProposed('');
       setBudgetRows([{ category: '', head: '', amount: '' }]);
       setEnclosureSelections([]);
+    };
+
+    if (force) {
+      performReset();
+    } else {
+      showAlert(
+        'Are you sure you want to reset the form?',
+        'warning',
+        'Confirm Reset',
+        true,
+        'Reset',
+        () => {
+          closeAlert();
+          performReset();
+        }
+      );
     }
   };
   const getSubcategoryLabel = (category: string) => {
@@ -2385,7 +2424,7 @@ const FinanceApproval: React.FC = () => {
             {isLoading ? 'Generating...' : 'Download PDF'}
           </button>
           <button
-            onClick={handleReset}
+            onClick={() => handleReset(false)}
             style={{
               backgroundColor: '#0069ab',
               color: '#fff',
@@ -3034,7 +3073,16 @@ const FinanceApproval: React.FC = () => {
       )}
       {/* PAGE FOOTER - Left Aligned (Standard) */}
 
-
+      <AlertModal
+        show={alertConfig.show}
+        onHide={closeAlert}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        showCancel={alertConfig.showCancel}
+        confirmText={alertConfig.confirmText}
+        onConfirm={alertConfig.onConfirm}
+      />
     </div>
   );
 };

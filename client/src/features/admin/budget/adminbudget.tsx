@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import { useAuth } from "../../../contexts/AuthContext";
 import { hasPermission, isSuperAdmin } from "../../../shared/utils/permissionUtils";
+import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
 
 type ActionType = "return" | "reject" | null;
 type QueueTabKey = "hod" | "coordinator" | "dof" | "principal" | "admin";
@@ -78,6 +79,26 @@ const AdminBudget: React.FC = () => {
   const [data, setData] = useState<BudgetRequestItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [accessError, setAccessError] = useState("");
+
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+    onConfirm?: () => void;
+    showCancel?: boolean;
+    confirmText?: string;
+  }>({
+    show: false,
+    message: "",
+    type: "info"
+  });
+
+  const showAlert = (message: React.ReactNode, type: AlertType = "info", title?: string, showCancel = false, confirmText = "OK", onConfirm?: () => void) => {
+    setAlertConfig({ show: true, message, type, title, onConfirm, showCancel, confirmText });
+  };
+
+  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>("pending");
@@ -298,7 +319,7 @@ const AdminBudget: React.FC = () => {
     stage: string
   ) => {
     if (!canProcessStage(stage)) {
-      alert("You do not have permission to process this stage.");
+      showAlert("You do not have permission to process this stage.", "error");
       return;
     }
 
@@ -321,35 +342,44 @@ const AdminBudget: React.FC = () => {
 
   const onApprove = async (id: number, stage: string) => {
     if (!canProcessStage(stage)) {
-      alert("You do not have permission to approve this stage.");
+      showAlert("You do not have permission to approve this stage.", "error");
       return;
     }
 
-    try {
-      if (!window.confirm("Are you sure you want to approve this budget?")) return;
-      const response: any = await authenticityUtility.patch(`/budget/${id}/approval`, {
-        decision: "approved",
-      });
-      if (response.success) {
-        alert("Approved successfully");
-        fetchDashboard();
+    showAlert(
+      "Are you sure you want to approve this budget?",
+      "warning",
+      "Confirm Approval",
+      true,
+      "Approve",
+      async () => {
+        closeAlert();
+        try {
+          const response: any = await authenticityUtility.patch(`/budget/${id}/approval`, {
+            decision: "approved",
+          });
+          if (response.success) {
+            showAlert("Approved successfully", "success");
+            fetchDashboard();
+          }
+        } catch (error: any) {
+          showAlert(error.response?.data?.message || "Failed to approve", "error");
+        }
       }
-    } catch (error: any) {
-      alert(error.response?.data?.message || "Failed to approve");
-    }
+    );
   };
 
   const submitActionWithComment = async () => {
     if (!actionType || !actionId) return;
 
     if (!canProcessStage(actionStage)) {
-      alert("You do not have permission to process this stage.");
+      showAlert("You do not have permission to process this stage.", "error");
       return;
     }
 
     const comment = actionComment.trim();
     if (!comment) {
-      alert("Please enter comments.");
+      showAlert("Please enter comments.", "warning");
       return;
     }
 
@@ -360,12 +390,12 @@ const AdminBudget: React.FC = () => {
       });
 
       if (response.success) {
-        alert(`${actionType === "return" ? "Returned" : "Rejected"} successfully`);
+        showAlert(`${actionType === "return" ? "Returned" : "Rejected"} successfully`, "success");
         closeActionPopup();
         fetchDashboard();
       }
     } catch (error: any) {
-      alert(error.response?.data?.message || `Failed to ${actionType}`);
+      showAlert(error.response?.data?.message || `Failed to ${actionType}`, "error");
     }
   };
 
@@ -856,6 +886,17 @@ const AdminBudget: React.FC = () => {
           </div>
         </div>
       )}
+
+      <AlertModal
+        show={alertConfig.show}
+        onHide={closeAlert}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        showCancel={alertConfig.showCancel}
+        confirmText={alertConfig.confirmText}
+        onConfirm={alertConfig.onConfirm}
+      />
     </>
   );
 };
