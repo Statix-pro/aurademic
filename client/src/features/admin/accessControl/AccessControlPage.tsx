@@ -10,6 +10,8 @@ import {
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import Navbar from '../../../shared/components/layout/navbar/navbar';
 import './AccessControlPage.css';
+import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
+import DeleteConfirmationModal from '../../../shared/components/ui/DeleteConfirmationModal';
 
 interface Permission {
   id: number;
@@ -130,10 +132,49 @@ const AccessControlPage: React.FC = () => {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  const handleSyncRoles = async () => {
-    if (!window.confirm('This will synchronize all HOD and Coordinator roles mapped in Master Departments and Master Entity Contacts. Proceed?')) {
-      return;
-    }
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+    onConfirm?: () => void;
+    showCancel?: boolean;
+    confirmText?: string;
+  }>({
+    show: false,
+    message: '',
+    type: 'info'
+  });
+
+  const showAlert = (message: React.ReactNode, type: AlertType = 'info', title?: string, showCancel = false, confirmText = 'OK', onConfirm?: () => void) => {
+    setAlertConfig({ show: true, message, type, title, onConfirm, showCancel, confirmText });
+  };
+
+  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+
+  const [deleteModalConfig, setDeleteModalConfig] = useState<{
+    show: boolean;
+    role: Role | null;
+  }>({
+    show: false,
+    role: null
+  });
+
+  const handleSyncRolesClick = () => {
+    showAlert(
+      'This will update the assigned HODs and Coordinators based on the department and club database. Do you want to continue?',
+      'warning',
+      'Update Roles',
+      true,
+      'Update Now',
+      () => {
+        closeAlert();
+        executeSyncRoles();
+      }
+    );
+  };
+
+  const executeSyncRoles = async () => {
 
     setSyncRolesLoading(true);
     setError('');
@@ -501,10 +542,15 @@ const AccessControlPage: React.FC = () => {
     }
   };
 
-  const handleDeleteRole = async (role: Role) => {
-    if (!window.confirm(`Delete role ${role.role_name}?`)) {
-      return;
-    }
+  const handleDeleteRoleClick = (role: Role) => {
+    setDeleteModalConfig({ show: true, role });
+  };
+
+  const executeDeleteRole = async () => {
+    const role = deleteModalConfig.role;
+    if (!role) return;
+
+    setDeleteModalConfig(prev => ({ ...prev, show: false }));
 
     setDeletingRoleId(role.id);
     setError('');
@@ -787,7 +833,7 @@ const AccessControlPage: React.FC = () => {
                           <Button
                             size="sm"
                             variant="danger"
-                            onClick={() => handleDeleteRole(role)}
+                            onClick={() => handleDeleteRoleClick(role)}
                             disabled={
                               deletingRoleId === role.id || role.assigned_user_count > 0
                             }
@@ -837,7 +883,7 @@ const AccessControlPage: React.FC = () => {
                   <Button
                     variant="primary"
                     size="sm"
-                    onClick={handleSyncRoles}
+                    onClick={handleSyncRolesClick}
                     disabled={syncRolesLoading}
                   >
                     {syncRolesLoading ? (
@@ -845,7 +891,7 @@ const AccessControlPage: React.FC = () => {
                         <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> Syncing...
                       </>
                     ) : (
-                      'Refresh Master Roles'
+                      'Sync Roles'
                     )}
                   </Button>
                 </div>
@@ -1055,9 +1101,19 @@ const AccessControlPage: React.FC = () => {
                                 variant="primary"
                                 size="sm"
                                 className="px-4 shadow-sm fw-medium"
-                                onClick={async () => {
-                                  await saveUserRoles(accessUser.id);
-                                  setExpandedUser(null);
+                                onClick={() => {
+                                  showAlert(
+                                    `Are you sure you want to save the role assignments for ${accessUser.name}?`,
+                                    'info',
+                                    'Confirm Save',
+                                    true,
+                                    'Save',
+                                    async () => {
+                                      closeAlert();
+                                      await saveUserRoles(accessUser.id);
+                                      setExpandedUser(null);
+                                    }
+                                  );
                                 }}
                                 disabled={savingUserId === accessUser.id}
                               >
@@ -1152,6 +1208,26 @@ const AccessControlPage: React.FC = () => {
           </>
         )}
       </div>
+
+      <AlertModal
+        show={alertConfig.show}
+        onHide={closeAlert}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        showCancel={alertConfig.showCancel}
+        confirmText={alertConfig.confirmText}
+        onConfirm={alertConfig.onConfirm}
+      />
+
+      <DeleteConfirmationModal
+        show={deleteModalConfig.show}
+        onHide={() => setDeleteModalConfig(prev => ({ ...prev, show: false }))}
+        onConfirm={executeDeleteRole}
+        itemName={deleteModalConfig.role?.role_name}
+        isDeleting={deletingRoleId !== null}
+        title="Confirm Role Deletion"
+      />
     </>
   );
 };

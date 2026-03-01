@@ -6,6 +6,7 @@ import authenticityUtility from '../../shared/utils/authenticityUtility';
 import { useAuth } from '../../contexts/AuthContext';
 import Select from 'react-select';
 import './budget.css';
+import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 
 interface SelectOption {
   value: string;
@@ -472,6 +473,24 @@ const EMPTY_MONTHS: Record<string, string> = {
 
 
 const Budget: React.FC = () => {
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+    onConfirm?: () => void;
+  }>({
+    show: false,
+    message: '',
+    type: 'info'
+  });
+
+  const showAlert = (message: React.ReactNode, type: AlertType = 'info', title?: string, onConfirm?: () => void) => {
+    setAlertConfig({ show: true, message, type, title, onConfirm });
+  };
+
+  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+
   // Form state
   const [applicantName, setApplicantName] = useState('');
   const [applicantSearchQuery, setApplicantSearchQuery] = useState('');
@@ -800,7 +819,7 @@ const Budget: React.FC = () => {
   const handleSubmitBudget = async () => {
 
     if (!budgetLines.length) {
-      alert('Please add at least one budget line.');
+      showAlert('Please add at least one budget line.', 'warning');
       return;
     }
 
@@ -808,11 +827,11 @@ const Budget: React.FC = () => {
     for (let i = 0; i < budgetLines.length; i++) {
       const line = budgetLines[i];
       if (!line.budgetHead?.trim()) {
-        alert(`Line ${i + 1}: Budget Head is required`);
+        showAlert('Budget Head is required', 'warning');
         return;
       }
       if (!line.amount || Number(line.amount) <= 0) {
-        alert(`Line ${i + 1}: Valid Unit Amount is required`);
+        showAlert('Valid Unit Amount is required', 'warning');
         return;
       }
     }
@@ -835,7 +854,7 @@ const Budget: React.FC = () => {
 
 
     if (isNaN(fiscalYearInt)) {
-      alert("Error: Invalid Fiscal Year calculated. Please refresh.");
+      showAlert("Error: Invalid Fiscal Year calculated. Please refresh.", 'error');
       return;
     }
 
@@ -845,7 +864,7 @@ const Budget: React.FC = () => {
       applicantSearchQuery.trim() &&
       applicantSearchQuery.trim() !== applicantName.trim()
     ) {
-      alert('Please select an applicant from the search results.');
+      showAlert('Please select an applicant from the search results.', 'warning');
       return;
     }
 
@@ -880,33 +899,41 @@ const Budget: React.FC = () => {
         throw new Error(result.message || 'Submission failed on server');
       }
 
-      alert(
+      showAlert(
         isEditMode
           ? `Budget updated successfully!`
-          : `Budget submitted successfully! Reference: ${result.data.proposalRef}`
+          : (
+            <>
+              Budget submitted successfully!
+              <br />
+              Reference No.: <strong>{result.data.proposalRef}</strong>
+            </>
+          ),
+        'success',
+        undefined,
+        () => {
+          closeAlert();
+          if (!isEditMode) {
+            setBudgetLines([{
+              budgetHead: '', subHead: '', amount: '', qty: '1', monthAmounts: { ...EMPTY_MONTHS }, description: '',
+            }]);
+            setExpandedRows([0]);
+            setApplicantSearchQuery('');
+            setApplicantEmployeeId(null);
+            setApplicantSearchResults([]);
+            setShowApplicantDropdown(false);
+            setApplicantName(''); setDepartment(''); setDesignation(''); setEmail(''); setMobile('');
+            setBeneficiaryType(''); setBeneficiaryValue(''); setCategoryItem('');
+            setBeneficiarySearchQuery(''); setBeneficiarySearchResults([]); setShowBeneficiaryDropdown(false);
+            const today = new Date().toISOString().split('T')[0];
+            setDate(today);
+          }
+          navigate("/budgetcard");
+        }
       );
-
-
-      if (!isEditMode) {
-        setBudgetLines([{
-          budgetHead: '', subHead: '', amount: '', qty: '1', monthAmounts: { ...EMPTY_MONTHS }, description: '',
-        }]);
-        setExpandedRows([0]);
-        setApplicantSearchQuery('');
-        setApplicantEmployeeId(null);
-        setApplicantSearchResults([]);
-        setShowApplicantDropdown(false);
-        setApplicantName(''); setDepartment(''); setDesignation(''); setEmail(''); setMobile('');
-        setBeneficiaryType(''); setBeneficiaryValue(''); setCategoryItem('');
-        setBeneficiarySearchQuery(''); setBeneficiarySearchResults([]); setShowBeneficiaryDropdown(false);
-        const today = new Date().toISOString().split('T')[0];
-        setDate(today);
-      }
-
-      navigate("/budgetcard");
     } catch (error: any) {
       console.error('Submit error:', error);
-      alert(`Failed to submit: ${error.response?.data?.message || error.message}`);
+      showAlert(`Failed to submit: ${error.response?.data?.message || error.message}`, 'error');
     }
   };
 
@@ -1067,9 +1094,11 @@ const Budget: React.FC = () => {
           setIsEditable(false);
           setExpandedRows(mappedLines.map((_, idx) => idx));
         } else if (isEditURL && !isStatusEditable && !canOverrideEditLock) {
-          alert(`This proposal cannot be edited because it is currently '${p.status}'. Switching to View mode.`);
           setIsEditable(false);
-          navigate(`/budget/${id}`);
+          showAlert(`This proposal cannot be edited because it is currently '${p.status}'. Switching to View mode.`, 'warning', undefined, () => {
+            closeAlert();
+            navigate(`/budget/${id}`);
+          });
         } else {
           setIsEditable(true);
         }
@@ -2325,6 +2354,15 @@ const Budget: React.FC = () => {
           </button>
         </div>
       )}
+
+      <AlertModal
+        show={alertConfig.show}
+        onHide={closeAlert}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        onConfirm={alertConfig.onConfirm}
+      />
     </div>
   );
 };

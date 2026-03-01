@@ -4,6 +4,7 @@ import { Eye, Edit2, Plus, Trash2, Info } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../../shared/components/layout/navbar/Navbar";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
+import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
 
 // --- Interfaces ---
 
@@ -61,6 +62,27 @@ const BudgetDashboard: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+    onConfirm?: () => void;
+    showCancel?: boolean;
+    confirmText?: string;
+  }>({
+    show: false,
+    message: "",
+    type: "info"
+  });
+
+  const showAlert = (message: React.ReactNode, type: AlertType = "info", title?: string, showCancel = false, confirmText = "OK", onConfirm?: () => void) => {
+    setAlertConfig({ show: true, message, type, title, onConfirm, showCancel, confirmText });
+  };
+
+  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+
   const [showBudgetStatusDetail, setShowBudgetStatusDetail] = useState<{ [key: number]: boolean }>({});
   const [activeLogId, setActiveLogId] = useState<number | null>(null);
   const [logPopoverStyle, setLogPopoverStyle] = useState<React.CSSProperties>({});
@@ -440,18 +462,27 @@ const BudgetDashboard: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm("Are you sure you want to delete this proposal?")) return;
-    try {
-      const json = await authenticityUtility.delete(`/budget/${id}`) as any;
-      if (json.success) {
-        setProposals((prev) => prev.filter((p) => p.proposalId !== id));
-      } else {
-        alert(json.message || "Failed to delete");
+    showAlert(
+      "Are you sure you want to delete this proposal?",
+      "warning",
+      "Confirm Deletion",
+      true,
+      "Delete",
+      async () => {
+        closeAlert();
+        try {
+          const json = await authenticityUtility.delete(`/budget/${id}`) as any;
+          if (json.success) {
+            setProposals((prev) => prev.filter((p) => p.proposalId !== id));
+          } else {
+            showAlert(json.message || "Failed to delete", "error");
+          }
+        } catch (error: any) {
+          console.error(error);
+          showAlert(error.response?.data?.message || error.message || "Failed to delete", "error");
+        }
       }
-    } catch (error: any) {
-      console.error(error);
-      alert(error.response?.data?.message || error.message || "Failed to delete");
-    }
+    );
   };
 
   // --- Filtering ---
@@ -790,6 +821,17 @@ const BudgetDashboard: React.FC = () => {
           </div>
         </div>
       </section>
+
+      <AlertModal
+        show={alertConfig.show}
+        onHide={closeAlert}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        showCancel={alertConfig.showCancel}
+        confirmText={alertConfig.confirmText}
+        onConfirm={alertConfig.onConfirm}
+      />
     </>
   );
 };

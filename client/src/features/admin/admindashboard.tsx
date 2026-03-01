@@ -9,6 +9,7 @@ import JournalManagement from "./formManagement/JournalFormOptions";
 import ProjectFormOptions from "./formManagement/ProjectFormOptions";
 import JournalStatusUpdates from "./components/JournalStatusUpdates";
 import JournalStatusDetails from "./components/JournalStatusDetails";
+import AlertModal, { AlertType } from "../../shared/components/ui/AlertModal";
 
 interface ColumnConfigItem {
   show: boolean;
@@ -174,6 +175,26 @@ const Dashboard: React.FC = () => {
   const [isColumnDropdownOpen, setIsColumnDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+    onConfirm?: () => void;
+    showCancel?: boolean;
+    confirmText?: string;
+  }>({
+    show: false,
+    message: "",
+    type: "info"
+  });
+
+  const showAlert = (message: React.ReactNode, type: AlertType = "info", title?: string, showCancel = false, confirmText = "OK", onConfirm?: () => void) => {
+    setAlertConfig({ show: true, message, type, title, onConfirm, showCancel, confirmText });
+  };
+
+  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -258,15 +279,23 @@ const Dashboard: React.FC = () => {
   }, [fetchData]);
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm("Are you sure you want to delete this item?")) return;
-
-    try {
-      await authenticityUtility.delete(`/${activeTab}/${id}`);
-      fetchData();
-    } catch (err: unknown) {
-      const error = err as { message?: string };
-      setError("Error deleting item: " + error.message);
-    }
+    showAlert(
+      "Are you sure you want to delete this item?",
+      "warning",
+      "Confirm Deletion",
+      true,
+      "Delete",
+      async () => {
+        closeAlert();
+        try {
+          await authenticityUtility.delete(`/${activeTab}/${id}`);
+          fetchData();
+        } catch (err: unknown) {
+          const error = err as { message?: string };
+          setError("Error deleting item: " + error.message);
+        }
+      }
+    );
   };
 
   const handleApproveJournalRequest = async (requestId: number) => {
@@ -277,7 +306,7 @@ const Dashboard: React.FC = () => {
       ) as { success?: boolean; message?: string };
 
       if (response.success) {
-        alert("Journal request approved successfully!");
+        showAlert("Journal request approved successfully!", "success");
         fetchData();
         setAdminComment("");
       } else {
@@ -298,7 +327,7 @@ const Dashboard: React.FC = () => {
       ) as { success?: boolean; message?: string };
 
       if (response.success) {
-        alert("Journal request rejected successfully!");
+        showAlert("Journal request rejected successfully!", "success");
         fetchData();
         setAdminComment("");
       } else {
@@ -321,9 +350,10 @@ const Dashboard: React.FC = () => {
         { status, admin_comment: adminComment }
       ) as { message?: string };
 
-      alert(
+      showAlert(
         response.message ||
-          `Journal submission ${status === "approved" ? "approved" : "rejected"} successfully`
+        `Journal submission ${status === "approved" ? "approved" : "rejected"} successfully`,
+        "success"
       );
       setAdminComment("");
       fetchData();
@@ -332,8 +362,8 @@ const Dashboard: React.FC = () => {
       const error = err as { response?: { data?: { message?: string } }; message?: string };
       setError(
         error.response?.data?.message ||
-          error.message ||
-          "Failed to update journal submission approval"
+        error.message ||
+        "Failed to update journal submission approval"
       );
     }
   };
@@ -442,22 +472,22 @@ const Dashboard: React.FC = () => {
       ) as { status?: string; message?: string };
 
       if (response.status === "success") {
-        alert("Project request approved successfully!");
+        showAlert("Project request approved successfully!", "success");
         setAdminComment("");
         fetchData();
       } else {
-        alert(response.message || "Failed to approve project request");
+        showAlert(response.message || "Failed to approve project request", "error");
       }
     } catch (err: unknown) {
       console.error("Error approving project request:", err);
       const error = err as { response?: { data?: { message?: string } } };
-      alert(error.response?.data?.message || "Failed to approve project request");
+      showAlert(error.response?.data?.message || "Failed to approve project request", "error");
     }
   };
 
   const handleRejectProjectRequest = async (requestId: number) => {
     if (!adminComment.trim()) {
-      alert("Please provide a reason for rejection");
+      showAlert("Please provide a reason for rejection", "warning");
       return;
     }
 
@@ -468,16 +498,16 @@ const Dashboard: React.FC = () => {
       ) as { status?: string; message?: string };
 
       if (response.status === "success") {
-        alert("Project request rejected successfully!");
+        showAlert("Project request rejected successfully!", "success");
         setAdminComment("");
         fetchData();
       } else {
-        alert(response.message || "Failed to reject project request");
+        showAlert(response.message || "Failed to reject project request", "error");
       }
     } catch (err: unknown) {
       console.error("Error rejecting project request:", err);
       const error = err as { response?: { data?: { message?: string } } };
-      alert(error.response?.data?.message || "Failed to reject project request");
+      showAlert(error.response?.data?.message || "Failed to reject project request", "error");
     }
   };
 
@@ -505,7 +535,7 @@ const Dashboard: React.FC = () => {
       }
       const response = await authenticityUtility.patch(endpoint, { status: newStatus }) as { success?: boolean; message?: string };
       if (response.success) {
-        alert(`Edit request ${newStatus} successfully`);
+        showAlert(`Edit request ${newStatus} successfully`, "success");
         fetchData();
       } else {
         setError(response.message || "Failed to update edit request status");
@@ -1360,9 +1390,20 @@ const Dashboard: React.FC = () => {
           </Modal.Body>
 
         </Modal>
-
-        <JournalStatusDetails journalId={selectedJournalForStatus} show={showStatusDetailsModal} onHide={() => { setShowStatusDetailsModal(false); setSelectedJournalForStatus(null); }} />
       </div>
+
+      <JournalStatusDetails journalId={selectedJournalForStatus} show={showStatusDetailsModal} onHide={() => { setShowStatusDetailsModal(false); setSelectedJournalForStatus(null); }} />
+
+      <AlertModal
+        show={alertConfig.show}
+        onHide={closeAlert}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        showCancel={alertConfig.showCancel}
+        confirmText={alertConfig.confirmText}
+        onConfirm={alertConfig.onConfirm}
+      />
     </div>
   );
 };
