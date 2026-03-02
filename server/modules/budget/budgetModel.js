@@ -8,7 +8,7 @@ const APPROVAL_FLOW = {
   principal: { approve: 'principal_approved', reject: 'principal_rejected', next: 'completed' },
 };
 
-const EDITABLE_STATES = ['draft', 'submitted', 'level1_returned', 'dof_returned', 'principal_returned'];
+const EDITABLE_STATES = ['draft', 'submitted', 're_submitted', 'level1_returned', 'dof_returned', 'principal_returned'];
 
 const ENTITY_TYPE_BY_BENEFICIARY = Object.freeze({
   Centre: 'CENTRE',
@@ -123,7 +123,7 @@ class BudgetModel {
       };
     }
 
-    if (['Faculty', 'Department'].includes(beneficiaryType)) {
+    if (['Faculty', 'Staff', 'Department'].includes(beneficiaryType)) {
       return {
         routeType: LEVEL1_ROUTE_TYPE.departmentHod,
         departmentId,
@@ -448,10 +448,15 @@ class BudgetModel {
     return rows[0] || null;
   }
 
-  static async searchApplicant(query = '') {
+  static async searchApplicant(query = '', employeeType = null) {
     const queryStr = normalizeText(query);
     let sql;
     let params = [];
+
+    let typeFilter = '';
+    if (employeeType) {
+      typeFilter = ' AND e.employee_type = ?';
+    }
 
     if (!queryStr) {
       sql = `SELECT
@@ -467,9 +472,10 @@ class BudgetModel {
       LEFT JOIN master_departments d ON e.department_id = d.id
       LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
       LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
-      WHERE e.status = 'Active'
+      WHERE e.status = 'Active' ${typeFilter}
       ORDER BY e.first_name, e.last_name
       LIMIT 20`;
+      if (employeeType) params.push(employeeType);
     } else {
       sql = `SELECT
       e.id AS employee_id,
@@ -484,8 +490,8 @@ class BudgetModel {
       LEFT JOIN master_departments d ON e.department_id = d.id
       LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
       LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
-      WHERE e.status = 'Active'
-      AND(
+      WHERE e.status = 'Active' ${typeFilter}
+      AND (
         LOWER(e.first_name) LIKE ?
         OR LOWER(e.last_name) LIKE ?
         OR LOWER(CONCAT(e.first_name, ' ', COALESCE(e.last_name, ''))) LIKE ?
@@ -497,13 +503,14 @@ class BudgetModel {
 
       const searchPattern = `%${queryStr.toLowerCase()}%`;
 
-      params = [
+      if (employeeType) params.push(employeeType);
+      params.push(
         searchPattern,
         searchPattern,
         searchPattern,
         `${queryStr.toLowerCase()}%`,
-        searchPattern,
-      ];
+        searchPattern
+      );
     }
 
     const [rows] = await db.query(sql, params);
@@ -626,7 +633,7 @@ class BudgetModel {
         requiresDof: Number(rows[0].requires_dof) ? 1 : 0,
         requiresPrincipal: Number(rows[0].requires_principal) ? 1 : 0,
       }
-      : ['Faculty', 'Department'].includes(normalizedBeneficiaryType)
+      : ['Faculty', 'Staff', 'Department'].includes(normalizedBeneficiaryType)
         ? { requiresLevel1: 1, requiresDof: 1, requiresPrincipal: 1 }
         : { requiresLevel1: 0, requiresDof: 1, requiresPrincipal: 1 };
 
@@ -662,7 +669,7 @@ class BudgetModel {
       );
 
       const sequence = Number(seqRows[0].next_seq);
-      const proposalRef = `#B - ${fyYear} -${String(sequence).padStart(4, '0')} `;
+      const proposalRef = `#B-${fyYear}-${String(sequence).padStart(4, '0')}`;
 
       const departmentId = await this.#resolveDepartmentId(conn, payload);
       const { entityTypeCode, beneficiaryEntityId } = await this.#resolveBeneficiaryEntity(
@@ -835,6 +842,9 @@ class BudgetModel {
         return sum + amount * qty;
       }, 0);
 
+      const isReturnedState = proposal.status && proposal.status.endsWith('_returned');
+      const nextStatus = isReturnedState ? 're_submitted' : proposal.status;
+
       await conn.execute(
         `UPDATE budget_proposals
          SET beneficiary_type = ?,
@@ -843,6 +853,7 @@ class BudgetModel {
         department_id = ?,
         approval_flow = ?,
         current_stage = ?,
+        status = ?,
         proposal_description = ?,
         total_amount = ?,
         updated_at = NOW()
@@ -854,6 +865,7 @@ class BudgetModel {
           departmentId,
           approvalFlowString,
           nextCurrentStage,
+          nextStatus,
           payload.proposal_description || null,
           calculatedTotal,
           proposalId,
@@ -1080,7 +1092,7 @@ class BudgetModel {
 
     switch (safeRole) {
       case 'hod': {
-        const departmentBeneficiaryPredicate = "LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'department')";
+        const departmentBeneficiaryPredicate = "LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department')";
         where.push(departmentBeneficiaryPredicate);
 
         if (!isQueueSuperAdminView) {
@@ -1256,7 +1268,7 @@ class BudgetModel {
     const beneficiaryType = normalizeText(proposal?.beneficiary_type);
 
     if (key === 'level1') {
-      if (['Faculty', 'Department'].includes(beneficiaryType)) {
+      if (['Faculty', 'Staff', 'Department'].includes(beneficiaryType)) {
         return 'HOD';
       }
       if (this.isEntityBeneficiaryType(beneficiaryType)) {

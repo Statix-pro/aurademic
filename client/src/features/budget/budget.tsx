@@ -718,8 +718,15 @@ const Budget: React.FC = () => {
     }
 
     try {
+      let typeParam = '';
+      if (beneficiaryType === 'Faculty') {
+        typeParam = '&type=Teaching';
+      } else if (beneficiaryType === 'Staff') {
+        typeParam = '&type=Non-Teaching';
+      }
+
       const response = await authenticityUtility.get(
-        `/budget/search-applicant?q=${encodeURIComponent(query)}`
+        `/budget/search-applicant?q=${encodeURIComponent(query)}${typeParam}`
       ) as { success?: boolean; status?: string; data?: ApplicantSearchResult[] };
 
       if (response.status === 'success' || response.success) {
@@ -877,7 +884,7 @@ const Budget: React.FC = () => {
           : undefined,
       beneficiary_type: beneficiaryType?.trim(),
       beneficiary_value:
-        beneficiaryType === 'Faculty'
+        ['Faculty', 'Staff'].includes(beneficiaryType)
           ? beneficiaryValue?.trim()
           : beneficiaryType === 'Institution'
             ? 'K.S.Rangasamy College of Technology'
@@ -990,7 +997,7 @@ const Budget: React.FC = () => {
   useEffect(() => {
     if (beneficiaryType === 'Institution') {
       setBeneficiaryValue('K.S.Rangasamy College of Technology');
-    } else if (beneficiaryType === 'Faculty') {
+    } else if (['Faculty', 'Staff'].includes(beneficiaryType)) {
       if (applicantName.trim() && !beneficiaryValue) {
         setBeneficiaryValue(applicantName);
         setBeneficiarySearchQuery(applicantName);
@@ -1085,7 +1092,7 @@ const Budget: React.FC = () => {
         }
 
 
-        const editableStatuses = ['draft', 'level1_returned', 'dof_returned', 'submitted'];
+        const editableStatuses = ['draft', 'level1_returned', 'dof_returned', 'submitted', 're_submitted'];
         const isStatusEditable = editableStatuses.includes((p.status || '').toLowerCase());
         const isEditURL = location.pathname.includes('/edit');
         const canOverrideEditLock = isSuperAdminUser && isEditURL;
@@ -1473,6 +1480,7 @@ const Budget: React.FC = () => {
                       }}
                       options={[
                         { value: 'Faculty', label: 'Faculty' },
+                        { value: 'Staff', label: 'Staff' },
                         { value: 'Department', label: 'Department' },
                         { value: 'Centre', label: 'Centre' },
                         { value: 'Cell', label: 'Cell' },
@@ -1545,10 +1553,10 @@ const Budget: React.FC = () => {
               </div>
 
               <div className="col-md-8">
-                {beneficiaryType === 'Faculty' ? (
+                {['Faculty', 'Staff'].includes(beneficiaryType) ? (
                   <div className="form-group" style={{ height: '72px', display: 'flex', flexDirection: 'column' }}>
                     <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
-                      Faculty Name
+                      {beneficiaryType === 'Staff' ? 'Staff Name' : 'Faculty Name'}
                     </label>
                     <div style={{ position: 'relative', flex: 1 }}>
                       <input
@@ -1571,7 +1579,7 @@ const Budget: React.FC = () => {
                           e.currentTarget.style.boxShadow = 'none';
                           setTimeout(() => setShowBeneficiaryDropdown(false), 200);
                         }}
-                        placeholder="Search faculty by name or ERP ID"
+                        placeholder={beneficiaryType === 'Staff' ? "Search staff by name or ERP ID" : "Search faculty by name or ERP ID"}
                         style={{
                           borderRadius: '12px',
                           border: '1px solid #e0e0e0',

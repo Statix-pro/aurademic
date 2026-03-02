@@ -2,6 +2,7 @@ import BudgetModel from './budgetModel.js';
 
 const VALID_BENEFICIARY_TYPES = [
   'Faculty',
+  'Staff',
   'Department',
   'Centre',
   'Cell',
@@ -236,8 +237,8 @@ class BudgetController {
 
   static async searchApplicant(req, res) {
     try {
-      const { q } = req.query;
-      const results = await BudgetModel.searchApplicant(q || '');
+      const { q, type } = req.query;
+      const results = await BudgetModel.searchApplicant(q || '', type);
 
       return res.status(200).json({
         success: true,

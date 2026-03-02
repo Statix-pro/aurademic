@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import "./adminbudget.css";
 import Navbar from "../../../shared/components/layout/navbar/Navbar";
-import { Eye, Edit2, CheckCircle2, RotateCcw, XCircle } from "lucide-react";
+import { Eye, Edit2, CheckCircle2, RotateCcw, XCircle, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -45,6 +45,7 @@ interface BudgetRequestItem {
 const BENEFICIARY_OPTIONS = [
   "All Beneficiary",
   "Faculty",
+  "Staff",
   "Department",
   "Centre",
   "Cell",
@@ -106,7 +107,7 @@ const AdminBudget: React.FC = () => {
   const [beneficiaryFilter, setBeneficiaryFilter] = useState("All Beneficiary");
   const [fiscalYear, setFiscalYear] = useState<number>(() => {
     const d = new Date();
-    return d.getMonth() < 3 ? d.getFullYear() - 1 : d.getFullYear();
+    return d.getMonth() < 2 ? d.getFullYear() - 1 : d.getFullYear();
   });
 
   // Pagination
@@ -213,6 +214,11 @@ const AdminBudget: React.FC = () => {
   const [actionRef, setActionRef] = useState<string>("");
   const [actionComment, setActionComment] = useState<string>("");
   const [actionStage, setActionStage] = useState<string>("");
+
+  const [deletePopupOpen, setDeletePopupOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleteRef, setDeleteRef] = useState<string>("");
+  const [deleteCountdown, setDeleteCountdown] = useState(10);
 
   const isApprovedForActiveTab = useCallback(
     (item: BudgetRequestItem) => {
@@ -399,6 +405,41 @@ const AdminBudget: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    if (deletePopupOpen && deleteCountdown > 0) {
+      timer = setTimeout(() => setDeleteCountdown((c) => c - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [deletePopupOpen, deleteCountdown]);
+
+  const openDeletePopup = (id: number, ref: string) => {
+    setDeleteId(id);
+    setDeleteRef(ref);
+    setDeleteCountdown(10);
+    setDeletePopupOpen(true);
+  };
+
+  const closeDeletePopup = () => {
+    setDeletePopupOpen(false);
+    setDeleteId(null);
+    setDeleteRef("");
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    try {
+      const response: any = await authenticityUtility.delete(`/budget/${deleteId}`);
+      if (response.success) {
+        showAlert("Budget request deleted successfully", "success");
+        closeDeletePopup();
+        fetchDashboard();
+      }
+    } catch (error: any) {
+      showAlert(error.response?.data?.message || "Failed to delete budget request", "error");
+    }
+  };
+
   const baseFilteredData = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     const ben = beneficiaryFilter;
@@ -453,6 +494,7 @@ const AdminBudget: React.FC = () => {
 
   const getDisplayStatus = (item: BudgetRequestItem) => {
     const s = (item.status || "").toLowerCase();
+    if (s === "re_submitted") return "Resubmitted";
     if (getStatusCategory(item) === "approved") return "Approved";
     if (s.includes("rejected")) return "Reject";
     if (s.includes("returned") || s.includes("return")) return "Return";
@@ -559,7 +601,7 @@ const AdminBudget: React.FC = () => {
                 >
                   {BENEFICIARY_OPTIONS.filter((opt) => {
                     if (activeQueueTabKey === "hod") {
-                      return ["All Beneficiary", "Faculty", "Department"].includes(opt);
+                      return ["All Beneficiary", "Faculty", "Staff", "Department"].includes(opt);
                     }
                     if (activeQueueTabKey === "coordinator") {
                       return ["All Beneficiary", "Centre", "Cell", "Club", "Professional Body"].includes(opt);
@@ -733,44 +775,62 @@ const AdminBudget: React.FC = () => {
                           </div>
 
                           <div className="adminbudget-action-card">
-                            <button
-                              className="adminbudget-action-btn adminbudget-action-btn--approve"
-                              title="Approve"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onApprove(item.id, item.current_stage);
-                              }}
-                              disabled={item.status === "completed" || !canProcessCurrentStage}
-                            >
-                              <CheckCircle2 size={18} />
-                            </button>
+                            {!isSuperAdmin(user) && (
+                              <>
+                                <button
+                                  className="adminbudget-action-btn adminbudget-action-btn--approve"
+                                  title="Approve"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onApprove(item.id, item.current_stage);
+                                  }}
+                                  disabled={item.status === "completed" || !canProcessCurrentStage}
+                                >
+                                  <CheckCircle2 size={18} />
+                                </button>
 
-                            <button
-                              className="adminbudget-action-btn adminbudget-action-btn--return"
-                              title="Return"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openActionPopup("return", item.id, item.proposal_ref, item.current_stage);
-                              }}
-                              disabled={
-                                ["completed", "rejected"].includes(item.status.toLowerCase()) ||
-                                !canProcessCurrentStage
-                              }
-                            >
-                              <RotateCcw size={18} />
-                            </button>
+                                <button
+                                  className="adminbudget-action-btn adminbudget-action-btn--return"
+                                  title="Return"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openActionPopup("return", item.id, item.proposal_ref, item.current_stage);
+                                  }}
+                                  disabled={
+                                    ["completed", "rejected"].includes(item.status.toLowerCase()) ||
+                                    !canProcessCurrentStage
+                                  }
+                                >
+                                  <RotateCcw size={18} />
+                                </button>
 
-                            <button
-                              className="adminbudget-action-btn adminbudget-action-btn--reject"
-                              title="Reject"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openActionPopup("reject", item.id, item.proposal_ref, item.current_stage);
-                              }}
-                              disabled={item.status === "rejected" || !canProcessCurrentStage}
-                            >
-                              <XCircle size={18} />
-                            </button>
+                                <button
+                                  className="adminbudget-action-btn adminbudget-action-btn--reject"
+                                  title="Reject"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openActionPopup("reject", item.id, item.proposal_ref, item.current_stage);
+                                  }}
+                                  disabled={item.status === "rejected" || !canProcessCurrentStage}
+                                >
+                                  <XCircle size={18} />
+                                </button>
+                              </>
+                            )}
+
+                            {isSuperAdmin(user) && (
+                              <button
+                                className="adminbudget-action-btn"
+                                style={{ color: "#dc3545", borderColor: "#dc3545" }}
+                                title="Delete"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openDeletePopup(item.id, item.proposal_ref);
+                                }}
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -881,6 +941,79 @@ const AdminBudget: React.FC = () => {
                 }}
               >
                 Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deletePopupOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 999999,
+            padding: 16,
+          }}
+          onClick={closeDeletePopup}
+        >
+          <div
+            style={{
+              width: "min(400px, 95vw)",
+              background: "#fff",
+              borderRadius: 12,
+              padding: 24,
+              boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
+              textAlign: "center",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ color: "#dc3545", marginBottom: 16 }}>
+              <Trash2 size={48} />
+            </div>
+            <h4 style={{ margin: "0 0 8px 0", color: "#333" }}>Confirm Deletion</h4>
+            <p style={{ margin: "0 0 16px 0", color: "#666", fontSize: "14px" }}>
+              Are you sure you want to permanently delete budget request{" "}
+              <strong>{deleteRef}</strong>? This action cannot be undone.
+            </p>
+
+            <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}>
+              <button
+                type="button"
+                onClick={closeDeletePopup}
+                style={{
+                  border: "1px solid #ddd",
+                  background: "#fff",
+                  borderRadius: 8,
+                  padding: "8px 24px",
+                  cursor: "pointer",
+                  fontWeight: 500,
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleteCountdown > 0}
+                style={{
+                  border: "none",
+                  background: deleteCountdown > 0 ? "#e9ecef" : "#dc3545",
+                  color: deleteCountdown > 0 ? "#6c757d" : "#fff",
+                  borderRadius: 8,
+                  padding: "8px 24px",
+                  cursor: deleteCountdown > 0 ? "not-allowed" : "pointer",
+                  fontWeight: 500,
+                  minWidth: "120px",
+                  transition: "all 0.2s",
+                }}
+              >
+                {deleteCountdown > 0 ? `Delete (${deleteCountdown}s)` : "Delete"}
               </button>
             </div>
           </div>
