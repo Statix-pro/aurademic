@@ -655,6 +655,7 @@ const BudgetDashboard: React.FC = () => {
                 // Status Pill Text
                 let statusLabel = "Submitted";
                 if (['principal_approved', 'completed'].includes(proposal.status)) statusLabel = "Approved";
+                else if (proposal.status === 're_submitted') statusLabel = "Resubmitted";
                 else if (proposal.status.includes('rejected')) statusLabel = "Rejected";
                 else if (proposal.status.includes('returned')) statusLabel = "Returned";
                 else if (proposal.status.includes('approved')) statusLabel = "Pending"; // Intermediate approval is still Pending
@@ -761,7 +762,7 @@ const BudgetDashboard: React.FC = () => {
                             <Eye size={16} />
                           </button>
                           {/* Edit only if submitted/returned */}
-                          {['submitted', 'level1_returned', 'hod_returned', 'dof_returned', 'principal_returned'].includes(proposal.status) && (
+                          {['submitted', 're_submitted', 'level1_returned', 'hod_returned', 'dof_returned', 'principal_returned'].includes(proposal.status) && (
                             <button title="Edit" className="budgetdashboard-action-global" onClick={() => navigate(`/budget/${proposal.proposalId}/edit`)}>
                               <Edit2 size={16} />
                             </button>

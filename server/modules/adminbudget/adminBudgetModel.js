@@ -1,5 +1,5 @@
 import db from '../../config/connection.js';
-
+import BudgetModel from '../budget/budgetModel.js';
 const VALID_MONTHS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
 
 const APPROVAL_FLOW = {
@@ -571,7 +571,7 @@ class AdminBudgetModel {
     q,
     department,
   }) {
-    const budgetsResult = await this.listBudgets({
+    const budgetsResult = await BudgetModel.listBudgets({
       role: 'super_admin',
       page,
       limit,
@@ -1286,7 +1286,7 @@ class AdminBudgetModel {
 
 
   static async getProposalDataForExport(proposalId) {
-    const master = await this.getBudgetById(proposalId);
+    const master = await BudgetModel.getBudgetById(proposalId);
 
     if (!master) {
       return null;
