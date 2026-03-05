@@ -1185,8 +1185,8 @@ class BudgetModel {
       }
       case 'user':
       default: {
-        where.push('(bp.user_id = ? OR bp.user_email = ?)');
-        params.push(Number(userId), normalizeText(userEmail));
+        where.push('(bp.user_id = ? OR bp.user_email = ? OR bp.employee_id IN (SELECT id FROM master_employees WHERE user_id = ? AND status = "Active"))');
+        params.push(Number(userId), normalizeText(userEmail), Number(userId));
         break;
       }
     }
@@ -1541,6 +1541,17 @@ class BudgetModel {
     // ✅ ALWAYS allow the owner or named user to access their own proposal
     if (pid === uid || emailMatch) {
       return true;
+    }
+
+    // ✅ Allow the applicant (employee on whose behalf proposal was submitted) to view
+    if (proposal.employee_id && uid > 0) {
+      const [empRows] = await db.execute(
+        'SELECT id FROM master_employees WHERE id = ? AND user_id = ? AND status = "Active" LIMIT 1',
+        [proposal.employee_id, uid]
+      );
+      if (empRows.length > 0) {
+        return true;
+      }
     }
 
     switch (normalizedRole) {

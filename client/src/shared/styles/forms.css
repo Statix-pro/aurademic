@@ -213,15 +213,16 @@ input[type='checkbox'],
 }
 
 .btn-outline-secondary:hover {
-  background-color: #0069ab !important;
-  color: white !important;
-  border-color: #0069ab !important;
-  box-shadow: 0 2px 8px rgba(0, 105, 171, 0.3) !important;
+  background-color: rgba(0, 105, 171, 0.1) !important;
+  /* Subtle blue background instead of solid fill */
+  color: #005492 !important;
+  border-color: #005492 !important;
+  box-shadow: 0 2px 8px rgba(0, 105, 171, 0.2) !important;
 }
 
 .btn-outline-secondary:focus {
-  background-color: #0069ab !important;
-  color: white !important;
+  background-color: transparent !important;
+  color: #0069ab !important;
   border-color: #0069ab !important;
   box-shadow: 0 0 0 0.25rem rgba(0, 105, 171, 0.25) !important;
 }

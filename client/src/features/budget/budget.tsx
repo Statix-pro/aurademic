@@ -1096,8 +1096,19 @@ const Budget: React.FC = () => {
         const isStatusEditable = editableStatuses.includes((p.status || '').toLowerCase());
         const isEditURL = location.pathname.includes('/edit');
         const canOverrideEditLock = isSuperAdminUser && isEditURL;
+        const accessType = json.accessType || 'owner';
 
-        if (!isEditURL) {
+        // Applicants (employees on whose behalf the proposal was submitted) can only view
+        if (accessType === 'applicant') {
+          setIsEditable(false);
+          setExpandedRows(mappedLines.map((_, idx) => idx));
+          if (isEditURL) {
+            showAlert('You are the applicant for this proposal. You can only view it, not edit.', 'info', undefined, () => {
+              closeAlert();
+              navigate(`/budget/${id}`);
+            });
+          }
+        } else if (!isEditURL) {
           setIsEditable(false);
           setExpandedRows(mappedLines.map((_, idx) => idx));
         } else if (isEditURL && !isStatusEditable && !canOverrideEditLock) {

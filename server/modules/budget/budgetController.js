@@ -1,4 +1,5 @@
 import BudgetModel from './budgetModel.js';
+import db from '../../config/connection.js';
 
 const VALID_BENEFICIARY_TYPES = [
   'Faculty',
@@ -612,9 +613,30 @@ class BudgetController {
         });
       }
 
+      // Determine access type: owner, applicant, or approver
+      let accessType = 'approver';
+      const uid = Number(userId);
+      const proposalUserId = Number(budget.master?.user_id || budget.user_id);
+
+      if (uid === proposalUserId) {
+        accessType = 'owner';
+      } else {
+        const proposalEmployeeId = budget.master?.employee_id || budget.employee_id;
+        if (proposalEmployeeId && uid > 0) {
+          const [empMatch] = await db.execute(
+            'SELECT id FROM master_employees WHERE id = ? AND user_id = ? AND status = "Active" LIMIT 1',
+            [proposalEmployeeId, uid]
+          );
+          if (empMatch.length > 0) {
+            accessType = 'applicant';
+          }
+        }
+      }
+
       return res.json({
         success: true,
         data: budget,
+        accessType,
       });
     } catch (error) {
       console.error('Get budget error:', error);
@@ -641,9 +663,18 @@ class BudgetController {
         fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
       });
 
+      // Tag each budget with is_applicant_only flag
+      const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
+      const enrichedBudgets = budgets.budgets.map((b) => ({
+        ...b,
+        is_applicant_only:
+          Number(b.user_id) !== Number(userId) &&
+          normalizeText(b.user_email).toLowerCase() !== normalizedUserEmail,
+      }));
+
       return res.json({
         success: true,
-        data: budgets.budgets,
+        data: enrichedBudgets,
         pagination: budgets.pagination,
         currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
       });
