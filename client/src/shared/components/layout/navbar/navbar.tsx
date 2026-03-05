@@ -8,6 +8,7 @@ import {
   canAccessAdminArea,
   canAccessBudgetApproval,
   canManageAccessControl,
+  isSuperAdmin,
 } from "../../../utils/permissionUtils";
 
 const Navbar: React.FC = () => {
@@ -18,7 +19,8 @@ const Navbar: React.FC = () => {
   const showAdminDashboard = canAccessAdminArea(user);
   const showBudgetApproval = canAccessBudgetApproval(user);
   const showAccessControl = canManageAccessControl(user);
-  const showAdminMenu = showAdminDashboard || showBudgetApproval || showAccessControl;
+  const showMasterData = isSuperAdmin(user);
+  const showAdminMenu = showAdminDashboard || showBudgetApproval || showAccessControl || showMasterData;
 
   const toggleDropdown = (menuName: string) => {
     setActiveMenu((prev) => (prev === menuName ? null : menuName));
@@ -351,6 +353,18 @@ const Navbar: React.FC = () => {
                     }}
                   >
                     <li>Access Control</li>
+                  </Link>
+                )}
+                {showMasterData && (
+                  <Link
+                    to="/admin/master-data"
+                    className="dropdown-li"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      document.body.classList.remove('menu-open');
+                    }}
+                  >
+                    <li>Master Data</li>
                   </Link>
                 )}
               </ul>

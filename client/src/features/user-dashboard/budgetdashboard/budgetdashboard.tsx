@@ -33,6 +33,7 @@ interface ProposalGroup {
   edits: any[];
   totalProposed: number;
   totalApproved: number;
+  isApplicantOnly: boolean;
 }
 
 interface ConsolidatedRow {
@@ -234,12 +235,18 @@ const BudgetDashboard: React.FC = () => {
         }
 
         // 2. Fetch Details for ALL (Parallel)
+        // Build a map of is_applicant_only from the list result
+        const applicantOnlyMap: Record<number, boolean> = {};
+        listResult.data.forEach((summary: any) => {
+          applicantOnlyMap[summary.id] = Boolean(summary.is_applicant_only);
+        });
+
         const detailPromises = listResult.data.map(async (summary: any) => {
           try {
             const detailJson = await authenticityUtility.get(
               `/budget/${summary.id}`
             ) as any;
-            return detailJson.success ? detailJson.data : null;
+            return detailJson.success ? { ...detailJson.data, _isApplicantOnly: applicantOnlyMap[summary.id] || false } : null;
           } catch (e) {
             return null;
           }
@@ -280,7 +287,8 @@ const BudgetDashboard: React.FC = () => {
             approvals: data.pendingApprovals || data.approvals || [],
             edits: data.edits || [],
             totalProposed: items.reduce((sum: number, i: any) => sum + i.proposedAmount, 0),
-            totalApproved: items.reduce((sum: number, i: any) => sum + i.approvedAmount, 0)
+            totalApproved: items.reduce((sum: number, i: any) => sum + i.approvedAmount, 0),
+            isApplicantOnly: Boolean(data._isApplicantOnly),
           };
         });
 
@@ -761,14 +769,14 @@ const BudgetDashboard: React.FC = () => {
                           <button title="View" className="budgetdashboard-action-global" onClick={() => navigate(`/budget/${proposal.proposalId}`)}>
                             <Eye size={16} />
                           </button>
-                          {/* Edit only if submitted/returned */}
-                          {['submitted', 're_submitted', 'level1_returned', 'hod_returned', 'dof_returned', 'principal_returned'].includes(proposal.status) && (
+                          {/* Edit only if submitted/returned AND not applicant-only */}
+                          {!proposal.isApplicantOnly && ['submitted', 're_submitted', 'level1_returned', 'hod_returned', 'dof_returned', 'principal_returned'].includes(proposal.status) && (
                             <button title="Edit" className="budgetdashboard-action-global" onClick={() => navigate(`/budget/${proposal.proposalId}/edit`)}>
                               <Edit2 size={16} />
                             </button>
                           )}
-                          {/* Delete only if not fully approved */}
-                          {!['principal_approved', 'completed'].includes(proposal.status) && (
+                          {/* Delete only if not fully approved AND not applicant-only */}
+                          {!proposal.isApplicantOnly && !['principal_approved', 'completed'].includes(proposal.status) && (
                             <button title="Delete" className="budgetdashboard-action-global" onClick={() => handleDelete(proposal.proposalId)}>
                               <Trash2 size={14} />
                             </button>
