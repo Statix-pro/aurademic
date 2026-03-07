@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import Navbar from '../.././shared/components/layout/navbar/navbar';
@@ -427,6 +426,20 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   ],
 };
 
+const TAG_OPTIONS = [
+  { value: 'Laboratory', label: 'Laboratory' },
+  { value: 'Association', label: 'Association' },
+  { value: 'Skilling', label: 'Skilling' },
+  { value: 'Research', label: 'Research' },
+  { value: 'Outreach', label: 'Outreach' },
+  { value: 'Office', label: 'Office' },
+  { value: 'Academics', label: 'Academics' },
+  { value: 'Essentials', label: 'Essentials' },
+  { value: 'Events', label: 'Events' },
+  { value: 'Innovation', label: 'Innovation' },
+  { value: 'Start-up', label: 'Start-up' },
+  { value: 'Entrepreneurship', label: 'Entrepreneurship' }
+] as SelectOption[];
 
 
 const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
@@ -811,7 +824,7 @@ const Budget: React.FC = () => {
       setBudgetHeadFilter((prev) => ({ ...prev, [rowIndex]: '' }));
       return;
     }
-
+     updateLine(rowIndex, 'subHead', '');
     updateLine(rowIndex, 'budgetHead', selectedOption.budgetHead);
 
     if (selectedOption.optionType === 'head-sub-head' && selectedOption.subHead) {
@@ -1169,8 +1182,19 @@ const Budget: React.FC = () => {
       minimumFractionDigits: 0,
     });
   };
+const [selectedTag, setSelectedTag] = useState<string>('');
 
+useEffect(() => {
+  if (beneficiaryType === 'Faculty' || beneficiaryType === 'Staff') {
+    setSelectedTag('Skilling');
+  } else if (beneficiaryType === 'Department') {
+    setSelectedTag('');
+  } else if (beneficiaryType && beneficiaryType !== 'Faculty' && beneficiaryType !== 'Staff' && beneficiaryType !== 'Department') {
+    setSelectedTag('Essentials');
+  }
+}, [beneficiaryType]);
 
+const showTagDropdown = !!beneficiaryType?.trim();
 
   return (
     <div className="budgetPage">
@@ -1467,7 +1491,7 @@ const Budget: React.FC = () => {
         <div className="budgetCard">
           <div className="cardContent">
             <div className="row mb-3" style={{ marginBottom: '15px' }}>
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <div className="form-group">
                   <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
                     Beneficiary
@@ -1478,6 +1502,7 @@ const Budget: React.FC = () => {
                       onChange={(selected: any) => {
                         const val = selected?.value || '';
                         setBeneficiaryType(val);
+                        setSelectedTag('');
                         setCategoryItem('');
                         setCategorySelections([]);
                         setBeneficiarySearchQuery('');
@@ -1507,8 +1532,8 @@ const Budget: React.FC = () => {
                       styles={{
                         control: (base: any, state: any) => ({
                           ...base,
-                          minHeight: '36px',
-                          height: 36,
+                          minHeight: '45px',
+                          height: 45,
                           borderRadius: 12,
                           border: state.isFocused
                             ? '1px solid #0069ab'
@@ -1563,7 +1588,7 @@ const Budget: React.FC = () => {
 
               </div>
 
-              <div className="col-md-8">
+              <div className="col-md-6">
                 {['Faculty', 'Staff'].includes(beneficiaryType) ? (
                   <div className="form-group" style={{ height: '72px', display: 'flex', flexDirection: 'column' }}>
                     <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
@@ -1727,8 +1752,8 @@ const Budget: React.FC = () => {
                         styles={{
                           control: (base: any, state: any) => ({
                             ...base,
-                            minHeight: '100%',
-                            height: '100%',
+                            minHeight:' 45px',
+                            height: '45',
                             borderRadius: 12,
                             border: state.isFocused
                               ? '1px solid #0069ab'
@@ -1763,7 +1788,63 @@ const Budget: React.FC = () => {
                   <div style={{ height: '72px' }} />
                 )}
               </div>
+               <div className="col-md-3">
+  {showTagDropdown ? (
+    <div className="form-group" style={{ display: 'flex', flexDirection: 'column', marginBottom: '15px' }}>
+      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
+        Tag
+      </label>
 
+      <div style={{ position: 'relative', zIndex: 1000, flex: 1 }}>
+        <Select
+          value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
+          onChange={(selected: any) => setSelectedTag(selected?.value || '')}
+          options={TAG_OPTIONS}
+          placeholder=""
+          isSearchable={true}
+          isClearable={false}   // no cross
+          isDisabled={!isEditable}
+          menuPosition="fixed"
+          menuPlacement="auto"
+          styles={{
+            control: (base: any, state: any) => ({
+              ...base,
+              minHeight: '45px',
+              height: '45px',
+              borderRadius: 12,
+              border: state.isFocused ? '1px solid #0069ab' : '1px solid #e0e0e0',
+              boxShadow: state.isFocused ? '0 0 0 3px rgba(0, 105, 171, 0.15)' : 'none',
+              backgroundColor: isEditable ? '#fcfdff' : '#e9ecef',
+              fontSize: '0.95rem',
+              fontFamily: 'inherit'
+            }),
+            dropdownIndicator: (base: any, state: any) => ({
+              ...base,
+              padding: '0 15px',
+              transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+            }),
+            indicatorSeparator: () => ({ display: 'none' }),
+            valueContainer: (base: any) => ({ ...base, padding: '2px 15px' }),
+            option: (base: any, state: any) => ({
+              ...base,
+              padding: '10px 15px',
+              backgroundColor: state.isSelected
+                ? '#0069ab'
+                : state.isFocused
+                ? 'rgba(0,105,171,0.1)'
+                : '#fff',
+              color: state.isSelected ? 'white' : '#333'
+            })
+          }}
+        />
+      </div>
+    </div>
+  ) : (
+    // same “disabled/blank control space” like other extra dropdowns
+    <div style={{ height: '74px' }} />
+  )}
+</div>
+   
             </div>
           </div>
         </div>

@@ -16,56 +16,59 @@
   border-radius: 18px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.06);
   overflow: hidden;
+ 
+}
+
+.adminbudget-view-toggle {
+  display: flex;
+  justify-content: center;
+  margin: 18px auto 6px auto;
+  background-color: #e1f0ff;
+  border-radius: 50px;
+  padding: 5px;
+  width: min(360px, calc(100% - 32px));
+}
+
+.adminbudget-view-toggle button {
+  border: none;
+  background-color: transparent;
+  color: #5d6b8a;
+  padding: 8px 20px;
+  border-radius: 50px;
+  font-weight: 500;
+  width: 50%;
+  transition: all 0.3s ease;
+}
+
+.adminbudget-view-toggle button.active {
+  background-color: #0069ab;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
+}
+
+.adminbudget-dashboard-placeholder {
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #5d6b8a;
+  font-weight: 600;
+  padding: 24px;
 }
 
 .adminbudget-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 16px 24px;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 16px !important;
+  flex-wrap: nowrap !important;
+  padding: 16px 24px !important;
 }
-
 .adminbudget-title {
   margin: 0;
   font-weight: 600;
   color: #0a2540;
   font-size: 1.4rem;
-  flex-shrink: 0;
-}
-
-.adminbudget-role-tabs {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-right: auto;
-}
-
-.adminbudget-role-tab {
-  border: 1px solid #cbd5e1;
-  background: #f8fafc;
-  color: #334155;
-  border-radius: 10px;
-  padding: 7px 14px;
-  font-size: 0.86rem;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-}
-
-.adminbudget-role-tab:hover {
-  border-color: #0069ab;
-  color: #0069ab;
-  background: #eef6fc;
-}
-
-.adminbudget-role-tab.active {
-  border-color: #0069ab;
-  background: #0069ab;
-  color: #ffffff;
 }
 
 .adminbudget-header-actions {
@@ -73,7 +76,6 @@
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
-  margin-left: auto;
 }
 
 .adminbudget-control {
@@ -126,6 +128,22 @@
   background: #ffffff;
   box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
   padding: 16px 16px 14px 16px;
+}
+
+.adminbudget-item--archiving {
+  animation: adminbudgetArchiveOut 0.28s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes adminbudgetArchiveOut {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(28px) scale(0.98);
+  }
 }
 
 .adminbudget-item--clickable {
@@ -240,7 +258,6 @@
   padding: 2px 0;
   width: 100%;
 }
-
 .adminbudget-label {
   color: #64748b;
   font-weight: 600;
@@ -251,8 +268,7 @@
 .adminbudget-label::after {
   content: ':';
   position: absolute;
-  right: -10px;
-  /* Perfect position after label */
+  right: -10px; /* Perfect position after label */
   color: #64748b;
 }
 
@@ -263,12 +279,9 @@
   margin-left: 8px;
   flex: 1;
   overflow: hidden;
-  text-overflow: ellipsis;
-  /* Truncate very long names */
-  white-space: nowrap;
-  /* Single line */
+  text-overflow: ellipsis; /* Truncate very long names */
+  white-space: nowrap; /* Single line */
 }
-
 /* Comments (rejected only) */
 .adminbudget-comments {
   margin-top: 8px;
@@ -283,15 +296,14 @@
   margin: 1px 0;
   color: #dc2626;
 }
-
 .adminbudget-right {
-  min-width: 0;
   display: flex;
-  justify-content: flex-end;
+  flex-direction: row;
   align-items: center;
-  flex-shrink: 0;
+  gap: 12px;
+  justify-content: flex-end;
+  flex: 1;
 }
-
 .adminbudget-status {
   display: inline-block;
   padding: 6px 10px;
@@ -317,6 +329,12 @@
   background: #fdeaea;
   color: #b42318;
   border: 1px solid #f7c6c6;
+}
+
+.adminbudget-status--archived {
+  background: #eef2ff;
+  color: #334155;
+  border: 1px solid #dbe4ff;
 }
 
 /* Small action card (right of each item) */
@@ -345,13 +363,22 @@
   cursor: pointer;
   transition: transform 0.15s ease, background 0.15s ease;
 }
-
 .adminbudget-action-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   transform: none;
 }
+.adminbudget-status-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 
+.adminbudget-actions-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 .adminbudget-action-btn--approve {
   background: #e7f8ef;
   color: #137a3a;
@@ -363,35 +390,45 @@
 }
 
 .adminbudget-action-btn--return {
+  background: #fff4d6;
+  color: #d97706;
+  
+}
+
+
+.adminbudget-action-btn--return:hover:not(:disabled) {
+   background: #fef3c7;
+   transform: translateY(-1px);
+}
+
+
+.adminbudget-action-btn--reject {
+  background: #fdeaea;
+  color: #b42318;
+}
+
+.adminbudget-action-btn--reject:hover:not(:disabled) {
+  background: #f7c6c6;
+  transform: translateY(-1px);
+}
+.adminbudget-action-btn--reject {
+  background: #fdeaea;
+  color: #b42318;
+}
+
+.adminbudget-action-btn--reject:hover:not(:disabled) {
+  background: #f7c6c6;
+  transform: translateY(-1px);
+}
+.adminbudget-action-btn--archive {
   background: #eef2ff;
   color: #3730a3;
 }
 
-.adminbudget-action-btn--return:hover:not(:disabled) {
-  background: #e0e7ff;
+.adminbudget-action-btn--archive:hover:not(:disabled) {
+   background: #e0e7ff;
   transform: translateY(-1px);
 }
-
-.adminbudget-action-btn--reject {
-  background: #fdeaea;
-  color: #b42318;
-}
-
-.adminbudget-action-btn--reject:hover:not(:disabled) {
-  background: #f7c6c6;
-  transform: translateY(-1px);
-}
-
-.adminbudget-action-btn--reject {
-  background: #fdeaea;
-  color: #b42318;
-}
-
-.adminbudget-action-btn--reject:hover:not(:disabled) {
-  background: #f7c6c6;
-  transform: translateY(-1px);
-}
-
 .adminbudget-pagination {
   display: flex;
   justify-content: flex-end;
@@ -428,20 +465,12 @@
 }
 
 @media (max-width: 768px) {
-  .adminbudget-header {
-    align-items: flex-start;
-  }
-
-  .adminbudget-role-tabs {
-    width: 100%;
-    margin-right: 0;
-    order: 3;
+  .adminbudget-view-toggle {
+    width: calc(100% - 24px);
   }
 
   .adminbudget-header-actions {
     width: 100%;
-    margin-left: 0;
-    order: 2;
   }
 
   .adminbudget-control {
@@ -463,49 +492,18 @@
     max-width: 160px;
   }
 }
-
 .adminbudget-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+  position: fixed; top:0; left:0; right:0; bottom:0;
+  background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;
 }
-
-.adminbudget-modal {
-  background: white;
-  padding: 24px;
-  border-radius: 12px;
-  min-width: 450px;
-}
-
-.adminbudget-modal-textarea {
-  width: 100%;
-  height: 100px;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-}
-
-.adminbudget-modal-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
-
+.adminbudget-modal { background: white; padding: 24px; border-radius: 12px; min-width: 450px; }
+.adminbudget-modal-textarea { width: 100%; height: 100px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; }
+.adminbudget-modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 16px; }
 
 .adminbudget-stats {
   display: flex;
-  justify-content: center;
-  /* Perfect center alignment */
-  gap: 20px;
-  /* Increased spacing like screenshot */
+  justify-content: center; /* Perfect center alignment */
+  gap: 20px; /* Increased spacing like screenshot */
   /* More breathing room */
   padding: 20px 0;
   overflow-x: auto;
@@ -517,104 +515,146 @@
 
 .adminbudget-stats-card {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  width: 210px;
-  /* Larger fixed width */
-  height: 90px;
-  /* Taller like screenshot */
-  padding: 12px 8px;
-  border-radius: 25px;
-  /* Slightly softer pill */
+  justify-content: flex-start;
+  gap: 14px;
+  width: 175px; /* Fixed width like screenshot */
+  height: 86px;
+  padding: 12px 16px;
+  border-radius: 12px;
   font-weight: 700;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 6px 16px rgba(2, 6, 23, 0.08);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
   cursor: pointer;
   user-select: none;
-  border: 2px solid transparent;
-  position: relative;
-  /* For active glow */
+  position: relative; /* For active glow */
 }
 
 .adminbudget-stats-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.12);
+  border-color: rgba(15, 23, 42, 0.18);
 }
 
+.adminbudget-stats-card:hover .adminbudget-stats-icon {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(2, 6, 23, 0.12);
+}
+
+.adminbudget-stats-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.adminbudget-stats-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+
+
 .adminbudget-stats-card.active {
-  border-color: rgba(255, 255, 255, 1);
-  box-shadow:
-    0 0 0 4px rgba(255, 255, 255, 0.6),
-    0 8px 30px rgba(0, 0, 0, 0.2) !important;
-  transform: translateY(-2px);
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow: 
+    0 0 0 4px rgba(2, 6, 23, 0.05), 
+    0 8px 30px rgba(0,0,0,0.2) !important;
+  
 }
 
 .adminbudget-stats-number {
-  font-size: 2rem;
-  /* Much larger numbers */
-  font-weight: 800;
-  line-height: 1;
-  margin-bottom: 4px;
+    line-height: 1;
+  margin-top: 6px;
+    font-size: 24px;
+  font-weight: 700;
+  color: #4f4f6e;
 }
 
 .adminbudget-stats-label {
-  font-size: 0.85rem;
-  /* Slightly larger label */
+
   opacity: 1;
+  color: inherit;
   text-transform: none !important;
   letter-spacing: 1px;
-  font-weight: 600;
+  
 }
 
 /* Keep your existing color classes - just add size tweaks */
-/* Keep your existing color classes - just add size tweaks */
-.adminbudget-stats-card.total {
-  background: #eef2ff;
-  color: #0069ab;
+.adminbudget-stats-card.total
+{
+  color: #5d6b8a;
+  font-weight: 500;
+  font-size: 14px;
 }
-
+.adminbudget-stats-card.total .adminbudget-stats-icon {
+  background:#0069ab;
+  color: #eef2f7;
+}
 .adminbudget-stats-card.returned {
-  background: #dbeafe;
-  color: #1e40af;
+ color: #5d6b8a;
+ font-weight: 500;
+ font-size: 14px;
+}
+.adminbudget-stats-card.returned .adminbudget-stats-icon {
+  background:#0069ab;
+  color: #eef2f7;
 }
 
 
-.adminbudget-stats-card.total:hover {
-  background: #eef2ff;
-}
-
-.adminbudget-stats-card.returned:hover {
-  background: #dbeafe;
-}
 
 .adminbudget-stats-card.pending {
-  background: #fef3c7;
-  color: #d97706;
+ color: #5d6b8a;
+ font-weight: 500;
+ font-size: 14px;
+}
+.adminbudget-stats-card.pending .adminbudget-stats-icon {
+  background:#0069ab;
+  color: #eef2f7;
 }
 
-.adminbudget-stats-card.pending:hover {
-  background: #fef3c7;
-}
+
 
 .adminbudget-stats-card.rejected {
-  background: #fdeaea;
-  color: #b42318;
+ color: #5d6b8a;
+ font-weight: 500;
+ font-size: 14px;
+}
+.adminbudget-stats-card.rejected .adminbudget-stats-icon {
+  background:#0069ab;
+  color: #eef2f7;
 }
 
-.adminbudget-stats-card.rejected:hover {
-  background: #fdeaea;
-}
 
 .adminbudget-stats-card.approved {
-  background: #e7f8ef;
-  color: #137a3a;
+ color: #5d6b8a;
+ font-weight: 500;
+ font-size: 14px;
+}
+.adminbudget-stats-card.approved .adminbudget-stats-icon {
+ background:#0069ab;
+  color: #eef2f7;
 }
 
-.adminbudget-stats-card.approved:hover {
-  background: #e7f8ef;
+.adminbudget-stats-card.archived {
+  color: #5d6b8a;
+  font-weight: 500;
+  font-size: 14px;
 }
+.adminbudget-stats-card.archived .adminbudget-stats-icon {
+  background:#0069ab;
+  color: #eef2f7;
+}
+
 
 /* Mobile: Stack vertically if too small */
 @media (max-width: 768px) {
@@ -623,9 +663,9 @@
     align-items: center;
     gap: 16px;
   }
-
+  
   .adminbudget-stats-card {
-    width: 140px;
-    height: 90px;
+    width: 200px;
+    height: 86px;
   }
 }

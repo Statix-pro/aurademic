@@ -12,6 +12,8 @@ const BUDGET_PERMISSIONS = Object.freeze({
   workflowLevel1: 'budget.workflow.level1',
   workflowDof: 'budget.workflow.dof',
   workflowPrincipal: 'budget.workflow.principal',
+  adminView: 'budget.admin.view',
+  adminManage: 'budget.admin.manage',
 });
 
 const canAccessLevel1Queue = permissionMiddleware([BUDGET_PERMISSIONS.workflowLevel1]);
@@ -21,6 +23,8 @@ const canProcessWorkflow = permissionMiddleware([
   BUDGET_PERMISSIONS.workflowLevel1,
   BUDGET_PERMISSIONS.workflowDof,
   BUDGET_PERMISSIONS.workflowPrincipal,
+  BUDGET_PERMISSIONS.adminView,
+  BUDGET_PERMISSIONS.adminManage,
 ]);
 
 router.use(authMiddleware);

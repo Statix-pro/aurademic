@@ -709,11 +709,12 @@ class BudgetModel {
           department_id,
           proposal_description,
           total_amount,
+          approved_total_amount,
           approval_flow,
           status,
           current_stage,
           created_at
-        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, NOW())`,
+        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, NOW())`,
         [
           proposalRef,
           fyYear,
@@ -726,6 +727,7 @@ class BudgetModel {
           beneficiaryEntityId,
           departmentId,
           payload.proposal_description || null,
+          calculatedTotal,
           calculatedTotal,
           approvalFlowString,
           initialStage,
@@ -856,6 +858,7 @@ class BudgetModel {
         status = ?,
         proposal_description = ?,
         total_amount = ?,
+        approved_total_amount = ?,
         updated_at = NOW()
          WHERE id = ? `,
         [
@@ -867,6 +870,7 @@ class BudgetModel {
           nextCurrentStage,
           nextStatus,
           payload.proposal_description || null,
+          calculatedTotal,
           calculatedTotal,
           proposalId,
         ]
@@ -920,16 +924,46 @@ class BudgetModel {
 
 
   static async processApproval(proposalId, { role, decision, feedback, approverUserId, approverEmail }) {
-    if (!['level1', 'dof', 'principal'].includes(role)) {
-      throw new Error('Invalid role');
-    }
-    if (!['approved', 'rejected', 'returned'].includes(decision)) {
+    const normalizedDecision = normalizeText(decision).toLowerCase();
+
+    if (!['approved', 'rejected', 'returned', 'archived'].includes(normalizedDecision)) {
       throw new Error('Invalid decision');
     }
 
     const proposal = await this.getBudgetById(proposalId);
     if (!proposal) {
       throw new Error('Proposal not found');
+    }
+
+    if (normalizedDecision === 'archived') {
+      const logRole = normalizeText(role).toLowerCase() || 'admin';
+
+      return this.withTransaction(async (conn) => {
+        await conn.execute(
+          `UPDATE budget_proposals
+           SET status = 'archived', current_stage = 'archived', updated_at = NOW()
+           WHERE id = ? `,
+          [proposalId]
+        );
+
+        await conn.execute(
+          `INSERT INTO budget_proposal_approvals(
+            budget_proposal_id, role, approver_user_id, approver_email,
+            decision, feedback, allows_edit
+          ) VALUES(?, ?, ?, ?, 'archived', ?, 0)`,
+          [
+            proposalId,
+            logRole,
+            approverUserId,
+            approverEmail || '',
+            feedback || '',
+          ]
+        );
+      });
+    }
+
+    if (!['level1', 'dof', 'principal'].includes(role)) {
+      throw new Error('Invalid role');
     }
 
     if (proposal.current_stage !== role) {
@@ -944,7 +978,7 @@ class BudgetModel {
     const requiresPrincipalStage = flowStages.includes('principal');
     const flow = APPROVAL_FLOW[role];
 
-    if (decision === 'approved') {
+    if (normalizedDecision === 'approved') {
       newStatus = flow.approve;
       nextStage = flow.next;
 
@@ -965,7 +999,7 @@ class BudgetModel {
         newStatus = 'completed';
         nextStage = 'completed';
       }
-    } else if (decision === 'rejected') {
+    } else if (normalizedDecision === 'rejected') {
       newStatus = flow.reject;
     } else {
       newStatus = flow.returned;
@@ -986,7 +1020,7 @@ class BudgetModel {
         [newStatus, nextStage, proposalId]
       );
 
-      if (decision !== 'approved' && !normalizeText(feedback)) {
+      if (normalizedDecision !== 'approved' && !normalizeText(feedback)) {
         throw new Error('Feedback required for reject/return');
       }
 
@@ -1001,14 +1035,14 @@ class BudgetModel {
           displayRole,
           approverUserId,
           approverEmail || '',
-          decision,
+          normalizedDecision,
           feedback || '',
-          decision === 'returned' ? 1 : 0,
+          normalizedDecision === 'returned' ? 1 : 0,
         ]
       );
 
       // 2. Insert AUTO-APPROVAL for Principal (Only if DoF Approved + Principal Required)
-      if (role === 'dof' && decision === 'approved' && requiresPrincipalStage) {
+      if (role === 'dof' && normalizedDecision === 'approved' && requiresPrincipalStage) {
         await conn.execute(
           `INSERT INTO budget_proposal_approvals(
           budget_proposal_id, role, approver_user_id, approver_email,
@@ -1066,11 +1100,12 @@ class BudgetModel {
                         me.code AS org_unit_code,
                           met.name AS org_unit_type,
                             met.code AS org_unit_type_code,
-                              bp.proposal_description,
-                              bp.total_amount,
-                              bp.status,
-                              bp.current_stage,
-                              bp.approval_flow,
+      bp.proposal_description,
+      bp.total_amount,
+      bp.approved_total_amount,
+      bp.status,
+      bp.current_stage,
+      bp.approval_flow,
                               DATE_FORMAT(bp.created_at, '%Y-%m-%d %H:%i') AS created_date,
                                 COUNT(DISTINCT bpl.id) AS line_count,
                                   COUNT(DISTINCT bpa.id) AS approval_count
@@ -1185,8 +1220,8 @@ class BudgetModel {
       }
       case 'user':
       default: {
-        where.push('(bp.user_id = ? OR bp.user_email = ? OR bp.employee_id IN (SELECT id FROM master_employees WHERE user_id = ? AND status = "Active"))');
-        params.push(Number(userId), normalizeText(userEmail), Number(userId));
+        where.push('(bp.user_id = ? OR bp.user_email = ?)');
+        params.push(Number(userId), normalizeText(userEmail));
         break;
       }
     }
@@ -1455,23 +1490,31 @@ class BudgetModel {
 
 
   static async #insertBudgetLine(proposalId, line, conn) {
+    const unitAmount = Number(line.unit_amount) || 0;
+    const quantity = Number(line.quantity) || 1;
+    const lineTotal = unitAmount * quantity;
+
     const [result] = await conn.execute(
       `INSERT INTO budget_proposal_lines(
           budget_proposal_id,
           budget_head,
           sub_head,
           unit_amount,
+          approved_unit_amount,
           quantity,
           line_total,
+          approved_line_total,
           line_description
-        ) VALUES(?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         proposalId,
         line.budget_head,
         line.sub_head || '',
-        Number(line.unit_amount) || 0,
-        Number(line.quantity) || 1,
-        (Number(line.unit_amount) || 0) * (Number(line.quantity) || 1),
+        unitAmount,
+        unitAmount,
+        quantity,
+        lineTotal,
+        lineTotal,
         line.line_description || '',
       ]
     );
@@ -1541,17 +1584,6 @@ class BudgetModel {
     // ✅ ALWAYS allow the owner or named user to access their own proposal
     if (pid === uid || emailMatch) {
       return true;
-    }
-
-    // ✅ Allow the applicant (employee on whose behalf proposal was submitted) to view
-    if (proposal.employee_id && uid > 0) {
-      const [empRows] = await db.execute(
-        'SELECT id FROM master_employees WHERE id = ? AND user_id = ? AND status = "Active" LIMIT 1',
-        [proposal.employee_id, uid]
-      );
-      if (empRows.length > 0) {
-        return true;
-      }
     }
 
     switch (normalizedRole) {
