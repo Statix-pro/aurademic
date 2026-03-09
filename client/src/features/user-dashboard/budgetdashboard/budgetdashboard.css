@@ -50,11 +50,12 @@
    gap: 4px;
  }
 
- .budgetdashboard-header-right {
-   display: flex;
-   align-items: center;
-   gap: 12px;
- }
+.budgetdashboard-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
 
  /* Add button */
  .budgetdashboard-add-btn {
@@ -640,39 +641,81 @@
  }
 
  .budgetdashboard-status-pill--pending {
-   background: linear-gradient(135deg, #fefce8, #fef9c3);
-   color: #92400e;
-   border: 1px solid #f8d07c;
-   box-shadow: 0 4px 14px rgba(248, 208, 124, 0.2);
+    background: #fff4d6 !important;
+  color: #a97900 !important;
+  padding: 6px 12px !important;
+  border-radius: 20px !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+  font-size: 0.8rem !important;
  }
 
  /* No hover effect for pending */
- .budgetdashboard-status-pill--pending:hover {
-   background: linear-gradient(135deg, #fefce8, #fef9c3);
-   color: #92400e;
-   border: 1px solid #f8d07c;
-   box-shadow: 0 4px 14px rgba(248, 208, 124, 0.2);
-   transform: none;
- }
 
  .budgetdashboard-status-pill--approved {
-   background: #e7f8ef;
-   color: #137a3a;
-   border: 1px solid;
+ background: #e7f8ef !important;
+  color: #137a3a !important;
+  padding: 6px 12px !important;
+  border-radius: 20px !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+  font-size: 0.8rem !important;
+}
 
- }
+.budgetdashboard-status-pill--returned {
+  background: #fff4d6 !important;
+  color: #a97900 !important;
+  padding: 6px 12px !important;
+  border-radius: 20px !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+  font-size: 0.8rem !important;
+}
+.budgetdashboard-status-pill--submitted
+ {
+  background: #fff4d6 !important;
+  color: #a97900 !important;
+  padding: 6px 12px !important;
+  border-radius: 20px !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+  font-size: 0.8rem !important;
+}
 
+
+/* Header badge for returned */
+.budgetdashboard-proposal-status-badge--returned {
+  background: #fff3cd !important;
+  color: #856404 !important;
+  border: 1px solid #ffeaa7 !important;
+  padding: 6px 12px !important;
+  border-radius: 16px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+.budgetdashboard-status-pill--resubmitted {
+  background: #fff4d6 !important;
+  color: #a97900 !important;
+  padding: 6px 12px !important;
+  border-radius: 20px !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+  font-size: 0.8rem !important;
+}
  .budgetdashboard-status-pill--rejected {
-   background: linear-gradient(135deg, #fee2e2, #fecaca);
-   color: #b42318;
-   border: 1px solid #ef4444;
-   box-shadow: 0 4px 14px rgba(239, 68, 68, 0.22);
- }
+  background: #fdeaea !important;
+  color: #b42318 !important;
+  padding: 6px 12px !important;
+  border-radius: 20px !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+  font-size: 0.8rem !important;
+}
+
 
  /* SPECIFIC HOVER - exclude pending */
- .budgetdashboard-status-pill:not(.budgetdashboard-status-pill--pending):hover {
-   transform: translateY(-1px);
- }
+ 
 
  /* Step line under pill */
  .budgetdashboard-status-detail-line {
@@ -755,19 +798,18 @@
    color: white;
  }
 
- .budgetdashboard-header-search-group {
-   display: flex;
-   align-items: center;
-   gap: 12px;
-   /* Space between dropdown and search */
-   flex: 1;
-   max-width: 500px;
-   /* Prevent overflow; tweak based on your layout */
- }
+.budgetdashboard-header-search-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 1 auto;
+  max-width: none;
+}
 
- .budgetdashboard-financial-year {
-   padding: 8px 12px;
-   border: 1px solid #d1d5db;
+.budgetdashboard-financial-year {
+  height: 38px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
    /* Matches typical input borders */
    border-radius: 6px;
    background: white;
@@ -935,6 +977,28 @@
    color: #475569;
  }
 
+ .log-actor-line {
+   display: block;
+   width: 100%;
+   margin-top: 4px;
+   font-size: 0.75rem;
+   font-weight: 700;
+   color: #334155;
+ }
+
+ .log-admin-mark {
+   display: inline-flex;
+   align-items: center;
+   margin-left: 8px;
+   padding: 2px 8px;
+   border-radius: 999px;
+   background: #fb923c;
+   color: #7c2d12;
+   font-size: 0.68rem;
+   font-weight: 800;
+   letter-spacing: 0.2px;
+ }
+
  .log-date {
    font-size: 0.7rem;
    color: #94a3b8;
@@ -948,3 +1012,35 @@
    padding-top: 4px;
    line-height: 1.4;
  }
+
+.budgetdashboard-beneficiary-filter {
+  height: 38px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  /* Matches typical input borders */
+  border-radius: 6px;
+  background: white;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+  /* Fixed width for consistency */
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+ .budgetdashboard-beneficiary-filter:focus {
+   outline: none;
+   border-color: #3b82f6;
+   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+ }
+
+ .budgetdashboard-beneficiary-filter:hover {
+   border-color: #9ca3af;
+ }
+

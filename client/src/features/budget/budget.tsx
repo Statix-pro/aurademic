@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import Navbar from '../.././shared/components/layout/navbar/navbar';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import { useAuth } from '../../contexts/AuthContext';
+import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils';
 import Select from 'react-select';
 import './budget.css';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
@@ -60,7 +62,8 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Furniture & Fixtures',
       'Vehicles',
       'Equipment',
-      'Accessories & Kits', 'Library Books'
+      'Accessories & Kits', 
+      'Library',
     ],
   },
   { label: 'Recurring', options: [] },
@@ -149,7 +152,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Amplifiers',
     'A/V Equipment',
     'Intercom',
-    'Xerox Machine',
+    'Xerox Machine','Mouse','Keyboard','CMOS Battery'
   ],
   'Furniture & Fixtures': [
     'Chair',
@@ -170,8 +173,10 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Power Tools',
     'Weighing Machine',
     'Drilling Machine',
-    'Drone Kit',
+    'Drone Kit','Lab Accessories','Others'
   ],
+  'Library':['Library Books','Journals','agazines','Newspaper','DELNET','E-Resources',],
+
   'Maintenance Charges': ['Annual Maintenance Charges', 'Equipment Maintenance',
     'Software Maintenance',
     'Building Maintenance',
@@ -221,12 +226,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   'Membership & Subscriptions': [
     'Professional Body fees',
     'Membership fees',
-    'Annual Membership fee',
-    'Journals',
-    'Magazines',
-    'Newspaper',
-    'DELNET',
-    'E-Resources',
+    ' Annual Subscription Charges',
+       'E-Resources',
     'Data Subscription Charges',
   ],
   'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Others'],
@@ -266,11 +267,11 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   'Sports': ['Sports Meet', 'Sports Day'],
   'Competitions': ['Hackathons', 'Competitions', 'Club Activities', 'Project Expo', 'Ideathon', 'Start-up meet'],
 
-  'Institutional Governance Meetings': ['Governing Body Meeting', 'Research Advisory Board Meeting', 'Finance Committee Meeting', 'Result Passing Board Meeting', 'Examination Committee Meeting'
+  'Institutional Governance Meetings': ['Governing Body Meeting', 'Research Advisory Board Meeting', 'Finance Committee Meeting', 'Result Passing Board (RPB) Meeting', 'Examination Committee Meeting'
     , 'Placement Meeting'],
 
   'Academic Governance Meetings': ['Academic Council Meeting', 'Standing Committee Meeting',
-    'Board of Studies Meeting', 'DAB Meeting'],
+    'Board of Studies (Bos) Meeting', 'DAB Meeting'],
   'Institutional Audits': ['Academic Audit', 'Administrative Audit', 'Energy & Green Audit'],
   'Government Meetings': ['Government Meetings'],
   'Faculty Empowerment': [
@@ -441,6 +442,12 @@ const TAG_OPTIONS = [
   { value: 'Entrepreneurship', label: 'Entrepreneurship' }
 ] as SelectOption[];
 
+const STAGE_PERMISSION_MAP: Record<string, string> = {
+  level1: 'budget.workflow.level1',
+  dof: 'budget.workflow.dof',
+  principal: 'budget.workflow.principal',
+};
+
 
 const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
   Department: 'DEPARTMENT',
@@ -548,6 +555,11 @@ const Budget: React.FC = () => {
 
   const [isEditable, setIsEditable] = useState(isNewMode);
   const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(!id);
+  const [proposalStatus, setProposalStatus] = useState<string>('');
+  const [proposalStage, setProposalStage] = useState<string>('');
+  const [actionPopupOpen, setActionPopupOpen] = useState(false);
+  const [actionType, setActionType] = useState<'return' | 'reject' | null>(null);
+  const [actionComment, setActionComment] = useState('');
 
   const getCurrentFY = () => {
     const now = new Date();
@@ -1038,6 +1050,9 @@ const Budget: React.FC = () => {
           return;
         }
 
+        setProposalStatus((p.status || '').toString());
+        setProposalStage((p.current_stage || p.currentStage || '').toString());
+
 
         setApplicantName(p.applicant_name || p.user_name || p.name || "");
         setApplicantSearchQuery(p.applicant_name || p.user_name || p.name || "");
@@ -1141,6 +1156,127 @@ const Budget: React.FC = () => {
 
     loadProposal();
   }, [id, location.pathname, navigate, isSuperAdminUser]);
+
+  const canProcessStage = (stage: string) => {
+    if (isSuperAdmin(user)) return true;
+    const permissionKey = STAGE_PERMISSION_MAP[(stage || '').toLowerCase()];
+    if (!permissionKey) return false;
+    return hasPermission(user, permissionKey);
+  };
+
+  const onApprove = async () => {
+    if (!id) {
+      showAlert('Missing budget id.', 'error');
+      return;
+    }
+
+    if (!proposalStage || !canProcessStage(proposalStage)) {
+      showAlert('You do not have permission to approve this stage.', 'warning');
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to approve this budget?')) return;
+
+    try {
+      const response: any = await authenticityUtility.patch(`/budget/${id}/approval`, {
+        decision: 'approved',
+      });
+
+      if (response?.success || response?.data?.success) {
+        showAlert('Budget approved!', 'success', undefined, () => {
+          closeAlert();
+          navigate(-1);
+        });
+        return;
+      }
+
+      showAlert(response?.message || 'Failed to approve', 'error');
+    } catch (error: any) {
+      showAlert(error?.response?.data?.message || 'Failed to approve', 'error');
+    }
+  };
+
+  const onArchive = async () => {
+    if (!id) {
+      showAlert('Missing budget id.', 'error');
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to archive this budget?')) return;
+
+    try {
+      const response: any = await authenticityUtility.patch(`/budget/${id}/approval`, {
+        decision: 'archived',
+      });
+
+      if (response?.success || response?.data?.success) {
+        showAlert('Budget archived!', 'success', undefined, () => {
+          closeAlert();
+          navigate(-1);
+        });
+        return;
+      }
+
+      showAlert(response?.message || 'Failed to archive', 'error');
+    } catch (error: any) {
+      showAlert(error?.response?.data?.message || 'Failed to archive', 'error');
+    }
+  };
+
+  const openActionPopup = (type: 'return' | 'reject') => {
+    if (!proposalStage || !canProcessStage(proposalStage)) {
+      showAlert('You do not have permission to process this stage.', 'warning');
+      return;
+    }
+    setActionType(type);
+    setActionComment('');
+    setActionPopupOpen(true);
+  };
+
+  const closeActionPopup = () => {
+    setActionPopupOpen(false);
+    setActionType(null);
+    setActionComment('');
+  };
+
+  const submitActionWithComment = async () => {
+    if (!id || !actionType) return;
+
+    if (!proposalStage || !canProcessStage(proposalStage)) {
+      showAlert('You do not have permission to process this stage.', 'warning');
+      return;
+    }
+
+    const comment = actionComment.trim();
+    if (!comment) {
+      showAlert('Please enter comments.', 'warning');
+      return;
+    }
+
+    try {
+      const response: any = await authenticityUtility.patch(`/budget/${id}/approval`, {
+        decision: actionType === 'return' ? 'returned' : 'rejected',
+        feedback: comment,
+      });
+
+      if (response?.success || response?.data?.success) {
+        showAlert(
+          actionType === 'return' ? 'Budget returned!' : 'Budget rejected!',
+          'success',
+          undefined,
+          () => {
+            closeAlert();
+            closeActionPopup();
+            navigate(-1);
+          }
+        );
+        return;
+      }
+      showAlert(response?.message || `Failed to ${actionType}`, 'error');
+    } catch (error: any) {
+      showAlert(error?.response?.data?.message || `Failed to ${actionType}`, 'error');
+    }
+  };
 
 
   useEffect(() => {
@@ -2407,6 +2543,122 @@ const showTagDropdown = !!beneficiaryType?.trim();
         </div>
       </fieldset>
 
+      {/* ADMIN ACTION BUTTONS - Only for admin=true */}
+      {new URLSearchParams(location.search).get('admin') === 'true' && (
+        <div
+          className="budget-admin-actions"
+          style={{
+            padding: '24px 20px',
+            background: '#f8f9fa',
+            borderTop: '2px solid #dee2e6',
+            display: 'flex',
+            gap: '12px',
+            justifyContent: 'center',
+            marginTop: '40px',
+          }}
+        >
+          <button
+            className="budget-admin-btn budget-admin-btn--approve"
+            onClick={onApprove}
+            disabled={
+              proposalStatus.toLowerCase().includes('completed') ||
+              proposalStatus.toLowerCase().includes('archived') ||
+              !canProcessStage(proposalStage)
+            }
+            style={{
+              padding: '12px 24px',
+              background: '#e7f8ef',
+              color: '#137a3a',
+              border: 'none',
+              borderRadius: '12px',
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(40, 167, 69, 0.3)',
+            }}
+          >
+            Approve
+          </button>
+
+          <button
+            className="budget-admin-btn budget-admin-btn--return"
+            onClick={() => openActionPopup('return')}
+            disabled={
+              ['completed', 'rejected', 'archived', 'archive'].some((token) =>
+                proposalStatus.toLowerCase().includes(token)
+              ) || !canProcessStage(proposalStage)
+            }
+            style={{
+              padding: '12px 24px',
+              background: '#fff4d6 ',
+              color: '#a97900 ',
+              border: 'none',
+              borderRadius: '12px',
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(255, 193, 7, 0.3)',
+            }}
+          >
+            Return
+          </button>
+
+          <button
+            className="budget-admin-btn budget-admin-btn--reject"
+            onClick={() => openActionPopup('reject')}
+            disabled={
+              proposalStatus.toLowerCase().includes('rejected') ||
+              proposalStatus.toLowerCase().includes('archived') ||
+              !canProcessStage(proposalStage)
+            }
+            style={{
+              padding: '12px 24px',
+              background: '#fdeaea ',
+  color:' #b42318 ',
+              border: 'none',
+              borderRadius: '12px',
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              
+            }}
+          >
+            Reject
+          </button>
+
+          <button
+            className="budget-admin-btn budget-admin-btn--archive"
+            onClick={onArchive}
+            disabled={proposalStatus.toLowerCase().includes('archived') || proposalStatus.toLowerCase().includes('archive')}
+            style={{
+              padding: '12px 24px',
+              background: '#eef2ff',
+              color: '#334155',
+              border: 'none',
+              borderRadius: '12px',
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(108, 117, 125, 0.3)',
+            }}
+          >
+            Archive
+          </button>
+        </div>
+      )}
+
       {!isViewMode && (
         <div
           style={{
@@ -2463,6 +2715,84 @@ const showTagDropdown = !!beneficiaryType?.trim();
         title={alertConfig.title}
         onConfirm={alertConfig.onConfirm}
       />
+
+      {actionPopupOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 999999,
+            padding: 16,
+          }}
+          onClick={closeActionPopup}
+        >
+          <div
+            style={{
+              width: 'min(520px, 95vw)',
+              background: '#fff',
+              borderRadius: 12,
+              padding: 18,
+              boxShadow: '0 10px 35px rgba(0,0,0,0.25)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h5 style={{ margin: 0, marginBottom: 10 }}>
+              {actionType === 'return' ? 'Return Budget' : 'Reject Budget'} - Comments
+            </h5>
+
+            <textarea
+              value={actionComment}
+              onChange={(e) => setActionComment(e.target.value)}
+              rows={4}
+              placeholder="Enter comments (required)..."
+              style={{
+                width: '100%',
+                borderRadius: 10,
+                border: '1px solid #e0e0e0',
+                padding: '10px 12px',
+                outline: 'none',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+              }}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
+              <button
+                type="button"
+                onClick={closeActionPopup}
+                style={{
+                  border: '1px solid #ddd',
+                  background: '#fff',
+                  borderRadius: 10,
+                  padding: '8px 14px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={submitActionWithComment}
+                style={{
+                  border: 'none',
+                  background: actionType === 'reject' ? '#dc3545' : '#f0ad4e',
+                  color: '#fff',
+                  borderRadius: 10,
+                  padding: '8px 14px',
+                  cursor: 'pointer',
+                }}
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
