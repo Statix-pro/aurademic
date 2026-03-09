@@ -228,20 +228,23 @@ const AdminBudget: React.FC = () => {
   const isApprovedForActiveTab = useCallback(
     (item: BudgetRequestItem) => {
       const s = (item.status || "").toLowerCase();
-      if (s === "completed") return true;
 
-      switch (activeQueueTabKey) {
-        case "hod":
-        case "coordinator":
-          return s.startsWith("level1_approved");
-        case "dof":
-          return s.startsWith("dof_approved");
-        case "principal":
-          return s.startsWith("principal_approved");
-        case "admin":
-        default:
-          return s === "completed" || s.includes("approved");
-      }
+      const approvedStatusByTab: Record<QueueTabKey, string[]> = {
+        // Stage-wise cumulative approved visibility:
+        // HOD/Coordinator should still see records approved in downstream stages.
+        hod: ["level1_approved", "hod_approved", "dof_approved", "principal_approved", "completed"],
+        coordinator: ["level1_approved", "hod_approved", "dof_approved", "principal_approved", "completed"],
+        dof: ["dof_approved", "principal_approved", "completed"],
+        principal: ["principal_approved", "completed"],
+        admin: ["principal_approved", "completed"],
+      };
+
+      const tabKey = activeQueueTabKey || "admin";
+      const approvedStates = approvedStatusByTab[tabKey] || approvedStatusByTab.admin;
+
+      return approvedStates.some((stateToken) =>
+        stateToken === "completed" ? s === "completed" : s.startsWith(stateToken)
+      );
     },
     [activeQueueTabKey]
   );

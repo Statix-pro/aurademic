@@ -1061,7 +1061,7 @@ const Budget: React.FC = () => {
             ? Number(p.employee_id)
             : null
         );
-        setEmail(p.user_email || p.email || "");
+        setEmail(p.applicant_email || p.email || p.user_email || "");
 
 
         setDesignation(p.designation || p.user_designation || "");
@@ -1126,12 +1126,15 @@ const Budget: React.FC = () => {
         const canOverrideEditLock = isSuperAdminUser && isEditURL;
         const accessType = json.accessType || 'owner';
 
-        // Applicants (employees on whose behalf the proposal was submitted) can only view
-        if (accessType === 'applicant') {
+        // Applicants/beneficiaries can only view; they cannot edit someone else's proposal.
+        if (accessType === 'applicant' || accessType === 'beneficiary') {
           setIsEditable(false);
           setExpandedRows(mappedLines.map((_, idx) => idx));
           if (isEditURL) {
-            showAlert('You are the applicant for this proposal. You can only view it, not edit.', 'info', undefined, () => {
+            const viewOnlyMessage = accessType === 'beneficiary'
+              ? 'You are the beneficiary for this proposal. You can only view it, not edit.'
+              : 'You are the applicant for this proposal. You can only view it, not edit.';
+            showAlert(viewOnlyMessage, 'info', undefined, () => {
               closeAlert();
               navigate(`/budget/${id}`);
             });
