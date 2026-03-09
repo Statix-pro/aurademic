@@ -216,11 +216,11 @@ function App() {
                 <Route path="/guesthouse-booking" element={<GuestHouseBooking />} />
                 <Route path="/guestHouse-dashboard" element={<GuestHouseDashboard />} />
 
-                {/* ✅ BUDGET ROUTES (FIXED) */}
+                {/*  BUDGET ROUTES */}
                 <Route path="/budgetcard" element={<BudgetDashboard />} />
                 <Route path="/budget/new" element={<Budget />} />
-                <Route path="/budget/:id" element={<Budget />} />       {/* View Route */}
-                <Route path="/budget/:id/edit" element={<Budget />} />  {/* Edit Route */}
+                <Route path="/budget/:id" element={<Budget />} />
+                <Route path="/budget/:id/edit" element={<Budget />} />
 
                 <Route
                   path="/admin/budget"
@@ -230,7 +230,16 @@ function App() {
                     </BudgetApprovalRoute>
                   }
                 />
+                <Route
+                  path="/admin/budget/:tab"
+                  element={
+                    <BudgetApprovalRoute>
+                      <AdminBudget />
+                    </BudgetApprovalRoute>
+                  }
+                />
                 <Route path="/adminbudget" element={<Navigate to="/admin/budget" replace />} />
+                <Route path="/adminbudget/*" element={<Navigate to="/admin/budget/approval" replace />} />
 
                 {/* Under Construction Pages */}
 
