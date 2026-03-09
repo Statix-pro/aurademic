@@ -612,6 +612,36 @@ class BudgetController {
         });
       }
 
+      // Determine access type: owner, applicant, beneficiary, or approver
+      let accessType = 'approver';
+      const uid = Number(userId);
+      const proposalUserId = Number(budget.master?.user_id || budget.user_id);
+
+      if (uid === proposalUserId) {
+        accessType = 'owner';
+      } else {
+        const proposalEmployeeId = budget.master?.employee_id || budget.employee_id;
+        if (proposalEmployeeId && uid > 0) {
+          const [empMatch] = await db.execute(
+            'SELECT id FROM master_employees WHERE id = ? AND user_id = ? AND status = "Active" LIMIT 1',
+            [proposalEmployeeId, uid]
+          );
+          if (empMatch.length > 0) {
+            accessType = 'applicant';
+          }
+        }
+
+        if (accessType === 'approver') {
+          const isBeneficiary = await BudgetModel.isFacultyBeneficiaryForUser(
+            budget.master || budget,
+            uid
+          );
+          if (isBeneficiary) {
+            accessType = 'beneficiary';
+          }
+        }
+      }
+
       return res.json({
         success: true,
         data: budget,
