@@ -417,6 +417,22 @@ class BudgetModel {
     return rows[0] || null;
   }
 
+  static async checkEmployeeUserMatch(employeeId, userId) {
+    const parsedEmployeeId = Number(employeeId);
+    const parsedUserId = Number(userId);
+
+    if (!Number.isInteger(parsedEmployeeId) || parsedEmployeeId <= 0 || !Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+      return false;
+    }
+
+    const [rows] = await db.execute(
+      'SELECT id FROM master_employees WHERE id = ? AND user_id = ? AND status = "Active" LIMIT 1',
+      [parsedEmployeeId, parsedUserId]
+    );
+
+    return rows.length > 0;
+  }
+
   static async getUserDepartmentByEmail(userEmail) {
     const normalizedEmail = normalizeText(userEmail).toLowerCase();
 
