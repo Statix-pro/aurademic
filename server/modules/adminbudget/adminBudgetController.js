@@ -1015,7 +1015,15 @@ class AdminBudgetController {
         feedback: normalizeText(req.body?.feedback),
         approverUserId: AdminBudgetController.getUserId(req),
         approverEmail: normalizeText(req.user?.email),
+        isSuperAdmin,
       });
+
+      if (result && result.error) {
+        return res.status(403).json({
+          success: false,
+          message: result.error,
+        });
+      }
 
       return res.json({
         success: true,

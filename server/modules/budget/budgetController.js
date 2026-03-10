@@ -1,5 +1,4 @@
 import BudgetModel from './budgetModel.js';
-
 const VALID_BENEFICIARY_TYPES = [
   'Faculty',
   'Staff',
@@ -622,11 +621,8 @@ class BudgetController {
       } else {
         const proposalEmployeeId = budget.master?.employee_id || budget.employee_id;
         if (proposalEmployeeId && uid > 0) {
-          const [empMatch] = await db.execute(
-            'SELECT id FROM master_employees WHERE id = ? AND user_id = ? AND status = "Active" LIMIT 1',
-            [proposalEmployeeId, uid]
-          );
-          if (empMatch.length > 0) {
+          const isMatch = await BudgetModel.checkEmployeeUserMatch(proposalEmployeeId, uid);
+          if (isMatch) {
             accessType = 'applicant';
           }
         }

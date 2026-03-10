@@ -264,7 +264,7 @@ class AdminBudgetModel {
     return rows[0] || null;
   }
 
-  static async toggleArchiveState(proposalId, { role, feedback, approverUserId, approverEmail }) {
+  static async toggleArchiveState(proposalId, { role, feedback, approverUserId, approverEmail, isSuperAdmin }) {
     const parsedProposalId = Number(proposalId);
 
     if (!Number.isInteger(parsedProposalId) || parsedProposalId <= 0) {
@@ -332,8 +332,8 @@ class AdminBudgetModel {
         && requesterUserId === archivedByUserId;
       const sameUserByEmail = requesterEmail.length > 0 && requesterEmail === archivedByEmail;
 
-      if (!sameUserById && !sameUserByEmail) {
-        throw new Error('Only the user who archived this proposal can unarchive it');
+      if (!sameUserById && !sameUserByEmail && !isSuperAdmin) {
+        return { error: 'Only the user who archived this proposal can unarchive it (or a super admin)' };
       }
 
       const snapshotFromFeedback = this.#decodeArchiveSnapshot(latestArchive.feedback);
