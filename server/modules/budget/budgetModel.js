@@ -41,6 +41,7 @@ const LEVEL1_ASSIGNMENT_STATUS = Object.freeze({
   unassigned: 'unassigned',
 });
 const WORKFLOW_STAGES = Object.freeze(['level1', 'dof', 'principal']);
+const BUDGET_PROPOSAL_COLUMN_EXISTS_CACHE = new Map();
 
 const normalizeEntityTypeCode = (value) => {
   const raw = normalizeText(value)
@@ -80,11 +81,108 @@ const formatApprovalFlowString = ({ requiresLevel1, requiresDof, requiresPrincip
 };
 
 class BudgetModel {
+  static async #hasBudgetProposalColumn(columnName) {
+    const normalizedColumn = normalizeText(columnName);
+    if (!normalizedColumn) return false;
+
+    // Cache only positive existence so post-migration columns are picked up
+    // without requiring a server restart.
+    if (BUDGET_PROPOSAL_COLUMN_EXISTS_CACHE.get(normalizedColumn) === true) {
+      return true;
+    }
+
+    const [rows] = await db.execute(
+      `SELECT COUNT(*) AS count
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'budget_proposals'
+         AND COLUMN_NAME = ?`,
+      [normalizedColumn]
+    );
+
+    const exists = Number(rows?.[0]?.count || 0) > 0;
+
+    if (exists) {
+      BUDGET_PROPOSAL_COLUMN_EXISTS_CACHE.set(normalizedColumn, true);
+    } else {
+      BUDGET_PROPOSAL_COLUMN_EXISTS_CACHE.delete(normalizedColumn);
+    }
+
+    return exists;
+  }
+
+  static async getBudgetTags() {
+    try {
+      const [rows] = await db.execute(
+        `SELECT id, tag_name, is_active, sort_order
+         FROM budget_tags
+         WHERE is_active = 1
+         ORDER BY sort_order ASC, tag_name ASC`
+      );
+      return rows;
+    } catch (error) {
+      if (error?.code === 'ER_NO_SUCH_TABLE') {
+        return [];
+      }
+      throw error;
+    }
+  }
+
 
   static getCurrentFinancialYear() {
     const now = new Date();
     const month = now.getMonth() + 1;
     return month >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+  }
+
+  static getDefaultFreezeCutoffDate(fiscalYear) {
+    const fy = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
+    return `${fy}-02-01`;
+  }
+
+  static async getFreezeConfig(fiscalYear) {
+    const fy = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
+    let rows = [];
+
+    try {
+      [rows] = await db.execute(
+        `SELECT fiscal_year, cutoff_date, is_frozen, updated_by_user_id, updated_by_email
+         FROM budget_time_freeze_config
+         WHERE fiscal_year = ?
+         LIMIT 1`,
+        [fy]
+      );
+    } catch (error) {
+      if (error?.code === 'ER_NO_SUCH_TABLE') {
+        return {
+          fiscalYear: fy,
+          cutoffDate: this.getDefaultFreezeCutoffDate(fy),
+          isFrozen: false,
+          updatedByUserId: null,
+          updatedByEmail: null,
+        };
+      }
+      throw error;
+    }
+
+    if (!rows.length) {
+      return {
+        fiscalYear: fy,
+        cutoffDate: this.getDefaultFreezeCutoffDate(fy),
+        isFrozen: false,
+        updatedByUserId: null,
+        updatedByEmail: null,
+      };
+    }
+
+    const row = rows[0];
+    return {
+      fiscalYear: Number(row.fiscal_year),
+      cutoffDate: row.cutoff_date ? String(row.cutoff_date) : this.getDefaultFreezeCutoffDate(fy),
+      isFrozen: Number(row.is_frozen) === 1,
+      updatedByUserId: row.updated_by_user_id ? Number(row.updated_by_user_id) : null,
+      updatedByEmail: normalizeText(row.updated_by_email) || null,
+    };
   }
 
   static normalizeEntityTypeCode(typeCode) {
@@ -695,6 +793,37 @@ class BudgetModel {
         assigneeEmail: level1EntityAssignee?.email || null,
       });
 
+      const hasApplicantNameColumn = await this.#hasBudgetProposalColumn('applicant_name');
+      const hasBudgetTagColumn = await this.#hasBudgetProposalColumn('budget_tag');
+      const applicantNameInsertColumn = hasApplicantNameColumn ? ', applicant_name' : '';
+      const budgetTagInsertColumn = hasBudgetTagColumn ? ', budget_tag' : '';
+      const applicantNameInsertValue = hasApplicantNameColumn ? ', ?' : '';
+      const budgetTagInsertValue = hasBudgetTagColumn ? ', ?' : '';
+
+      const createParams = [
+        proposalRef,
+        fyYear,
+        payload.employee_id || payload.user_id,
+        payload.user_id,
+        payload.user_email || '',
+        payload.request_date,
+        payload.beneficiary_type,
+        payload.beneficiary_value || null,
+        beneficiaryEntityId,
+        departmentId,
+        payload.proposal_description || null,
+        calculatedTotal,
+        calculatedTotal,
+        approvalFlowString,
+        initialStage,
+      ];
+      if (hasApplicantNameColumn) {
+        createParams.push(payload.applicant_name || null);
+      }
+      if (hasBudgetTagColumn) {
+        createParams.push(payload.budget_tag || null);
+      }
+
       const [proposalResult] = await conn.execute(
         `INSERT INTO budget_proposals(
           proposal_ref,
@@ -712,26 +841,10 @@ class BudgetModel {
           approved_total_amount,
           approval_flow,
           status,
-          current_stage,
+          current_stage${applicantNameInsertColumn}${budgetTagInsertColumn},
           created_at
-        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, NOW())`,
-        [
-          proposalRef,
-          fyYear,
-          payload.employee_id || payload.user_id,
-          payload.user_id,
-          payload.user_email || '',
-          payload.request_date,
-          payload.beneficiary_type,
-          payload.beneficiary_value || null,
-          beneficiaryEntityId,
-          departmentId,
-          payload.proposal_description || null,
-          calculatedTotal,
-          calculatedTotal,
-          approvalFlowString,
-          initialStage,
-        ]
+        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?${applicantNameInsertValue}${budgetTagInsertValue}, NOW())`,
+        createParams
       );
 
       const proposalId = proposalResult.insertId;
@@ -796,6 +909,32 @@ class BudgetModel {
         ORDER BY l.id, FIELD(m.month, ${VALID_MONTHS.map((month) => `'${month}'`).join(',')})`,
       [proposalId]
     );
+    const approvedAllocationsByLineId = {};
+    for (const line of lines) {
+      const lineId = Number(line?.id);
+      if (!Number.isInteger(lineId)) continue;
+      const raw = line?.approved_month_allocations_json;
+      if (!raw) continue;
+      let parsed = null;
+      try {
+        parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      } catch {
+        parsed = null;
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+      const normalized = {};
+      for (const month of VALID_MONTHS) {
+        normalized[month] = Number(parsed?.[month] || 0);
+      }
+      const hasAny = Object.values(normalized).some((v) => Number(v) !== 0);
+      if (hasAny) {
+        approvedAllocationsByLineId[lineId] = normalized;
+      }
+    }
+    const approvedAllocations =
+      Object.keys(approvedAllocationsByLineId).length > 0
+        ? approvedAllocationsByLineId
+        : null;
 
     const [approvals] = await db.execute(
       `SELECT *, DATE_FORMAT(decided_at, '%Y-%m-%d %H:%i') AS decided_at_formatted
@@ -805,16 +944,47 @@ class BudgetModel {
       [proposalId]
     );
 
+    let edits = [];
+    try {
+      const [editRows] = await db.execute(
+        `SELECT
+           id,
+           budget_proposal_id,
+           edited_by_user_id,
+           edited_by_email,
+           summary,
+           details,
+           created_at,
+           DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') AS created_at_formatted
+         FROM budget_proposal_edits
+         WHERE budget_proposal_id = ?
+         ORDER BY created_at`,
+        [proposalId]
+      );
+      edits = editRows;
+    } catch (error) {
+      // Keep response compatible if migration isn't applied yet.
+      if (error?.code !== 'ER_NO_SUCH_TABLE') {
+        throw error;
+      }
+    }
+
     return {
       master,
       lines,
       allocations: this.groupAllocationsByLine(allocations),
+      approved_allocations: approvedAllocations,
       approvals,
+      edits,
     };
   }
 
 
-  static async update(proposalId, payload, { skipEditStateValidation = false } = {}) {
+  static async update(
+    proposalId,
+    payload,
+    { skipEditStateValidation = false, editedByUserId = null, editedByEmail = null, editedByRole = null } = {}
+  ) {
     const proposal = await this.getBudgetById(proposalId);
 
     if (!proposal) {
@@ -826,6 +996,49 @@ class BudgetModel {
     }
 
     return this.withTransaction(async (conn) => {
+      const [previousLines] = await conn.execute(
+        `SELECT id, budget_head, sub_head, unit_amount, quantity, line_description
+         FROM budget_proposal_lines
+         WHERE budget_proposal_id = ?
+         ORDER BY id`,
+        [proposalId]
+      );
+      const [previousAllocationRows] = await conn.execute(
+        `SELECT
+           l.id AS line_id,
+           m.month,
+           m.amount
+         FROM budget_proposal_lines l
+         LEFT JOIN budget_line_month_allocations m ON m.budget_line_id = l.id
+         WHERE l.budget_proposal_id = ?
+         ORDER BY l.id`,
+        [proposalId]
+      );
+      const previousMonthByLineId = new Map();
+      for (const row of previousAllocationRows) {
+        if (!previousMonthByLineId.has(row.line_id)) {
+          previousMonthByLineId.set(row.line_id, {});
+        }
+        if (row.month) {
+          previousMonthByLineId.get(row.line_id)[row.month] = Number(row.amount || 0);
+        }
+      }
+
+      const toAmount = (value) => Number(value || 0);
+      const toQty = (value) => {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed) || parsed <= 0) return 1;
+        return parsed;
+      };
+      const normalizeMonthMap = (raw) => {
+        const out = {};
+        for (const month of VALID_MONTHS) {
+          out[month] = Number(raw?.[month] || 0);
+        }
+        return out;
+      };
+      const incomingLines = Array.isArray(payload.lines) ? payload.lines : [];
+      const lineChangeDetails = [];
       const departmentId = await this.#resolveDepartmentId(conn, payload);
       const { entityTypeCode, beneficiaryEntityId } = await this.#resolveBeneficiaryEntity(
         conn,
@@ -835,8 +1048,11 @@ class BudgetModel {
       const flow = await this.resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn);
       const approvalFlowString = formatApprovalFlowString(flow);
       const initialStage = flow.requiresLevel1 ? 'level1' : flow.requiresDof ? 'dof' : 'principal';
+      const isReturnedState = proposal.status && proposal.status.endsWith('_returned');
       const nextCurrentStage =
-        ['draft', 'submitted'].includes(proposal.status) ? initialStage : proposal.current_stage;
+        ['draft', 'submitted'].includes(proposal.status) || isReturnedState
+          ? initialStage
+          : proposal.current_stage;
 
       const calculatedTotal = (payload.lines || []).reduce((sum, line) => {
         const amount = Number(line.unit_amount) || 0;
@@ -844,12 +1060,43 @@ class BudgetModel {
         return sum + amount * qty;
       }, 0);
 
-      const isReturnedState = proposal.status && proposal.status.endsWith('_returned');
       const nextStatus = isReturnedState ? 're_submitted' : proposal.status;
+
+      const hasApplicantNameColumn = await this.#hasBudgetProposalColumn('applicant_name');
+      const hasBudgetTagColumn = await this.#hasBudgetProposalColumn('budget_tag');
+      const applicantNameSetClause = hasApplicantNameColumn ? 'applicant_name = ?,' : '';
+      const budgetTagSetClause = hasBudgetTagColumn ? 'budget_tag = ?,' : '';
+      const updateParams = [];
+
+      if (hasApplicantNameColumn) {
+        updateParams.push(payload.applicant_name || null);
+      }
+
+      updateParams.push(
+        payload.beneficiary_type,
+        payload.beneficiary_value || null,
+        beneficiaryEntityId,
+        departmentId,
+        approvalFlowString,
+        nextCurrentStage,
+        nextStatus,
+        payload.proposal_description || null
+      );
+
+      if (hasBudgetTagColumn) {
+        updateParams.push(payload.budget_tag || null);
+      }
+
+      updateParams.push(
+        calculatedTotal,
+        calculatedTotal,
+        proposalId
+      );
 
       await conn.execute(
         `UPDATE budget_proposals
-         SET beneficiary_type = ?,
+         SET ${applicantNameSetClause}
+        beneficiary_type = ?,
         beneficiary_value = ?,
         beneficiary_entity_id = ?,
         department_id = ?,
@@ -857,23 +1104,12 @@ class BudgetModel {
         current_stage = ?,
         status = ?,
         proposal_description = ?,
+        ${budgetTagSetClause}
         total_amount = ?,
         approved_total_amount = ?,
         updated_at = NOW()
          WHERE id = ? `,
-        [
-          payload.beneficiary_type,
-          payload.beneficiary_value || null,
-          beneficiaryEntityId,
-          departmentId,
-          approvalFlowString,
-          nextCurrentStage,
-          nextStatus,
-          payload.proposal_description || null,
-          calculatedTotal,
-          calculatedTotal,
-          proposalId,
-        ]
+        updateParams
       );
 
       await conn.execute(
@@ -899,6 +1135,105 @@ class BudgetModel {
           }
         }
       }
+
+      const maxLineCount = Math.max(previousLines.length, incomingLines.length);
+      for (let i = 0; i < maxLineCount; i += 1) {
+        const oldLine = previousLines[i];
+        const newLine = incomingLines[i];
+        const lineNo = i + 1;
+
+        if (oldLine && !newLine) {
+          lineChangeDetails.push({
+            lineNo,
+            changes: ['Line removed'],
+          });
+          continue;
+        }
+
+        if (!oldLine && newLine) {
+          lineChangeDetails.push({
+            lineNo,
+            changes: ['Line added'],
+          });
+          continue;
+        }
+
+        if (!oldLine || !newLine) {
+          continue;
+        }
+
+        const changes = [];
+        const oldBudgetHead = normalizeText(oldLine.budget_head);
+        const newBudgetHead = normalizeText(newLine.budget_head);
+        if (oldBudgetHead !== newBudgetHead) {
+          changes.push(`Budget Head changed from "${oldBudgetHead || '-'}" to "${newBudgetHead || '-'}"`);
+        }
+
+        const oldSubHead = normalizeText(oldLine.sub_head);
+        const newSubHead = normalizeText(newLine.sub_head);
+        if (oldSubHead !== newSubHead) {
+          changes.push(`Sub Head changed from "${oldSubHead || '-'}" to "${newSubHead || '-'}"`);
+        }
+
+        const oldUnitAmount = toAmount(oldLine.unit_amount);
+        const newUnitAmount = toAmount(newLine.unit_amount);
+        if (oldUnitAmount !== newUnitAmount) {
+          changes.push(`Unit Amount changed from ${oldUnitAmount} to ${newUnitAmount}`);
+        }
+
+        const oldQty = toQty(oldLine.quantity);
+        const newQty = toQty(newLine.quantity);
+        if (oldQty !== newQty) {
+          changes.push(`Quantity changed from ${oldQty} to ${newQty}`);
+        }
+
+        const oldDescription = normalizeText(oldLine.line_description);
+        const newDescription = normalizeText(newLine.line_description);
+        if (oldDescription !== newDescription) {
+          changes.push('Description updated');
+        }
+
+        const oldMonths = normalizeMonthMap(previousMonthByLineId.get(oldLine.id) || {});
+        const newMonths = normalizeMonthMap(newLine.month_allocations || {});
+        const monthDiffs = [];
+        for (const month of VALID_MONTHS) {
+          if (oldMonths[month] !== newMonths[month]) {
+            monthDiffs.push(`${month}: ${oldMonths[month]} -> ${newMonths[month]}`);
+          }
+        }
+        if (monthDiffs.length > 0) {
+          changes.push(`Month allocations changed (${monthDiffs.join(', ')})`);
+        }
+
+        if (changes.length > 0) {
+          lineChangeDetails.push({ lineNo, changes });
+        }
+      }
+
+      const editSummary =
+        lineChangeDetails.length > 0
+          ? `${lineChangeDetails.length} line(s) updated`
+          : 'Proposal edited';
+
+      try {
+        await conn.execute(
+          `INSERT INTO budget_proposal_edits
+            (budget_proposal_id, edited_by_user_id, edited_by_email, summary, details)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            proposalId,
+            editedByUserId || null,
+            normalizeText(editedByEmail) || null,
+            editSummary,
+            JSON.stringify({ editorRole: normalizeText(editedByRole).toLowerCase(), lines: lineChangeDetails }),
+          ]
+        );
+      } catch (error) {
+        // Keep update flow working if migration table is not available in a deployment.
+        if (error?.code !== 'ER_NO_SUCH_TABLE') {
+          throw error;
+        }
+      }
     });
   }
 
@@ -913,9 +1248,16 @@ class BudgetModel {
         [proposalId]
       );
 
+      // Preserve historical reference numbers so deleted refs are never reused.
+      await conn.execute(
+        `UPDATE budget_proposal_refs
+         SET proposal_id = NULL
+         WHERE proposal_id = ?`,
+        [proposalId]
+      );
+
       await conn.execute('DELETE FROM budget_proposal_lines WHERE budget_proposal_id = ?', [proposalId]);
       await conn.execute('DELETE FROM budget_proposal_approvals WHERE budget_proposal_id = ?', [proposalId]);
-      await conn.execute('DELETE FROM budget_proposal_refs WHERE proposal_id = ?', [proposalId]);
 
       const [result] = await conn.execute('DELETE FROM budget_proposals WHERE id = ?', [proposalId]);
       return result.affectedRows > 0;
@@ -1073,6 +1415,14 @@ class BudgetModel {
     const pLimit = Number.parseInt(limit, 10) || 10;
     const pOffset = (pPage - 1) * pLimit;
     const currentFY = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
+    const hasApplicantNameColumn = await this.#hasBudgetProposalColumn('applicant_name');
+    const hasBudgetTagColumn = await this.#hasBudgetProposalColumn('budget_tag');
+    const applicantNameColumnExpr = hasApplicantNameColumn
+      ? "NULLIF(TRIM(MAX(bp.applicant_name)), ''),"
+      : '';
+    const budgetTagColumnExpr = hasBudgetTagColumn
+      ? 'MAX(bp.budget_tag) AS budget_tag,'
+      : 'NULL AS budget_tag,';
 
     let sql = `
       SELECT SQL_CALC_FOUND_ROWS
@@ -1083,10 +1433,12 @@ class BudgetModel {
         bp.user_id,
         MAX(bp.user_email) AS user_email,
           COALESCE(
+            ${applicantNameColumnExpr}
             NULLIF(TRIM(MAX(CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, '')))), ''),
             NULLIF(TRIM(MAX(u.name)), ''),
             NULLIF(TRIM(MAX(bp.user_email)), '')
           ) AS applicant_name,
+            ${budgetTagColumnExpr}
             MAX(CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, ''))) AS faculty_name,
               MAX(u.name) AS user_name,
                 DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,

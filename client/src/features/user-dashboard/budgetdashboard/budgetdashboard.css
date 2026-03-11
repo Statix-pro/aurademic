@@ -297,9 +297,9 @@
  /* Replace this entire block */
  .budgetdashboard-proposal-header.budgetdashboard-proposal-flat {
    margin: 14px 0 8px 0;
-   padding: 12px 20px;
+   padding: 14px 24px;
    border: none;
-   border-bottom: 2px solid #e2e8f6;
+   border-bottom: 2px solid #4a9af5;
    /* ← CHANGED: same as header */
    border-radius: 0;
    box-shadow: none;
@@ -315,9 +315,40 @@
  .budgetdashboard-proposal-left {
    font-size: 1.4rem;
    font-weight: 600;
-   color: #495057;
+      color: #0a2540;
    flex-shrink: 0;
    /* Prevent shrinking */
+ }
+
+ .budgetdashboard-proposal-title-group {
+   display: flex;
+   align-items: center;
+   gap: 10px;
+   min-width: 0;
+ }
+
+ .budgetdashboard-proposal-applicant {
+   font-size: 1rem;
+   font-weight: 600;
+   color: #0f2542;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   max-width: 320px;
+ }
+
+ .budgetdashboard-proposal-tag-pill {
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   padding: 7px 14px;
+   border-radius: 999px;
+   background: #dbeaf5;
+   color: #3b6d91;
+   font-size: 0.95rem;
+   font-weight: 500;
+   line-height: 1;
+   white-space: nowrap;
  }
 
  .budgetdashboard-proposal-center {
@@ -565,9 +596,19 @@
      font-size: 1.2rem;
    }
 
-   .budgetdashboard-proposal-left {
-     font-size: 1.1rem;
-   }
+  .budgetdashboard-proposal-left {
+    font-size: 1.4rem;
+  }
+
+  .budgetdashboard-proposal-applicant {
+    font-size: 1.4rem;
+    max-width: 200px;
+  }
+
+  .budgetdashboard-proposal-tag-pill {
+    font-size: 0.82rem;
+    padding: 6px 12px;
+  }
 
    .budgetdashboard-status-pill {
      padding: 8px 10px;
@@ -924,11 +965,17 @@
  }
 
  .log-approval-item {
+   position: relative;
    background: #fdfdfd;
    border: 1px solid #f1f5f9;
    border-radius: 8px;
    padding: 10px;
    margin-bottom: 10px;
+ }
+
+.log-approval-item--admin {
+   border-color: #fed7aa;
+   background: #fffaf5;
  }
 
  .log-approval-meta {
@@ -987,13 +1034,15 @@
  }
 
  .log-admin-mark {
+   position: absolute;
+   top: 8px;
+   right: 8px;
    display: inline-flex;
    align-items: center;
-   margin-left: 8px;
    padding: 2px 8px;
    border-radius: 999px;
    background: #fb923c;
-   color: #7c2d12;
+   color: #ffffff;
    font-size: 0.68rem;
    font-weight: 800;
    letter-spacing: 0.2px;

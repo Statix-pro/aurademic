@@ -30,7 +30,9 @@ const canProcessWorkflow = permissionMiddleware([
 router.use(authMiddleware);
 
 router.get('/faculty', BudgetController.getFacultyDetails);
+router.get('/freeze-config', BudgetController.getFreezeConfig);
 router.get('/search-applicant', BudgetController.searchApplicant);
+router.get('/tags', BudgetController.getBudgetTags);
 router.get('/org-units', BudgetController.getAllOrgUnits);
 router.get('/org-units/:type', BudgetController.getOrgUnits);
 

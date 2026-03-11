@@ -50,10 +50,15 @@ router.put('/freeze-config', AdminBudgetController.upsertFreezeConfig);
 
 // Admin budget page workflow endpoints (moved from /budget/* usage)
 router.get('/faculty', AdminBudgetController.getFacultyDetails);
+router.get('/search-applicant', AdminBudgetController.searchApplicant);
+router.get('/tags', AdminBudgetController.getBudgetTags);
+router.get('/org-units', AdminBudgetController.getAllOrgUnits);
+router.get('/org-units/:type', AdminBudgetController.getOrgUnits);
 router.get('/hod', canAccessLevel1Queue, AdminBudgetController.getHodBudgets);
 router.get('/coordinator', canAccessLevel1Queue, AdminBudgetController.getCoordinatorBudgets);
 router.get('/dof', canAccessDofQueue, AdminBudgetController.getDofBudgets);
 router.get('/principal', canAccessPrincipalQueue, AdminBudgetController.getPrincipalBudgets);
+router.get('/:id(\\d+)', AdminBudgetController.get);
 router.put('/:id(\\d+)', canProcessWorkflow, AdminBudgetController.updateApprovedAmounts);
 router.patch('/:id(\\d+)/approval', canProcessWorkflow, AdminBudgetController.approve);
 router.patch('/:id(\\d+)/archive-toggle', canToggleArchive, AdminBudgetController.toggleArchive);

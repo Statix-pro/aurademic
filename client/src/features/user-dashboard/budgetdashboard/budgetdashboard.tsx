@@ -34,6 +34,7 @@ interface ProposalGroup {
   edits: any[];
   userEmail?: string;
   applicantName?: string;
+  budgetTag?: string;
   totalProposed: number;
   totalApproved: number;
   isApplicantOnly: boolean;
@@ -53,6 +54,7 @@ interface LogEvent {
   subtitle?: string;
   actorLine?: string;
   actorIsAdmin?: boolean;
+  actorBadgeLabel?: string;
   timestamp: number;
   dateLabel: string;
   decision?: string;
@@ -73,6 +75,10 @@ const BudgetDashboard: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const resolveProposalTag = (proposal: ProposalGroup): string => {
+    return String(proposal.budgetTag || "").trim();
+  };
 
   const [alertConfig, setAlertConfig] = useState<{
     show: boolean;
@@ -100,8 +106,8 @@ const BudgetDashboard: React.FC = () => {
   const infoTriggerRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const formatFY = (fyStart: number) => `${fyStart}-${String(fyStart + 1).slice(2)}`;
-  const INITIAL_WINDOW_MONTH = 3; // April (0-indexed)
-  const INITIAL_WINDOW_DAY = 10;
+  const INITIAL_WINDOW_MONTH = 1; // February (0-indexed)
+  const INITIAL_WINDOW_DAY = 1;
   const [freezeCutoffDate, setFreezeCutoffDate] = useState<string>('');
   const [isFreezeActive, setIsFreezeActive] = useState<boolean>(false);
 
@@ -162,14 +168,14 @@ const BudgetDashboard: React.FC = () => {
   const getDefaultCutoffDateForFY = (fy: string) => {
     const fyStart = Number.parseInt(String(fy || '').split('-')[0], 10);
     if (!Number.isInteger(fyStart)) return '';
-    return `${fyStart}-04-10`;
+    return `${fyStart}-02-01`;
   };
 
   useEffect(() => {
     const loadFreezeConfig = async () => {
       try {
         const fyStart = Number.parseInt(financialYear.split("-")[0], 10);
-        const response: any = await authenticityUtility.get('/adminbudget/freeze-config', {
+        const response: any = await authenticityUtility.get('/budget/freeze-config', {
           params: { fiscalYear: fyStart },
         });
         if (response?.success && response?.data?.cutoffDate) {
@@ -365,10 +371,13 @@ const BudgetDashboard: React.FC = () => {
             createdAt: master.created_at,
             updatedAt: master.updated_at,
             items: items,
-            approvals: data.pendingApprovals || data.approvals || [],
+            approvals: Array.isArray(data.approvals)
+              ? data.approvals
+              : (Array.isArray(data.pendingApprovals) ? data.pendingApprovals : []),
             edits: data.edits || [],
             userEmail: master.user_email || master.userEmail || "",
             applicantName: master.applicant_name || master.user_name || master.name || "",
+            budgetTag: master.budget_tag || "",
             totalProposed: items.reduce((sum: number, i: any) => sum + i.proposedAmount, 0),
             totalApproved: items.reduce((sum: number, i: any) => sum + i.approvedAmount, 0),
             isApplicantOnly: Boolean(data._isApplicantOnly),
@@ -441,6 +450,14 @@ const BudgetDashboard: React.FC = () => {
     return token === "admin" || token === "super_admin";
   };
 
+  const getWorkflowBadgeLabel = (role?: string | null) => {
+    const token = normalizeText(role).toLowerCase();
+    if (["level1", "hod", "coordinator"].includes(token)) return "HOD";
+    if (token === "dof") return "DOF";
+    if (["principal", "admin", "super_admin", "superadmin"].includes(token)) return "SUPERADMIN";
+    return "";
+  };
+
   const formatDateTime = (value?: string) => {
     if (!value) return "-";
     const parsed = new Date(value);
@@ -471,6 +488,10 @@ const BudgetDashboard: React.FC = () => {
     const createdAtMs = proposal.createdAt ? new Date(proposal.createdAt).getTime() : 0;
     const updatedAtMs = proposal.updatedAt ? new Date(proposal.updatedAt).getTime() : 0;
     const submitterEmail = normalizeEmail(proposal.userEmail);
+    const approvalLogs = Array.isArray(proposal.approvals) ? proposal.approvals : [];
+    const hasApprovalUpdate = approvalLogs.some(
+      (app: any) => String(app?.decision || '').toLowerCase() === 'updated'
+    );
 
     if (createdAtMs) {
       events.push({
@@ -490,6 +511,14 @@ const BudgetDashboard: React.FC = () => {
         const createdAt = edit.created_at || edit.createdAt;
         const createdMs = createdAt ? new Date(createdAt).getTime() : createdAtMs;
         const summary = normalizeText(edit.summary);
+        let parsedDetails: any = null;
+        if (edit.details) {
+          try {
+            parsedDetails = typeof edit.details === 'string' ? JSON.parse(edit.details) : edit.details;
+          } catch {
+            parsedDetails = null;
+          }
+        }
         const editorEmail = readActorEmail(edit, [
           "edited_by_email",
           "editedByEmail",
@@ -503,16 +532,26 @@ const BudgetDashboard: React.FC = () => {
           isAdminRoleToken(edit.edited_by_role || edit.editedByRole || edit.role);
         const inferredAdmin = Boolean(editorEmail && submitterEmail && editorEmail !== submitterEmail);
         const actorIsAdmin = explicitlyAdmin || inferredAdmin;
+        const editorRole =
+          normalizeText(edit.edited_by_role || edit.editedByRole || edit.role) ||
+          normalizeText(parsedDetails?.editorRole);
+        const actorBadgeLabel = getWorkflowBadgeLabel(editorRole) || (actorIsAdmin ? "SUPERADMIN" : "");
         let rowSummary = '';
         let detailSummary = '';
 
         if (edit.details) {
           try {
-            const parsed = typeof edit.details === 'string' ? JSON.parse(edit.details) : edit.details;
-            const lines = Array.isArray(parsed?.lines) ? parsed.lines : [];
+            const parsed = parsedDetails;
+            const lines = Array.isArray(parsed?.lines)
+              ? parsed.lines
+              : Array.isArray(parsed)
+                ? parsed
+                : Array.isArray(parsed?.lineChanges)
+                  ? parsed.lineChanges
+                  : [];
             if (lines.length > 0) {
               const numericRows = lines
-                .map((line: any) => Number(line?.lineNo))
+                .map((line: any) => Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no))
                 .filter((lineNo: number) => Number.isInteger(lineNo) && lineNo > 0);
               const rowNumbers: number[] = Array.from(new Set<number>(numericRows)).sort(
                 (a: number, b: number) => a - b
@@ -522,9 +561,16 @@ const BudgetDashboard: React.FC = () => {
                 rowSummary = `Row No. ${rowNumbers.join(', ')}`;
               }
 
-              const details = lines.map((line: any) => (
-                `Line ${line.lineNo}: ${(line.changes || []).join('; ')}`
-              ));
+              const details = lines.map((line: any, lineIdx: number) => {
+                const lineNo = Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no) || (lineIdx + 1);
+                const rawChanges = line?.changes;
+                const changeList = Array.isArray(rawChanges)
+                  ? rawChanges
+                  : normalizeText(rawChanges)
+                    ? [normalizeText(rawChanges)]
+                    : [];
+                return `Line ${lineNo}: ${changeList.join('; ') || 'Updated'}`;
+              });
               detailSummary = details.join(' | ');
             }
           } catch {
@@ -541,6 +587,7 @@ const BudgetDashboard: React.FC = () => {
           subtitle,
           actorLine: `Updated By: ${editorEmail || "-"}`,
           actorIsAdmin,
+          actorBadgeLabel,
           timestamp: createdMs,
           dateLabel: createdAt ? formatDateTime(createdAt) : "-",
           decision: "updated",
@@ -548,7 +595,7 @@ const BudgetDashboard: React.FC = () => {
       });
     }
 
-    if (updatedAtMs && createdAtMs && updatedAtMs > createdAtMs && editLogs.length === 0) {
+    if (updatedAtMs && createdAtMs && updatedAtMs > createdAtMs && editLogs.length === 0 && !hasApprovalUpdate) {
       events.push({
         key: "updated-at-fallback",
         title: "Updated",
@@ -560,12 +607,16 @@ const BudgetDashboard: React.FC = () => {
       });
     }
 
-    (proposal.approvals || []).forEach((app: any, idx: number) => {
+    approvalLogs.forEach((app: any, idx: number) => {
       const feedback = normalizeText(app.feedback);
       if (feedback === "Auto-approved after DoF clearance") {
         return;
       }
       const decision = String(app.decision || "updated").toLowerCase();
+      if (decision === "updated") {
+        if (editLogs.length > 0) return;
+        if (!feedback || feedback.toLowerCase().includes("reviewed (no line change)")) return;
+      }
       const approverEmail = readActorEmail(app, [
         "approver_email",
         "approverEmail",
@@ -589,6 +640,7 @@ const BudgetDashboard: React.FC = () => {
       const actorIsAdmin =
         isAdminRoleToken(app.role) ||
         Boolean(app.is_admin ?? app.isAdmin ?? app.updated_by_admin ?? app.updatedByAdmin);
+      const actorBadgeLabel = decision === "updated" ? getWorkflowBadgeLabel(app.role) : "";
 
       events.push({
         key: `approval-${idx}`,
@@ -596,6 +648,7 @@ const BudgetDashboard: React.FC = () => {
         subtitle: subtitleParts.join(" | "),
         actorLine: `${actorPrefix}: ${approverEmail || "-"}`,
         actorIsAdmin,
+        actorBadgeLabel,
         timestamp: decidedAtMs || createdAtMs,
         dateLabel: decidedAt ? formatDateTime(decidedAt) : "-",
         decision,
@@ -886,6 +939,7 @@ const BudgetDashboard: React.FC = () => {
                 const label = isInitialBudget
                   ? `Initial Budget ${++initialBudgetCount}`
                   : `Additional Budget ${++additionalBudgetCount}`;
+                const displayTag = resolveProposalTag(proposal);
                 const isExpanded = showBudgetStatusDetail[proposal.proposalId] || false;
 
                 // Status Pill Text
@@ -906,14 +960,14 @@ const BudgetDashboard: React.FC = () => {
 
                     {/* Card Header */}
                     <div className="budgetdashboard-proposal-header budgetdashboard-proposal-flat">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div className="budgetdashboard-proposal-title-group">
                         <div className="budgetdashboard-proposal-left">{label}</div>
                         <div
                           className="budgetdashboard-info-trigger"
                           ref={(el) => { infoTriggerRefs.current[proposal.proposalId] = el; }}
                           onClick={() => handleInfoClick(proposal.proposalId)}
                         >
-                          <Info size={18} color="#6c757d" style={{ cursor: 'pointer' }} />
+                          <Info size={20} color="#6b7280" style={{ cursor: 'pointer' }} />
                           {activeLogId === proposal.proposalId && (
                             <div
                               className="budgetdashboard-log-popover"
@@ -935,7 +989,15 @@ const BudgetDashboard: React.FC = () => {
 
                                 <div className="budgetdashboard-log-approvals">
                                   {buildLogEvents(proposal).map((event) => (
-                                    <div key={event.key} className="log-approval-item">
+                                    <div
+                                      key={event.key}
+                                      className={`log-approval-item${event.actorBadgeLabel ? ' log-approval-item--admin' : ''}`}
+                                    >
+                                      {event.actorBadgeLabel && (
+                                        <span className="log-admin-mark" title="Updated by Admin">
+                                          {`\u2605 ${event.actorBadgeLabel}`}
+                                        </span>
+                                      )}
                                       <div className="log-approval-meta">
                                         <span
                                           className={`log-decision log-decision--${event.decision || 'approved'
@@ -949,11 +1011,6 @@ const BudgetDashboard: React.FC = () => {
                                         {event.actorLine && (
                                           <span className="log-actor-line">
                                             {event.actorLine}
-                                            {event.actorIsAdmin && (
-                                              <span className="log-admin-mark" title="Updated by Admin">
-                                                * Admin
-                                              </span>
-                                            )}
                                           </span>
                                         )}
                                         <span className="log-date">{event.dateLabel}</span>
@@ -965,6 +1022,14 @@ const BudgetDashboard: React.FC = () => {
                             </div>
                           )}
                         </div>
+                        <div className="budgetdashboard-proposal-applicant">
+                          {proposal.applicantName || '-'}
+                        </div>
+                        {displayTag && (
+                          <div className="budgetdashboard-proposal-tag-pill">
+                            {displayTag}
+                          </div>
+                        )}
                       </div>
 
                       <div className="budgetdashboard-actions-global" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
