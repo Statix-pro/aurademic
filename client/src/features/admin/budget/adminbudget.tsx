@@ -1571,11 +1571,9 @@ const AdminBudget: React.FC = () => {
             </div>
           </div>
         </div>
-      )
-      }
+      )}
 
-      {
-        deletePopupOpen && (
+      {deletePopupOpen && (
           <div
             style={{
               position: "fixed",
@@ -1646,7 +1644,6 @@ const AdminBudget: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
       )}
 
       {logPopupOpen && (
