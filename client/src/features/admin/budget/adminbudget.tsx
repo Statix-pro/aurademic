@@ -10,7 +10,6 @@ import {
   XCircle,
   Briefcase,
   Clock,
-  AlertTriangle,
   Archive,
   Trash2,
   CalendarDays,
@@ -261,20 +260,23 @@ const AdminBudget: React.FC = () => {
   const isApprovedForActiveTab = useCallback(
     (item: BudgetRequestItem) => {
       const s = (item.status || "").toLowerCase();
-      if (s === "completed") return true;
 
-      switch (activeQueueTabKey) {
-        case "hod":
-        case "coordinator":
-          return s.startsWith("level1_approved");
-        case "dof":
-          return s.startsWith("dof_approved");
-        case "principal":
-          return s.startsWith("principal_approved");
-        case "admin":
-        default:
-          return s === "completed" || s.includes("approved");
-      }
+      const approvedStatusByTab: Record<QueueTabKey, string[]> = {
+        // Stage-wise cumulative approved visibility:
+        // HOD/Coordinator should still see records approved in downstream stages.
+        hod: ["level1_approved", "hod_approved", "dof_approved", "principal_approved", "completed"],
+        coordinator: ["level1_approved", "hod_approved", "dof_approved", "principal_approved", "completed"],
+        dof: ["dof_approved", "principal_approved", "completed"],
+        principal: ["principal_approved", "completed"],
+        admin: ["principal_approved", "completed"],
+      };
+
+      const tabKey = activeQueueTabKey || "admin";
+      const approvedStates = approvedStatusByTab[tabKey] || approvedStatusByTab.admin;
+
+      return approvedStates.some((stateToken) =>
+        stateToken === "completed" ? s === "completed" : s.startsWith(stateToken)
+      );
     },
     [activeQueueTabKey]
   );
@@ -319,11 +321,11 @@ const AdminBudget: React.FC = () => {
       if (response?.success) {
         const normalizedRows: BudgetRequestItem[] = Array.isArray(response.data)
           ? response.data.map((row: any) => ({
-              ...row,
-              applicant_name: String(
-                row?.applicant_name || row?.faculty_name || row?.user_name || row?.user_email || ""
-              ).trim(),
-            }))
+            ...row,
+            applicant_name: String(
+              row?.applicant_name || row?.faculty_name || row?.user_name || row?.user_email || ""
+            ).trim(),
+          }))
           : [];
         setData(normalizedRows);
       } else {
@@ -1264,9 +1266,8 @@ const AdminBudget: React.FC = () => {
                           return (
                             <div className="adminbudget-item-wrap" key={item.id}>
                               <div
-                                className={`adminbudget-item adminbudget-item--clickable ${
-                                  archivingIds.has(item.id) ? "adminbudget-item--archiving" : ""
-                                }`}
+                                className={`adminbudget-item adminbudget-item--clickable ${archivingIds.has(item.id) ? "adminbudget-item--archiving" : ""
+                                  }`}
                                 role="button"
                                 tabIndex={0}
                                 onClick={() => navigate(`/budget/${item.id}?admin=true`)}
@@ -1488,7 +1489,7 @@ const AdminBudget: React.FC = () => {
             )}
           </div>
         </div>
-      </section>
+      </section >
 
       {actionPopupOpen && (
         <div
@@ -1570,76 +1571,79 @@ const AdminBudget: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      )
+      }
 
-      {deletePopupOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.35)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 999999,
-            padding: 16,
-          }}
-          onClick={closeDeletePopup}
-        >
+      {
+        deletePopupOpen && (
           <div
             style={{
-              width: "min(400px, 95vw)",
-              background: "#fff",
-              borderRadius: 12,
-              padding: 24,
-              boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
-              textAlign: "center",
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.35)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 999999,
+              padding: 16,
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={closeDeletePopup}
           >
-            <div style={{ color: "#dc3545", marginBottom: 16 }}>
-              <Trash2 size={48} />
-            </div>
-            <h4 style={{ margin: "0 0 8px 0", color: "#333" }}>Confirm Deletion</h4>
-            <p style={{ margin: "0 0 16px 0", color: "#666", fontSize: "14px" }}>
-              Are you sure you want to permanently delete budget request <strong>{deleteRef}</strong>? This
-              action cannot be undone.
-            </p>
+            <div
+              style={{
+                width: "min(400px, 95vw)",
+                background: "#fff",
+                borderRadius: 12,
+                padding: 24,
+                boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
+                textAlign: "center",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ color: "#dc3545", marginBottom: 16 }}>
+                <Trash2 size={48} />
+              </div>
+              <h4 style={{ margin: "0 0 8px 0", color: "#333" }}>Confirm Deletion</h4>
+              <p style={{ margin: "0 0 16px 0", color: "#666", fontSize: "14px" }}>
+                Are you sure you want to permanently delete budget request <strong>{deleteRef}</strong>? This
+                action cannot be undone.
+              </p>
 
-            <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}>
-              <button
-                type="button"
-                onClick={closeDeletePopup}
-                style={{
-                  border: "1px solid #ddd",
-                  background: "#fff",
-                  borderRadius: 8,
-                  padding: "8px 24px",
-                  cursor: "pointer",
-                  fontWeight: 500,
-                }}
-              >
-                Cancel
-              </button>
+              <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}>
+                <button
+                  type="button"
+                  onClick={closeDeletePopup}
+                  style={{
+                    border: "1px solid #ddd",
+                    background: "#fff",
+                    borderRadius: 8,
+                    padding: "8px 24px",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                  }}
+                >
+                  Cancel
+                </button>
 
-              <button
-                type="button"
-                onClick={confirmDelete}
-                disabled={deleteCountdown > 0}
-                style={{
-                  border: "none",
-                  background: deleteCountdown > 0 ? "#e9ecef" : "#dc3545",
-                  color: deleteCountdown > 0 ? "#6c757d" : "#fff",
-                  borderRadius: 8,
-                  padding: "8px 24px",
-                  cursor: deleteCountdown > 0 ? "not-allowed" : "pointer",
-                  fontWeight: 500,
-                  minWidth: "120px",
-                  transition: "all 0.2s",
-                }}
-              >
-                {deleteCountdown > 0 ? `Delete (${deleteCountdown}s)` : "Delete"}
-              </button>
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  disabled={deleteCountdown > 0}
+                  style={{
+                    border: "none",
+                    background: deleteCountdown > 0 ? "#e9ecef" : "#dc3545",
+                    color: deleteCountdown > 0 ? "#6c757d" : "#fff",
+                    borderRadius: 8,
+                    padding: "8px 24px",
+                    cursor: deleteCountdown > 0 ? "not-allowed" : "pointer",
+                    fontWeight: 500,
+                    minWidth: "120px",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {deleteCountdown > 0 ? `Delete (${deleteCountdown}s)` : "Delete"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

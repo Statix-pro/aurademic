@@ -1,5 +1,4 @@
 import BudgetModel from './budgetModel.js';
-
 const VALID_BENEFICIARY_TYPES = [
   'Faculty',
   'Staff',
@@ -660,6 +659,33 @@ class BudgetController {
           success: false,
           message: 'Access denied - cannot view this proposal',
         });
+      }
+
+      // Determine access type: owner, applicant, beneficiary, or approver
+      let accessType = 'approver';
+      const uid = Number(userId);
+      const proposalUserId = Number(budget.master?.user_id || budget.user_id);
+
+      if (uid === proposalUserId) {
+        accessType = 'owner';
+      } else {
+        const proposalEmployeeId = budget.master?.employee_id || budget.employee_id;
+        if (proposalEmployeeId && uid > 0) {
+          const isMatch = await BudgetModel.checkEmployeeUserMatch(proposalEmployeeId, uid);
+          if (isMatch) {
+            accessType = 'applicant';
+          }
+        }
+
+        if (accessType === 'approver') {
+          const isBeneficiary = await BudgetModel.isFacultyBeneficiaryForUser(
+            budget.master || budget,
+            uid
+          );
+          if (isBeneficiary) {
+            accessType = 'beneficiary';
+          }
+        }
       }
 
       return res.json({
