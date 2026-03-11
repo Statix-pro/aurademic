@@ -1,6 +1,4 @@
 import BudgetModel from './budgetModel.js';
-import db from '../../config/connection.js';
-
 const VALID_BENEFICIARY_TYPES = [
   'Faculty',
   'Staff',
@@ -613,7 +611,7 @@ class BudgetController {
         });
       }
 
-      // Determine access type: owner, applicant, or approver
+      // Determine access type: owner, applicant, beneficiary, or approver
       let accessType = 'approver';
       const uid = Number(userId);
       const proposalUserId = Number(budget.master?.user_id || budget.user_id);
@@ -623,12 +621,19 @@ class BudgetController {
       } else {
         const proposalEmployeeId = budget.master?.employee_id || budget.employee_id;
         if (proposalEmployeeId && uid > 0) {
-          const [empMatch] = await db.execute(
-            'SELECT id FROM master_employees WHERE id = ? AND user_id = ? AND status = "Active" LIMIT 1',
-            [proposalEmployeeId, uid]
-          );
-          if (empMatch.length > 0) {
+          const isMatch = await BudgetModel.checkEmployeeUserMatch(proposalEmployeeId, uid);
+          if (isMatch) {
             accessType = 'applicant';
+          }
+        }
+
+        if (accessType === 'approver') {
+          const isBeneficiary = await BudgetModel.isFacultyBeneficiaryForUser(
+            budget.master || budget,
+            uid
+          );
+          if (isBeneficiary) {
+            accessType = 'beneficiary';
           }
         }
       }
@@ -636,7 +641,6 @@ class BudgetController {
       return res.json({
         success: true,
         data: budget,
-        accessType,
       });
     } catch (error) {
       console.error('Get budget error:', error);
@@ -663,18 +667,9 @@ class BudgetController {
         fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
       });
 
-      // Tag each budget with is_applicant_only flag
-      const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
-      const enrichedBudgets = budgets.budgets.map((b) => ({
-        ...b,
-        is_applicant_only:
-          Number(b.user_id) !== Number(userId) &&
-          normalizeText(b.user_email).toLowerCase() !== normalizedUserEmail,
-      }));
-
       return res.json({
         success: true,
-        data: enrichedBudgets,
+        data: budgets.budgets,
         pagination: budgets.pagination,
         currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
       });
@@ -844,11 +839,12 @@ class BudgetController {
       }
 
       const { decision = 'approved', feedback } = req.body || {};
+      const normalizedDecision = normalizeText(decision).toLowerCase();
 
-      if (!['approved', 'rejected', 'returned'].includes(decision)) {
+      if (!['approved', 'rejected', 'returned', 'archived'].includes(normalizedDecision)) {
         return res.status(400).json({
           success: false,
-          message: 'Decision must be: approved, rejected, returned',
+          message: 'Decision must be: approved, rejected, returned, archived',
         });
       }
 
@@ -866,21 +862,28 @@ class BudgetController {
       const isSuperAdmin = BudgetController.isSuperAdmin(req);
       const level1Route = BudgetModel.resolveLevel1Route(proposal);
 
-      if (!requiredPermission) {
+      if (normalizedDecision !== 'archived' && !requiredPermission) {
         return res.status(400).json({
           success: false,
           message: `Proposal is not in an approvable stage: ${proposal.current_stage}`,
         });
       }
 
-      if (!BudgetController.hasPermission(req, requiredPermission)) {
+      if (
+        normalizedDecision !== 'archived'
+        && !BudgetController.hasPermission(req, requiredPermission)
+      ) {
         return res.status(403).json({
           success: false,
           message: `Insufficient permission for ${currentStage.toUpperCase()} approval stage`,
         });
       }
 
-      if (currentStage === 'level1' && level1Route.routeType === 'entity_contact') {
+      if (
+        normalizedDecision !== 'archived'
+        && currentStage === 'level1'
+        && level1Route.routeType === 'entity_contact'
+      ) {
         const entityAssignee = await BudgetModel.resolveEntityLevel1Assignee(level1Route.entityId);
 
         if (!entityAssignee?.email && !isSuperAdmin) {
@@ -900,7 +903,7 @@ class BudgetController {
         proposalId,
         userId,
         userEmail,
-        isSuperAdmin ? 'super_admin' : currentStage,
+        normalizedDecision === 'archived' ? 'admin' : isSuperAdmin ? 'super_admin' : currentStage,
         userDepartment,
         userDepartmentId
       );
@@ -914,17 +917,17 @@ class BudgetController {
 
       await BudgetModel.processApproval(proposalId, {
         role: currentStage,
-        decision,
-        feedback: decision !== 'approved' ? feedback : undefined,
+        decision: normalizedDecision,
+        feedback: ['rejected', 'returned', 'archived'].includes(normalizedDecision) ? feedback : undefined,
         approverUserId: userId,
         approverEmail: userEmail,
       });
 
       return res.json({
         success: true,
-        message: `Proposal ${decision} successfully`,
+        message: `Proposal ${normalizedDecision} successfully`,
         data: {
-          decision,
+          decision: normalizedDecision,
           role: currentStage,
           timestamp: new Date().toISOString(),
         },

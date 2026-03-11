@@ -12,8 +12,6 @@ const LEGACY_ADMIN_PERMISSION_KEYS = [
   'form_options.manage',
   'budget.proposal.manage',
   'budget.workflow.level1',
-  'budget.workflow.dof',
-  'budget.workflow.principal',
   'budget.admin.view',
   'budget.admin.manage',
   'access_control.read',

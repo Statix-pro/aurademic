@@ -21,6 +21,23 @@ const canViewBudgetAdmin = permissionMiddleware([
     BUDGET_PERMISSIONS.adminManage,
 ]);
 const canManageBudgetAdmin = permissionMiddleware([BUDGET_PERMISSIONS.adminManage]);
+const canToggleArchive = permissionMiddleware([
+    BUDGET_PERMISSIONS.workflowLevel1,
+    BUDGET_PERMISSIONS.workflowDof,
+    BUDGET_PERMISSIONS.workflowPrincipal,
+    BUDGET_PERMISSIONS.adminView,
+    BUDGET_PERMISSIONS.adminManage,
+]);
+const canAccessLevel1Queue = permissionMiddleware([BUDGET_PERMISSIONS.workflowLevel1]);
+const canAccessDofQueue = permissionMiddleware([BUDGET_PERMISSIONS.workflowDof]);
+const canAccessPrincipalQueue = permissionMiddleware([BUDGET_PERMISSIONS.workflowPrincipal]);
+const canProcessWorkflow = permissionMiddleware([
+    BUDGET_PERMISSIONS.workflowLevel1,
+    BUDGET_PERMISSIONS.workflowDof,
+    BUDGET_PERMISSIONS.workflowPrincipal,
+    BUDGET_PERMISSIONS.adminView,
+    BUDGET_PERMISSIONS.adminManage,
+]);
 
 // Apply authentication middleware to all routes
 router.use(authMiddleware);
@@ -28,6 +45,19 @@ router.use(authMiddleware);
 // Approval flows
 router.get('/approval-flows', canViewBudgetAdmin, AdminBudgetController.getApprovalFlows);
 router.patch('/admin/flow/:id(\\d+)', canManageBudgetAdmin, AdminBudgetController.updateFlowConfig);
+router.get('/freeze-config', AdminBudgetController.getFreezeConfig);
+router.put('/freeze-config', AdminBudgetController.upsertFreezeConfig);
+
+// Admin budget page workflow endpoints (moved from /budget/* usage)
+router.get('/faculty', AdminBudgetController.getFacultyDetails);
+router.get('/hod', canAccessLevel1Queue, AdminBudgetController.getHodBudgets);
+router.get('/coordinator', canAccessLevel1Queue, AdminBudgetController.getCoordinatorBudgets);
+router.get('/dof', canAccessDofQueue, AdminBudgetController.getDofBudgets);
+router.get('/principal', canAccessPrincipalQueue, AdminBudgetController.getPrincipalBudgets);
+router.put('/:id(\\d+)', canProcessWorkflow, AdminBudgetController.updateApprovedAmounts);
+router.patch('/:id(\\d+)/approval', canProcessWorkflow, AdminBudgetController.approve);
+router.patch('/:id(\\d+)/archive-toggle', canToggleArchive, AdminBudgetController.toggleArchive);
+router.delete('/:id(\\d+)', canManageBudgetAdmin, AdminBudgetController.deleteProposal);
 
 // Organizations and contacts
 router.get('/entities/:type', canManageBudgetAdmin, AdminBudgetController.getEntitiesByType);
