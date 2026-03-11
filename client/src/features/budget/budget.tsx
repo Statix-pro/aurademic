@@ -8,7 +8,7 @@ import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils'
 import Select from 'react-select';
 import './budget.css';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
-import {  Eye,  Edit2,  CheckCircle2,  RotateCcw,  XCircle,  Briefcase,  Clock,  AlertTriangle,  Archive,  Trash2,} from "lucide-react";
+import { Eye, Edit2, CheckCircle2, RotateCcw, XCircle, Briefcase, Clock, AlertTriangle, Archive, Trash2, } from "lucide-react";
 
 interface SelectOption {
   value: string;
@@ -64,7 +64,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Furniture & Fixtures',
       'Vehicles',
       'Equipment',
-      'Accessories & Kits', 
+      'Accessories & Kits',
       'Library',
     ],
   },
@@ -154,7 +154,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Amplifiers',
     'A/V Equipment',
     'Intercom',
-    'Xerox Machine','Mouse','Keyboard','CMOS Battery'
+    'Xerox Machine', 'Mouse', 'Keyboard', 'CMOS Battery'
   ],
   'Furniture & Fixtures': [
     'Chair',
@@ -175,9 +175,9 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Power Tools',
     'Weighing Machine',
     'Drilling Machine',
-    'Drone Kit','Lab Accessories','Others'
+    'Drone Kit', 'Lab Accessories', 'Others'
   ],
-  'Library':['Library Books','Journals','agazines','Newspaper','DELNET','E-Resources',],
+  'Library': ['Library Books', 'Journals', 'agazines', 'Newspaper', 'DELNET', 'E-Resources',],
 
   'Maintenance Charges': ['Annual Maintenance Charges', 'Equipment Maintenance',
     'Software Maintenance',
@@ -229,7 +229,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Professional Body fees',
     'Membership fees',
     ' Annual Subscription Charges',
-       'E-Resources',
+    'E-Resources',
     'Data Subscription Charges',
   ],
   'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Others'],
@@ -543,7 +543,7 @@ const Budget: React.FC = () => {
     Array.isArray(user?.roles) &&
     user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
   );
-  
+
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -552,7 +552,7 @@ const Budget: React.FC = () => {
     return params.get('admin') === 'true';
   }, [location.search]);
   const budgetApiBase = isAdminContextEdit ? '/adminbudget' : '/budget';
-  
+
   const isEditMode = location.pathname.includes('/edit') && !!id;
 
 
@@ -846,7 +846,7 @@ const Budget: React.FC = () => {
       setBudgetHeadFilter((prev) => ({ ...prev, [rowIndex]: '' }));
       return;
     }
-     updateLine(rowIndex, 'subHead', '');
+    updateLine(rowIndex, 'subHead', '');
     updateLine(rowIndex, 'budgetHead', selectedOption.budgetHead);
 
     if (selectedOption.optionType === 'head-sub-head' && selectedOption.subHead) {
@@ -957,14 +957,14 @@ const Budget: React.FC = () => {
         isPrivilegedReviewer
           ? 'Approved amounts updated successfully!'
           : isEditMode
-          ? `Budget updated successfully!`
-          : (
-            <>
-              Budget submitted successfully!
-              <br />
-              Reference No.: <strong>{result.data.proposalRef}</strong>
-            </>
-          ),
+            ? `Budget updated successfully!`
+            : (
+              <>
+                Budget submitted successfully!
+                <br />
+                Reference No.: <strong>{result.data.proposalRef}</strong>
+              </>
+            ),
         'success',
         undefined,
         () => {
@@ -1077,13 +1077,8 @@ const Budget: React.FC = () => {
   useEffect(() => {
     if (beneficiaryType === 'Institution') {
       setBeneficiaryValue('K.S.Rangasamy College of Technology');
-    } else if (['Faculty', 'Staff'].includes(beneficiaryType)) {
-      if (applicantName.trim() && !beneficiaryValue) {
-        setBeneficiaryValue(applicantName);
-        setBeneficiarySearchQuery(applicantName);
-      }
     }
-  }, [beneficiaryType, applicantName]);
+  }, [beneficiaryType]);
 
 
   useEffect(() => {
@@ -1416,23 +1411,23 @@ const Budget: React.FC = () => {
       minimumFractionDigits: 0,
     });
   };
-const [selectedTag, setSelectedTag] = useState<string>('');
+  const [selectedTag, setSelectedTag] = useState<string>('');
 
-useEffect(() => {
-  if (!beneficiaryType?.trim()) {
-    setSelectedTag('');
-    return;
-  }
+  useEffect(() => {
+    if (!beneficiaryType?.trim()) {
+      setSelectedTag('');
+      return;
+    }
 
-  setSelectedTag((prev) => {
-    if (prev) return prev;
-    if (beneficiaryType === 'Faculty' || beneficiaryType === 'Staff') return 'Skilling';
-    if (beneficiaryType === 'Department') return '';
-    return 'Essentials';
-  });
-}, [beneficiaryType]);
+    setSelectedTag((prev) => {
+      if (prev) return prev;
+      if (beneficiaryType === 'Faculty' || beneficiaryType === 'Staff') return 'Skilling';
+      if (beneficiaryType === 'Department') return '';
+      return 'Essentials';
+    });
+  }, [beneficiaryType]);
 
-const showTagDropdown = !!beneficiaryType?.trim();
+  const showTagDropdown = !!beneficiaryType?.trim();
 
   return (
     <div className="budgetPage">
@@ -1990,7 +1985,7 @@ const showTagDropdown = !!beneficiaryType?.trim();
                         styles={{
                           control: (base: any, state: any) => ({
                             ...base,
-                            minHeight:' 45px',
+                            minHeight: ' 45px',
                             height: '45',
                             borderRadius: 12,
                             border: state.isFocused
@@ -2026,63 +2021,63 @@ const showTagDropdown = !!beneficiaryType?.trim();
                   <div style={{ height: '72px' }} />
                 )}
               </div>
-               <div className="col-md-3">
-  {showTagDropdown ? (
-    <div className="form-group" style={{ display: 'flex', flexDirection: 'column', marginBottom: '15px' }}>
-      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
-        Tag
-      </label>
+              <div className="col-md-3">
+                {showTagDropdown ? (
+                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', marginBottom: '15px' }}>
+                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
+                      Tag
+                    </label>
 
-      <div style={{ position: 'relative', zIndex: 1000, flex: 1 }}>
-        <Select
-          value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
-          onChange={(selected: any) => setSelectedTag(selected?.value || '')}
-          options={tagOptions}
-          placeholder=""
-          isSearchable={true}
-          isClearable={false}   // no cross
-          isDisabled={!isEditable}
-          menuPosition="fixed"
-          menuPlacement="auto"
-          styles={{
-            control: (base: any, state: any) => ({
-              ...base,
-              minHeight: '45px',
-              height: '45px',
-              borderRadius: 12,
-              border: state.isFocused ? '1px solid #0069ab' : '1px solid #e0e0e0',
-              boxShadow: state.isFocused ? '0 0 0 3px rgba(0, 105, 171, 0.15)' : 'none',
-              backgroundColor: isEditable ? '#fcfdff' : '#e9ecef',
-              fontSize: '0.95rem',
-              fontFamily: 'inherit'
-            }),
-            dropdownIndicator: (base: any, state: any) => ({
-              ...base,
-              padding: '0 15px',
-              transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
-            }),
-            indicatorSeparator: () => ({ display: 'none' }),
-            valueContainer: (base: any) => ({ ...base, padding: '2px 15px' }),
-            option: (base: any, state: any) => ({
-              ...base,
-              padding: '10px 15px',
-              backgroundColor: state.isSelected
-                ? '#0069ab'
-                : state.isFocused
-                ? 'rgba(0,105,171,0.1)'
-                : '#fff',
-              color: state.isSelected ? 'white' : '#333'
-            })
-          }}
-        />
-      </div>
-    </div>
-  ) : (
-    // same “disabled/blank control space” like other extra dropdowns
-    <div style={{ height: '74px' }} />
-  )}
-</div>
-   
+                    <div style={{ position: 'relative', zIndex: 1000, flex: 1 }}>
+                      <Select
+                        value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
+                        onChange={(selected: any) => setSelectedTag(selected?.value || '')}
+                        options={tagOptions}
+                        placeholder=""
+                        isSearchable={true}
+                        isClearable={false}   // no cross
+                        isDisabled={!isEditable}
+                        menuPosition="fixed"
+                        menuPlacement="auto"
+                        styles={{
+                          control: (base: any, state: any) => ({
+                            ...base,
+                            minHeight: '45px',
+                            height: '45px',
+                            borderRadius: 12,
+                            border: state.isFocused ? '1px solid #0069ab' : '1px solid #e0e0e0',
+                            boxShadow: state.isFocused ? '0 0 0 3px rgba(0, 105, 171, 0.15)' : 'none',
+                            backgroundColor: isEditable ? '#fcfdff' : '#e9ecef',
+                            fontSize: '0.95rem',
+                            fontFamily: 'inherit'
+                          }),
+                          dropdownIndicator: (base: any, state: any) => ({
+                            ...base,
+                            padding: '0 15px',
+                            transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                          }),
+                          indicatorSeparator: () => ({ display: 'none' }),
+                          valueContainer: (base: any) => ({ ...base, padding: '2px 15px' }),
+                          option: (base: any, state: any) => ({
+                            ...base,
+                            padding: '10px 15px',
+                            backgroundColor: state.isSelected
+                              ? '#0069ab'
+                              : state.isFocused
+                                ? 'rgba(0,105,171,0.1)'
+                                : '#fff',
+                            color: state.isSelected ? 'white' : '#333'
+                          })
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  // same “disabled/blank control space” like other extra dropdowns
+                  <div style={{ height: '74px' }} />
+                )}
+              </div>
+
             </div>
           </div>
         </div>
@@ -2296,18 +2291,18 @@ const showTagDropdown = !!beneficiaryType?.trim();
 
                           <td>
                             <input
-                                      className="tableInput"
-                                      type="number"
-                                      min={0}
-                                      placeholder="0"
-                                      value={line.amount}
-                                      onChange={(e) => {
-                                        const v = e.target.value;
-                                        const safe = v === "" ? "" : Math.max(0, Number(v)).toString();
-                                        updateLine(idx, "amount", safe);
-                                      }}
-                                      onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                                    />
+                              className="tableInput"
+                              type="number"
+                              min={0}
+                              placeholder="0"
+                              value={line.amount}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                const safe = v === "" ? "" : Math.max(0, Number(v)).toString();
+                                updateLine(idx, "amount", safe);
+                              }}
+                              onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                            />
                           </td>
                           <td>
                             <input
@@ -2504,19 +2499,19 @@ const showTagDropdown = !!beneficiaryType?.trim();
                                         >
                                           <div className="monthLabel">{month}</div>
                                           <input
-                                              type="number"
-                                              min={0}
-                                              placeholder="0"
-                                              className="monthAmountInput"
-                                              value={line.monthAmounts[month] || ""}
-                                              onChange={(e) => {
-                                                const v = e.target.value;
-                                                const safe =
-                                                  v === "" ? "" : Math.max(0, Number(v)).toString();
-                                                updateLineMonthAmount(idx, month, safe);
-                                              }}
-                                              onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                                            />
+                                            type="number"
+                                            min={0}
+                                            placeholder="0"
+                                            className="monthAmountInput"
+                                            value={line.monthAmounts[month] || ""}
+                                            onChange={(e) => {
+                                              const v = e.target.value;
+                                              const safe =
+                                                v === "" ? "" : Math.max(0, Number(v)).toString();
+                                              updateLineMonthAmount(idx, month, safe);
+                                            }}
+                                            onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                                          />
                                         </div>
                                       );
                                     })}
@@ -2700,7 +2695,7 @@ const showTagDropdown = !!beneficiaryType?.trim();
               boxShadow: '0 4px 12px rgba(40, 167, 69, 0.3)',
             }}
           >
-           <CheckCircle2 size={18} /> Approve
+            <CheckCircle2 size={18} /> Approve
           </button>
 
           <button
@@ -2740,7 +2735,7 @@ const showTagDropdown = !!beneficiaryType?.trim();
             style={{
               padding: '12px 24px',
               background: '#fdeaea ',
-               color:' #b42318 ',
+              color: ' #b42318 ',
               border: 'none',
               borderRadius: '12px',
               fontSize: '16px',
@@ -2749,10 +2744,10 @@ const showTagDropdown = !!beneficiaryType?.trim();
               display: 'flex',
               alignItems: 'center',
               gap: '20px',
-              
+
             }}
           >
-          <XCircle size={18} />  Reject
+            <XCircle size={18} />  Reject
           </button>
 
           <button
@@ -2774,7 +2769,7 @@ const showTagDropdown = !!beneficiaryType?.trim();
               boxShadow: '0 4px 12px rgba(108, 117, 125, 0.3)',
             }}
           >
-           <Archive size={18} />Archive
+            <Archive size={18} />Archive
           </button>
         </div>
       )}
