@@ -25,12 +25,15 @@ interface ProposalGroup {
   status: string; // "submitted", "hod_approved", "dof_approved", "principal_approved", "rejected", "returned"
   currentStage: "hod" | "dof" | "principal" | "completed";
   beneficiaryType: string;
+  beneficiaryValue: string;
   approvalFlow: string;
   createdAt: string;
   updatedAt: string;
   items: DashboardLineItem[];
   approvals: any[];
   edits: any[];
+  userEmail?: string;
+  applicantName?: string;
   totalProposed: number;
   totalApproved: number;
   isApplicantOnly: boolean;
@@ -48,9 +51,16 @@ interface LogEvent {
   key: string;
   title: string;
   subtitle?: string;
+  actorLine?: string;
+  actorIsAdmin?: boolean;
   timestamp: number;
   dateLabel: string;
   decision?: string;
+}
+
+interface BeneficiaryScopeOption {
+  key: string;
+  label: string;
 }
 
 const BudgetDashboard: React.FC = () => {
@@ -59,7 +69,7 @@ const BudgetDashboard: React.FC = () => {
 
   // State
   const [proposals, setProposals] = useState<ProposalGroup[]>([]);
-  const [consolidatedData, setConsolidatedData] = useState<ConsolidatedRow[]>([]);
+  const [beneficiaryScope, setBeneficiaryScope] = useState("all");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -90,6 +100,10 @@ const BudgetDashboard: React.FC = () => {
   const infoTriggerRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const formatFY = (fyStart: number) => `${fyStart}-${String(fyStart + 1).slice(2)}`;
+  const INITIAL_WINDOW_MONTH = 3; // April (0-indexed)
+  const INITIAL_WINDOW_DAY = 10;
+  const [freezeCutoffDate, setFreezeCutoffDate] = useState<string>('');
+  const [isFreezeActive, setIsFreezeActive] = useState<boolean>(false);
 
   // Business default for filter: from Feb 1, preselect next FY.
   const getDefaultFilterFY = () => {
@@ -133,6 +147,71 @@ const BudgetDashboard: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [activeLogId]);
+
+  const parseDateSafe = (value?: string) => {
+    if (!value) return null;
+    const direct = new Date(value);
+    if (!Number.isNaN(direct.getTime())) return direct;
+
+    const normalized = String(value).replace(' ', 'T');
+    const fallback = new Date(normalized);
+    if (!Number.isNaN(fallback.getTime())) return fallback;
+    return null;
+  };
+
+  const getDefaultCutoffDateForFY = (fy: string) => {
+    const fyStart = Number.parseInt(String(fy || '').split('-')[0], 10);
+    if (!Number.isInteger(fyStart)) return '';
+    return `${fyStart}-04-10`;
+  };
+
+  useEffect(() => {
+    const loadFreezeConfig = async () => {
+      try {
+        const fyStart = Number.parseInt(financialYear.split("-")[0], 10);
+        const response: any = await authenticityUtility.get('/adminbudget/freeze-config', {
+          params: { fiscalYear: fyStart },
+        });
+        if (response?.success && response?.data?.cutoffDate) {
+          setFreezeCutoffDate(String(response.data.cutoffDate));
+          setIsFreezeActive(Boolean(response?.data?.isFrozen));
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to fetch budget freeze config:', error);
+      }
+
+      setFreezeCutoffDate(getDefaultCutoffDateForFY(financialYear));
+      setIsFreezeActive(false);
+    };
+
+    loadFreezeConfig();
+  }, [financialYear]);
+
+  const getInitialWindowCutoff = (fy: string) => {
+    if (!isFreezeActive) return null;
+
+    const fallback = (() => {
+      const fyStart = Number.parseInt(String(fy || '').split('-')[0], 10);
+      if (!Number.isInteger(fyStart)) return null;
+      return new Date(fyStart, INITIAL_WINDOW_MONTH, INITIAL_WINDOW_DAY, 23, 59, 59, 999);
+    })();
+
+    const sourceDate = freezeCutoffDate || getDefaultCutoffDateForFY(fy);
+    if (!sourceDate) return fallback;
+
+    const parsed = new Date(`${sourceDate}T23:59:59.999`);
+    if (Number.isNaN(parsed.getTime())) return fallback;
+    return parsed;
+  };
+
+  const isInitialBudgetProposal = (createdAt?: string) => {
+    const proposalDate = parseDateSafe(createdAt);
+    const cutoff = getInitialWindowCutoff(financialYear);
+    if (!proposalDate) return false;
+    if (!cutoff) return true;
+    return proposalDate.getTime() <= cutoff.getTime();
+  };
 
   // Close on outside click
   useEffect(() => {
@@ -230,7 +309,6 @@ const BudgetDashboard: React.FC = () => {
 
         if (!listResult.success || !listResult.data) {
           setProposals([]);
-          setConsolidatedData([]);
           return;
         }
 
@@ -268,8 +346,10 @@ const BudgetDashboard: React.FC = () => {
             budgetHead: line.budget_head || "Unknown",
             subHead: line.sub_head || "-",
             proposedAmount: parseFloat(line.line_total || 0),
-            // ✅ FIX: Approved amount is 0 unless status is strictly 'completed' or 'principal_approved'
-            approvedAmount: isFullyApproved ? parseFloat(line.line_total || 0) : 0,
+            // Show approved amount only after final approval, sourced from approved columns.
+            approvedAmount: isFullyApproved
+              ? parseFloat(line.approved_line_total ?? line.line_total ?? 0)
+              : 0,
             expenditure: 0, // Placeholder for future integration
             createdAt: master.created_at
           }));
@@ -279,6 +359,7 @@ const BudgetDashboard: React.FC = () => {
             proposalRef: master.proposal_ref,
             status: master.status,
             beneficiaryType: master.beneficiary_type,
+            beneficiaryValue: master.beneficiary_value,
             currentStage: master.current_stage,
             approvalFlow: master.approval_flow,
             createdAt: master.created_at,
@@ -286,6 +367,8 @@ const BudgetDashboard: React.FC = () => {
             items: items,
             approvals: data.pendingApprovals || data.approvals || [],
             edits: data.edits || [],
+            userEmail: master.user_email || master.userEmail || "",
+            applicantName: master.applicant_name || master.user_name || master.name || "",
             totalProposed: items.reduce((sum: number, i: any) => sum + i.proposedAmount, 0),
             totalApproved: items.reduce((sum: number, i: any) => sum + i.approvedAmount, 0),
             isApplicantOnly: Boolean(data._isApplicantOnly),
@@ -296,48 +379,9 @@ const BudgetDashboard: React.FC = () => {
         parsedProposals.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         setProposals(parsedProposals);
 
-        // 4. Generate Consolidated View (Approved Only)
-        // Logic: Only include proposals that are strictly APPROVED
-        const approvedProposals = parsedProposals.filter(p =>
-          ['principal_approved', 'completed'].includes(p.status)
-        );
-
-        const consolidationMap: Record<string, ConsolidatedRow> = {};
-
-        approvedProposals.forEach((p, index) => {
-          const isInitial = index === 0; // First approved proposal is Initial
-
-          p.items.forEach(item => {
-            if (!consolidationMap[item.budgetHead]) {
-              consolidationMap[item.budgetHead] = {
-                budgetHead: item.budgetHead,
-                initial: 0,
-                additional: 0,
-                expenditure: 0,
-                balance: 0
-              };
-            }
-
-            if (isInitial) {
-              consolidationMap[item.budgetHead].initial += item.approvedAmount;
-            } else {
-              consolidationMap[item.budgetHead].additional += item.approvedAmount;
-            }
-          });
-        });
-
-        // Calculate Balance
-        const finalConsolidated = Object.values(consolidationMap).map(row => ({
-          ...row,
-          balance: (row.initial + row.additional) - row.expenditure
-        }));
-
-        setConsolidatedData(finalConsolidated);
-
       } catch (err: any) {
         if (err.response?.status === 404) {
           setProposals([]);
-          setConsolidatedData([]);
         } else {
           console.error("Dashboard Error:", err);
           setError(err.response?.data?.message || err.message || "Failed to load dashboard.");
@@ -355,6 +399,47 @@ const BudgetDashboard: React.FC = () => {
   const formatINR = (n: number) => Number(n || 0).toLocaleString("en-IN");
 
   const normalizeText = (value?: string | null) => String(value || "").trim();
+  const normalizeScopeKey = (value?: string | null) => normalizeText(value).toLowerCase();
+  const normalizeEmail = (value?: string | null) => normalizeText(value).toLowerCase();
+
+  const readActorEmail = (record: any, keys: string[]) => {
+    for (const key of keys) {
+      const value = normalizeEmail(record?.[key]);
+      if (value) return value;
+    }
+    return "";
+  };
+
+  const getScopeFromProposal = (proposal: ProposalGroup) => {
+    const type = normalizeText(proposal.beneficiaryType);
+    const value = normalizeText(proposal.beneficiaryValue);
+
+    const normalizedType = type.toLowerCase();
+    if (normalizedType === "faculty" || normalizedType === "staff" || normalizedType === "individual") {
+      return value ? `person::${value}` : "person::";
+    }
+
+    if (!type) {
+      return value ? `person::${value}` : "person::";
+    }
+
+    return value ? `${type}::${value}` : `${type}::`;
+  };
+
+  const formatScopeLabel = (scopeKey: string) => {
+    if (scopeKey.startsWith("person::")) {
+      const [, value = ""] = scopeKey.split("::");
+      return value || "Individual";
+    }
+
+    const [type = "", value = ""] = scopeKey.split("::");
+    return value ? `${type} - ${value}` : type;
+  };
+
+  const isAdminRoleToken = (value?: string | null) => {
+    const token = normalizeText(value).toLowerCase();
+    return token === "admin" || token === "super_admin";
+  };
 
   const formatDateTime = (value?: string) => {
     if (!value) return "-";
@@ -385,12 +470,14 @@ const BudgetDashboard: React.FC = () => {
     const events: LogEvent[] = [];
     const createdAtMs = proposal.createdAt ? new Date(proposal.createdAt).getTime() : 0;
     const updatedAtMs = proposal.updatedAt ? new Date(proposal.updatedAt).getTime() : 0;
+    const submitterEmail = normalizeEmail(proposal.userEmail);
 
     if (createdAtMs) {
       events.push({
         key: "submitted",
         title: "Submitted",
         subtitle: "Proposal created",
+        actorLine: `Submitted By: ${submitterEmail || "-"}`,
         timestamp: createdAtMs,
         dateLabel: formatDateTime(proposal.createdAt),
         decision: "submitted",
@@ -402,33 +489,74 @@ const BudgetDashboard: React.FC = () => {
       editLogs.forEach((edit: any, idx: number) => {
         const createdAt = edit.created_at || edit.createdAt;
         const createdMs = createdAt ? new Date(createdAt).getTime() : createdAtMs;
-        let summary = normalizeText(edit.summary);
+        const summary = normalizeText(edit.summary);
+        const editorEmail = readActorEmail(edit, [
+          "edited_by_email",
+          "editedByEmail",
+          "updated_by_email",
+          "updatedByEmail",
+          "user_email",
+          "email",
+        ]);
+        const explicitlyAdmin =
+          Boolean(edit.is_admin ?? edit.isAdmin ?? edit.updated_by_admin ?? edit.updatedByAdmin) ||
+          isAdminRoleToken(edit.edited_by_role || edit.editedByRole || edit.role);
+        const inferredAdmin = Boolean(editorEmail && submitterEmail && editorEmail !== submitterEmail);
+        const actorIsAdmin = explicitlyAdmin || inferredAdmin;
+        let rowSummary = '';
+        let detailSummary = '';
 
-        if (!summary && edit.details) {
+        if (edit.details) {
           try {
-            const parsed = JSON.parse(edit.details);
+            const parsed = typeof edit.details === 'string' ? JSON.parse(edit.details) : edit.details;
             const lines = Array.isArray(parsed?.lines) ? parsed.lines : [];
             if (lines.length > 0) {
+              const numericRows = lines
+                .map((line: any) => Number(line?.lineNo))
+                .filter((lineNo: number) => Number.isInteger(lineNo) && lineNo > 0);
+              const rowNumbers: number[] = Array.from(new Set<number>(numericRows)).sort(
+                (a: number, b: number) => a - b
+              );
+
+              if (rowNumbers.length > 0) {
+                rowSummary = `Row No. ${rowNumbers.join(', ')}`;
+              }
+
               const details = lines.map((line: any) => (
-                `Corrections made in Line No. ${line.lineNo}: ${(line.changes || []).join('; ')}`
+                `Line ${line.lineNo}: ${(line.changes || []).join('; ')}`
               ));
-              summary = details.join(' | ');
+              detailSummary = details.join(' | ');
             }
           } catch {
-            // ignore parse errors, fallback below
+            // ignore parse errors, keep summary fallback
           }
         }
 
-        if (!summary) return;
+        const subtitle = [rowSummary || summary, detailSummary].filter(Boolean).join(' | ');
+        if (!subtitle) return;
 
         events.push({
           key: `edit-${edit.id || idx}`,
           title: "Updated",
-          subtitle: summary,
+          subtitle,
+          actorLine: `Updated By: ${editorEmail || "-"}`,
+          actorIsAdmin,
           timestamp: createdMs,
           dateLabel: createdAt ? formatDateTime(createdAt) : "-",
           decision: "updated",
         });
+      });
+    }
+
+    if (updatedAtMs && createdAtMs && updatedAtMs > createdAtMs && editLogs.length === 0) {
+      events.push({
+        key: "updated-at-fallback",
+        title: "Updated",
+        subtitle: "Proposal edited",
+        actorLine: `Updated By: ${submitterEmail || "-"}`,
+        timestamp: updatedAtMs,
+        dateLabel: formatDateTime(proposal.updatedAt),
+        decision: "updated",
       });
     }
 
@@ -438,18 +566,36 @@ const BudgetDashboard: React.FC = () => {
         return;
       }
       const decision = String(app.decision || "updated").toLowerCase();
+      const approverEmail = readActorEmail(app, [
+        "approver_email",
+        "approverEmail",
+        "updated_by_email",
+        "updatedByEmail",
+        "email",
+      ]);
       const decidedAt = app.decided_at || app.decidedAt || app.decided_at_formatted;
       const decidedAtMs = decidedAt ? new Date(decidedAt).getTime() : 0;
-      const feedbackNote = feedback ? `Note: ${feedback}` : "";
+      const feedbackNote = feedback && !feedback.startsWith("__archive_meta__:")
+        ? `Note: ${feedback}`
+        : "";
+      const actorPrefix =
+        decision === "approved"
+          ? "Approved By"
+          : `${decision.charAt(0).toUpperCase() + decision.slice(1)} By`;
       const subtitleParts = [
         `by ${getRoleLabel(app.role, proposal)}`,
         feedbackNote,
       ].filter(Boolean);
+      const actorIsAdmin =
+        isAdminRoleToken(app.role) ||
+        Boolean(app.is_admin ?? app.isAdmin ?? app.updated_by_admin ?? app.updatedByAdmin);
 
       events.push({
         key: `approval-${idx}`,
         title: decision.charAt(0).toUpperCase() + decision.slice(1),
         subtitle: subtitleParts.join(" | "),
+        actorLine: `${actorPrefix}: ${approverEmail || "-"}`,
+        actorIsAdmin,
         timestamp: decidedAtMs || createdAtMs,
         dateLabel: decidedAt ? formatDateTime(decidedAt) : "-",
         decision,
@@ -494,13 +640,76 @@ const BudgetDashboard: React.FC = () => {
   };
 
   // --- Filtering ---
+  const scopeOptions = useMemo(() => {
+    const dynamicScopes = proposals.map(getScopeFromProposal);
+    const uniqueScopes = Array.from(new Set(dynamicScopes));
+    return [
+      { key: "all", label: "All Beneficiaries" },
+      ...uniqueScopes.map((scopeKey) => ({
+        key: scopeKey,
+        label: formatScopeLabel(scopeKey),
+      })),
+    ] as BeneficiaryScopeOption[];
+  }, [proposals]);
 
+  useEffect(() => {
+    const hasCurrentScope = scopeOptions.some((option) => option.key === beneficiaryScope);
+    if (!hasCurrentScope) {
+      setBeneficiaryScope("all");
+    }
+  }, [scopeOptions, beneficiaryScope]);
+
+  const scopeFilteredProposals = useMemo(() => {
+    const normalizedSelectedScope = normalizeScopeKey(beneficiaryScope);
+    if (normalizedSelectedScope === "all") {
+      return proposals;
+    }
+    return proposals.filter((proposal) => {
+      const proposalScope = normalizeScopeKey(getScopeFromProposal(proposal));
+      return proposalScope === normalizedSelectedScope;
+    });
+  }, [proposals, beneficiaryScope]);
+
+  const scopedConsolidatedData = useMemo(() => {
+    const approvedProposals = scopeFilteredProposals.filter((proposal) =>
+      ["principal_approved", "completed"].includes(proposal.status)
+    );
+    const consolidationMap: Record<string, ConsolidatedRow> = {};
+
+    approvedProposals.forEach((proposal) => {
+      const isInitial = isInitialBudgetProposal(proposal.createdAt);
+
+      proposal.items.forEach((item) => {
+        if (!consolidationMap[item.budgetHead]) {
+          consolidationMap[item.budgetHead] = {
+            budgetHead: item.budgetHead,
+            initial: 0,
+            additional: 0,
+            expenditure: 0,
+            balance: 0,
+          };
+        }
+
+        if (isInitial) {
+          consolidationMap[item.budgetHead].initial += item.approvedAmount;
+        } else {
+          consolidationMap[item.budgetHead].additional += item.approvedAmount;
+        }
+      });
+    });
+
+    return Object.values(consolidationMap).map((row) => ({
+      ...row,
+      balance: (row.initial + row.additional) - row.expenditure,
+    }));
+  }, [scopeFilteredProposals]);
+  
   // Filtered Consolidated Data
   const filteredConsolidated = useMemo(() => {
-    if (!budgetHeadSearch.trim()) return consolidatedData;
+    if (!budgetHeadSearch.trim()) return scopedConsolidatedData;
     const q = budgetHeadSearch.toLowerCase();
-    return consolidatedData.filter(d => d.budgetHead.toLowerCase().includes(q));
-  }, [consolidatedData, budgetHeadSearch]);
+    return scopedConsolidatedData.filter(d => d.budgetHead.toLowerCase().includes(q));
+  }, [scopedConsolidatedData, budgetHeadSearch]);
 
   const consolidatedTotals = useMemo(() => filteredConsolidated.reduce((acc, row) => ({
     initial: acc.initial + row.initial,
@@ -511,12 +720,12 @@ const BudgetDashboard: React.FC = () => {
 
   // Filtered Proposal List
   const filteredProposals = useMemo(() => {
-    if (!budgetHeadSearch.trim()) return proposals;
+    if (!budgetHeadSearch.trim()) return scopeFilteredProposals;
     const q = budgetHeadSearch.toLowerCase();
-    return proposals.filter(p =>
+    return scopeFilteredProposals.filter(p =>
       p.items.some(i => i.budgetHead.toLowerCase().includes(q) || i.subHead.toLowerCase().includes(q))
     );
-  }, [proposals, budgetHeadSearch]);
+  }, [scopeFilteredProposals, budgetHeadSearch]);
 
   // --- Timeline Logic ---
   const getTimelineState = (proposal: ProposalGroup, step: string) => {
@@ -591,6 +800,18 @@ const BudgetDashboard: React.FC = () => {
                       </option>
                     ))}
                   </select>
+                  <select
+                    className="budgetdashboard-beneficiary-filter"
+                    value={beneficiaryScope}
+                    onChange={(e) => setBeneficiaryScope(e.target.value)}
+                    aria-label="Beneficiary filter"
+                  >
+                    {scopeOptions.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     type="text"
                     className="budgetdashboard-search"
@@ -615,7 +836,7 @@ const BudgetDashboard: React.FC = () => {
               {error && <div className="budgetdashboard-state" style={{ color: 'red' }}>{error}</div>}
 
               {/* 1. CONSOLIDATED TABLE (Approved Items Aggregated) */}
-              {!loading && consolidatedData.length > 0 && (
+              {!loading && scopedConsolidatedData.length > 0 && (
                 <div className="budgetdashboard-table-section">
                   <div className="budgetdashboard-table-wrapper">
                     <table className="budgetdashboard-table">
@@ -643,7 +864,8 @@ const BudgetDashboard: React.FC = () => {
                       </tbody>
                       <tfoot>
                         <tr className="budgetdashboard-total-row">
-                          <td colSpan={2}><strong>Total</strong></td>
+                           <td ></td>
+                          <td ><strong>Total</strong></td>
                           <td><strong>₹{formatINR(consolidatedTotals.initial)}</strong></td>
                           <td><strong>₹{formatINR(consolidatedTotals.additional)}</strong></td>
                           <td><strong>₹{formatINR(consolidatedTotals.expenditure)}</strong></td>
@@ -656,8 +878,14 @@ const BudgetDashboard: React.FC = () => {
               )}
 
               {/* 2. PROPOSAL LIST (Cards for Pending, Approved, etc.) */}
-              {!loading && filteredProposals.map((proposal, idx) => {
-                const label = idx === 0 ? "Initial Budget" : `Additional Budget ${idx}`;
+              {!loading && (() => {
+                let initialBudgetCount = 0;
+                let additionalBudgetCount = 0;
+                return filteredProposals.map((proposal) => {
+                const isInitialBudget = isInitialBudgetProposal(proposal.createdAt);
+                const label = isInitialBudget
+                  ? `Initial Budget ${++initialBudgetCount}`
+                  : `Additional Budget ${++additionalBudgetCount}`;
                 const isExpanded = showBudgetStatusDetail[proposal.proposalId] || false;
 
                 // Status Pill Text
@@ -696,7 +924,7 @@ const BudgetDashboard: React.FC = () => {
                               <div className="budgetdashboard-log-header">Submission Logs</div>
                               <div className="budgetdashboard-log-body">
                                 {new Date(proposal.updatedAt).getTime() >
-                                  new Date(proposal.createdAt).getTime() + 1000 && (
+                                  new Date(proposal.createdAt).getTime() && (
                                     <div className="budgetdashboard-log-item">
                                       <span className="log-label">Last Edited:</span>
                                       <span className="log-value">
@@ -718,6 +946,16 @@ const BudgetDashboard: React.FC = () => {
                                         <span className="log-role">
                                           {event.subtitle || 'Status update'}
                                         </span>
+                                        {event.actorLine && (
+                                          <span className="log-actor-line">
+                                            {event.actorLine}
+                                            {event.actorIsAdmin && (
+                                              <span className="log-admin-mark" title="Updated by Admin">
+                                                * Admin
+                                              </span>
+                                            )}
+                                          </span>
+                                        )}
                                         <span className="log-date">{event.dateLabel}</span>
                                       </div>
                                     </div>
@@ -776,11 +1014,12 @@ const BudgetDashboard: React.FC = () => {
                             </button>
                           )}
                           {/* Delete only if not fully approved AND not applicant-only */}
-                          {!proposal.isApplicantOnly && !['principal_approved', 'completed'].includes(proposal.status) && (
-                            <button title="Delete" className="budgetdashboard-action-global" onClick={() => handleDelete(proposal.proposalId)}>
-                              <Trash2 size={14} />
-                            </button>
-                          )}
+                           {['submitted', 'resubmitted'].includes(proposal.status) && (
+    <button title="Delete" className="budgetdashboard-action-global" onClick={() => handleDelete(proposal.proposalId)}>
+      <Trash2 size={14} />
+    </button>
+  )}
+
                         </div>
                       </div>
                     </div>
@@ -821,9 +1060,10 @@ const BudgetDashboard: React.FC = () => {
                     </div>
                   </div>
                 );
-              })}
+                });
+              })()}
 
-              {!loading && proposals.length === 0 && (
+              {!loading && scopeFilteredProposals.length === 0 && (
                 <div className="budgetdashboard-state">No budget proposals found for this fiscal year.</div>
               )}
             </div>

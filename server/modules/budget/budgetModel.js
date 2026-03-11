@@ -417,6 +417,22 @@ class BudgetModel {
     return rows[0] || null;
   }
 
+  static async checkEmployeeUserMatch(employeeId, userId) {
+    const parsedEmployeeId = Number(employeeId);
+    const parsedUserId = Number(userId);
+
+    if (!Number.isInteger(parsedEmployeeId) || parsedEmployeeId <= 0 || !Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+      return false;
+    }
+
+    const [rows] = await db.execute(
+      'SELECT id FROM master_employees WHERE id = ? AND user_id = ? AND status = "Active" LIMIT 1',
+      [parsedEmployeeId, parsedUserId]
+    );
+
+    return rows.length > 0;
+  }
+
   static async getUserDepartmentByEmail(userEmail) {
     const normalizedEmail = normalizeText(userEmail).toLowerCase();
 
@@ -709,11 +725,12 @@ class BudgetModel {
           department_id,
           proposal_description,
           total_amount,
+          approved_total_amount,
           approval_flow,
           status,
           current_stage,
           created_at
-        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, NOW())`,
+        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, NOW())`,
         [
           proposalRef,
           fyYear,
@@ -726,6 +743,7 @@ class BudgetModel {
           beneficiaryEntityId,
           departmentId,
           payload.proposal_description || null,
+          calculatedTotal,
           calculatedTotal,
           approvalFlowString,
           initialStage,
@@ -856,6 +874,7 @@ class BudgetModel {
         status = ?,
         proposal_description = ?,
         total_amount = ?,
+        approved_total_amount = ?,
         updated_at = NOW()
          WHERE id = ? `,
         [
@@ -867,6 +886,7 @@ class BudgetModel {
           nextCurrentStage,
           nextStatus,
           payload.proposal_description || null,
+          calculatedTotal,
           calculatedTotal,
           proposalId,
         ]
@@ -920,16 +940,46 @@ class BudgetModel {
 
 
   static async processApproval(proposalId, { role, decision, feedback, approverUserId, approverEmail }) {
-    if (!['level1', 'dof', 'principal'].includes(role)) {
-      throw new Error('Invalid role');
-    }
-    if (!['approved', 'rejected', 'returned'].includes(decision)) {
+    const normalizedDecision = normalizeText(decision).toLowerCase();
+
+    if (!['approved', 'rejected', 'returned', 'archived'].includes(normalizedDecision)) {
       throw new Error('Invalid decision');
     }
 
     const proposal = await this.getBudgetById(proposalId);
     if (!proposal) {
       throw new Error('Proposal not found');
+    }
+
+    if (normalizedDecision === 'archived') {
+      const logRole = normalizeText(role).toLowerCase() || 'admin';
+
+      return this.withTransaction(async (conn) => {
+        await conn.execute(
+          `UPDATE budget_proposals
+           SET status = 'archived', current_stage = 'archived', updated_at = NOW()
+           WHERE id = ? `,
+          [proposalId]
+        );
+
+        await conn.execute(
+          `INSERT INTO budget_proposal_approvals(
+            budget_proposal_id, role, approver_user_id, approver_email,
+            decision, feedback, allows_edit
+          ) VALUES(?, ?, ?, ?, 'archived', ?, 0)`,
+          [
+            proposalId,
+            logRole,
+            approverUserId,
+            approverEmail || '',
+            feedback || '',
+          ]
+        );
+      });
+    }
+
+    if (!['level1', 'dof', 'principal'].includes(role)) {
+      throw new Error('Invalid role');
     }
 
     if (proposal.current_stage !== role) {
@@ -944,7 +994,7 @@ class BudgetModel {
     const requiresPrincipalStage = flowStages.includes('principal');
     const flow = APPROVAL_FLOW[role];
 
-    if (decision === 'approved') {
+    if (normalizedDecision === 'approved') {
       newStatus = flow.approve;
       nextStage = flow.next;
 
@@ -965,7 +1015,7 @@ class BudgetModel {
         newStatus = 'completed';
         nextStage = 'completed';
       }
-    } else if (decision === 'rejected') {
+    } else if (normalizedDecision === 'rejected') {
       newStatus = flow.reject;
     } else {
       newStatus = flow.returned;
@@ -986,7 +1036,7 @@ class BudgetModel {
         [newStatus, nextStage, proposalId]
       );
 
-      if (decision !== 'approved' && !normalizeText(feedback)) {
+      if (normalizedDecision !== 'approved' && !normalizeText(feedback)) {
         throw new Error('Feedback required for reject/return');
       }
 
@@ -1001,14 +1051,14 @@ class BudgetModel {
           displayRole,
           approverUserId,
           approverEmail || '',
-          decision,
+          normalizedDecision,
           feedback || '',
-          decision === 'returned' ? 1 : 0,
+          normalizedDecision === 'returned' ? 1 : 0,
         ]
       );
 
       // 2. Insert AUTO-APPROVAL for Principal (Only if DoF Approved + Principal Required)
-      if (role === 'dof' && decision === 'approved' && requiresPrincipalStage) {
+      if (role === 'dof' && normalizedDecision === 'approved' && requiresPrincipalStage) {
         await conn.execute(
           `INSERT INTO budget_proposal_approvals(
           budget_proposal_id, role, approver_user_id, approver_email,
@@ -1039,6 +1089,8 @@ class BudgetModel {
     const pLimit = Number.parseInt(limit, 10) || 10;
     const pOffset = (pPage - 1) * pLimit;
     const currentFY = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
+    const parsedUserId = Number(userId);
+    const safeUserId = Number.isInteger(parsedUserId) && parsedUserId > 0 ? parsedUserId : -1;
 
     let sql = `
       SELECT SQL_CALC_FOUND_ROWS
@@ -1049,12 +1101,13 @@ class BudgetModel {
         bp.user_id,
         MAX(bp.user_email) AS user_email,
           COALESCE(
-            NULLIF(TRIM(MAX(CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, '')))), ''),
-            NULLIF(TRIM(MAX(u.name)), ''),
+            NULLIF(TRIM(MAX(CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, '')))), ''),
+            NULLIF(TRIM(MAX(applicant_user.name)), ''),
+            NULLIF(TRIM(MAX(creator_user.name)), ''),
             NULLIF(TRIM(MAX(bp.user_email)), '')
           ) AS applicant_name,
-            MAX(CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, ''))) AS faculty_name,
-              MAX(u.name) AS user_name,
+            MAX(CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, ''))) AS faculty_name,
+              MAX(COALESCE(applicant_user.name, creator_user.name)) AS user_name,
                 DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
                   bp.beneficiary_type,
                   bp.beneficiary_value,
@@ -1066,11 +1119,12 @@ class BudgetModel {
                         me.code AS org_unit_code,
                           met.name AS org_unit_type,
                             met.code AS org_unit_type_code,
-                              bp.proposal_description,
-                              bp.total_amount,
-                              bp.status,
-                              bp.current_stage,
-                              bp.approval_flow,
+      bp.proposal_description,
+      bp.total_amount,
+      bp.approved_total_amount,
+      bp.status,
+      bp.current_stage,
+      bp.approval_flow,
                               DATE_FORMAT(bp.created_at, '%Y-%m-%d %H:%i') AS created_date,
                                 COUNT(DISTINCT bpl.id) AS line_count,
                                   COUNT(DISTINCT bpa.id) AS approval_count
@@ -1078,8 +1132,9 @@ class BudgetModel {
       LEFT JOIN master_departments md ON bp.department_id = md.id
       LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
       LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
-      LEFT JOIN master_employees req_emp ON bp.user_id = req_emp.user_id AND req_emp.status = 'Active'
-      LEFT JOIN users u ON bp.user_id = u.id
+      LEFT JOIN master_employees applicant_emp ON bp.employee_id = applicant_emp.id
+      LEFT JOIN users applicant_user ON applicant_emp.user_id = applicant_user.id
+      LEFT JOIN users creator_user ON bp.user_id = creator_user.id
       LEFT JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
       LEFT JOIN budget_proposal_approvals bpa ON bp.id = bpa.budget_proposal_id
       LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
@@ -1138,13 +1193,13 @@ class BudgetModel {
           // OR if their email is in master_entity_contacts (for backwards compatibility/fallback)
           const filterConditions = [];
 
-          if (userId) {
+          if (safeUserId > 0) {
             filterConditions.push(`me.id IN (
               SELECT entity_id 
               FROM user_entity_roles 
               WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY')
             )`);
-            params.push(Number(userId));
+            params.push(safeUserId);
           }
 
           if (userEmail) {
@@ -1161,12 +1216,10 @@ class BudgetModel {
         break;
       }
       case 'dof': {
-        if (isQueueSuperAdminView) {
-          where.push('(bp.current_stage = "dof" OR bp.status LIKE "dof_%" OR bp.status = "completed")');
-        } else {
-          // Finance Queue: Needs action OR I already acted on it
-          where.push('(bp.current_stage = "dof" OR bp.status LIKE "dof_%" OR bp.status = "completed")');
-        }
+        // Finance Queue: needs action OR already handled by DoF (including downstream principal stage).
+        where.push(
+          '(bp.current_stage = "dof" OR bp.status LIKE "dof_%" OR bp.status LIKE "principal_%" OR bp.status = "completed")'
+        );
         break;
       }
       case 'principal': {
@@ -1185,8 +1238,29 @@ class BudgetModel {
       }
       case 'user':
       default: {
-        where.push('(bp.user_id = ? OR bp.user_email = ? OR bp.employee_id IN (SELECT id FROM master_employees WHERE user_id = ? AND status = "Active"))');
-        params.push(Number(userId), normalizeText(userEmail), Number(userId));
+        where.push(`(
+          bp.user_id = ?
+          OR bp.user_email = ?
+          OR bp.employee_id IN (
+            SELECT id FROM master_employees WHERE user_id = ? AND status = "Active"
+          )
+          OR (
+            LOWER(TRIM(bp.beneficiary_type)) = 'faculty'
+            AND EXISTS (
+              SELECT 1
+              FROM master_employees be
+              WHERE be.user_id = ?
+                AND be.status = 'Active'
+                AND (
+                  LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(CONCAT(COALESCE(be.title, ''), ' ', be.first_name, ' ', COALESCE(be.last_name, ''))))
+                  OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(CONCAT(be.first_name, ' ', COALESCE(be.last_name, ''))))
+                  OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(be.email))
+                  OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(be.erp_id))
+                )
+            )
+          )
+        )`);
+        params.push(safeUserId, normalizeText(userEmail), safeUserId, safeUserId);
         break;
       }
     }
@@ -1208,8 +1282,8 @@ class BudgetModel {
           OR bp.beneficiary_value LIKE ?
           OR md.name LIKE ?
           OR me.name LIKE ?
-          OR req_emp.first_name LIKE ?
-          OR req_emp.last_name LIKE ?
+          OR applicant_emp.first_name LIKE ?
+          OR applicant_emp.last_name LIKE ?
       )`);
       params.push(
         searchPattern,
@@ -1455,23 +1529,31 @@ class BudgetModel {
 
 
   static async #insertBudgetLine(proposalId, line, conn) {
+    const unitAmount = Number(line.unit_amount) || 0;
+    const quantity = Number(line.quantity) || 1;
+    const lineTotal = unitAmount * quantity;
+
     const [result] = await conn.execute(
       `INSERT INTO budget_proposal_lines(
           budget_proposal_id,
           budget_head,
           sub_head,
           unit_amount,
+          approved_unit_amount,
           quantity,
           line_total,
+          approved_line_total,
           line_description
-        ) VALUES(?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         proposalId,
         line.budget_head,
         line.sub_head || '',
-        Number(line.unit_amount) || 0,
-        Number(line.quantity) || 1,
-        (Number(line.unit_amount) || 0) * (Number(line.quantity) || 1),
+        unitAmount,
+        unitAmount,
+        quantity,
+        lineTotal,
+        lineTotal,
         line.line_description || '',
       ]
     );
@@ -1497,29 +1579,74 @@ class BudgetModel {
                 me.code AS org_unit_code,
                   met.name AS org_unit_type,
                     met.code AS org_unit_type_code,
-                      -- ✅ FETCH MISSING FIELDS FROM EMPLOYEE TABLE
-      emp.designation,
-        emp.designation AS user_designation,
-          emp.mobile,
-          emp.mobile AS user_mobile,
-            COALESCE(emp_parent_dept.name, emp_parent_dept_fallback.name, emp_dept.name) AS user_department,
-              COALESCE(emp_parent_dept.name, emp_parent_dept_fallback.name, emp_dept.name) AS applicant_department,
-                CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS user_name,
-                  CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS name
+      COALESCE(applicant_emp.designation, creator_emp.designation) AS designation,
+        COALESCE(applicant_emp.designation, creator_emp.designation) AS user_designation,
+          COALESCE(applicant_emp.mobile, creator_emp.mobile) AS mobile,
+          COALESCE(applicant_emp.mobile, creator_emp.mobile) AS user_mobile,
+            COALESCE(creator_parent_dept.name, creator_parent_dept_fallback.name, creator_emp_dept.name) AS user_department,
+              COALESCE(applicant_parent_dept.name, applicant_parent_dept_fallback.name, applicant_emp_dept.name) AS applicant_department,
+                COALESCE(
+                  NULLIF(TRIM(CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, ''))), ''),
+                  NULLIF(TRIM(CONCAT(creator_emp.first_name, ' ', COALESCE(creator_emp.last_name, ''))), '')
+                ) AS applicant_name,
+                  COALESCE(
+                    NULLIF(TRIM(CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, ''))), ''),
+                    NULLIF(TRIM(CONCAT(creator_emp.first_name, ' ', COALESCE(creator_emp.last_name, ''))), '')
+                  ) AS user_name,
+                    COALESCE(
+                      NULLIF(TRIM(CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, ''))), ''),
+                      NULLIF(TRIM(CONCAT(creator_emp.first_name, ' ', COALESCE(creator_emp.last_name, ''))), '')
+                    ) AS name,
+                    COALESCE(NULLIF(TRIM(applicant_emp.email), ''), NULLIF(TRIM(bp.user_email), '')) AS applicant_email,
+                    COALESCE(NULLIF(TRIM(applicant_emp.email), ''), NULLIF(TRIM(bp.user_email), '')) AS email
           FROM budget_proposals bp
           LEFT JOIN master_departments md ON bp.department_id = md.id
           LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
           LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
-      -- ✅ ADD THIS JOIN TO GET THE DATA
-          LEFT JOIN master_employees emp ON bp.user_id = emp.user_id 
-          LEFT JOIN master_departments emp_dept ON emp.department_id = emp_dept.id
-          LEFT JOIN master_departments emp_parent_dept ON emp.parent_department_id = emp_parent_dept.id
-          LEFT JOIN master_departments emp_parent_dept_fallback ON emp_dept.parent_id = emp_parent_dept_fallback.id
+          LEFT JOIN master_employees applicant_emp ON bp.employee_id = applicant_emp.id
+          LEFT JOIN master_departments applicant_emp_dept ON applicant_emp.department_id = applicant_emp_dept.id
+          LEFT JOIN master_departments applicant_parent_dept ON applicant_emp.parent_department_id = applicant_parent_dept.id
+          LEFT JOIN master_departments applicant_parent_dept_fallback ON applicant_emp_dept.parent_id = applicant_parent_dept_fallback.id
+          LEFT JOIN master_employees creator_emp ON bp.user_id = creator_emp.user_id AND creator_emp.status = 'Active'
+          LEFT JOIN master_departments creator_emp_dept ON creator_emp.department_id = creator_emp_dept.id
+          LEFT JOIN master_departments creator_parent_dept ON creator_emp.parent_department_id = creator_parent_dept.id
+          LEFT JOIN master_departments creator_parent_dept_fallback ON creator_emp_dept.parent_id = creator_parent_dept_fallback.id
           WHERE bp.id = ? `,
       [proposalId]
     );
 
     return rows[0] || null;
+  }
+
+  static async isFacultyBeneficiaryForUser(proposal = {}, userId) {
+    const normalizedBeneficiaryType = normalizeBeneficiaryType(proposal?.beneficiary_type).toLowerCase();
+    const beneficiaryValue = normalizeText(proposal?.beneficiary_value).toLowerCase();
+    const uid = Number(userId);
+
+    if (normalizedBeneficiaryType !== 'faculty') {
+      return false;
+    }
+
+    if (!beneficiaryValue || !Number.isInteger(uid) || uid <= 0) {
+      return false;
+    }
+
+    const [rows] = await db.execute(
+      `SELECT 1
+       FROM master_employees e
+       WHERE e.user_id = ?
+         AND e.status = 'Active'
+         AND (
+           LOWER(TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')))) = ?
+           OR LOWER(TRIM(CONCAT(e.first_name, ' ', COALESCE(e.last_name, '')))) = ?
+           OR LOWER(TRIM(e.email)) = ?
+           OR LOWER(TRIM(e.erp_id)) = ?
+         )
+       LIMIT 1`,
+      [uid, beneficiaryValue, beneficiaryValue, beneficiaryValue, beneficiaryValue]
+    );
+
+    return rows.length > 0;
   }
 
   static async validateUserAccess(proposalId, userId, userEmail, role, department, departmentId) {
@@ -1552,6 +1679,10 @@ class BudgetModel {
       if (empRows.length > 0) {
         return true;
       }
+    }
+
+    if (await this.isFacultyBeneficiaryForUser(proposal, uid)) {
+      return true;
     }
 
     switch (normalizedRole) {

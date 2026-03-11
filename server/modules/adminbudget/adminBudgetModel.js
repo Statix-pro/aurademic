@@ -1,5 +1,4 @@
 import db from '../../config/connection.js';
-import BudgetModel from '../budget/budgetModel.js';
 const VALID_MONTHS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
 
 const APPROVAL_FLOW = {
@@ -20,6 +19,7 @@ const ENTITY_TYPE_BY_BENEFICIARY = Object.freeze({
 });
 
 const normalizeText = (value) => String(value || '').trim();
+const ARCHIVE_META_PREFIX = '__archive_meta__:';
 
 const normalizeBeneficiaryType = (beneficiaryType) => {
   const normalized = normalizeText(beneficiaryType);
@@ -80,11 +80,419 @@ const formatApprovalFlowString = ({ requiresLevel1, requiresDof, requiresPrincip
 };
 
 class AdminBudgetModel {
+  static getDefaultFreezeCutoffDate(fiscalYear) {
+    const fy = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
+    return `${fy}-04-10`;
+  }
+
+  static async getFreezeConfig(fiscalYear) {
+    const fy = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
+    let rows = [];
+    try {
+      const [resultRows] = await db.execute(
+        `SELECT fiscal_year, cutoff_date, is_frozen, updated_at
+         FROM budget_time_freeze_config
+         WHERE fiscal_year = ?
+         LIMIT 1`,
+        [fy]
+      );
+      rows = resultRows;
+    } catch (error) {
+      if (error?.code === 'ER_NO_SUCH_TABLE') {
+        return {
+          fiscalYear: fy,
+          cutoffDate: this.getDefaultFreezeCutoffDate(fy),
+          isFrozen: false,
+          updatedAt: null,
+        };
+      }
+      throw error;
+    }
+
+    if (!rows.length) {
+      return {
+        fiscalYear: fy,
+        cutoffDate: this.getDefaultFreezeCutoffDate(fy),
+        isFrozen: false,
+        updatedAt: null,
+      };
+    }
+
+    const row = rows[0];
+    return {
+      fiscalYear: Number(row.fiscal_year),
+      cutoffDate: row.cutoff_date ? String(row.cutoff_date) : this.getDefaultFreezeCutoffDate(fy),
+      isFrozen: Number(row.is_frozen) === 1,
+      updatedAt: row.updated_at || null,
+    };
+  }
+
+  static async upsertFreezeConfig({
+    fiscalYear,
+    cutoffDate,
+    isFrozen,
+    updatedByUserId,
+    updatedByEmail,
+  }) {
+    const fy = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
+    const freezeFlag = Number(isFrozen) === 1 ? 1 : 0;
+    const safeCutoffDate = cutoffDate || this.getDefaultFreezeCutoffDate(fy);
+
+    await db.execute(
+      `INSERT INTO budget_time_freeze_config
+        (fiscal_year, cutoff_date, is_frozen, updated_by_user_id, updated_by_email)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+        cutoff_date = VALUES(cutoff_date),
+        is_frozen = VALUES(is_frozen),
+        updated_by_user_id = VALUES(updated_by_user_id),
+        updated_by_email = VALUES(updated_by_email),
+        updated_at = CURRENT_TIMESTAMP`,
+      [
+        fy,
+        safeCutoffDate,
+        freezeFlag,
+        Number.isInteger(Number(updatedByUserId)) ? Number(updatedByUserId) : null,
+        normalizeText(updatedByEmail) || null,
+      ]
+    );
+
+    return this.getFreezeConfig(fy);
+  }
+
+  static #encodeArchiveFeedback(feedback, proposal) {
+    const snapshot = {
+      previousStatus: normalizeText(proposal?.status),
+      previousStage: normalizeText(proposal?.current_stage),
+    };
+    const encodedSnapshot = Buffer.from(JSON.stringify(snapshot), 'utf8').toString('base64');
+    const userFeedback = normalizeText(feedback);
+
+    return userFeedback
+      ? `${ARCHIVE_META_PREFIX}${encodedSnapshot}\n${userFeedback}`
+      : `${ARCHIVE_META_PREFIX}${encodedSnapshot}`;
+  }
+
+  static #decodeArchiveSnapshot(feedback) {
+    const rawFeedback = normalizeText(feedback);
+
+    if (!rawFeedback.startsWith(ARCHIVE_META_PREFIX)) {
+      return null;
+    }
+
+    const encodedPayload = rawFeedback
+      .slice(ARCHIVE_META_PREFIX.length)
+      .split(/\r?\n/, 1)[0]
+      .trim();
+
+    if (!encodedPayload) {
+      return null;
+    }
+
+    try {
+      const decoded = Buffer.from(encodedPayload, 'base64').toString('utf8');
+      const parsed = JSON.parse(decoded);
+      const previousStatus = normalizeText(parsed?.previousStatus);
+      const previousStage = normalizeText(parsed?.previousStage);
+
+      if (!previousStatus || !previousStage) {
+        return null;
+      }
+
+      return { previousStatus, previousStage };
+    } catch {
+      return null;
+    }
+  }
+
+  static #deriveUnarchiveFallbackState(proposal, archiveRole) {
+    const flowStages = normalizeText(proposal?.approval_flow)
+      .split('_')
+      .map((stage) => normalizeText(stage).toLowerCase())
+      .filter(Boolean);
+
+    const normalizedArchiveRole = normalizeText(archiveRole).toLowerCase();
+    const includesLevel1 = flowStages.includes('level1');
+    const includesDof = flowStages.includes('dof');
+
+    if (['level1', 'hod', 'coordinator'].includes(normalizedArchiveRole)) {
+      return { previousStatus: 'submitted', previousStage: 'level1' };
+    }
+
+    if (normalizedArchiveRole === 'dof') {
+      return {
+        previousStatus: includesLevel1 ? 'level1_approved' : 'submitted',
+        previousStage: 'dof',
+      };
+    }
+
+    if (normalizedArchiveRole === 'principal') {
+      return {
+        previousStatus: includesDof ? 'dof_approved' : includesLevel1 ? 'level1_approved' : 'submitted',
+        previousStage: 'principal',
+      };
+    }
+
+    const firstStage = flowStages[0] || 'level1';
+
+    if (firstStage === 'dof') {
+      return { previousStatus: 'submitted', previousStage: 'dof' };
+    }
+
+    if (firstStage === 'principal') {
+      return { previousStatus: 'submitted', previousStage: 'principal' };
+    }
+
+    return { previousStatus: 'submitted', previousStage: 'level1' };
+  }
+
+  static async getProposalForArchiveToggle(proposalId, conn = db) {
+    const parsedProposalId = Number(proposalId);
+
+    if (!Number.isInteger(parsedProposalId) || parsedProposalId <= 0) {
+      return null;
+    }
+
+    const [rows] = await conn.execute(
+      `SELECT id, status, current_stage, approval_flow
+       FROM budget_proposals
+       WHERE id = ?
+       LIMIT 1`,
+      [parsedProposalId]
+    );
+
+    return rows[0] || null;
+  }
+
+  static async toggleArchiveState(proposalId, { role, feedback, approverUserId, approverEmail, isSuperAdmin }) {
+    const parsedProposalId = Number(proposalId);
+
+    if (!Number.isInteger(parsedProposalId) || parsedProposalId <= 0) {
+      throw new Error('Invalid proposal ID');
+    }
+
+    return this.withTransaction(async (conn) => {
+      const proposal = await this.getProposalForArchiveToggle(parsedProposalId, conn);
+
+      if (!proposal) {
+        throw new Error('Proposal not found');
+      }
+
+      const isArchived = ['archive', 'archived'].includes(normalizeText(proposal.status).toLowerCase())
+        || ['archive', 'archived'].includes(normalizeText(proposal.current_stage).toLowerCase());
+
+      if (!isArchived) {
+        await conn.execute(
+          `UPDATE budget_proposals
+           SET status = 'archived', current_stage = 'archived', updated_at = NOW()
+           WHERE id = ?`,
+          [parsedProposalId]
+        );
+
+        await conn.execute(
+          `INSERT INTO budget_proposal_approvals(
+            budget_proposal_id, role, approver_user_id, approver_email,
+            decision, feedback, allows_edit
+          ) VALUES(?, ?, ?, ?, 'archived', ?, 0)`,
+          [
+            parsedProposalId,
+            normalizeText(role).toLowerCase() || 'admin',
+            Number(approverUserId),
+            normalizeText(approverEmail),
+            this.#encodeArchiveFeedback(feedback, proposal),
+          ]
+        );
+
+        return { action: 'archived', proposal };
+      }
+
+      const [archiveRows] = await conn.execute(
+        `SELECT role, approver_user_id, approver_email, feedback
+         FROM budget_proposal_approvals
+         WHERE budget_proposal_id = ?
+           AND LOWER(TRIM(decision)) IN ('archive', 'archived')
+         ORDER BY decided_at DESC, id DESC
+         LIMIT 1`,
+        [parsedProposalId]
+      );
+
+      if (!archiveRows.length) {
+        throw new Error('Cannot unarchive: archive record not found');
+      }
+
+      const latestArchive = archiveRows[0];
+      const requesterEmail = normalizeText(approverEmail).toLowerCase();
+      const archivedByEmail = normalizeText(latestArchive.approver_email).toLowerCase();
+      const requesterUserId = Number(approverUserId);
+      const archivedByUserId = Number(latestArchive.approver_user_id);
+      const sameUserById = Number.isInteger(requesterUserId)
+        && requesterUserId > 0
+        && Number.isInteger(archivedByUserId)
+        && archivedByUserId > 0
+        && requesterUserId === archivedByUserId;
+      const sameUserByEmail = requesterEmail.length > 0 && requesterEmail === archivedByEmail;
+
+      if (!sameUserById && !sameUserByEmail && !isSuperAdmin) {
+        return { error: 'Only the user who archived this proposal can unarchive it (or a super admin)' };
+      }
+
+      const snapshotFromFeedback = this.#decodeArchiveSnapshot(latestArchive.feedback);
+      const fallbackState = this.#deriveUnarchiveFallbackState(proposal, latestArchive.role);
+      const restoreState = snapshotFromFeedback || fallbackState;
+
+      await conn.execute(
+        `UPDATE budget_proposals
+         SET status = ?, current_stage = ?, updated_at = NOW()
+         WHERE id = ?`,
+        [restoreState.previousStatus, restoreState.previousStage, parsedProposalId]
+      );
+
+      await conn.execute(
+        `INSERT INTO budget_proposal_approvals(
+          budget_proposal_id, role, approver_user_id, approver_email,
+          decision, feedback, allows_edit
+        ) VALUES(?, ?, ?, ?, 'unarchived', ?, 0)`,
+        [
+          parsedProposalId,
+          normalizeText(latestArchive.role).toLowerCase() || 'admin',
+          requesterUserId,
+          normalizeText(approverEmail),
+          normalizeText(feedback) || `Restored to ${restoreState.previousStage}`,
+        ]
+      );
+
+      return { action: 'unarchived', proposal };
+    });
+  }
+
+  static async updateApprovedAmounts(
+    proposalId,
+    payload,
+    { editorRole, editorUserId, editorEmail } = {}
+  ) {
+    const proposal = await this.getBudgetById(proposalId);
+    if (!proposal) {
+      throw new Error('Proposal not found');
+    }
+
+    return this.withTransaction(async (conn) => {
+      const [existingLines] = await conn.execute(
+        `SELECT id, budget_head, sub_head, quantity, unit_amount, line_total, approved_unit_amount, approved_line_total
+         FROM budget_proposal_lines
+         WHERE budget_proposal_id = ?
+         ORDER BY id`,
+        [proposalId]
+      );
+
+      const incomingLines = Array.isArray(payload?.lines) ? payload.lines : [];
+      if (!incomingLines.length || !existingLines.length) {
+        throw new Error('At least one budget line required');
+      }
+
+      const upto = Math.min(existingLines.length, incomingLines.length);
+      const changedRows = [];
+
+      for (let idx = 0; idx < upto; idx += 1) {
+        const prevLine = existingLines[idx];
+        const incoming = incomingLines[idx] || {};
+        const quantity = Number(prevLine.quantity) || 1;
+        const previousApprovedUnit = Number(prevLine.approved_unit_amount ?? prevLine.unit_amount) || 0;
+        const nextApprovedUnit = Number.isFinite(Number(incoming.unit_amount))
+          ? Number(incoming.unit_amount)
+          : previousApprovedUnit;
+        const nextApprovedLineTotal = Number((nextApprovedUnit * quantity).toFixed(2));
+        const previousApprovedLineTotal = Number(prevLine.approved_line_total ?? prevLine.line_total) || 0;
+
+        await conn.execute(
+          `UPDATE budget_proposal_lines
+           SET approved_unit_amount = ?,
+               approved_line_total = ?
+           WHERE id = ?`,
+          [nextApprovedUnit, nextApprovedLineTotal, prevLine.id]
+        );
+
+        if (
+          Number(nextApprovedUnit.toFixed(2)) !== Number(previousApprovedUnit.toFixed(2))
+          || Number(nextApprovedLineTotal.toFixed(2)) !== Number(previousApprovedLineTotal.toFixed(2))
+        ) {
+          changedRows.push(idx + 1);
+        }
+      }
+
+      await conn.execute(
+        `UPDATE budget_proposals bp
+         SET bp.approved_total_amount = (
+           SELECT COALESCE(SUM(COALESCE(bpl.approved_line_total, bpl.line_total)), 0)
+           FROM budget_proposal_lines bpl
+           WHERE bpl.budget_proposal_id = bp.id
+         ),
+         bp.updated_at = NOW()
+         WHERE bp.id = ?`,
+        [proposalId]
+      );
+
+      const normalizedEditorRole = normalizeText(editorRole).toLowerCase();
+      const logRole = normalizedEditorRole === 'level1'
+        ? (this.isEntityBeneficiaryType(proposal.beneficiary_type) ? 'coordinator' : 'hod')
+        : normalizedEditorRole || 'admin';
+      const rowText = changedRows.length ? `Approved amounts updated for Row No. ${changedRows.join(', ')}` : 'Approved amounts reviewed';
+
+      await conn.execute(
+        `INSERT INTO budget_proposal_approvals(
+          budget_proposal_id, role, approver_user_id, approver_email,
+          decision, feedback, allows_edit
+        ) VALUES(?, ?, ?, ?, 'updated', ?, 0)`,
+        [proposalId, logRole, Number(editorUserId), normalizeText(editorEmail), rowText]
+      );
+    });
+  }
 
   static getCurrentFinancialYear() {
     const now = new Date();
     const month = now.getMonth() + 1;
     return month >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+  }
+
+  static async getUserAssignments(userId) {
+    const parsedUserId = Number(userId);
+    if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+      return [];
+    }
+
+    const [rows] = await db.execute(
+      `SELECT
+         uer.entity_id,
+         uer.entity_type,
+         r.role_code,
+         p.permission_key AS permission_code,
+         COALESCE(d.name, me.name) as entity_name
+       FROM user_entity_roles uer
+       JOIN roles r ON uer.role_id = r.id
+       JOIN role_permissions rp ON r.id = rp.role_id
+       JOIN permissions p ON rp.permission_id = p.id
+       LEFT JOIN master_departments d ON uer.entity_id = d.id AND uer.entity_type = 'DEPARTMENT'
+       LEFT JOIN master_entities me ON uer.entity_id = me.id AND uer.entity_type != 'DEPARTMENT'
+       WHERE uer.user_id = ?`,
+      [parsedUserId]
+    );
+
+    const assignmentsMap = new Map();
+
+    for (const row of rows) {
+      const key = `${row.entity_type}-${row.entity_id}`;
+      if (!assignmentsMap.has(key)) {
+        assignmentsMap.set(key, {
+          entity_id: row.entity_id,
+          entity_type: row.entity_type,
+          entity_name: row.entity_name || 'Unknown',
+          role: row.role_code,
+          permissions: [],
+        });
+      }
+      assignmentsMap.get(key).permissions.push(row.permission_code);
+    }
+
+    return Array.from(assignmentsMap.values());
   }
 
   static normalizeEntityTypeCode(typeCode) {
@@ -571,7 +979,7 @@ class AdminBudgetModel {
     q,
     department,
   }) {
-    const budgetsResult = await BudgetModel.listBudgets({
+    const budgetsResult = await this.listBudgets({
       role: 'super_admin',
       page,
       limit,
@@ -1176,23 +1584,31 @@ class AdminBudgetModel {
   }
 
   static async #insertBudgetLine(proposalId, line, conn) {
+    const unitAmount = Number(line.unit_amount) || 0;
+    const quantity = Number(line.quantity) || 1;
+    const lineTotal = unitAmount * quantity;
+
     const [result] = await conn.execute(
       `INSERT INTO budget_proposal_lines (
         budget_proposal_id,
         budget_head,
         sub_head,
         unit_amount,
+        approved_unit_amount,
         quantity,
         line_total,
+        approved_line_total,
         line_description
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         proposalId,
         line.budget_head,
         line.sub_head || '',
-        Number(line.unit_amount) || 0,
-        Number(line.quantity) || 1,
-        (Number(line.unit_amount) || 0) * (Number(line.quantity) || 1),
+        unitAmount,
+        unitAmount,
+        quantity,
+        lineTotal,
+        lineTotal,
         line.line_description || '',
       ]
     );
@@ -1205,6 +1621,459 @@ class AdminBudgetModel {
       'INSERT INTO budget_line_month_allocations (budget_line_id, month, amount) VALUES (?, ?, ?)',
       [lineId, month, Number(amount) || 0]
     );
+  }
+
+  static async delete(proposalId) {
+    return this.withTransaction(async (conn) => {
+      await conn.execute(
+        `DELETE m
+         FROM budget_line_month_allocations m
+         JOIN budget_proposal_lines l ON m.budget_line_id = l.id
+         WHERE l.budget_proposal_id = ? `,
+        [proposalId]
+      );
+
+      await conn.execute('DELETE FROM budget_proposal_lines WHERE budget_proposal_id = ?', [proposalId]);
+      await conn.execute('DELETE FROM budget_proposal_approvals WHERE budget_proposal_id = ?', [proposalId]);
+      await conn.execute('DELETE FROM budget_proposal_refs WHERE proposal_id = ?', [proposalId]);
+
+      const [result] = await conn.execute('DELETE FROM budget_proposals WHERE id = ?', [proposalId]);
+      return result.affectedRows > 0;
+    });
+  }
+
+  static async processApproval(proposalId, { role, decision, feedback, approverUserId, approverEmail }) {
+    const normalizedDecision = normalizeText(decision).toLowerCase();
+
+    if (!['approved', 'rejected', 'returned', 'archived'].includes(normalizedDecision)) {
+      throw new Error('Invalid decision');
+    }
+
+    const proposal = await this.getBudgetById(proposalId);
+    if (!proposal) {
+      throw new Error('Proposal not found');
+    }
+
+    if (normalizedDecision === 'archived') {
+      const logRole = normalizeText(role).toLowerCase() || 'admin';
+
+      return this.withTransaction(async (conn) => {
+        await conn.execute(
+          `UPDATE budget_proposals
+           SET status = 'archived', current_stage = 'archived', updated_at = NOW()
+           WHERE id = ? `,
+          [proposalId]
+        );
+
+        await conn.execute(
+          `INSERT INTO budget_proposal_approvals(
+            budget_proposal_id, role, approver_user_id, approver_email,
+            decision, feedback, allows_edit
+          ) VALUES(?, ?, ?, ?, 'archived', ?, 0)`,
+          [
+            proposalId,
+            logRole,
+            approverUserId,
+            approverEmail || '',
+            feedback || '',
+          ]
+        );
+      });
+    }
+
+    if (!['level1', 'dof', 'principal'].includes(role)) {
+      throw new Error('Invalid role');
+    }
+
+    if (proposal.current_stage !== role) {
+      throw new Error(`Stage mismatch: expected ${role}, got ${proposal.current_stage} `);
+    }
+
+    let newStatus = decision;
+    let nextStage = role;
+    const flowStages = normalizeText(proposal.approval_flow).split('_');
+    const requiresPrincipalStage = flowStages.includes('principal');
+    const flow = APPROVAL_FLOW[role];
+
+    if (normalizedDecision === 'approved') {
+      newStatus = flow.approve;
+      nextStage = flow.next;
+
+      if (role === 'dof' || role === 'principal') {
+        newStatus = 'completed';
+        nextStage = 'completed';
+      }
+    } else if (normalizedDecision === 'rejected') {
+      newStatus = flow.reject;
+    } else {
+      newStatus = flow.returned;
+      nextStage = role;
+    }
+
+    const displayRole = (role === 'level1')
+      ? (this.isEntityBeneficiaryType(proposal.beneficiary_type) ? 'coordinator' : 'hod')
+      : role;
+
+    return this.withTransaction(async (conn) => {
+      await conn.execute(
+        `UPDATE budget_proposals
+         SET status = ?, current_stage = ?, updated_at = NOW()
+         WHERE id = ? `,
+        [newStatus, nextStage, proposalId]
+      );
+
+      if (normalizedDecision !== 'approved' && !normalizeText(feedback)) {
+        throw new Error('Feedback required for reject/return');
+      }
+
+      await conn.execute(
+        `INSERT INTO budget_proposal_approvals(
+          budget_proposal_id, role, approver_user_id, approver_email,
+          decision, feedback, allows_edit
+        ) VALUES(?, ?, ?, ?, ?, ?, ?)`,
+        [
+          proposalId,
+          displayRole,
+          approverUserId,
+          approverEmail || '',
+          normalizedDecision,
+          feedback || '',
+          normalizedDecision === 'returned' ? 1 : 0,
+        ]
+      );
+
+      if (role === 'dof' && normalizedDecision === 'approved' && requiresPrincipalStage) {
+        await conn.execute(
+          `INSERT INTO budget_proposal_approvals(
+            budget_proposal_id, role, approver_user_id, approver_email,
+            decision, feedback, allows_edit, decided_at
+          ) VALUES(?, 'principal', ?, ?, 'approved', 'Auto-approved after DoF clearance', 0, NOW())`,
+          [proposalId, approverUserId, 'system-auto@ksrct.ac.in']
+        );
+      }
+    });
+  }
+
+  static async listBudgets({
+    userId,
+    userEmail,
+    department,
+    departmentId,
+    role,
+    superAdminQueueView = false,
+    page = 1,
+    limit = 10,
+    status,
+    fiscalYear,
+    q,
+    departmentFilter,
+  }) {
+    const pPage = Number.parseInt(page, 10) || 1;
+    const pLimit = Number.parseInt(limit, 10) || 10;
+    const pOffset = (pPage - 1) * pLimit;
+    const currentFY = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
+
+    let sql = `
+      SELECT SQL_CALC_FOUND_ROWS
+      bp.id,
+        bp.proposal_ref,
+        bp.fiscal_year,
+        bp.employee_id,
+        bp.user_id,
+        MAX(bp.user_email) AS user_email,
+          COALESCE(
+            NULLIF(TRIM(MAX(CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, '')))), ''),
+            NULLIF(TRIM(MAX(u.name)), ''),
+            NULLIF(TRIM(MAX(bp.user_email)), '')
+          ) AS applicant_name,
+            MAX(CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, ''))) AS faculty_name,
+              MAX(u.name) AS user_name,
+                DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
+                  bp.beneficiary_type,
+                  bp.beneficiary_value,
+                  bp.department_id,
+                  md.name AS department,
+                    md.code AS department_code,
+                      bp.beneficiary_entity_id,
+                      me.name AS org_unit_name,
+                        me.code AS org_unit_code,
+                          met.name AS org_unit_type,
+                            met.code AS org_unit_type_code,
+      bp.proposal_description,
+      bp.total_amount,
+      bp.approved_total_amount,
+      bp.status,
+      bp.current_stage,
+      bp.approval_flow,
+      DATE_FORMAT(bp.created_at, '%Y-%m-%d %H:%i') AS created_date,
+      COUNT(DISTINCT bpl.id) AS line_count,
+      COUNT(DISTINCT bpa.id) AS approval_count
+      FROM budget_proposals bp
+      LEFT JOIN master_departments md ON bp.department_id = md.id
+      LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+      LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
+      LEFT JOIN master_employees req_emp ON bp.user_id = req_emp.user_id AND req_emp.status = 'Active'
+      LEFT JOIN users u ON bp.user_id = u.id
+      LEFT JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
+      LEFT JOIN budget_proposal_approvals bpa ON bp.id = bpa.budget_proposal_id
+      LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
+    `;
+
+    const where = ['bp.fiscal_year = ?'];
+    const params = [Number(currentFY)];
+    const safeRole = this.normalizeBudgetRole(role);
+    const isQueueSuperAdminView = Boolean(superAdminQueueView) && ['hod', 'coordinator', 'dof', 'principal'].includes(safeRole);
+    const archivedStatusPredicate = `LOWER(TRIM(bp.status)) IN ('archived', 'archive')`;
+    const archivedByLevel1Predicate = `(
+      ${archivedStatusPredicate}
+      AND EXISTS (
+        SELECT 1
+        FROM budget_proposal_approvals bpa_archive
+        WHERE bpa_archive.budget_proposal_id = bp.id
+          AND LOWER(TRIM(bpa_archive.decision)) IN ('archived', 'archive')
+          AND LOWER(TRIM(bpa_archive.role)) IN ('level1', 'hod', 'coordinator')
+      )
+    )`;
+    const archivedByDofPredicate = `(
+      ${archivedStatusPredicate}
+      AND EXISTS (
+        SELECT 1
+        FROM budget_proposal_approvals bpa_archive
+        WHERE bpa_archive.budget_proposal_id = bp.id
+          AND LOWER(TRIM(bpa_archive.decision)) IN ('archived', 'archive')
+          AND LOWER(TRIM(bpa_archive.role)) = 'dof'
+      )
+    )`;
+    const archivedByPrincipalPredicate = `(
+      ${archivedStatusPredicate}
+      AND EXISTS (
+        SELECT 1
+        FROM budget_proposal_approvals bpa_archive
+        WHERE bpa_archive.budget_proposal_id = bp.id
+          AND LOWER(TRIM(bpa_archive.decision)) IN ('archived', 'archive')
+          AND LOWER(TRIM(bpa_archive.role)) = 'principal'
+      )
+    )`;
+
+    switch (safeRole) {
+      case 'hod': {
+        where.push("LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department')");
+        if (!isQueueSuperAdminView) {
+          where.push('md.type = "Academic"');
+          where.push(`(
+            bp.current_stage = "level1"
+            OR (bp.status LIKE "level1_%" AND bp.status != "completed")
+            OR ${archivedByLevel1Predicate}
+          )`);
+          const normalizedDepartment = normalizeText(department);
+          const hodScope = [];
+          if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
+            hodScope.push('bp.department_id = ?');
+            params.push(Number(departmentId));
+          }
+          if (normalizedDepartment) {
+            hodScope.push(`(
+              LOWER(TRIM(md.name)) = LOWER(TRIM(?))
+              OR LOWER(TRIM(md.code)) = LOWER(TRIM(?))
+              OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(?))
+            )`);
+            params.push(normalizedDepartment, normalizedDepartment, normalizedDepartment);
+          }
+          where.push(hodScope.length ? `(${hodScope.join(' OR ')})` : '1 = 0');
+        }
+        break;
+      }
+      case 'coordinator': {
+        where.push("LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')");
+        if (!isQueueSuperAdminView) {
+          where.push(`(
+            bp.current_stage = "level1"
+            OR (bp.status LIKE "level1_%" AND bp.status != "completed")
+            OR ${archivedByLevel1Predicate}
+          )`);
+          const filterConditions = [];
+          if (userId) {
+            filterConditions.push(`me.id IN (
+              SELECT entity_id
+              FROM user_entity_roles
+              WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY')
+            )`);
+            params.push(Number(userId));
+          }
+          if (userEmail) {
+            filterConditions.push('LOWER(TRIM(mec.email)) = LOWER(TRIM(?))');
+            params.push(userEmail);
+          }
+          where.push(filterConditions.length ? `(${filterConditions.join(' OR ')})` : '1 = 0');
+        }
+        break;
+      }
+      case 'dof':
+        where.push(`(
+          bp.current_stage = "dof"
+          OR bp.status LIKE "dof_%"
+          OR bp.status = "completed"
+          OR ${archivedByDofPredicate}
+        )`);
+        break;
+      case 'principal':
+        where.push(`(
+          bp.current_stage = "principal"
+          OR bp.status LIKE "principal_%"
+          OR bp.status = "completed"
+          OR ${archivedByPrincipalPredicate}
+        )`);
+        break;
+      case 'admin':
+      case 'super_admin':
+        break;
+      case 'user':
+      default:
+        where.push('(bp.user_id = ? OR bp.user_email = ?)');
+        params.push(Number(userId), normalizeText(userEmail));
+        break;
+    }
+
+    if (normalizeText(status)) {
+      where.push('bp.status = ?');
+      params.push(normalizeText(status));
+    }
+    if (normalizeText(departmentFilter)) {
+      where.push('md.name = ?');
+      params.push(normalizeText(departmentFilter));
+    }
+    if (normalizeText(q)) {
+      const searchPattern = `%${normalizeText(q)}%`;
+      where.push(`(
+        bp.proposal_ref LIKE ?
+        OR bp.beneficiary_value LIKE ?
+        OR md.name LIKE ?
+        OR me.name LIKE ?
+        OR req_emp.first_name LIKE ?
+        OR req_emp.last_name LIKE ?
+      )`);
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+    }
+
+    sql += ` WHERE ${where.join(' AND ')}
+             GROUP BY bp.id, md.name, md.code, me.name, me.code, met.name, met.code
+             ORDER BY bp.created_at DESC
+             LIMIT ? OFFSET ? `;
+
+    params.push(Number(pLimit), Number(pOffset));
+    const [rows] = await db.query(sql, params);
+    const enrichedRows = await this.#attachLevel1AssignmentMetadata(rows);
+    const [totalRows] = await db.query('SELECT FOUND_ROWS() AS total');
+
+    return {
+      budgets: enrichedRows,
+      pagination: {
+        total: Number(totalRows[0].total),
+        page: pPage,
+        limit: pLimit,
+        pages: Math.ceil(Number(totalRows[0].total) / pLimit),
+      },
+    };
+  }
+
+  static async getBudgetById(proposalId) {
+    const [rows] = await db.execute(
+      `SELECT
+        bp.*,
+        DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
+        md.name AS department,
+        md.code AS department_code,
+        me.name AS org_unit_name,
+        me.code AS org_unit_code,
+        met.name AS org_unit_type,
+        met.code AS org_unit_type_code,
+        emp.designation,
+        emp.designation AS user_designation,
+        emp.mobile,
+        emp.mobile AS user_mobile,
+        COALESCE(emp_parent_dept.name, emp_parent_dept_fallback.name, emp_dept.name) AS user_department,
+        COALESCE(emp_parent_dept.name, emp_parent_dept_fallback.name, emp_dept.name) AS applicant_department,
+        CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS user_name,
+        CONCAT(emp.first_name, ' ', COALESCE(emp.last_name, '')) AS name
+      FROM budget_proposals bp
+      LEFT JOIN master_departments md ON bp.department_id = md.id
+      LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+      LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
+      LEFT JOIN master_employees emp ON bp.user_id = emp.user_id
+      LEFT JOIN master_departments emp_dept ON emp.department_id = emp_dept.id
+      LEFT JOIN master_departments emp_parent_dept ON emp.parent_department_id = emp_parent_dept.id
+      LEFT JOIN master_departments emp_parent_dept_fallback ON emp_dept.parent_id = emp_parent_dept_fallback.id
+      WHERE bp.id = ?`,
+      [proposalId]
+    );
+
+    return rows[0] || null;
+  }
+
+  static async validateUserAccess(proposalId, userId, userEmail, role, department, departmentId) {
+    const proposal = await this.getBudgetById(proposalId);
+    if (!proposal) return false;
+
+    const uid = Number(userId);
+    const pid = Number(proposal.user_id);
+    const normalizedRole = this.normalizeBudgetRole(role);
+    const emailMatch = proposal.user_email
+      && userEmail
+      && normalizeText(proposal.user_email).toLowerCase() === normalizeText(userEmail).toLowerCase();
+
+    if (pid === uid || emailMatch) return true;
+
+    switch (normalizedRole) {
+      case 'user':
+        return pid === uid || emailMatch;
+      case 'hod':
+      case 'coordinator':
+      case 'level1': {
+        const level1Route = this.resolveLevel1Route(proposal);
+        if (level1Route.routeType === LEVEL1_ROUTE_TYPE.entityContact) {
+          const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
+          if (normalizedUserEmail) {
+            const [contacts] = await db.execute(`SELECT email FROM master_entity_contacts WHERE entity_id = ? `, [level1Route.entityId]);
+            if (contacts.some((c) => normalizeText(c.email).toLowerCase() === normalizedUserEmail)) {
+              return true;
+            }
+          }
+          if (uid > 0) {
+            const [uerRows] = await db.execute(
+              `SELECT 1 FROM user_entity_roles WHERE user_id = ? AND entity_id = ? LIMIT 1`,
+              [uid, level1Route.entityId]
+            );
+            if (uerRows.length > 0) return true;
+          }
+          return false;
+        }
+
+        const normalizedDepartment = normalizeText(department).toLowerCase();
+        if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0 && proposal.department_id) {
+          return Number(proposal.department_id) === Number(departmentId);
+        }
+        if (normalizedDepartment) {
+          const proposalDepartmentName = normalizeText(proposal.department).toLowerCase();
+          const proposalDepartmentCode = normalizeText(proposal.department_code).toLowerCase();
+          const proposalBeneficiaryValue = normalizeText(proposal.beneficiary_value).toLowerCase();
+          const proposalBeneficiaryType = normalizeBeneficiaryType(proposal.beneficiary_type).toLowerCase();
+          if (proposalDepartmentName === normalizedDepartment || proposalDepartmentCode === normalizedDepartment) {
+            return true;
+          }
+          if (proposalBeneficiaryType === 'department' && proposalBeneficiaryValue === normalizedDepartment) {
+            return true;
+          }
+        }
+        return false;
+      }
+      case 'dof':
+      case 'principal':
+      case 'admin':
+      case 'super_admin':
+        return true;
+      default:
+        return pid === uid || emailMatch;
+    }
   }
 
 
@@ -1286,7 +2155,7 @@ class AdminBudgetModel {
 
 
   static async getProposalDataForExport(proposalId) {
-    const master = await BudgetModel.getBudgetById(proposalId);
+    const master = await this.getBudgetById(proposalId);
 
     if (!master) {
       return null;
