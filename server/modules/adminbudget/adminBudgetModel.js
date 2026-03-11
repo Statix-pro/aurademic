@@ -140,7 +140,7 @@ class AdminBudgetModel {
       sql = `SELECT
       e.id AS employee_id,
         e.erp_id,
-        CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+        TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))) AS name,
           COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
             COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
               e.email,
@@ -158,7 +158,7 @@ class AdminBudgetModel {
       sql = `SELECT
       e.id AS employee_id,
         e.erp_id,
-        CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+        TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))) AS name,
           COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
             COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
               e.email,
@@ -172,7 +172,7 @@ class AdminBudgetModel {
       AND (
         LOWER(e.first_name) LIKE ?
         OR LOWER(e.last_name) LIKE ?
-        OR LOWER(CONCAT(e.first_name, ' ', COALESCE(e.last_name, ''))) LIKE ?
+        OR LOWER(TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')))) LIKE ?
         OR LOWER(e.erp_id) LIKE ?
         OR LOWER(e.email) LIKE ?
         )
@@ -989,7 +989,7 @@ class AdminBudgetModel {
               COALESCE(pd_emp.name, pd_dept.name) AS parent_department_name,
               e.designation,
               e.mobile,
-              CONCAT(e.first_name, ' ', COALESCE(e.last_name, '')) AS full_name
+              TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))) AS full_name
           FROM master_employees e
           JOIN master_departments d ON e.department_id = d.id
           LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
@@ -1046,7 +1046,7 @@ class AdminBudgetModel {
               COALESCE(pd_emp.name, pd_dept.name) AS parent_department_name,
               e.designation,
               e.mobile,
-              CONCAT(e.first_name, ' ', COALESCE(e.last_name, '')) AS full_name
+              TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))) AS full_name
           FROM master_employees e
           JOIN master_departments d ON e.department_id = d.id
           LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
