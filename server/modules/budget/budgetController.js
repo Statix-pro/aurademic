@@ -235,6 +235,31 @@ class BudgetController {
     }
   }
 
+  static async getFreezeConfig(req, res) {
+    try {
+      const { fiscalYear } = req.query;
+      const fy = fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear();
+      const config = await BudgetModel.getFreezeConfig(fy);
+
+      return res.json({
+        success: true,
+        data: config,
+      });
+    } catch (error) {
+      console.error('Get budget freeze config error:', error);
+      if (error?.code === 'ER_NO_SUCH_TABLE') {
+        return res.status(500).json({
+          success: false,
+          message: 'Freeze config table is missing. Run migration: 20260308_add_budget_time_freeze_config.sql',
+        });
+      }
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch freeze config',
+      });
+    }
+  }
+
   static async searchApplicant(req, res) {
     try {
       const { q, type } = req.query;
@@ -251,6 +276,22 @@ class BudgetController {
         success: false,
         status: 'error',
         message: error.message || 'Failed to search applicants',
+      });
+    }
+  }
+
+  static async getBudgetTags(req, res) {
+    try {
+      const tags = await BudgetModel.getBudgetTags();
+      return res.json({
+        success: true,
+        data: tags,
+      });
+    } catch (error) {
+      console.error('Get budget tags error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch budget tags',
       });
     }
   }
@@ -400,6 +441,8 @@ class BudgetController {
         fiscal_year: Number.parseInt(payload.fiscal_year, 10),
         user_id: userId,
         user_email: userEmail,
+        applicant_name: normalizeText(payload.applicant_name),
+        budget_tag: normalizeText(payload.budget_tag),
         employee_id: payload.employee_id || userId,
         department: resolvedDepartment,
       });
@@ -484,8 +527,15 @@ class BudgetController {
       await BudgetModel.update(proposalId, {
         ...payload,
         beneficiary_type: normalizedBeneficiaryType,
+        applicant_name: normalizeText(payload.applicant_name),
+        budget_tag: normalizeText(payload.budget_tag),
         department: resolvedDepartment,
-      }, { skipEditStateValidation: isPrivileged });
+      }, {
+        skipEditStateValidation: isPrivileged,
+        editedByUserId: userId,
+        editedByEmail: userEmail,
+        editedByRole: userRole,
+      });
 
       return res.json({
         success: true,

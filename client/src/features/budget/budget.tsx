@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import Navbar from '../.././shared/components/layout/navbar/navbar';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
@@ -8,6 +8,7 @@ import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils'
 import Select from 'react-select';
 import './budget.css';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
+import {  Eye,  Edit2,  CheckCircle2,  RotateCcw,  XCircle,  Briefcase,  Clock,  AlertTriangle,  Archive,  Trash2,} from "lucide-react";
 
 interface SelectOption {
   value: string;
@@ -29,6 +30,7 @@ const normalizeText = (value: string | null | undefined): string =>
   String(value || '').trim();
 
 type BudgetLine = {
+  lineId?: number;
   budgetHead: string;
   subHead: string;
   amount: string;
@@ -427,7 +429,13 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   ],
 };
 
-const TAG_OPTIONS = [
+const STAGE_PERMISSION_MAP: Record<string, string> = {
+  level1: 'budget.workflow.level1',
+  dof: 'budget.workflow.dof',
+  principal: 'budget.workflow.principal',
+};
+
+const FALLBACK_TAG_OPTIONS: SelectOption[] = [
   { value: 'Laboratory', label: 'Laboratory' },
   { value: 'Association', label: 'Association' },
   { value: 'Skilling', label: 'Skilling' },
@@ -439,14 +447,8 @@ const TAG_OPTIONS = [
   { value: 'Events', label: 'Events' },
   { value: 'Innovation', label: 'Innovation' },
   { value: 'Start-up', label: 'Start-up' },
-  { value: 'Entrepreneurship', label: 'Entrepreneurship' }
-] as SelectOption[];
-
-const STAGE_PERMISSION_MAP: Record<string, string> = {
-  level1: 'budget.workflow.level1',
-  dof: 'budget.workflow.dof',
-  principal: 'budget.workflow.principal',
-};
+  { value: 'Entrepreneurship', label: 'Entrepreneurship' },
+];
 
 
 const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
@@ -534,16 +536,23 @@ const Budget: React.FC = () => {
   const [subcategorySelections, setSubcategorySelections] = useState<string[]>([]);
   const [categorySelections, setCategorySelections] = useState<SelectOption[]>([]);
   const [categoryItem, setCategoryItem] = useState('');
+  const [tagOptions, setTagOptions] = useState<SelectOption[]>([]);
   const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
   const { user } = useAuth();
   const isSuperAdminUser = Boolean(user?.is_super_admin) || (
     Array.isArray(user?.roles) &&
     user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
   );
+  
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-
+  const isAdminContextEdit = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('admin') === 'true';
+  }, [location.search]);
+  const budgetApiBase = isAdminContextEdit ? '/adminbudget' : '/budget';
+  
   const isEditMode = location.pathname.includes('/edit') && !!id;
 
 
@@ -551,6 +560,7 @@ const Budget: React.FC = () => {
 
 
   const isNewMode = !id;
+  const isReviewerAmountOnlyEdit = isAdminContextEdit && isEditMode;
 
 
   const [isEditable, setIsEditable] = useState(isNewMode);
@@ -711,7 +721,7 @@ const Budget: React.FC = () => {
 
     try {
       const response = await authenticityUtility.get(
-        `/budget/search-applicant?q=${encodeURIComponent(query)}`
+        `${budgetApiBase}/search-applicant?q=${encodeURIComponent(query)}`
       ) as { success?: boolean; status?: string; data?: ApplicantSearchResult[] };
 
       if (response.status === 'success' || response.success) {
@@ -751,7 +761,7 @@ const Budget: React.FC = () => {
       }
 
       const response = await authenticityUtility.get(
-        `/budget/search-applicant?q=${encodeURIComponent(query)}${typeParam}`
+        `${budgetApiBase}/search-applicant?q=${encodeURIComponent(query)}${typeParam}`
       ) as { success?: boolean; status?: string; data?: ApplicantSearchResult[] };
 
       if (response.status === 'success' || response.success) {
@@ -915,24 +925,38 @@ const Budget: React.FC = () => {
             ? 'K.S.Rangasamy College of Technology'
             : categoryItem?.trim(),
       proposal_description: '',
+      applicant_name: applicantName?.trim(),
+      budget_tag: selectedTag?.trim() || null,
       lines: formattedLines,
     };
 
     try {
+      const isPrivilegedReviewer = isAdminContextEdit && isEditMode;
+      const endpoint = isPrivilegedReviewer
+        ? `/adminbudget/${id}`
+        : (isEditMode ? `${budgetApiBase}/${id}` : budgetApiBase);
+      const requestPayload = isPrivilegedReviewer
+        ? {
+          lines: formattedLines.map((line, lineIndex) => ({
+            line_id: budgetLines[lineIndex]?.lineId,
+            unit_amount: Number(line.unit_amount),
+            quantity: Number(line.quantity) || 1,
+            month_allocations: line.month_allocations || {},
+          })),
+        }
+        : payload;
       const httpMethod = isEditMode ? 'put' : 'post';
-      const endpoint = isEditMode
-        ? `/budget/${id}`
-        : '/budget';
 
-
-      const result = await (authenticityUtility as any)[httpMethod](endpoint, payload);
+      const result = await (authenticityUtility as any)[httpMethod](endpoint, requestPayload);
 
       if (!result.success) {
         throw new Error(result.message || 'Submission failed on server');
       }
 
       showAlert(
-        isEditMode
+        isPrivilegedReviewer
+          ? 'Approved amounts updated successfully!'
+          : isEditMode
           ? `Budget updated successfully!`
           : (
             <>
@@ -956,11 +980,16 @@ const Budget: React.FC = () => {
             setShowApplicantDropdown(false);
             setApplicantName(''); setDepartment(''); setDesignation(''); setEmail(''); setMobile('');
             setBeneficiaryType(''); setBeneficiaryValue(''); setCategoryItem('');
+            setSelectedTag('');
             setBeneficiarySearchQuery(''); setBeneficiarySearchResults([]); setShowBeneficiaryDropdown(false);
             const today = new Date().toISOString().split('T')[0];
             setDate(today);
           }
-          navigate("/budgetcard");
+          if (isPrivilegedReviewer) {
+            navigate("/admin/budget");
+          } else {
+            navigate("/budgetcard");
+          }
         }
       );
     } catch (error: any) {
@@ -980,7 +1009,7 @@ const Budget: React.FC = () => {
       await Promise.all(
         Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).map(async ([beneficiaryKey, apiType]) => {
           try {
-            const json = await authenticityUtility.get(`/budget/org-units/${apiType}`) as any;
+            const json = await authenticityUtility.get(`${budgetApiBase}/org-units/${apiType}`) as any;
             const rows = Array.isArray(json?.data) ? json.data : [];
 
             nextOptions[beneficiaryKey] = rows
@@ -1004,7 +1033,33 @@ const Budget: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [budgetApiBase]);
+
+  useEffect(() => {
+    const loadTagOptions = async () => {
+      try {
+        const response: any = await authenticityUtility.get(`${budgetApiBase}/tags`);
+        if (!response?.success || !Array.isArray(response?.data)) {
+          setTagOptions(FALLBACK_TAG_OPTIONS);
+          return;
+        }
+
+        const options = response.data
+          .map((row: any) => ({
+            value: String(row?.tag_name || '').trim(),
+            label: String(row?.tag_name || '').trim(),
+          }))
+          .filter((opt: SelectOption) => opt.value.length > 0);
+
+        setTagOptions(options.length > 0 ? options : FALLBACK_TAG_OPTIONS);
+      } catch (error) {
+        console.error('Failed to load budget tags', error);
+        setTagOptions(FALLBACK_TAG_OPTIONS);
+      }
+    };
+
+    loadTagOptions();
+  }, [budgetApiBase]);
 
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -1036,7 +1091,7 @@ const Budget: React.FC = () => {
 
     const loadProposal = async () => {
       try {
-        const json = await authenticityUtility.get(`/budget/${id}`) as any;
+        const json = await authenticityUtility.get(`${budgetApiBase}/${id}`) as any;
         if (!json?.success) {
           console.error("Failed to load proposal", json);
           return;
@@ -1094,6 +1149,7 @@ const Budget: React.FC = () => {
 
         setBeneficiaryValue(normalizedBeneficiaryValue);
         setCategoryItem(normalizedBeneficiaryValue);
+        setSelectedTag(p.budget_tag || '');
         setDepartment(normalizedApplicantDepartment);
 
         // Date
@@ -1101,15 +1157,37 @@ const Budget: React.FC = () => {
 
 
         const apiLines = Array.isArray(data.lines) ? data.lines : [];
-        const apiAllocations = data.allocations || {};
+        const approvedAllocations = data.approved_allocations;
+        const hasApprovedAllocations =
+          approvedAllocations &&
+          typeof approvedAllocations === 'object' &&
+          !Array.isArray(approvedAllocations) &&
+          Object.keys(approvedAllocations).length > 0;
+        const apiAllocations = isAdminContextEdit
+          ? (hasApprovedAllocations ? approvedAllocations : (data.allocations || {}))
+          : (data.allocations || {});
 
         const mappedLines = apiLines.map((ln: any) => {
           const lineAllocations = apiAllocations[ln.id] || {};
+          const proposedQty = Number(ln.quantity || 1);
+          const approvedUnit = Number(ln.approved_unit_amount ?? ln.unit_amount ?? 0);
+          const approvedLineTotal = Number(ln.approved_line_total ?? ln.line_total ?? 0);
+          const inferredApprovedQty =
+            approvedUnit > 0 && Number.isFinite(approvedLineTotal) && approvedLineTotal > 0
+              ? (approvedLineTotal / approvedUnit)
+              : proposedQty;
+          const roundedApprovedQty = Number.isFinite(inferredApprovedQty)
+            ? (Math.abs(inferredApprovedQty - Math.round(inferredApprovedQty)) < 0.0001
+              ? Math.round(inferredApprovedQty)
+              : inferredApprovedQty)
+            : proposedQty;
+
           return {
+            lineId: Number(ln.id),
             budgetHead: (ln.budget_head || "").toString(),
             subHead: (ln.sub_head || "").toString(),
-            amount: String(parseInt(ln.unit_amount || "0", 10)),
-            qty: String(ln.quantity || "1"),
+            amount: String(parseInt((isAdminContextEdit ? (ln.approved_unit_amount ?? ln.unit_amount) : ln.unit_amount) || "0", 10)),
+            qty: String(isAdminContextEdit ? roundedApprovedQty : proposedQty),
             monthAmounts: lineAllocations,
             description: (ln.line_description || "").toString(),
           };
@@ -1123,17 +1201,34 @@ const Budget: React.FC = () => {
         const editableStatuses = ['draft', 'level1_returned', 'dof_returned', 'submitted', 're_submitted'];
         const isStatusEditable = editableStatuses.includes((p.status || '').toLowerCase());
         const isEditURL = location.pathname.includes('/edit');
-        const canOverrideEditLock = isSuperAdminUser && isEditURL;
+        const currentStageKey = String(p.current_stage || p.currentStage || '').toLowerCase();
+        const stagePermission = STAGE_PERMISSION_MAP[currentStageKey];
+        const hasAnyBudgetWorkflowPermission =
+          hasPermission(user, 'budget.workflow.level1') ||
+          hasPermission(user, 'budget.workflow.dof') ||
+          hasPermission(user, 'budget.workflow.principal');
+        const canPrivilegedAdminEdit =
+          isAdminContextEdit &&
+          isEditURL &&
+          (
+            isSuperAdminUser ||
+            hasPermission(user, 'budget.admin.view') ||
+            hasPermission(user, 'budget.admin.manage') ||
+            hasAnyBudgetWorkflowPermission ||
+            (Boolean(stagePermission) && hasPermission(user, stagePermission))
+          );
+        const canOverrideEditLock = canPrivilegedAdminEdit;
+        const viewModePath = isAdminContextEdit ? `/budget/${id}?admin=true` : `/budget/${id}`;
         const accessType = json.accessType || 'owner';
 
         // Applicants (employees on whose behalf the proposal was submitted) can only view
-        if (accessType === 'applicant') {
+        if (accessType === 'applicant' && !canPrivilegedAdminEdit) {
           setIsEditable(false);
           setExpandedRows(mappedLines.map((_, idx) => idx));
           if (isEditURL) {
             showAlert('You are the applicant for this proposal. You can only view it, not edit.', 'info', undefined, () => {
               closeAlert();
-              navigate(`/budget/${id}`);
+              navigate(viewModePath);
             });
           }
         } else if (!isEditURL) {
@@ -1143,7 +1238,7 @@ const Budget: React.FC = () => {
           setIsEditable(false);
           showAlert(`This proposal cannot be edited because it is currently '${p.status}'. Switching to View mode.`, 'warning', undefined, () => {
             closeAlert();
-            navigate(`/budget/${id}`);
+            navigate(viewModePath);
           });
         } else {
           setIsEditable(true);
@@ -1155,7 +1250,7 @@ const Budget: React.FC = () => {
     };
 
     loadProposal();
-  }, [id, location.pathname, navigate, isSuperAdminUser]);
+  }, [id, location.pathname, navigate, isSuperAdminUser, isAdminContextEdit, user, budgetApiBase]);
 
   const canProcessStage = (stage: string) => {
     if (isSuperAdmin(user)) return true;
@@ -1178,7 +1273,7 @@ const Budget: React.FC = () => {
     if (!window.confirm('Are you sure you want to approve this budget?')) return;
 
     try {
-      const response: any = await authenticityUtility.patch(`/budget/${id}/approval`, {
+      const response: any = await authenticityUtility.patch(`${budgetApiBase}/${id}/approval`, {
         decision: 'approved',
       });
 
@@ -1205,7 +1300,7 @@ const Budget: React.FC = () => {
     if (!window.confirm('Are you sure you want to archive this budget?')) return;
 
     try {
-      const response: any = await authenticityUtility.patch(`/budget/${id}/approval`, {
+      const response: any = await authenticityUtility.patch(`${budgetApiBase}/${id}/approval`, {
         decision: 'archived',
       });
 
@@ -1254,7 +1349,7 @@ const Budget: React.FC = () => {
     }
 
     try {
-      const response: any = await authenticityUtility.patch(`/budget/${id}/approval`, {
+      const response: any = await authenticityUtility.patch(`${budgetApiBase}/${id}/approval`, {
         decision: actionType === 'return' ? 'returned' : 'rejected',
         feedback: comment,
       });
@@ -1285,7 +1380,7 @@ const Budget: React.FC = () => {
 
     const fetchUserDetails = async () => {
       try {
-        const json = await authenticityUtility.get('/budget/faculty') as any;
+        const json = await authenticityUtility.get(`${budgetApiBase}/faculty`) as any;
 
         if (json.success && json.data) {
           setApplicantEmployeeId(
@@ -1308,7 +1403,7 @@ const Budget: React.FC = () => {
     };
 
     fetchUserDetails();
-  }, [id, applicantName]);
+  }, [id, applicantName, budgetApiBase]);
 
   const formatINR = (value: number | string): string => {
     const num = Number(value || 0);
@@ -1321,13 +1416,17 @@ const Budget: React.FC = () => {
 const [selectedTag, setSelectedTag] = useState<string>('');
 
 useEffect(() => {
-  if (beneficiaryType === 'Faculty' || beneficiaryType === 'Staff') {
-    setSelectedTag('Skilling');
-  } else if (beneficiaryType === 'Department') {
+  if (!beneficiaryType?.trim()) {
     setSelectedTag('');
-  } else if (beneficiaryType && beneficiaryType !== 'Faculty' && beneficiaryType !== 'Staff' && beneficiaryType !== 'Department') {
-    setSelectedTag('Essentials');
+    return;
   }
+
+  setSelectedTag((prev) => {
+    if (prev) return prev;
+    if (beneficiaryType === 'Faculty' || beneficiaryType === 'Staff') return 'Skilling';
+    if (beneficiaryType === 'Department') return '';
+    return 'Essentials';
+  });
 }, [beneficiaryType]);
 
 const showTagDropdown = !!beneficiaryType?.trim();
@@ -1935,7 +2034,7 @@ const showTagDropdown = !!beneficiaryType?.trim();
         <Select
           value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
           onChange={(selected: any) => setSelectedTag(selected?.value || '')}
-          options={TAG_OPTIONS}
+          options={tagOptions}
           placeholder=""
           isSearchable={true}
           isClearable={false}   // no cross
@@ -2054,7 +2153,7 @@ const showTagDropdown = !!beneficiaryType?.trim();
                               placeholder="Select or type"
                               isSearchable={true}
                               isClearable={true}
-                              isDisabled={!isEditable}
+                              isDisabled={!isEditable || isReviewerAmountOnlyEdit}
                               maxMenuHeight={200}
                               menuPlacement="auto"
                               formatGroupLabel={(group: any) => (
@@ -2149,7 +2248,7 @@ const showTagDropdown = !!beneficiaryType?.trim();
                               placeholder=""
                               isSearchable={true}
                               isClearable={false}
-                              isDisabled={!line.budgetHead || !isEditable}
+                              isDisabled={!line.budgetHead || !isEditable || isReviewerAmountOnlyEdit}
                               maxMenuHeight={200}
                               styles={{
                                 control: (base: any, state: any) => ({
@@ -2194,25 +2293,32 @@ const showTagDropdown = !!beneficiaryType?.trim();
 
                           <td>
                             <input
-                              className="tableInput"
-                              type="number"
-                              min={0}
-                              placeholder="0"
-                              value={line.amount}
-                              onChange={e => updateLine(idx, "amount", e.target.value)}
-                              onWheel={e => (e.currentTarget as HTMLInputElement).blur()}
-                            />
+                                      className="tableInput"
+                                      type="number"
+                                      min={0}
+                                      placeholder="0"
+                                      value={line.amount}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        const safe = v === "" ? "" : Math.max(0, Number(v)).toString();
+                                        updateLine(idx, "amount", safe);
+                                      }}
+                                      onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                                    />
                           </td>
                           <td>
                             <input
                               className="tableInput"
                               type="number"
-                              min="0"
-                              step="1"
+                              min={0}
+                              step={1}
+                              placeholder="0"
                               value={line.qty}
-                              onChange={(e) =>
-                                updateLine(idx, 'qty', e.target.value)
-                              }
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                const safe = v === "" ? "" : Math.max(0, Number(v)).toString();
+                                updateLine(idx, "qty", safe);
+                              }}
                               onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                             />
                           </td>
@@ -2296,7 +2402,7 @@ const showTagDropdown = !!beneficiaryType?.trim();
                                   ? `Fill: ${missing.join(', ')} first!`
                                   : 'Add row';
                               })()}
-                              disabled={budgetLines.some(
+                              disabled={isReviewerAmountOnlyEdit || budgetLines.some(
                                 (line) =>
                                   !line.budgetHead ||
                                   !line.subHead ||
@@ -2317,7 +2423,7 @@ const showTagDropdown = !!beneficiaryType?.trim();
                               className="tableIconBtn tableIconBtnDanger"
                               onClick={() => deleteLine(idx)}
                               title="Delete row"
-                              disabled={budgetLines.length === 1}
+                              disabled={isReviewerAmountOnlyEdit || budgetLines.length === 1}
                             >
                               ×
                             </button>
@@ -2344,6 +2450,7 @@ const showTagDropdown = !!beneficiaryType?.trim();
                                   </label>
                                   <textarea
                                     value={line.description || ''}
+                                    readOnly={isReviewerAmountOnlyEdit}
                                     onChange={(e) =>
                                       updateLine(idx, 'description', e.target.value)
                                     }
@@ -2383,25 +2490,33 @@ const showTagDropdown = !!beneficiaryType?.trim();
                                 >
 
                                   <div className="monthGrid">
-                                    {MONTH_KEYS.map((month) => (
-                                      <div key={month} className="monthBox">
-                                        <div className="monthLabel">{month}</div>
-                                        <input
-                                          type="number"
-                                          placeholder="0"
-                                          className="monthAmountInput"
-                                          value={line.monthAmounts[month] || ''}
-                                          onChange={(e) =>
-                                            updateLineMonthAmount(
-                                              idx,
-                                              month,
-                                              e.target.value
-                                            )
-                                          }
-                                          onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                                        />
-                                      </div>
-                                    ))}
+                                    {MONTH_KEYS.map((month) => {
+                                      const value = line.monthAmounts[month] || "";
+                                      const isActive = !!value && parseFloat(value) > 0;
+
+                                      return (
+                                        <div
+                                          key={month}
+                                          className={`monthBox ${isActive ? "monthBox--active" : ""}`}
+                                        >
+                                          <div className="monthLabel">{month}</div>
+                                          <input
+                                              type="number"
+                                              min={0}
+                                              placeholder="0"
+                                              className="monthAmountInput"
+                                              value={line.monthAmounts[month] || ""}
+                                              onChange={(e) => {
+                                                const v = e.target.value;
+                                                const safe =
+                                                  v === "" ? "" : Math.max(0, Number(v)).toString();
+                                                updateLineMonthAmount(idx, month, safe);
+                                              }}
+                                              onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                                            />
+                                        </div>
+                                      );
+                                    })}
                                   </div>
 
 
@@ -2544,7 +2659,7 @@ const showTagDropdown = !!beneficiaryType?.trim();
       </fieldset>
 
       {/* ADMIN ACTION BUTTONS - Only for admin=true */}
-      {new URLSearchParams(location.search).get('admin') === 'true' && (
+      {new URLSearchParams(location.search).get('admin') === 'true' && !isEditMode && (
         <div
           className="budget-admin-actions"
           style={{
@@ -2552,9 +2667,11 @@ const showTagDropdown = !!beneficiaryType?.trim();
             background: '#f8f9fa',
             borderTop: '2px solid #dee2e6',
             display: 'flex',
-            gap: '12px',
+            gap: '48px',
+            rowGap: '30px',
             justifyContent: 'center',
             marginTop: '40px',
+            flexWrap: 'wrap',
           }}
         >
           <button
@@ -2576,11 +2693,11 @@ const showTagDropdown = !!beneficiaryType?.trim();
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: '20px',
               boxShadow: '0 4px 12px rgba(40, 167, 69, 0.3)',
             }}
           >
-            Approve
+           <CheckCircle2 size={18} /> Approve
           </button>
 
           <button
@@ -2602,11 +2719,11 @@ const showTagDropdown = !!beneficiaryType?.trim();
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: '20px',
               boxShadow: '0 4px 12px rgba(255, 193, 7, 0.3)',
             }}
           >
-            Return
+            <RotateCcw size={18} />Return
           </button>
 
           <button
@@ -2620,7 +2737,7 @@ const showTagDropdown = !!beneficiaryType?.trim();
             style={{
               padding: '12px 24px',
               background: '#fdeaea ',
-  color:' #b42318 ',
+               color:' #b42318 ',
               border: 'none',
               borderRadius: '12px',
               fontSize: '16px',
@@ -2628,11 +2745,11 @@ const showTagDropdown = !!beneficiaryType?.trim();
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: '20px',
               
             }}
           >
-            Reject
+          <XCircle size={18} />  Reject
           </button>
 
           <button
@@ -2650,11 +2767,11 @@ const showTagDropdown = !!beneficiaryType?.trim();
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: '14px',
               boxShadow: '0 4px 12px rgba(108, 117, 125, 0.3)',
             }}
           >
-            Archive
+           <Archive size={18} />Archive
           </button>
         </div>
       )}

@@ -161,14 +161,128 @@
   box-shadow: none;
 }
 
-.adminbudget-freeze-btn {
+.adminbudget-freeze-popover-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.adminbudget-freeze-trigger {
+  width: 52px;
   height: 42px;
   border: none;
-  border-radius: 999px;
-  padding: 0 18px;
-  background: #6b7280;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
   color: #ffffff;
-  font-size: 0.98rem;
+  box-shadow: 0 10px 22px rgba(185, 28, 28, 0.28);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.adminbudget-freeze-trigger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(153, 27, 27, 0.32);
+}
+
+.adminbudget-freeze-trigger.is-frozen {
+  background: linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%);
+}
+
+.adminbudget-freeze-popover-card {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(360px, 92vw);
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 14px;
+  box-shadow: 0 16px 36px rgba(2, 6, 23, 0.18);
+  padding: 14px;
+  z-index: 70;
+}
+
+.adminbudget-freeze-popover-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #111827;
+}
+
+.adminbudget-freeze-popover-subtitle {
+  margin-top: 4px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.adminbudget-freeze-popover-meta {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.adminbudget-freeze-popover-date {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.adminbudget-freeze-popover-label {
+  display: block;
+  margin-top: 12px;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.adminbudget-freeze-popover-note {
+  margin-top: 8px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.adminbudget-freeze-popover-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.adminbudget-freeze-popover-cancel {
+  height: 38px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 0 14px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.adminbudget-freeze-btn {
+  height: 38px;
+  border: none;
+  border-radius: 10px;
+  padding: 0 14px;
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+  color: #ffffff;
+  font-size: 0.9rem;
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
@@ -180,7 +294,7 @@
 }
 
 .adminbudget-freeze-btn.is-frozen {
-  background: #e14255;
+  background: linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%);
 }
 
 .adminbudget-freeze-btn:disabled {
@@ -217,7 +331,7 @@
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: #ffffff;
   box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
-  padding: 16px 16px 14px 16px;
+  padding: 14px 24px;
 }
 
 .adminbudget-item--archiving {
@@ -265,7 +379,7 @@
 .adminbudget-topbar-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
 }
 
@@ -290,11 +404,19 @@
   max-width: 240px;
 }
 
-.adminbudget-date {
-  font-size: 0.85rem;
-  color: #64748b;
-  white-space: nowrap;
-}
+.adminbudget-tag-pill {
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   padding: 7px 14px;
+   border-radius: 999px;
+   background: #dbeaf5;
+   color: #3b6d91;
+   font-size: 0.95rem;
+   font-weight: 500;
+   line-height: 1;
+   white-space: nowrap;
+ }
 
 .adminbudget-topbar-right {
   display: flex;
@@ -770,4 +892,142 @@
     width: 200px;
     height: 86px;
   }
+}
+
+/* Match user-dashboard submission log UI exactly */
+.budgetdashboard-log-header {
+  background: #f8fafc;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #0f172a;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.budgetdashboard-log-body {
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.adminbudget-log-body {
+  max-height: min(58vh, 460px);
+}
+
+.budgetdashboard-log-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+
+.log-label {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.log-value {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.budgetdashboard-log-approvals {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.log-approval-item {
+  position: relative;
+  background: #fdfdfd;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.log-approval-item--admin {
+  border-color: #fed7aa;
+  background: #fffaf5;
+}
+
+.log-approval-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.log-decision {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.log-decision--approved {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.log-decision--rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.log-decision--returned {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.log-decision--submitted {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.log-decision--updated {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.log-decision--archived {
+  background: #eef2ff;
+  color: #334155;
+}
+
+.log-role {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.log-actor-line {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.log-admin-mark {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fb923c;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.log-date {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-left: auto;
 }

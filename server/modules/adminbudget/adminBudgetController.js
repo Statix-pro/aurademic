@@ -54,6 +54,10 @@ class AdminBudgetController {
     return !Number.isNaN(parsed.getTime());
   }
 
+  static #isFebFirst(date = new Date()) {
+    return date.getMonth() === 1 && date.getDate() === 1;
+  }
+
   static getUserId(req) {
     return req.user?.id || req.user?.userId || null;
   }
@@ -227,6 +231,155 @@ class AdminBudgetController {
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch faculty details',
+      });
+    }
+  }
+
+  static async searchApplicant(req, res) {
+    try {
+      const { q, type } = req.query;
+      const results = await AdminBudgetModel.searchApplicant(q || '', type);
+
+      return res.status(200).json({
+        success: true,
+        status: 'success',
+        data: results,
+      });
+    } catch (error) {
+      console.error('Admin budget applicant search error:', error);
+      return res.status(500).json({
+        success: false,
+        status: 'error',
+        message: error.message || 'Failed to search applicants',
+      });
+    }
+  }
+
+  static async getBudgetTags(req, res) {
+    try {
+      const tags = await AdminBudgetModel.getBudgetTags();
+      return res.json({
+        success: true,
+        data: tags,
+      });
+    } catch (error) {
+      console.error('Admin get budget tags error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch budget tags',
+      });
+    }
+  }
+
+  static async getOrgUnits(req, res) {
+    try {
+      const mappedType = AdminBudgetController.normalizeEntityTypeParam(req.params.type);
+
+      if (!['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(mappedType)) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Invalid type. Must be: DEPARTMENT, CENTRE, CELL, CLUB, PROFESSIONAL_BODY (or PROF_BODY)',
+        });
+      }
+
+      const units = await AdminBudgetModel.getOrgUnitsByType(mappedType);
+
+      return res.json({
+        success: true,
+        data: units,
+        count: units.length,
+      });
+    } catch (error) {
+      console.error('Admin get org units error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch org units',
+      });
+    }
+  }
+
+  static async getAllOrgUnits(req, res) {
+    try {
+      const units = await AdminBudgetModel.getAllOrgUnits();
+
+      const grouped = units.reduce((acc, unit) => {
+        const key = unit.type_code;
+        if (!acc[key]) {
+          acc[key] = [];
+        }
+        acc[key].push(unit);
+        return acc;
+      }, {});
+
+      return res.json({
+        success: true,
+        data: {
+          all: units,
+          grouped,
+        },
+        count: units.length,
+      });
+    } catch (error) {
+      console.error('Admin get all org units error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch all org units',
+      });
+    }
+  }
+
+  static async get(req, res) {
+    try {
+      const proposalId = Number.parseInt(req.params.id, 10);
+
+      if (!Number.isInteger(proposalId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid proposal ID',
+        });
+      }
+
+      const budget = await AdminBudgetModel.getFull(proposalId);
+
+      if (!budget) {
+        return res.status(404).json({
+          success: false,
+          message: 'Proposal not found',
+        });
+      }
+
+      const userId = AdminBudgetController.getUserId(req);
+      const userEmail = normalizeText(req.user?.email);
+      const userRole = AdminBudgetController.resolveAccessRoleFromPermissions(req);
+      const userDepartment = await AdminBudgetController.resolveUserDepartment(req);
+      const userDepartmentId = await AdminBudgetController.resolveUserDepartmentId(req);
+
+      const hasAccess = await AdminBudgetModel.validateUserAccess(
+        proposalId,
+        userId,
+        userEmail,
+        userRole,
+        userDepartment,
+        userDepartmentId
+      );
+
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied - cannot view this proposal',
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: budget,
+      });
+    } catch (error) {
+      console.error('Admin get budget error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch proposal',
       });
     }
   }
@@ -890,7 +1043,8 @@ class AdminBudgetController {
 
       const fiscalYear = Number.parseInt(req.body?.fiscalYear, 10) || AdminBudgetModel.getCurrentFinancialYear();
       const cutoffDate = normalizeText(req.body?.cutoffDate) || AdminBudgetModel.getDefaultFreezeCutoffDate(fiscalYear);
-      const isFrozen = req.body?.isFrozen === false ? 0 : 1;
+      const requestedFreezeState = req.body?.isFrozen === false ? 0 : 1;
+      const isFrozen = isSuperAdminUser ? requestedFreezeState : 1;
 
       const existingConfig = await AdminBudgetModel.getFreezeConfig(fiscalYear);
       if (existingConfig?.isFrozen && !isSuperAdminUser) {
@@ -898,6 +1052,15 @@ class AdminBudgetController {
           success: false,
           message: 'Freeze already applied. Only Super Admin can update deadline and freeze again.',
         });
+      }
+
+      if (!isSuperAdminUser) {
+        if (!AdminBudgetController.#isFebFirst()) {
+          return res.status(403).json({
+            success: false,
+            message: 'DoF can freeze budget only on February 1 of the fiscal year.',
+          });
+        }
       }
 
       if (!AdminBudgetController.#isValidDateOnlyString(cutoffDate)) {

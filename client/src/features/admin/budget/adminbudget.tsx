@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import "./adminbudget.css";
 import Navbar from "../../../shared/components/layout/navbar/Navbar";
 import {
   Eye,
+  Info,
   Edit2,
   CheckCircle2,
   RotateCcw,
@@ -13,6 +14,7 @@ import {
   Archive,
   Trash2,
   CalendarDays,
+  Snowflake,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
@@ -39,6 +41,8 @@ interface RbacAssignment {
 interface BudgetRequestItem {
   id: number;
   proposal_ref: string;
+  budget_tag?: string;
+  has_approved_override?: number;
   applicant_name: string;
   faculty_name?: string;
   user_name?: string;
@@ -51,6 +55,27 @@ interface BudgetRequestItem {
   status: string;
   current_stage: string;
   created_date: string;
+}
+
+interface BudgetHistoryEntry {
+  role?: string;
+  decision?: string;
+  feedback?: string;
+  decided_at_formatted?: string;
+  decided_at?: string;
+  approver_email?: string;
+}
+
+interface AdminLogEvent {
+  key: string;
+  title: string;
+  subtitle: string;
+  actorLine: string;
+  dateLabel: string;
+  decision: string;
+  timestamp: number;
+  actorIsAdmin?: boolean;
+  actorBadgeLabel?: string;
 }
 
 const BENEFICIARY_OPTIONS = [
@@ -116,10 +141,12 @@ const AdminBudget: React.FC = () => {
     const d = new Date();
     return d.getMonth() < 2 ? d.getFullYear() - 1 : d.getFullYear();
   });
-  const [freezeDate, setFreezeDate] = useState<string>(() => `${new Date().getFullYear()}-04-10`);
+  const [freezeDate, setFreezeDate] = useState<string>(() => `${new Date().getFullYear()}-02-01`);
   const [isTimeFrozen, setIsTimeFrozen] = useState<boolean>(false);
   const [freezeLoading, setFreezeLoading] = useState<boolean>(false);
   const [freezeSaving, setFreezeSaving] = useState<boolean>(false);
+  const [freezePopupOpen, setFreezePopupOpen] = useState<boolean>(false);
+  const freezePopoverRef = useRef<HTMLDivElement | null>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -143,6 +170,12 @@ const AdminBudget: React.FC = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteRef, setDeleteRef] = useState<string>("");
   const [deleteCountdown, setDeleteCountdown] = useState(10);
+  const [logPopupOpen, setLogPopupOpen] = useState(false);
+  const [logLoading, setLogLoading] = useState(false);
+  const [logRef, setLogRef] = useState<string>("");
+  const [logProposal, setLogProposal] = useState<any>(null);
+  const [logEntries, setLogEntries] = useState<BudgetHistoryEntry[]>([]);
+  const [logEdits, setLogEdits] = useState<any[]>([]);
 
   // Archive animation/state
   const [archivingIds, setArchivingIds] = useState<Set<number>>(new Set<number>());
@@ -316,6 +349,19 @@ const AdminBudget: React.FC = () => {
     }
     return () => clearTimeout(timer);
   }, [deletePopupOpen, deleteCountdown]);
+
+  useEffect(() => {
+    if (!freezePopupOpen) return;
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!freezePopoverRef.current) return;
+      if (freezePopoverRef.current.contains(event.target as Node)) return;
+      setFreezePopupOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [freezePopupOpen]);
 
   const openActionPopup = (type: "return" | "reject", id: number, ref: string, stage: string) => {
     if (!canProcessStage(stage)) {
@@ -579,11 +625,16 @@ const AdminBudget: React.FC = () => {
   }, [user]);
 
   const isSuperAdminLogin = useMemo(() => isSuperAdmin(user), [user]);
-  const showFreezeControls = activeQueueTabKey === "dof" && (isDofLogin || isSuperAdminLogin);
-  const canEditFreezeConfig = isSuperAdminLogin || (isDofLogin && !isTimeFrozen);
-  const canFreezeNow = isSuperAdminLogin || (isDofLogin && !isTimeFrozen);
+  const showFreezeControls = isDofLogin || isSuperAdminLogin;
+  const isTodayFebFirst = useMemo(() => {
+    const today = new Date();
+    return today.getMonth() === 1 && today.getDate() === 1;
+  }, []);
+  const canEditFreezeConfig = isSuperAdminLogin || (isDofLogin && !isTimeFrozen && isTodayFebFirst);
+  const canFreezeNow = isSuperAdminLogin || (isDofLogin && !isTimeFrozen && isTodayFebFirst);
+  const dofFreezeAllowedDateText = useMemo(() => `February 1, ${fiscalYear}`, [fiscalYear]);
 
-  const getDefaultFreezeDate = useCallback((fy: number) => `${fy}-04-10`, []);
+  const getDefaultFreezeDate = useCallback((fy: number) => `${fy}-02-01`, []);
 
   useEffect(() => {
     const fetchFreezeConfig = async () => {
@@ -614,11 +665,21 @@ const AdminBudget: React.FC = () => {
 
   const onFreezeTime = async () => {
     if (!canFreezeNow) {
-      alert("Freeze already applied. Only Super Admin can edit and freeze again.");
+      if (isDofLogin && !isSuperAdminLogin && isTimeFrozen) {
+        alert("Freeze already applied for this fiscal year. Only Super Admin can edit it now.");
+        return;
+      }
+      if (isDofLogin && !isSuperAdminLogin && !isTodayFebFirst) {
+        alert(`DoF freeze can be applied only on ${dofFreezeAllowedDateText}.`);
+        return;
+      }
+      alert("Only Super Admin can edit freeze configuration right now.");
       return;
     }
 
-    if (!freezeDate) {
+    const selectedFreezeDate = freezeDate;
+
+    if (!selectedFreezeDate) {
       alert("Please select a freeze date.");
       return;
     }
@@ -627,12 +688,14 @@ const AdminBudget: React.FC = () => {
       setFreezeSaving(true);
       const response: any = await authenticityUtility.put("/adminbudget/freeze-config", {
         fiscalYear,
-        cutoffDate: freezeDate,
+        cutoffDate: selectedFreezeDate,
         isFrozen: true,
       });
 
       if (response?.success) {
+        setFreezeDate(response?.data?.cutoffDate || selectedFreezeDate);
         setIsTimeFrozen(true);
+        setFreezePopupOpen(false);
       } else {
         alert(response?.message || "Failed to freeze budget time.");
       }
@@ -649,20 +712,299 @@ const AdminBudget: React.FC = () => {
   }, [location.pathname]);
 
   useEffect(() => {
-    const isBaseAdminBudgetPath =
-      location.pathname === "/adminbudget" || location.pathname === "/admin/budget";
-    if (isBaseAdminBudgetPath) {
-      navigate("/admin/budget/approval", { replace: true });
+    if (location.pathname === "/adminbudget") {
+      navigate("/admin/budget", { replace: true });
     }
   }, [location.pathname, navigate]);
 
-  const formatCreatedDate = (value?: string) => {
-    if (!value) return "";
-    const raw = value.split(" ")[0];
-    const [year, month, day] = raw.split("-");
-    if (!year || !month || !day) return raw;
-    return `${day}.${month}.${year}`;
+  const openLogPopup = async (item: BudgetRequestItem) => {
+    setLogPopupOpen(true);
+    setLogLoading(true);
+    setLogRef(item.proposal_ref || "");
+    setLogProposal(null);
+    setLogEntries([]);
+    setLogEdits([]);
+
+    try {
+      const response: any = await authenticityUtility.get(`/adminbudget/${item.id}`);
+      const proposal = response?.data?.master || response?.data || null;
+      const entries = Array.isArray(response?.data?.approvals)
+        ? response.data.approvals
+        : Array.isArray(response?.data?.pendingApprovals)
+          ? response.data.pendingApprovals
+          : [];
+      const edits = Array.isArray(response?.data?.edits) ? response.data.edits : [];
+      setLogProposal(proposal);
+      setLogEntries(entries);
+      setLogEdits(edits);
+    } catch (error: any) {
+      alert(error?.response?.data?.message || "Failed to fetch proposal logs");
+      setLogPopupOpen(false);
+    } finally {
+      setLogLoading(false);
+    }
   };
+
+  const closeLogPopup = () => {
+    setLogPopupOpen(false);
+    setLogProposal(null);
+    setLogEntries([]);
+    setLogEdits([]);
+    setLogRef("");
+  };
+
+  const formatFreezeDate = (value?: string) => {
+    if (!value) return "--";
+    const raw = String(value).trim();
+
+    const ymdMatch = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (ymdMatch) {
+      const [, year, month, day] = ymdMatch;
+      return `${day}-${month}-${year}`;
+    }
+
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return raw;
+    const day = String(parsed.getDate()).padStart(2, "0");
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const year = String(parsed.getFullYear());
+    return `${day}-${month}-${year}`;
+  };
+
+  const normalizeTextForLog = (value?: string | null) => String(value || "").trim();
+  const normalizeEmailForLog = (value?: string | null) => normalizeTextForLog(value).toLowerCase();
+
+  const formatDateTimeForLog = (value?: string) => {
+    if (!value) return "-";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "-";
+    return parsed.toLocaleString("en-IN");
+  };
+
+  const readActorEmail = (record: any, keys: string[]) => {
+    for (const key of keys) {
+      const value = normalizeEmailForLog(record?.[key]);
+      if (value) return value;
+    }
+    return "";
+  };
+
+  const isAdminRoleToken = (value?: string | null) => {
+    const token = normalizeTextForLog(value).toLowerCase();
+    return token === "admin" || token === "super_admin";
+  };
+
+  const getWorkflowBadgeLabel = (role?: string | null) => {
+    const token = normalizeTextForLog(role).toLowerCase();
+    if (["level1", "hod", "coordinator"].includes(token)) return "HOD";
+    if (token === "dof") return "DOF";
+    if (["principal", "admin", "super_admin", "superadmin"].includes(token)) return "SUPERADMIN";
+    return "";
+  };
+
+  const getRoleLabelForLog = (role?: string) => {
+    const normalized = String(role || "").toLowerCase();
+    if (normalized === "level1") {
+      const isEntity = ["club", "cell", "center", "centre", "professional body"].includes(
+        String(logProposal?.beneficiary_type || "").toLowerCase().trim()
+      );
+      return isEntity ? "Coordinator" : "HoD";
+    }
+    const map: Record<string, string> = {
+      hod: "HoD",
+      coordinator: "Coordinator",
+      dof: "DoF",
+      principal: "Principal",
+      admin: "Admin",
+      super_admin: "Super Admin",
+    };
+    return map[normalized] || (role ? role.toUpperCase() : "Approver");
+  };
+
+  const buildAdminLogEvents = useMemo<AdminLogEvent[]>(() => {
+    const events: AdminLogEvent[] = [];
+    const createdAt = logProposal?.created_at || logProposal?.createdAt;
+    const updatedAt = logProposal?.updated_at || logProposal?.updatedAt;
+    const createdAtMs = createdAt ? new Date(createdAt).getTime() : 0;
+    const updatedAtMs = updatedAt ? new Date(updatedAt).getTime() : 0;
+    const submitterEmail = normalizeEmailForLog(logProposal?.user_email || logProposal?.userEmail);
+    const approvalLogs = Array.isArray(logEntries) ? logEntries : [];
+    const hasApprovalUpdate = approvalLogs.some(
+      (app: any) => String(app?.decision || "").toLowerCase() === "updated"
+    );
+
+    if (createdAtMs) {
+      events.push({
+        key: "submitted",
+        title: "Submitted",
+        subtitle: "Proposal created",
+        actorLine: `Submitted By: ${submitterEmail || "-"}`,
+        timestamp: createdAtMs,
+        dateLabel: formatDateTimeForLog(createdAt),
+        decision: "submitted",
+      });
+    }
+
+    const editLogs = Array.isArray(logEdits) ? logEdits : [];
+    if (editLogs.length > 0) {
+      editLogs.forEach((edit: any, idx: number) => {
+        const editCreatedAt = edit.created_at || edit.createdAt;
+        const editCreatedMs = editCreatedAt ? new Date(editCreatedAt).getTime() : createdAtMs;
+        const summary = normalizeTextForLog(edit.summary);
+        let parsedDetails: any = null;
+
+        if (edit.details) {
+          try {
+            parsedDetails = typeof edit.details === "string" ? JSON.parse(edit.details) : edit.details;
+          } catch {
+            parsedDetails = null;
+          }
+        }
+
+        const editorEmail = readActorEmail(edit, [
+          "edited_by_email",
+          "editedByEmail",
+          "updated_by_email",
+          "updatedByEmail",
+          "user_email",
+          "email",
+        ]);
+        const explicitlyAdmin =
+          Boolean(edit.is_admin ?? edit.isAdmin ?? edit.updated_by_admin ?? edit.updatedByAdmin) ||
+          isAdminRoleToken(edit.edited_by_role || edit.editedByRole || edit.role);
+        const inferredAdmin = Boolean(editorEmail && submitterEmail && editorEmail !== submitterEmail);
+        const actorIsAdmin = explicitlyAdmin || inferredAdmin;
+        const editorRole =
+          normalizeTextForLog(edit.edited_by_role || edit.editedByRole || edit.role) ||
+          normalizeTextForLog(parsedDetails?.editorRole);
+        const actorBadgeLabel = getWorkflowBadgeLabel(editorRole) || (actorIsAdmin ? "SUPERADMIN" : "");
+        let rowSummary = "";
+        let detailSummary = "";
+
+        if (edit.details) {
+          try {
+            const parsed = parsedDetails;
+            const lines = Array.isArray(parsed?.lines)
+              ? parsed.lines
+              : Array.isArray(parsed)
+                ? parsed
+                : Array.isArray(parsed?.lineChanges)
+                  ? parsed.lineChanges
+                  : [];
+            if (lines.length > 0) {
+              const numericRows = lines
+                .map((line: any) => Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no))
+                .filter((lineNo: number) => Number.isInteger(lineNo) && lineNo > 0);
+              const rowNumbers = Array.from(new Set<number>(numericRows)).sort((a, b) => a - b);
+
+              if (rowNumbers.length > 0) {
+                rowSummary = `Row No. ${rowNumbers.join(", ")}`;
+              }
+
+              const details = lines.map((line: any, lineIdx: number) => {
+                const lineNo = Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no) || (lineIdx + 1);
+                const rawChanges = line?.changes;
+                const changeList = Array.isArray(rawChanges)
+                  ? rawChanges
+                  : normalizeTextForLog(rawChanges)
+                    ? [normalizeTextForLog(rawChanges)]
+                    : [];
+                return `Line ${lineNo}: ${changeList.join("; ") || "Updated"}`;
+              });
+              detailSummary = details.join(" | ");
+            }
+          } catch {
+            // Keep summary fallback if details parse fails.
+          }
+        }
+
+        const subtitle = [rowSummary || summary, detailSummary].filter(Boolean).join(" | ");
+        if (!subtitle) return;
+
+        events.push({
+          key: `edit-${edit.id || idx}`,
+          title: "Updated",
+          subtitle,
+          actorLine: `Updated By: ${editorEmail || "-"}`,
+          actorIsAdmin,
+          actorBadgeLabel,
+          timestamp: editCreatedMs,
+          dateLabel: editCreatedAt ? formatDateTimeForLog(editCreatedAt) : "-",
+          decision: "updated",
+        });
+      });
+    }
+
+    if (updatedAtMs && createdAtMs && updatedAtMs > createdAtMs && editLogs.length === 0 && !hasApprovalUpdate) {
+      events.push({
+        key: "updated-at-fallback",
+        title: "Updated",
+        subtitle: "Proposal edited",
+        actorLine: `Updated By: ${submitterEmail || "-"}`,
+        timestamp: updatedAtMs,
+        dateLabel: formatDateTimeForLog(updatedAt),
+        decision: "updated",
+      });
+    }
+
+    approvalLogs.forEach((app: any, idx: number) => {
+      const feedback = normalizeTextForLog(app.feedback);
+      if (feedback === "__archive_meta__:") return;
+      if (feedback === "Auto-approved after DoF clearance") return;
+
+      const decision = String(app.decision || "updated").toLowerCase();
+      if (decision === "updated") {
+        if (editLogs.length > 0) return;
+        if (!feedback || feedback.toLowerCase().includes("reviewed (no line change)")) return;
+      }
+      const approverEmail = readActorEmail(app, [
+        "approver_email",
+        "approverEmail",
+        "updated_by_email",
+        "updatedByEmail",
+        "email",
+      ]);
+      const decidedAt = app.decided_at || app.decidedAt || app.decided_at_formatted;
+      const decidedAtMs = decidedAt ? new Date(decidedAt).getTime() : 0;
+      const feedbackNote = feedback && !feedback.startsWith("__archive_meta__:")
+        ? `Note: ${feedback}`
+        : "";
+      const actorPrefix =
+        decision === "approved"
+          ? "Approved By"
+          : `${decision.charAt(0).toUpperCase() + decision.slice(1)} By`;
+      const subtitleParts = [
+        `by ${getRoleLabelForLog(app.role)}`,
+        feedbackNote,
+      ].filter(Boolean);
+      const actorIsAdmin =
+        isAdminRoleToken(app.role) ||
+        Boolean(app.is_admin ?? app.isAdmin ?? app.updated_by_admin ?? app.updatedByAdmin);
+      const actorBadgeLabel = decision === "updated" ? getWorkflowBadgeLabel(app.role) : "";
+
+      events.push({
+        key: `approval-${idx}`,
+        title: decision.charAt(0).toUpperCase() + decision.slice(1),
+        subtitle: subtitleParts.join(" | "),
+        actorLine: `${actorPrefix}: ${approverEmail || "-"}`,
+        actorIsAdmin,
+        actorBadgeLabel,
+        timestamp: decidedAtMs || createdAtMs,
+        dateLabel: decidedAt ? formatDateTimeForLog(decidedAt) : "-",
+        decision,
+      });
+    });
+
+    const submitted = events.filter((e) => e.decision === "submitted");
+    const updates = events
+      .filter((e) => e.decision === "updated")
+      .sort((a, b) => a.timestamp - b.timestamp);
+    const approvals = events
+      .filter((e) => e.decision !== "submitted" && e.decision !== "updated")
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    return [...submitted, ...updates, ...approvals];
+  }, [logEntries, logEdits, logProposal]);
 
   return (
     <>
@@ -695,28 +1037,77 @@ const AdminBudget: React.FC = () => {
 
                   <div className="adminbudget-header-actions">
                     {showFreezeControls && (
-                      <>
-                        <div className="adminbudget-freeze-date-wrap">
-                          <CalendarDays size={18} className="adminbudget-freeze-date-icon" />
-                          <input
-                            className="adminbudget-control adminbudget-freeze-date"
-                            type="date"
-                            value={freezeDate}
-                            onChange={(e) => setFreezeDate(e.target.value)}
-                            disabled={freezeLoading || freezeSaving || !canEditFreezeConfig}
-                            title="Freeze Date"
-                          />
-                        </div>
+                      <div className="adminbudget-freeze-popover-wrap" ref={freezePopoverRef}>
                         <button
                           type="button"
-                          className={`adminbudget-freeze-btn ${isTimeFrozen ? "is-frozen" : ""}`}
-                          onClick={onFreezeTime}
-                          disabled={freezeLoading || freezeSaving || !canFreezeNow}
-                          title={!canFreezeNow ? "Only Super Admin can freeze again" : "Freeze"}
+                          className={`adminbudget-freeze-trigger ${isTimeFrozen ? "is-frozen" : ""}`}
+                          onClick={() => setFreezePopupOpen((prev) => !prev)}
+                          title="Freeze Budget Time"
+                          aria-label="Freeze Budget Time"
                         >
-                          {freezeSaving ? "Freezing..." : isTimeFrozen ? "Freeze Again" : "Freeze"}
+                          <Snowflake size={20} />
                         </button>
-                      </>
+
+                        {freezePopupOpen && (
+                          <div className="adminbudget-freeze-popover-card">
+                            <div className="adminbudget-freeze-popover-title">Freeze Budget Time</div>
+                            <div className="adminbudget-freeze-popover-meta">
+                              <div className="adminbudget-freeze-popover-subtitle">
+                                FY {fiscalYear}-{String(fiscalYear + 1).slice(2)}
+                              </div>
+                              <div className="adminbudget-freeze-popover-date">
+                                {formatFreezeDate(freezeDate)}
+                              </div>
+                            </div>
+
+                            <label className="adminbudget-freeze-popover-label" htmlFor="freezeDateInput">
+                              Cutoff Date
+                            </label>
+                            <div className="adminbudget-freeze-date-wrap">
+                              <CalendarDays size={18} className="adminbudget-freeze-date-icon" />
+                              <input
+                                id="freezeDateInput"
+                                className="adminbudget-control adminbudget-freeze-date"
+                                type="date"
+                                value={freezeDate}
+                                onChange={(e) => setFreezeDate(e.target.value)}
+                                disabled={freezeLoading || freezeSaving || !canEditFreezeConfig}
+                                title="Freeze Date"
+                              />
+                            </div>
+
+                            {!isSuperAdminLogin && (
+                              <div className="adminbudget-freeze-popover-note">
+                                DoF can freeze once per financial year and only on {dofFreezeAllowedDateText}.
+                              </div>
+                            )}
+
+                            <div className="adminbudget-freeze-popover-actions">
+                              <button
+                                type="button"
+                                className="adminbudget-freeze-popover-cancel"
+                                onClick={() => setFreezePopupOpen(false)}
+                                disabled={freezeSaving}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                className={`adminbudget-freeze-btn ${isTimeFrozen ? "is-frozen" : ""}`}
+                                onClick={onFreezeTime}
+                                disabled={freezeLoading || freezeSaving || !canFreezeNow}
+                                title={
+                                  !canFreezeNow && !isSuperAdminLogin
+                                    ? `DoF freeze is available only on ${dofFreezeAllowedDateText}`
+                                    : "Freeze"
+                                }
+                              >
+                                {freezeSaving ? "Freezing..." : isTimeFrozen ? "Update Freeze" : "Freeze"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
 
                     {assignments.length > 1 && (
@@ -863,6 +1254,12 @@ const AdminBudget: React.FC = () => {
                       <div className="adminbudget-cards-container">
                         {currentItems.map((item) => {
                           const canProcessCurrentStage = canProcessStage(item.current_stage);
+                          const hasApprovedOverride = Number(item.has_approved_override ?? 0) > 0;
+                          const isApprovedForDisplay = hasApprovedOverride || getStatusCategory(item) === "approved";
+                          const displayAmountLabel = isApprovedForDisplay ? "Approved" : "Proposed";
+                          const displayAmountValue = isApprovedForDisplay
+                            ? Number(item.approved_total_amount ?? item.total_amount ?? 0)
+                            : Number(item.total_amount ?? 0);
 
                           return (
                             <div className="adminbudget-item-wrap" key={item.id}>
@@ -872,11 +1269,11 @@ const AdminBudget: React.FC = () => {
                                 }`}
                                 role="button"
                                 tabIndex={0}
-                                onClick={() => navigate(`/budget/${item.id}`)}
+                                onClick={() => navigate(`/budget/${item.id}?admin=true`)}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter" || e.key === " ") {
                                     e.preventDefault();
-                                    navigate(`/budget/${item.id}`);
+                                    navigate(`/budget/${item.id}?admin=true`);
                                   }
                                 }}
                               >
@@ -884,7 +1281,7 @@ const AdminBudget: React.FC = () => {
                                   <div className="adminbudget-topbar-left">
                                     <span className="adminbudget-id">{item.proposal_ref}</span>
                                     <h5 className="adminbudget-name">{item.applicant_name || "Unknown"}</h5>
-                                    <span className="adminbudget-date">{formatCreatedDate(item.created_date)}</span>
+                                    <span className="adminbudget-tag-pill">{item.budget_tag || "No Tag"}</span>
                                   </div>
 
                                   <div className="adminbudget-topbar-right">
@@ -897,24 +1294,24 @@ const AdminBudget: React.FC = () => {
                                           className="adminbudget-amount-label"
                                           style={{ margin: 0, fontSize: "0.78rem", fontWeight: 600, opacity: 0.75 }}
                                         >
-                                          Proposed
+                                          {displayAmountLabel}
                                         </p>
                                         <p className="adminbudget-amount" style={{ margin: 0, fontSize: "1.1rem" }}>
-                                          Rs {Number(item.total_amount || 0).toLocaleString("en-IN")}
-                                        </p>
-                                      </div>
-                                      <div className="adminbudget-amount-item">
-                                        <p
-                                          className="adminbudget-amount-label"
-                                          style={{ margin: 0, fontSize: "0.78rem", fontWeight: 600, opacity: 0.75 }}
-                                        >
-                                          Approved
-                                        </p>
-                                        <p className="adminbudget-amount" style={{ margin: 0, fontSize: "1.1rem" }}>
-                                          Rs {Number(item.approved_total_amount ?? 0).toLocaleString("en-IN")}
+                                          Rs {displayAmountValue.toLocaleString("en-IN")}
                                         </p>
                                       </div>
                                     </div>
+
+                                    <button
+                                      className="adminbudget-icon-btn"
+                                      title="Logs"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openLogPopup(item);
+                                      }}
+                                    >
+                                      <Info size={16} />
+                                    </button>
 
                                     <button
                                       className="adminbudget-icon-btn"
@@ -1006,16 +1403,31 @@ const AdminBudget: React.FC = () => {
                                       )}
 
                                       {isSuperAdmin(user) && (
-                                        <button
-                                          className="adminbudget-action-btn adminbudget-action-btn--reject"
-                                          title="Delete"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            openDeletePopup(item.id, item.proposal_ref);
-                                          }}
-                                        >
-                                          <Trash2 size={18} />
-                                        </button>
+                                        <>
+                                          <button
+                                            className="adminbudget-action-btn adminbudget-action-btn--return"
+                                            title="Return"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openActionPopup("return", item.id, item.proposal_ref, item.current_stage);
+                                            }}
+                                            disabled={["completed", "rejected", "archived", "archive"].some((token) =>
+                                              item.status.toLowerCase().includes(token)
+                                            )}
+                                          >
+                                            <RotateCcw size={18} />
+                                          </button>
+                                          <button
+                                            className="adminbudget-action-btn adminbudget-action-btn--reject"
+                                            title="Delete"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openDeletePopup(item.id, item.proposal_ref);
+                                            }}
+                                          >
+                                            <Trash2 size={18} />
+                                          </button>
+                                        </>
                                       )}
 
                                       <button
@@ -1033,7 +1445,7 @@ const AdminBudget: React.FC = () => {
                                         }}
                                         disabled={archivingIds.has(item.id)}
                                       >
-                                        <AlertTriangle size={18} />
+                                        <Archive size={18} />
                                       </button>
                                     </div>
                                   </div>
@@ -1227,6 +1639,100 @@ const AdminBudget: React.FC = () => {
                 }}
               >
                 {deleteCountdown > 0 ? `Delete (${deleteCountdown}s)` : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {logPopupOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 999999,
+            padding: 16,
+          }}
+          onClick={closeLogPopup}
+        >
+          <div
+            style={{
+              width: "min(760px, 96vw)",
+              maxHeight: "80vh",
+              overflow: "auto",
+              background: "#fff",
+              borderRadius: 12,
+              padding: 0,
+              boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="budgetdashboard-log-header">Submission Logs</div>
+            <div className="budgetdashboard-log-body adminbudget-log-body">
+              <div className="budgetdashboard-log-item">
+                <span className="log-label">Proposal:</span>
+                <span className="log-value">{logRef || "--"}</span>
+              </div>
+
+              {(logProposal?.updated_at || logProposal?.updatedAt) && (logProposal?.created_at || logProposal?.createdAt) && (
+                new Date(logProposal.updated_at || logProposal.updatedAt).getTime() >
+                new Date(logProposal.created_at || logProposal.createdAt).getTime()
+              ) && (
+                <div className="budgetdashboard-log-item">
+                  <span className="log-label">Last Edited:</span>
+                  <span className="log-value">{formatDateTimeForLog(logProposal.updated_at || logProposal.updatedAt)}</span>
+                </div>
+              )}
+
+              {logLoading && <div className="adminbudget-state" style={{ padding: "24px 0" }}>Loading logs...</div>}
+              {!logLoading && buildAdminLogEvents.length === 0 && (
+                <div className="adminbudget-state" style={{ padding: "24px 0" }}>No logs available.</div>
+              )}
+
+              {!logLoading && buildAdminLogEvents.length > 0 && (
+                <div className="budgetdashboard-log-approvals">
+                  {buildAdminLogEvents.map((event) => (
+                    <div
+                      key={event.key}
+                      className={`log-approval-item${event.actorBadgeLabel ? " log-approval-item--admin" : ""}`}
+                    >
+                      {event.actorBadgeLabel && (
+                        <span className="log-admin-mark" title="Updated by Admin">
+                          {`\u2605 ${event.actorBadgeLabel}`}
+                        </span>
+                      )}
+                      <div className="log-approval-meta">
+                        <span className={`log-decision log-decision--${event.decision || "approved"}`}>
+                          {event.title.toUpperCase()}
+                        </span>
+                        <span className="log-role">{event.subtitle || "Status update"}</span>
+                        {event.actorLine && <span className="log-actor-line">{event.actorLine}</span>}
+                        <span className="log-date">{event.dateLabel}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 16px 16px" }}>
+              <button
+                type="button"
+                onClick={closeLogPopup}
+                style={{
+                  border: "1px solid #ddd",
+                  background: "#fff",
+                  borderRadius: 8,
+                  padding: "8px 20px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                Close
               </button>
             </div>
           </div>

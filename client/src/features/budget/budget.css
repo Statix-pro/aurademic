@@ -470,3 +470,9 @@ input[type="number"]::-webkit-inner-spin-button {
   white-space: pre-wrap;
   line-height: 1.5;
 }
+
+.monthBox--active {
+  border-color: #0069ab;
+  background-color: #e7f3ff;
+  box-shadow: 0 0 0 2px rgba(0, 105, 171, 0.18);
+}

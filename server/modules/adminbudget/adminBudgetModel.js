@@ -41,6 +41,7 @@ const LEVEL1_ASSIGNMENT_STATUS = Object.freeze({
   unassigned: 'unassigned',
 });
 const WORKFLOW_STAGES = Object.freeze(['level1', 'dof', 'principal']);
+const BUDGET_PROPOSAL_COLUMN_EXISTS_CACHE = new Map();
 
 const normalizeEntityTypeCode = (value) => {
   const raw = normalizeText(value)
@@ -80,9 +81,123 @@ const formatApprovalFlowString = ({ requiresLevel1, requiresDof, requiresPrincip
 };
 
 class AdminBudgetModel {
+  static async #hasBudgetProposalColumn(columnName) {
+    const normalizedColumn = normalizeText(columnName);
+    if (!normalizedColumn) return false;
+
+    if (BUDGET_PROPOSAL_COLUMN_EXISTS_CACHE.get(normalizedColumn) === true) {
+      return true;
+    }
+
+    const [rows] = await db.execute(
+      `SELECT COUNT(*) AS count
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'budget_proposals'
+         AND COLUMN_NAME = ?`,
+      [normalizedColumn]
+    );
+
+    const exists = Number(rows?.[0]?.count || 0) > 0;
+
+    if (exists) {
+      BUDGET_PROPOSAL_COLUMN_EXISTS_CACHE.set(normalizedColumn, true);
+    } else {
+      BUDGET_PROPOSAL_COLUMN_EXISTS_CACHE.delete(normalizedColumn);
+    }
+
+    return exists;
+  }
+
+  static async getBudgetTags() {
+    try {
+      const [rows] = await db.execute(
+        `SELECT id, tag_name, is_active, sort_order
+         FROM budget_tags
+         WHERE is_active = 1
+         ORDER BY sort_order ASC, tag_name ASC`
+      );
+      return rows;
+    } catch (error) {
+      if (error?.code === 'ER_NO_SUCH_TABLE') {
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  static async searchApplicant(query = '', employeeType = null) {
+    const queryStr = normalizeText(query);
+    let sql;
+    const params = [];
+
+    let typeFilter = '';
+    if (employeeType) {
+      typeFilter = ' AND e.employee_type = ?';
+    }
+
+    if (!queryStr) {
+      sql = `SELECT
+      e.id AS employee_id,
+        e.erp_id,
+        CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+          COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
+            COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
+              e.email,
+              e.mobile,
+              e.employee_type
+      FROM master_employees e
+      LEFT JOIN master_departments d ON e.department_id = d.id
+      LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
+      LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
+      WHERE e.status = 'Active' ${typeFilter}
+      ORDER BY e.first_name, e.last_name
+      LIMIT 20`;
+      if (employeeType) params.push(employeeType);
+    } else {
+      sql = `SELECT
+      e.id AS employee_id,
+        e.erp_id,
+        CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+          COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
+            COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
+              e.email,
+              e.mobile,
+              e.employee_type
+      FROM master_employees e
+      LEFT JOIN master_departments d ON e.department_id = d.id
+      LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
+      LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
+      WHERE e.status = 'Active' ${typeFilter}
+      AND (
+        LOWER(e.first_name) LIKE ?
+        OR LOWER(e.last_name) LIKE ?
+        OR LOWER(CONCAT(e.first_name, ' ', COALESCE(e.last_name, ''))) LIKE ?
+        OR LOWER(e.erp_id) LIKE ?
+        OR LOWER(e.email) LIKE ?
+        )
+      ORDER BY e.first_name, e.last_name
+      LIMIT 20`;
+
+      const searchPattern = `%${queryStr.toLowerCase()}%`;
+
+      if (employeeType) params.push(employeeType);
+      params.push(
+        searchPattern,
+        searchPattern,
+        searchPattern,
+        `${queryStr.toLowerCase()}%`,
+        searchPattern
+      );
+    }
+
+    const [rows] = await db.query(sql, params);
+    return rows;
+  }
+
   static getDefaultFreezeCutoffDate(fiscalYear) {
     const fy = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
-    return `${fy}-04-10`;
+    return `${fy}-02-01`;
   }
 
   static async getFreezeConfig(fiscalYear) {
@@ -376,8 +491,19 @@ class AdminBudgetModel {
     }
 
     return this.withTransaction(async (conn) => {
+      try {
+        await conn.execute(
+          `ALTER TABLE budget_proposal_lines
+           ADD COLUMN approved_month_allocations_json LONGTEXT NULL AFTER approved_line_total`
+        );
+      } catch (error) {
+        if (error?.code !== 'ER_DUP_FIELDNAME') {
+          throw error;
+        }
+      }
+
       const [existingLines] = await conn.execute(
-        `SELECT id, budget_head, sub_head, quantity, unit_amount, line_total, approved_unit_amount, approved_line_total
+        `SELECT id, budget_head, sub_head, quantity, unit_amount, line_total, approved_unit_amount, approved_line_total, approved_month_allocations_json
          FROM budget_proposal_lines
          WHERE budget_proposal_id = ?
          ORDER BY id`,
@@ -389,61 +515,184 @@ class AdminBudgetModel {
         throw new Error('At least one budget line required');
       }
 
-      const upto = Math.min(existingLines.length, incomingLines.length);
-      const changedRows = [];
+      const [proposedAllocationRows] = await conn.execute(
+        `SELECT m.budget_line_id AS line_id, m.month, m.amount
+         FROM budget_line_month_allocations m
+         JOIN budget_proposal_lines l ON l.id = m.budget_line_id
+         WHERE l.budget_proposal_id = ?`,
+        [proposalId]
+      );
+      const normalizeMonthMap = (raw = {}) => {
+        const out = {};
+        for (const month of VALID_MONTHS) {
+          out[month] = Number(raw?.[month] || 0);
+        }
+        return out;
+      };
 
-      for (let idx = 0; idx < upto; idx += 1) {
-        const prevLine = existingLines[idx];
-        const incoming = incomingLines[idx] || {};
-        const quantity = Number(prevLine.quantity) || 1;
-        const previousApprovedUnit = Number(prevLine.approved_unit_amount ?? prevLine.unit_amount) || 0;
-        const nextApprovedUnit = Number.isFinite(Number(incoming.unit_amount))
-          ? Number(incoming.unit_amount)
-          : previousApprovedUnit;
-        const nextApprovedLineTotal = Number((nextApprovedUnit * quantity).toFixed(2));
-        const previousApprovedLineTotal = Number(prevLine.approved_line_total ?? prevLine.line_total) || 0;
+      const toMonthMapByLine = (rows = []) => {
+        const map = new Map();
+        for (const row of rows) {
+          const lineId = Number(row?.line_id);
+          const month = normalizeText(row?.month);
+          if (!Number.isInteger(lineId) || !VALID_MONTHS.includes(month)) continue;
+          if (!map.has(lineId)) map.set(lineId, {});
+          map.get(lineId)[month] = Number(row?.amount || 0);
+        }
+        return map;
+      };
 
-        await conn.execute(
-          `UPDATE budget_proposal_lines
-           SET approved_unit_amount = ?,
-               approved_line_total = ?
-           WHERE id = ?`,
-          [nextApprovedUnit, nextApprovedLineTotal, prevLine.id]
-        );
+      const toDiffLabel = (value) => {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return '0';
+        return Number.isInteger(numeric) ? String(numeric) : String(Number(numeric.toFixed(2)));
+      };
 
-        if (
-          Number(nextApprovedUnit.toFixed(2)) !== Number(previousApprovedUnit.toFixed(2))
-          || Number(nextApprovedLineTotal.toFixed(2)) !== Number(previousApprovedLineTotal.toFixed(2))
-        ) {
-          changedRows.push(idx + 1);
+      const proposedMonthByLineId = toMonthMapByLine(proposedAllocationRows);
+      const incomingByLineId = new Map();
+      for (const line of incomingLines) {
+        const lineId = Number(line?.line_id);
+        if (Number.isInteger(lineId) && lineId > 0) {
+          incomingByLineId.set(lineId, line);
         }
       }
 
-      await conn.execute(
-        `UPDATE budget_proposals bp
-         SET bp.approved_total_amount = (
-           SELECT COALESCE(SUM(COALESCE(bpl.approved_line_total, bpl.line_total)), 0)
-           FROM budget_proposal_lines bpl
-           WHERE bpl.budget_proposal_id = bp.id
-         ),
-         bp.updated_at = NOW()
-         WHERE bp.id = ?`,
-        [proposalId]
-      );
-
+      const upto = Math.min(existingLines.length, incomingLines.length);
+      const changedRows = [];
+      const lineChangeDetails = [];
       const normalizedEditorRole = normalizeText(editorRole).toLowerCase();
       const logRole = normalizedEditorRole === 'level1'
         ? (this.isEntityBeneficiaryType(proposal.beneficiary_type) ? 'coordinator' : 'hod')
         : normalizedEditorRole || 'admin';
-      const rowText = changedRows.length ? `Approved amounts updated for Row No. ${changedRows.join(', ')}` : 'Approved amounts reviewed';
+      const parseApprovedMonthJson = (value) => {
+        if (!value) return {};
+        try {
+          const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+          return parsed;
+        } catch {
+          return {};
+        }
+      };
 
-      await conn.execute(
-        `INSERT INTO budget_proposal_approvals(
-          budget_proposal_id, role, approver_user_id, approver_email,
-          decision, feedback, allows_edit
-        ) VALUES(?, ?, ?, ?, 'updated', ?, 0)`,
-        [proposalId, logRole, Number(editorUserId), normalizeText(editorEmail), rowText]
-      );
+      for (let idx = 0; idx < upto; idx += 1) {
+        const prevLine = existingLines[idx];
+        const incoming = incomingByLineId.get(Number(prevLine.id)) || incomingLines[idx] || {};
+        const lineNo = idx + 1;
+        const previousApprovedUnit = Number(prevLine.approved_unit_amount ?? prevLine.unit_amount) || 0;
+        const previousApprovedLineTotal = Number(prevLine.approved_line_total ?? prevLine.line_total) || 0;
+        const inferredApprovedQuantity =
+          previousApprovedUnit > 0
+            ? (previousApprovedLineTotal / previousApprovedUnit)
+            : Number(prevLine.quantity || 1);
+        const baseQuantity = Number.isFinite(inferredApprovedQuantity) && inferredApprovedQuantity > 0
+          ? inferredApprovedQuantity
+          : (Number(prevLine.quantity) || 1);
+        const effectiveQuantity = Number.isFinite(Number(incoming.quantity)) && Number(incoming.quantity) > 0
+          ? Number(incoming.quantity)
+          : baseQuantity;
+        const nextApprovedUnit = Number.isFinite(Number(incoming.unit_amount))
+          ? Number(incoming.unit_amount)
+          : previousApprovedUnit;
+        const nextApprovedLineTotal = Number((nextApprovedUnit * effectiveQuantity).toFixed(2));
+        const changes = [];
+
+        const baseMonthMap = normalizeMonthMap(
+          parseApprovedMonthJson(prevLine.approved_month_allocations_json)
+          || proposedMonthByLineId.get(Number(prevLine.id))
+          || {}
+        );
+        const nextMonthMap = normalizeMonthMap(incoming.month_allocations || baseMonthMap);
+        const monthDiffs = [];
+        for (const month of VALID_MONTHS) {
+          const from = Number(baseMonthMap[month] || 0);
+          const to = Number(nextMonthMap[month] || 0);
+          if (Math.abs(from - to) > 0.01) {
+            monthDiffs.push(`${month}: ${toDiffLabel(from)} -> ${toDiffLabel(to)}`);
+          }
+        }
+
+        if (Number(nextApprovedUnit.toFixed(2)) !== Number(previousApprovedUnit.toFixed(2))) {
+          changes.push(`Approved Unit Amount changed from ${previousApprovedUnit} to ${nextApprovedUnit}`);
+        }
+
+        if (Math.abs(Number(effectiveQuantity) - Number(baseQuantity)) > 0.0001) {
+          changes.push(`Quantity changed from ${toDiffLabel(baseQuantity)} to ${toDiffLabel(effectiveQuantity)}`);
+        }
+
+        if (Number(nextApprovedLineTotal.toFixed(2)) !== Number(previousApprovedLineTotal.toFixed(2))) {
+          changes.push(`Approved Line Total changed from ${previousApprovedLineTotal} to ${nextApprovedLineTotal}`);
+        }
+
+        if (monthDiffs.length > 0) {
+          changes.push(`Month allocations changed (${monthDiffs.join(', ')})`);
+        }
+
+        if (changes.length > 0) {
+          await conn.execute(
+            `UPDATE budget_proposal_lines
+             SET approved_unit_amount = ?,
+                 approved_line_total = ?,
+                 approved_month_allocations_json = ?
+             WHERE id = ?`,
+            [nextApprovedUnit, nextApprovedLineTotal, JSON.stringify(nextMonthMap), prevLine.id]
+          );
+
+          changedRows.push(lineNo);
+          lineChangeDetails.push({ lineNo, changes });
+        }
+      }
+
+      if (changedRows.length > 0) {
+        await conn.execute(
+          `UPDATE budget_proposals bp
+           SET bp.approved_total_amount = (
+             SELECT COALESCE(SUM(COALESCE(bpl.approved_line_total, bpl.line_total)), 0)
+             FROM budget_proposal_lines bpl
+             WHERE bpl.budget_proposal_id = bp.id
+           ),
+           bp.updated_at = NOW()
+           WHERE bp.id = ?`,
+          [proposalId]
+        );
+      }
+
+      if (changedRows.length > 0) {
+        const editSummary = `${lineChangeDetails.length} line(s) approved amount updated`;
+
+        try {
+          await conn.execute(
+            `INSERT INTO budget_proposal_edits
+              (budget_proposal_id, edited_by_user_id, edited_by_email, summary, details)
+             VALUES (?, ?, ?, ?, ?)`,
+            [
+              proposalId,
+              editorUserId || null,
+              normalizeText(editorEmail) || null,
+              editSummary,
+              JSON.stringify({ editorRole: normalizedEditorRole || 'admin', lines: lineChangeDetails }),
+            ]
+          );
+        } catch (error) {
+          if (error?.code !== 'ER_NO_SUCH_TABLE') {
+            throw error;
+          }
+        }
+
+        const rowText = `Approved values updated for Row No. ${changedRows.join(', ')}`;
+
+        await conn.execute(
+          `INSERT INTO budget_proposal_approvals(
+            budget_proposal_id, role, approver_user_id, approver_email,
+            decision, feedback, allows_edit
+          ) VALUES(?, ?, ?, ?, 'updated', ?, 0)`,
+          [proposalId, logRole, Number(editorUserId), normalizeText(editorEmail), rowText]
+        );
+      }
+
+      return {
+        changedRows,
+      };
     });
   }
 
@@ -1633,9 +1882,16 @@ class AdminBudgetModel {
         [proposalId]
       );
 
+      // Preserve historical reference numbers so deleted refs are never reused.
+      await conn.execute(
+        `UPDATE budget_proposal_refs
+         SET proposal_id = NULL
+         WHERE proposal_id = ?`,
+        [proposalId]
+      );
+
       await conn.execute('DELETE FROM budget_proposal_lines WHERE budget_proposal_id = ?', [proposalId]);
       await conn.execute('DELETE FROM budget_proposal_approvals WHERE budget_proposal_id = ?', [proposalId]);
-      await conn.execute('DELETE FROM budget_proposal_refs WHERE proposal_id = ?', [proposalId]);
 
       const [result] = await conn.execute('DELETE FROM budget_proposals WHERE id = ?', [proposalId]);
       return result.affectedRows > 0;
@@ -1772,6 +2028,10 @@ class AdminBudgetModel {
     const pLimit = Number.parseInt(limit, 10) || 10;
     const pOffset = (pPage - 1) * pLimit;
     const currentFY = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
+    const hasBudgetTagColumn = await this.#hasBudgetProposalColumn('budget_tag');
+    const budgetTagColumnExpr = hasBudgetTagColumn
+      ? 'MAX(bp.budget_tag) AS budget_tag,'
+      : 'NULL AS budget_tag,';
 
     let sql = `
       SELECT SQL_CALC_FOUND_ROWS
@@ -1786,6 +2046,7 @@ class AdminBudgetModel {
             NULLIF(TRIM(MAX(u.name)), ''),
             NULLIF(TRIM(MAX(bp.user_email)), '')
           ) AS applicant_name,
+            ${budgetTagColumnExpr}
             MAX(CONCAT(req_emp.first_name, ' ', COALESCE(req_emp.last_name, ''))) AS faculty_name,
               MAX(u.name) AS user_name,
                 DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
@@ -1806,6 +2067,13 @@ class AdminBudgetModel {
       bp.current_stage,
       bp.approval_flow,
       DATE_FORMAT(bp.created_at, '%Y-%m-%d %H:%i') AS created_date,
+      MAX(
+        CASE
+          WHEN COALESCE(bpl.approved_unit_amount, bpl.unit_amount, 0) <> COALESCE(bpl.unit_amount, 0)
+            OR COALESCE(bpl.approved_line_total, bpl.line_total, 0) <> COALESCE(bpl.line_total, 0)
+          THEN 1 ELSE 0
+        END
+      ) AS has_approved_override,
       COUNT(DISTINCT bpl.id) AS line_count,
       COUNT(DISTINCT bpa.id) AS approval_count
       FROM budget_proposals bp
@@ -2008,6 +2276,99 @@ class AdminBudgetModel {
     );
 
     return rows[0] || null;
+  }
+
+  static async getFull(proposalId) {
+    const master = await this.getBudgetById(proposalId);
+
+    if (!master) {
+      return null;
+    }
+
+    const [lines] = await db.execute(
+      `SELECT *
+       FROM budget_proposal_lines
+       WHERE budget_proposal_id = ?
+       ORDER BY id`,
+      [proposalId]
+    );
+
+    const [allocations] = await db.execute(
+      `SELECT l.id AS line_id, m.month, m.amount, l.budget_head, l.sub_head
+       FROM budget_proposal_lines l
+       JOIN budget_line_month_allocations m ON l.id = m.budget_line_id
+       WHERE l.budget_proposal_id = ?
+       ORDER BY l.id, FIELD(m.month, ${VALID_MONTHS.map((month) => `'${month}'`).join(',')})`,
+      [proposalId]
+    );
+
+    const approvedAllocationsByLineId = {};
+    for (const line of lines) {
+      const lineId = Number(line?.id);
+      if (!Number.isInteger(lineId)) continue;
+      const raw = line?.approved_month_allocations_json;
+      if (!raw) continue;
+      let parsed = null;
+      try {
+        parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      } catch {
+        parsed = null;
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+      const normalized = {};
+      for (const month of VALID_MONTHS) {
+        normalized[month] = Number(parsed?.[month] || 0);
+      }
+      const hasAny = Object.values(normalized).some((v) => Number(v) !== 0);
+      if (hasAny) {
+        approvedAllocationsByLineId[lineId] = normalized;
+      }
+    }
+    const approvedAllocations =
+      Object.keys(approvedAllocationsByLineId).length > 0
+        ? approvedAllocationsByLineId
+        : null;
+
+    const [approvals] = await db.execute(
+      `SELECT *, DATE_FORMAT(decided_at, '%Y-%m-%d %H:%i') AS decided_at_formatted
+       FROM budget_proposal_approvals
+       WHERE budget_proposal_id = ?
+       ORDER BY decided_at`,
+      [proposalId]
+    );
+
+    let edits = [];
+    try {
+      const [editRows] = await db.execute(
+        `SELECT
+           id,
+           budget_proposal_id,
+           edited_by_user_id,
+           edited_by_email,
+           summary,
+           details,
+           created_at,
+           DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') AS created_at_formatted
+         FROM budget_proposal_edits
+         WHERE budget_proposal_id = ?
+         ORDER BY created_at`,
+        [proposalId]
+      );
+      edits = editRows;
+    } catch (error) {
+      if (error?.code !== 'ER_NO_SUCH_TABLE') {
+        throw error;
+      }
+    }
+
+    return {
+      master,
+      lines,
+      allocations: this.groupAllocationsByLine(allocations),
+      approved_allocations: approvedAllocations,
+      approvals,
+      edits,
+    };
   }
 
   static async validateUserAccess(proposalId, userId, userEmail, role, department, departmentId) {
