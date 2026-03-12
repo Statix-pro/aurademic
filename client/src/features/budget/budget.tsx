@@ -177,7 +177,19 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Drilling Machine',
     'Drone Kit', 'Lab Accessories', 'Others'
   ],
-  'Library': ['Library Books', 'Journals', 'agazines', 'Newspaper', 'DELNET', 'E-Resources',],
+  'Library': [
+    'Books',
+    'Journals',
+    'Magazines',
+    'Newspapers',
+    'E-Journals',
+    'E-Books',
+    'Remote Access Tool',
+    'Plagiarism Detection Tool',
+    'Non Books (CD etc.)',
+    'Databases',
+    'Membership'
+  ],
 
   'Maintenance Charges': ['Annual Maintenance Charges', 'Equipment Maintenance',
     'Software Maintenance',
