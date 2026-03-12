@@ -523,6 +523,7 @@ const Budget: React.FC = () => {
   const [showApplicantDropdown, setShowApplicantDropdown] = useState(false);
   const [date, setDate] = useState('');
   const [department, setDepartment] = useState('');
+  const [applicantEntity, setApplicantEntity] = useState('');
   const [designation, setDesignation] = useState('');
   const [email, setEmail] = useState('');
   const [mobile, setMobile] = useState('');
@@ -740,6 +741,7 @@ const Budget: React.FC = () => {
     setApplicantSearchQuery((emp.name || '').trim());
     setApplicantEmployeeId(Number.isInteger(Number(emp.employee_id)) ? Number(emp.employee_id) : null);
     setDepartment(emp.department || '');
+    setApplicantEntity((emp as any).entity || '');
     setDesignation(emp.designation || '');
     setEmail(emp.email || '');
     setMobile(emp.mobile || '');
@@ -926,6 +928,7 @@ const Budget: React.FC = () => {
             : categoryItem?.trim(),
       proposal_description: '',
       applicant_name: applicantName?.trim(),
+      applicant_entity: applicantEntity?.trim() || null,
       budget_tag: selectedTag?.trim() || null,
       lines: formattedLines,
     };
@@ -978,7 +981,7 @@ const Budget: React.FC = () => {
             setApplicantEmployeeId(null);
             setApplicantSearchResults([]);
             setShowApplicantDropdown(false);
-            setApplicantName(''); setDepartment(''); setDesignation(''); setEmail(''); setMobile('');
+            setApplicantName(''); setDepartment(''); setApplicantEntity(''); setDesignation(''); setEmail(''); setMobile('');
             setBeneficiaryType(''); setBeneficiaryValue(''); setCategoryItem('');
             setSelectedTag('');
             setBeneficiarySearchQuery(''); setBeneficiarySearchResults([]); setShowBeneficiaryDropdown(false);
@@ -1146,6 +1149,7 @@ const Budget: React.FC = () => {
         setCategoryItem(normalizedBeneficiaryValue);
         setSelectedTag(p.budget_tag || '');
         setDepartment(normalizedApplicantDepartment);
+        setApplicantEntity(p.applicant_entity || p.user_entity || '');
 
         // Date
         setDate((p.request_date || "").split("T")[0]);
@@ -1389,6 +1393,7 @@ const Budget: React.FC = () => {
           setApplicantName(json.data.name || '');
           setApplicantSearchQuery(json.data.name || '');
           setDepartment(json.data.department || '');
+          setApplicantEntity(json.data.entity_name || json.data.entity || '');
           setEmail(json.data.email || '');
 
 
