@@ -579,11 +579,13 @@ class BudgetModel {
         TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))) AS name,
           COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
             COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
-              e.email,
-              e.mobile,
-              e.employee_type
+        e.email,
+        e.mobile,
+        e.employee_type,
+        mentity.name AS entity
       FROM master_employees e
       LEFT JOIN master_departments d ON e.department_id = d.id
+      LEFT JOIN master_entities mentity ON e.entity_id = mentity.id
       LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
       LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
       WHERE e.status = 'Active' ${typeFilter}
@@ -597,11 +599,13 @@ class BudgetModel {
         TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))) AS name,
           COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
             COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
-              e.email,
-              e.mobile,
-              e.employee_type
+        e.email,
+        e.mobile,
+        e.employee_type,
+        mentity.name AS entity
       FROM master_employees e
       LEFT JOIN master_departments d ON e.department_id = d.id
+      LEFT JOIN master_entities mentity ON e.entity_id = mentity.id
       LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
       LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
       WHERE e.status = 'Active' ${typeFilter}

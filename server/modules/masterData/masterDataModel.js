@@ -334,12 +334,14 @@ const masterDataModel = {
           e.email, e.mobile,
           e.designation, e.department_id,
           d.name AS department_name, d.code AS department_code,
+          e.entity_id, me.name AS entity_name, me.code AS entity_code,
           e.employee_type, e.status,
           e.dob, e.doj, e.dor,
           e.gender,
           e.orcid_id, e.wos_researcher_id, e.scopus_id, e.google_scholar_id
         FROM master_employees e
         LEFT JOIN master_departments d ON e.department_id = d.id
+        LEFT JOIN master_entities me ON e.entity_id = me.id
         WHERE 1=1
       `;
             const params = [];
@@ -417,10 +419,12 @@ const masterDataModel = {
     async getEmployeeById(id) {
         try {
             const [rows] = await db.query(
-                `SELECT e.*, d.name AS department_name, d.code AS department_code
-         FROM master_employees e
-         LEFT JOIN master_departments d ON e.department_id = d.id
-         WHERE e.id = ?`,
+                `SELECT e.*, d.name AS department_name, d.code AS department_code,
+                 me.name AS entity_name, me.code AS entity_code
+                 FROM master_employees e
+                 LEFT JOIN master_departments d ON e.department_id = d.id
+                 LEFT JOIN master_entities me ON e.entity_id = me.id
+                 WHERE e.id = ?`,
                 [id]
             );
             return rows[0] || null;
@@ -434,10 +438,10 @@ const masterDataModel = {
             const [result] = await db.query(
                 `INSERT INTO master_employees
           (erp_id, title, first_name, last_name, gender, email, mobile,
-           designation, department_id, parent_department_id, employee_type,
+           designation, department_id, parent_department_id, entity_id, employee_type,
            dob, doj, dor, status,
            orcid_id, wos_researcher_id, scopus_id, google_scholar_id, research_gate_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     data.erp_id,
                     data.title || null,
@@ -449,6 +453,7 @@ const masterDataModel = {
                     data.designation || null,
                     data.department_id || null,
                     data.parent_department_id || null,
+                    data.entity_id || null,
                     data.employee_type || 'Teaching',
                     data.dob || null,
                     data.doj || null,
@@ -483,6 +488,7 @@ const masterDataModel = {
                 'designation',
                 'department_id',
                 'parent_department_id',
+                'entity_id',
                 'employee_type',
                 'dob',
                 'doj',

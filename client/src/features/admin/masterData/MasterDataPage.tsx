@@ -71,6 +71,9 @@ interface Employee {
     department_id: number | null;
     department_name: string | null;
     department_code: string | null;
+    entity_id: number | null;
+    entity_name: string | null;
+    entity_code: string | null;
     employee_type: string;
     status: string;
     gender: string | null;
@@ -575,6 +578,7 @@ export default function MasterDataPage() {
         gender: "",
         designation: "",
         department_id: "",
+        entity_id: "",
         employee_type: "Teaching",
         status: "Active",
         dob: "",
@@ -622,8 +626,9 @@ export default function MasterDataPage() {
         if (activeTab === "employees") fetchEmployees();
     }, [activeTab, fetchEmployees]);
 
-    // Also fetch departments for employee department dropdown
+    // Also fetch departments and entities for employee dropdowns
     const [allDepartments, setAllDepartments] = useState<Department[]>([]);
+    const [allEntitiesList, setAllEntitiesList] = useState<Entity[]>([]);
 
     useEffect(() => {
         const fetchAllDepts = async () => {
@@ -642,7 +647,24 @@ export default function MasterDataPage() {
                 /* silent */
             }
         };
+        const fetchAllEntitiesList = async () => {
+            try {
+                const response = await fetch(
+                    `${baseUrl}/api/master-data/entities?is_active=1`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${localStorage.getItem("token")}`,
+                        },
+                    }
+                );
+                const data = await response.json();
+                if (data.status === "success") setAllEntitiesList(data.data);
+            } catch {
+                /* silent */
+            }
+        };
         fetchAllDepts();
+        fetchAllEntitiesList();
     }, [baseUrl]);
 
     const formatDate = (dateStr: string | null): string => {
@@ -667,6 +689,7 @@ export default function MasterDataPage() {
                 gender: emp.gender || "",
                 designation: emp.designation || "",
                 department_id: emp.department_id ? String(emp.department_id) : "",
+                entity_id: emp.entity_id ? String(emp.entity_id) : "",
                 employee_type: emp.employee_type,
                 status: emp.status,
                 dob: formatDate(emp.dob),
@@ -689,6 +712,7 @@ export default function MasterDataPage() {
                 gender: "",
                 designation: "",
                 department_id: "",
+                entity_id: "",
                 employee_type: "Teaching",
                 status: "Active",
                 dob: "",
@@ -710,6 +734,9 @@ export default function MasterDataPage() {
                 ...empForm,
                 department_id: empForm.department_id
                     ? parseInt(empForm.department_id)
+                    : null,
+                entity_id: empForm.entity_id
+                    ? parseInt(empForm.entity_id)
                     : null,
                 dob: empForm.dob || null,
                 doj: empForm.doj || null,
@@ -1675,6 +1702,7 @@ export default function MasterDataPage() {
                             <div className="detail-row"><span className="detail-label">Gender</span><span className="detail-value">{viewingEmp.gender || '—'}</span></div>
                             <div className="detail-row"><span className="detail-label">Designation</span><span className="detail-value">{viewingEmp.designation || '—'}</span></div>
                             <div className="detail-row"><span className="detail-label">Department</span><span className="detail-value">{viewingEmp.department_name || '—'}</span></div>
+                            <div className="detail-row"><span className="detail-label">Entity</span><span className="detail-value">{viewingEmp.entity_name || '—'}</span></div>
                             <div className="detail-row"><span className="detail-label">Employee Type</span><span className="detail-value"><Badge bg="info">{viewingEmp.employee_type}</Badge></span></div>
                             <div className="detail-row"><span className="detail-label">Status</span><span className="detail-value">{renderEmpStatusBadge(viewingEmp.status)}</span></div>
                             <div className="detail-row"><span className="detail-label">Date of Birth</span><span className="detail-value">{formatDate(viewingEmp.dob) || '—'}</span></div>
@@ -1811,7 +1839,7 @@ export default function MasterDataPage() {
                                     />
                                 </Form.Group>
                             </div>
-                            <div className="col-md-4">
+                            <div className="col-md-3">
                                 <Form.Group>
                                     <Form.Label>Department</Form.Label>
                                     <Form.Select
@@ -1825,7 +1853,21 @@ export default function MasterDataPage() {
                                     </Form.Select>
                                 </Form.Group>
                             </div>
-                            <div className="col-md-4">
+                            <div className="col-md-3">
+                                <Form.Group>
+                                    <Form.Label>Entity / Cell / Club</Form.Label>
+                                    <Form.Select
+                                        value={empForm.entity_id}
+                                        onChange={(e) => setEmpForm({ ...empForm, entity_id: e.target.value })}
+                                    >
+                                        <option value="">Select Entity</option>
+                                        {allEntitiesList.map((e) => (
+                                            <option key={e.id} value={e.id}>{e.name}</option>
+                                        ))}
+                                    </Form.Select>
+                                </Form.Group>
+                            </div>
+                            <div className="col-md-3">
                                 <Form.Group>
                                     <Form.Label>Employee Type</Form.Label>
                                     <Form.Select
