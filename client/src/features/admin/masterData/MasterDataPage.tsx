@@ -362,7 +362,6 @@ export default function MasterDataPage() {
     const [showEntityModal, setShowEntityModal] = useState(false);
     const [editingEntity, setEditingEntity] = useState<Entity | null>(null);
     const [viewingEntity, setViewingEntity] = useState<Entity | null>(null);
-    const [selectedEntityContact, setSelectedEntityContact] = useState<EmployeeLookupOption | null>(null);
     const [entityForm, setEntityForm] = useState({
         entity_type_id: "",
         code: "",
@@ -429,17 +428,6 @@ export default function MasterDataPage() {
                 contact_role: primaryContact?.role || "office",
                 // sort_order: String(entity.sort_order),
             });
-            // Pre-populate the contact select if there is existing data
-            if (primaryContact?.email) {
-                setSelectedEntityContact({
-                    value: 0,
-                    label: primaryContact.email,
-                    email: primaryContact.email,
-                    mobile: null,
-                });
-            } else {
-                setSelectedEntityContact(null);
-            }
         } else {
             setEditingEntity(null);
             setEntityForm({
@@ -450,7 +438,6 @@ export default function MasterDataPage() {
                 contact_role: "office",
                 // sort_order: "0",
             });
-            setSelectedEntityContact(null);
         }
         setShowEntityModal(true);
     };
@@ -1426,47 +1413,20 @@ export default function MasterDataPage() {
                             </div>
                             <div className="col-md-8">
                                 <Form.Group>
-                                    <Form.Label>Contact Person (Search Employee)</Form.Label>
-                                    <AsyncSelect<EmployeeLookupOption>
-                                        value={selectedEntityContact}
-                                        loadOptions={loadEmployeeOptions}
-                                        onChange={(option) => {
-                                            setSelectedEntityContact(option);
-                                            if (option) {
-                                                setEntityForm({
-                                                    ...entityForm,
-                                                    contact_email: option.email,
-                                                });
-                                            } else {
-                                                setEntityForm({
-                                                    ...entityForm,
-                                                    contact_email: "",
-                                                });
-                                            }
-                                        }}
-                                        isClearable
-                                        placeholder="Type at least 2 characters to search..."
-                                        noOptionsMessage={({ inputValue }) =>
-                                            inputValue.length < 2
-                                                ? "Type at least 2 characters..."
-                                                : "No employees found"
+                                    <Form.Label>Contact Email</Form.Label>
+                                    <Form.Control
+                                        type="email"
+                                        value={entityForm.contact_email}
+                                        onChange={(e) =>
+                                            setEntityForm({
+                                                ...entityForm,
+                                                contact_email: e.target.value,
+                                            })
                                         }
-                                        classNamePrefix="react-select"
+                                        placeholder="Enter contact email"
                                     />
                                 </Form.Group>
                             </div>
-                            {selectedEntityContact && (
-                                <div className="col-md-12">
-                                    <Form.Group>
-                                        <Form.Label>Contact Email</Form.Label>
-                                        <Form.Control
-                                            readOnly
-                                            value={entityForm.contact_email}
-                                            className="bg-light"
-                                        />
-                                    </Form.Group>
-                                </div>
-                            )}
                         </div>
                     </Modal.Body>
                     <Modal.Footer className="bg-light p-3">
