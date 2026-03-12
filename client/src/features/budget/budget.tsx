@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from "react-router-dom";
-import Navbar from '../.././shared/components/layout/navbar/navbar';
+
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils';
@@ -1448,7 +1448,7 @@ const Budget: React.FC = () => {
 
   return (
     <div className="budgetPage">
-      <Navbar />
+
       <fieldset disabled={isViewMode} style={{ border: 0, padding: 0, margin: 0 }}>
 
         <div className="budgetCard">
@@ -2044,7 +2044,6 @@ const Budget: React.FC = () => {
                     <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
                       Tag
                     </label>
-
                     <div style={{ position: 'relative', zIndex: 1000, flex: 1 }}>
                       <Select
                         value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
@@ -2094,12 +2093,9 @@ const Budget: React.FC = () => {
                   <div style={{ height: '74px' }} />
                 )}
               </div>
-
             </div>
           </div>
         </div>
-
-
 
         <div className="budgetCard">
           <div className="cardContent">
@@ -2752,7 +2748,7 @@ const Budget: React.FC = () => {
             style={{
               padding: '12px 24px',
               background: '#fdeaea ',
-              color: ' #b42318 ',
+              color: '#b42318',
               border: 'none',
               borderRadius: '12px',
               fontSize: '16px',
@@ -2760,7 +2756,7 @@ const Budget: React.FC = () => {
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '20px',
+              gap: '8px',
 
             }}
           >

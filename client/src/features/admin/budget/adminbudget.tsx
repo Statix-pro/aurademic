@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import "./adminbudget.css";
-import Navbar from "../../../shared/components/layout/navbar/Navbar";
+
 import {
   Eye,
   Info,
@@ -623,7 +623,7 @@ const AdminBudget: React.FC = () => {
       ? user.permissions.map((permission) => String(permission).toLowerCase())
       : [];
 
-    return roles.includes("hod") || permissions.includes("budget.workflow.hod");
+    return roles.includes("hod") || permissions.includes("budget.workflow.level1");
   }, [user]);
 
   const isDofLogin = useMemo(() => {
@@ -1018,7 +1018,7 @@ const AdminBudget: React.FC = () => {
 
   return (
     <>
-      <Navbar />
+
 
       <section className="adminbudget-page">
         <div className="adminbudget-container">

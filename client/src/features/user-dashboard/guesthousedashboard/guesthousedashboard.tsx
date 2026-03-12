@@ -2,13 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import Navbar from '../../../shared/components/layout/navbar/Navbar';  // ← YOUR PATH
+
 import './guesthousedashboard.css';  // Fixed spelling
-import { 
-  FaRegClock, 
-  FaBuilding, 
-  FaLayerGroup, 
-  FaMapMarkerAlt ,FaPlus 
+import {
+  FaRegClock,
+  FaBuilding,
+  FaLayerGroup,
+  FaMapMarkerAlt, FaPlus
 } from 'react-icons/fa';  // ← Named imports
 
 interface EventType {
@@ -97,7 +97,7 @@ const GuestHouseDashboard: React.FC = () => {
 
     const frameRect = rightFrame.getBoundingClientRect();
     const headerH = header ? header.getBoundingClientRect().height : 0;
-    
+
     let avail = Math.floor(frameRect.height - headerH - 10);
     if (window.innerWidth < 480) avail = Math.max(300, avail);
     else if (window.innerWidth < 768) avail = Math.max(400, avail);
@@ -183,31 +183,31 @@ const GuestHouseDashboard: React.FC = () => {
 
   return (
     <div className="guesthouse-dashboard-wrapper">
-      <Navbar />
+
       <div className="guesthouse-dashboard-container">
         <div className="guesthouse-dashboard-main">
           {/* LEFT FRAME */}
-          <div className="left-frame" ref={leftFrameRef}  style={{ position: 'relative' }}>
-             <div className="frame-top-actions">
-    <button 
-      className="add-booking-btn"
-      onClick={() => window.location.href = '/guesthouse-booking'}
-    >
-      Add +
-    </button>
-  </div>
-  
+          <div className="left-frame" ref={leftFrameRef} style={{ position: 'relative' }}>
+            <div className="frame-top-actions">
+              <button
+                className="add-booking-btn"
+                onClick={() => window.location.href = '/guesthouse-booking'}
+              >
+                Add +
+              </button>
+            </div>
+
             <h3>
               {selectedDate ? formatDate(selectedDate) : 'All Upcoming Events'}
             </h3>
-            
+
             {filteredEvents.length === 0 ? (
               <p className="no-events">No rooms booked for this day.</p>
             ) : (
               filteredEvents.map((event, index) => (
-                <div 
-                  className="event-card" 
-                  key={index} 
+                <div
+                  className="event-card"
+                  key={index}
                   onClick={() => setSelectedEvent(event)}
                   style={{ cursor: 'pointer' }}
                 >
@@ -240,8 +240,8 @@ const GuestHouseDashboard: React.FC = () => {
           {/* RIGHT FRAME */}
           <div className="right-frame" ref={rightFrameRef}>
             <h3 ref={headerRef}> Calendar</h3>
-          
-            
+
+
             <div className="calendar-header">
               <div className="calendar-left">
                 <button className="today-btn" onClick={handleTodayClick}>
