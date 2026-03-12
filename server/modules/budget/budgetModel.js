@@ -407,8 +407,8 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
   }
 
 
-  export async function resolveApprovalFlow(beneficiaryType, entityTypeCode = null, conn = db) {
-    return resolveSharedApprovalFlow(beneficiaryType, entityTypeCode, conn);
+  export async function resolveApprovalFlow(beneficiaryType, entityTypeCode = null, conn = db, options = {}) {
+    return resolveSharedApprovalFlow(beneficiaryType, entityTypeCode, conn, options);
   }
 
 
@@ -444,7 +444,9 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
         payload.beneficiary_value
       );
 
-      const flow = await resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn);
+      const flow = await resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn, {
+        budgetTag: payload.budget_tag,
+      });
       const initialStage = flow.requiresLevel1 ? 'level1' : flow.requiresDof ? 'dof' : 'principal';
       const approvalFlowString = formatApprovalFlowString(flow);
       const level1Route = resolveLevel1Route({
@@ -713,7 +715,9 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
         payload.beneficiary_type,
         payload.beneficiary_value
       );
-      const flow = await resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn);
+      const flow = await resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn, {
+        budgetTag: payload.budget_tag,
+      });
       const approvalFlowString = formatApprovalFlowString(flow);
       const initialStage = flow.requiresLevel1 ? 'level1' : flow.requiresDof ? 'dof' : 'principal';
       const isReturnedState = proposal.status && proposal.status.endsWith('_returned');
@@ -974,7 +978,7 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
       });
     }
 
-    if (!['level1', 'dof', 'principal'].includes(role)) {
+    if (!['level1', 'ithead', 'dof', 'principal'].includes(role)) {
       throw new Error('Invalid role');
     }
 
@@ -986,13 +990,18 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
     let newStatus = decision;
     let nextStage = role;
 
-    const flowStages = normalizeText(proposal.approval_flow).split('_');
+    const flowStages = normalizeText(proposal.approval_flow).split('_').filter(Boolean);
+    const currentStageIndex = flowStages.indexOf(role);
+    const dynamicNextStage =
+      currentStageIndex >= 0 && currentStageIndex < flowStages.length - 1
+        ? flowStages[currentStageIndex + 1]
+        : 'completed';
     const requiresPrincipalStage = flowStages.includes('principal');
     const flow = APPROVAL_FLOW[role];
 
     if (normalizedDecision === 'approved') {
       newStatus = flow.approve;
-      nextStage = flow.next;
+      nextStage = dynamicNextStage || flow.next;
 
       // AUTO-APPROVAL LOGIC
       if (role === 'dof') {

@@ -7,7 +7,7 @@ import {
 import {
   WORKFLOW_STAGE_PERMISSION,
   getUserId,
-  isSuperAdmin,
+  isSuperAdmin as hasSuperAdminAccess,
   hasPermission,
   resolveAccessRoleFromPermissions,
 } from '../shared/budget/controllerPermissions.js';
@@ -492,7 +492,7 @@ import {
       }
 
       const userId = getUserId(req);
-      const isSuperAdmin = isSuperAdmin(req);
+      const isSuperAdmin = hasSuperAdminAccess(req);
       const proposal = await BudgetModel.getBudgetById(proposalId);
 
       if (!proposal) {
@@ -652,7 +652,7 @@ import {
       const department = await resolveUserDepartment(req);
       const departmentId = await resolveUserDepartmentId(req);
       const userEmail = normalizeText(req.user?.email);
-      const isSuperAdmin = isSuperAdmin(req);
+      const isSuperAdmin = hasSuperAdminAccess(req);
 
       if (!isSuperAdmin && !department && !departmentId && !userEmail) {
         return res.status(400).json({
@@ -694,7 +694,7 @@ import {
   export async function getCoordinatorBudgets(req, res) {
     try {
       const userEmail = normalizeText(req.user?.email);
-      const isSuperAdmin = isSuperAdmin(req);
+      const isSuperAdmin = hasSuperAdminAccess(req);
 
       const userId = getUserId(req);
 
@@ -736,7 +736,7 @@ import {
   export async function getItheadBudgets(req, res) {
     try {
       const { page = 1, limit = 10, status, fiscalYear } = req.query;
-      const isSuperAdminUser = isSuperAdmin(req);
+      const isSuperAdminUser = hasSuperAdminAccess(req);
 
       const budgets = await BudgetModel.listBudgets({
         role: 'ithead',
@@ -765,7 +765,7 @@ import {
   export async function getDofBudgets(req, res) {
     try {
       const { page = 1, limit = 10, status, fiscalYear } = req.query;
-      const isSuperAdmin = isSuperAdmin(req);
+      const isSuperAdmin = hasSuperAdminAccess(req);
 
       const budgets = await BudgetModel.listBudgets({
         role: 'dof',
@@ -794,7 +794,7 @@ import {
   export async function getPrincipalBudgets(req, res) {
     try {
       const { page = 1, limit = 10, status, fiscalYear } = req.query;
-      const isSuperAdmin = isSuperAdmin(req);
+      const isSuperAdmin = hasSuperAdminAccess(req);
 
       const budgets = await BudgetModel.listBudgets({
         role: 'principal',
@@ -853,7 +853,7 @@ import {
 
       const currentStage = normalizeText(proposal.current_stage).toLowerCase();
       const requiredPermission = WORKFLOW_STAGE_PERMISSION[currentStage];
-      const isSuperAdmin = isSuperAdmin(req);
+      const isSuperAdmin = hasSuperAdminAccess(req);
       const level1Route = BudgetModel.resolveLevel1Route(proposal);
 
       if (normalizedDecision !== 'archived' && !requiredPermission) {
@@ -965,7 +965,7 @@ import {
       const userEmail = normalizeText(req.user?.email);
       const userDepartment = await resolveUserDepartment(req);
       const userDepartmentId = await resolveUserDepartmentId(req);
-      const accessRole = isSuperAdmin(req) ? 'super_admin' : 'user';
+      const accessRole = hasSuperAdminAccess(req) ? 'super_admin' : 'user';
 
       const hasAccess = await BudgetModel.validateUserAccess(
         proposalId,
