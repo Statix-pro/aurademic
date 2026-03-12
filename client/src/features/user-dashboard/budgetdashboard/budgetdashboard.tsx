@@ -1019,9 +1019,9 @@ const BudgetDashboard: React.FC = () => {
                                   ))}
                                 </div>
                               </div>
+                            </div>
                             )}
                           </div>
-                        </div>
                         <div className="budgetdashboard-proposal-applicant">
                           {proposal.applicantName || '-'}
                         </div>
