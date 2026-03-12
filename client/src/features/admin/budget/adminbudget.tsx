@@ -21,7 +21,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { hasPermission, isSuperAdmin } from "../../../shared/utils/permissionUtils";
 
 type ActionType = "return" | "reject" | null;
-type QueueTabKey = "hod" | "coordinator" | "dof" | "principal" | "admin";
+type QueueTabKey = "hod" | "coordinator" | "ithead" | "dof" | "principal" | "admin";
 
 interface QueueTab {
   key: QueueTabKey;
@@ -89,16 +89,18 @@ const BENEFICIARY_OPTIONS = [
 ];
 
 const ARCHIVE_TRANSITION_MS = 280;
-const TAB_PRIORITY: QueueTabKey[] = ["hod", "coordinator", "dof", "principal", "admin"];
+const TAB_PRIORITY: QueueTabKey[] = ["hod", "coordinator", "ithead", "dof", "principal", "admin"];
 
 const STAGE_PERMISSION_MAP: Record<string, string> = {
   level1: "budget.workflow.level1",
+  ithead: "budget.workflow.ithead",
   dof: "budget.workflow.dof",
   principal: "budget.workflow.principal",
 };
 
 const STAGE_DISPLAY_MAP: Record<string, string> = {
   level1: "Level-1",
+  ithead: "IT Head",
   dof: "DoF",
   principal: "Principal",
 };
@@ -115,6 +117,7 @@ const getRoleLabel = (role: string) => {
   const map: Record<string, string> = {
     hod: "HoD",
     coordinator: "Coordinator",
+    ithead: "IT Head",
     principal: "Principal",
     dof: "DoF",
     admin: "Admin",
@@ -201,6 +204,10 @@ const AdminBudget: React.FC = () => {
       tabs.push({ key: "coordinator", label: "Coordinator", endpoint: "/adminbudget/coordinator" });
     }
 
+    if (superUser || hasPermission(user, "budget.workflow.ithead")) {
+      tabs.push({ key: "ithead", label: "IT Head", endpoint: "/adminbudget/ithead" });
+    }
+
     if (superUser || hasPermission(user, "budget.workflow.dof")) {
       tabs.push({ key: "dof", label: "DoF", endpoint: "/adminbudget/dof" });
     }
@@ -264,8 +271,9 @@ const AdminBudget: React.FC = () => {
       const approvedStatusByTab: Record<QueueTabKey, string[]> = {
         // Stage-wise cumulative approved visibility:
         // HOD/Coordinator should still see records approved in downstream stages.
-        hod: ["level1_approved", "hod_approved", "dof_approved", "principal_approved", "completed"],
-        coordinator: ["level1_approved", "hod_approved", "dof_approved", "principal_approved", "completed"],
+        hod: ["level1_approved", "hod_approved", "ithead_approved", "dof_approved", "principal_approved", "completed"],
+        coordinator: ["level1_approved", "hod_approved", "ithead_approved", "dof_approved", "principal_approved", "completed"],
+        ithead: ["ithead_approved", "dof_approved", "principal_approved", "completed"],
         dof: ["dof_approved", "principal_approved", "completed"],
         principal: ["principal_approved", "completed"],
         admin: ["principal_approved", "completed"],
@@ -1574,76 +1582,76 @@ const AdminBudget: React.FC = () => {
       )}
 
       {deletePopupOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 999999,
+            padding: 16,
+          }}
+          onClick={closeDeletePopup}
+        >
           <div
             style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.35)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 999999,
-              padding: 16,
+              width: "min(400px, 95vw)",
+              background: "#fff",
+              borderRadius: 12,
+              padding: 24,
+              boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
+              textAlign: "center",
             }}
-            onClick={closeDeletePopup}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div
-              style={{
-                width: "min(400px, 95vw)",
-                background: "#fff",
-                borderRadius: 12,
-                padding: 24,
-                boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
-                textAlign: "center",
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div style={{ color: "#dc3545", marginBottom: 16 }}>
-                <Trash2 size={48} />
-              </div>
-              <h4 style={{ margin: "0 0 8px 0", color: "#333" }}>Confirm Deletion</h4>
-              <p style={{ margin: "0 0 16px 0", color: "#666", fontSize: "14px" }}>
-                Are you sure you want to permanently delete budget request <strong>{deleteRef}</strong>? This
-                action cannot be undone.
-              </p>
+            <div style={{ color: "#dc3545", marginBottom: 16 }}>
+              <Trash2 size={48} />
+            </div>
+            <h4 style={{ margin: "0 0 8px 0", color: "#333" }}>Confirm Deletion</h4>
+            <p style={{ margin: "0 0 16px 0", color: "#666", fontSize: "14px" }}>
+              Are you sure you want to permanently delete budget request <strong>{deleteRef}</strong>? This
+              action cannot be undone.
+            </p>
 
-              <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}>
-                <button
-                  type="button"
-                  onClick={closeDeletePopup}
-                  style={{
-                    border: "1px solid #ddd",
-                    background: "#fff",
-                    borderRadius: 8,
-                    padding: "8px 24px",
-                    cursor: "pointer",
-                    fontWeight: 500,
-                  }}
-                >
-                  Cancel
-                </button>
+            <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}>
+              <button
+                type="button"
+                onClick={closeDeletePopup}
+                style={{
+                  border: "1px solid #ddd",
+                  background: "#fff",
+                  borderRadius: 8,
+                  padding: "8px 24px",
+                  cursor: "pointer",
+                  fontWeight: 500,
+                }}
+              >
+                Cancel
+              </button>
 
-                <button
-                  type="button"
-                  onClick={confirmDelete}
-                  disabled={deleteCountdown > 0}
-                  style={{
-                    border: "none",
-                    background: deleteCountdown > 0 ? "#e9ecef" : "#dc3545",
-                    color: deleteCountdown > 0 ? "#6c757d" : "#fff",
-                    borderRadius: 8,
-                    padding: "8px 24px",
-                    cursor: deleteCountdown > 0 ? "not-allowed" : "pointer",
-                    fontWeight: 500,
-                    minWidth: "120px",
-                    transition: "all 0.2s",
-                  }}
-                >
-                  {deleteCountdown > 0 ? `Delete (${deleteCountdown}s)` : "Delete"}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleteCountdown > 0}
+                style={{
+                  border: "none",
+                  background: deleteCountdown > 0 ? "#e9ecef" : "#dc3545",
+                  color: deleteCountdown > 0 ? "#6c757d" : "#fff",
+                  borderRadius: 8,
+                  padding: "8px 24px",
+                  cursor: deleteCountdown > 0 ? "not-allowed" : "pointer",
+                  fontWeight: 500,
+                  minWidth: "120px",
+                  transition: "all 0.2s",
+                }}
+              >
+                {deleteCountdown > 0 ? `Delete (${deleteCountdown}s)` : "Delete"}
+              </button>
             </div>
           </div>
+        </div>
       )}
 
       {logPopupOpen && (
@@ -1683,11 +1691,11 @@ const AdminBudget: React.FC = () => {
                 new Date(logProposal.updated_at || logProposal.updatedAt).getTime() >
                 new Date(logProposal.created_at || logProposal.createdAt).getTime()
               ) && (
-                <div className="budgetdashboard-log-item">
-                  <span className="log-label">Last Edited:</span>
-                  <span className="log-value">{formatDateTimeForLog(logProposal.updated_at || logProposal.updatedAt)}</span>
-                </div>
-              )}
+                  <div className="budgetdashboard-log-item">
+                    <span className="log-label">Last Edited:</span>
+                    <span className="log-value">{formatDateTimeForLog(logProposal.updated_at || logProposal.updatedAt)}</span>
+                  </div>
+                )}
 
               {logLoading && <div className="adminbudget-state" style={{ padding: "24px 0" }}>Loading logs...</div>}
               {!logLoading && buildAdminLogEvents.length === 0 && (

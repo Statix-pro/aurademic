@@ -1,103 +1,18 @@
-import BudgetModel from './budgetModel.js';
-const VALID_BENEFICIARY_TYPES = [
-  'Faculty',
-  'Staff',
-  'Department',
-  'Centre',
-  'Cell',
-  'Club',
-  'Institution',
-  'Professional Body',
-  'Professional Bodies',
-  'ProfessionalBodies',
-];
+import * as BudgetModel from './budgetModel.js';
+import {
+  VALID_BENEFICIARY_TYPES,
+  normalizeText,
+  normalizeBeneficiaryType,
+} from '../shared/budget/budgetUtils.js';
+import {
+  WORKFLOW_STAGE_PERMISSION,
+  getUserId,
+  isSuperAdmin,
+  hasPermission,
+  resolveAccessRoleFromPermissions,
+} from '../shared/budget/controllerPermissions.js';
 
-const MUTABLE_ENTITY_TYPES = new Set(['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY']);
-const BUDGET_PERMISSIONS = Object.freeze({
-  proposalManage: 'budget.proposal.manage',
-  workflowLevel1: 'budget.workflow.level1',
-  workflowDof: 'budget.workflow.dof',
-  workflowPrincipal: 'budget.workflow.principal',
-  adminView: 'budget.admin.view',
-  adminManage: 'budget.admin.manage',
-});
-
-const WORKFLOW_STAGE_PERMISSION = Object.freeze({
-  level1: BUDGET_PERMISSIONS.workflowLevel1,
-  dof: BUDGET_PERMISSIONS.workflowDof,
-  principal: BUDGET_PERMISSIONS.workflowPrincipal,
-});
-
-const BUDGET_SCOPE_PERMISSIONS = Object.freeze([
-  { permission: BUDGET_PERMISSIONS.adminManage, role: 'admin' },
-  { permission: BUDGET_PERMISSIONS.adminView, role: 'admin' },
-  { permission: BUDGET_PERMISSIONS.workflowPrincipal, role: 'principal' },
-  { permission: BUDGET_PERMISSIONS.workflowDof, role: 'dof' },
-  { permission: BUDGET_PERMISSIONS.workflowLevel1, role: 'hod' },
-  { permission: BUDGET_PERMISSIONS.proposalManage, role: 'user' },
-]);
-
-const normalizeText = (value) => String(value || '').trim();
-
-const normalizeBeneficiaryType = (beneficiaryType) => {
-  const normalized = normalizeText(beneficiaryType);
-  if (normalized === 'ProfessionalBodies' || normalized === 'Professional Bodies') {
-    return 'Professional Body';
-  }
-  return normalized;
-};
-
-class BudgetController {
-  static getUserId(req) {
-    return req.user?.id || req.user?.userId || null;
-  }
-
-  static isSuperAdmin(req) {
-    if (!req?.user) {
-      return false;
-    }
-
-    if (req.user.is_super_admin || req.user.isSuperAdmin) {
-      return true;
-    }
-
-    const roleTokens = Array.isArray(req.user.roles) ? req.user.roles : [];
-    return roleTokens.some((role) => normalizeText(role).toLowerCase() === 'super_admin');
-  }
-
-  static getPermissionSet(req) {
-    const permissionTokens = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-    return new Set(permissionTokens.map((token) => normalizeText(token)).filter(Boolean));
-  }
-
-  static hasPermission(req, permissionKey) {
-    if (!permissionKey) return false;
-    if (BudgetController.isSuperAdmin(req)) return true;
-    return BudgetController.getPermissionSet(req).has(permissionKey);
-  }
-
-  static hasAnyPermission(req, permissionKeys = []) {
-    const permissionSet = BudgetController.getPermissionSet(req);
-    return permissionKeys.some((permissionKey) => permissionSet.has(permissionKey));
-  }
-
-  static resolveAccessRoleFromPermissions(req) {
-    if (BudgetController.isSuperAdmin(req)) {
-      return 'super_admin';
-    }
-
-    const permissionSet = BudgetController.getPermissionSet(req);
-
-    for (const mapping of BUDGET_SCOPE_PERMISSIONS) {
-      if (permissionSet.has(mapping.permission)) {
-        return mapping.role;
-      }
-    }
-
-    return 'user';
-  }
-
-  static normalizeEntityTypeParam(typeParam) {
+  export function normalizeEntityTypeParam(typeParam) {
     const normalized = BudgetModel.normalizeEntityTypeCode(typeParam);
 
     if (normalized === 'PROF_BODY') {
@@ -107,14 +22,14 @@ class BudgetController {
     return normalized;
   }
 
-  static async resolveUserDepartment(req) {
+  export async function resolveUserDepartment(req) {
     const requestDepartment = normalizeText(req.user?.department);
 
     if (requestDepartment) {
       return requestDepartment;
     }
 
-    const userId = BudgetController.getUserId(req);
+    const userId = getUserId(req);
     const userEmail = normalizeText(req.user?.email);
 
     if (userId) {
@@ -141,8 +56,8 @@ class BudgetController {
     return null;
   }
 
-  static async resolveUserDepartmentId(req) {
-    const departmentName = await BudgetController.resolveUserDepartment(req);
+  export async function resolveUserDepartmentId(req) {
+    const departmentName = await resolveUserDepartment(req);
 
     if (!departmentName) {
       return null;
@@ -152,9 +67,9 @@ class BudgetController {
     return department ? Number(department.id) : null;
   }
 
-  static async resolveSubmissionDepartment(req, beneficiaryType, payload = {}) {
+  export async function resolveSubmissionDepartment(req, beneficiaryType, payload = {}) {
     const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
-    const userDepartment = await BudgetController.resolveUserDepartment(req);
+    const userDepartment = await resolveUserDepartment(req);
     const parsedEmployeeId = Number.parseInt(payload?.employee_id, 10);
 
     if (normalizedBeneficiaryType === 'Faculty') {
@@ -184,9 +99,9 @@ class BudgetController {
   }
 
 
-  static async getFacultyDetails(req, res) {
+  export async function getFacultyDetails(req, res) {
     try {
-      const userId = BudgetController.getUserId(req);
+      const userId = getUserId(req);
       if (!userId) {
         return res.status(401).json({
           success: false,
@@ -204,8 +119,8 @@ class BudgetController {
       const department =
         empData?.parent_department_name ||
         empData?.name ||
-        await BudgetController.resolveUserDepartment(req);
-      const role = BudgetController.resolveAccessRoleFromPermissions(req);
+        await resolveUserDepartment(req);
+      const role = resolveAccessRoleFromPermissions(req);
 
       return res.json({
         success: true,
@@ -234,7 +149,7 @@ class BudgetController {
     }
   }
 
-  static async getFreezeConfig(req, res) {
+  export async function getFreezeConfig(req, res) {
     try {
       const { fiscalYear } = req.query;
       const fy = fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear();
@@ -259,7 +174,7 @@ class BudgetController {
     }
   }
 
-  static async searchApplicant(req, res) {
+  export async function searchApplicant(req, res) {
     try {
       const { q, type } = req.query;
       const results = await BudgetModel.searchApplicant(q || '', type);
@@ -279,7 +194,7 @@ class BudgetController {
     }
   }
 
-  static async getBudgetTags(req, res) {
+  export async function getBudgetTags(req, res) {
     try {
       const tags = await BudgetModel.getBudgetTags();
       return res.json({
@@ -295,9 +210,9 @@ class BudgetController {
     }
   }
 
-  static async getOrgUnits(req, res) {
+  export async function getOrgUnits(req, res) {
     try {
-      const mappedType = BudgetController.normalizeEntityTypeParam(req.params.type);
+      const mappedType = normalizeEntityTypeParam(req.params.type);
 
       if (!['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(mappedType)) {
         return res.status(400).json({
@@ -323,7 +238,7 @@ class BudgetController {
     }
   }
 
-  static async getAllOrgUnits(req, res) {
+  export async function getAllOrgUnits(req, res) {
     try {
       const units = await BudgetModel.getAllOrgUnits();
 
@@ -360,10 +275,10 @@ class BudgetController {
 
 
 
-  static async create(req, res) {
+  export async function create(req, res) {
     try {
       const payload = req.body || {};
-      const userId = BudgetController.getUserId(req);
+      const userId = getUserId(req);
       const userEmail = normalizeText(req.user?.email);
 
       if (!userId || !userEmail) {
@@ -428,7 +343,7 @@ class BudgetController {
         }
       }
 
-      const resolvedDepartment = await BudgetController.resolveSubmissionDepartment(
+      const resolvedDepartment = await resolveSubmissionDepartment(
         req,
         normalizedBeneficiaryType,
         payload
@@ -470,7 +385,7 @@ class BudgetController {
     }
   }
 
-  static async update(req, res) {
+  export async function update(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
 
@@ -481,11 +396,11 @@ class BudgetController {
         });
       }
 
-      const userId = BudgetController.getUserId(req);
+      const userId = getUserId(req);
       const userEmail = normalizeText(req.user?.email);
-      const userDepartment = await BudgetController.resolveUserDepartment(req);
-      const userDepartmentId = await BudgetController.resolveUserDepartmentId(req);
-      const userRole = BudgetController.resolveAccessRoleFromPermissions(req);
+      const userDepartment = await resolveUserDepartment(req);
+      const userDepartmentId = await resolveUserDepartmentId(req);
+      const userRole = resolveAccessRoleFromPermissions(req);
       const isPrivileged = ['super_admin', 'admin', 'dof', 'principal'].includes(userRole);
 
       if (!isPrivileged) {
@@ -510,7 +425,7 @@ class BudgetController {
       const normalizedBeneficiaryType = payload.beneficiary_type
         ? normalizeBeneficiaryType(payload.beneficiary_type)
         : payload.beneficiary_type;
-      const resolvedDepartment = await BudgetController.resolveSubmissionDepartment(
+      const resolvedDepartment = await resolveSubmissionDepartment(
         req,
         normalizedBeneficiaryType,
         payload
@@ -568,7 +483,7 @@ class BudgetController {
     }
   }
 
-  static async deleteProposal(req, res) {
+  export async function deleteProposal(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
 
@@ -576,8 +491,8 @@ class BudgetController {
         return res.status(400).json({ success: false, message: 'Invalid proposal ID' });
       }
 
-      const userId = BudgetController.getUserId(req);
-      const isSuperAdmin = BudgetController.isSuperAdmin(req);
+      const userId = getUserId(req);
+      const isSuperAdmin = isSuperAdmin(req);
       const proposal = await BudgetModel.getBudgetById(proposalId);
 
       if (!proposal) {
@@ -619,7 +534,7 @@ class BudgetController {
     }
   }
 
-  static async get(req, res) {
+  export async function get(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
 
@@ -639,11 +554,11 @@ class BudgetController {
         });
       }
 
-      const userId = BudgetController.getUserId(req);
+      const userId = getUserId(req);
       const userEmail = normalizeText(req.user?.email);
-      const userRole = BudgetController.resolveAccessRoleFromPermissions(req);
-      const userDepartment = await BudgetController.resolveUserDepartment(req);
-      const userDepartmentId = await BudgetController.resolveUserDepartmentId(req);
+      const userRole = resolveAccessRoleFromPermissions(req);
+      const userDepartment = await resolveUserDepartment(req);
+      const userDepartmentId = await resolveUserDepartmentId(req);
 
       const hasAccess = await BudgetModel.validateUserAccess(
         proposalId,
@@ -701,10 +616,10 @@ class BudgetController {
     }
   }
 
-  static async getMyBudgets(req, res) {
+  export async function getMyBudgets(req, res) {
     try {
       const { page = 1, limit = 10, status, fiscalYear } = req.query;
-      const userId = BudgetController.getUserId(req);
+      const userId = getUserId(req);
       const userEmail = normalizeText(req.user?.email);
 
       const budgets = await BudgetModel.listBudgets({
@@ -732,12 +647,12 @@ class BudgetController {
     }
   }
 
-  static async getHodBudgets(req, res) {
+  export async function getHodBudgets(req, res) {
     try {
-      const department = await BudgetController.resolveUserDepartment(req);
-      const departmentId = await BudgetController.resolveUserDepartmentId(req);
+      const department = await resolveUserDepartment(req);
+      const departmentId = await resolveUserDepartmentId(req);
       const userEmail = normalizeText(req.user?.email);
-      const isSuperAdmin = BudgetController.isSuperAdmin(req);
+      const isSuperAdmin = isSuperAdmin(req);
 
       if (!isSuperAdmin && !department && !departmentId && !userEmail) {
         return res.status(400).json({
@@ -776,12 +691,12 @@ class BudgetController {
     }
   }
 
-  static async getCoordinatorBudgets(req, res) {
+  export async function getCoordinatorBudgets(req, res) {
     try {
       const userEmail = normalizeText(req.user?.email);
-      const isSuperAdmin = BudgetController.isSuperAdmin(req);
+      const isSuperAdmin = isSuperAdmin(req);
 
-      const userId = BudgetController.getUserId(req);
+      const userId = getUserId(req);
 
       if (!isSuperAdmin && !userEmail && !userId) {
         return res.status(400).json({
@@ -818,10 +733,39 @@ class BudgetController {
     }
   }
 
-  static async getDofBudgets(req, res) {
+  export async function getItheadBudgets(req, res) {
     try {
       const { page = 1, limit = 10, status, fiscalYear } = req.query;
-      const isSuperAdmin = BudgetController.isSuperAdmin(req);
+      const isSuperAdminUser = isSuperAdmin(req);
+
+      const budgets = await BudgetModel.listBudgets({
+        role: 'ithead',
+        superAdminQueueView: isSuperAdminUser,
+        page: Number.parseInt(page, 10),
+        limit: Number.parseInt(limit, 10),
+        status: status || undefined,
+        fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      });
+
+      return res.json({
+        success: true,
+        data: budgets.budgets,
+        pagination: budgets.pagination,
+        currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
+      });
+    } catch (error) {
+      console.error('IT Head budgets error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch IT Head budgets',
+      });
+    }
+  }
+
+  export async function getDofBudgets(req, res) {
+    try {
+      const { page = 1, limit = 10, status, fiscalYear } = req.query;
+      const isSuperAdmin = isSuperAdmin(req);
 
       const budgets = await BudgetModel.listBudgets({
         role: 'dof',
@@ -847,10 +791,10 @@ class BudgetController {
     }
   }
 
-  static async getPrincipalBudgets(req, res) {
+  export async function getPrincipalBudgets(req, res) {
     try {
       const { page = 1, limit = 10, status, fiscalYear } = req.query;
-      const isSuperAdmin = BudgetController.isSuperAdmin(req);
+      const isSuperAdmin = isSuperAdmin(req);
 
       const budgets = await BudgetModel.listBudgets({
         role: 'principal',
@@ -877,7 +821,7 @@ class BudgetController {
   }
 
 
-  static async approve(req, res) {
+  export async function approve(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
 
@@ -909,7 +853,7 @@ class BudgetController {
 
       const currentStage = normalizeText(proposal.current_stage).toLowerCase();
       const requiredPermission = WORKFLOW_STAGE_PERMISSION[currentStage];
-      const isSuperAdmin = BudgetController.isSuperAdmin(req);
+      const isSuperAdmin = isSuperAdmin(req);
       const level1Route = BudgetModel.resolveLevel1Route(proposal);
 
       if (normalizedDecision !== 'archived' && !requiredPermission) {
@@ -921,7 +865,7 @@ class BudgetController {
 
       if (
         normalizedDecision !== 'archived'
-        && !BudgetController.hasPermission(req, requiredPermission)
+        && !hasPermission(req, requiredPermission)
       ) {
         return res.status(403).json({
           success: false,
@@ -944,10 +888,10 @@ class BudgetController {
         }
       }
 
-      const userId = BudgetController.getUserId(req);
+      const userId = getUserId(req);
       const userEmail = normalizeText(req.user?.email);
-      const userDepartment = await BudgetController.resolveUserDepartment(req);
-      const userDepartmentId = await BudgetController.resolveUserDepartmentId(req);
+      const userDepartment = await resolveUserDepartment(req);
+      const userDepartmentId = await resolveUserDepartmentId(req);
 
       const hasAccess = await BudgetModel.validateUserAccess(
         proposalId,
@@ -1006,7 +950,7 @@ class BudgetController {
 
 
 
-  static async uploadFiles(req, res) {
+  export async function uploadFiles(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
 
@@ -1017,11 +961,11 @@ class BudgetController {
         });
       }
 
-      const userId = BudgetController.getUserId(req);
+      const userId = getUserId(req);
       const userEmail = normalizeText(req.user?.email);
-      const userDepartment = await BudgetController.resolveUserDepartment(req);
-      const userDepartmentId = await BudgetController.resolveUserDepartmentId(req);
-      const accessRole = BudgetController.isSuperAdmin(req) ? 'super_admin' : 'user';
+      const userDepartment = await resolveUserDepartment(req);
+      const userDepartmentId = await resolveUserDepartmentId(req);
+      const accessRole = isSuperAdmin(req) ? 'super_admin' : 'user';
 
       const hasAccess = await BudgetModel.validateUserAccess(
         proposalId,
@@ -1070,7 +1014,7 @@ class BudgetController {
     }
   }
 
-  static async getHistory(req, res) {
+  export async function getHistory(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
 
@@ -1081,11 +1025,11 @@ class BudgetController {
         });
       }
 
-      const userId = BudgetController.getUserId(req);
+      const userId = getUserId(req);
       const userEmail = normalizeText(req.user?.email);
-      const userRole = BudgetController.resolveAccessRoleFromPermissions(req);
-      const userDepartment = await BudgetController.resolveUserDepartment(req);
-      const userDepartmentId = await BudgetController.resolveUserDepartmentId(req);
+      const userRole = resolveAccessRoleFromPermissions(req);
+      const userDepartment = await resolveUserDepartment(req);
+      const userDepartmentId = await resolveUserDepartmentId(req);
 
       const hasAccess = await BudgetModel.validateUserAccess(
         proposalId,
@@ -1136,7 +1080,7 @@ class BudgetController {
     }
   }
 
-  static async getMonthAllocations(req, res) {
+  export async function getMonthAllocations(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
 
@@ -1147,11 +1091,11 @@ class BudgetController {
         });
       }
 
-      const userId = BudgetController.getUserId(req);
+      const userId = getUserId(req);
       const userEmail = normalizeText(req.user?.email);
-      const userRole = BudgetController.resolveAccessRoleFromPermissions(req);
-      const userDepartment = await BudgetController.resolveUserDepartment(req);
-      const userDepartmentId = await BudgetController.resolveUserDepartmentId(req);
+      const userRole = resolveAccessRoleFromPermissions(req);
+      const userDepartment = await resolveUserDepartment(req);
+      const userDepartmentId = await resolveUserDepartmentId(req);
 
       const hasAccess = await BudgetModel.validateUserAccess(
         proposalId,
@@ -1186,7 +1130,7 @@ class BudgetController {
 
 
 
-  static async getStatus(req, res) {
+  export async function getStatus(req, res) {
     try {
       const proposalId = Number.parseInt(req.params.id, 10);
 
@@ -1206,11 +1150,11 @@ class BudgetController {
         });
       }
 
-      const userId = BudgetController.getUserId(req);
+      const userId = getUserId(req);
       const userEmail = normalizeText(req.user?.email);
-      const userRole = BudgetController.resolveAccessRoleFromPermissions(req);
-      const userDepartment = await BudgetController.resolveUserDepartment(req);
-      const userDepartmentId = await BudgetController.resolveUserDepartmentId(req);
+      const userRole = resolveAccessRoleFromPermissions(req);
+      const userDepartment = await resolveUserDepartment(req);
+      const userDepartmentId = await resolveUserDepartmentId(req);
 
       const hasAccess = await BudgetModel.validateUserAccess(
         proposalId,
@@ -1248,7 +1192,3 @@ class BudgetController {
       });
     }
   }
-
-}
-
-export default BudgetController;
