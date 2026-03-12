@@ -8,7 +8,7 @@ import {
   canManageAccessControl,
 } from '../../../shared/utils/permissionUtils';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
-import Navbar from '../../../shared/components/layout/navbar/navbar';
+
 import './AccessControlPage.css';
 import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
 import DeleteConfirmationModal from '../../../shared/components/ui/DeleteConfirmationModal';
@@ -666,7 +666,7 @@ const AccessControlPage: React.FC = () => {
 
   return (
     <>
-      <Navbar />
+
       <div className="access-control-wrapper">
         <div className="access-control-header">
           <h2>Access Control</h2>

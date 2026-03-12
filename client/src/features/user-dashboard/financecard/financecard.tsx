@@ -4,7 +4,7 @@ import axios from 'axios';
 import './financecard.css';
 import { Eye, Edit2, Trash2, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from '../../../shared/components/layout/navbar/navbar';
+
 
 interface FinanceCardItem {
   id: number;
@@ -45,7 +45,7 @@ const FinanceCard: React.FC = () => {
 
   return (
     <>
-      <Navbar />
+
 
       <section className="financecard-page">
         {/* HEADER */}

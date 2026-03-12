@@ -7,7 +7,7 @@ import autoTable from 'jspdf-autotable';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './financeapproval.css';
 import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
-import Navbar from '../../shared/components/layout/navbar/navbar';
+
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import CustomTagInput from '../../shared/components/ui/CustomTagInput';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
@@ -1688,7 +1688,7 @@ const FinanceApproval: React.FC = () => {
 
   return (
     <div className="finance-approval-body" style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}>
-      <Navbar />
+
 
       {!showPreview && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
