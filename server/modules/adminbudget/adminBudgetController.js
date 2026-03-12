@@ -9,7 +9,7 @@ import {
   BUDGET_PERMISSIONS,
   WORKFLOW_STAGE_PERMISSION,
   getUserId,
-  isSuperAdmin,
+  isSuperAdmin as hasSuperAdminAccess,
   getPermissionSet,
   hasPermission,
   resolveAccessRoleFromPermissions,
@@ -307,7 +307,7 @@ export async function getHodBudgets(req, res) {
     const department = await resolveUserDepartment(req);
     const departmentId = await resolveUserDepartmentId(req);
     const userEmail = normalizeText(req.user?.email);
-    const isSuperAdmin = isSuperAdmin(req);
+    const isSuperAdmin = hasSuperAdminAccess(req);
 
     if (!isSuperAdmin && !department && !departmentId && !userEmail) {
       return res.status(400).json({
@@ -349,7 +349,7 @@ export async function getHodBudgets(req, res) {
 export async function getCoordinatorBudgets(req, res) {
   try {
     const userEmail = normalizeText(req.user?.email);
-    const isSuperAdmin = isSuperAdmin(req);
+    const isSuperAdmin = hasSuperAdminAccess(req);
     const userId = getUserId(req);
 
     if (!isSuperAdmin && !userEmail && !userId) {
@@ -390,7 +390,7 @@ export async function getCoordinatorBudgets(req, res) {
 export async function getItheadBudgets(req, res) {
   try {
     const { page = 1, limit = 10, status, fiscalYear } = req.query;
-    const isSuperAdminUser = isSuperAdmin(req);
+    const isSuperAdminUser = hasSuperAdminAccess(req);
 
     const budgets = await AdminBudgetModel.listBudgets({
       role: 'ithead',
@@ -419,7 +419,7 @@ export async function getItheadBudgets(req, res) {
 export async function getDofBudgets(req, res) {
   try {
     const { page = 1, limit = 10, status, fiscalYear } = req.query;
-    const isSuperAdmin = isSuperAdmin(req);
+    const isSuperAdmin = hasSuperAdminAccess(req);
 
     const budgets = await AdminBudgetModel.listBudgets({
       role: 'dof',
@@ -448,7 +448,7 @@ export async function getDofBudgets(req, res) {
 export async function getPrincipalBudgets(req, res) {
   try {
     const { page = 1, limit = 10, status, fiscalYear } = req.query;
-    const isSuperAdmin = isSuperAdmin(req);
+    const isSuperAdmin = hasSuperAdminAccess(req);
 
     const budgets = await AdminBudgetModel.listBudgets({
       role: 'principal',
@@ -506,7 +506,7 @@ export async function approve(req, res) {
 
     const currentStage = normalizeText(proposal.current_stage).toLowerCase();
     const requiredPermission = WORKFLOW_STAGE_PERMISSION[currentStage];
-    const isSuperAdmin = isSuperAdmin(req);
+    const isSuperAdmin = hasSuperAdminAccess(req);
     const level1Route = AdminBudgetModel.resolveLevel1Route(proposal);
 
     if (normalizedDecision !== 'archived' && !requiredPermission) {
@@ -629,7 +629,7 @@ export async function updateApprovedAmounts(req, res) {
 
     const currentStage = normalizeText(proposal.current_stage).toLowerCase();
     const requiredPermission = WORKFLOW_STAGE_PERMISSION[currentStage];
-    const isSuperAdmin = isSuperAdmin(req);
+    const isSuperAdmin = hasSuperAdminAccess(req);
 
     if (!requiredPermission && !isSuperAdmin) {
       return res.status(400).json({
@@ -694,7 +694,7 @@ export async function deleteProposal(req, res) {
     }
 
     const userId = getUserId(req);
-    const isSuperAdmin = isSuperAdmin(req);
+    const isSuperAdmin = hasSuperAdminAccess(req);
     const proposal = await AdminBudgetModel.getBudgetById(proposalId);
 
     if (!proposal) {
@@ -978,7 +978,7 @@ export async function getFreezeConfig(req, res) {
 
 export async function upsertFreezeConfig(req, res) {
   try {
-    const isSuperAdminUser = isSuperAdmin(req);
+    const isSuperAdminUser = hasSuperAdminAccess(req);
     const hasDofPermission = hasPermission(req, BUDGET_PERMISSIONS.workflowDof);
 
     if (!isSuperAdminUser && !hasDofPermission) {
@@ -1101,7 +1101,7 @@ export async function toggleArchive(req, res) {
       || ['archive', 'archived'].includes(normalizeText(proposal.current_stage).toLowerCase());
     const currentStage = normalizeText(proposal.current_stage).toLowerCase();
     const requiredPermission = WORKFLOW_STAGE_PERMISSION[currentStage];
-    const isSuperAdmin = isSuperAdmin(req);
+    const isSuperAdmin = hasSuperAdminAccess(req);
 
     if (!isArchived) {
       if (!requiredPermission) {

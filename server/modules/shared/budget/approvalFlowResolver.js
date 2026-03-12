@@ -63,8 +63,8 @@ export async function resolveApprovalFlow(beneficiaryType, entityTypeCode = null
     }
 
     // Tag-based IT Head stage injection
-    const normalizedTag = normalizeText(budgetTag).toLowerCase();
-    if (normalizedTag === 'it') {
+    const normalizedTag = normalizeText(budgetTag).toLowerCase().replace(/\s+/g, ' ').trim();
+    if (normalizedTag === 'it infrastructure') {
         resolvedFlow.requiresIthead = 1;
     }
 

@@ -15,6 +15,7 @@ export const VALID_MONTHS = Object.freeze([
 
 export const APPROVAL_FLOW = Object.freeze({
     level1: { approve: 'level1_approved', reject: 'level1_rejected', returned: 'level1_returned', next: 'dof' },
+    ithead: { approve: 'ithead_approved', reject: 'ithead_rejected', returned: 'ithead_returned', next: 'dof' },
     dof: { approve: 'dof_approved', reject: 'dof_rejected', returned: 'dof_returned', next: 'principal' },
     principal: { approve: 'principal_approved', reject: 'principal_rejected', next: 'completed' },
 });
