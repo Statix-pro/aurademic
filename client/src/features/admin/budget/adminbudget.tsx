@@ -19,6 +19,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import { useAuth } from "../../../contexts/AuthContext";
 import { hasPermission, isSuperAdmin } from "../../../shared/utils/permissionUtils";
+import AlertModal, { type AlertType } from "../../../shared/components/ui/AlertModal";
 
 type ActionType = "return" | "reject" | null;
 type QueueTabKey = "hod" | "coordinator" | "ithead" | "dof" | "principal" | "admin";
@@ -181,6 +182,50 @@ const AdminBudget: React.FC = () => {
 
   // Archive animation/state
   const [archivingIds, setArchivingIds] = useState<Set<number>>(new Set<number>());
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+    onConfirm?: (() => void) | undefined;
+    showCancel?: boolean;
+    confirmText?: string;
+    cancelText?: string;
+  }>({
+    show: false,
+    message: "",
+    type: "info",
+  });
+
+  const showAlert = (
+    message: React.ReactNode,
+    type: AlertType = "info",
+    title?: string,
+    onConfirm?: () => void,
+    showCancel = false,
+    confirmText = "OK",
+    cancelText = "Cancel"
+  ) => {
+    setAlertConfig({
+      show: true,
+      message,
+      type,
+      title,
+      onConfirm: onConfirm
+        ? () => {
+          closeAlert();
+          onConfirm();
+        }
+        : undefined,
+      showCancel,
+      confirmText,
+      cancelText,
+    });
+  };
+
+  const closeAlert = () => {
+    setAlertConfig((prev) => ({ ...prev, show: false, onConfirm: undefined }));
+  };
 
   const currentActiveAssignment = useMemo<RbacAssignment | null>(() => {
     return assignments.length > 0 ? assignments[activeAssignmentIndex] : null;
@@ -375,7 +420,7 @@ const AdminBudget: React.FC = () => {
 
   const openActionPopup = (type: "return" | "reject", id: number, ref: string, stage: string) => {
     if (!canProcessStage(stage)) {
-      alert("You do not have permission to process this stage.");
+      showAlert("You do not have permission to process this stage.", "warning");
       return;
     }
     setActionType(type);
@@ -397,33 +442,39 @@ const AdminBudget: React.FC = () => {
 
   const onApprove = async (itemId?: number, stage?: string) => {
     if (!itemId) {
-      alert("Missing budget id.");
+      showAlert("Missing budget id.", "warning");
       return;
     }
 
     if (!stage || !canProcessStage(stage)) {
-      alert("You do not have permission to approve this stage.");
+      showAlert("You do not have permission to approve this stage.", "warning");
       return;
     }
+    showAlert(
+      "Are you sure you want to approve this budget?",
+      "warning",
+      "Confirm Approval",
+      async () => {
+        try {
+          const response: any = await authenticityUtility.patch(`/adminbudget/${itemId}/approval`, {
+            decision: "approved",
+          });
 
-    if (!window.confirm("Are you sure you want to approve this budget?")) return;
-
-    try {
-      const response: any = await authenticityUtility.patch(`/adminbudget/${itemId}/approval`, {
-        decision: "approved",
-      });
-
-      if (response?.success || response?.data?.success) {
-        fetchDashboard();
-        return;
-      }
-      alert(response?.message || "Failed to approve");
-    } catch (error: any) {
-      alert(error.response?.data?.message || "Failed to approve");
-    }
+          if (response?.success || response?.data?.success) {
+            fetchDashboard();
+            return;
+          }
+          showAlert(response?.message || "Failed to approve", "error");
+        } catch (error: any) {
+          showAlert(error.response?.data?.message || "Failed to approve", "error");
+        }
+      },
+      true,
+      "Approve"
+    );
   };
 
-  const onArchiveToggle = async (item: BudgetRequestItem) => {
+  const onArchiveToggle = (item: BudgetRequestItem) => {
     const id = Number(item.id);
     const isArchived = ["archived", "archive"].some((token) =>
       (item.status || "").toLowerCase().includes(token)
@@ -431,53 +482,60 @@ const AdminBudget: React.FC = () => {
     const confirmMessage = isArchived
       ? "Are you sure you want to unarchive this budget?"
       : "Are you sure you want to archive this budget?";
+    showAlert(
+      confirmMessage,
+      "warning",
+      isArchived ? "Confirm Unarchive" : "Confirm Archive",
+      async () => {
+        if (archivingIds.has(id)) return;
 
-    if (!window.confirm(confirmMessage)) return;
-    if (archivingIds.has(id)) return;
+        setArchivingIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
 
-    setArchivingIds((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
+        try {
+          const response: any = await authenticityUtility.patch(`/adminbudget/${id}/archive-toggle`, {});
 
-    try {
-      const response: any = await authenticityUtility.patch(`/adminbudget/${id}/archive-toggle`, {});
+          if (response.success) {
+            fetchDashboard();
+          }
+        } catch (error: any) {
+          setArchivingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+          showAlert(error.response?.data?.message || "Failed to update archive state", "error");
+          return;
+        }
 
-      if (response.success) {
-        fetchDashboard();
-      }
-    } catch (error: any) {
-      setArchivingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      alert(error.response?.data?.message || "Failed to update archive state");
-      return;
-    }
-
-    window.setTimeout(() => {
-      setArchivingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      fetchDashboard();
-    }, ARCHIVE_TRANSITION_MS);
+        window.setTimeout(() => {
+          setArchivingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+          fetchDashboard();
+        }, ARCHIVE_TRANSITION_MS);
+      },
+      true,
+      isArchived ? "Unarchive" : "Archive"
+    );
   };
 
   const submitActionWithComment = async () => {
     if (!actionType || !actionId) return;
 
     if (!canProcessStage(actionStage)) {
-      alert("You do not have permission to process this stage.");
+      showAlert("You do not have permission to process this stage.", "warning");
       return;
     }
 
     const comment = actionComment.trim();
     if (!comment) {
-      alert("Please enter comments.");
+      showAlert("Please enter comments.", "warning");
       return;
     }
 
@@ -488,12 +546,12 @@ const AdminBudget: React.FC = () => {
       });
 
       if (response.success) {
-        alert(`${actionType === "return" ? "Returned" : "Rejected"} successfully`);
+        showAlert(`${actionType === "return" ? "Returned" : "Rejected"} successfully`, "success");
         closeActionPopup();
         fetchDashboard();
       }
     } catch (error: any) {
-      alert(error.response?.data?.message || `Failed to ${actionType}`);
+      showAlert(error.response?.data?.message || `Failed to ${actionType}`, "error");
     }
   };
 
@@ -515,12 +573,12 @@ const AdminBudget: React.FC = () => {
     try {
       const response: any = await authenticityUtility.delete(`/adminbudget/${deleteId}`);
       if (response.success) {
-        alert("Budget request deleted successfully");
+        showAlert("Budget proposal deleted successfully", "success");
         closeDeletePopup();
         fetchDashboard();
       }
     } catch (error: any) {
-      alert(error.response?.data?.message || "Failed to delete budget request");
+      showAlert(error.response?.data?.message || "Failed to delete budget proposal", "error");
     }
   };
 
@@ -676,21 +734,21 @@ const AdminBudget: React.FC = () => {
   const onFreezeTime = async () => {
     if (!canFreezeNow) {
       if (isDofLogin && !isSuperAdminLogin && isTimeFrozen) {
-        alert("Freeze already applied for this fiscal year. Only Super Admin can edit it now.");
+        showAlert("Freeze already applied for this fiscal year. Only Super Admin can edit it now.", "warning");
         return;
       }
       if (isDofLogin && !isSuperAdminLogin && !isTodayFebFirst) {
-        alert(`DoF freeze can be applied only on ${dofFreezeAllowedDateText}.`);
+        showAlert(`DoF freeze can be applied only on ${dofFreezeAllowedDateText}.`, "warning");
         return;
       }
-      alert("Only Super Admin can edit freeze configuration right now.");
+      showAlert("Only Super Admin can edit freeze configuration right now.", "warning");
       return;
     }
 
     const selectedFreezeDate = freezeDate;
 
     if (!selectedFreezeDate) {
-      alert("Please select a freeze date.");
+      showAlert("Please select a freeze date.", "warning");
       return;
     }
 
@@ -707,10 +765,10 @@ const AdminBudget: React.FC = () => {
         setIsTimeFrozen(true);
         setFreezePopupOpen(false);
       } else {
-        alert(response?.message || "Failed to freeze budget time.");
+        showAlert(response?.message || "Failed to freeze budget time.", "error");
       }
     } catch (error: any) {
-      alert(error?.response?.data?.message || "Failed to freeze budget time.");
+      showAlert(error?.response?.data?.message || "Failed to freeze budget time.", "error");
     } finally {
       setFreezeSaving(false);
     }
@@ -748,7 +806,7 @@ const AdminBudget: React.FC = () => {
       setLogEntries(entries);
       setLogEdits(edits);
     } catch (error: any) {
-      alert(error?.response?.data?.message || "Failed to fetch proposal logs");
+      showAlert(error?.response?.data?.message || "Failed to fetch proposal logs", "error");
       setLogPopupOpen(false);
     } finally {
       setLogLoading(false);
@@ -1580,6 +1638,18 @@ const AdminBudget: React.FC = () => {
           </div>
         </div>
       )}
+
+      <AlertModal
+        show={alertConfig.show}
+        onHide={closeAlert}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        onConfirm={alertConfig.onConfirm}
+        showCancel={alertConfig.showCancel}
+        confirmText={alertConfig.confirmText}
+        cancelText={alertConfig.cancelText}
+      />
 
       {deletePopupOpen && (
         <div
