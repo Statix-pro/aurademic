@@ -108,7 +108,7 @@ export async function buildBudgetList(options) {
 
     const where = ['bp.fiscal_year = ?'];
     const params = [Number(currentFY)];
-    const isQueueSuperAdminView = Boolean(superAdminQueueView) && ['hod', 'coordinator', 'dof', 'principal'].includes(safeRole);
+    const isQueueSuperAdminView = Boolean(superAdminQueueView) && ['hod', 'coordinator', 'ithead', 'dof', 'principal'].includes(safeRole);
 
     // Admin Archived Predicates
     const archivedStatusPredicate = `LOWER(TRIM(bp.status)) IN ('archived', 'archive')`;
@@ -137,6 +137,15 @@ export async function buildBudgetList(options) {
       WHERE bpa_archive.budget_proposal_id = bp.id
         AND LOWER(TRIM(bpa_archive.decision)) IN ('archived', 'archive')
         AND LOWER(TRIM(bpa_archive.role)) = 'principal'
+    )
+  )`;
+    const archivedByItheadPredicate = `(
+    ${archivedStatusPredicate}
+    AND EXISTS (
+      SELECT 1 FROM budget_proposal_approvals bpa_archive
+      WHERE bpa_archive.budget_proposal_id = bp.id
+        AND LOWER(TRIM(bpa_archive.decision)) IN ('archived', 'archive')
+        AND LOWER(TRIM(bpa_archive.role)) = 'ithead'
     )
   )`;
 
@@ -201,7 +210,12 @@ export async function buildBudgetList(options) {
             );
             break;
         case 'ithead':
-            where.push('(bp.current_stage = "ithead" OR bp.status LIKE "ithead_%")');
+            where.push('LOWER(TRIM(bp.budget_tag)) = LOWER(TRIM(?))');
+            params.push('IT Infrastructure');
+            where.push(isAdminView
+                ? `(bp.current_stage = "ithead" OR bp.status LIKE "ithead_%" OR ${archivedByItheadPredicate})`
+                : `(bp.current_stage = "ithead" OR bp.status LIKE "ithead_%")`
+            );
             break;
         case 'principal':
             where.push(isAdminView

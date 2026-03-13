@@ -443,6 +443,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
 
 const STAGE_PERMISSION_MAP: Record<string, string> = {
   level1: 'budget.workflow.level1',
+  ithead: 'budget.workflow.ithead',
   dof: 'budget.workflow.dof',
   principal: 'budget.workflow.principal',
 };
@@ -874,144 +875,187 @@ const Budget: React.FC = () => {
 
 
 
-  const handleSubmitBudget = async () => {
+ const handleSubmitBudget = async () => {
+  // Check budget lines first
+  if (!budgetLines.length) {
+    showAlert('Please add at least one budget line.', 'warning');
+    return;
+  }
 
-    if (!budgetLines.length) {
-      showAlert('Please add at least one budget line.', 'warning');
+  for (let i = 0; i < budgetLines.length; i++) {
+    const line = budgetLines[i];
+    
+    // Budget Head required
+    if (!line.budgetHead?.trim()) {
+      showAlert(`Budget Head is required for line ${i + 1}`, 'warning');
       return;
     }
-
-
-    for (let i = 0; i < budgetLines.length; i++) {
-      const line = budgetLines[i];
-      if (!line.budgetHead?.trim()) {
-        showAlert('Budget Head is required', 'warning');
-        return;
-      }
-      if (!line.amount || Number(line.amount) <= 0) {
-        showAlert('Valid Unit Amount is required', 'warning');
-        return;
-      }
-    }
-
-
-    const formattedLines = budgetLines.map((line) => ({
-      budget_head: line.budgetHead?.trim(),
-      sub_head: line.subHead?.trim() || '',
-      unit_amount: Number(line.amount),
-      quantity: Number(line.qty) || 1,
-      line_description:
-        line.description?.trim() ||
-        `${line.budgetHead} - ${line.subHead || ''}`,
-      month_allocations: line.monthAmounts || {},
-    }));
-
-
-    const safeFY = String(explicitFiscalYear);
-    const fiscalYearInt = parseInt(safeFY.split("-")[0]);
-
-
-    if (isNaN(fiscalYearInt)) {
-      showAlert("Error: Invalid Fiscal Year calculated. Please refresh.", 'error');
+    
+    // Sub Head required
+    if (!line.subHead?.trim()) {
+      showAlert(`Sub Head is required for line ${i + 1}`, 'warning');
       return;
     }
-
-
-    if (
-      isNewMode &&
-      applicantSearchQuery.trim() &&
-      applicantSearchQuery.trim() !== applicantName.trim()
-    ) {
-      showAlert('Please select an applicant from the search results.', 'warning');
+    
+    // Unit Amount required and positive
+    const unitAmount = Number(line.amount);
+    if (!line.amount || unitAmount <= 0) {
+      showAlert(`Valid Unit Amount > 0 is required for line ${i + 1}`, 'warning');
       return;
     }
-
-    const payload = {
-      request_date: date,
-      fiscal_year: fiscalYearInt,
-      employee_id:
-        Number.isInteger(Number(applicantEmployeeId)) && Number(applicantEmployeeId) > 0
-          ? Number(applicantEmployeeId)
-          : undefined,
-      beneficiary_type: beneficiaryType?.trim(),
-      beneficiary_employee_id:
-        ['Faculty', 'Staff'].includes(beneficiaryType) &&
-          Number.isInteger(Number(beneficiaryEmployeeId)) &&
-          Number(beneficiaryEmployeeId) > 0
-          ? Number(beneficiaryEmployeeId)
-          : undefined,
-      beneficiary_value:
-        ['Faculty', 'Staff'].includes(beneficiaryType)
-          ? beneficiaryValue?.trim()
-          : beneficiaryType === 'Institution'
-            ? 'K.S.Rangasamy College of Technology'
-            : categoryItem?.trim(),
-      proposal_description: '',
-      applicant_name: applicantName?.trim(),
-      applicant_entity: applicantEntity?.trim() || null,
-      budget_tag: selectedTag?.trim() || null,
-      lines: formattedLines,
-    };
-
-    try {
-      const isPrivilegedReviewer = isAdminContextEdit && isEditMode;
-      const endpoint = isPrivilegedReviewer
-        ? `/budget/${id}`
-        : (isEditMode ? `${budgetApiBase}/${id}` : budgetApiBase);
-      const requestPayload = payload;
-      const httpMethod = isEditMode ? 'put' : 'post';
-
-      const result = await (authenticityUtility as any)[httpMethod](endpoint, requestPayload);
-
-      if (!result.success) {
-        throw new Error(result.message || 'Submission failed on server');
-      }
-
+    
+    // Quantity required and positive (blocks 0 qty)
+    const quantity = Number(line.qty);
+    if (!line.qty || quantity <= 0) {
+      showAlert(`Valid Quantity > 0 is required for line ${i + 1}`, 'warning');
+      return;
+    }
+    
+    // Description required
+    if (!line.description?.trim()) {
+      showAlert(`Description is required for line ${i + 1}`, 'warning');
+      return;
+    }
+    
+    // Month splitup must EXACTLY match unit_amount * quantity
+    const totalMonthAmount = Object.values(line.monthAmounts || {}).reduce(
+      (sum, val) => sum + (Number(val) || 0), 0
+    );
+    
+    const expectedTotal = unitAmount * quantity;
+    if (Math.abs(totalMonthAmount - expectedTotal) > 0.01) {
       showAlert(
-        isPrivilegedReviewer
-          ? 'Budget updated successfully!'
-          : isEditMode
-            ? `Budget updated successfully!`
-            : (
-              <>
-                Budget submitted successfully!
-                <br />
-                Reference No.: <strong>{result.data.proposalRef}</strong>
-              </>
-            ),
-        'success',
-        undefined,
-        () => {
-          closeAlert();
-          if (!isEditMode) {
-            setBudgetLines([{
-              budgetHead: '', subHead: '', amount: '', qty: '1', monthAmounts: { ...EMPTY_MONTHS }, description: '',
-            }]);
-            setExpandedRows([0]);
-            setApplicantSearchQuery('');
-            setApplicantEmployeeId(null);
-            setApplicantSearchResults([]);
-            setShowApplicantDropdown(false);
-            setApplicantName(''); setDepartment(''); setApplicantEntity(''); setDesignation(''); setEmail(''); setMobile('');
-            setBeneficiaryEmployeeId(null);
-            setBeneficiaryType(''); setBeneficiaryValue(''); setCategoryItem('');
-            setSelectedTag('');
-            setBeneficiarySearchQuery(''); setBeneficiarySearchResults([]); setShowBeneficiaryDropdown(false);
-            const today = new Date().toISOString().split('T')[0];
-            setDate(today);
-          }
-          if (isPrivilegedReviewer) {
-            navigate("/admin/budget");
-          } else {
-            navigate("/budgetcard");
-          }
-        }
+        `Line ${i + 1}: Month total (₹${totalMonthAmount.toFixed(2)}) must equal Unit Amount × Qty (₹${expectedTotal.toFixed(2)})`, 
+        'warning'
       );
-    } catch (error: any) {
-      console.error('Submit error:', error);
-      showAlert(`Failed to submit: ${error.response?.data?.message || error.message}`, 'error');
+      return;
     }
+  }
+
+  // Rest of validation (applicant, beneficiary, tag, FY)...
+  if (!applicantName?.trim()) {
+    showAlert('Applicant Name is required', 'warning');
+    return;
+  }
+
+  // Beneficiary validation
+  const getBeneficiaryDisplayValue = () => {
+    if (beneficiaryType === 'Institution') return 'K.S.Rangasamy College of Technology';
+    if (['Faculty', 'Staff'].includes(beneficiaryType || '')) return beneficiaryValue?.trim();
+    return categoryItem?.trim() || beneficiaryValue?.trim();
   };
+
+  if (!beneficiaryType?.trim()) {
+    showAlert('Beneficiary Type is required', 'warning');
+    return;
+  }
+
+  const displayBeneficiaryValue = getBeneficiaryDisplayValue();
+  if (!displayBeneficiaryValue) {
+    showAlert('Beneficiary selection is required for the chosen type', 'warning');
+    return;
+  }
+
+  // Tag mandatory
+  if (!selectedTag?.trim()) {
+    showAlert('Budget Tag is required', 'warning');
+    return;
+  }
+
+  // Fiscal year validation
+  const safeFY = String(explicitFiscalYear);
+  const fiscalYearInt = parseInt(safeFY.split("-")[0]);
+  if (isNaN(fiscalYearInt)) {
+    showAlert("Error: Invalid Fiscal Year calculated. Please refresh.", 'error');
+    return;
+  }
+
+  const formattedLines = budgetLines.map((line) => ({
+    budget_head: line.budgetHead?.trim(),
+    sub_head: line.subHead?.trim(),
+    unit_amount: Number(line.amount),
+    quantity: Number(line.qty),  // Now guaranteed > 0
+    line_description: line.description?.trim(),
+    month_allocations: line.monthAmounts || {},
+  }));
+
+  const payload = {
+    request_date: date,
+    fiscal_year: fiscalYearInt,
+    employee_id: Number.isInteger(Number(applicantEmployeeId)) && Number(applicantEmployeeId) > 0
+      ? Number(applicantEmployeeId)
+      : undefined,
+    beneficiary_type: beneficiaryType?.trim(),
+    beneficiary_value: displayBeneficiaryValue,
+    proposal_description: '',
+    applicant_name: applicantName?.trim(),
+    applicant_entity: applicantEntity?.trim() || null,
+    budget_tag: selectedTag?.trim(),
+    lines: formattedLines,
+  };
+
+  try {
+    const isPrivilegedReviewer = isAdminContextEdit && isEditMode;
+    const endpoint = isPrivilegedReviewer
+      ? `/adminbudget/${id}`
+      : (isEditMode ? `${budgetApiBase}/${id}` : budgetApiBase);
+    
+    const requestPayload = isPrivilegedReviewer
+      ? {
+          lines: formattedLines.map((line, lineIndex) => ({
+            line_id: budgetLines[lineIndex]?.lineId,
+            unit_amount: Number(line.unit_amount),
+            quantity: Number(line.quantity),
+            month_allocations: line.month_allocations || {},
+          })),
+        }
+      : payload;
+    
+    const httpMethod = isEditMode ? 'put' : 'post';
+
+    const result = await (authenticityUtility as any)[httpMethod](endpoint, requestPayload);
+
+    if (!result.success) {
+      throw new Error(result.message || 'Submission failed on server');
+    }
+
+    showAlert(
+      isPrivilegedReviewer
+        ? 'Approved amounts updated successfully!'
+        : isEditMode
+        ? `Budget updated successfully!`
+        : (
+            <>
+              Budget submitted successfully!
+              <br />
+              Reference No.: <strong>{result.data.proposalRef}</strong>
+            </>
+          ),
+      'success',
+      undefined,
+      () => {
+        closeAlert();
+        if (!isEditMode) {
+          // Reset form
+          setBudgetLines([{
+            budgetHead: '', subHead: '', amount: '', qty: '1', monthAmounts: { ...EMPTY_MONTHS }, description: '',
+          }]);
+          setExpandedRows([0]);
+          // ... rest of reset code
+        }
+        if (isPrivilegedReviewer) {
+          navigate("/admin/budget");
+        } else {
+          navigate("/budgetcard");
+        }
+      }
+    );
+  } catch (error: any) {
+    console.error('Submit error:', error);
+    showAlert(`Failed to submit: ${error.response?.data?.message || error.message}`, 'error');
+  }
+};
+
 
 
 
@@ -1210,7 +1254,7 @@ const Budget: React.FC = () => {
         }
 
 
-        const editableStatuses = ['draft', 'level1_returned', 'dof_returned', 'submitted', 're_submitted'];
+        const editableStatuses = ['draft', 'level1_returned', 'ithead_returned', 'dof_returned', 'submitted', 're_submitted'];
         const isStatusEditable = editableStatuses.includes((p.status || '').toLowerCase());
         const isEditURL = location.pathname.includes('/edit');
         const currentStageKey = String(p.current_stage || p.currentStage || '').toLowerCase();
@@ -2673,7 +2717,7 @@ const Budget: React.FC = () => {
       </fieldset>
 
       {/* ADMIN ACTION BUTTONS - Only for admin=true */}
-      {new URLSearchParams(location.search).get('admin') === 'true' && !isEditMode && (
+      {new URLSearchParams(location.search).get('admin') === 'true'   &&  !isSuperAdmin(user) && !isEditMode && (
         <div
           className="budget-admin-actions"
           style={{
