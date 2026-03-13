@@ -346,19 +346,27 @@ const BudgetDashboard: React.FC = () => {
           // CHECK: Is this proposal FULLY approved?
           const isFullyApproved = ['principal_approved', 'completed'].includes(master.status);
 
-          const items = lines.map((line: any) => ({
+          const items = lines.map((line: any) => {
+            const unitAmount = Number(line.unit_amount ?? 0);
+            const quantity = Number(line.quantity ?? 1);
+            const proposedTotal = Number.isFinite(unitAmount) && Number.isFinite(quantity)
+              ? unitAmount * quantity
+              : Number(line.line_total ?? 0);
+
+            return {
             id: line.id,
             proposalId: master.id,
             budgetHead: line.budget_head || "Unknown",
             subHead: line.sub_head || "-",
-            proposedAmount: parseFloat(line.line_total || 0),
+            proposedAmount: Number.isFinite(proposedTotal) ? proposedTotal : 0,
             // Show approved amount only after final approval, sourced from approved columns.
             approvedAmount: isFullyApproved
               ? parseFloat(line.approved_line_total ?? line.line_total ?? 0)
               : 0,
             expenditure: 0, // Placeholder for future integration
             createdAt: master.created_at
-          }));
+          };
+          });
 
           return {
             proposalId: master.id,
@@ -1073,7 +1081,7 @@ const BudgetDashboard: React.FC = () => {
                               <Eye size={16} />
                             </button>
                             {/* Edit only if submitted/returned AND not applicant-only */}
-                            {!proposal.isApplicantOnly && ['submitted', 're_submitted', 'level1_returned', 'hod_returned', 'dof_returned', 'principal_returned'].includes(proposal.status) && (
+                            {!proposal.isApplicantOnly && ['submitted', 're_submitted', 'level1_returned', 'hod_returned', 'ithead_returned', 'dof_returned', 'principal_returned'].includes(proposal.status) && (
                               <button title="Edit" className="budgetdashboard-action-global" onClick={() => navigate(`/budget/${proposal.proposalId}/edit`)}>
                                 <Edit2 size={16} />
                               </button>

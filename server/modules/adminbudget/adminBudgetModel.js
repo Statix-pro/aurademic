@@ -838,6 +838,11 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
         return { entityTypeCode: null, beneficiaryEntityId: null };
       }
 
+      const entityRecord = await getEntityById(conn, beneficiaryEntityId);
+      if (!entityRecord || entityRecord.is_active !== 1) {
+        return { entityTypeCode: null, beneficiaryEntityId: null };
+      }
+
       return {
         entityTypeCode: beneficiaryEntityTypeCode,
         beneficiaryEntityId,
@@ -1818,6 +1823,7 @@ export async function getBudgetById(proposalId) {
         }
         return false;
       }
+      case 'ithead':
       case 'dof':
       case 'principal':
       case 'admin':

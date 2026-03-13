@@ -401,10 +401,11 @@ export async function resolveSubmissionDepartment(req, beneficiaryType, payload 
       const userDepartment = await resolveUserDepartment(req);
       const userDepartmentId = await resolveUserDepartmentId(req);
       const userRole = resolveAccessRoleFromPermissions(req);
-      const canBypassAccessCheck = ['super_admin', 'admin', 'dof', 'principal'].includes(userRole);
+
+       const canBypassAccessCheck = ['super_admin', 'admin', 'dof', 'principal'].includes(userRole);
       const canBypassEditStateValidation = canBypassAccessCheck || ['hod', 'ithead'].includes(userRole);
 
-      if (!canBypassAccessCheck) {
+     if (!canBypassAccessCheck) {
         const hasAccess = await BudgetModel.validateUserAccess(
           proposalId,
           userId,
@@ -414,14 +415,13 @@ export async function resolveSubmissionDepartment(req, beneficiaryType, payload 
           userDepartmentId
         );
 
-        if (!hasAccess) {
+       if (!hasAccess) {
           return res.status(403).json({
             success: false,
             message: 'Access denied - cannot update this proposal',
           });
         }
       }
-
       const payload = req.body || {};
       const normalizedBeneficiaryType = payload.beneficiary_type
         ? normalizeBeneficiaryType(payload.beneficiary_type)

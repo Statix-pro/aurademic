@@ -392,6 +392,11 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
         return { entityTypeCode: null, beneficiaryEntityId: null };
       }
 
+      const entityRecord = await getEntityById(conn, beneficiaryEntityId);
+      if (!entityRecord || entityRecord.is_active !== 1) {
+        return { entityTypeCode: null, beneficiaryEntityId: null };
+      }
+
       return {
         entityTypeCode: beneficiaryEntityTypeCode,
         beneficiaryEntityId,
@@ -1482,6 +1487,14 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
       case 'admin':
       case 'super_admin':
         return true;
+      case 'ithead': {
+        const inItheadStage =
+          normalizeText(proposal.current_stage).toLowerCase() === 'ithead'
+          || normalizeText(proposal.status).toLowerCase().startsWith('ithead_');
+        const tagMatches =
+          normalizeText(proposal.budget_tag).toLowerCase() === 'it infrastructure';
+        return inItheadStage && tagMatches;
+      }
 
       default:
         return pid === uid || emailMatch;
