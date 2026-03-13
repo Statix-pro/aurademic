@@ -173,6 +173,14 @@ export const resolveLevel1Route = (proposalOrPayload = {}) => {
         };
     }
 
+    if (['Faculty', 'Staff'].includes(beneficiaryType) && entityId) {
+        return {
+            routeType: LEVEL1_ROUTE_TYPE.entityContact,
+            departmentId,
+            entityId,
+        };
+    }
+
     if (['Faculty', 'Staff', 'Department'].includes(beneficiaryType)) {
         return {
             routeType: LEVEL1_ROUTE_TYPE.departmentHod,
@@ -190,9 +198,12 @@ export const resolveLevel1Route = (proposalOrPayload = {}) => {
 
 export const resolveStageLabel = (stageKey, proposal = {}) => {
     const key = normalizeText(stageKey).toLowerCase();
-    const beneficiaryType = normalizeText(proposal?.beneficiary_type);
+    const beneficiaryType = normalizeBeneficiaryType(proposal?.beneficiary_type);
 
     if (key === 'level1') {
+        if (resolveLevel1Route(proposal).routeType === LEVEL1_ROUTE_TYPE.entityContact) {
+            return 'Coordinator';
+        }
         if (['Faculty', 'Staff', 'Department'].includes(beneficiaryType)) {
             return 'HOD';
         }

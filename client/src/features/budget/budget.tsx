@@ -541,6 +541,7 @@ const Budget: React.FC = () => {
   const [mobile, setMobile] = useState('');
   const [beneficiaryType, setBeneficiaryType] = useState('');
   const [beneficiaryValue, setBeneficiaryValue] = useState('');
+  const [beneficiaryEmployeeId, setBeneficiaryEmployeeId] = useState<number | null>(null);
   const [beneficiarySearchQuery, setBeneficiarySearchQuery] = useState('');
   const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<ApplicantSearchResult[]>(
     []
@@ -791,6 +792,7 @@ const Budget: React.FC = () => {
 
   const handleSelectBeneficiary = (emp: ApplicantSearchResult) => {
     setBeneficiaryValue((emp.name || '').trim());
+    setBeneficiaryEmployeeId(Number.isInteger(Number(emp.employee_id)) ? Number(emp.employee_id) : null);
     setBeneficiarySearchQuery((emp.name || '').trim());
     setShowBeneficiaryDropdown(false);
   };
@@ -932,6 +934,12 @@ const Budget: React.FC = () => {
           ? Number(applicantEmployeeId)
           : undefined,
       beneficiary_type: beneficiaryType?.trim(),
+      beneficiary_employee_id:
+        ['Faculty', 'Staff'].includes(beneficiaryType) &&
+          Number.isInteger(Number(beneficiaryEmployeeId)) &&
+          Number(beneficiaryEmployeeId) > 0
+          ? Number(beneficiaryEmployeeId)
+          : undefined,
       beneficiary_value:
         ['Faculty', 'Staff'].includes(beneficiaryType)
           ? beneficiaryValue?.trim()
@@ -994,6 +1002,7 @@ const Budget: React.FC = () => {
             setApplicantSearchResults([]);
             setShowApplicantDropdown(false);
             setApplicantName(''); setDepartment(''); setApplicantEntity(''); setDesignation(''); setEmail(''); setMobile('');
+            setBeneficiaryEmployeeId(null);
             setBeneficiaryType(''); setBeneficiaryValue(''); setCategoryItem('');
             setSelectedTag('');
             setBeneficiarySearchQuery(''); setBeneficiarySearchResults([]); setShowBeneficiaryDropdown(false);
@@ -1138,6 +1147,7 @@ const Budget: React.FC = () => {
             ? 'Professional Body'
             : p.beneficiary_type || '';
         setBeneficiaryType(normalizedBeneficiaryType);
+        setBeneficiaryEmployeeId(null);
 
         // For Faculty type, set the search query for editing
         if (normalizedBeneficiaryType === 'Faculty') {
@@ -1755,6 +1765,7 @@ const Budget: React.FC = () => {
                         setSelectedTag('');
                         setCategoryItem('');
                         setCategorySelections([]);
+                        setBeneficiaryEmployeeId(null);
                         setBeneficiarySearchQuery('');
                         setBeneficiarySearchResults([]);
                         setShowBeneficiaryDropdown(false);
@@ -1850,6 +1861,7 @@ const Budget: React.FC = () => {
                         value={beneficiarySearchQuery || beneficiaryValue || ''}
                         onChange={(e) => {
                           setBeneficiaryValue(e.target.value);
+                          setBeneficiaryEmployeeId(null);
                           setBeneficiarySearchQuery(e.target.value);
                           handleBeneficiarySearch(e.target.value);
                         }}

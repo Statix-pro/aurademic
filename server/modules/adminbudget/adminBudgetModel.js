@@ -732,8 +732,9 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
     }
 
     const entityIds = rows
-      .filter((row) => isEntityBeneficiaryType(row?.beneficiary_type))
-      .map((row) => Number(row?.beneficiary_entity_id))
+      .map((row) => resolveLevel1Route(row))
+      .filter((route) => route.routeType === LEVEL1_ROUTE_TYPE.entityContact)
+      .map((route) => Number(route.entityId))
       .filter((entityId) => Number.isInteger(entityId) && entityId > 0);
     const entityAssigneeMap = await resolveEntityAssigneeMap(entityIds, conn);
 
@@ -818,8 +819,30 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
     return department ? Number(department.id) : null;
   }
 
-  async function resolveBeneficiaryEntity(conn, beneficiaryType, beneficiaryValue) {
+  async function resolveBeneficiaryEntity(conn, beneficiaryType, beneficiaryValue, beneficiaryEmployeeId = null) {
+    const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
     const entityTypeCode = beneficiaryTypeToEntityTypeCode(beneficiaryType);
+
+    if (['Faculty', 'Staff'].includes(normalizedBeneficiaryType)) {
+      const parsedBeneficiaryEmployeeId = Number.parseInt(beneficiaryEmployeeId, 10);
+
+      if (!Number.isInteger(parsedBeneficiaryEmployeeId) || parsedBeneficiaryEmployeeId <= 0) {
+        return { entityTypeCode: null, beneficiaryEntityId: null };
+      }
+
+      const employeeContext = await getEmployeeDepartmentByEmployeeId(parsedBeneficiaryEmployeeId);
+      const beneficiaryEntityId = Number(employeeContext?.entity_id);
+      const beneficiaryEntityTypeCode = normalizeEntityTypeCode(employeeContext?.entity_type_code);
+
+      if (!Number.isInteger(beneficiaryEntityId) || beneficiaryEntityId <= 0 || !beneficiaryEntityTypeCode) {
+        return { entityTypeCode: null, beneficiaryEntityId: null };
+      }
+
+      return {
+        entityTypeCode: beneficiaryEntityTypeCode,
+        beneficiaryEntityId,
+      };
+    }
 
     if (!entityTypeCode) {
       return { entityTypeCode: null, beneficiaryEntityId: null };

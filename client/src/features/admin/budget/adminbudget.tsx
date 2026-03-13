@@ -55,6 +55,7 @@ interface BudgetRequestItem {
   status: string;
   current_stage: string;
   created_date: string;
+  level1_route_type?: string | null;
 }
 
 interface BudgetHistoryEntry {
@@ -108,7 +109,10 @@ const STAGE_DISPLAY_MAP: Record<string, string> = {
 
 const ENTITY_BENEFICIARY_TYPES = ["Centre", "Cell", "Club", "Professional Body"];
 
-const getLevel1Label = (beneficiaryType: string) => {
+const getLevel1Label = (beneficiaryType: string, routeType?: string | null) => {
+  if (String(routeType || "").toLowerCase() === "entity_contact") {
+    return "Coordinator";
+  }
   const type = (beneficiaryType || "").toLowerCase();
   const entityTypes = ENTITY_BENEFICIARY_TYPES.map((t) => t.toLowerCase());
   return entityTypes.includes(type) ? "Coordinator" : "HOD";
@@ -681,7 +685,7 @@ const AdminBudget: React.FC = () => {
     const stageKey = (item.current_stage || "").toLowerCase();
     let stageLabel = STAGE_DISPLAY_MAP[stageKey] || (item.current_stage ? item.current_stage.toUpperCase() : "");
     if (stageKey === "level1") {
-      stageLabel = getLevel1Label(item.beneficiary_type);
+      stageLabel = getLevel1Label(item.beneficiary_type, item.level1_route_type);
     }
     return "Pending " + stageLabel;
   };
@@ -894,10 +898,9 @@ const AdminBudget: React.FC = () => {
   const getRoleLabelForLog = (role?: string) => {
     const normalized = String(role || "").toLowerCase();
     if (normalized === "level1") {
-      const isEntity = ["club", "cell", "center", "centre", "professional body"].includes(
-        String(logProposal?.beneficiary_type || "").toLowerCase().trim()
-      );
-      return isEntity ? "Coordinator" : "HoD";
+      return getLevel1Label(logProposal?.beneficiary_type || "", logProposal?.level1_route_type) === "Coordinator"
+        ? "Coordinator"
+        : "HoD";
     }
     const map: Record<string, string> = {
       hod: "HoD",

@@ -67,36 +67,42 @@ import {
     return department ? Number(department.id) : null;
   }
 
-  export async function resolveSubmissionDepartment(req, beneficiaryType, payload = {}) {
-    const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
-    const userDepartment = await resolveUserDepartment(req);
-    const parsedEmployeeId = Number.parseInt(payload?.employee_id, 10);
+export async function resolveSubmissionDepartment(req, beneficiaryType, payload = {}) {
+  const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
+  const userDepartment = await resolveUserDepartment(req);
+  const parsedBeneficiaryEmployeeId = Number.parseInt(payload?.beneficiary_employee_id, 10);
+  const parsedEmployeeId = Number.parseInt(payload?.employee_id, 10);
 
-    if (normalizedBeneficiaryType === 'Faculty') {
-      if (Number.isInteger(parsedEmployeeId) && parsedEmployeeId > 0) {
-        const employeeDepartment = await BudgetModel.getEmployeeDepartmentByEmployeeId(parsedEmployeeId);
-        const resolvedFacultyDepartment = normalizeText(
-          employeeDepartment?.parent_department_name || employeeDepartment?.name
-        );
+  if (['Faculty', 'Staff'].includes(normalizedBeneficiaryType)) {
+    const routingEmployeeId =
+      Number.isInteger(parsedBeneficiaryEmployeeId) && parsedBeneficiaryEmployeeId > 0
+        ? parsedBeneficiaryEmployeeId
+        : parsedEmployeeId;
 
-        if (resolvedFacultyDepartment) {
-          return resolvedFacultyDepartment;
-        }
+    if (Number.isInteger(routingEmployeeId) && routingEmployeeId > 0) {
+      const employeeDepartment = await BudgetModel.getEmployeeDepartmentByEmployeeId(routingEmployeeId);
+      const resolvedFacultyDepartment = normalizeText(
+        employeeDepartment?.parent_department_name || employeeDepartment?.name
+      );
+
+      if (resolvedFacultyDepartment) {
+        return resolvedFacultyDepartment;
       }
-
-      if (!userDepartment) {
-        throw new Error('Department not set for faculty user');
-      }
-
-      return userDepartment;
     }
 
-    if (normalizedBeneficiaryType === 'Department') {
-      return normalizeText(payload?.beneficiary_value) || null;
+    if (!userDepartment) {
+      throw new Error(`Department not set for ${normalizedBeneficiaryType.toLowerCase()} beneficiary`);
     }
 
-    return userDepartment || null;
+    return userDepartment;
   }
+
+  if (normalizedBeneficiaryType === 'Department') {
+    return normalizeText(payload?.beneficiary_value) || null;
+  }
+
+  return userDepartment || null;
+}
 
 
   export async function getFacultyDetails(req, res) {
