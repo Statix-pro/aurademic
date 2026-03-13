@@ -86,6 +86,7 @@ export const canAccessBudgetApproval = (user?: User | null) => {
     'budget.admin.view',
     'budget.admin.manage',
     'budget.workflow.level1',
+    'budget.workflow.ithead',
     'budget.workflow.dof',
     'budget.workflow.principal',
   ]);
