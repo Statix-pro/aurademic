@@ -56,7 +56,7 @@ export const VALID_BENEFICIARY_TYPES = Object.freeze([
     'Institution', 'Professional Body', 'Professional Bodies', 'ProfessionalBodies',
 ]);
 
-export const MUTABLE_ENTITY_TYPES = Object.freeze(['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY']);
+export const MUTABLE_ENTITY_TYPES = Object.freeze(new Set(['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY']));
 
 // =====================================================
 // NORMALIZERS
