@@ -498,8 +498,19 @@ const AdminBudget: React.FC = () => {
         try {
           const response: any = await authenticityUtility.patch(`/adminbudget/${id}/archive-toggle`, {});
 
-          if (response.success) {
+          if (response?.success || response?.data?.success) {
             fetchDashboard();
+          } else {
+            setArchivingIds((prev) => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+            showAlert(
+              response?.message || response?.data?.message || "Failed to update archive state",
+              "error"
+            );
+            return;
           }
         } catch (error: any) {
           setArchivingIds((prev) => {
@@ -545,11 +556,16 @@ const AdminBudget: React.FC = () => {
         feedback: comment,
       });
 
-      if (response.success) {
+      if (response?.success || response?.data?.success) {
         showAlert(`${actionType === "return" ? "Returned" : "Rejected"} successfully`, "success");
         closeActionPopup();
         fetchDashboard();
+        return;
       }
+      showAlert(
+        response?.message || response?.data?.message || `Failed to ${actionType}`,
+        "error"
+      );
     } catch (error: any) {
       showAlert(error.response?.data?.message || `Failed to ${actionType}`, "error");
     }
@@ -572,11 +588,16 @@ const AdminBudget: React.FC = () => {
     if (!deleteId) return;
     try {
       const response: any = await authenticityUtility.delete(`/adminbudget/${deleteId}`);
-      if (response.success) {
+      if (response?.success || response?.data?.success) {
         showAlert("Budget proposal deleted successfully", "success");
         closeDeletePopup();
         fetchDashboard();
+        return;
       }
+      showAlert(
+        response?.message || response?.data?.message || "Failed to delete budget proposal",
+        "error"
+      );
     } catch (error: any) {
       showAlert(error.response?.data?.message || "Failed to delete budget proposal", "error");
     }
@@ -1653,6 +1674,9 @@ const AdminBudget: React.FC = () => {
 
       {deletePopupOpen && (
         <div
+          role="button"
+          tabIndex={0}
+          aria-label="Close delete confirmation dialog"
           style={{
             position: "fixed",
             inset: 0,
@@ -1663,7 +1687,18 @@ const AdminBudget: React.FC = () => {
             zIndex: 999999,
             padding: 16,
           }}
-          onClick={closeDeletePopup}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closeDeletePopup();
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              closeDeletePopup();
+            }
+          }}
         >
           <div
             style={{
@@ -1674,7 +1709,6 @@ const AdminBudget: React.FC = () => {
               boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
               textAlign: "center",
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             <div style={{ color: "#dc3545", marginBottom: 16 }}>
               <Trash2 size={48} />

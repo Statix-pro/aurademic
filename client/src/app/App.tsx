@@ -216,16 +216,72 @@ function App() {
                   <Route path="/storybook" element={<Storybook />} />
 
                   {/* Finance & Guesthouse Routes */}
-                  <Route path="/finance/new" element={<FinanceApproval />} />
-                  <Route path="/financecard" element={<FinanceCard />} />
-                  <Route path="/guesthouse-booking" element={<GuestHouseBooking />} />
-                  <Route path="/guestHouse-dashboard" element={<GuestHouseDashboard />} />
+                  <Route
+                    path="/finance/new"
+                    element={
+                      <ProtectedRoute>
+                        <FinanceApproval />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/financecard"
+                    element={
+                      <ProtectedRoute>
+                        <FinanceCard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/guesthouse-booking"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseBooking />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/guestHouse-dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
 
                   {/*  BUDGET ROUTES */}
-                  <Route path="/budgetcard" element={<BudgetDashboard />} />
-                  <Route path="/budget/new" element={<Budget />} />
-                  <Route path="/budget/:id" element={<Budget />} />
-                  <Route path="/budget/:id/edit" element={<Budget />} />
+                  <Route
+                    path="/budgetcard"
+                    element={
+                      <ProtectedRoute>
+                        <BudgetDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/budget/new"
+                    element={
+                      <ProtectedRoute>
+                        <Budget />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/budget/:id"
+                    element={
+                      <ProtectedRoute>
+                        <Budget />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/budget/:id/edit"
+                    element={
+                      <ProtectedRoute>
+                        <Budget />
+                      </ProtectedRoute>
+                    }
+                  />
 
                   <Route
                     path="/admin/budget"

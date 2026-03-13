@@ -56,9 +56,3 @@ JOIN permissions p ON p.permission_key IN (
 )
 WHERE r.role_code = 'it_head'
 ON DUPLICATE KEY UPDATE granted_at = granted_at;
-
--- =====================================================
--- 4. IT BUDGET TAG
--- =====================================================
-INSERT IGNORE INTO budget_tags (tag_name, is_active, sort_order)
-VALUES ('IT', 1, 5);
