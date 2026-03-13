@@ -956,18 +956,9 @@ const Budget: React.FC = () => {
     try {
       const isPrivilegedReviewer = isAdminContextEdit && isEditMode;
       const endpoint = isPrivilegedReviewer
-        ? `/adminbudget/${id}`
+        ? `/budget/${id}`
         : (isEditMode ? `${budgetApiBase}/${id}` : budgetApiBase);
-      const requestPayload = isPrivilegedReviewer
-        ? {
-          lines: formattedLines.map((line, lineIndex) => ({
-            line_id: budgetLines[lineIndex]?.lineId,
-            unit_amount: Number(line.unit_amount),
-            quantity: Number(line.quantity) || 1,
-            month_allocations: line.month_allocations || {},
-          })),
-        }
-        : payload;
+      const requestPayload = payload;
       const httpMethod = isEditMode ? 'put' : 'post';
 
       const result = await (authenticityUtility as any)[httpMethod](endpoint, requestPayload);
@@ -978,7 +969,7 @@ const Budget: React.FC = () => {
 
       showAlert(
         isPrivilegedReviewer
-          ? 'Approved amounts updated successfully!'
+          ? 'Budget updated successfully!'
           : isEditMode
             ? `Budget updated successfully!`
             : (
