@@ -401,9 +401,10 @@ export async function resolveSubmissionDepartment(req, beneficiaryType, payload 
       const userDepartment = await resolveUserDepartment(req);
       const userDepartmentId = await resolveUserDepartmentId(req);
       const userRole = resolveAccessRoleFromPermissions(req);
-      const isPrivileged = ['super_admin', 'admin', 'dof', 'principal'].includes(userRole);
+      const canBypassAccessCheck = ['super_admin', 'admin', 'dof', 'principal'].includes(userRole);
+      const canBypassEditStateValidation = canBypassAccessCheck || ['hod', 'ithead'].includes(userRole);
 
-      if (!isPrivileged) {
+      if (!canBypassAccessCheck) {
         const hasAccess = await BudgetModel.validateUserAccess(
           proposalId,
           userId,
@@ -445,7 +446,7 @@ export async function resolveSubmissionDepartment(req, beneficiaryType, payload 
         budget_tag: normalizeText(payload.budget_tag),
         department: resolvedDepartment,
       }, {
-        skipEditStateValidation: isPrivileged,
+        skipEditStateValidation: canBypassEditStateValidation,
         editedByUserId: userId,
         editedByEmail: userEmail,
         editedByRole: userRole,
