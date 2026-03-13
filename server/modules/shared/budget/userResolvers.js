@@ -89,9 +89,14 @@ export async function getEmployeeDepartmentByEmployeeId(employeeId) {
       d.id AS department_id,
         d.name,
         d.code,
-        COALESCE(pd_emp.name, pd_dept.name, d.name) AS parent_department_name
+        COALESCE(pd_emp.name, pd_dept.name, d.name) AS parent_department_name,
+        e.entity_id,
+        me.name AS entity_name,
+        met.code AS entity_type_code
         FROM master_employees e
         LEFT JOIN master_departments d ON e.department_id = d.id
+        LEFT JOIN master_entities me ON e.entity_id = me.id
+        LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
         LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
         LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
         WHERE e.id = ?

@@ -142,7 +142,10 @@ export async function buildBudgetList(options) {
 
     switch (safeRole) {
         case 'hod': {
-            where.push("LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department')");
+            where.push(`(
+                (LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff') AND bp.beneficiary_entity_id IS NULL)
+                OR LOWER(TRIM(bp.beneficiary_type)) = 'department'
+            )`);
             if (!isQueueSuperAdminView) {
                 where.push('md.type = "Academic"');
                 const actionQueueExpr = isAdminView
@@ -165,7 +168,13 @@ export async function buildBudgetList(options) {
             break;
         }
         case 'coordinator': {
-            where.push("LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')");
+            where.push(`(
+                LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')
+                OR (
+                    LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff')
+                    AND bp.beneficiary_entity_id IS NOT NULL
+                )
+            )`);
             if (!isQueueSuperAdminView) {
                 const actionQueueExpr = isAdminView
                     ? `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed") OR ${archivedByLevel1Predicate})`
