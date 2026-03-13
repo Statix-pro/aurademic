@@ -84,16 +84,10 @@ export async function resolveSubmissionDepartment(req, beneficiaryType, payload 
   const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
   const userDepartment = await resolveUserDepartment(req);
   const parsedBeneficiaryEmployeeId = Number.parseInt(payload?.beneficiary_employee_id, 10);
-  const parsedEmployeeId = Number.parseInt(payload?.employee_id, 10);
 
   if (['Faculty', 'Staff'].includes(normalizedBeneficiaryType)) {
-    const routingEmployeeId =
-      Number.isInteger(parsedBeneficiaryEmployeeId) && parsedBeneficiaryEmployeeId > 0
-        ? parsedBeneficiaryEmployeeId
-        : parsedEmployeeId;
-
-    if (Number.isInteger(routingEmployeeId) && routingEmployeeId > 0) {
-      const employeeDepartment = await AdminBudgetModel.getEmployeeDepartmentByEmployeeId(routingEmployeeId);
+    if (Number.isInteger(parsedBeneficiaryEmployeeId) && parsedBeneficiaryEmployeeId > 0) {
+      const employeeDepartment = await AdminBudgetModel.getEmployeeDepartmentByEmployeeId(parsedBeneficiaryEmployeeId);
       const resolvedFacultyDepartment = normalizeText(
         employeeDepartment?.parent_department_name || employeeDepartment?.name
       );
@@ -524,6 +518,7 @@ export async function approve(req, res) {
 
     if (
       normalizedDecision !== 'archived'
+      && !isSuperAdmin
       && !hasPermission(req, requiredPermission)
     ) {
       return res.status(403).json({
