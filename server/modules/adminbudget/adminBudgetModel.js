@@ -1462,13 +1462,7 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
         [proposalId]
       );
 
-      // Preserve historical reference numbers so deleted refs are never reused.
-      await conn.execute(
-        `UPDATE budget_proposal_refs
-         SET proposal_id = NULL
-         WHERE proposal_id = ?`,
-        [proposalId]
-      );
+      await conn.execute('DELETE FROM budget_proposal_refs WHERE proposal_id = ?', [proposalId]);
 
       await conn.execute('DELETE FROM budget_proposal_lines WHERE budget_proposal_id = ?', [proposalId]);
       await conn.execute('DELETE FROM budget_proposal_approvals WHERE budget_proposal_id = ?', [proposalId]);
