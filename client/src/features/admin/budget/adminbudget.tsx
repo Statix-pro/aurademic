@@ -13,7 +13,7 @@ import {
   Archive,
   Trash2,
   CalendarDays,
-  Snowflake,
+  Lock,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
@@ -91,6 +91,7 @@ const BENEFICIARY_OPTIONS = [
 ];
 
 const ARCHIVE_TRANSITION_MS = 280;
+const ADMIN_FETCH_PAGE_SIZE = 100;
 const TAB_PRIORITY: QueueTabKey[] = ["hod", "coordinator", "ithead", "dof", "principal", "admin"];
 
 const STAGE_PERMISSION_MAP: Record<string, string> = {
@@ -108,6 +109,7 @@ const STAGE_DISPLAY_MAP: Record<string, string> = {
 };
 
 const ENTITY_BENEFICIARY_TYPES = ["Centre", "Cell", "Club", "Professional Body"];
+const ROWS_PER_PAGE_OPTIONS = [5, 10, 25, 50];
 
 const getLevel1Label = (beneficiaryType: string, routeType?: string | null) => {
   if (String(routeType || "").toLowerCase() === "entity_contact") {
@@ -154,10 +156,11 @@ const AdminBudget: React.FC = () => {
   const [freezeSaving, setFreezeSaving] = useState<boolean>(false);
   const [freezePopupOpen, setFreezePopupOpen] = useState<boolean>(false);
   const freezePopoverRef = useRef<HTMLDivElement | null>(null);
+  const fetchRequestSeqRef = useRef(0);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
 
   // Queue/role handling
   const [assignments, setAssignments] = useState<RbacAssignment[]>([]);
@@ -367,32 +370,61 @@ const AdminBudget: React.FC = () => {
       return;
     }
 
+    const requestSeq = ++fetchRequestSeqRef.current;
+
     try {
       setLoading(true);
       setAccessError("");
 
-      const response: any = await authenticityUtility.get(activeQueueTab.endpoint, {
-        params: { limit: 100, status: "", fiscalYear },
-      });
+      const summaryRows: any[] = [];
+      let page = 1;
+      let totalPages = 1;
 
-      if (response?.success) {
-        const normalizedRows: BudgetRequestItem[] = Array.isArray(response.data)
-          ? response.data.map((row: any) => ({
-            ...row,
-            applicant_name: String(
-              row?.applicant_name || row?.faculty_name || row?.user_name || row?.user_email || ""
-            ).trim(),
-          }))
-          : [];
-        setData(normalizedRows);
-      } else {
-        setData([]);
+      while (page <= totalPages) {
+        const response: any = await authenticityUtility.get(activeQueueTab.endpoint, {
+          params: {
+            page,
+            limit: ADMIN_FETCH_PAGE_SIZE,
+            status: "",
+            fiscalYear,
+          },
+        });
+
+        if (!response?.success) {
+          if (requestSeq !== fetchRequestSeqRef.current) return;
+          setData([]);
+          return;
+        }
+
+        if (Array.isArray(response.data)) {
+          summaryRows.push(...response.data);
+        }
+
+        totalPages = Number(response?.pagination?.totalPages || totalPages || 1);
+        page += 1;
       }
+
+      if (requestSeq !== fetchRequestSeqRef.current) return;
+
+      const uniqueRows = Array.from(
+        new Map(summaryRows.map((row: any) => [row?.id, row])).values()
+      );
+
+      const normalizedRows: BudgetRequestItem[] = uniqueRows.map((row: any) => ({
+        ...row,
+        applicant_name: String(
+          row?.applicant_name || row?.faculty_name || row?.user_name || row?.user_email || ""
+        ).trim(),
+      }));
+
+      setData(normalizedRows);
     } catch (error: any) {
+      if (requestSeq !== fetchRequestSeqRef.current) return;
       console.error("Fetch budget error:", error);
       setData([]);
       setAccessError(error?.response?.data?.message || "Failed to fetch budget requests");
     } finally {
+      if (requestSeq !== fetchRequestSeqRef.current) return;
       setLoading(false);
     }
   }, [activeQueueTab, fiscalYear]);
@@ -658,7 +690,7 @@ const AdminBudget: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, searchTerm, beneficiaryFilter, activeQueueTabKey, fiscalYear]);
+  }, [statusFilter, searchTerm, beneficiaryFilter, activeQueueTabKey, fiscalYear, itemsPerPage]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -1137,7 +1169,7 @@ const AdminBudget: React.FC = () => {
                           title="Freeze Budget Time"
                           aria-label="Freeze Budget Time"
                         >
-                          <Snowflake size={20} />
+                          <Lock size={18} />
                         </button>
 
                         {freezePopupOpen && (
@@ -1548,25 +1580,56 @@ const AdminBudget: React.FC = () => {
                       </div>
 
                       <div className="adminbudget-pagination">
-                        <button
-                          className="adminbudget-pagebtn"
-                          disabled={safeCurrentPage <= 1}
-                          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                        >
-                          Previous
-                        </button>
+                        <div className="adminbudget-pagination-left">
+                          <div className="adminbudget-rows-control">
+                            <label htmlFor="adminbudget-rows-per-page" className="adminbudget-rows-label">
+                              Rows per page
+                            </label>
+                            <select
+                              id="adminbudget-rows-per-page"
+                              className="adminbudget-rows-select"
+                              value={itemsPerPage}
+                              onChange={(e) => {
+                                const next = Number(e.target.value);
+                                setItemsPerPage(Number.isFinite(next) ? next : 10);
+                              }}
+                            >
+                              {ROWS_PER_PAGE_OPTIONS.map((size) => (
+                                <option key={size} value={size}>
+                                  {size}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                        <span className="adminbudget-pageinfo">
-                          Page {safeCurrentPage} of {totalPages}
-                        </span>
+                          <span className="adminbudget-pagecount">
+                            {filteredData.length === 0
+                              ? "0-0 of 0"
+                              : `${indexOfFirst + 1}-${Math.min(indexOfLast, filteredData.length)} of ${filteredData.length}`}
+                          </span>
+                        </div>
 
-                        <button
-                          className="adminbudget-pagebtn"
-                          disabled={safeCurrentPage >= totalPages}
-                          onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                        >
-                          Next
-                        </button>
+                        <div className="adminbudget-pagination-right">
+                          <button
+                            className="adminbudget-pagebtn"
+                            disabled={safeCurrentPage <= 1}
+                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                          >
+                            Previous
+                          </button>
+
+                          <span className="adminbudget-pageinfo">
+                            Page {safeCurrentPage} of {totalPages}
+                          </span>
+
+                          <button
+                            className="adminbudget-pagebtn"
+                            disabled={safeCurrentPage >= totalPages}
+                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                          >
+                            Next
+                          </button>
+                        </div>
                       </div>
                     </>
                   )}
