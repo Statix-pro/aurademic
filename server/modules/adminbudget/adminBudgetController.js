@@ -53,7 +53,8 @@ export async function resolveUserDepartment(req) {
 
     // Check Multi-Context RBAC Assignments
     const assignments = await AdminBudgetModel.getUserAssignments(userId);
-    const deptAssignment = assignments.find((a) => a.entity_type === 'DEPARTMENT');
+    const safeAssignments = Array.isArray(assignments) ? assignments : [];
+    const deptAssignment = safeAssignments.find((a) => a.entity_type === 'DEPARTMENT');
     if (deptAssignment?.entity_name) {
       return deptAssignment.entity_name;
     }
