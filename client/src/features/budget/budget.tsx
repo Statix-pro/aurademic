@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from "react-router-dom";
-import Navbar from '../.././shared/components/layout/navbar/navbar';
+
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils';
@@ -443,6 +443,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
 
 const STAGE_PERMISSION_MAP: Record<string, string> = {
   level1: 'budget.workflow.level1',
+  ithead: 'budget.workflow.ithead',
   dof: 'budget.workflow.dof',
   principal: 'budget.workflow.principal',
 };
@@ -541,6 +542,7 @@ const Budget: React.FC = () => {
   const [mobile, setMobile] = useState('');
   const [beneficiaryType, setBeneficiaryType] = useState('');
   const [beneficiaryValue, setBeneficiaryValue] = useState('');
+  const [beneficiaryEmployeeId, setBeneficiaryEmployeeId] = useState<number | null>(null);
   const [beneficiarySearchQuery, setBeneficiarySearchQuery] = useState('');
   const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<ApplicantSearchResult[]>(
     []
@@ -580,6 +582,7 @@ const Budget: React.FC = () => {
   const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(!id);
   const [proposalStatus, setProposalStatus] = useState<string>('');
   const [proposalStage, setProposalStage] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionPopupOpen, setActionPopupOpen] = useState(false);
   const [actionType, setActionType] = useState<'return' | 'reject' | null>(null);
   const [actionComment, setActionComment] = useState('');
@@ -791,6 +794,7 @@ const Budget: React.FC = () => {
 
   const handleSelectBeneficiary = (emp: ApplicantSearchResult) => {
     setBeneficiaryValue((emp.name || '').trim());
+    setBeneficiaryEmployeeId(Number.isInteger(Number(emp.employee_id)) ? Number(emp.employee_id) : null);
     setBeneficiarySearchQuery((emp.name || '').trim());
     setShowBeneficiaryDropdown(false);
   };
@@ -873,145 +877,197 @@ const Budget: React.FC = () => {
 
 
   const handleSubmitBudget = async () => {
-
+    if (isSubmitting) {
+      return;
+    }
     if (!budgetLines.length) {
       showAlert('Please add at least one budget line.', 'warning');
       return;
     }
 
-
-    for (let i = 0; i < budgetLines.length; i++) {
-      const line = budgetLines[i];
-      if (!line.budgetHead?.trim()) {
-        showAlert('Budget Head is required', 'warning');
-        return;
-      }
-      if (!line.amount || Number(line.amount) <= 0) {
-        showAlert('Valid Unit Amount is required', 'warning');
-        return;
-      }
+  for (let i = 0; i < budgetLines.length; i++) {
+    const line = budgetLines[i];
+    
+    // Budget Head required
+    if (!line.budgetHead?.trim()) {
+      showAlert(`Budget Head is required for line ${i + 1}`, 'warning');
+      return;
     }
-
-
-    const formattedLines = budgetLines.map((line) => ({
-      budget_head: line.budgetHead?.trim(),
-      sub_head: line.subHead?.trim() || '',
-      unit_amount: Number(line.amount),
-      quantity: Number(line.qty) || 1,
-      line_description:
-        line.description?.trim() ||
-        `${line.budgetHead} - ${line.subHead || ''}`,
-      month_allocations: line.monthAmounts || {},
-    }));
-
-
-    const safeFY = String(explicitFiscalYear);
-    const fiscalYearInt = parseInt(safeFY.split("-")[0]);
-
-
-    if (isNaN(fiscalYearInt)) {
-      showAlert("Error: Invalid Fiscal Year calculated. Please refresh.", 'error');
+    
+    // Sub Head required
+    if (!line.subHead?.trim()) {
+      showAlert(`Sub Head is required for line ${i + 1}`, 'warning');
+      return;
+    }
+    
+    // Unit Amount required and positive
+    const unitAmount = Number(line.amount);
+    if (!line.amount || unitAmount <= 0) {
+      showAlert(`Valid Unit Amount > 0 is required for line ${i + 1}`, 'warning');
+      return;
+    }
+    // Quantity required and positive (blocks 0 qty)
+    const quantity = Number(line.qty);
+    if (!line.qty || quantity <= 0) {
+      showAlert(`Valid Quantity > 0 is required for line ${i + 1}`, 'warning');
       return;
     }
 
-
-    if (
-      isNewMode &&
-      applicantSearchQuery.trim() &&
-      applicantSearchQuery.trim() !== applicantName.trim()
-    ) {
-      showAlert('Please select an applicant from the search results.', 'warning');
+    // Description required
+    if (!line.description?.trim()) {
+      showAlert(`Description is required for line ${i + 1}`, 'warning');
       return;
     }
 
-    const payload = {
-      request_date: date,
-      fiscal_year: fiscalYearInt,
-      employee_id:
-        Number.isInteger(Number(applicantEmployeeId)) && Number(applicantEmployeeId) > 0
-          ? Number(applicantEmployeeId)
-          : undefined,
-      beneficiary_type: beneficiaryType?.trim(),
-      beneficiary_value:
-        ['Faculty', 'Staff'].includes(beneficiaryType)
-          ? beneficiaryValue?.trim()
-          : beneficiaryType === 'Institution'
-            ? 'K.S.Rangasamy College of Technology'
-            : categoryItem?.trim(),
-      proposal_description: '',
-      applicant_name: applicantName?.trim(),
-      applicant_entity: applicantEntity?.trim() || null,
-      budget_tag: selectedTag?.trim() || null,
-      lines: formattedLines,
-    };
+    // Month splitup must EXACTLY match unit_amount * quantity
+    const totalMonthAmount = Object.values(line.monthAmounts || {}).reduce(
+      (sum, val) => sum + (Number(val) || 0), 0
+    );
 
-    try {
-      const isPrivilegedReviewer = isAdminContextEdit && isEditMode;
-      const endpoint = isPrivilegedReviewer
-        ? `/adminbudget/${id}`
-        : (isEditMode ? `${budgetApiBase}/${id}` : budgetApiBase);
-      const requestPayload = isPrivilegedReviewer
-        ? {
+    const expectedTotal = unitAmount * quantity;
+    if (Math.abs(totalMonthAmount - expectedTotal) > 0.01) {
+      showAlert(
+        `Line ${i + 1}: Month total (₹${totalMonthAmount.toFixed(2)}) must equal Unit Amount × Qty (₹${expectedTotal.toFixed(2)})`,
+        'warning'
+      );
+      return;
+    }
+  }
+
+  // Rest of validation (applicant, beneficiary, tag, FY)...
+  if (!applicantName?.trim()) {
+    showAlert('Applicant Name is required', 'warning');
+    return;
+  }
+
+  // Beneficiary validation
+  const getBeneficiaryDisplayValue = () => {
+    if (beneficiaryType === 'Institution') return 'K.S.Rangasamy College of Technology';
+    if (['Faculty', 'Staff'].includes(beneficiaryType || '')) return beneficiaryValue?.trim();
+    return categoryItem?.trim() || beneficiaryValue?.trim();
+  };
+
+  if (!beneficiaryType?.trim()) {
+    showAlert('Beneficiary Type is required', 'warning');
+    return;
+  }
+
+  const displayBeneficiaryValue = getBeneficiaryDisplayValue();
+  if (!displayBeneficiaryValue) {
+    showAlert('Beneficiary selection is required for the chosen type', 'warning');
+    return;
+  }
+
+  // Tag mandatory
+  if (!selectedTag?.trim()) {
+    showAlert('Budget Tag is required', 'warning');
+    return;
+  }
+
+  // Fiscal year validation
+  const safeFY = String(explicitFiscalYear);
+  const fiscalYearInt = parseInt(safeFY.split("-")[0]);
+  if (isNaN(fiscalYearInt)) {
+    showAlert("Error: Invalid Fiscal Year calculated. Please refresh.", 'error');
+    return;
+  }
+
+  const formattedLines = budgetLines.map((line) => ({
+    budget_head: line.budgetHead?.trim(),
+    sub_head: line.subHead?.trim(),
+    unit_amount: Number(line.amount),
+    quantity: Number(line.qty),  // Now guaranteed > 0
+    line_description: line.description?.trim(),
+    month_allocations: line.monthAmounts || {},
+  }));
+
+  const payload = {
+    request_date: date,
+    fiscal_year: fiscalYearInt,
+    employee_id: Number.isInteger(Number(applicantEmployeeId)) && Number(applicantEmployeeId) > 0
+      ? Number(applicantEmployeeId)
+      : undefined,
+    beneficiary_type: beneficiaryType?.trim(),
+    beneficiary_employee_id:
+      ['Faculty', 'Staff'].includes(beneficiaryType) &&
+        Number.isInteger(Number(beneficiaryEmployeeId)) &&
+        Number(beneficiaryEmployeeId) > 0
+        ? Number(beneficiaryEmployeeId)
+        : undefined,
+    beneficiary_value: displayBeneficiaryValue,
+    proposal_description: '',
+    applicant_name: applicantName?.trim(),
+    applicant_entity: applicantEntity?.trim() || null,
+    budget_tag: selectedTag?.trim(),
+    lines: formattedLines,
+  };
+
+  try {
+    setIsSubmitting(true);
+    const isPrivilegedReviewer = isAdminContextEdit && isEditMode;
+    const endpoint = isPrivilegedReviewer
+      ? `/adminbudget/${id}`
+      : (isEditMode ? `${budgetApiBase}/${id}` : budgetApiBase);
+    
+    const requestPayload = isPrivilegedReviewer
+      ? {
           lines: formattedLines.map((line, lineIndex) => ({
             line_id: budgetLines[lineIndex]?.lineId,
             unit_amount: Number(line.unit_amount),
-            quantity: Number(line.quantity) || 1,
+            quantity: Number(line.quantity),
             month_allocations: line.month_allocations || {},
           })),
         }
-        : payload;
-      const httpMethod = isEditMode ? 'put' : 'post';
+      : payload;
+    
+    const httpMethod = isEditMode ? 'put' : 'post';
 
-      const result = await (authenticityUtility as any)[httpMethod](endpoint, requestPayload);
+    const result = await (authenticityUtility as any)[httpMethod](endpoint, requestPayload);
 
-      if (!result.success) {
-        throw new Error(result.message || 'Submission failed on server');
-      }
-
-      showAlert(
-        isPrivilegedReviewer
-          ? 'Approved amounts updated successfully!'
-          : isEditMode
-            ? `Budget updated successfully!`
-            : (
-              <>
-                Budget submitted successfully!
-                <br />
-                Reference No.: <strong>{result.data.proposalRef}</strong>
-              </>
-            ),
-        'success',
-        undefined,
-        () => {
-          closeAlert();
-          if (!isEditMode) {
-            setBudgetLines([{
-              budgetHead: '', subHead: '', amount: '', qty: '1', monthAmounts: { ...EMPTY_MONTHS }, description: '',
-            }]);
-            setExpandedRows([0]);
-            setApplicantSearchQuery('');
-            setApplicantEmployeeId(null);
-            setApplicantSearchResults([]);
-            setShowApplicantDropdown(false);
-            setApplicantName(''); setDepartment(''); setApplicantEntity(''); setDesignation(''); setEmail(''); setMobile('');
-            setBeneficiaryType(''); setBeneficiaryValue(''); setCategoryItem('');
-            setSelectedTag('');
-            setBeneficiarySearchQuery(''); setBeneficiarySearchResults([]); setShowBeneficiaryDropdown(false);
-            const today = new Date().toISOString().split('T')[0];
-            setDate(today);
-          }
-          if (isPrivilegedReviewer) {
-            navigate("/admin/budget");
-          } else {
-            navigate("/budgetcard");
-          }
-        }
-      );
-    } catch (error: any) {
-      console.error('Submit error:', error);
-      showAlert(`Failed to submit: ${error.response?.data?.message || error.message}`, 'error');
+    if (!result.success) {
+      throw new Error(result.message || 'Submission failed on server');
     }
-  };
+
+    showAlert(
+      isPrivilegedReviewer
+        ? 'Approved amounts updated successfully!'
+        : isEditMode
+        ? `Budget updated successfully!`
+        : (
+            <>
+              Budget submitted successfully!
+              <br />
+              Reference No.: <strong>{result.data.proposalRef}</strong>
+            </>
+          ),
+      'success',
+      undefined,
+      () => {
+        closeAlert();
+        if (!isEditMode) {
+          // Reset form
+          setBudgetLines([{
+            budgetHead: '', subHead: '', amount: '', qty: '1', monthAmounts: { ...EMPTY_MONTHS }, description: '',
+          }]);
+          setExpandedRows([0]);
+          // ... rest of reset code
+        }
+        if (isPrivilegedReviewer) {
+          navigate("/admin/budget");
+        } else {
+          navigate("/budgetcard");
+        }
+      }
+    );
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } }; message?: string };
+    console.error('Submit error:', err);
+    showAlert(`Failed to submit: ${err.response?.data?.message || err.message}`, 'error');
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
 
 
 
@@ -1138,6 +1194,7 @@ const Budget: React.FC = () => {
             ? 'Professional Body'
             : p.beneficiary_type || '';
         setBeneficiaryType(normalizedBeneficiaryType);
+        setBeneficiaryEmployeeId(null);
 
         // For Faculty type, set the search query for editing
         if (normalizedBeneficiaryType === 'Faculty') {
@@ -1209,7 +1266,7 @@ const Budget: React.FC = () => {
         }
 
 
-        const editableStatuses = ['draft', 'level1_returned', 'dof_returned', 'submitted', 're_submitted'];
+        const editableStatuses = ['draft', 'level1_returned', 'ithead_returned', 'dof_returned', 'submitted', 're_submitted'];
         const isStatusEditable = editableStatuses.includes((p.status || '').toLowerCase());
         const isEditURL = location.pathname.includes('/edit');
         const currentStageKey = String(p.current_stage || p.currentStage || '').toLowerCase();
@@ -1448,7 +1505,7 @@ const Budget: React.FC = () => {
 
   return (
     <div className="budgetPage">
-      <Navbar />
+
       <fieldset disabled={isViewMode} style={{ border: 0, padding: 0, margin: 0 }}>
 
         <div className="budgetCard">
@@ -1755,6 +1812,7 @@ const Budget: React.FC = () => {
                         setSelectedTag('');
                         setCategoryItem('');
                         setCategorySelections([]);
+                        setBeneficiaryEmployeeId(null);
                         setBeneficiarySearchQuery('');
                         setBeneficiarySearchResults([]);
                         setShowBeneficiaryDropdown(false);
@@ -1850,6 +1908,7 @@ const Budget: React.FC = () => {
                         value={beneficiarySearchQuery || beneficiaryValue || ''}
                         onChange={(e) => {
                           setBeneficiaryValue(e.target.value);
+                          setBeneficiaryEmployeeId(null);
                           setBeneficiarySearchQuery(e.target.value);
                           handleBeneficiarySearch(e.target.value);
                         }}
@@ -2044,7 +2103,6 @@ const Budget: React.FC = () => {
                     <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
                       Tag
                     </label>
-
                     <div style={{ position: 'relative', zIndex: 1000, flex: 1 }}>
                       <Select
                         value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
@@ -2094,12 +2152,9 @@ const Budget: React.FC = () => {
                   <div style={{ height: '74px' }} />
                 )}
               </div>
-
             </div>
           </div>
         </div>
-
-
 
         <div className="budgetCard">
           <div className="cardContent">
@@ -2674,7 +2729,7 @@ const Budget: React.FC = () => {
       </fieldset>
 
       {/* ADMIN ACTION BUTTONS - Only for admin=true */}
-      {new URLSearchParams(location.search).get('admin') === 'true' && !isEditMode && (
+      {new URLSearchParams(location.search).get('admin') === 'true'   &&  !isSuperAdmin(user) && !isEditMode && (
         <div
           className="budget-admin-actions"
           style={{
@@ -2752,7 +2807,7 @@ const Budget: React.FC = () => {
             style={{
               padding: '12px 24px',
               background: '#fdeaea ',
-              color: ' #b42318 ',
+              color: '#b42318',
               border: 'none',
               borderRadius: '12px',
               fontSize: '16px',
@@ -2760,7 +2815,7 @@ const Budget: React.FC = () => {
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '20px',
+              gap: '8px',
 
             }}
           >
@@ -2804,6 +2859,7 @@ const Budget: React.FC = () => {
             type="submit"
             className="submitBudgetBtn"
             onClick={handleSubmitBudget}
+            disabled={isSubmitting}
             style={{
               padding: "12px 40px",
               fontSize: "16px",
@@ -2812,17 +2868,20 @@ const Budget: React.FC = () => {
               color: "white",
               border: "none",
               borderRadius: "12px",
-              cursor: "pointer",
+              cursor: isSubmitting ? "not-allowed" : "pointer",
+              opacity: isSubmitting ? 0.7 : 1,
               minWidth: "150px",
               boxShadow: "0 6px 20px rgba(0, 105, 171, 0.3)",
               transition: "all 0.3s ease",
             }}
             onMouseOver={(e) => {
+              if (isSubmitting) return;
               e.currentTarget.style.backgroundColor = "#0056b3";
               e.currentTarget.style.transform = "translateY(-3px)";
               e.currentTarget.style.boxShadow = "0 8px 25px rgba(0, 105, 171, 0.4)";
             }}
             onMouseOut={(e) => {
+              if (isSubmitting) return;
               e.currentTarget.style.backgroundColor = "#0069ab";
               e.currentTarget.style.transform = "translateY(0)";
               e.currentTarget.style.boxShadow = "0 6px 20px rgba(0, 105, 171, 0.3)";
@@ -2834,7 +2893,7 @@ const Budget: React.FC = () => {
               e.currentTarget.style.boxShadow = "0 6px 20px rgba(0, 105, 171, 0.3)";
             }}
           >
-            {isEditMode ? "Update Budget" : "Submit Budget"}
+            {isSubmitting ? "Saving..." : isEditMode ? "Update Budget" : "Submit Budget"}
           </button>
         </div>
       )}

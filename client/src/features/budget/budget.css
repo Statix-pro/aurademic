@@ -431,46 +431,6 @@ input[type="number"]::-webkit-inner-spin-button {
   stroke: #0056b3 !important;
 }
 
-/* Custom Alert Modal Styles */
-.compact-alert-modal .modal-content {
-  border: none;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.compact-alert-modal .modal-header {
-  border-bottom: none;
-  padding: 16px 20px 0;
-}
-
-.compact-alert-modal .modal-title {
-  font-weight: 600;
-  color: #333;
-  font-size: 1.05rem;
-}
-
-.compact-alert-modal .modal-body {
-  padding: 16px 20px;
-}
-
-.compact-alert-modal .modal-footer {
-  border-top: 1px solid #f0f2f5;
-  padding: 12px 20px;
-  background-color: #f9f9fa;
-}
-
-.compact-alert-modal .btn {
-  border-radius: 6px;
-  padding: 6px 16px;
-  font-weight: 500;
-}
-
-.compact-alert-modal .modal-body p {
-  white-space: pre-wrap;
-  line-height: 1.5;
-}
-
 .monthBox--active {
   border-color: #0069ab;
   background-color: #e7f3ff;

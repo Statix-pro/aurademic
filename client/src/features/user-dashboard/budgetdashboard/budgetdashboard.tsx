@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import "./budgetdashboard.css";
 import { Eye, Edit2, Plus, Trash2, Info } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import Navbar from "../../../shared/components/layout/navbar/Navbar";
+
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
 
@@ -346,19 +346,27 @@ const BudgetDashboard: React.FC = () => {
           // CHECK: Is this proposal FULLY approved?
           const isFullyApproved = ['principal_approved', 'completed'].includes(master.status);
 
-          const items = lines.map((line: any) => ({
+          const items = lines.map((line: any) => {
+            const unitAmount = Number(line.unit_amount ?? 0);
+            const quantity = Number(line.quantity ?? 1);
+            const proposedTotal = Number.isFinite(unitAmount) && Number.isFinite(quantity)
+              ? unitAmount * quantity
+              : Number(line.line_total ?? 0);
+
+            return {
             id: line.id,
             proposalId: master.id,
             budgetHead: line.budget_head || "Unknown",
             subHead: line.sub_head || "-",
-            proposedAmount: parseFloat(line.line_total || 0),
+            proposedAmount: Number.isFinite(proposedTotal) ? proposedTotal : 0,
             // Show approved amount only after final approval, sourced from approved columns.
             approvedAmount: isFullyApproved
               ? parseFloat(line.approved_line_total ?? line.line_total ?? 0)
               : 0,
             expenditure: 0, // Placeholder for future integration
             createdAt: master.created_at
-          }));
+          };
+          });
 
           return {
             proposalId: master.id,
@@ -756,7 +764,7 @@ const BudgetDashboard: React.FC = () => {
       balance: (row.initial + row.additional) - row.expenditure,
     }));
   }, [scopeFilteredProposals]);
-  
+
   // Filtered Consolidated Data
   const filteredConsolidated = useMemo(() => {
     if (!budgetHeadSearch.trim()) return scopedConsolidatedData;
@@ -830,7 +838,7 @@ const BudgetDashboard: React.FC = () => {
 
   return (
     <>
-      <Navbar />
+
       <section className="budgetdashboard-page">
         <div className="budgetdashboard-container">
           <div className="budgetdashboard-card">
@@ -917,7 +925,7 @@ const BudgetDashboard: React.FC = () => {
                       </tbody>
                       <tfoot>
                         <tr className="budgetdashboard-total-row">
-                           <td ></td>
+                          <td ></td>
                           <td ><strong>Total</strong></td>
                           <td><strong>₹{formatINR(consolidatedTotals.initial)}</strong></td>
                           <td><strong>₹{formatINR(consolidatedTotals.additional)}</strong></td>
@@ -935,28 +943,28 @@ const BudgetDashboard: React.FC = () => {
                 let initialBudgetCount = 0;
                 let additionalBudgetCount = 0;
                 return filteredProposals.map((proposal) => {
-                const isInitialBudget = isInitialBudgetProposal(proposal.createdAt);
-                const label = isInitialBudget
-                  ? `Initial Budget ${++initialBudgetCount}`
-                  : `Additional Budget ${++additionalBudgetCount}`;
-                const displayTag = resolveProposalTag(proposal);
-                const isExpanded = showBudgetStatusDetail[proposal.proposalId] || false;
+                  const isInitialBudget = isInitialBudgetProposal(proposal.createdAt);
+                  const label = isInitialBudget
+                    ? `Initial Budget ${++initialBudgetCount}`
+                    : `Additional Budget ${++additionalBudgetCount}`;
+                  const displayTag = resolveProposalTag(proposal);
+                  const isExpanded = showBudgetStatusDetail[proposal.proposalId] || false;
 
-                // Status Pill Text
-                let statusLabel = "Submitted";
-                if (['principal_approved', 'completed'].includes(proposal.status)) statusLabel = "Approved";
-                else if (proposal.status === 're_submitted') statusLabel = "Resubmitted";
-                else if (proposal.status.includes('rejected')) statusLabel = "Rejected";
-                else if (proposal.status.includes('returned')) statusLabel = "Returned";
-                else if (proposal.status.includes('approved')) statusLabel = "Pending"; // Intermediate approval is still Pending
+                  // Status Pill Text
+                  let statusLabel = "Submitted";
+                  if (['principal_approved', 'completed'].includes(proposal.status)) statusLabel = "Approved";
+                  else if (proposal.status === 're_submitted') statusLabel = "Resubmitted";
+                  else if (proposal.status.includes('rejected')) statusLabel = "Rejected";
+                  else if (proposal.status.includes('returned')) statusLabel = "Returned";
+                  else if (proposal.status.includes('approved')) statusLabel = "Pending"; // Intermediate approval is still Pending
 
-                // Timeline States
-                const hodState = getTimelineState(proposal, 'hod');
-                const dofState = getTimelineState(proposal, 'dof');
-                const principalState = getTimelineState(proposal, 'principal');
+                  // Timeline States
+                  const hodState = getTimelineState(proposal, 'hod');
+                  const dofState = getTimelineState(proposal, 'dof');
+                  const principalState = getTimelineState(proposal, 'principal');
 
-                return (
-                  <div key={proposal.proposalId} style={{ marginTop: '20px' }}>
+                  return (
+                    <div key={proposal.proposalId} style={{ marginTop: '20px' }}>
 
                     {/* Card Header */}
                     <div className="budgetdashboard-proposal-header budgetdashboard-proposal-flat">
@@ -1020,8 +1028,8 @@ const BudgetDashboard: React.FC = () => {
                                 </div>
                               </div>
                             </div>
-                          )}
-                        </div>
+                            )}
+                          </div>
                         <div className="budgetdashboard-proposal-applicant">
                           {proposal.applicantName || '-'}
                         </div>
@@ -1032,99 +1040,99 @@ const BudgetDashboard: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="budgetdashboard-actions-global" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div
-                            className={`budgetdashboard-status-pill budgetdashboard-status-pill--${statusLabel.toLowerCase()}`}
-                            onClick={() => setShowBudgetStatusDetail(prev => ({ ...prev, [proposal.proposalId]: !prev[proposal.proposalId] }))}
-                          >
-                            {statusLabel}
+                        <div className="budgetdashboard-actions-global" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div
+                              className={`budgetdashboard-status-pill budgetdashboard-status-pill--${statusLabel.toLowerCase()}`}
+                              onClick={() => setShowBudgetStatusDetail(prev => ({ ...prev, [proposal.proposalId]: !prev[proposal.proposalId] }))}
+                            >
+                              {statusLabel}
+                            </div>
+
+                            {/* Timeline (Only if Expanded) */}
+                            {isExpanded && (
+                              <div className="budgetdashboard-status-detail-line" style={{ marginTop: 0, padding: 0 }}>
+                                {(proposal.approvalFlow || "hod_dof_principal").split('_').map((stage, sIdx, array) => {
+                                  const labelMap: Record<string, string> = {
+                                    'hod': 'HoD',
+                                    'headcfrd': 'CFRD',
+                                    'dof': 'DoF',
+                                    'principal': 'Principal'
+                                  };
+                                  const stageState = getTimelineState(proposal, stage);
+                                  return (
+                                    <React.Fragment key={stage}>
+                                      <div
+                                        className={`budgetdashboard-status-line-circle ${getCircleClass(stageState)}`}
+                                        title={labelMap[stage] || stage.toUpperCase()}
+                                      />
+                                      {sIdx < array.length - 1 && (
+                                        <div className={`budgetdashboard-status-line-connector ${getConnectorClass(stageState)}`} />
+                                      )}
+                                    </React.Fragment>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
 
-                          {/* Timeline (Only if Expanded) */}
-                          {isExpanded && (
-                            <div className="budgetdashboard-status-detail-line" style={{ marginTop: 0, padding: 0 }}>
-                              {(proposal.approvalFlow || "hod_dof_principal").split('_').map((stage, sIdx, array) => {
-                                const labelMap: Record<string, string> = {
-                                  'hod': 'HoD',
-                                  'headcfrd': 'CFRD',
-                                  'dof': 'DoF',
-                                  'principal': 'Principal'
-                                };
-                                const stageState = getTimelineState(proposal, stage);
-                                return (
-                                  <React.Fragment key={stage}>
-                                    <div
-                                      className={`budgetdashboard-status-line-circle ${getCircleClass(stageState)}`}
-                                      title={labelMap[stage] || stage.toUpperCase()}
-                                    />
-                                    {sIdx < array.length - 1 && (
-                                      <div className={`budgetdashboard-status-line-connector ${getConnectorClass(stageState)}`} />
-                                    )}
-                                  </React.Fragment>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <button title="View" className="budgetdashboard-action-global" onClick={() => navigate(`/budget/${proposal.proposalId}`)}>
-                            <Eye size={16} />
-                          </button>
-                          {/* Edit only if submitted/returned AND not applicant-only */}
-                          {!proposal.isApplicantOnly && ['submitted', 're_submitted', 'level1_returned', 'hod_returned', 'dof_returned', 'principal_returned'].includes(proposal.status) && (
-                            <button title="Edit" className="budgetdashboard-action-global" onClick={() => navigate(`/budget/${proposal.proposalId}/edit`)}>
-                              <Edit2 size={16} />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button title="View" className="budgetdashboard-action-global" onClick={() => navigate(`/budget/${proposal.proposalId}`)}>
+                              <Eye size={16} />
                             </button>
-                          )}
-                          {/* Delete only if not fully approved AND not applicant-only */}
-                           {['submitted', 'resubmitted'].includes(proposal.status) && (
-    <button title="Delete" className="budgetdashboard-action-global" onClick={() => handleDelete(proposal.proposalId)}>
-      <Trash2 size={14} />
-    </button>
-  )}
+                            {/* Edit only if submitted/returned AND not applicant-only */}
+                            {!proposal.isApplicantOnly && ['submitted', 're_submitted', 'level1_returned', 'hod_returned', 'ithead_returned', 'dof_returned', 'principal_returned'].includes(proposal.status) && (
+                              <button title="Edit" className="budgetdashboard-action-global" onClick={() => navigate(`/budget/${proposal.proposalId}/edit`)}>
+                                <Edit2 size={16} />
+                              </button>
+                            )}
+                            {/* Delete only if not fully approved AND not applicant-only */}
+                            {['submitted', 'resubmitted'].includes(proposal.status) && (
+                              <button title="Delete" className="budgetdashboard-action-global" onClick={() => handleDelete(proposal.proposalId)}>
+                                <Trash2 size={14} />
+                              </button>
+                            )}
 
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Lines Table */}
+                      <div className="budgetdashboard-table-section">
+                        <div className="budgetdashboard-table-wrapper" style={{ margin: 0 }}>
+                          <table className="budgetdashboard-pending-table" style={{ width: "100%" }}>
+                            <thead>
+                              <tr>
+                                <th style={{ width: '50px' }}>S.No</th>
+                                <th style={{ width: '300px' }}>Budget Head</th>
+                                <th style={{ width: '300px' }}>Sub Head</th>
+                                <th style={{ width: '150px' }}>Proposed</th>
+                                <th style={{ width: '150px' }}>Approved</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {proposal.items.map((line, lIdx) => (
+                                <tr key={line.id} onClick={() => navigate(`/budget/${proposal.proposalId}`)} style={{ cursor: 'pointer' }}>
+                                  <td>{lIdx + 1}</td>
+                                  <td><div className="budgetdashboard-head-title">{line.budgetHead}</div></td>
+                                  <td>{line.subHead}</td>
+                                  <td>₹{formatINR(line.proposedAmount)}</td>
+                                  <td>₹{formatINR(line.approvedAmount)}</td> {/* 0 until fully approved */}
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="budgetdashboard-total-row">
+                                <td colSpan={3}><strong>Total</strong></td>
+                                <td><strong>₹{formatINR(proposal.totalProposed)}</strong></td>
+                                <td><strong>₹{formatINR(proposal.totalApproved)}</strong></td>
+                              </tr>
+                            </tfoot>
+                          </table>
                         </div>
                       </div>
                     </div>
-
-                    {/* Lines Table */}
-                    <div className="budgetdashboard-table-section">
-                      <div className="budgetdashboard-table-wrapper" style={{ margin: 0 }}>
-                        <table className="budgetdashboard-pending-table" style={{ width: "100%" }}>
-                          <thead>
-                            <tr>
-                              <th style={{ width: '50px' }}>S.No</th>
-                              <th style={{ width: '300px' }}>Budget Head</th>
-                              <th style={{ width: '300px' }}>Sub Head</th>
-                              <th style={{ width: '150px' }}>Proposed</th>
-                              <th style={{ width: '150px' }}>Approved</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {proposal.items.map((line, lIdx) => (
-                              <tr key={line.id} onClick={() => navigate(`/budget/${proposal.proposalId}`)} style={{ cursor: 'pointer' }}>
-                                <td>{lIdx + 1}</td>
-                                <td><div className="budgetdashboard-head-title">{line.budgetHead}</div></td>
-                                <td>{line.subHead}</td>
-                                <td>₹{formatINR(line.proposedAmount)}</td>
-                                <td>₹{formatINR(line.approvedAmount)}</td> {/* 0 until fully approved */}
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot>
-                            <tr className="budgetdashboard-total-row">
-                              <td colSpan={3}><strong>Total</strong></td>
-                              <td><strong>₹{formatINR(proposal.totalProposed)}</strong></td>
-                              <td><strong>₹{formatINR(proposal.totalApproved)}</strong></td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                );
+                  );
                 });
               })()}
 

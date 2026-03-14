@@ -8,6 +8,28 @@ const handleError = (res, error, fallbackMessage) => {
     });
 };
 
+const parsePositiveId = (value) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const normalizeEmployeeScope = (payload = {}) => {
+    const departmentId = parsePositiveId(payload.department_id);
+    const entityId = parsePositiveId(payload.entity_id);
+
+    if (departmentId && entityId) {
+        const error = new Error('Employee can be mapped to either Department or Entity, not both');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return {
+        ...payload,
+        department_id: departmentId,
+        entity_id: entityId,
+    };
+};
+
 const masterDataController = {
     // ============================================
     // DEPARTMENTS
@@ -174,7 +196,8 @@ const masterDataController = {
                     message: 'erp_id, first_name, and email are required',
                 });
             }
-            const employee = await masterDataModel.createEmployee(req.body);
+            const normalizedPayload = normalizeEmployeeScope(req.body || {});
+            const employee = await masterDataModel.createEmployee(normalizedPayload);
             return res.status(201).json({ status: 'success', data: employee });
         } catch (error) {
             return handleError(res, error, 'Failed to create employee');
@@ -184,7 +207,8 @@ const masterDataController = {
     async updateEmployee(req, res) {
         try {
             const { id } = req.params;
-            const success = await masterDataModel.updateEmployee(id, req.body || {});
+            const normalizedPayload = normalizeEmployeeScope(req.body || {});
+            const success = await masterDataModel.updateEmployee(id, normalizedPayload);
             if (success) {
                 return res.json({ status: 'success', message: 'Employee updated successfully' });
             }

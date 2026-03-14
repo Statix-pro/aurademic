@@ -1,6 +1,6 @@
 import React from 'react';
 import './UnderConstruction.css';
-import Navbar from '../layout/navbar/navbar';
+
 
 interface UnderConstructionProps {
     pageName?: string;
@@ -9,7 +9,7 @@ interface UnderConstructionProps {
 const UnderConstruction: React.FC<UnderConstructionProps> = ({ pageName = "This page" }) => {
     return (
         <>
-            <Navbar />
+
             <div className="under-construction-container">
                 <div className="under-construction-content">
                     <div className="construction-icon">

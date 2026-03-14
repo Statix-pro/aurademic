@@ -1,5 +1,5 @@
 import express from 'express';
-import AdminBudgetController from './adminBudgetController.js';
+import * as AdminBudgetController from './adminBudgetController.js';
 import {
     authMiddleware,
     permissionMiddleware,
@@ -10,6 +10,7 @@ const router = express.Router();
 
 const BUDGET_PERMISSIONS = Object.freeze({
     workflowLevel1: 'budget.workflow.level1',
+    workflowIthead: 'budget.workflow.ithead',
     workflowDof: 'budget.workflow.dof',
     workflowPrincipal: 'budget.workflow.principal',
     adminView: 'budget.admin.view',
@@ -23,16 +24,19 @@ const canViewBudgetAdmin = permissionMiddleware([
 const canManageBudgetAdmin = permissionMiddleware([BUDGET_PERMISSIONS.adminManage]);
 const canToggleArchive = permissionMiddleware([
     BUDGET_PERMISSIONS.workflowLevel1,
+    BUDGET_PERMISSIONS.workflowIthead,
     BUDGET_PERMISSIONS.workflowDof,
     BUDGET_PERMISSIONS.workflowPrincipal,
     BUDGET_PERMISSIONS.adminView,
     BUDGET_PERMISSIONS.adminManage,
 ]);
 const canAccessLevel1Queue = permissionMiddleware([BUDGET_PERMISSIONS.workflowLevel1]);
+const canAccessItheadQueue = permissionMiddleware([BUDGET_PERMISSIONS.workflowIthead]);
 const canAccessDofQueue = permissionMiddleware([BUDGET_PERMISSIONS.workflowDof]);
 const canAccessPrincipalQueue = permissionMiddleware([BUDGET_PERMISSIONS.workflowPrincipal]);
 const canProcessWorkflow = permissionMiddleware([
     BUDGET_PERMISSIONS.workflowLevel1,
+    BUDGET_PERMISSIONS.workflowIthead,
     BUDGET_PERMISSIONS.workflowDof,
     BUDGET_PERMISSIONS.workflowPrincipal,
     BUDGET_PERMISSIONS.adminView,
@@ -56,6 +60,7 @@ router.get('/org-units', AdminBudgetController.getAllOrgUnits);
 router.get('/org-units/:type', AdminBudgetController.getOrgUnits);
 router.get('/hod', canAccessLevel1Queue, AdminBudgetController.getHodBudgets);
 router.get('/coordinator', canAccessLevel1Queue, AdminBudgetController.getCoordinatorBudgets);
+router.get('/ithead', canAccessItheadQueue, AdminBudgetController.getItheadBudgets);
 router.get('/dof', canAccessDofQueue, AdminBudgetController.getDofBudgets);
 router.get('/principal', canAccessPrincipalQueue, AdminBudgetController.getPrincipalBudgets);
 router.get('/:id(\\d+)', AdminBudgetController.get);
