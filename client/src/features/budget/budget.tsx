@@ -582,6 +582,7 @@ const Budget: React.FC = () => {
   const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(!id);
   const [proposalStatus, setProposalStatus] = useState<string>('');
   const [proposalStage, setProposalStage] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionPopupOpen, setActionPopupOpen] = useState(false);
   const [actionType, setActionType] = useState<'return' | 'reject' | null>(null);
   const [actionComment, setActionComment] = useState('');
@@ -875,12 +876,14 @@ const Budget: React.FC = () => {
 
 
 
- const handleSubmitBudget = async () => {
-  // Check budget lines first
-  if (!budgetLines.length) {
-    showAlert('Please add at least one budget line.', 'warning');
-    return;
-  }
+  const handleSubmitBudget = async () => {
+    if (isSubmitting) {
+      return;
+    }
+    if (!budgetLines.length) {
+      showAlert('Please add at least one budget line.', 'warning');
+      return;
+    }
 
   for (let i = 0; i < budgetLines.length; i++) {
     const line = budgetLines[i];
@@ -903,29 +906,28 @@ const Budget: React.FC = () => {
       showAlert(`Valid Unit Amount > 0 is required for line ${i + 1}`, 'warning');
       return;
     }
-    
     // Quantity required and positive (blocks 0 qty)
     const quantity = Number(line.qty);
     if (!line.qty || quantity <= 0) {
       showAlert(`Valid Quantity > 0 is required for line ${i + 1}`, 'warning');
       return;
     }
-    
+
     // Description required
     if (!line.description?.trim()) {
       showAlert(`Description is required for line ${i + 1}`, 'warning');
       return;
     }
-    
+
     // Month splitup must EXACTLY match unit_amount * quantity
     const totalMonthAmount = Object.values(line.monthAmounts || {}).reduce(
       (sum, val) => sum + (Number(val) || 0), 0
     );
-    
+
     const expectedTotal = unitAmount * quantity;
     if (Math.abs(totalMonthAmount - expectedTotal) > 0.01) {
       showAlert(
-        `Line ${i + 1}: Month total (₹${totalMonthAmount.toFixed(2)}) must equal Unit Amount × Qty (₹${expectedTotal.toFixed(2)})`, 
+        `Line ${i + 1}: Month total (₹${totalMonthAmount.toFixed(2)}) must equal Unit Amount × Qty (₹${expectedTotal.toFixed(2)})`,
         'warning'
       );
       return;
@@ -986,6 +988,12 @@ const Budget: React.FC = () => {
       ? Number(applicantEmployeeId)
       : undefined,
     beneficiary_type: beneficiaryType?.trim(),
+    beneficiary_employee_id:
+      ['Faculty', 'Staff'].includes(beneficiaryType) &&
+        Number.isInteger(Number(beneficiaryEmployeeId)) &&
+        Number(beneficiaryEmployeeId) > 0
+        ? Number(beneficiaryEmployeeId)
+        : undefined,
     beneficiary_value: displayBeneficiaryValue,
     proposal_description: '',
     applicant_name: applicantName?.trim(),
@@ -995,6 +1003,7 @@ const Budget: React.FC = () => {
   };
 
   try {
+    setIsSubmitting(true);
     const isPrivilegedReviewer = isAdminContextEdit && isEditMode;
     const endpoint = isPrivilegedReviewer
       ? `/adminbudget/${id}`
@@ -1050,9 +1059,12 @@ const Budget: React.FC = () => {
         }
       }
     );
-  } catch (error: any) {
-    console.error('Submit error:', error);
-    showAlert(`Failed to submit: ${error.response?.data?.message || error.message}`, 'error');
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } }; message?: string };
+    console.error('Submit error:', err);
+    showAlert(`Failed to submit: ${err.response?.data?.message || err.message}`, 'error');
+  } finally {
+    setIsSubmitting(false);
   }
 };
 
@@ -2847,6 +2859,7 @@ const Budget: React.FC = () => {
             type="submit"
             className="submitBudgetBtn"
             onClick={handleSubmitBudget}
+            disabled={isSubmitting}
             style={{
               padding: "12px 40px",
               fontSize: "16px",
@@ -2855,17 +2868,20 @@ const Budget: React.FC = () => {
               color: "white",
               border: "none",
               borderRadius: "12px",
-              cursor: "pointer",
+              cursor: isSubmitting ? "not-allowed" : "pointer",
+              opacity: isSubmitting ? 0.7 : 1,
               minWidth: "150px",
               boxShadow: "0 6px 20px rgba(0, 105, 171, 0.3)",
               transition: "all 0.3s ease",
             }}
             onMouseOver={(e) => {
+              if (isSubmitting) return;
               e.currentTarget.style.backgroundColor = "#0056b3";
               e.currentTarget.style.transform = "translateY(-3px)";
               e.currentTarget.style.boxShadow = "0 8px 25px rgba(0, 105, 171, 0.4)";
             }}
             onMouseOut={(e) => {
+              if (isSubmitting) return;
               e.currentTarget.style.backgroundColor = "#0069ab";
               e.currentTarget.style.transform = "translateY(0)";
               e.currentTarget.style.boxShadow = "0 6px 20px rgba(0, 105, 171, 0.3)";
@@ -2877,7 +2893,7 @@ const Budget: React.FC = () => {
               e.currentTarget.style.boxShadow = "0 6px 20px rgba(0, 105, 171, 0.3)";
             }}
           >
-            {isEditMode ? "Update Budget" : "Submit Budget"}
+            {isSubmitting ? "Saving..." : isEditMode ? "Update Budget" : "Submit Budget"}
           </button>
         </div>
       )}
