@@ -450,149 +450,174 @@ export async function create(payload) {
 
     const fyYear = payload.fiscal_year || getCurrentFinancialYear();
 
-    // 1. Ensure tracker row exists for the year
-    await conn.execute(
-      'INSERT IGNORE INTO budget_proposal_refs (ref_year, ref_sequence, proposal_id, proposal_ref) VALUES (?, 0, NULL, NULL)',
-      [fyYear]
-    );
-
-    // 2. Lock the tracker row specifically to serialize requests for this year.
-    // We lock the row where proposal_id IS NULL.
-    await conn.execute(
-      `SELECT id FROM budget_proposal_refs 
-         WHERE ref_year = ? AND proposal_id IS NULL 
-         FOR UPDATE`,
-      [fyYear]
-    );
-
-    // 3. Get the actual maximum sequence used by real proposals (where proposal_id is NOT NULL)
-    // This ensures we never "Double Book" a sequence number even if the tracker is out of sync.
-    const [maxRows] = await conn.execute(
-      `SELECT COALESCE(MAX(ref_sequence), 0) AS current_max
-         FROM budget_proposal_refs 
-         WHERE ref_year = ? AND proposal_id IS NOT NULL`,
-      [fyYear]
-    );
-
-    const sequence = Number(maxRows[0].current_max) + 1;
-    const proposalRef = `#B-${fyYear}-${String(sequence).padStart(4, '0')}`;
-
-    const departmentId = await resolveDepartmentId(conn, payload);
-    const { entityTypeCode, beneficiaryEntityId } = await resolveBeneficiaryEntity(
-      conn,
-      payload.beneficiary_type,
-      payload.beneficiary_value,
-      payload.beneficiary_employee_id
-    );
-
-    const flow = await resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn, {
-      budgetTag: payload.budget_tag,
-    });
-    const initialStage = flow.requiresLevel1 ? 'level1' : flow.requiresDof ? 'dof' : 'principal';
-    const approvalFlowString = formatApprovalFlowString(flow);
-    const level1Route = resolveLevel1Route({
-      ...payload,
-      department_id: departmentId,
-      beneficiary_entity_id: beneficiaryEntityId,
-    });
-    const level1EntityAssignee =
-      level1Route.routeType === LEVEL1_ROUTE_TYPE.entityContact
-        ? await resolveEntityLevel1Assignee(level1Route.entityId, conn)
-        : null;
-    const level1AssignmentStatus = resolveLevel1AssignmentStatus({
-      routeType: level1Route.routeType,
-      assigneeEmail: level1EntityAssignee?.email || null,
-    });
-
-    const hasApplicantNameColumn = await hasBudgetProposalColumn('applicant_name');
-    const hasBudgetTagColumn = await hasBudgetProposalColumn('budget_tag');
-    const applicantNameInsertColumn = hasApplicantNameColumn ? ', applicant_name' : '';
-    const budgetTagInsertColumn = hasBudgetTagColumn ? ', budget_tag' : '';
-    const applicantNameInsertValue = hasApplicantNameColumn ? ', ?' : '';
-    const budgetTagInsertValue = hasBudgetTagColumn ? ', ?' : '';
-
-    const createParams = [
-      proposalRef,
-      fyYear,
-      payload.employee_id || payload.user_id,
-      payload.user_id,
-      payload.user_email || '',
-      payload.request_date,
-      payload.beneficiary_type,
-      payload.beneficiary_value || null,
-      beneficiaryEntityId,
-      departmentId,
-      payload.proposal_description || null,
-      calculatedTotal,
-      calculatedTotal,
-      approvalFlowString,
-      initialStage,
-    ];
-    if (hasApplicantNameColumn) {
-      createParams.push(payload.applicant_name || null);
-    }
-    if (hasBudgetTagColumn) {
-      createParams.push(payload.budget_tag || null);
+    // 1. Acquire a named lock to serialize ref generation across concurrent requests.
+    // This prevents duplicate refs when many budgets are created simultaneously.
+    const lockName = `budget_ref_fy_${fyYear}`;
+    const [lockRows] = await conn.execute('SELECT GET_LOCK(?, 15) AS acquired', [lockName]);
+    const lockAcquired = Number(lockRows[0]?.acquired) === 1;
+    if (!lockAcquired) {
+      throw new Error(`Could not acquire budget reference lock for FY ${fyYear}`);
     }
 
-    const [proposalResult] = await conn.execute(
-      `INSERT INTO budget_proposals(
-          proposal_ref,
-          fiscal_year,
-          employee_id,
-          user_id,
-          user_email,
-          request_date,
-          beneficiary_type,
-          beneficiary_value,
-          beneficiary_entity_id,
-          department_id,
-          proposal_description,
-          total_amount,
-          approved_total_amount,
-          approval_flow,
-          status,
-          current_stage${applicantNameInsertColumn}${budgetTagInsertColumn},
-          created_at
-        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?${applicantNameInsertValue}${budgetTagInsertValue}, NOW())`,
-      createParams
-    );
+    try {
+      // 2. Ensure tracker row exists for the year
+      await conn.execute(
+        'INSERT IGNORE INTO budget_proposal_refs (ref_year, ref_sequence, proposal_id, proposal_ref) VALUES (?, 0, NULL, NULL)',
+        [fyYear]
+      );
 
-    const proposalId = proposalResult.insertId;
+      // 2b. Clean up orphan ref rows (proposal_id IS NULL, ref_sequence > 0) from prior deletes
+      await conn.execute(
+        'DELETE FROM budget_proposal_refs WHERE proposal_id IS NULL AND ref_sequence > 0 AND ref_year = ?',
+        [fyYear]
+      );
 
-    await conn.execute(
-      `INSERT INTO budget_proposal_refs(proposal_id, ref_year, ref_sequence, proposal_ref)
-      VALUES(?, ?, ?, ?)`,
-      [proposalId, fyYear, sequence, proposalRef]
-    );
+      // 3. Lock the tracker row (belt-and-suspenders with GET_LOCK)
+      const [trackerRows] = await conn.execute(
+        `SELECT id FROM budget_proposal_refs 
+           WHERE ref_year = ? AND proposal_id IS NULL 
+           FOR UPDATE`,
+        [fyYear]
+      );
+      if (trackerRows.length === 0) {
+        throw new Error(`Budget tracker row missing for FY ${fyYear}`);
+      }
 
-    if (Array.isArray(payload.lines)) {
-      for (const line of payload.lines) {
-        const lineId = await insertBudgetLine(proposalId, line, conn);
+      // 4. Get the maximum sequence used (real proposals + orphans from deleted proposals).
+      // Orphans: proposal_id IS NULL but ref_sequence > 0 (left when proposal was deleted).
+      // Including them prevents reusing a sequence whose proposal_ref still exists in the table.
+      const [maxRows] = await conn.execute(
+        `SELECT COALESCE(MAX(ref_sequence), 0) AS current_max
+           FROM budget_proposal_refs 
+           WHERE ref_year = ?
+             AND (proposal_id IS NOT NULL OR ref_sequence > 0)`,
+        [fyYear]
+      );
 
-        if (line.month_allocations) {
-          for (const [month, amount] of Object.entries(line.month_allocations)) {
-            if (VALID_MONTHS.includes(month)) {
-              await insertMonthAllocation(lineId, month, amount, conn);
+      const sequence = Number(maxRows[0].current_max) + 1;
+      const proposalRef = `#B-${fyYear}-${String(sequence).padStart(4, '0')}`;
+
+      const departmentId = await resolveDepartmentId(conn, payload);
+      const { entityTypeCode, beneficiaryEntityId } = await resolveBeneficiaryEntity(
+        conn,
+        payload.beneficiary_type,
+        payload.beneficiary_value,
+        payload.beneficiary_employee_id
+      );
+
+      const flow = await resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn, {
+        budgetTag: payload.budget_tag,
+      });
+      const initialStage = flow.requiresLevel1 ? 'level1' : flow.requiresDof ? 'dof' : 'principal';
+      const approvalFlowString = formatApprovalFlowString(flow);
+      const level1Route = resolveLevel1Route({
+        ...payload,
+        department_id: departmentId,
+        beneficiary_entity_id: beneficiaryEntityId,
+      });
+      const level1EntityAssignee =
+        level1Route.routeType === LEVEL1_ROUTE_TYPE.entityContact
+          ? await resolveEntityLevel1Assignee(level1Route.entityId, conn)
+          : null;
+      const level1AssignmentStatus = resolveLevel1AssignmentStatus({
+        routeType: level1Route.routeType,
+        assigneeEmail: level1EntityAssignee?.email || null,
+      });
+
+      const hasApplicantNameColumn = await hasBudgetProposalColumn('applicant_name');
+      const hasBudgetTagColumn = await hasBudgetProposalColumn('budget_tag');
+      const applicantNameInsertColumn = hasApplicantNameColumn ? ', applicant_name' : '';
+      const budgetTagInsertColumn = hasBudgetTagColumn ? ', budget_tag' : '';
+      const applicantNameInsertValue = hasApplicantNameColumn ? ', ?' : '';
+      const budgetTagInsertValue = hasBudgetTagColumn ? ', ?' : '';
+
+      const createParams = [
+        proposalRef,
+        fyYear,
+        payload.employee_id || payload.user_id,
+        payload.user_id,
+        payload.user_email || '',
+        payload.request_date,
+        payload.beneficiary_type,
+        payload.beneficiary_value || null,
+        beneficiaryEntityId,
+        departmentId,
+        payload.proposal_description || null,
+        calculatedTotal,
+        calculatedTotal,
+        approvalFlowString,
+        initialStage,
+      ];
+      if (hasApplicantNameColumn) {
+        createParams.push(payload.applicant_name || null);
+      }
+      if (hasBudgetTagColumn) {
+        createParams.push(payload.budget_tag || null);
+      }
+
+      const [proposalResult] = await conn.execute(
+        `INSERT INTO budget_proposals(
+            proposal_ref,
+            fiscal_year,
+            employee_id,
+            user_id,
+            user_email,
+            request_date,
+            beneficiary_type,
+            beneficiary_value,
+            beneficiary_entity_id,
+            department_id,
+            proposal_description,
+            total_amount,
+            approved_total_amount,
+            approval_flow,
+            status,
+            current_stage${applicantNameInsertColumn}${budgetTagInsertColumn},
+            created_at
+          ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?${applicantNameInsertValue}${budgetTagInsertValue}, NOW())`,
+        createParams
+      );
+
+      const proposalId = proposalResult.insertId;
+
+      // Use REPLACE INTO to take over any "ghost" rows left by deleted proposals.
+      // This solves the "Duplicate entry" error when a previous proposal with the same sequence was deleted.
+      await conn.execute(
+        `REPLACE INTO budget_proposal_refs(proposal_id, ref_year, ref_sequence, proposal_ref)
+        VALUES(?, ?, ?, ?)`,
+        [proposalId, fyYear, sequence, proposalRef]
+      );
+
+      if (Array.isArray(payload.lines)) {
+        for (const line of payload.lines) {
+          const lineId = await insertBudgetLine(proposalId, line, conn);
+
+          if (line.month_allocations) {
+            for (const [month, amount] of Object.entries(line.month_allocations)) {
+              if (VALID_MONTHS.includes(month)) {
+                await insertMonthAllocation(lineId, month, amount, conn);
+              }
             }
           }
         }
       }
-    }
 
-    return {
-      proposalId,
-      proposalRef,
-      fyYear,
-      requiresLevel1: flow.requiresLevel1,
-      initialStage,
-      approvalFlow: approvalFlowString,
-      departmentId,
-      beneficiaryEntityId,
-      level1RouteType: level1Route.routeType,
-      level1AssigneeEmail: level1EntityAssignee?.email || null,
-      level1AssignmentStatus,
-    };
+      return {
+        proposalId,
+        proposalRef,
+        fyYear,
+        requiresLevel1: flow.requiresLevel1,
+        initialStage,
+        approvalFlow: approvalFlowString,
+        departmentId,
+        beneficiaryEntityId,
+        level1RouteType: level1Route.routeType,
+        level1AssigneeEmail: level1EntityAssignee?.email || null,
+        level1AssignmentStatus,
+      };
+    } finally {
+      await conn.execute('SELECT RELEASE_LOCK(?)', [lockName]);
+    }
   });
 }
 
@@ -1128,12 +1153,7 @@ async function deleteBudgetProposal(proposalId) {
     );
 
     // Preserve historical reference numbers so deleted refs are never reused.
-    await conn.execute(
-      `UPDATE budget_proposal_refs
-         SET proposal_id = NULL
-         WHERE proposal_id = ?`,
-      [proposalId]
-    );
+    await conn.execute('DELETE FROM budget_proposal_refs WHERE proposal_id = ?', [proposalId]);
 
     await conn.execute('DELETE FROM budget_proposal_lines WHERE budget_proposal_id = ?', [proposalId]);
     await conn.execute('DELETE FROM budget_proposal_approvals WHERE budget_proposal_id = ?', [proposalId]);
