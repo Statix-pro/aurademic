@@ -301,6 +301,33 @@ const BudgetDashboard: React.FC = () => {
   }, [activeLogId]);
   // --- Fetch Data ---
   useEffect(() => {
+    const mapWithConcurrency = async <T, R>(
+      items: T[],
+      limit: number,
+      mapper: (item: T, index: number) => Promise<R>
+    ): Promise<R[]> => {
+      if (!Array.isArray(items) || items.length === 0) return [];
+      const safeLimit = Math.max(1, Math.min(limit, items.length));
+      const results = new Array<R>(items.length);
+      let nextIndex = 0;
+
+      const workers = Array.from({ length: safeLimit }, async () => {
+        while (true) {
+          const current = nextIndex;
+          nextIndex += 1;
+
+          if (current >= items.length) {
+            break;
+          }
+
+          results[current] = await mapper(items[current], current);
+        }
+      });
+
+      await Promise.all(workers);
+      return results;
+    };
+
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
@@ -308,35 +335,58 @@ const BudgetDashboard: React.FC = () => {
 
         const fiscalYearNum = parseInt(financialYear.split("-")[0]);
 
-        // 1. Fetch List
-        const listResult = await authenticityUtility.get(
-          `/budget/my?fiscalYear=${fiscalYearNum}&page=1&limit=100`
-        ) as any;
+        // 1. Fetch list pages sequentially to avoid request bursts
+        const pageSize = 100;
+        const summaryRows: any[] = [];
+        let page = 1;
+        let totalPages = 1;
 
-        if (!listResult.success || !listResult.data) {
-          setProposals([]);
-          return;
+        while (page <= totalPages) {
+          const pageResult = await authenticityUtility.get(
+            `/budget/my?fiscalYear=${fiscalYearNum}&page=${page}&limit=${pageSize}`
+          ) as any;
+
+          if (page === 1 && (!pageResult?.success || !Array.isArray(pageResult?.data))) {
+            setProposals([]);
+            return;
+          }
+
+          if (pageResult?.success && Array.isArray(pageResult?.data)) {
+            summaryRows.push(...pageResult.data);
+          }
+
+          totalPages = Number(pageResult?.pagination?.totalPages || totalPages || 1);
+          page += 1;
         }
+
+        const uniqueSummaries = Array.from(
+          new Map(summaryRows.map((row: any) => [row?.id, row])).values()
+        );
 
         // 2. Fetch Details for ALL (Parallel)
         // Build a map of is_applicant_only from the list result
         const applicantOnlyMap: Record<number, boolean> = {};
-        listResult.data.forEach((summary: any) => {
+        uniqueSummaries.forEach((summary: any) => {
           applicantOnlyMap[summary.id] = Boolean(summary.is_applicant_only);
         });
 
-        const detailPromises = listResult.data.map(async (summary: any) => {
-          try {
-            const detailJson = await authenticityUtility.get(
-              `/budget/${summary.id}`
-            ) as any;
-            return detailJson.success ? { ...detailJson.data, _isApplicantOnly: applicantOnlyMap[summary.id] || false } : null;
-          } catch (e) {
-            return null;
+        // Concurrency-limited detail fetch prevents large N request spikes.
+        const fullProposals = (await mapWithConcurrency(
+          uniqueSummaries,
+          8,
+          async (summary: any) => {
+            try {
+              const detailJson = await authenticityUtility.get(
+                `/budget/${summary.id}`
+              ) as any;
+              return detailJson.success
+                ? { ...detailJson.data, _isApplicantOnly: applicantOnlyMap[summary.id] || false }
+                : null;
+            } catch {
+              return null;
+            }
           }
-        });
-
-        const fullProposals = (await Promise.all(detailPromises)).filter(Boolean);
+        )).filter(Boolean);
 
         // 3. Process Proposals
         const parsedProposals: ProposalGroup[] = fullProposals.map((data: any) => {
