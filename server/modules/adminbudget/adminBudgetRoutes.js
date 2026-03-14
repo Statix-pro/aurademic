@@ -80,6 +80,7 @@ router.put('/entities/:type/:id(\\d+)/contacts', canManageBudgetAdmin, AdminBudg
 // Aggregates & Dashboard Stats
 router.get('/aggregates', canViewBudgetAdmin, AdminBudgetController.getAggregates);
 router.get('/stats', canViewBudgetAdmin, AdminBudgetController.getStats);
+router.get('/kpi-stats', AdminBudgetController.getKpiStats);
 router.get('/admin', canViewBudgetAdmin, AdminBudgetController.adminList);
 router.get('/superadmin/flow', superAdminMiddleware, AdminBudgetController.getSuperAdminFlowDashboard);
 

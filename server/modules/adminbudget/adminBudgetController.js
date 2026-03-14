@@ -317,7 +317,7 @@ export async function getHodBudgets(req, res) {
       });
     }
 
-    const { page = 1, limit = 10, status, fiscalYear } = req.query;
+    const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
 
     const budgets = await AdminBudgetModel.listBudgets({
       department,
@@ -329,6 +329,9 @@ export async function getHodBudgets(req, res) {
       limit: Number.parseInt(limit, 10),
       status: status || undefined,
       fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      q,
+      departmentFilter,
+      beneficiaryType,
     });
 
     return res.json({
@@ -360,7 +363,7 @@ export async function getCoordinatorBudgets(req, res) {
       });
     }
 
-    const { page = 1, limit = 10, status, fiscalYear } = req.query;
+    const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
 
     const budgets = await AdminBudgetModel.listBudgets({
       userId,
@@ -371,6 +374,9 @@ export async function getCoordinatorBudgets(req, res) {
       limit: Number.parseInt(limit, 10),
       status: status || undefined,
       fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      q,
+      departmentFilter,
+      beneficiaryType,
     });
 
     return res.json({
@@ -390,7 +396,7 @@ export async function getCoordinatorBudgets(req, res) {
 
 export async function getItheadBudgets(req, res) {
   try {
-    const { page = 1, limit = 10, status, fiscalYear } = req.query;
+    const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
     const isSuperAdminUser = hasSuperAdminAccess(req);
 
     const budgets = await AdminBudgetModel.listBudgets({
@@ -400,6 +406,9 @@ export async function getItheadBudgets(req, res) {
       limit: Number.parseInt(limit, 10),
       status: status || undefined,
       fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      q,
+      departmentFilter,
+      beneficiaryType,
     });
 
     return res.json({
@@ -419,7 +428,7 @@ export async function getItheadBudgets(req, res) {
 
 export async function getDofBudgets(req, res) {
   try {
-    const { page = 1, limit = 10, status, fiscalYear } = req.query;
+    const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
     const isSuperAdmin = hasSuperAdminAccess(req);
 
     const budgets = await AdminBudgetModel.listBudgets({
@@ -429,6 +438,9 @@ export async function getDofBudgets(req, res) {
       limit: Number.parseInt(limit, 10),
       status: status || undefined,
       fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      q,
+      departmentFilter,
+      beneficiaryType,
     });
 
     return res.json({
@@ -448,7 +460,7 @@ export async function getDofBudgets(req, res) {
 
 export async function getPrincipalBudgets(req, res) {
   try {
-    const { page = 1, limit = 10, status, fiscalYear } = req.query;
+    const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
     const isSuperAdmin = hasSuperAdminAccess(req);
 
     const budgets = await AdminBudgetModel.listBudgets({
@@ -458,6 +470,9 @@ export async function getPrincipalBudgets(req, res) {
       limit: Number.parseInt(limit, 10),
       status: status || undefined,
       fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      q,
+      departmentFilter,
+      beneficiaryType,
     });
 
     return res.json({
@@ -1157,7 +1172,7 @@ export async function toggleArchive(req, res) {
 
 export async function adminList(req, res) {
   try {
-    const { page = 1, limit = 20, status, fiscalYear } = req.query;
+    const { page = 1, limit = 20, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
 
     const budgets = await AdminBudgetModel.listBudgets({
       role: 'admin',
@@ -1165,6 +1180,9 @@ export async function adminList(req, res) {
       limit: Number.parseInt(limit, 10),
       status,
       fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      q,
+      departmentFilter,
+      beneficiaryType,
     });
 
     return res.json({
@@ -1339,6 +1357,41 @@ export async function getStats(req, res) {
   }
 }
 
+export async function getKpiStats(req, res) {
+  try {
+    const department = await resolveUserDepartment(req);
+    const departmentId = await resolveUserDepartmentId(req);
+    const userEmail = normalizeText(req.user?.email);
+    const userId = getUserId(req);
+    const isSuperAdmin = hasSuperAdminAccess(req);
+    const { fiscalYear, q, role: roleParam, departmentFilter, beneficiaryType } = req.query;
+    const role = roleParam || resolveAccessRoleFromPermissions(req);
+
+    const stats = await AdminBudgetModel.getKpiStats({
+      userId,
+      userEmail,
+      department,
+      departmentId,
+      role,
+      superAdminQueueView: isSuperAdmin,
+      fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      q,
+      departmentFilter,
+      beneficiaryType,
+    });
+
+    return res.json({
+      success: true,
+      data: stats,
+    });
+  } catch (error) {
+    console.error('KPI stats error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch KPI stats',
+    });
+  }
+}
 
 export async function updateFlowConfig(req, res) {
   try {

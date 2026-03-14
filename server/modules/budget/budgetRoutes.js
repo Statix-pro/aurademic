@@ -40,6 +40,8 @@ router.get('/org-units', BudgetController.getAllOrgUnits);
 router.get('/org-units/:type', BudgetController.getOrgUnits);
 
 router.get('/my', BudgetController.getMyBudgets);
+router.get('/my/full', BudgetController.getMyBudgetsFull);
+router.get('/my/kpi-stats', BudgetController.getKpiStats);
 router.get('/hod', canAccessLevel1Queue, BudgetController.getHodBudgets);
 router.get('/coordinator', canAccessLevel1Queue, BudgetController.getCoordinatorBudgets);
 router.get('/ithead', canAccessItheadQueue, BudgetController.getItheadBudgets);
