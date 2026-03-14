@@ -51,6 +51,8 @@ const AlertModal: React.FC<AlertModalProps> = ({
         }
     };
 
+    const isForceAction = !!onConfirm && !showCancel;
+
     return (
         <CustomModal
             show={show}
@@ -59,6 +61,9 @@ const AlertModal: React.FC<AlertModalProps> = ({
             size="sm"
             centered
             className="compact-alert-modal"
+            backdrop={isForceAction ? "static" : undefined}
+            keyboard={isForceAction ? false : undefined}
+            hideCloseButton={isForceAction}
             footer={
                 <div className="d-flex justify-content-end gap-2 w-100">
                     {showCancel && (

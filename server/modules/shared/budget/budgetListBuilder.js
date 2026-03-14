@@ -28,6 +28,7 @@ export async function buildBudgetList(options) {
         fiscalYear,
         q,
         departmentFilter,
+        beneficiaryType,
         isAdminView = false, // Set to true for admin-specific fields/logic
         hasColumnCache = { applicant_name: true, budget_tag: true }
     } = options;
@@ -255,13 +256,43 @@ export async function buildBudgetList(options) {
         }
     }
 
-    if (normalizeText(status)) {
-        where.push('bp.status = ?');
-        params.push(normalizeText(status));
+    const normalizedStatus = normalizeText(status).toLowerCase();
+    if (normalizedStatus) {
+        let approvedCondition = "1=0";
+        if (safeRole === 'hod' || safeRole === 'coordinator') {
+            approvedCondition = "bp.status IN ('level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed')";
+        } else if (safeRole === 'ithead') {
+            approvedCondition = "bp.status IN ('ithead_approved', 'dof_approved', 'principal_approved', 'completed')";
+        } else if (safeRole === 'dof') {
+            approvedCondition = "bp.status IN ('dof_approved', 'principal_approved', 'completed')";
+        } else if (safeRole === 'principal') {
+            approvedCondition = "bp.status IN ('principal_approved', 'completed')";
+        } else {
+            approvedCondition = "bp.status IN ('principal_approved', 'completed')";
+        }
+
+        if (normalizedStatus === 'archived') {
+            where.push("LOWER(TRIM(bp.status)) IN ('archived', 'archive')");
+        } else if (normalizedStatus === 'returned') {
+            where.push("LOWER(TRIM(bp.status)) NOT IN ('archived', 'archive') AND LOWER(TRIM(bp.status)) LIKE '%returned%'");
+        } else if (normalizedStatus === 'rejected') {
+            where.push("LOWER(TRIM(bp.status)) NOT IN ('archived', 'archive') AND LOWER(TRIM(bp.status)) LIKE '%rejected%'");
+        } else if (normalizedStatus === 'approved') {
+            where.push(`LOWER(TRIM(bp.status)) NOT IN ('archived', 'archive', 'rejected', 'returned') AND ${approvedCondition}`);
+        } else if (normalizedStatus === 'pending') {
+            where.push(`LOWER(TRIM(bp.status)) NOT IN ('archived', 'archive', 'rejected', 'returned') AND NOT ${approvedCondition}`);
+        } else if (normalizedStatus !== 'all' && normalizedStatus !== 'total') {
+            where.push('bp.status = ?');
+            params.push(normalizeText(status));
+        }
     }
     if (normalizeText(departmentFilter)) {
         where.push('md.name = ?');
         params.push(normalizeText(departmentFilter));
+    }
+    if (normalizeText(beneficiaryType)) {
+        where.push('LOWER(TRIM(bp.beneficiary_type)) = LOWER(TRIM(?))');
+        params.push(normalizeText(beneficiaryType));
     }
     if (normalizeText(q)) {
         const searchPattern = `%${normalizeText(q)}%`;
@@ -294,5 +325,162 @@ export async function buildBudgetList(options) {
             limit: pLimit,
             pages: Math.ceil(Number(totalRows[0].total) / pLimit),
         },
+    };
+}
+
+/**
+ * Builds and executes a query to get KPI counts (Total, Pending, Approved, etc.)
+ * using the same context/where-clause logic as buildBudgetList.
+ *
+ * @param {object} options - Query options
+ * @returns {Promise<object>} Counts for various categories
+ */
+export async function buildBudgetKpiStats(options) {
+    const {
+        userId,
+        userEmail,
+        department,
+        departmentId,
+        role,
+        superAdminQueueView = false,
+        fiscalYear,
+        q,
+        departmentFilter,
+        beneficiaryType,
+        isAdminView = false
+    } = options;
+
+    const currentFY = Number.parseInt(fiscalYear, 10) || getCurrentFinancialYear();
+    const safeUserId = Number(userId) > 0 ? Number(userId) : -1;
+    const safeRole = normalizeBudgetRole(role);
+
+    const where = ['bp.fiscal_year = ?'];
+    const params = [Number(currentFY)];
+    const isQueueSuperAdminView = Boolean(superAdminQueueView) && ['hod', 'coordinator', 'ithead', 'dof', 'principal'].includes(safeRole);
+
+    // Archival predicates (replicated from buildBudgetList)
+    const archivedStatusPredicate = `LOWER(TRIM(bp.status)) IN ('archived', 'archive')`;
+    const archivedByLevel1Predicate = `(${archivedStatusPredicate} AND EXISTS (SELECT 1 FROM budget_proposal_approvals bpa_archive WHERE bpa_archive.budget_proposal_id = bp.id AND LOWER(TRIM(bpa_archive.decision)) IN ('archived', 'archive') AND LOWER(TRIM(bpa_archive.role)) IN ('level1', 'hod', 'coordinator')))`;
+    const archivedByDofPredicate = `(${archivedStatusPredicate} AND EXISTS (SELECT 1 FROM budget_proposal_approvals bpa_archive WHERE bpa_archive.budget_proposal_id = bp.id AND LOWER(TRIM(bpa_archive.decision)) IN ('archived', 'archive') AND LOWER(TRIM(bpa_archive.role)) = 'dof'))`;
+    const archivedByPrincipalPredicate = `(${archivedStatusPredicate} AND EXISTS (SELECT 1 FROM budget_proposal_approvals bpa_archive WHERE bpa_archive.budget_proposal_id = bp.id AND LOWER(TRIM(bpa_archive.decision)) IN ('archived', 'archive') AND LOWER(TRIM(bpa_archive.role)) = 'principal'))`;
+    const archivedByItheadPredicate = `(${archivedStatusPredicate} AND EXISTS (SELECT 1 FROM budget_proposal_approvals bpa_archive WHERE bpa_archive.budget_proposal_id = bp.id AND LOWER(TRIM(bpa_archive.decision)) IN ('archived', 'archive') AND LOWER(TRIM(bpa_archive.role)) = 'ithead'))`;
+
+    switch (safeRole) {
+        case 'hod': {
+            where.push(`((LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff') AND bp.beneficiary_entity_id IS NULL) OR LOWER(TRIM(bp.beneficiary_type)) = 'department')`);
+            if (!isQueueSuperAdminView) {
+                where.push('md.type = "Academic"');
+                const actionQueueExpr = isAdminView
+                    ? `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed") OR ${archivedByLevel1Predicate})`
+                    : `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed"))`;
+                where.push(actionQueueExpr);
+                const normalizedDepartment = normalizeText(department);
+                const hodScope = [];
+                if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) { hodScope.push('bp.department_id = ?'); params.push(Number(departmentId)); }
+                if (normalizedDepartment) { hodScope.push(`(LOWER(TRIM(md.name)) = LOWER(TRIM(?)) OR LOWER(TRIM(md.code)) = LOWER(TRIM(?)) OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(?)))`); params.push(normalizedDepartment, normalizedDepartment, normalizedDepartment); }
+                where.push(hodScope.length ? `(${hodScope.join(' OR ')})` : '1 = 0');
+            }
+            break;
+        }
+        case 'coordinator': {
+            where.push(`(LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body') OR (LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff') AND bp.beneficiary_entity_id IS NOT NULL))`);
+            if (!isQueueSuperAdminView) {
+                const actionQueueExpr = isAdminView
+                    ? `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed") OR ${archivedByLevel1Predicate})`
+                    : `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed"))`;
+                where.push(actionQueueExpr);
+                const filterConditions = [];
+                if (safeUserId > 0) { filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'))`); params.push(safeUserId); }
+                if (userEmail) { filterConditions.push('LOWER(TRIM(mec.email)) = LOWER(TRIM(?))'); params.push(userEmail); }
+                where.push(filterConditions.length ? `(${filterConditions.join(' OR ')})` : '1 = 0');
+            }
+            break;
+        }
+        case 'dof':
+            where.push(isAdminView
+                ? `(bp.current_stage = "dof" OR bp.status LIKE "dof_%" OR bp.status = "completed" OR ${archivedByDofPredicate})`
+                : `(bp.current_stage = "dof" OR bp.status LIKE "dof_%" OR bp.status LIKE "principal_%" OR bp.status = "completed")`
+            );
+            break;
+        case 'ithead':
+            where.push('LOWER(TRIM(bp.budget_tag)) = LOWER(TRIM(?))');
+            params.push('IT Infrastructure');
+            where.push(isAdminView
+                ? `(bp.current_stage = "ithead" OR bp.status LIKE "ithead_%" OR ${archivedByItheadPredicate})`
+                : `(bp.current_stage = "ithead" OR bp.status LIKE "ithead_%")`
+            );
+            break;
+        case 'principal':
+            where.push(isAdminView
+                ? `(bp.current_stage = "principal" OR bp.status LIKE "principal_%" OR bp.status = "completed" OR ${archivedByPrincipalPredicate})`
+                : `(bp.current_stage = "principal" OR bp.status LIKE "principal_%" OR bp.status = "completed")`
+            );
+            break;
+        case 'admin':
+        case 'super_admin':
+            break;
+        default:
+            if (isAdminView) {
+                where.push('(bp.user_id = ? OR bp.user_email = ?)');
+                params.push(safeUserId, normalizeText(userEmail));
+            }
+            break;
+    }
+
+    if (normalizeText(departmentFilter)) { where.push('md.name = ?'); params.push(normalizeText(departmentFilter)); }
+    if (normalizeText(beneficiaryType)) {
+        where.push('LOWER(TRIM(bp.beneficiary_type)) = LOWER(TRIM(?))');
+        params.push(normalizeText(beneficiaryType));
+    }
+    if (normalizeText(q)) {
+        const searchPattern = `%${normalizeText(q)}%`;
+        where.push(`(bp.proposal_ref LIKE ? OR bp.beneficiary_value LIKE ? OR md.name LIKE ? OR me.name LIKE ? OR applicant_emp.first_name LIKE ? OR applicant_emp.last_name LIKE ?)`);
+        params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+    }
+
+    const whereClause = `WHERE ${where.join(' AND ')}`;
+
+    // Status category mapping logic replicated from frontend (isApprovedForActiveTab + getStatusCategory)
+    // but in SQL for performance.
+    let approvedCondition = "1=0"; // Default
+    if (safeRole === 'hod' || safeRole === 'coordinator') {
+        approvedCondition = "bp.status IN ('level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed')";
+    } else if (safeRole === 'ithead') {
+        approvedCondition = "bp.status IN ('ithead_approved', 'dof_approved', 'principal_approved', 'completed')";
+    } else if (safeRole === 'dof') {
+        approvedCondition = "bp.status IN ('dof_approved', 'principal_approved', 'completed')";
+    } else if (safeRole === 'principal') {
+        approvedCondition = "bp.status IN ('principal_approved', 'completed')";
+    } else {
+        // Admin/SuperAdmin/General view
+        approvedCondition = "bp.status IN ('principal_approved', 'completed')";
+    }
+
+    const sql = `
+        SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN LOWER(TRIM(bp.status)) IN ('archived', 'archive') THEN 1 ELSE 0 END) AS archived,
+            SUM(CASE WHEN (LOWER(TRIM(bp.status)) NOT IN ('archived', 'archive') AND LOWER(TRIM(bp.status)) LIKE '%returned%') THEN 1 ELSE 0 END) AS returned,
+            SUM(CASE WHEN (LOWER(TRIM(bp.status)) NOT IN ('archived', 'archive') AND LOWER(TRIM(bp.status)) LIKE '%rejected%') THEN 1 ELSE 0 END) AS rejected,
+            SUM(CASE WHEN (LOWER(TRIM(bp.status)) NOT IN ('archived', 'archive', 'rejected', 'returned') AND ${approvedCondition}) THEN 1 ELSE 0 END) AS approved,
+            SUM(CASE WHEN (LOWER(TRIM(bp.status)) NOT IN ('archived', 'archive', 'rejected', 'returned') AND NOT ${approvedCondition}) THEN 1 ELSE 0 END) AS pending
+        FROM budget_proposals bp
+        LEFT JOIN master_departments md ON bp.department_id = md.id
+        LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+        LEFT JOIN master_employees applicant_emp ON bp.user_id = applicant_emp.user_id AND applicant_emp.status = 'Active'
+        LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
+        ${whereClause}
+    `;
+
+    const [rows] = await db.query(sql, params);
+    const result = rows[0] || { total: 0, archived: 0, returned: 0, rejected: 0, approved: 0, pending: 0 };
+
+    return {
+        total: Number(result.total || 0),
+        archived: Number(result.archived || 0),
+        returned: Number(result.returned || 0),
+        rejected: Number(result.rejected || 0),
+        approved: Number(result.approved || 0),
+        pending: Number(result.pending || 0)
     };
 }

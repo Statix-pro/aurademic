@@ -25,7 +25,7 @@ import {
 import * as userResolvers from '../shared/budget/userResolvers.js';
 import * as orgUnitQueries from '../shared/budget/orgUnitQueries.js';
 import { resolveApprovalFlow as resolveSharedApprovalFlow } from '../shared/budget/approvalFlowResolver.js';
-import { buildBudgetList } from '../shared/budget/budgetListBuilder.js';
+import { buildBudgetList, buildBudgetKpiStats } from '../shared/budget/budgetListBuilder.js';
 
 const VALID_MONTHS = SHARED_VALID_MONTHS;
 const APPROVAL_FLOW = SHARED_APPROVAL_FLOW;
@@ -1610,7 +1610,8 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
     fiscalYear,
     q,
     departmentFilter,
-  }) {
+    beneficiaryType,
+    }) {
     const hasApplicantNameColumn = await hasBudgetProposalColumn('applicant_name');
     const hasBudgetTagColumn = await hasBudgetProposalColumn('budget_tag');
     const result = await buildBudgetList({
@@ -1626,6 +1627,7 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
       fiscalYear,
       q,
       departmentFilter,
+      beneficiaryType,
       isAdminView: true,
       hasColumnCache: {
         applicant_name: hasApplicantNameColumn,
@@ -1633,12 +1635,38 @@ const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
       },
     });
     const enrichedRows = await attachLevel1AssignmentMetadata(result.rows);
-
     return {
       budgets: enrichedRows,
       pagination: result.pagination,
     };
-  }
+    }
+
+    export async function getKpiStats({
+    userId,
+    userEmail,
+    department,
+    departmentId,
+    role,
+    superAdminQueueView = false,
+    fiscalYear,
+    q,
+    departmentFilter,
+    beneficiaryType,
+    }) {
+    return buildBudgetKpiStats({
+      userId,
+      userEmail,
+      department,
+      departmentId,
+      role,
+      superAdminQueueView,
+      fiscalYear,
+      q,
+      departmentFilter,
+      beneficiaryType,
+      isAdminView: true
+    });
+    }
 
 export async function getBudgetById(proposalId) {
     const [rows] = await db.execute(
