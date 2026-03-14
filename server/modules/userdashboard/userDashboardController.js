@@ -1,6 +1,6 @@
 // userDashboardController.js
 import userDashboardModel from './userDashboardModel.js';
-import BudgetModel from '../budget/budgetModel.js';
+import * as BudgetModel from '../budget/budgetModel.js';
 
 const userDashboardController = {
   async getDashboardStats(req, res) {

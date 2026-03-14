@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import "./adminbudget.css";
-import Navbar from "../../../shared/components/layout/navbar/Navbar";
+
 import {
   Eye,
   Info,
@@ -19,9 +19,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import { useAuth } from "../../../contexts/AuthContext";
 import { hasPermission, isSuperAdmin } from "../../../shared/utils/permissionUtils";
+import AlertModal, { type AlertType } from "../../../shared/components/ui/AlertModal";
 
 type ActionType = "return" | "reject" | null;
-type QueueTabKey = "hod" | "coordinator" | "dof" | "principal" | "admin";
+type QueueTabKey = "hod" | "coordinator" | "ithead" | "dof" | "principal" | "admin";
 
 interface QueueTab {
   key: QueueTabKey;
@@ -54,6 +55,7 @@ interface BudgetRequestItem {
   status: string;
   current_stage: string;
   created_date: string;
+  level1_route_type?: string | null;
 }
 
 interface BudgetHistoryEntry {
@@ -89,23 +91,28 @@ const BENEFICIARY_OPTIONS = [
 ];
 
 const ARCHIVE_TRANSITION_MS = 280;
-const TAB_PRIORITY: QueueTabKey[] = ["hod", "coordinator", "dof", "principal", "admin"];
+const TAB_PRIORITY: QueueTabKey[] = ["hod", "coordinator", "ithead", "dof", "principal", "admin"];
 
 const STAGE_PERMISSION_MAP: Record<string, string> = {
   level1: "budget.workflow.level1",
+  ithead: "budget.workflow.ithead",
   dof: "budget.workflow.dof",
   principal: "budget.workflow.principal",
 };
 
 const STAGE_DISPLAY_MAP: Record<string, string> = {
   level1: "Level-1",
+  ithead: "IT Head",
   dof: "DoF",
   principal: "Principal",
 };
 
 const ENTITY_BENEFICIARY_TYPES = ["Centre", "Cell", "Club", "Professional Body"];
 
-const getLevel1Label = (beneficiaryType: string) => {
+const getLevel1Label = (beneficiaryType: string, routeType?: string | null) => {
+  if (String(routeType || "").toLowerCase() === "entity_contact") {
+    return "Coordinator";
+  }
   const type = (beneficiaryType || "").toLowerCase();
   const entityTypes = ENTITY_BENEFICIARY_TYPES.map((t) => t.toLowerCase());
   return entityTypes.includes(type) ? "Coordinator" : "HOD";
@@ -115,6 +122,7 @@ const getRoleLabel = (role: string) => {
   const map: Record<string, string> = {
     hod: "HoD",
     coordinator: "Coordinator",
+    ithead: "IT Head",
     principal: "Principal",
     dof: "DoF",
     admin: "Admin",
@@ -178,6 +186,50 @@ const AdminBudget: React.FC = () => {
 
   // Archive animation/state
   const [archivingIds, setArchivingIds] = useState<Set<number>>(new Set<number>());
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+    onConfirm?: (() => void) | undefined;
+    showCancel?: boolean;
+    confirmText?: string;
+    cancelText?: string;
+  }>({
+    show: false,
+    message: "",
+    type: "info",
+  });
+
+  const showAlert = (
+    message: React.ReactNode,
+    type: AlertType = "info",
+    title?: string,
+    onConfirm?: () => void,
+    showCancel = false,
+    confirmText = "OK",
+    cancelText = "Cancel"
+  ) => {
+    setAlertConfig({
+      show: true,
+      message,
+      type,
+      title,
+      onConfirm: onConfirm
+        ? () => {
+          closeAlert();
+          onConfirm();
+        }
+        : undefined,
+      showCancel,
+      confirmText,
+      cancelText,
+    });
+  };
+
+  const closeAlert = () => {
+    setAlertConfig((prev) => ({ ...prev, show: false, onConfirm: undefined }));
+  };
 
   const currentActiveAssignment = useMemo<RbacAssignment | null>(() => {
     return assignments.length > 0 ? assignments[activeAssignmentIndex] : null;
@@ -199,6 +251,10 @@ const AdminBudget: React.FC = () => {
 
     if (superUser || (hasLevel1Context && !isAcademicContext)) {
       tabs.push({ key: "coordinator", label: "Coordinator", endpoint: "/adminbudget/coordinator" });
+    }
+
+    if (superUser || hasPermission(user, "budget.workflow.ithead")) {
+      tabs.push({ key: "ithead", label: "IT Head", endpoint: "/adminbudget/ithead" });
     }
 
     if (superUser || hasPermission(user, "budget.workflow.dof")) {
@@ -264,8 +320,9 @@ const AdminBudget: React.FC = () => {
       const approvedStatusByTab: Record<QueueTabKey, string[]> = {
         // Stage-wise cumulative approved visibility:
         // HOD/Coordinator should still see records approved in downstream stages.
-        hod: ["level1_approved", "hod_approved", "dof_approved", "principal_approved", "completed"],
-        coordinator: ["level1_approved", "hod_approved", "dof_approved", "principal_approved", "completed"],
+        hod: ["level1_approved", "hod_approved", "ithead_approved", "dof_approved", "principal_approved", "completed"],
+        coordinator: ["level1_approved", "hod_approved", "ithead_approved", "dof_approved", "principal_approved", "completed"],
+        ithead: ["ithead_approved", "dof_approved", "principal_approved", "completed"],
         dof: ["dof_approved", "principal_approved", "completed"],
         principal: ["principal_approved", "completed"],
         admin: ["principal_approved", "completed"],
@@ -367,7 +424,7 @@ const AdminBudget: React.FC = () => {
 
   const openActionPopup = (type: "return" | "reject", id: number, ref: string, stage: string) => {
     if (!canProcessStage(stage)) {
-      alert("You do not have permission to process this stage.");
+      showAlert("You do not have permission to process this stage.", "warning");
       return;
     }
     setActionType(type);
@@ -389,33 +446,39 @@ const AdminBudget: React.FC = () => {
 
   const onApprove = async (itemId?: number, stage?: string) => {
     if (!itemId) {
-      alert("Missing budget id.");
+      showAlert("Missing budget id.", "warning");
       return;
     }
 
     if (!stage || !canProcessStage(stage)) {
-      alert("You do not have permission to approve this stage.");
+      showAlert("You do not have permission to approve this stage.", "warning");
       return;
     }
+    showAlert(
+      "Are you sure you want to approve this budget?",
+      "warning",
+      "Confirm Approval",
+      async () => {
+        try {
+          const response: any = await authenticityUtility.patch(`/adminbudget/${itemId}/approval`, {
+            decision: "approved",
+          });
 
-    if (!window.confirm("Are you sure you want to approve this budget?")) return;
-
-    try {
-      const response: any = await authenticityUtility.patch(`/adminbudget/${itemId}/approval`, {
-        decision: "approved",
-      });
-
-      if (response?.success || response?.data?.success) {
-        fetchDashboard();
-        return;
-      }
-      alert(response?.message || "Failed to approve");
-    } catch (error: any) {
-      alert(error.response?.data?.message || "Failed to approve");
-    }
+          if (response?.success || response?.data?.success) {
+            fetchDashboard();
+            return;
+          }
+          showAlert(response?.message || "Failed to approve", "error");
+        } catch (error: any) {
+          showAlert(error.response?.data?.message || "Failed to approve", "error");
+        }
+      },
+      true,
+      "Approve"
+    );
   };
 
-  const onArchiveToggle = async (item: BudgetRequestItem) => {
+  const onArchiveToggle = (item: BudgetRequestItem) => {
     const id = Number(item.id);
     const isArchived = ["archived", "archive"].some((token) =>
       (item.status || "").toLowerCase().includes(token)
@@ -423,53 +486,71 @@ const AdminBudget: React.FC = () => {
     const confirmMessage = isArchived
       ? "Are you sure you want to unarchive this budget?"
       : "Are you sure you want to archive this budget?";
+    showAlert(
+      confirmMessage,
+      "warning",
+      isArchived ? "Confirm Unarchive" : "Confirm Archive",
+      async () => {
+        if (archivingIds.has(id)) return;
 
-    if (!window.confirm(confirmMessage)) return;
-    if (archivingIds.has(id)) return;
+        setArchivingIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
 
-    setArchivingIds((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
+        try {
+          const response: any = await authenticityUtility.patch(`/adminbudget/${id}/archive-toggle`, {});
 
-    try {
-      const response: any = await authenticityUtility.patch(`/adminbudget/${id}/archive-toggle`, {});
+          if (response?.success || response?.data?.success) {
+            fetchDashboard();
+          } else {
+            setArchivingIds((prev) => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+            showAlert(
+              response?.message || response?.data?.message || "Failed to update archive state",
+              "error"
+            );
+            return;
+          }
+        } catch (error: any) {
+          setArchivingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+          showAlert(error.response?.data?.message || "Failed to update archive state", "error");
+          return;
+        }
 
-      if (response.success) {
-        fetchDashboard();
-      }
-    } catch (error: any) {
-      setArchivingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      alert(error.response?.data?.message || "Failed to update archive state");
-      return;
-    }
-
-    window.setTimeout(() => {
-      setArchivingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      fetchDashboard();
-    }, ARCHIVE_TRANSITION_MS);
+        window.setTimeout(() => {
+          setArchivingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+          fetchDashboard();
+        }, ARCHIVE_TRANSITION_MS);
+      },
+      true,
+      isArchived ? "Unarchive" : "Archive"
+    );
   };
 
   const submitActionWithComment = async () => {
     if (!actionType || !actionId) return;
 
     if (!canProcessStage(actionStage)) {
-      alert("You do not have permission to process this stage.");
+      showAlert("You do not have permission to process this stage.", "warning");
       return;
     }
 
     const comment = actionComment.trim();
     if (!comment) {
-      alert("Please enter comments.");
+      showAlert("Please enter comments.", "warning");
       return;
     }
 
@@ -479,13 +560,18 @@ const AdminBudget: React.FC = () => {
         feedback: comment,
       });
 
-      if (response.success) {
-        alert(`${actionType === "return" ? "Returned" : "Rejected"} successfully`);
+      if (response?.success || response?.data?.success) {
+        showAlert(`${actionType === "return" ? "Returned" : "Rejected"} successfully`, "success");
         closeActionPopup();
         fetchDashboard();
+        return;
       }
+      showAlert(
+        response?.message || response?.data?.message || `Failed to ${actionType}`,
+        "error"
+      );
     } catch (error: any) {
-      alert(error.response?.data?.message || `Failed to ${actionType}`);
+      showAlert(error.response?.data?.message || `Failed to ${actionType}`, "error");
     }
   };
 
@@ -506,13 +592,18 @@ const AdminBudget: React.FC = () => {
     if (!deleteId) return;
     try {
       const response: any = await authenticityUtility.delete(`/adminbudget/${deleteId}`);
-      if (response.success) {
-        alert("Budget request deleted successfully");
+      if (response?.success || response?.data?.success) {
+        showAlert("Budget proposal deleted successfully", "success");
         closeDeletePopup();
         fetchDashboard();
+        return;
       }
+      showAlert(
+        response?.message || response?.data?.message || "Failed to delete budget proposal",
+        "error"
+      );
     } catch (error: any) {
-      alert(error.response?.data?.message || "Failed to delete budget request");
+      showAlert(error.response?.data?.message || "Failed to delete budget proposal", "error");
     }
   };
 
@@ -594,7 +685,7 @@ const AdminBudget: React.FC = () => {
     const stageKey = (item.current_stage || "").toLowerCase();
     let stageLabel = STAGE_DISPLAY_MAP[stageKey] || (item.current_stage ? item.current_stage.toUpperCase() : "");
     if (stageKey === "level1") {
-      stageLabel = getLevel1Label(item.beneficiary_type);
+      stageLabel = getLevel1Label(item.beneficiary_type, item.level1_route_type);
     }
     return "Pending " + stageLabel;
   };
@@ -615,7 +706,7 @@ const AdminBudget: React.FC = () => {
       ? user.permissions.map((permission) => String(permission).toLowerCase())
       : [];
 
-    return roles.includes("hod") || permissions.includes("budget.workflow.hod");
+    return roles.includes("hod") || permissions.includes("budget.workflow.level1");
   }, [user]);
 
   const isDofLogin = useMemo(() => {
@@ -668,21 +759,21 @@ const AdminBudget: React.FC = () => {
   const onFreezeTime = async () => {
     if (!canFreezeNow) {
       if (isDofLogin && !isSuperAdminLogin && isTimeFrozen) {
-        alert("Freeze already applied for this fiscal year. Only Super Admin can edit it now.");
+        showAlert("Freeze already applied for this fiscal year. Only Super Admin can edit it now.", "warning");
         return;
       }
       if (isDofLogin && !isSuperAdminLogin && !isTodayFebFirst) {
-        alert(`DoF freeze can be applied only on ${dofFreezeAllowedDateText}.`);
+        showAlert(`DoF freeze can be applied only on ${dofFreezeAllowedDateText}.`, "warning");
         return;
       }
-      alert("Only Super Admin can edit freeze configuration right now.");
+      showAlert("Only Super Admin can edit freeze configuration right now.", "warning");
       return;
     }
 
     const selectedFreezeDate = freezeDate;
 
     if (!selectedFreezeDate) {
-      alert("Please select a freeze date.");
+      showAlert("Please select a freeze date.", "warning");
       return;
     }
 
@@ -699,10 +790,10 @@ const AdminBudget: React.FC = () => {
         setIsTimeFrozen(true);
         setFreezePopupOpen(false);
       } else {
-        alert(response?.message || "Failed to freeze budget time.");
+        showAlert(response?.message || "Failed to freeze budget time.", "error");
       }
     } catch (error: any) {
-      alert(error?.response?.data?.message || "Failed to freeze budget time.");
+      showAlert(error?.response?.data?.message || "Failed to freeze budget time.", "error");
     } finally {
       setFreezeSaving(false);
     }
@@ -740,7 +831,7 @@ const AdminBudget: React.FC = () => {
       setLogEntries(entries);
       setLogEdits(edits);
     } catch (error: any) {
-      alert(error?.response?.data?.message || "Failed to fetch proposal logs");
+      showAlert(error?.response?.data?.message || "Failed to fetch proposal logs", "error");
       setLogPopupOpen(false);
     } finally {
       setLogLoading(false);
@@ -807,10 +898,9 @@ const AdminBudget: React.FC = () => {
   const getRoleLabelForLog = (role?: string) => {
     const normalized = String(role || "").toLowerCase();
     if (normalized === "level1") {
-      const isEntity = ["club", "cell", "center", "centre", "professional body"].includes(
-        String(logProposal?.beneficiary_type || "").toLowerCase().trim()
-      );
-      return isEntity ? "Coordinator" : "HoD";
+      return getLevel1Label(logProposal?.beneficiary_type || "", logProposal?.level1_route_type) === "Coordinator"
+        ? "Coordinator"
+        : "HoD";
     }
     const map: Record<string, string> = {
       hod: "HoD",
@@ -1010,7 +1100,7 @@ const AdminBudget: React.FC = () => {
 
   return (
     <>
-      <Navbar />
+
 
       <section className="adminbudget-page">
         <div className="adminbudget-container">
@@ -1573,77 +1663,102 @@ const AdminBudget: React.FC = () => {
         </div>
       )}
 
+      <AlertModal
+        show={alertConfig.show}
+        onHide={closeAlert}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        onConfirm={alertConfig.onConfirm}
+        showCancel={alertConfig.showCancel}
+        confirmText={alertConfig.confirmText}
+        cancelText={alertConfig.cancelText}
+      />
+
       {deletePopupOpen && (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Close delete confirmation dialog"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 999999,
+            padding: 16,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closeDeletePopup();
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              closeDeletePopup();
+            }
+          }}
+        >
           <div
             style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.35)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 999999,
-              padding: 16,
+              width: "min(400px, 95vw)",
+              background: "#fff",
+              borderRadius: 12,
+              padding: 24,
+              boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
+              textAlign: "center",
             }}
-            onClick={closeDeletePopup}
           >
-            <div
-              style={{
-                width: "min(400px, 95vw)",
-                background: "#fff",
-                borderRadius: 12,
-                padding: 24,
-                boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
-                textAlign: "center",
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div style={{ color: "#dc3545", marginBottom: 16 }}>
-                <Trash2 size={48} />
-              </div>
-              <h4 style={{ margin: "0 0 8px 0", color: "#333" }}>Confirm Deletion</h4>
-              <p style={{ margin: "0 0 16px 0", color: "#666", fontSize: "14px" }}>
-                Are you sure you want to permanently delete budget request <strong>{deleteRef}</strong>? This
-                action cannot be undone.
-              </p>
+            <div style={{ color: "#dc3545", marginBottom: 16 }}>
+              <Trash2 size={48} />
+            </div>
+            <h4 style={{ margin: "0 0 8px 0", color: "#333" }}>Confirm Deletion</h4>
+            <p style={{ margin: "0 0 16px 0", color: "#666", fontSize: "14px" }}>
+              Are you sure you want to permanently delete budget request <strong>{deleteRef}</strong>? This
+              action cannot be undone.
+            </p>
 
-              <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}>
-                <button
-                  type="button"
-                  onClick={closeDeletePopup}
-                  style={{
-                    border: "1px solid #ddd",
-                    background: "#fff",
-                    borderRadius: 8,
-                    padding: "8px 24px",
-                    cursor: "pointer",
-                    fontWeight: 500,
-                  }}
-                >
-                  Cancel
-                </button>
+            <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}>
+              <button
+                type="button"
+                onClick={closeDeletePopup}
+                style={{
+                  border: "1px solid #ddd",
+                  background: "#fff",
+                  borderRadius: 8,
+                  padding: "8px 24px",
+                  cursor: "pointer",
+                  fontWeight: 500,
+                }}
+              >
+                Cancel
+              </button>
 
-                <button
-                  type="button"
-                  onClick={confirmDelete}
-                  disabled={deleteCountdown > 0}
-                  style={{
-                    border: "none",
-                    background: deleteCountdown > 0 ? "#e9ecef" : "#dc3545",
-                    color: deleteCountdown > 0 ? "#6c757d" : "#fff",
-                    borderRadius: 8,
-                    padding: "8px 24px",
-                    cursor: deleteCountdown > 0 ? "not-allowed" : "pointer",
-                    fontWeight: 500,
-                    minWidth: "120px",
-                    transition: "all 0.2s",
-                  }}
-                >
-                  {deleteCountdown > 0 ? `Delete (${deleteCountdown}s)` : "Delete"}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleteCountdown > 0}
+                style={{
+                  border: "none",
+                  background: deleteCountdown > 0 ? "#e9ecef" : "#dc3545",
+                  color: deleteCountdown > 0 ? "#6c757d" : "#fff",
+                  borderRadius: 8,
+                  padding: "8px 24px",
+                  cursor: deleteCountdown > 0 ? "not-allowed" : "pointer",
+                  fontWeight: 500,
+                  minWidth: "120px",
+                  transition: "all 0.2s",
+                }}
+              >
+                {deleteCountdown > 0 ? `Delete (${deleteCountdown}s)` : "Delete"}
+              </button>
             </div>
           </div>
+        </div>
       )}
 
       {logPopupOpen && (
@@ -1683,11 +1798,11 @@ const AdminBudget: React.FC = () => {
                 new Date(logProposal.updated_at || logProposal.updatedAt).getTime() >
                 new Date(logProposal.created_at || logProposal.createdAt).getTime()
               ) && (
-                <div className="budgetdashboard-log-item">
-                  <span className="log-label">Last Edited:</span>
-                  <span className="log-value">{formatDateTimeForLog(logProposal.updated_at || logProposal.updatedAt)}</span>
-                </div>
-              )}
+                  <div className="budgetdashboard-log-item">
+                    <span className="log-label">Last Edited:</span>
+                    <span className="log-value">{formatDateTimeForLog(logProposal.updated_at || logProposal.updatedAt)}</span>
+                  </div>
+                )}
 
               {logLoading && <div className="adminbudget-state" style={{ padding: "24px 0" }}>Loading logs...</div>}
               {!logLoading && buildAdminLogEvents.length === 0 && (

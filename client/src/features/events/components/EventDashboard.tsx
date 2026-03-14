@@ -7,7 +7,7 @@ import EventDetailsPopup from "./EventDetailsPopup";
 import { Clock, Building2, Layers, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import Navbar from "../../..//shared/components/layout/navbar/navbar";
+
 import "../styles/Dashboard.css";
 
 interface EventData {
@@ -189,7 +189,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <div>
-      <Navbar />
+
       <div className="dashboard-container">
         <div className="dashboard-content">
           <div className="dashboard-main">

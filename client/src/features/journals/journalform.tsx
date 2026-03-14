@@ -8,7 +8,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { Trash2, Plus, GripVertical, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import Navbar from '../../shared/components/layout/navbar/navbar';
+
 import CustomTagInput from '../../shared/components/ui/CustomTagInput';
 
 // Type definitions
@@ -2797,7 +2797,7 @@ const JournalForm: React.FC = () => {
   try {
     return (
       <div className="journal-form-body">
-        <Navbar />
+
         <div className="container journal-form-container">
           {/* View Mode & Edit Request Alerts */}
           {isViewMode &&
@@ -4784,7 +4784,7 @@ const JournalForm: React.FC = () => {
     console.error('Error in JournalForm component:', error);
     return (
       <div className="journal-form-body">
-        <Navbar />
+
         <div className="container journal-form-container">
           <div className="alert alert-danger">
             <h4>Error Loading Form</h4>

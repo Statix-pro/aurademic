@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, ChangeEvent, useRef } from "re
 import authenticityUtility from "../../shared/utils/authenticityUtility";
 import { Pencil, Trash2, Eye, Check, X, Settings } from "lucide-react";
 import { Modal, Button, Dropdown } from "react-bootstrap";
-import Navbar from "../../shared/components/layout/navbar/navbar";
+
 import "./admindashboard.css";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import JournalManagement from "./formManagement/JournalFormOptions";
@@ -1346,7 +1346,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <div>
-      <Navbar />
+
       <div className="dashboard-container">
         <div className="tab-buttons">
           <div className={`tab-button ${activeTab === "projects" ? "active" : ""}`} onClick={() => { setActiveTab("projects"); setCurrentPage(1); }}>Projects</div>

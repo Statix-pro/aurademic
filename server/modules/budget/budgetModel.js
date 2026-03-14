@@ -1,87 +1,50 @@
 import db from '../../config/connection.js';
+import {
+  VALID_MONTHS as SHARED_VALID_MONTHS,
+  APPROVAL_FLOW as SHARED_APPROVAL_FLOW,
+  EDITABLE_STATES as SHARED_EDITABLE_STATES,
+  ENTITY_TYPE_BY_BENEFICIARY as SHARED_ENTITY_TYPE_BY_BENEFICIARY,
+  ENTITY_BENEFICIARY_TYPES as SHARED_ENTITY_BENEFICIARY_TYPES,
+  LEVEL1_ROUTE_TYPE as SHARED_LEVEL1_ROUTE_TYPE,
+  LEVEL1_ASSIGNMENT_STATUS as SHARED_LEVEL1_ASSIGNMENT_STATUS,
+  WORKFLOW_STAGES as SHARED_WORKFLOW_STAGES,
+  normalizeText as sharedNormalizeText,
+  normalizeBeneficiaryType as sharedNormalizeBeneficiaryType,
+  normalizeEntityTypeCode as sharedNormalizeEntityTypeCode,
+  normalizeBudgetRole as sharedNormalizeBudgetRole,
+  isEntityBeneficiaryType as sharedIsEntityBeneficiaryType,
+  beneficiaryTypeToEntityTypeCode as sharedBeneficiaryTypeToEntityTypeCode,
+  getCurrentFinancialYear as sharedGetCurrentFinancialYear,
+  getDefaultFreezeCutoffDate as sharedGetDefaultFreezeCutoffDate,
+  groupAllocationsByLine as sharedGroupAllocationsByLine,
+  resolveLevel1AssignmentStatus as sharedResolveLevel1AssignmentStatus,
+  resolveLevel1Route as sharedResolveLevel1Route,
+  resolveStageLabel as sharedResolveStageLabel,
+  formatApprovalFlowString as sharedFormatApprovalFlowString,
+} from '../shared/budget/budgetUtils.js';
+import * as userResolvers from '../shared/budget/userResolvers.js';
+import * as orgUnitQueries from '../shared/budget/orgUnitQueries.js';
+import { resolveApprovalFlow as resolveSharedApprovalFlow } from '../shared/budget/approvalFlowResolver.js';
+import { buildBudgetList } from '../shared/budget/budgetListBuilder.js';
 
-const VALID_MONTHS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+const VALID_MONTHS = SHARED_VALID_MONTHS;
+const APPROVAL_FLOW = SHARED_APPROVAL_FLOW;
+const EDITABLE_STATES = SHARED_EDITABLE_STATES;
+const ENTITY_TYPE_BY_BENEFICIARY = SHARED_ENTITY_TYPE_BY_BENEFICIARY;
+const ENTITY_BENEFICIARY_TYPES = SHARED_ENTITY_BENEFICIARY_TYPES;
+const LEVEL1_ROUTE_TYPE = SHARED_LEVEL1_ROUTE_TYPE;
+const LEVEL1_ASSIGNMENT_STATUS = SHARED_LEVEL1_ASSIGNMENT_STATUS;
+const WORKFLOW_STAGES = SHARED_WORKFLOW_STAGES;
+const normalizeText = sharedNormalizeText;
 
-const APPROVAL_FLOW = {
-  level1: { approve: 'level1_approved', reject: 'level1_rejected', returned: 'level1_returned', next: 'dof' },
-  dof: { approve: 'dof_approved', reject: 'dof_rejected', returned: 'dof_returned', next: 'principal' },
-  principal: { approve: 'principal_approved', reject: 'principal_rejected', next: 'completed' },
-};
-
-const EDITABLE_STATES = ['draft', 'submitted', 're_submitted', 'level1_returned', 'dof_returned', 'principal_returned'];
-
-const ENTITY_TYPE_BY_BENEFICIARY = Object.freeze({
-  Centre: 'CENTRE',
-  Cell: 'CELL',
-  Club: 'CLUB',
-  'Professional Body': 'PROFESSIONAL_BODY',
-  ProfessionalBodies: 'PROFESSIONAL_BODY',
-  'Professional Bodies': 'PROFESSIONAL_BODY',
-});
-
-const normalizeText = (value) => String(value || '').trim();
-
-const normalizeBeneficiaryType = (beneficiaryType) => {
-  const normalized = normalizeText(beneficiaryType);
-
-  if (normalized === 'Professional Bodies' || normalized === 'ProfessionalBodies') {
-    return 'Professional Body';
-  }
-
-  return normalized;
-};
-
-const ENTITY_BENEFICIARY_TYPES = Object.freeze(['Centre', 'Cell', 'Club', 'Professional Body']);
-const LEVEL1_ROUTE_TYPE = Object.freeze({
-  departmentHod: 'department_hod',
-  entityContact: 'entity_contact',
-});
-const LEVEL1_ASSIGNMENT_STATUS = Object.freeze({
-  assigned: 'assigned',
-  unassigned: 'unassigned',
-});
-const WORKFLOW_STAGES = Object.freeze(['level1', 'dof', 'principal']);
+export const normalizeBeneficiaryType = (beneficiaryType) => sharedNormalizeBeneficiaryType(beneficiaryType);
 const BUDGET_PROPOSAL_COLUMN_EXISTS_CACHE = new Map();
 
-const normalizeEntityTypeCode = (value) => {
-  const raw = normalizeText(value)
-    .toUpperCase()
-    .replace(/\s+/g, '_')
-    .replace(/[^A-Z_]/g, '');
+export const normalizeEntityTypeCode = (value) => sharedNormalizeEntityTypeCode(value);
+export const normalizeBudgetRole = (value) => sharedNormalizeBudgetRole(value);
+const formatApprovalFlowString = (flow) => sharedFormatApprovalFlowString(flow);
 
-  if (!raw) {
-    return '';
-  }
-
-  if (raw === 'PROF_BODY' || raw === 'PROFESSIONALBODIES' || raw === 'PROFESSIONAL_BODYS') {
-    return 'PROFESSIONAL_BODY';
-  }
-
-  return raw;
-};
-
-const normalizeBudgetRole = (value) => {
-  const role = normalizeText(value).toLowerCase();
-
-  if (role === 'faculty' || role === '') {
-    return 'user';
-  }
-
-  return role;
-};
-
-const formatApprovalFlowString = ({ requiresLevel1, requiresDof, requiresPrincipal }) => {
-  const stages = [];
-
-  if (requiresLevel1) stages.push('level1');
-  if (requiresDof) stages.push('dof');
-  if (requiresPrincipal) stages.push('principal');
-
-  return stages.length > 0 ? stages.join('_') : 'dof_principal';
-};
-
-class BudgetModel {
-  static async #hasBudgetProposalColumn(columnName) {
+  async function hasBudgetProposalColumn(columnName) {
     const normalizedColumn = normalizeText(columnName);
     if (!normalizedColumn) return false;
 
@@ -111,7 +74,7 @@ class BudgetModel {
     return exists;
   }
 
-  static async getBudgetTags() {
+  export async function getBudgetTags() {
     try {
       const [rows] = await db.execute(
         `SELECT id, tag_name, is_active, sort_order
@@ -129,19 +92,16 @@ class BudgetModel {
   }
 
 
-  static getCurrentFinancialYear() {
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    return month >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+  export function getCurrentFinancialYear() {
+    return sharedGetCurrentFinancialYear();
   }
 
-  static getDefaultFreezeCutoffDate(fiscalYear) {
-    const fy = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
-    return `${fy}-02-01`;
+  export function getDefaultFreezeCutoffDate(fiscalYear) {
+    return sharedGetDefaultFreezeCutoffDate(fiscalYear);
   }
 
-  static async getFreezeConfig(fiscalYear) {
-    const fy = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
+  export async function getFreezeConfig(fiscalYear) {
+    const fy = Number.parseInt(fiscalYear, 10) || getCurrentFinancialYear();
     let rows = [];
 
     try {
@@ -156,7 +116,7 @@ class BudgetModel {
       if (error?.code === 'ER_NO_SUCH_TABLE') {
         return {
           fiscalYear: fy,
-          cutoffDate: this.getDefaultFreezeCutoffDate(fy),
+          cutoffDate: getDefaultFreezeCutoffDate(fy),
           isFrozen: false,
           updatedByUserId: null,
           updatedByEmail: null,
@@ -168,7 +128,7 @@ class BudgetModel {
     if (!rows.length) {
       return {
         fiscalYear: fy,
-        cutoffDate: this.getDefaultFreezeCutoffDate(fy),
+        cutoffDate: getDefaultFreezeCutoffDate(fy),
         isFrozen: false,
         updatedByUserId: null,
         updatedByEmail: null,
@@ -178,65 +138,26 @@ class BudgetModel {
     const row = rows[0];
     return {
       fiscalYear: Number(row.fiscal_year),
-      cutoffDate: row.cutoff_date ? String(row.cutoff_date) : this.getDefaultFreezeCutoffDate(fy),
+      cutoffDate: row.cutoff_date ? String(row.cutoff_date) : getDefaultFreezeCutoffDate(fy),
       isFrozen: Number(row.is_frozen) === 1,
       updatedByUserId: row.updated_by_user_id ? Number(row.updated_by_user_id) : null,
       updatedByEmail: normalizeText(row.updated_by_email) || null,
     };
   }
 
-  static normalizeEntityTypeCode(typeCode) {
-    return normalizeEntityTypeCode(typeCode);
+  export function beneficiaryTypeToEntityTypeCode(beneficiaryType) {
+    return sharedBeneficiaryTypeToEntityTypeCode(beneficiaryType);
   }
 
-  static normalizeBudgetRole(role) {
-    return normalizeBudgetRole(role);
+  export function isEntityBeneficiaryType(beneficiaryType) {
+    return sharedIsEntityBeneficiaryType(beneficiaryType);
   }
 
-  static beneficiaryTypeToEntityTypeCode(beneficiaryType) {
-    return ENTITY_TYPE_BY_BENEFICIARY[normalizeBeneficiaryType(beneficiaryType)] || null;
+  export function resolveLevel1Route(proposalOrPayload = {}) {
+    return sharedResolveLevel1Route(proposalOrPayload);
   }
 
-  static normalizeBeneficiaryType(beneficiaryType) {
-    return normalizeBeneficiaryType(beneficiaryType);
-  }
-
-  static isEntityBeneficiaryType(beneficiaryType) {
-    return ENTITY_BENEFICIARY_TYPES.includes(normalizeBeneficiaryType(beneficiaryType));
-  }
-
-  static resolveLevel1Route(proposalOrPayload = {}) {
-    const beneficiaryType = normalizeBeneficiaryType(proposalOrPayload?.beneficiary_type);
-    const parsedDepartmentId = Number(proposalOrPayload?.department_id);
-    const parsedEntityId = Number(proposalOrPayload?.beneficiary_entity_id);
-    const departmentId =
-      Number.isInteger(parsedDepartmentId) && parsedDepartmentId > 0 ? parsedDepartmentId : null;
-    const entityId = Number.isInteger(parsedEntityId) && parsedEntityId > 0 ? parsedEntityId : null;
-
-    if (this.isEntityBeneficiaryType(beneficiaryType)) {
-      return {
-        routeType: LEVEL1_ROUTE_TYPE.entityContact,
-        departmentId: null,
-        entityId,
-      };
-    }
-
-    if (['Faculty', 'Staff', 'Department'].includes(beneficiaryType)) {
-      return {
-        routeType: LEVEL1_ROUTE_TYPE.departmentHod,
-        departmentId,
-        entityId: null,
-      };
-    }
-
-    return {
-      routeType: null,
-      departmentId,
-      entityId,
-    };
-  }
-
-  static #pickEntityLevel1Contact(contacts = []) {
+  function pickEntityLevel1Contact(contacts = []) {
     if (!Array.isArray(contacts) || contacts.length === 0) {
       return null;
     }
@@ -272,7 +193,7 @@ class BudgetModel {
     return normalizedContacts[0];
   }
 
-  static async resolveEntityLevel1Assignee(entityId, conn = db) {
+  export async function resolveEntityLevel1Assignee(entityId, conn = db) {
     const parsedEntityId = Number(entityId);
 
     if (!Number.isInteger(parsedEntityId) || parsedEntityId <= 0) {
@@ -287,7 +208,7 @@ class BudgetModel {
       [parsedEntityId]
     );
 
-    const selectedContact = this.#pickEntityLevel1Contact(rows);
+    const selectedContact = pickEntityLevel1Contact(rows);
 
     if (!selectedContact) {
       return null;
@@ -301,15 +222,11 @@ class BudgetModel {
     };
   }
 
-  static resolveLevel1AssignmentStatus({ routeType, assigneeEmail } = {}) {
-    if (routeType === LEVEL1_ROUTE_TYPE.entityContact && !normalizeText(assigneeEmail)) {
-      return LEVEL1_ASSIGNMENT_STATUS.unassigned;
-    }
-
-    return LEVEL1_ASSIGNMENT_STATUS.assigned;
+  export function resolveLevel1AssignmentStatus({ routeType, assigneeEmail } = {}) {
+    return sharedResolveLevel1AssignmentStatus({ routeType, assigneeEmail });
   }
 
-  static async #resolveEntityAssigneeMap(entityIds = [], conn = db) {
+  async function resolveEntityAssigneeMap(entityIds = [], conn = db) {
     const uniqueEntityIds = [
       ...new Set(
         entityIds
@@ -343,7 +260,7 @@ class BudgetModel {
     }
 
     for (const [entityId, contacts] of groupedContacts.entries()) {
-      const selectedContact = this.#pickEntityLevel1Contact(contacts);
+      const selectedContact = pickEntityLevel1Contact(contacts);
       if (selectedContact) {
         assigneeMap.set(entityId, selectedContact);
       }
@@ -352,19 +269,20 @@ class BudgetModel {
     return assigneeMap;
   }
 
-  static async #attachLevel1AssignmentMetadata(rows = [], conn = db) {
+  async function attachLevel1AssignmentMetadata(rows = [], conn = db) {
     if (!Array.isArray(rows) || rows.length === 0) {
       return [];
     }
 
     const entityIds = rows
-      .filter((row) => this.isEntityBeneficiaryType(row?.beneficiary_type))
-      .map((row) => Number(row?.beneficiary_entity_id))
+      .map((row) => resolveLevel1Route(row))
+      .filter((route) => route.routeType === LEVEL1_ROUTE_TYPE.entityContact)
+      .map((route) => Number(route.entityId))
       .filter((entityId) => Number.isInteger(entityId) && entityId > 0);
-    const entityAssigneeMap = await this.#resolveEntityAssigneeMap(entityIds, conn);
+    const entityAssigneeMap = await resolveEntityAssigneeMap(entityIds, conn);
 
     return rows.map((row) => {
-      const level1Route = this.resolveLevel1Route(row);
+      const level1Route = resolveLevel1Route(row);
       const entityAssignee =
         level1Route.routeType === LEVEL1_ROUTE_TYPE.entityContact
           ? entityAssigneeMap.get(level1Route.entityId) || null
@@ -375,7 +293,7 @@ class BudgetModel {
         ...row,
         level1_route_type: level1Route.routeType,
         level1_assignee_email: assigneeEmail,
-        level1_assignment_status: this.resolveLevel1AssignmentStatus({
+        level1_assignment_status: resolveLevel1AssignmentStatus({
           routeType: level1Route.routeType,
           assigneeEmail,
         }),
@@ -383,22 +301,12 @@ class BudgetModel {
     });
   }
 
-  static groupAllocationsByLine(allocations) {
-    const grouped = {};
-
-    for (const allocation of allocations) {
-      if (!grouped[allocation.line_id]) {
-        grouped[allocation.line_id] = {};
-      }
-
-      grouped[allocation.line_id][allocation.month] = Number(allocation.amount);
-    }
-
-    return grouped;
+  export function groupAllocationsByLine(allocations) {
+    return sharedGroupAllocationsByLine(allocations);
   }
 
 
-  static async withTransaction(callback) {
+  export async function withTransaction(callback) {
     const conn = await db.getConnection();
 
     try {
@@ -414,257 +322,41 @@ class BudgetModel {
     }
   }
 
-  static async getUserDepartmentByUserId(userId) {
-    const parsedUserId = Number(userId);
-    if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
-      return null;
-    }
-
-    // FIXED: Select designation, mobile, and construct full name
-    const [rows] = await db.execute(
-      `SELECT 
-              e.id AS employee_id,
-              d.id, 
-              d.name, 
-              d.code,
-              COALESCE(pd_emp.name, pd_dept.name) AS parent_department_name,
-              e.designation,
-              e.mobile,
-              TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))) AS full_name
-          FROM master_employees e
-          JOIN master_departments d ON e.department_id = d.id
-          LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
-          LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
-          WHERE e.user_id = ? AND e.status = 'Active'
-          ORDER BY e.id ASC
-          LIMIT 1`,
-      [parsedUserId]
-    );
-
-    return rows[0] || null;
+  export async function getUserDepartmentByUserId(userId) {
+    return userResolvers.getUserDepartmentByUserId(userId);
   }
 
-  static async getUserAssignments(userId) {
-    const parsedUserId = Number(userId);
-    if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
-      return [];
-    }
-
-    // Fetch strict mapped contextual assignments mapping to the user
-    // Join with roles and permissions logic to return a flat payload of permissions
-    const [rows] = await db.execute(`
-      SELECT 
-        uer.entity_id, 
-        uer.entity_type, 
-        r.role_code, 
-        p.permission_key AS permission_code,
-        COALESCE(d.name, me.name) as entity_name
-      FROM user_entity_roles uer
-      JOIN roles r ON uer.role_id = r.id
-      JOIN role_permissions rp ON r.id = rp.role_id
-      JOIN permissions p ON rp.permission_id = p.id
-      LEFT JOIN master_departments d ON uer.entity_id = d.id AND uer.entity_type = 'DEPARTMENT'
-      LEFT JOIN master_entities me ON uer.entity_id = me.id AND uer.entity_type != 'DEPARTMENT'
-      WHERE uer.user_id = ?
-    `, [parsedUserId]);
-
-    // Grouping the flat permissions array into structured context objects
-    const assignmentsMap = new Map();
-
-    for (const row of rows) {
-      const key = `${row.entity_type}-${row.entity_id}`;
-      if (!assignmentsMap.has(key)) {
-        assignmentsMap.set(key, {
-          entity_id: row.entity_id,
-          entity_type: row.entity_type,
-          entity_name: row.entity_name || 'Unknown',
-          role: row.role_code,
-          permissions: []
-        });
-      }
-      assignmentsMap.get(key).permissions.push(row.permission_code);
-    }
-
-    return Array.from(assignmentsMap.values());
+  export async function getUserAssignments(userId) {
+    return userResolvers.getUserAssignments(userId);
   }
 
-  static async getEmployeeDepartmentByEmployeeId(employeeId) {
-    const parsedEmployeeId = Number(employeeId);
-
-    if (!Number.isInteger(parsedEmployeeId) || parsedEmployeeId <= 0) {
-      return null;
-    }
-
-    const [rows] = await db.execute(
-      `SELECT
-      e.id AS employee_id,
-        d.id AS department_id,
-          d.name,
-          d.code,
-          COALESCE(pd_emp.name, pd_dept.name, d.name) AS parent_department_name
-          FROM master_employees e
-          LEFT JOIN master_departments d ON e.department_id = d.id
-          LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
-          LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
-          WHERE e.id = ?
-        AND e.status = 'Active'
-          LIMIT 1`,
-      [parsedEmployeeId]
-    );
-
-    return rows[0] || null;
+  export async function getEmployeeDepartmentByEmployeeId(employeeId) {
+    return userResolvers.getEmployeeDepartmentByEmployeeId(employeeId);
   }
 
-  static async checkEmployeeUserMatch(employeeId, userId) {
-    const parsedEmployeeId = Number(employeeId);
-    const parsedUserId = Number(userId);
-
-    if (!Number.isInteger(parsedEmployeeId) || parsedEmployeeId <= 0 || !Number.isInteger(parsedUserId) || parsedUserId <= 0) {
-      return false;
-    }
-
-    const [rows] = await db.execute(
-      'SELECT id FROM master_employees WHERE id = ? AND user_id = ? AND status = "Active" LIMIT 1',
-      [parsedEmployeeId, parsedUserId]
-    );
-
-    return rows.length > 0;
+  export async function checkEmployeeUserMatch(employeeId, userId) {
+    return userResolvers.checkEmployeeUserMatch(employeeId, userId);
   }
 
-  static async getUserDepartmentByEmail(userEmail) {
-    const normalizedEmail = normalizeText(userEmail).toLowerCase();
-
-    if (!normalizedEmail) {
-      return null;
-    }
-
-    const [rows] = await db.execute(
-      `SELECT
-      e.id AS employee_id,
-        d.id,
-        d.name,
-        d.code,
-        COALESCE(pd_emp.name, pd_dept.name) AS parent_department_name,
-          e.designation,
-          e.mobile,
-          TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))) AS full_name
-          FROM master_employees e
-          JOIN master_departments d ON e.department_id = d.id
-          LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
-          LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
-          WHERE LOWER(TRIM(e.email)) = ?
-        AND e.status = 'Active'
-          ORDER BY e.id ASC
-          LIMIT 1`,
-      [normalizedEmail]
-    );
-
-    return rows[0] || null;
+  export async function getUserDepartmentByEmail(userEmail) {
+    return userResolvers.getUserDepartmentByEmail(userEmail);
   }
 
-  static async searchApplicant(query = '', employeeType = null) {
-    const queryStr = normalizeText(query);
-    let sql;
-    let params = [];
-
-    let typeFilter = '';
-    if (employeeType) {
-      typeFilter = ' AND e.employee_type = ?';
-    }
-
-    if (!queryStr) {
-      sql = `SELECT
-      e.id AS employee_id,
-        e.erp_id,
-        TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))) AS name,
-          COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
-            COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
-        e.email,
-        e.mobile,
-        e.employee_type,
-        mentity.name AS entity
-      FROM master_employees e
-      LEFT JOIN master_departments d ON e.department_id = d.id
-      LEFT JOIN master_entities mentity ON e.entity_id = mentity.id
-      LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
-      LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
-      WHERE e.status = 'Active' ${typeFilter}
-      ORDER BY e.first_name, e.last_name
-      LIMIT 20`;
-      if (employeeType) params.push(employeeType);
-    } else {
-      sql = `SELECT
-      e.id AS employee_id,
-        e.erp_id,
-        TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))) AS name,
-          COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
-            COALESCE(pd_emp.name, pd_dept.name, d.name) AS department,
-        e.email,
-        e.mobile,
-        e.employee_type,
-        mentity.name AS entity
-      FROM master_employees e
-      LEFT JOIN master_departments d ON e.department_id = d.id
-      LEFT JOIN master_entities mentity ON e.entity_id = mentity.id
-      LEFT JOIN master_departments pd_emp ON e.parent_department_id = pd_emp.id
-      LEFT JOIN master_departments pd_dept ON d.parent_id = pd_dept.id
-      WHERE e.status = 'Active' ${typeFilter}
-      AND (
-        LOWER(e.first_name) LIKE ?
-        OR LOWER(e.last_name) LIKE ?
-        OR LOWER(TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')))) LIKE ?
-        OR LOWER(e.erp_id) LIKE ?
-        OR LOWER(e.email) LIKE ?
-        )
-      ORDER BY e.first_name, e.last_name
-      LIMIT 20`;
-
-      const searchPattern = `%${queryStr.toLowerCase()}%`;
-
-      if (employeeType) params.push(employeeType);
-      params.push(
-        searchPattern,
-        searchPattern,
-        searchPattern,
-        `${queryStr.toLowerCase()}%`,
-        searchPattern
-      );
-    }
-
-    const [rows] = await db.query(sql, params);
-    return rows;
+  export async function searchApplicant(query = '', employeeType = null) {
+    return userResolvers.searchApplicant(query, employeeType);
   }
 
-  static async getDepartmentByName(name, conn = db) {
-    const normalized = normalizeText(name);
-
-    if (!normalized) {
-      return null;
-    }
-
-    const [rows] = await conn.execute(
-      `SELECT id, name, code
-       FROM master_departments
-       WHERE is_active = 1 AND type = 'Academic'
-      AND(
-        LOWER(TRIM(name)) = LOWER(TRIM(?))
-           OR LOWER(TRIM(code)) = LOWER(TRIM(?))
-      )
-       ORDER BY CASE WHEN LOWER(TRIM(name)) = LOWER(TRIM(?)) THEN 0 ELSE 1 END
-       LIMIT 1`,
-      [normalized, normalized, normalized]
-    );
-
-    return rows[0] || null;
+  export async function getDepartmentByName(name, conn = db) {
+    return orgUnitQueries.getDepartmentByName(name, conn);
   }
 
-  static async #resolveDepartmentId(conn, payload) {
+  async function resolveDepartmentId(conn, payload) {
     const beneficiaryType = normalizeText(payload?.beneficiary_type);
     const beneficiaryValue = normalizeText(payload?.beneficiary_value);
     const requestDepartment = normalizeText(payload?.department);
 
     if (beneficiaryType === 'Department' && beneficiaryValue) {
-      const department = await this.getDepartmentByName(beneficiaryValue, conn);
+      const department = await getDepartmentByName(beneficiaryValue, conn);
 
       if (!department) {
         throw new Error(`Invalid department beneficiary: ${beneficiaryValue} `);
@@ -677,12 +369,39 @@ class BudgetModel {
       return null;
     }
 
-    const department = await this.getDepartmentByName(requestDepartment, conn);
+    const department = await getDepartmentByName(requestDepartment, conn);
     return department ? Number(department.id) : null;
   }
 
-  static async #resolveBeneficiaryEntity(conn, beneficiaryType, beneficiaryValue) {
-    const entityTypeCode = this.beneficiaryTypeToEntityTypeCode(beneficiaryType);
+  async function resolveBeneficiaryEntity(conn, beneficiaryType, beneficiaryValue, beneficiaryEmployeeId = null) {
+    const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
+    const entityTypeCode = beneficiaryTypeToEntityTypeCode(beneficiaryType);
+
+    if (['Faculty', 'Staff'].includes(normalizedBeneficiaryType)) {
+      const parsedBeneficiaryEmployeeId = Number.parseInt(beneficiaryEmployeeId, 10);
+
+      if (!Number.isInteger(parsedBeneficiaryEmployeeId) || parsedBeneficiaryEmployeeId <= 0) {
+        return { entityTypeCode: null, beneficiaryEntityId: null };
+      }
+
+      const employeeContext = await getEmployeeDepartmentByEmployeeId(parsedBeneficiaryEmployeeId);
+      const beneficiaryEntityId = Number(employeeContext?.entity_id);
+      const beneficiaryEntityTypeCode = normalizeEntityTypeCode(employeeContext?.entity_type_code);
+
+      if (!Number.isInteger(beneficiaryEntityId) || beneficiaryEntityId <= 0 || !beneficiaryEntityTypeCode) {
+        return { entityTypeCode: null, beneficiaryEntityId: null };
+      }
+
+      const entityRecord = await getEntityById(conn, beneficiaryEntityId);
+      if (!entityRecord || entityRecord.is_active !== 1) {
+        return { entityTypeCode: null, beneficiaryEntityId: null };
+      }
+
+      return {
+        entityTypeCode: beneficiaryEntityTypeCode,
+        beneficiaryEntityId,
+      };
+    }
 
     if (!entityTypeCode) {
       return { entityTypeCode: null, beneficiaryEntityId: null };
@@ -716,63 +435,20 @@ class BudgetModel {
   }
 
 
-  static async resolveApprovalFlow(beneficiaryType, entityTypeCode = null, conn = db) {
-    const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
-
-    if (!normalizedBeneficiaryType) {
-      return { requiresLevel1: 0, requiresDof: 1, requiresPrincipal: 1 };
-    }
-
-    const [rows] = entityTypeCode
-      ? await conn.execute(
-        `SELECT requires_level1, requires_dof, requires_principal
-           FROM approval_flow_config
-           WHERE beneficiary_type = ?
-        AND entity_type_code = ?
-          AND module IN ('BUDGET', 'BOTH')
-             AND is_active = 1
-           LIMIT 1`,
-        [normalizedBeneficiaryType, entityTypeCode]
-      )
-      : await conn.execute(
-        `SELECT requires_level1, requires_dof, requires_principal
-           FROM approval_flow_config
-           WHERE beneficiary_type = ?
-        AND entity_type_code IS NULL
-             AND module IN ('BUDGET', 'BOTH')
-             AND is_active = 1
-           LIMIT 1`,
-        [normalizedBeneficiaryType]
-      );
-
-    const resolvedFlow = rows.length > 0
-      ? {
-        requiresLevel1: Number(rows[0].requires_level1) ? 1 : 0,
-        requiresDof: Number(rows[0].requires_dof) ? 1 : 0,
-        requiresPrincipal: Number(rows[0].requires_principal) ? 1 : 0,
-      }
-      : ['Faculty', 'Staff', 'Department'].includes(normalizedBeneficiaryType)
-        ? { requiresLevel1: 1, requiresDof: 1, requiresPrincipal: 1 }
-        : { requiresLevel1: 0, requiresDof: 1, requiresPrincipal: 1 };
-
-    // Entity beneficiaries must always pass through Level 1 before DoF/Principal.
-    if (this.isEntityBeneficiaryType(normalizedBeneficiaryType)) {
-      resolvedFlow.requiresLevel1 = 1;
-    }
-
-    return resolvedFlow;
+  export async function resolveApprovalFlow(beneficiaryType, entityTypeCode = null, conn = db, options = {}) {
+    return resolveSharedApprovalFlow(beneficiaryType, entityTypeCode, conn, options);
   }
 
 
-  static async create(payload) {
-    return this.withTransaction(async (conn) => {
+  export async function create(payload) {
+    return withTransaction(async (conn) => {
       const calculatedTotal = (payload.lines || []).reduce((sum, line) => {
         const amount = Number(line.unit_amount) || 0;
         const qty = Number(line.quantity) || 1;
         return sum + amount * qty;
       }, 0);
 
-      const fyYear = payload.fiscal_year || this.getCurrentFinancialYear();
+      const fyYear = payload.fiscal_year || getCurrentFinancialYear();
 
       await conn.execute(
         'INSERT IGNORE INTO budget_proposal_refs (ref_year, ref_sequence, proposal_id, proposal_ref) VALUES (?, 0, NULL, NULL)',
@@ -789,32 +465,35 @@ class BudgetModel {
       const sequence = Number(seqRows[0].next_seq);
       const proposalRef = `#B-${fyYear}-${String(sequence).padStart(4, '0')}`;
 
-      const departmentId = await this.#resolveDepartmentId(conn, payload);
-      const { entityTypeCode, beneficiaryEntityId } = await this.#resolveBeneficiaryEntity(
+      const departmentId = await resolveDepartmentId(conn, payload);
+      const { entityTypeCode, beneficiaryEntityId } = await resolveBeneficiaryEntity(
         conn,
         payload.beneficiary_type,
-        payload.beneficiary_value
+        payload.beneficiary_value,
+        payload.beneficiary_employee_id
       );
 
-      const flow = await this.resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn);
+      const flow = await resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn, {
+        budgetTag: payload.budget_tag,
+      });
       const initialStage = flow.requiresLevel1 ? 'level1' : flow.requiresDof ? 'dof' : 'principal';
       const approvalFlowString = formatApprovalFlowString(flow);
-      const level1Route = this.resolveLevel1Route({
+      const level1Route = resolveLevel1Route({
         ...payload,
         department_id: departmentId,
         beneficiary_entity_id: beneficiaryEntityId,
       });
       const level1EntityAssignee =
         level1Route.routeType === LEVEL1_ROUTE_TYPE.entityContact
-          ? await this.resolveEntityLevel1Assignee(level1Route.entityId, conn)
+          ? await resolveEntityLevel1Assignee(level1Route.entityId, conn)
           : null;
-      const level1AssignmentStatus = this.resolveLevel1AssignmentStatus({
+      const level1AssignmentStatus = resolveLevel1AssignmentStatus({
         routeType: level1Route.routeType,
         assigneeEmail: level1EntityAssignee?.email || null,
       });
 
-      const hasApplicantNameColumn = await this.#hasBudgetProposalColumn('applicant_name');
-      const hasBudgetTagColumn = await this.#hasBudgetProposalColumn('budget_tag');
+      const hasApplicantNameColumn = await hasBudgetProposalColumn('applicant_name');
+      const hasBudgetTagColumn = await hasBudgetProposalColumn('budget_tag');
       const applicantNameInsertColumn = hasApplicantNameColumn ? ', applicant_name' : '';
       const budgetTagInsertColumn = hasBudgetTagColumn ? ', budget_tag' : '';
       const applicantNameInsertValue = hasApplicantNameColumn ? ', ?' : '';
@@ -877,12 +556,12 @@ class BudgetModel {
 
       if (Array.isArray(payload.lines)) {
         for (const line of payload.lines) {
-          const lineId = await this.#insertBudgetLine(proposalId, line, conn);
+          const lineId = await insertBudgetLine(proposalId, line, conn);
 
           if (line.month_allocations) {
             for (const [month, amount] of Object.entries(line.month_allocations)) {
               if (VALID_MONTHS.includes(month)) {
-                await this.#insertMonthAllocation(lineId, month, amount, conn);
+                await insertMonthAllocation(lineId, month, amount, conn);
               }
             }
           }
@@ -906,8 +585,8 @@ class BudgetModel {
   }
 
 
-  static async getFull(proposalId) {
-    const master = await this.getBudgetById(proposalId);
+  export async function getFull(proposalId) {
+    const master = await getBudgetById(proposalId);
 
     if (!master) {
       return null;
@@ -992,7 +671,7 @@ class BudgetModel {
     return {
       master,
       lines,
-      allocations: this.groupAllocationsByLine(allocations),
+      allocations: groupAllocationsByLine(allocations),
       approved_allocations: approvedAllocations,
       approvals,
       edits,
@@ -1000,12 +679,12 @@ class BudgetModel {
   }
 
 
-  static async update(
+  export async function update(
     proposalId,
     payload,
     { skipEditStateValidation = false, editedByUserId = null, editedByEmail = null, editedByRole = null } = {}
   ) {
-    const proposal = await this.getBudgetById(proposalId);
+    const proposal = await getBudgetById(proposalId);
 
     if (!proposal) {
       throw new Error('Proposal not found');
@@ -1015,7 +694,7 @@ class BudgetModel {
       throw new Error(`Cannot edit ${proposal.status} proposals`);
     }
 
-    return this.withTransaction(async (conn) => {
+    return withTransaction(async (conn) => {
       const [previousLines] = await conn.execute(
         `SELECT id, budget_head, sub_head, unit_amount, quantity, line_description
          FROM budget_proposal_lines
@@ -1059,13 +738,30 @@ class BudgetModel {
       };
       const incomingLines = Array.isArray(payload.lines) ? payload.lines : [];
       const lineChangeDetails = [];
-      const departmentId = await this.#resolveDepartmentId(conn, payload);
-      const { entityTypeCode, beneficiaryEntityId } = await this.#resolveBeneficiaryEntity(
+      let departmentId = await resolveDepartmentId(conn, payload);
+      let { entityTypeCode, beneficiaryEntityId } = await resolveBeneficiaryEntity(
         conn,
         payload.beneficiary_type,
-        payload.beneficiary_value
+        payload.beneficiary_value,
+        payload.beneficiary_employee_id
       );
-      const flow = await this.resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn);
+      const shouldPreserveExistingFacultyRouting =
+        ['Faculty', 'Staff'].includes(normalizeBeneficiaryType(payload.beneficiary_type))
+        && !Number.isInteger(Number.parseInt(payload?.beneficiary_employee_id, 10))
+        && normalizeText(payload?.beneficiary_type) === normalizeText(proposal?.beneficiary_type)
+        && normalizeText(payload?.beneficiary_value) === normalizeText(proposal?.beneficiary_value);
+
+      if (shouldPreserveExistingFacultyRouting) {
+        departmentId = Number.isInteger(Number(proposal?.department_id))
+          ? Number(proposal.department_id)
+          : departmentId;
+        beneficiaryEntityId = Number.isInteger(Number(proposal?.beneficiary_entity_id))
+          ? Number(proposal.beneficiary_entity_id)
+          : beneficiaryEntityId;
+      }
+      const flow = await resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn, {
+        budgetTag: payload.budget_tag,
+      });
       const approvalFlowString = formatApprovalFlowString(flow);
       const initialStage = flow.requiresLevel1 ? 'level1' : flow.requiresDof ? 'dof' : 'principal';
       const isReturnedState = proposal.status && proposal.status.endsWith('_returned');
@@ -1082,8 +778,8 @@ class BudgetModel {
 
       const nextStatus = isReturnedState ? 're_submitted' : proposal.status;
 
-      const hasApplicantNameColumn = await this.#hasBudgetProposalColumn('applicant_name');
-      const hasBudgetTagColumn = await this.#hasBudgetProposalColumn('budget_tag');
+      const hasApplicantNameColumn = await hasBudgetProposalColumn('applicant_name');
+      const hasBudgetTagColumn = await hasBudgetProposalColumn('budget_tag');
       const applicantNameSetClause = hasApplicantNameColumn ? 'applicant_name = ?,' : '';
       const budgetTagSetClause = hasBudgetTagColumn ? 'budget_tag = ?,' : '';
       const updateParams = [];
@@ -1144,12 +840,12 @@ class BudgetModel {
 
       if (Array.isArray(payload.lines)) {
         for (const line of payload.lines) {
-          const lineId = await this.#insertBudgetLine(proposalId, line, conn);
+          const lineId = await insertBudgetLine(proposalId, line, conn);
 
           if (line.month_allocations) {
             for (const [month, amount] of Object.entries(line.month_allocations)) {
               if (VALID_MONTHS.includes(month)) {
-                await this.#insertMonthAllocation(lineId, month, amount, conn);
+                await insertMonthAllocation(lineId, month, amount, conn);
               }
             }
           }
@@ -1258,8 +954,8 @@ class BudgetModel {
   }
 
 
-  static async delete(proposalId) {
-    return this.withTransaction(async (conn) => {
+  async function deleteBudgetProposal(proposalId) {
+    return withTransaction(async (conn) => {
       await conn.execute(
         `DELETE m
          FROM budget_line_month_allocations m
@@ -1284,15 +980,17 @@ class BudgetModel {
     });
   }
 
+  export { deleteBudgetProposal as delete };
 
-  static async processApproval(proposalId, { role, decision, feedback, approverUserId, approverEmail }) {
+
+  export async function processApproval(proposalId, { role, decision, feedback, approverUserId, approverEmail }) {
     const normalizedDecision = normalizeText(decision).toLowerCase();
 
     if (!['approved', 'rejected', 'returned', 'archived'].includes(normalizedDecision)) {
       throw new Error('Invalid decision');
     }
 
-    const proposal = await this.getBudgetById(proposalId);
+    const proposal = await getBudgetById(proposalId);
     if (!proposal) {
       throw new Error('Proposal not found');
     }
@@ -1300,7 +998,7 @@ class BudgetModel {
     if (normalizedDecision === 'archived') {
       const logRole = normalizeText(role).toLowerCase() || 'admin';
 
-      return this.withTransaction(async (conn) => {
+      return withTransaction(async (conn) => {
         await conn.execute(
           `UPDATE budget_proposals
            SET status = 'archived', current_stage = 'archived', updated_at = NOW()
@@ -1324,7 +1022,7 @@ class BudgetModel {
       });
     }
 
-    if (!['level1', 'dof', 'principal'].includes(role)) {
+    if (!['level1', 'ithead', 'dof', 'principal'].includes(role)) {
       throw new Error('Invalid role');
     }
 
@@ -1336,13 +1034,18 @@ class BudgetModel {
     let newStatus = decision;
     let nextStage = role;
 
-    const flowStages = normalizeText(proposal.approval_flow).split('_');
+    const flowStages = normalizeText(proposal.approval_flow).split('_').filter(Boolean);
+    const currentStageIndex = flowStages.indexOf(role);
+    const dynamicNextStage =
+      currentStageIndex >= 0 && currentStageIndex < flowStages.length - 1
+        ? flowStages[currentStageIndex + 1]
+        : 'completed';
     const requiresPrincipalStage = flowStages.includes('principal');
     const flow = APPROVAL_FLOW[role];
 
     if (normalizedDecision === 'approved') {
       newStatus = flow.approve;
-      nextStage = flow.next;
+      nextStage = dynamicNextStage || flow.next;
 
       // AUTO-APPROVAL LOGIC
       if (role === 'dof') {
@@ -1370,11 +1073,11 @@ class BudgetModel {
 
     // Determine the descriptive role for logging (e.g., 'hod' or 'coordinator' instead of 'level1')
     const displayRole = (role === 'level1')
-      ? (this.isEntityBeneficiaryType(proposal.beneficiary_type) ? 'coordinator' : 'hod')
+      ? (isEntityBeneficiaryType(proposal.beneficiary_type) ? 'coordinator' : 'hod')
       : role;
 
     // Database Update
-    return this.withTransaction(async (conn) => {
+    return withTransaction(async (conn) => {
       await conn.execute(
         `UPDATE budget_proposals 
              SET status = ?, current_stage = ?, updated_at = NOW() 
@@ -1417,7 +1120,7 @@ class BudgetModel {
   }
 
 
-  static async listBudgets({
+  export async function listBudgets({
     userId,
     userEmail,
     department,
@@ -1431,249 +1134,32 @@ class BudgetModel {
     q,
     departmentFilter,
   }) {
-    const pPage = Number.parseInt(page, 10) || 1;
-    const pLimit = Number.parseInt(limit, 10) || 10;
-    const pOffset = (pPage - 1) * pLimit;
-    const currentFY = Number.parseInt(fiscalYear, 10) || this.getCurrentFinancialYear();
-    const parsedUserId = Number(userId);
-    const safeUserId = Number.isInteger(parsedUserId) && parsedUserId > 0 ? parsedUserId : -1;
-    const hasApplicantNameColumn = await this.#hasBudgetProposalColumn('applicant_name');
-    const hasBudgetTagColumn = await this.#hasBudgetProposalColumn('budget_tag');
-    const applicantNameColumnExpr = hasApplicantNameColumn
-      ? "NULLIF(TRIM(MAX(bp.applicant_name)), ''),"
-      : '';
-    const budgetTagColumnExpr = hasBudgetTagColumn
-      ? 'MAX(bp.budget_tag) AS budget_tag,'
-      : 'NULL AS budget_tag,';
-
-    let sql = `
-      SELECT SQL_CALC_FOUND_ROWS
-      bp.id,
-        bp.proposal_ref,
-        bp.fiscal_year,
-        bp.employee_id,
-        bp.user_id,
-        MAX(bp.user_email) AS user_email,
-          COALESCE(
-            ${applicantNameColumnExpr}
-            NULLIF(TRIM(MAX(CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, '')))), ''),
-            NULLIF(TRIM(MAX(applicant_user.name)), ''),
-            NULLIF(TRIM(MAX(creator_user.name)), ''),
-            NULLIF(TRIM(MAX(bp.user_email)), '')
-          ) AS applicant_name,
-            ${budgetTagColumnExpr}
-            MAX(CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, ''))) AS faculty_name,
-              MAX(COALESCE(applicant_user.name, creator_user.name)) AS user_name,
-                DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
-                  bp.beneficiary_type,
-                  bp.beneficiary_value,
-                  bp.department_id,
-                  md.name AS department,
-                    md.code AS department_code,
-                      bp.beneficiary_entity_id,
-                      me.name AS org_unit_name,
-                        me.code AS org_unit_code,
-                          met.name AS org_unit_type,
-                            met.code AS org_unit_type_code,
-      bp.proposal_description,
-      bp.total_amount,
-      bp.approved_total_amount,
-      bp.status,
-      bp.current_stage,
-      bp.approval_flow,
-                              DATE_FORMAT(bp.created_at, '%Y-%m-%d %H:%i') AS created_date,
-                                COUNT(DISTINCT bpl.id) AS line_count,
-                                  COUNT(DISTINCT bpa.id) AS approval_count
-      FROM budget_proposals bp
-      LEFT JOIN master_departments md ON bp.department_id = md.id
-      LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
-      LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
-      LEFT JOIN master_employees applicant_emp ON bp.employee_id = applicant_emp.id
-      LEFT JOIN users applicant_user ON applicant_emp.user_id = applicant_user.id
-      LEFT JOIN users creator_user ON bp.user_id = creator_user.id
-      LEFT JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
-      LEFT JOIN budget_proposal_approvals bpa ON bp.id = bpa.budget_proposal_id
-      LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
-        `;
-
-    const where = ['bp.fiscal_year = ?'];
-    const params = [Number(currentFY)];
-    const safeRole = this.normalizeBudgetRole(role);
-    const isQueueSuperAdminView = Boolean(superAdminQueueView) && ['hod', 'coordinator', 'dof', 'principal'].includes(safeRole);
-
-    switch (safeRole) {
-      case 'hod': {
-        const departmentBeneficiaryPredicate = "LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department')";
-        where.push(departmentBeneficiaryPredicate);
-
-        if (!isQueueSuperAdminView) {
-          where.push('md.type = "Academic"');
-          // Action Queue Filter for regular HODs
-          where.push('(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed"))');
-
-          const normalizedDepartment = normalizeText(department);
-          const hodScope = [];
-
-          if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
-            hodScope.push('bp.department_id = ?');
-            params.push(Number(departmentId));
-          }
-
-          if (normalizedDepartment) {
-            hodScope.push(`(
-          LOWER(TRIM(md.name)) = LOWER(TRIM(?))
-              OR LOWER(TRIM(md.code)) = LOWER(TRIM(?))
-              OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(?))
-        )`);
-            params.push(normalizedDepartment, normalizedDepartment, normalizedDepartment);
-          }
-
-          if (!hodScope.length) {
-            where.push('1 = 0');
-          } else {
-            where.push(`(${hodScope.join(' OR ')})`);
-          }
-        }
-        break;
-      }
-      case 'coordinator': {
-        // Coordinator Tab: Centres, Cells, Clubs, etc.
-        const entityBeneficiaryPredicate = "LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')";
-        where.push(entityBeneficiaryPredicate);
-
-        if (!isQueueSuperAdminView) {
-          // Action Queue Filter for regular Coordinators
-          where.push('(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed"))');
-
-          // Check if the user is mapped to specific entities via user_entity_roles
-          // OR if their email is in master_entity_contacts (for backwards compatibility/fallback)
-          const filterConditions = [];
-
-          if (safeUserId > 0) {
-            filterConditions.push(`me.id IN (
-              SELECT entity_id 
-              FROM user_entity_roles 
-              WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY')
-            )`);
-            params.push(safeUserId);
-          }
-
-          if (userEmail) {
-            filterConditions.push('LOWER(TRIM(mec.email)) = LOWER(TRIM(?))');
-            params.push(userEmail);
-          }
-
-          if (filterConditions.length > 0) {
-            where.push(`(${filterConditions.join(' OR ')})`);
-          } else {
-            where.push('1 = 0');
-          }
-        }
-        break;
-      }
-      case 'dof': {
-        // Finance Queue: needs action OR already handled by DoF (including downstream principal stage).
-        where.push(
-          '(bp.current_stage = "dof" OR bp.status LIKE "dof_%" OR bp.status LIKE "principal_%" OR bp.status = "completed")'
-        );
-        break;
-      }
-      case 'principal': {
-        if (isQueueSuperAdminView) {
-          where.push('(bp.current_stage = "principal" OR bp.status LIKE "principal_%" OR bp.status = "completed")');
-        } else {
-          // Principal Queue: Needs action OR I already acted on it
-          where.push('(bp.current_stage = "principal" OR bp.status LIKE "principal_%" OR bp.status = "completed")');
-        }
-        break;
-      }
-      case 'admin':
-      case 'super_admin': {
-        // Audit Queue: Big Picture (Show everything)
-        break;
-      }
-      case 'user':
-      default: {
-        where.push(`(
-          bp.user_id = ?
-          OR bp.user_email = ?
-          OR bp.employee_id IN (
-            SELECT id FROM master_employees WHERE user_id = ? AND status = "Active"
-          )
-          OR (
-            LOWER(TRIM(bp.beneficiary_type)) = 'faculty'
-            AND EXISTS (
-              SELECT 1
-              FROM master_employees be
-              WHERE be.user_id = ?
-                AND be.status = 'Active'
-                AND (
-                  LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(CONCAT(COALESCE(be.title, ''), ' ', be.first_name, ' ', COALESCE(be.last_name, ''))))
-                  OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(CONCAT(be.first_name, ' ', COALESCE(be.last_name, ''))))
-                  OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(be.email))
-                  OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(be.erp_id))
-                )
-            )
-          )
-        )`);
-        params.push(safeUserId, normalizeText(userEmail), safeUserId, safeUserId);
-        break;
-      }
-    }
-
-    if (normalizeText(status)) {
-      where.push('bp.status = ?');
-      params.push(normalizeText(status));
-    }
-
-    if (normalizeText(departmentFilter)) {
-      where.push('md.name = ?');
-      params.push(normalizeText(departmentFilter));
-    }
-
-    if (normalizeText(q)) {
-      const searchPattern = `% ${normalizeText(q)}% `;
-      where.push(`(
-          bp.proposal_ref LIKE ?
-          OR bp.beneficiary_value LIKE ?
-          OR md.name LIKE ?
-          OR me.name LIKE ?
-          OR applicant_emp.first_name LIKE ?
-          OR applicant_emp.last_name LIKE ?
-      )`);
-      params.push(
-        searchPattern,
-        searchPattern,
-        searchPattern,
-        searchPattern,
-        searchPattern,
-        searchPattern
-      );
-    }
-
-    sql += ` WHERE ${where.join(' AND ')}
-             GROUP BY bp.id, md.name, md.code, me.name, me.code, met.name, met.code
-             ORDER BY bp.created_at DESC
-      LIMIT ? OFFSET ? `;
-
-    params.push(Number(pLimit), Number(pOffset));
-
-    const [rows] = await db.query(sql, params);
-    const enrichedRows = await this.#attachLevel1AssignmentMetadata(rows);
-    const [totalRows] = await db.query('SELECT FOUND_ROWS() AS total');
-
-    return {
-      budgets: enrichedRows,
-      pagination: {
-        total: Number(totalRows[0].total),
-        page: pPage,
-        limit: pLimit,
-        pages: Math.ceil(Number(totalRows[0].total) / pLimit),
+    const hasApplicantNameColumn = await hasBudgetProposalColumn('applicant_name');
+    const hasBudgetTagColumn = await hasBudgetProposalColumn('budget_tag');
+    const result = await buildBudgetList({
+      userId,
+      userEmail,
+      department,
+      departmentId,
+      role,
+      superAdminQueueView,
+      page,
+      limit,
+      status,
+      fiscalYear,
+      q,
+      departmentFilter,
+      isAdminView: false,
+      hasColumnCache: {
+        applicant_name: hasApplicantNameColumn,
+        budget_tag: hasBudgetTagColumn,
       },
-    };
+    });
+    const enrichedRows = await attachLevel1AssignmentMetadata(result.rows);
+    return { budgets: enrichedRows, pagination: result.pagination };
   }
 
-  static #mapDecisionToStageState(decision) {
+  function mapDecisionToStageState(decision) {
     const normalizedDecision = normalizeText(decision).toLowerCase();
 
     if (normalizedDecision === 'approved') {
@@ -1693,151 +1179,36 @@ class BudgetModel {
 
 
 
-  static resolveStageLabel(stageKey, proposal = {}) {
-    const key = normalizeText(stageKey).toLowerCase();
-    const beneficiaryType = normalizeText(proposal?.beneficiary_type);
-
-    if (key === 'level1') {
-      if (['Faculty', 'Staff', 'Department'].includes(beneficiaryType)) {
-        return 'HOD';
-      }
-      if (this.isEntityBeneficiaryType(beneficiaryType)) {
-        return 'Coordinator';
-      }
-      return 'Level-1';
-    }
-
-    if (key === 'dof') return 'Finance';
-    if (key === 'principal') return 'Principal';
-    if (key === 'completed') return 'Completed';
-
-    return stageKey;
+  export function resolveStageLabel(stageKey, proposal = {}) {
+    return sharedResolveStageLabel(stageKey, proposal);
   }
 
 
   /* =====================================================
      8. ORG UNIT / ENTITY HELPERS
   ===================================================== */
-  static async getDepartments() {
-    const [rows] = await db.execute(
-      `SELECT id, code, name, is_active, sort_order
-       FROM master_departments
-       WHERE is_active = 1 AND type = 'Academic'
-       ORDER BY sort_order ASC, name ASC`
-    );
-
-    return rows;
+  export async function getDepartments() {
+    return orgUnitQueries.getDepartments();
   }
 
-  static async getEntitiesByType(typeCode) {
-    const normalizedTypeCode = this.normalizeEntityTypeCode(typeCode);
-
-    if (!normalizedTypeCode || normalizedTypeCode === 'DEPARTMENT') {
-      return [];
-    }
-
-    const [rows] = await db.execute(
-      `SELECT me.id,
-              me.code,
-              me.name,
-              me.is_active,
-              me.sort_order,
-              met.code AS type_code,
-              met.name AS type_name
-       FROM master_entities me
-       JOIN master_entity_types met ON me.entity_type_id = met.id
-       WHERE met.code = ?
-         AND me.is_active = 1
-       ORDER BY me.sort_order ASC, me.name ASC`,
-      [normalizedTypeCode]
-    );
-
-    return rows;
+  export async function getEntitiesByType(typeCode) {
+    return orgUnitQueries.getEntitiesByType(typeCode);
   }
 
 
-  static async getOrgUnitsByType(typeCode) {
-    const normalizedTypeCode = this.normalizeEntityTypeCode(typeCode);
-
-    if (normalizedTypeCode === 'DEPARTMENT') {
-      const departments = await this.getDepartments();
-
-      return departments.map((department) => ({
-        id: department.id,
-        name: department.name,
-        short_code: department.code,
-        is_active: department.is_active,
-        type_code: 'DEPARTMENT',
-        type_name: 'Department',
-      }));
-    }
-
-    if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
-      throw new Error('Invalid entity type code');
-    }
-
-    const entities = await this.getEntitiesByType(normalizedTypeCode);
-
-    return entities.map((entity) => ({
-      id: entity.id,
-      name: entity.name,
-      short_code: entity.code,
-      is_active: entity.is_active,
-      type_code: entity.type_code,
-      type_name: entity.type_name,
-    }));
+  export async function getOrgUnitsByType(typeCode) {
+    return orgUnitQueries.getOrgUnitsByType(typeCode);
   }
 
-  static async getAllOrgUnits() {
-    const departments = await this.getDepartments();
-
-    const [entityRows] = await db.execute(
-      `SELECT me.id,
-        me.code,
-        me.name,
-        me.is_active,
-        met.code AS type_code,
-          met.name AS type_name
-       FROM master_entities me
-       JOIN master_entity_types met ON me.entity_type_id = met.id
-       WHERE me.is_active = 1
-       ORDER BY met.name ASC, me.sort_order ASC, me.name ASC`
-    );
-
-    const departmentRows = departments.map((department) => ({
-      id: department.id,
-      name: department.name,
-      short_code: department.code,
-      is_active: department.is_active,
-      type_code: 'DEPARTMENT',
-      type_name: 'Department',
-    }));
-
-    const mappedEntities = entityRows.map((entity) => ({
-      id: entity.id,
-      name: entity.name,
-      short_code: entity.code,
-      is_active: entity.is_active,
-      type_code: entity.type_code,
-      type_name: entity.type_name,
-    }));
-
-    return [...departmentRows, ...mappedEntities];
+  export async function getAllOrgUnits() {
+    return orgUnitQueries.getAllOrgUnits();
   }
 
-  static async getOrgUnitEmails(orgUnitId) {
-    const [rows] = await db.execute(
-      `SELECT id, role, email, is_primary
-       FROM master_entity_contacts
-       WHERE entity_id = ?
-        ORDER BY is_primary DESC, role ASC`,
-      [orgUnitId]
-    );
-
-    return rows;
+  export async function getOrgUnitEmails(orgUnitId) {
+    return orgUnitQueries.getOrgUnitEmails(orgUnitId);
   }
 
-  static async #getEntityById(conn, entityId) {
+  async function getEntityById(conn, entityId) {
     const [rows] = await conn.execute(
       `SELECT me.id,
         me.code,
@@ -1856,7 +1227,7 @@ class BudgetModel {
     return rows[0] || null;
   }
 
-  static async #assertEntityInType(conn, typeCode, entityId) {
+  async function assertEntityInType(conn, typeCode, entityId) {
     const [rows] = await conn.execute(
       `SELECT me.id,
         me.code,
@@ -1884,7 +1255,7 @@ class BudgetModel {
 
 
 
-  static async #insertBudgetLine(proposalId, line, conn) {
+  async function insertBudgetLine(proposalId, line, conn) {
     const unitAmount = Number(line.unit_amount) || 0;
     const quantity = Number(line.quantity) || 1;
     const lineTotal = unitAmount * quantity;
@@ -1917,14 +1288,14 @@ class BudgetModel {
     return result.insertId;
   }
 
-  static async #insertMonthAllocation(lineId, month, amount, conn) {
+  async function insertMonthAllocation(lineId, month, amount, conn) {
     await conn.execute(
       'INSERT INTO budget_line_month_allocations (budget_line_id, month, amount) VALUES (?, ?, ?)',
       [lineId, month, Number(amount) || 0]
     );
   }
 
-  static async getBudgetById(proposalId) {
+  export async function getBudgetById(proposalId) {
     const [rows] = await db.execute(
       `SELECT
       bp.*,
@@ -1974,7 +1345,7 @@ class BudgetModel {
     return rows[0] || null;
   }
 
-  static async isFacultyBeneficiaryForUser(proposal = {}, userId) {
+  export async function isFacultyBeneficiaryForUser(proposal = {}, userId) {
     const normalizedBeneficiaryType = normalizeBeneficiaryType(proposal?.beneficiary_type).toLowerCase();
     const beneficiaryValue = normalizeText(proposal?.beneficiary_value).toLowerCase();
     const uid = Number(userId);
@@ -2005,8 +1376,8 @@ class BudgetModel {
     return rows.length > 0;
   }
 
-  static async validateUserAccess(proposalId, userId, userEmail, role, department, departmentId) {
-    const proposal = await this.getBudgetById(proposalId);
+  export async function validateUserAccess(proposalId, userId, userEmail, role, department, departmentId) {
+    const proposal = await getBudgetById(proposalId);
 
     if (!proposal) {
       return false;
@@ -2014,7 +1385,7 @@ class BudgetModel {
 
     const uid = Number(userId);
     const pid = Number(proposal.user_id);
-    const normalizedRole = this.normalizeBudgetRole(role);
+    const normalizedRole = normalizeBudgetRole(role);
 
     const emailMatch =
       proposal.user_email &&
@@ -2037,7 +1408,7 @@ class BudgetModel {
       }
     }
 
-    if (await this.isFacultyBeneficiaryForUser(proposal, uid)) {
+    if (await isFacultyBeneficiaryForUser(proposal, uid)) {
       return true;
     }
 
@@ -2048,7 +1419,7 @@ class BudgetModel {
       case 'hod':
       case 'coordinator':
       case 'level1': {
-        const level1Route = this.resolveLevel1Route(proposal);
+        const level1Route = resolveLevel1Route(proposal);
 
         if (level1Route.routeType === LEVEL1_ROUTE_TYPE.entityContact) {
           const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
@@ -2116,6 +1487,14 @@ class BudgetModel {
       case 'admin':
       case 'super_admin':
         return true;
+      case 'ithead': {
+        const inItheadStage =
+          normalizeText(proposal.current_stage).toLowerCase() === 'ithead'
+          || normalizeText(proposal.status).toLowerCase().startsWith('ithead_');
+        const tagMatches =
+          normalizeText(proposal.budget_tag).toLowerCase() === 'it infrastructure';
+        return inItheadStage && tagMatches;
+      }
 
       default:
         return pid === uid || emailMatch;
@@ -2125,7 +1504,7 @@ class BudgetModel {
 
 
 
-  static async getMonthlyAllocations(proposalId) {
+  export async function getMonthlyAllocations(proposalId) {
     const [rows] = await db.execute(
       `SELECT
       m.month,
@@ -2141,7 +1520,3 @@ class BudgetModel {
 
     return rows;
   }
-
-}
-
-export default BudgetModel;

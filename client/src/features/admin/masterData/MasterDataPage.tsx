@@ -8,13 +8,13 @@ import {
     Spinner,
     Badge,
 } from "react-bootstrap";
-import { Pencil, Trash2, Plus, Search, RotateCcw, Eye } from "lucide-react";
+import { Pencil, Trash2, Plus, Search, RotateCcw, Eye, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import AsyncSelect from "react-select/async";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import AlertModal, {
     AlertType,
 } from "../../../shared/components/ui/AlertModal";
-import Navbar from "../../../shared/components/layout/navbar/navbar";
+
 import "./MasterDataPage.css";
 
 // ============================================
@@ -95,6 +95,12 @@ interface EmployeeLookupOption {
 
 type TabKey = "departments" | "entities" | "employees";
 
+type SortDirection = 'asc' | 'desc';
+interface SortConfig {
+    key: string;
+    direction: SortDirection;
+}
+
 // ============================================
 // COMPONENT
 // ============================================
@@ -102,6 +108,62 @@ type TabKey = "departments" | "entities" | "employees";
 export default function MasterDataPage() {
     const baseUrl = authenticityUtility.getBaseURL();
     const [activeTab, setActiveTab] = useState<TabKey>("departments");
+
+    const [deptSort, setDeptSort] = useState<SortConfig | null>(null);
+    const [entitySort, setEntitySort] = useState<SortConfig | null>(null);
+    const [empSort, setEmpSort] = useState<SortConfig | null>(null);
+
+    const handleSort = (
+        key: string,
+        sortConfig: SortConfig | null,
+        setSortConfig: React.Dispatch<React.SetStateAction<SortConfig | null>>
+    ) => {
+        let direction: SortDirection = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortedData = (data: any[], sortConfig: SortConfig | null) => {
+        if (!sortConfig) return data;
+        return [...data].sort((a, b) => {
+            let valA = a[sortConfig.key] || '';
+            let valB = b[sortConfig.key] || '';
+
+            // Handle nested properties or special cases
+            if (sortConfig.key === 'contacts_email') {
+                valA = a.contacts?.[0]?.email || '';
+                valB = b.contacts?.[0]?.email || '';
+            }
+            if (sortConfig.key === 'full_name') {
+                valA = `${a.title || ''} ${a.first_name || ''} ${a.last_name || ''}`.trim();
+                valB = `${b.title || ''} ${b.first_name || ''} ${b.last_name || ''}`.trim();
+            }
+
+            if (typeof valA === 'string') valA = valA.toLowerCase();
+            if (typeof valB === 'string') valB = valB.toLowerCase();
+
+            if (valA < valB) {
+                return sortConfig.direction === 'asc' ? -1 : 1;
+            }
+            if (valA > valB) {
+                return sortConfig.direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+    };
+
+    const renderSortIcon = (key: string, sortConfig: SortConfig | null) => {
+        if (!sortConfig || sortConfig.key !== key) {
+            return <ArrowUpDown size={14} className="ms-1 text-muted" />;
+        }
+        return sortConfig.direction === 'asc' ? (
+            <ArrowUp size={14} className="ms-1" />
+        ) : (
+            <ArrowDown size={14} className="ms-1" />
+        );
+    };
 
     // Shared employee lookup for AsyncSelect
     const loadEmployeeOptions = async (inputValue: string): Promise<EmployeeLookupOption[]> => {
@@ -716,6 +778,10 @@ export default function MasterDataPage() {
 
     const handleEmpSubmit = async (e: FormEvent) => {
         e.preventDefault();
+        if (empForm.department_id && empForm.entity_id) {
+            showAlert("Choose either Department or Entity for an employee, not both.", "warning");
+            return;
+        }
         try {
             const body = {
                 ...empForm,
@@ -888,12 +954,12 @@ export default function MasterDataPage() {
                     <Table hover>
                         <thead>
                             <tr>
-                                <th>Code</th>
-                                <th>Name</th>
-                                <th>Type</th>
-                                <th>Parent</th>
-                                <th>HOD</th>
-                                <th>Status</th>
+                                <th onClick={() => handleSort('code', deptSort, setDeptSort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Code {renderSortIcon('code', deptSort)}</th>
+                                <th onClick={() => handleSort('name', deptSort, setDeptSort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Name {renderSortIcon('name', deptSort)}</th>
+                                <th onClick={() => handleSort('type', deptSort, setDeptSort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Type {renderSortIcon('type', deptSort)}</th>
+                                <th onClick={() => handleSort('parent_name', deptSort, setDeptSort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Parent {renderSortIcon('parent_name', deptSort)}</th>
+                                <th onClick={() => handleSort('hod_name', deptSort, setDeptSort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>HOD {renderSortIcon('hod_name', deptSort)}</th>
+                                <th onClick={() => handleSort('is_active', deptSort, setDeptSort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Status {renderSortIcon('is_active', deptSort)}</th>
                                 <th style={{ width: 150 }}>Actions</th>
                             </tr>
                         </thead>
@@ -903,7 +969,7 @@ export default function MasterDataPage() {
                                     <td colSpan={7}>No departments found</td>
                                 </tr>
                             ) : (
-                                departments.map((dept) => (
+                                getSortedData(departments, deptSort).map((dept) => (
                                     <tr
                                         key={dept.id}
                                         style={{ opacity: dept.is_active ? 1 : 0.6 }}
@@ -1211,11 +1277,11 @@ export default function MasterDataPage() {
                     <Table hover>
                         <thead>
                             <tr>
-                                <th>Type</th>
-                                <th>Code</th>
-                                <th>Name</th>
-                                <th>Contact Email</th>
-                                <th>Status</th>
+                                <th onClick={() => handleSort('type_name', entitySort, setEntitySort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Type {renderSortIcon('type_name', entitySort)}</th>
+                                <th onClick={() => handleSort('code', entitySort, setEntitySort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Code {renderSortIcon('code', entitySort)}</th>
+                                <th onClick={() => handleSort('name', entitySort, setEntitySort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Name {renderSortIcon('name', entitySort)}</th>
+                                <th onClick={() => handleSort('contacts_email', entitySort, setEntitySort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Contact Email {renderSortIcon('contacts_email', entitySort)}</th>
+                                <th onClick={() => handleSort('is_active', entitySort, setEntitySort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Status {renderSortIcon('is_active', entitySort)}</th>
                                 <th style={{ width: 150 }}>Actions</th>
                             </tr>
                         </thead>
@@ -1225,7 +1291,7 @@ export default function MasterDataPage() {
                                     <td colSpan={6}>No entities found</td>
                                 </tr>
                             ) : (
-                                entities.map((entity) => (
+                                getSortedData(entities, entitySort).map((entity) => (
                                     <tr
                                         key={entity.id}
                                         style={{ opacity: entity.is_active ? 1 : 0.6 }}
@@ -1531,13 +1597,13 @@ export default function MasterDataPage() {
                         <Table hover>
                             <thead>
                                 <tr>
-                                    <th>ERP ID</th>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Designation</th>
-                                    <th>Department</th>
-                                    <th>Type</th>
-                                    <th>Status</th>
+                                    <th onClick={() => handleSort('erp_id', empSort, setEmpSort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>ERP ID {renderSortIcon('erp_id', empSort)}</th>
+                                    <th onClick={() => handleSort('full_name', empSort, setEmpSort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Name {renderSortIcon('full_name', empSort)}</th>
+                                    <th onClick={() => handleSort('email', empSort, setEmpSort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Email {renderSortIcon('email', empSort)}</th>
+                                    <th onClick={() => handleSort('designation', empSort, setEmpSort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Designation {renderSortIcon('designation', empSort)}</th>
+                                    <th onClick={() => handleSort('department_name', empSort, setEmpSort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Department {renderSortIcon('department_name', empSort)}</th>
+                                    <th onClick={() => handleSort('employee_type', empSort, setEmpSort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Type {renderSortIcon('employee_type', empSort)}</th>
+                                    <th onClick={() => handleSort('status', empSort, setEmpSort)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Status {renderSortIcon('status', empSort)}</th>
                                     <th style={{ width: 150 }}>Actions</th>
                                 </tr>
                             </thead>
@@ -1547,7 +1613,7 @@ export default function MasterDataPage() {
                                         <td colSpan={8}>No employees found</td>
                                     </tr>
                                 ) : (
-                                    employees.map((emp) => (
+                                    getSortedData(employees, empSort).map((emp) => (
                                         <tr
                                             key={emp.id}
                                             style={{
@@ -1804,7 +1870,13 @@ export default function MasterDataPage() {
                                     <Form.Label>Department</Form.Label>
                                     <Form.Select
                                         value={empForm.department_id}
-                                        onChange={(e) => setEmpForm({ ...empForm, department_id: e.target.value })}
+                                        onChange={(e) =>
+                                            setEmpForm({
+                                                ...empForm,
+                                                department_id: e.target.value,
+                                                entity_id: e.target.value ? "" : empForm.entity_id,
+                                            })
+                                        }
                                     >
                                         <option value="">Select Department</option>
                                         {allDepartments.map((d) => (
@@ -1818,7 +1890,13 @@ export default function MasterDataPage() {
                                     <Form.Label>Entity / Cell / Club</Form.Label>
                                     <Form.Select
                                         value={empForm.entity_id}
-                                        onChange={(e) => setEmpForm({ ...empForm, entity_id: e.target.value })}
+                                        onChange={(e) =>
+                                            setEmpForm({
+                                                ...empForm,
+                                                entity_id: e.target.value,
+                                                department_id: e.target.value ? "" : empForm.department_id,
+                                            })
+                                        }
                                     >
                                         <option value="">Select Entity</option>
                                         {allEntitiesList.map((e) => (
@@ -1961,7 +2039,7 @@ export default function MasterDataPage() {
 
     return (
         <div className="master-data-page-wrapper">
-            <Navbar />
+
             <div className="master-data-management">
                 <div className="d-flex justify-content-between align-items-center mb-3">
                     <h2>Master Data Management</h2>
