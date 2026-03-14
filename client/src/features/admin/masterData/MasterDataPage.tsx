@@ -778,6 +778,10 @@ export default function MasterDataPage() {
 
     const handleEmpSubmit = async (e: FormEvent) => {
         e.preventDefault();
+        if (empForm.department_id && empForm.entity_id) {
+            showAlert("Choose either Department or Entity for an employee, not both.", "warning");
+            return;
+        }
         try {
             const body = {
                 ...empForm,
@@ -1866,7 +1870,13 @@ export default function MasterDataPage() {
                                     <Form.Label>Department</Form.Label>
                                     <Form.Select
                                         value={empForm.department_id}
-                                        onChange={(e) => setEmpForm({ ...empForm, department_id: e.target.value })}
+                                        onChange={(e) =>
+                                            setEmpForm({
+                                                ...empForm,
+                                                department_id: e.target.value,
+                                                entity_id: e.target.value ? "" : empForm.entity_id,
+                                            })
+                                        }
                                     >
                                         <option value="">Select Department</option>
                                         {allDepartments.map((d) => (
@@ -1880,7 +1890,13 @@ export default function MasterDataPage() {
                                     <Form.Label>Entity / Cell / Club</Form.Label>
                                     <Form.Select
                                         value={empForm.entity_id}
-                                        onChange={(e) => setEmpForm({ ...empForm, entity_id: e.target.value })}
+                                        onChange={(e) =>
+                                            setEmpForm({
+                                                ...empForm,
+                                                entity_id: e.target.value,
+                                                department_id: e.target.value ? "" : empForm.department_id,
+                                            })
+                                        }
                                     >
                                         <option value="">Select Entity</option>
                                         {allEntitiesList.map((e) => (
