@@ -1,0 +1,343 @@
+.adminbudgetdashboard-page {
+  background: #f3f7fb;
+  min-height: calc(100vh - 64px);
+  padding: 24px;
+}
+
+.adminbudgetdashboard-container {
+  max-width: 1190px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.adminbudgetdashboard-card {
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.adminbudgetdashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 22px;
+  border-bottom: 1px solid #eef2f6;
+  gap: 14px;
+}
+
+.adminbudgetdashboard-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.adminbudgetdashboard-title {
+  margin: 0;
+  padding-left: 8px;
+  font-weight: 600;
+  color: #0a2540;
+  font-size: 1.9rem;
+  line-height: 1;
+}
+
+.adminbudgetdashboard-role-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: #0069ab;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.adminbudgetdashboard-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.adminbudgetdashboard-filter--fy {
+  width: 250px;
+  min-width: 250px;
+}
+
+.adminbudgetdashboard-filter--beneficiary {
+  width: 230px;
+  min-width: 230px;
+}
+
+.adminbudgetdashboard-filter--search {
+  width: 315px;
+  min-width: 315px;
+}
+
+.adminbudgetdashboard-search {
+  width: 100%;
+  height: 42px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: #4b5563;
+  outline: none;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.adminbudgetdashboard-search::placeholder {
+  color: #64748b;
+}
+
+.adminbudgetdashboard-search:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.adminbudgetdashboard-body {
+  padding: 20px;
+}
+
+.adminbudgetdashboard-state {
+  text-align: center;
+  padding: 60px 0;
+  font-size: 0.95rem;
+  color: #6b7280;
+}
+
+.adminbudgetdashboard-state--error {
+  color: #b42318;
+}
+
+.adminbudgetdashboard-table-section {
+  margin-bottom: 22px;
+}
+
+.adminbudgetdashboard-table-wrapper {
+  overflow-x: auto;
+}
+
+.adminbudgetdashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  table-layout: fixed;
+}
+
+.adminbudgetdashboard-table th {
+  background: #dbece5;
+  color: #08723f;
+  padding: 14px 12px;
+  text-align: left;
+  font-weight: 700;
+  font-size: 1rem;
+  border-bottom: 2px solid #d2e7dd;
+}
+
+.adminbudgetdashboard-table td {
+  padding: 15px 12px;
+  border-bottom: 1px solid #e6ebf0;
+  vertical-align: middle;
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.adminbudgetdashboard-table th:nth-child(1),
+.adminbudgetdashboard-table td:nth-child(1) {
+  width: 7%;
+  text-align: center;
+}
+
+.adminbudgetdashboard-table th:nth-child(2),
+.adminbudgetdashboard-table td:nth-child(2) {
+  width: 33%;
+  text-align: left;
+}
+
+.adminbudgetdashboard-table th:nth-child(3),
+.adminbudgetdashboard-table td:nth-child(3),
+.adminbudgetdashboard-table th:nth-child(4),
+.adminbudgetdashboard-table td:nth-child(4),
+.adminbudgetdashboard-table th:nth-child(5),
+.adminbudgetdashboard-table td:nth-child(5),
+.adminbudgetdashboard-table th:nth-child(6),
+.adminbudgetdashboard-table td:nth-child(6) {
+  width: 15%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.adminbudgetdashboard-row-clickable {
+  cursor: pointer;
+}
+
+.adminbudgetdashboard-row-clickable:hover {
+  background: #f8fafc;
+}
+
+.adminbudgetdashboard-total-row td {
+  background: #f3f6f9 !important;
+  font-weight: 800 !important;
+  border-top: 2px solid #d8dee5 !important;
+  border-bottom: none !important;
+}
+
+.adminbudgetdashboard-total-row td:nth-child(1) {
+  text-align: center !important;
+}
+
+.adminbudgetdashboard-detail-section {
+  margin-top: 18px;
+  border: 1px solid #cdd8f6;
+  border-radius: 14px;
+  padding: 18px;
+  background: #f7f9ff;
+}
+
+.adminbudgetdashboard-detail-title {
+  margin: 0 0 14px 0;
+  color: #0a2540;
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.adminbudgetdashboard-detail-table-wrapper {
+  overflow-x: auto;
+}
+
+.adminbudgetdashboard-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fffdf4;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  table-layout: fixed;
+}
+
+.adminbudgetdashboard-detail-table th {
+  background: #f7eac0;
+  color: #b07200;
+  padding: 14px 12px;
+  text-align: left;
+  font-weight: 700;
+  font-size: 1rem;
+  border-bottom: 2px solid #eedb9f;
+}
+
+.adminbudgetdashboard-detail-table td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #eef2f6;
+  font-size: 0.95rem;
+  color: #0f172a;
+  vertical-align: middle;
+}
+
+.adminbudgetdashboard-detail-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.adminbudgetdashboard-detail-table th:nth-child(1),
+.adminbudgetdashboard-detail-table td:nth-child(1) {
+  width: 8%;
+  text-align: center;
+}
+
+.adminbudgetdashboard-detail-table th:nth-child(2),
+.adminbudgetdashboard-detail-table td:nth-child(2) {
+  width: 30%;
+}
+
+.adminbudgetdashboard-detail-table th:nth-child(3),
+.adminbudgetdashboard-detail-table td:nth-child(3) {
+  width: 28%;
+}
+
+.adminbudgetdashboard-detail-table th:nth-child(4),
+.adminbudgetdashboard-detail-table td:nth-child(4),
+.adminbudgetdashboard-detail-table th:nth-child(5),
+.adminbudgetdashboard-detail-table td:nth-child(5) {
+  width: 17%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 1200px) {
+  .adminbudgetdashboard-container {
+    padding: 0 16px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .adminbudgetdashboard-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .adminbudgetdashboard-header-right {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .adminbudgetdashboard-filter--search {
+    width: 280px;
+    min-width: 280px;
+  }
+}
+
+@media (max-width: 768px) {
+  .adminbudgetdashboard-page {
+    padding: 16px;
+  }
+
+  .adminbudgetdashboard-header {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .adminbudgetdashboard-header-left {
+    justify-content: space-between;
+  }
+
+  .adminbudgetdashboard-title {
+    font-size: 1.5rem;
+    padding-left: 0;
+  }
+
+  .adminbudgetdashboard-header-right {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .adminbudgetdashboard-filter--fy,
+  .adminbudgetdashboard-filter--beneficiary,
+  .adminbudgetdashboard-filter--search {
+    width: 100%;
+    min-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .adminbudgetdashboard-role-pill {
+    font-size: 0.82rem;
+    padding: 6px 10px;
+  }
+
+  .adminbudgetdashboard-table th,
+  .adminbudgetdashboard-table td,
+  .adminbudgetdashboard-detail-table th,
+  .adminbudgetdashboard-detail-table td {
+    padding: 8px 6px;
+    font-size: 0.82rem;
+  }
+}

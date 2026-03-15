@@ -29,14 +29,14 @@ import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
 import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
 import Budget from '../features/budget/budget';
 import BudgetDashboard from '../features/user-dashboard/budgetdashboard/budgetdashboard';
-import AdminBudget from '../features/admin/budget/adminbudget';
+import AdminBudget from '../features/admin/budget/bugdet-approval/adminbudget';
 import UnderConstruction from '../shared/components/ui/UnderConstruction';
 import ProfilePage from '../features/profile/ProfilePage';
 import AccessControlPage from '../features/admin/accessControl/AccessControlPage';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
 import { AbilityProvider } from '../shared/casl/AbilityContext';
 import MainLayout from '../shared/components/layout/MainLayout';
-
+import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/adminbudgetdashboard';
 
 function App() {
   return (
@@ -152,6 +152,14 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <ProjectsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route 
+                    path="/admin/budgetdashboard" 
+                    element={
+                      <ProtectedRoute>
+                        <AdminBudgetDashboard />
                       </ProtectedRoute>
                     }
                   />

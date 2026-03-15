@@ -333,6 +333,18 @@ const Navbar: React.FC = () => {
                 )}
                 {showBudgetApproval && (
                   <Link
+                    to="/admin/budgetdashboard"
+                    className="dropdown-li"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      document.body.classList.remove('menu-open');
+                    }}
+                  >
+                    <li>Budget-Dashboard</li>
+                  </Link>
+                )}
+                {showBudgetApproval && (
+                  <Link
                     to="/admin/budget"
                     className="dropdown-li"
                     onClick={() => {
