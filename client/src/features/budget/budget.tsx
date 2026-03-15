@@ -1075,24 +1075,42 @@ const Budget: React.FC = () => {
     let cancelled = false;
 
     const loadBeneficiaryOptions = async () => {
+      const toOptions = (rows: any[]) =>
+        rows
+          .map((row: any) => normalizeText(row?.name))
+          .filter(Boolean)
+          .map((name: string) => ({ value: name, label: name }));
+
       const nextOptions: Record<string, SelectOption[]> = {};
 
-      await Promise.all(
-        Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).map(async ([beneficiaryKey, apiType]) => {
+      try {
+        const json = await authenticityUtility.get(`${budgetApiBase}/org-units`) as any;
+        const grouped = json?.data?.grouped;
+
+        if (grouped && typeof grouped === 'object') {
+          Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).forEach(([beneficiaryKey, apiType]) => {
+            const rows = Array.isArray((grouped as Record<string, any[]>)[apiType])
+              ? (grouped as Record<string, any[]>)[apiType]
+              : [];
+            nextOptions[beneficiaryKey] = toOptions(rows);
+          });
+        } else {
+          throw new Error('Grouped org-units payload unavailable');
+        }
+      } catch (bulkError) {
+        console.error('Failed to fetch bulk org units, falling back to per-type calls:', bulkError);
+
+        for (const [beneficiaryKey, apiType] of Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE)) {
           try {
             const json = await authenticityUtility.get(`${budgetApiBase}/org-units/${apiType}`) as any;
             const rows = Array.isArray(json?.data) ? json.data : [];
-
-            nextOptions[beneficiaryKey] = rows
-              .map((row: any) => normalizeText(row?.name))
-              .filter(Boolean)
-              .map((name: string) => ({ value: name, label: name }));
+            nextOptions[beneficiaryKey] = toOptions(rows);
           } catch (error) {
             console.error(`Failed to fetch options for ${beneficiaryKey}:`, error);
             nextOptions[beneficiaryKey] = [];
           }
-        })
-      );
+        }
+      }
 
       if (!cancelled) {
         setSubcategoryOptionsByType(nextOptions);
