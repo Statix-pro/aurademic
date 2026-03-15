@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import "./budgetdashboard.css";
 import { Eye, Edit2, Plus, Trash2, Info } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -129,6 +129,12 @@ const BudgetDashboard: React.FC = () => {
   };
 
   const [financialYear, setFinancialYear] = useState(getDefaultFilterFY());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 20, pages: 1 });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
   const fyOptions = useMemo(() => {
     const running = getRunningFYStart();
     const defaultStart = Number.parseInt(getDefaultFilterFY().split("-")[0], 10);
@@ -300,60 +306,52 @@ const BudgetDashboard: React.FC = () => {
     };
   }, [activeLogId]);
   // --- Fetch Data ---
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        setError("");
+  // --- Fetch Data ---
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-        const fiscalYearNum = parseInt(financialYear.split("-")[0]);
+      const fiscalYearNum = parseInt(financialYear.split("-")[0]);
 
-        // 1. Fetch List
-        const listResult = await authenticityUtility.get(
-          `/budget/my?fiscalYear=${fiscalYearNum}&page=1&limit=100`
-        ) as any;
-
-        if (!listResult.success || !listResult.data) {
-          setProposals([]);
-          return;
+      // Fetch specific page with limit
+      const pageResult = await authenticityUtility.get("/budget/my/full", {
+        params: {
+          fiscalYear: fiscalYearNum,
+          page: currentPage,
+          limit: pageSize,
+          status: statusFilter === "all" ? "" : statusFilter,
+          q: searchTerm || undefined
         }
+      }) as any;
 
-        // 2. Fetch Details for ALL (Parallel)
-        // Build a map of is_applicant_only from the list result
-        const applicantOnlyMap: Record<number, boolean> = {};
-        listResult.data.forEach((summary: any) => {
-          applicantOnlyMap[summary.id] = Boolean(summary.is_applicant_only);
-        });
+      if (!pageResult?.success || !Array.isArray(pageResult?.data)) {
+        setProposals([]);
+        return;
+      }
 
-        const detailPromises = listResult.data.map(async (summary: any) => {
-          try {
-            const detailJson = await authenticityUtility.get(
-              `/budget/${summary.id}`
-            ) as any;
-            return detailJson.success ? { ...detailJson.data, _isApplicantOnly: applicantOnlyMap[summary.id] || false } : null;
-          } catch (e) {
-            return null;
-          }
-        });
+      if (pageResult.pagination) {
+        setPagination(pageResult.pagination);
+      }
 
-        const fullProposals = (await Promise.all(detailPromises)).filter(Boolean);
+      const fullRows = pageResult.data;
 
-        // 3. Process Proposals
-        const parsedProposals: ProposalGroup[] = fullProposals.map((data: any) => {
-          const master = data.master || data;
-          const lines = data.lines || [];
+      // 2. Process Proposals
+      const parsedProposals: ProposalGroup[] = fullRows.map((data: any) => {
+        const master = data.master || data;
+        const lines = data.lines || [];
 
-          // CHECK: Is this proposal FULLY approved?
-          const isFullyApproved = ['principal_approved', 'completed'].includes(master.status);
+        // CHECK: Is this proposal FULLY approved?
+        const isFullyApproved = ["principal_approved", "completed"].includes(master.status);
 
-          const items = lines.map((line: any) => {
-            const unitAmount = Number(line.unit_amount ?? 0);
-            const quantity = Number(line.quantity ?? 1);
-            const proposedTotal = Number.isFinite(unitAmount) && Number.isFinite(quantity)
-              ? unitAmount * quantity
-              : Number(line.line_total ?? 0);
+        const items = lines.map((line: any) => {
+          const unitAmount = Number(line.unit_amount ?? 0);
+          const quantity = Number(line.quantity ?? 1);
+          const proposedTotal = (unitAmount > 0 && quantity > 0)
+            ? unitAmount * quantity
+            : Number(line.line_total ?? 0);
 
-            return {
+          return {
             id: line.id,
             proposalId: master.id,
             budgetHead: line.budget_head || "Unknown",
@@ -366,50 +364,55 @@ const BudgetDashboard: React.FC = () => {
             expenditure: 0, // Placeholder for future integration
             createdAt: master.created_at
           };
-          });
-
-          return {
-            proposalId: master.id,
-            proposalRef: master.proposal_ref,
-            status: master.status,
-            beneficiaryType: master.beneficiary_type,
-            beneficiaryValue: master.beneficiary_value,
-            currentStage: master.current_stage,
-            approvalFlow: master.approval_flow,
-            createdAt: master.created_at,
-            updatedAt: master.updated_at,
-            items: items,
-            approvals: Array.isArray(data.approvals)
-              ? data.approvals
-              : (Array.isArray(data.pendingApprovals) ? data.pendingApprovals : []),
-            edits: data.edits || [],
-            userEmail: master.user_email || master.userEmail || "",
-            applicantName: master.applicant_name || master.user_name || master.name || "",
-            budgetTag: master.budget_tag || "",
-            totalProposed: items.reduce((sum: number, i: any) => sum + i.proposedAmount, 0),
-            totalApproved: items.reduce((sum: number, i: any) => sum + i.approvedAmount, 0),
-            isApplicantOnly: Boolean(data._isApplicantOnly),
-          };
         });
 
-        // Sort Chronologically (Oldest First)
-        parsedProposals.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        setProposals(parsedProposals);
+        return {
+          proposalId: master.id,
+          proposalRef: master.proposal_ref,
+          status: master.status,
+          beneficiaryType: master.beneficiary_type,
+          beneficiaryValue: master.beneficiary_value,
+          currentStage: master.current_stage,
+          approvalFlow: master.approval_flow,
+          createdAt: master.created_at,
+          updatedAt: master.updated_at,
+          items: items,
+          approvals: Array.isArray(data.approvals)
+            ? data.approvals
+            : (Array.isArray(data.pendingApprovals) ? data.pendingApprovals : []),
+          edits: data.edits || [],
+          userEmail: master.user_email || master.userEmail || "",
+          applicantName: master.applicant_name || master.user_name || master.name || "",
+          budgetTag: master.budget_tag || "",
+          totalProposed: items.reduce((sum: number, i: any) => sum + i.proposedAmount, 0),
+          totalApproved: items.reduce((sum: number, i: any) => sum + i.approvedAmount, 0),
+          isApplicantOnly: Boolean(master.is_applicant_only),
+        };
+      });
 
-      } catch (err: any) {
-        if (err.response?.status === 404) {
-          setProposals([]);
-        } else {
-          console.error("Dashboard Error:", err);
-          setError(err.response?.data?.message || err.message || "Failed to load dashboard.");
-        }
-      } finally {
-        setLoading(false);
+      // Sort Chronologically (Oldest First)
+      parsedProposals.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      setProposals(parsedProposals);
+
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        setProposals([]);
+      } else {
+        console.error("Dashboard Error:", err);
+        setError(err.response?.data?.message || err.message || "Failed to load dashboard.");
       }
-    };
+    } finally {
+      setLoading(false);
+    }
+  }, [financialYear, currentPage, pageSize, statusFilter, searchTerm]);
 
+  useEffect(() => {
     fetchDashboardData();
-  }, [financialYear]);
+  }, [fetchDashboardData]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [financialYear, searchTerm, statusFilter, pageSize]);
 
   // --- Helper Functions ---
 
@@ -850,6 +853,14 @@ const BudgetDashboard: React.FC = () => {
               </div>
               <div className="budgetdashboard-header-right">
                 <div className="budgetdashboard-header-search-group">
+                  <input
+                    type="text"
+                    className="budgetdashboard-search"
+                    placeholder="Search Proposals..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{ marginRight: '10px' }}
+                  />
                   <select
                     className="budgetdashboard-financial-year"
                     value={financialYear}
@@ -873,13 +884,6 @@ const BudgetDashboard: React.FC = () => {
                       </option>
                     ))}
                   </select>
-                  <input
-                    type="text"
-                    className="budgetdashboard-search"
-                    placeholder="Search Budget Head..."
-                    value={budgetHeadSearch}
-                    onChange={(e) => setBudgetHeadSearch(e.target.value)}
-                  />
                 </div>
                 <button
                   className="budgetdashboard-add-btn"
@@ -966,79 +970,79 @@ const BudgetDashboard: React.FC = () => {
                   return (
                     <div key={proposal.proposalId} style={{ marginTop: '20px' }}>
 
-                    {/* Card Header */}
-                    <div className="budgetdashboard-proposal-header budgetdashboard-proposal-flat">
-                      <div className="budgetdashboard-proposal-title-group">
-                        <div className="budgetdashboard-proposal-left">{label}</div>
-                        <div
-                          className="budgetdashboard-info-trigger"
-                          ref={(el) => { infoTriggerRefs.current[proposal.proposalId] = el; }}
-                          onClick={() => handleInfoClick(proposal.proposalId)}
-                        >
-                          <Info size={20} color="#6b7280" style={{ cursor: 'pointer' }} />
-                          {activeLogId === proposal.proposalId && (
-                            <div
-                              className="budgetdashboard-log-popover"
-                              style={logPopoverStyle}
-                              ref={popoverRef}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <div className="budgetdashboard-log-header">Submission Logs</div>
-                              <div className="budgetdashboard-log-body">
-                                {new Date(proposal.updatedAt).getTime() >
-                                  new Date(proposal.createdAt).getTime() && (
-                                    <div className="budgetdashboard-log-item">
-                                      <span className="log-label">Last Edited:</span>
-                                      <span className="log-value">
-                                        {formatDateTime(proposal.updatedAt)}
-                                      </span>
-                                    </div>
-                                  )}
+                      {/* Card Header */}
+                      <div className="budgetdashboard-proposal-header budgetdashboard-proposal-flat">
+                        <div className="budgetdashboard-proposal-title-group">
+                          <div className="budgetdashboard-proposal-left">{label}</div>
+                          <div
+                            className="budgetdashboard-info-trigger"
+                            ref={(el) => { infoTriggerRefs.current[proposal.proposalId] = el; }}
+                            onClick={() => handleInfoClick(proposal.proposalId)}
+                          >
+                            <Info size={20} color="#6b7280" style={{ cursor: 'pointer' }} />
+                            {activeLogId === proposal.proposalId && (
+                              <div
+                                className="budgetdashboard-log-popover"
+                                style={logPopoverStyle}
+                                ref={popoverRef}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="budgetdashboard-log-header">Submission Logs</div>
+                                <div className="budgetdashboard-log-body">
+                                  {new Date(proposal.updatedAt).getTime() >
+                                    new Date(proposal.createdAt).getTime() && (
+                                      <div className="budgetdashboard-log-item">
+                                        <span className="log-label">Last Edited:</span>
+                                        <span className="log-value">
+                                          {formatDateTime(proposal.updatedAt)}
+                                        </span>
+                                      </div>
+                                    )}
 
-                                <div className="budgetdashboard-log-approvals">
-                                  {buildLogEvents(proposal).map((event) => (
-                                    <div
-                                      key={event.key}
-                                      className={`log-approval-item${event.actorBadgeLabel ? ' log-approval-item--admin' : ''}`}
-                                    >
-                                      {event.actorBadgeLabel && (
-                                        <span className="log-admin-mark" title="Updated by Admin">
-                                          {`\u2605 ${event.actorBadgeLabel}`}
-                                        </span>
-                                      )}
-                                      <div className="log-approval-meta">
-                                        <span
-                                          className={`log-decision log-decision--${event.decision || 'approved'
-                                            }`}
-                                        >
-                                          {event.title.toUpperCase()}
-                                        </span>
-                                        <span className="log-role">
-                                          {event.subtitle || 'Status update'}
-                                        </span>
-                                        {event.actorLine && (
-                                          <span className="log-actor-line">
-                                            {event.actorLine}
+                                  <div className="budgetdashboard-log-approvals">
+                                    {buildLogEvents(proposal).map((event) => (
+                                      <div
+                                        key={event.key}
+                                        className={`log-approval-item${event.actorBadgeLabel ? ' log-approval-item--admin' : ''}`}
+                                      >
+                                        {event.actorBadgeLabel && (
+                                          <span className="log-admin-mark" title="Updated by Admin">
+                                            {`\u2605 ${event.actorBadgeLabel}`}
                                           </span>
                                         )}
-                                        <span className="log-date">{event.dateLabel}</span>
+                                        <div className="log-approval-meta">
+                                          <span
+                                            className={`log-decision log-decision--${event.decision || 'approved'
+                                              }`}
+                                          >
+                                            {event.title.toUpperCase()}
+                                          </span>
+                                          <span className="log-role">
+                                            {event.subtitle || 'Status update'}
+                                          </span>
+                                          {event.actorLine && (
+                                            <span className="log-actor-line">
+                                              {event.actorLine}
+                                            </span>
+                                          )}
+                                          <span className="log-date">{event.dateLabel}</span>
+                                        </div>
                                       </div>
-                                    </div>
-                                  ))}
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
                             )}
                           </div>
-                        <div className="budgetdashboard-proposal-applicant">
-                          {proposal.applicantName || '-'}
-                        </div>
-                        {displayTag && (
-                          <div className="budgetdashboard-proposal-tag-pill">
-                            {displayTag}
+                          <div className="budgetdashboard-proposal-applicant">
+                            {proposal.applicantName || '-'}
                           </div>
-                        )}
-                      </div>
+                          {displayTag && (
+                            <div className="budgetdashboard-proposal-tag-pill">
+                              {displayTag}
+                            </div>
+                          )}
+                        </div>
 
                         <div className="budgetdashboard-actions-global" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1136,8 +1140,60 @@ const BudgetDashboard: React.FC = () => {
                 });
               })()}
 
-              {!loading && scopeFilteredProposals.length === 0 && (
+              {!loading && proposals.length === 0 && (
                 <div className="budgetdashboard-state">No budget proposals found for this fiscal year.</div>
+              )}
+
+              {!loading && pagination.pages > 1 && (
+                <div className="budgetdashboard-pagination" style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: '30px',
+                  padding: '20px',
+                  borderTop: '1px solid #e5e7eb'
+                }}>
+                  <div className="budgetdashboard-pagination-left">
+                    <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                      Showing {(pagination.page - 1) * pagination.limit + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} proposals
+                    </span>
+                  </div>
+                  <div className="budgetdashboard-pagination-right" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button
+                      className="budgetdashboard-pagebtn"
+                      disabled={pagination.page <= 1}
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '6px',
+                        border: '1px solid #d1d5db',
+                        background: pagination.page <= 1 ? '#f3f4f6' : 'white',
+                        color: pagination.page <= 1 ? '#9ca3af' : '#374151',
+                        cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Previous
+                    </button>
+                    <span style={{ fontSize: '14px', fontWeight: 500 }}>
+                      Page {pagination.page} of {pagination.pages}
+                    </span>
+                    <button
+                      className="budgetdashboard-pagebtn"
+                      disabled={pagination.page >= pagination.pages}
+                      onClick={() => setCurrentPage(p => Math.min(pagination.pages, p + 1))}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '6px',
+                        border: '1px solid #d1d5db',
+                        background: pagination.page >= pagination.pages ? '#f3f4f6' : 'white',
+                        color: pagination.page >= pagination.pages ? '#9ca3af' : '#374151',
+                        cursor: pagination.page >= pagination.pages ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

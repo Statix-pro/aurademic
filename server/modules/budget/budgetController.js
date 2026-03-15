@@ -648,6 +648,81 @@ export async function resolveSubmissionDepartment(req, beneficiaryType, payload 
     }
   }
 
+  export async function getMyBudgetsFull(req, res) {
+    try {
+      const { page = 1, limit = 10, status, fiscalYear } = req.query;
+      const userId = getUserId(req);
+      const userEmail = normalizeText(req.user?.email);
+
+      const budgets = await BudgetModel.listBudgets({
+        userId,
+        userEmail,
+        role: 'user',
+        page: Number.parseInt(page, 10),
+        limit: Number.parseInt(limit, 10),
+        status: status || undefined,
+        fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      });
+
+      const proposalIds = (budgets?.budgets || [])
+        .map((proposal) => Number(proposal?.id))
+        .filter((id) => Number.isInteger(id) && id > 0);
+
+      const detailMap = await BudgetModel.getProposalDetailsByIds(proposalIds);
+      const fullData = (budgets?.budgets || []).map((proposal) => {
+        const detail = detailMap.get(Number(proposal?.id)) || {};
+        return {
+          master: proposal,
+          lines: detail.lines || [],
+          allocations: detail.allocations || {},
+          approved_allocations: detail.approved_allocations || null,
+          approvals: detail.approvals || [],
+          edits: detail.edits || [],
+        };
+      });
+
+      return res.json({
+        success: true,
+        data: fullData,
+        pagination: budgets.pagination,
+        currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
+      });
+    } catch (error) {
+      console.error('My full budgets error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch your budget details',
+      });
+    }
+  }
+
+  export async function getKpiStats(req, res) {
+    try {
+      const { fiscalYear, q } = req.query;
+      const userId = getUserId(req);
+      const userEmail = normalizeText(req.user?.email);
+
+      const stats = await BudgetModel.getKpiStats({
+        userId,
+        userEmail,
+        role: 'user',
+        fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+        q,
+      });
+
+      return res.json({
+        success: true,
+        data: stats,
+      });
+    } catch (error) {
+      console.error('KPI stats error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch KPI stats',
+      });
+    }
+  }
+
   export async function getHodBudgets(req, res) {
     try {
       const department = await resolveUserDepartment(req);
