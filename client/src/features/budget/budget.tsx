@@ -1638,7 +1638,15 @@ const Budget: React.FC = () => {
                         onBlur={(e) => {
                           e.currentTarget.style.borderColor = '#e0e0e0';
                           e.currentTarget.style.boxShadow = 'none';
-                          setTimeout(() => setShowApplicantDropdown(false), 200);
+                          setTimeout(() => {
+                            setShowApplicantDropdown(false);
+                            if (!applicantEmployeeId) {
+                              setApplicantName('');
+                              setApplicantSearchQuery('');
+                            } else if (applicantSearchQuery !== applicantName) {
+                              setApplicantSearchQuery(applicantName);
+                            }
+                          }, 200);
                         }}
                         required
                       />
@@ -1942,7 +1950,15 @@ const Budget: React.FC = () => {
                         onBlur={(e) => {
                           e.currentTarget.style.borderColor = '#e0e0e0';
                           e.currentTarget.style.boxShadow = 'none';
-                          setTimeout(() => setShowBeneficiaryDropdown(false), 200);
+                          setTimeout(() => {
+                            setShowBeneficiaryDropdown(false);
+                            if (!beneficiaryEmployeeId) {
+                              setBeneficiaryValue('');
+                              setBeneficiarySearchQuery('');
+                            } else if (beneficiarySearchQuery !== beneficiaryValue) {
+                              setBeneficiarySearchQuery(beneficiaryValue);
+                            }
+                          }, 200);
                         }}
                         placeholder={beneficiaryType === 'Staff' ? "Search staff by name or ERP ID" : "Search faculty by name or ERP ID"}
                         style={{
