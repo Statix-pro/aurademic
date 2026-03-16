@@ -152,7 +152,8 @@ const AdminBudget: React.FC = () => {
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [fiscalYear, setFiscalYear] = useState<number>(() => {
     const d = new Date();
-    return d.getMonth() < 2 ? d.getFullYear() - 1 : d.getFullYear();
+    // FY starts in February (month 1). If month is 0 (January), it's the previous year.
+    return d.getMonth() < 1 ? d.getFullYear() - 1 : d.getFullYear();
   });
   const [freezeDate, setFreezeDate] = useState<string>(() => `${new Date().getFullYear()}-02-01`);
   const [isTimeFrozen, setIsTimeFrozen] = useState<boolean>(false);
