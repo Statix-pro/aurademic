@@ -38,12 +38,19 @@ type ConsolidatedRow = {
 
 const ALL_BENEFICIARY_OPTION: Option = { value: 'all', label: 'All Beneficiary' };
 
+const getCurrentFiscalYearOption = (): Option => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-indexed
+  // FY starts in February (month 1)
+  const fyStart = month >= 1 ? year : year - 1;
+  const value = `${fyStart}-${String(fyStart + 1).slice(2)}`;
+  return { value, label: `FY ${value}` };
+};
+
 const AdminBudgetDashboard: React.FC = () => {
   const { user } = useAuth();
-  const [financialYear, setFinancialYear] = useState<Option | null>({
-    value: '2026-27',
-    label: 'FY 2026-27',
-  });
+  const [financialYear, setFinancialYear] = useState<Option | null>(getCurrentFiscalYearOption());
 
   const [beneficiary, setBeneficiary] = useState<Option | null>(ALL_BENEFICIARY_OPTION);
   const [searchText, setSearchText] = useState('');
@@ -55,12 +62,12 @@ const AdminBudgetDashboard: React.FC = () => {
   const roleKey = useMemo(() => {
     const roleCodes = Array.isArray(user?.roles)
       ? user.roles
-          .map((role: any) => {
-            if (!role) return '';
-            if (typeof role === 'string') return role;
-            return role.role_code || role.role_name || '';
-          })
-          .map((role) => String(role).toLowerCase())
+        .map((role: any) => {
+          if (!role) return '';
+          if (typeof role === 'string') return role;
+          return role.role_code || role.role_name || '';
+        })
+        .map((role) => String(role).toLowerCase())
       : [];
 
     if (isSuperAdmin(user)) {
@@ -111,11 +118,15 @@ const AdminBudgetDashboard: React.FC = () => {
     }
   }, [roleKey]);
 
-  const financialYearOptions: Option[] = [
-    { value: '2024-25', label: 'FY 2024-25' },
-    { value: '2025-26', label: 'FY 2025-26' },
-    { value: '2026-27', label: 'FY 2026-27' },
-  ];
+  const financialYearOptions: Option[] = useMemo(() => {
+    const currentOption = getCurrentFiscalYearOption();
+    const currentStart = parseInt(currentOption.value.split('-')[0], 10);
+    // Show current year and 2 previous years
+    return [currentStart - 2, currentStart - 1, currentStart].map((year) => ({
+      value: `${year}-${String(year + 1).slice(2)}`,
+      label: `FY ${year}-${String(year + 1).slice(2)}`,
+    }));
+  }, []);
 
   const beneficiaryOptions: Option[] = useMemo(() => {
     const statusKey = (value?: string) => String(value || '').toLowerCase();
@@ -554,103 +565,103 @@ const AdminBudgetDashboard: React.FC = () => {
           </div>
 
           <div className="adminbudgetdashboard-body">
-          {loading && <div className="adminbudgetdashboard-state">Loading...</div>}
-          {!loading && error && <div className="adminbudgetdashboard-state adminbudgetdashboard-state--error">{error}</div>}
+            {loading && <div className="adminbudgetdashboard-state">Loading...</div>}
+            {!loading && error && <div className="adminbudgetdashboard-state adminbudgetdashboard-state--error">{error}</div>}
 
-          {!loading && !error && consolidatedRows.length > 0 && (
-            <div className="adminbudgetdashboard-table-section">
-              <div className="adminbudgetdashboard-table-wrapper">
-                <table className="adminbudgetdashboard-table">
-                  <thead>
-                    <tr>
-                      <th>S.No</th>
-                      <th>Budget Head</th>
-                      <th>Initial</th>
-                      <th>Additional</th>
-                      <th>Expenditure</th>
-                      <th>Balance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {consolidatedRows.map((row, idx) => (
-                      <tr
-                        key={`${row.budgetHead}-${idx}`}
-                        className="adminbudgetdashboard-row-clickable"
-                        onClick={() =>
-                          setExpandedHead((prev) => (prev === row.budgetHead ? null : row.budgetHead))
-                        }
-                      >
-                        <td>{idx + 1}</td>
-                        <td>{row.budgetHead}</td>
-                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.initial)}` : '--'}</td>
-                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.additional)}` : '--'}</td>
-                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.expenditure)}` : '--'}</td>
-                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.balance)}` : '--'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="adminbudgetdashboard-total-row">
-                      <td></td>
-                      <td>
-                        <strong>Total</strong>
-                      </td>
-                      <td>
-                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.initial)}` : '--'}</strong>
-                      </td>
-                      <td>
-                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.additional)}` : '--'}</strong>
-                      </td>
-                      <td>
-                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.expenditure)}` : '--'}</strong>
-                      </td>
-                      <td>
-                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.balance)}` : '--'}</strong>
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {!loading && !error && expandedHead && (
-            <div className="adminbudgetdashboard-detail-section">
-              <div className="adminbudgetdashboard-detail-title">{expandedHead}</div>
-              {(detailsByHead[expandedHead] || []).length > 0 ? (
-                <div className="adminbudgetdashboard-detail-table-wrapper">
-                  <table className="adminbudgetdashboard-detail-table">
+            {!loading && !error && consolidatedRows.length > 0 && (
+              <div className="adminbudgetdashboard-table-section">
+                <div className="adminbudgetdashboard-table-wrapper">
+                  <table className="adminbudgetdashboard-table">
                     <thead>
                       <tr>
                         <th>S.No</th>
-                        <th>Applicant</th>
-                        <th>Sub Head</th>
+                        <th>Budget Head</th>
                         <th>Initial</th>
                         <th>Additional</th>
+                        <th>Expenditure</th>
+                        <th>Balance</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(detailsByHead[expandedHead] || []).map((detail, index) => (
-                        <tr key={`${expandedHead}-${detail.proposalId}-${index}`}>
-                          <td>{index + 1}</td>
-                          <td>{detail.applicantName}</td>
-                          <td>{detail.subHead}</td>
-                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.initialAmount)}` : '--'}</td>
-                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.additionalAmount)}` : '--'}</td>
+                      {consolidatedRows.map((row, idx) => (
+                        <tr
+                          key={`${row.budgetHead}-${idx}`}
+                          className="adminbudgetdashboard-row-clickable"
+                          onClick={() =>
+                            setExpandedHead((prev) => (prev === row.budgetHead ? null : row.budgetHead))
+                          }
+                        >
+                          <td>{idx + 1}</td>
+                          <td>{row.budgetHead}</td>
+                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.initial)}` : '--'}</td>
+                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.additional)}` : '--'}</td>
+                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.expenditure)}` : '--'}</td>
+                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.balance)}` : '--'}</td>
                         </tr>
                       ))}
                     </tbody>
+                    <tfoot>
+                      <tr className="adminbudgetdashboard-total-row">
+                        <td></td>
+                        <td>
+                          <strong>Total</strong>
+                        </td>
+                        <td>
+                          <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.initial)}` : '--'}</strong>
+                        </td>
+                        <td>
+                          <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.additional)}` : '--'}</strong>
+                        </td>
+                        <td>
+                          <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.expenditure)}` : '--'}</strong>
+                        </td>
+                        <td>
+                          <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.balance)}` : '--'}</strong>
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
-              ) : (
-                <div className="adminbudgetdashboard-state">No approved proposals found for this budget head.</div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
 
-          {!loading && !error && consolidatedRows.length === 0 && (
-            <div className="adminbudgetdashboard-state">No consolidated budget data found.</div>
-          )}
+            {!loading && !error && expandedHead && (
+              <div className="adminbudgetdashboard-detail-section">
+                <div className="adminbudgetdashboard-detail-title">{expandedHead}</div>
+                {(detailsByHead[expandedHead] || []).length > 0 ? (
+                  <div className="adminbudgetdashboard-detail-table-wrapper">
+                    <table className="adminbudgetdashboard-detail-table">
+                      <thead>
+                        <tr>
+                          <th>S.No</th>
+                          <th>Applicant</th>
+                          <th>Sub Head</th>
+                          <th>Initial</th>
+                          <th>Additional</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(detailsByHead[expandedHead] || []).map((detail, index) => (
+                          <tr key={`${expandedHead}-${detail.proposalId}-${index}`}>
+                            <td>{index + 1}</td>
+                            <td>{detail.applicantName}</td>
+                            <td>{detail.subHead}</td>
+                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.initialAmount)}` : '--'}</td>
+                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.additionalAmount)}` : '--'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="adminbudgetdashboard-state">No approved proposals found for this budget head.</div>
+                )}
+              </div>
+            )}
+
+            {!loading && !error && consolidatedRows.length === 0 && (
+              <div className="adminbudgetdashboard-state">No consolidated budget data found.</div>
+            )}
           </div>
         </div>
       </div>
