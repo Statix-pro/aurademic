@@ -1495,3 +1495,36 @@ export async function getBatch(req, res) {
     });
   }
 }
+
+export async function getConsolidation(req, res) {
+  try {
+    const department = await resolveUserDepartment(req);
+    const departmentId = await resolveUserDepartmentId(req);
+    const userEmail = normalizeText(req.user?.email);
+    const userId = getUserId(req);
+    const { fiscalYear, role: roleParam, beneficiaryType, q } = req.query;
+    const role = roleParam || resolveAccessRoleFromPermissions(req);
+
+    const consolidatedData = await AdminBudgetModel.getConsolidatedData({
+      userId,
+      userEmail,
+      department,
+      departmentId,
+      role,
+      fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      beneficiaryType,
+      q,
+    });
+
+    return res.json({
+      success: true,
+      data: consolidatedData,
+    });
+  } catch (error) {
+    console.error('Consolidation fetch error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch consolidated data',
+    });
+  }
+}

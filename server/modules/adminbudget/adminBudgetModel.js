@@ -1170,6 +1170,190 @@ export async function dashboardAggregates({ department, departmentId, role, fisc
   };
 }
 
+export async function getConsolidatedData({
+  userId,
+  userEmail,
+  department,
+  departmentId,
+  role,
+  fiscalYear,
+  beneficiaryType,
+  q,
+}) {
+  const currentFY = Number.parseInt(fiscalYear, 10) || getCurrentFinancialYear();
+  const safeRole = normalizeBudgetRole(role);
+  const safeUserId = Number(userId) > 0 ? Number(userId) : -1;
+
+  const where = ['bp.fiscal_year = ?'];
+  const params = [Number(currentFY)];
+
+  // 1. Role-based scoping (mirrored from buildBudgetList)
+  switch (safeRole) {
+    case 'hod': {
+      where.push(`(
+        (LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff') AND bp.beneficiary_entity_id IS NULL)
+        OR LOWER(TRIM(bp.beneficiary_type)) = 'department'
+      )`);
+      where.push('md.type = "Academic"');
+      const hodScope = [];
+      if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
+        hodScope.push('bp.department_id = ?');
+        params.push(Number(departmentId));
+      }
+      if (normalizeText(department)) {
+        const normalizedDept = normalizeText(department);
+        hodScope.push(`(LOWER(TRIM(md.name)) = LOWER(TRIM(?)) OR LOWER(TRIM(md.code)) = LOWER(TRIM(?)) OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(?)))`);
+        params.push(normalizedDept, normalizedDept, normalizedDept);
+      }
+      where.push(hodScope.length ? `(${hodScope.join(' OR ')})` : '1 = 0');
+      break;
+    }
+    case 'coordinator': {
+      where.push(`(
+        LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')
+        OR (LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff') AND bp.beneficiary_entity_id IS NOT NULL)
+      )`);
+      const filterConditions = [];
+      if (safeUserId > 0) {
+        filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'))`);
+        params.push(safeUserId);
+      }
+      if (userEmail) {
+        filterConditions.push('LOWER(TRIM(mec.email)) = LOWER(TRIM(?))');
+        params.push(userEmail);
+      }
+      where.push(filterConditions.length ? `(${filterConditions.join(' OR ')})` : '1 = 0');
+      break;
+    }
+    case 'ithead':
+      where.push('LOWER(TRIM(bp.budget_tag)) = LOWER(TRIM(?))');
+      params.push('IT Infrastructure');
+      break;
+    case 'dof':
+    case 'principal':
+    case 'admin':
+    case 'super_admin':
+      break;
+    default:
+      // General users shouldn't really be calling this, but for safety:
+      where.push('(bp.user_id = ? OR bp.user_email = ?)');
+      params.push(safeUserId, normalizeText(userEmail));
+      break;
+  }
+
+  // 2. Status Filtering (Only approved/completed for consolidation)
+  let approvedCondition = "1=0";
+  if (safeRole === 'hod' || safeRole === 'coordinator') {
+    approvedCondition = "bp.status IN ('level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed')";
+  } else if (safeRole === 'ithead') {
+    approvedCondition = "bp.status IN ('ithead_approved', 'dof_approved', 'principal_approved', 'completed')";
+  } else if (safeRole === 'dof') {
+    approvedCondition = "bp.status IN ('dof_approved', 'principal_approved', 'completed')";
+  } else {
+    approvedCondition = "bp.status IN ('principal_approved', 'completed')";
+  }
+  where.push(approvedCondition);
+
+  // Capture available beneficiary types before applying user-selected filters (beneficiaryType, q)
+  const typesSql = `
+    SELECT DISTINCT bp.beneficiary_type
+    FROM budget_proposals bp
+    LEFT JOIN master_departments md ON bp.department_id = md.id
+    LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+    LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
+    WHERE ${where.join(' AND ')}
+    ORDER BY bp.beneficiary_type ASC
+  `;
+  const [typeRows] = await db.execute(typesSql, params);
+  const availableBeneficiaryTypes = typeRows.map(tr => tr.beneficiary_type).filter(Boolean);
+
+  // 3. Other Filters
+  if (normalizeText(beneficiaryType) && normalizeText(beneficiaryType).toLowerCase() !== 'all') {
+    where.push('LOWER(TRIM(bp.beneficiary_type)) = LOWER(TRIM(?))');
+    params.push(normalizeText(beneficiaryType));
+  }
+
+  if (normalizeText(q)) {
+    const searchPattern = `%${normalizeText(q)}%`;
+    where.push(`(
+      bp.proposal_ref LIKE ?
+      OR bp.beneficiary_value LIKE ?
+      OR md.name LIKE ?
+      OR me.name LIKE ?
+    )`);
+    params.push(searchPattern, searchPattern, searchPattern, searchPattern);
+  }
+
+  const whereClause = `WHERE ${where.join(' AND ')}`;
+  const cutoffExpr = `CONCAT(bp.fiscal_year, '-02-01 23:59:59')`;
+
+  const sql = `
+    SELECT
+      bpl.budget_head AS budgetHead,
+      SUM(CASE WHEN bp.created_at <= ${cutoffExpr} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END) AS initial,
+      SUM(CASE WHEN bp.created_at > ${cutoffExpr} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END) AS additional,
+      0 AS expenditure
+    FROM budget_proposals bp
+    LEFT JOIN master_departments md ON bp.department_id = md.id
+    LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+    LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
+    JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
+    ${whereClause}
+    GROUP BY bpl.budget_head
+    ORDER BY bpl.budget_head ASC
+  `;
+
+  const [rows] = await db.execute(sql, params);
+
+  // Also fetch details per budget head for the expanded view
+  // To avoid N+1 later, we'll fetch all lines with proposal/applicant info
+  const detailsSql = `
+    SELECT
+      bpl.budget_head,
+      bpl.sub_head,
+      bp.id AS proposalId,
+      COALESCE(NULLIF(TRIM(bp.applicant_name), ''), NULLIF(TRIM(CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, ''))), ''), bp.user_email) AS applicantName,
+      CASE WHEN bp.created_at <= ${cutoffExpr} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END AS initialAmount,
+      CASE WHEN bp.created_at > ${cutoffExpr} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END AS additionalAmount
+    FROM budget_proposals bp
+    LEFT JOIN master_departments md ON bp.department_id = md.id
+    LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+    LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
+    LEFT JOIN master_employees applicant_emp ON bp.user_id = applicant_emp.user_id AND applicant_emp.status = 'Active'
+    JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
+    ${whereClause}
+    ORDER BY bpl.budget_head ASC, bpl.sub_head ASC
+  `;
+
+  const [detailRows] = await db.execute(detailsSql, params);
+
+  const detailsByHead = {};
+  for (const row of detailRows) {
+    if (!detailsByHead[row.budget_head]) {
+      detailsByHead[row.budget_head] = [];
+    }
+    detailsByHead[row.budget_head].push({
+      proposalId: row.proposalId,
+      applicantName: row.applicantName,
+      subHead: row.sub_head,
+      initialAmount: Number(row.initialAmount || 0),
+      additionalAmount: Number(row.additionalAmount || 0),
+    });
+  }
+
+  return {
+    consolidatedRows: rows.map(r => ({
+      ...r,
+      initial: Number(r.initial || 0),
+      additional: Number(r.additional || 0),
+      expenditure: Number(r.expenditure || 0),
+      balance: Number(r.initial || 0) + Number(r.additional || 0) - Number(r.expenditure || 0)
+    })),
+    detailsByHead,
+    availableBeneficiaryTypes
+  };
+}
+
 /* =====================================================
    8. ORG UNIT / ENTITY HELPERS
 ===================================================== */
