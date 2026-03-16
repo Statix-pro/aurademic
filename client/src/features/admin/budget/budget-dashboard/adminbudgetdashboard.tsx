@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import Select from 'react-select';
+import { Form } from 'react-bootstrap';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { hasPermission, isSuperAdmin } from '../../../../shared/utils/permissionUtils';
 import authenticityUtility from '../../../../shared/utils/authenticityUtility';
@@ -82,6 +82,10 @@ const AdminBudgetDashboard: React.FC = () => {
 
     if (isSuperAdmin(user)) {
       return 'super_admin';
+    }
+
+    if (roleCodes.some((code) => code.includes('principal'))) {
+      return 'principal';
     }
 
     if (roleCodes.some((code) => code.includes('dof')) || hasPermission(user, 'budget.workflow.dof')) {
@@ -210,6 +214,8 @@ const AdminBudgetDashboard: React.FC = () => {
 
   const canViewAmounts =
     roleKey === 'super_admin' ||
+    roleKey === 'principal' ||
+    roleKey === 'admin' ||
     roleKey === 'dof' ||
     roleKey === 'hod' ||
     roleKey === 'coordinator' ||
@@ -237,72 +243,6 @@ const AdminBudgetDashboard: React.FC = () => {
     }
   }, [detailsByHead, expandedHead]);
 
-  const selectStyles = {
-    control: (base: any, state: any) => ({
-      ...base,
-      minHeight: '42px',
-      height: '42px',
-      borderRadius: '12px',
-      border: '1px solid rgba(15, 23, 42, 0.18)',
-      boxShadow: state.isFocused
-        ? '0 0 0 4px rgba(0, 105, 171, 0.15), 0 10px 22px rgba(2, 6, 23, 0.08)'
-        : '0 6px 18px rgba(2, 6, 23, 0.06)',
-      backgroundColor: 'rgba(255, 255, 255, 0.92)',
-      paddingLeft: '4px',
-      paddingRight: '4px',
-      '&:hover': {
-        borderColor: '#0069ab',
-      },
-    }),
-    valueContainer: (base: any) => ({
-      ...base,
-      padding: '0 12px',
-      height: '42px',
-    }),
-    singleValue: (base: any) => ({
-      ...base,
-      color: '#0f172a',
-      fontSize: '0.95rem',
-      fontWeight: 500,
-    }),
-    placeholder: (base: any) => ({
-      ...base,
-      color: '#0f172a',
-      fontSize: '0.95rem',
-      fontWeight: 500,
-    }),
-    indicatorSeparator: () => ({
-      display: 'none',
-    }),
-    dropdownIndicator: (base: any) => ({
-      ...base,
-      color: '#0f172a',
-      paddingRight: '8px',
-    }),
-    menu: (base: any) => ({
-      ...base,
-      borderRadius: '10px',
-      overflow: 'hidden',
-      marginTop: '4px',
-      boxShadow: '0 8px 22px rgba(15, 23, 42, 0.14)',
-      border: '1px solid rgba(15, 23, 42, 0.14)',
-      zIndex: 9999,
-    }),
-    menuList: (base: any) => ({
-      ...base,
-      paddingTop: 0,
-      paddingBottom: 0,
-    }),
-    option: (base: any, state: any) => ({
-      ...base,
-      backgroundColor: state.isSelected ? '#2a6fd6' : state.isFocused ? '#eef4ff' : '#fff',
-      color: state.isSelected ? '#fff' : '#111827',
-      fontSize: '0.95rem',
-      padding: '12px 18px',
-      cursor: 'pointer',
-    }),
-  };
-
   return (
     <div className="adminbudgetdashboard-page">
       <div className="adminbudgetdashboard-container">
@@ -314,34 +254,46 @@ const AdminBudgetDashboard: React.FC = () => {
             </div>
             <div className="adminbudgetdashboard-header-right">
               <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--fy">
-                <Select
-                  value={financialYear}
-                  onChange={(option) => setFinancialYear(option)}
-                  options={financialYearOptions}
-                  styles={selectStyles}
-                  isSearchable={false}
-                />
+                <Form.Select
+                  value={financialYear?.value || ''}
+                  onChange={(e) => {
+                    const option = financialYearOptions.find(opt => opt.value === e.target.value);
+                    if (option) setFinancialYear(option);
+                  }}
+                  className="adminbudgetdashboard-select"
+                >
+                  {financialYearOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Form.Select>
               </div>
 
               <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--beneficiary">
-                <Select
-                  value={beneficiary}
-                  onChange={(option) => setBeneficiary(option)}
-                  options={beneficiaryOptions}
-                  styles={selectStyles}
-                  placeholder="All Beneficiary"
-                  isClearable={false}
-                  isSearchable={false}
-                />
+                <Form.Select
+                  value={beneficiary?.value || 'all'}
+                  onChange={(e) => {
+                    const option = beneficiaryOptions.find(opt => opt.value === e.target.value);
+                    if (option) setBeneficiary(option);
+                  }}
+                  className="adminbudgetdashboard-select"
+                >
+                  {beneficiaryOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Form.Select>
               </div>
 
               <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--search">
-                <input
+                <Form.Control
                   type="text"
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
                   placeholder="Search Budget ID or Applicant"
-                  className="adminbudgetdashboard-search"
+                  className="adminbudgetdashboard-search-input"
                 />
               </div>
             </div>

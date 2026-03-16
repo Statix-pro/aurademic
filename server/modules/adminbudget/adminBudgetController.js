@@ -1088,9 +1088,13 @@ export async function upsertFreezeConfig(req, res) {
 export async function getAggregates(req, res) {
   try {
     const { fiscalYear } = req.query;
+    const department = await resolveUserDepartment(req);
+    const departmentId = await resolveUserDepartmentId(req);
 
     const aggregates = await AdminBudgetModel.dashboardAggregates({
       role: getAuthorizedRole(req, req.query.scope),
+      department,
+      departmentId,
       fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
     });
 
@@ -1470,7 +1474,35 @@ export async function getBatch(req, res) {
       });
     }
 
-    const batchData = await AdminBudgetModel.getManyFull(proposalIds);
+    const userId = getUserId(req);
+    const userEmail = normalizeText(req.user?.email);
+    const userRole = resolveAccessRoleFromPermissions(req);
+    const userDepartment = await resolveUserDepartment(req);
+    const userDepartmentId = await resolveUserDepartmentId(req);
+
+    const authorizedProposalIds = [];
+    for (const proposalId of proposalIds) {
+      const hasAccess = await AdminBudgetModel.validateUserAccess(
+        proposalId,
+        userId,
+        userEmail,
+        userRole,
+        userDepartment,
+        userDepartmentId
+      );
+      if (hasAccess) {
+        authorizedProposalIds.push(proposalId);
+      }
+    }
+
+    if (!authorizedProposalIds.length) {
+      return res.json({
+        success: true,
+        data: [],
+      });
+    }
+
+    const batchData = await AdminBudgetModel.getManyFull(authorizedProposalIds);
 
     return res.json({
       success: true,
