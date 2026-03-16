@@ -1219,7 +1219,7 @@ export async function getConsolidatedData({
         params.push(safeUserId);
       }
       if (userEmail) {
-        filterConditions.push('LOWER(TRIM(mec.email)) = LOWER(TRIM(?))');
+        filterConditions.push('EXISTS (SELECT 1 FROM master_entity_contacts mec_sub WHERE mec_sub.entity_id = me.id AND LOWER(TRIM(mec_sub.email)) = LOWER(TRIM(?)))');
         params.push(userEmail);
       }
       where.push(filterConditions.length ? `(${filterConditions.join(' OR ')})` : '1 = 0');
@@ -1260,7 +1260,6 @@ export async function getConsolidatedData({
     FROM budget_proposals bp
     LEFT JOIN master_departments md ON bp.department_id = md.id
     LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
-    LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
     WHERE ${where.join(' AND ')}
     ORDER BY bp.beneficiary_type ASC
   `;
@@ -1296,7 +1295,6 @@ export async function getConsolidatedData({
     FROM budget_proposals bp
     LEFT JOIN master_departments md ON bp.department_id = md.id
     LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
-    LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
     JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
     ${whereClause}
     GROUP BY bpl.budget_head
@@ -1307,18 +1305,23 @@ export async function getConsolidatedData({
 
   // Also fetch details per budget head for the expanded view
   // To avoid N+1 later, we'll fetch all lines with proposal/applicant info
+  const hasApplicantName = await hasBudgetProposalColumn('applicant_name');
+  
+  const applicantNameExpr = hasApplicantName 
+    ? `COALESCE(NULLIF(TRIM(bp.applicant_name), ''), NULLIF(TRIM(CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, ''))), ''), bp.user_email)`
+    : `COALESCE(NULLIF(TRIM(CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, ''))), ''), bp.user_email)`;
+
   const detailsSql = `
     SELECT
       bpl.budget_head,
       bpl.sub_head,
       bp.id AS proposalId,
-      COALESCE(NULLIF(TRIM(bp.applicant_name), ''), NULLIF(TRIM(CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, ''))), ''), bp.user_email) AS applicantName,
+      ${applicantNameExpr} AS applicantName,
       CASE WHEN bp.created_at <= ${cutoffExpr} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END AS initialAmount,
       CASE WHEN bp.created_at > ${cutoffExpr} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END AS additionalAmount
     FROM budget_proposals bp
     LEFT JOIN master_departments md ON bp.department_id = md.id
     LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
-    LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
     LEFT JOIN master_employees applicant_emp ON bp.user_id = applicant_emp.user_id AND applicant_emp.status = 'Active'
     JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
     ${whereClause}
