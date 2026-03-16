@@ -60,6 +60,7 @@ router.get('/tags', AdminBudgetController.getBudgetTags);
 router.get('/org-units', AdminBudgetController.getAllOrgUnits);
 router.get('/org-units/:type', AdminBudgetController.getOrgUnits);
 router.get('/batch', AdminBudgetController.getBatch);
+router.get('/consolidation', AdminBudgetController.getConsolidation);
 router.get('/hod', canAccessLevel1Queue, AdminBudgetController.getHodBudgets);
 router.get('/coordinator', canAccessLevel1Queue, AdminBudgetController.getCoordinatorBudgets);
 router.get('/ithead', canAccessItheadQueue, AdminBudgetController.getItheadBudgets);

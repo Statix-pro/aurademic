@@ -54,10 +54,20 @@ const AdminBudgetDashboard: React.FC = () => {
 
   const [beneficiary, setBeneficiary] = useState<Option | null>(ALL_BENEFICIARY_OPTION);
   const [searchText, setSearchText] = useState('');
-  const [proposals, setProposals] = useState<AdminProposalGroup[]>([]);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [consolidatedRows, setConsolidatedRows] = useState<ConsolidatedRow[]>([]);
+  const [detailsByHead, setDetailsByHead] = useState<Record<string, any[]>>({});
+  const [availableBeneficiaryTypes, setAvailableBeneficiaryTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [expandedHead, setExpandedHead] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchText);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchText]);
 
   const roleKey = useMemo(() => {
     const roleCodes = Array.isArray(user?.roles)
@@ -129,80 +139,17 @@ const AdminBudgetDashboard: React.FC = () => {
   }, []);
 
   const beneficiaryOptions: Option[] = useMemo(() => {
-    const statusKey = (value?: string) => String(value || '').toLowerCase();
-    const allowedStatusesByRole: Record<string, string[]> = {
-      hod: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
-      coordinator: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
-      ithead: ['ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
-      dof: ['dof_approved', 'principal_approved', 'completed'],
-      admin: ['principal_approved', 'completed'],
-      super_admin: ['principal_approved', 'completed'],
-    };
-    const allowedStatuses = allowedStatusesByRole[roleKey] || allowedStatusesByRole.admin;
-    const approvedProposals = proposals.filter((proposal) =>
-      allowedStatuses.includes(statusKey(proposal.status))
-    );
-
-    if (roleKey === 'dof' || roleKey === 'super_admin') {
-      const seen = new Set<string>();
-      const entityOrder = ['Department', 'Centre', 'Cell', 'Club', 'Professional Body', 'Institution'];
-      const entitySet = new Set(entityOrder.map((item) => item.toLowerCase()));
-      const entityOptions: Option[] = [];
-
-      approvedProposals.forEach((proposal) => {
-        const type = String(proposal.beneficiaryType || '').trim();
-        const value = String(proposal.beneficiaryValue || '').trim();
-        if (!type || !value) return;
-        if (!entitySet.has(type.toLowerCase())) return;
-        const key = `${type.toLowerCase()}::${value.toLowerCase()}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        entityOptions.push({
-          value: `${type}::${value}`,
-          label: value,
-        });
-      });
-
-      entityOptions.sort((a, b) => a.label.localeCompare(b.label));
-
-      return [
-        ALL_BENEFICIARY_OPTION,
-        { value: 'Faculty', label: 'Faculty' },
-        ...entityOptions,
-      ];
+    if (!availableBeneficiaryTypes || availableBeneficiaryTypes.length === 0) {
+      return [ALL_BENEFICIARY_OPTION];
     }
 
-    const allOptions: Option[] = [
-      ALL_BENEFICIARY_OPTION,
-      { value: 'Faculty', label: 'Faculty' },
-      { value: 'Department', label: 'Department' },
-      { value: 'Centre', label: 'Centre' },
-      { value: 'Cell', label: 'Cell' },
-      { value: 'Club', label: 'Club' },
-      { value: 'Professional Body', label: 'Professional Body' },
-      { value: 'Institution', label: 'Institution' },
-    ];
+    const options = availableBeneficiaryTypes.map((type) => ({
+      value: type,
+      label: type,
+    }));
 
-    if (roleKey === 'hod') {
-      return [
-        ALL_BENEFICIARY_OPTION,
-        { value: 'Faculty', label: 'Faculty' },
-        { value: 'Department', label: 'Department' },
-      ];
-    }
-
-    if (roleKey === 'coordinator') {
-      return [
-        ALL_BENEFICIARY_OPTION,
-        { value: 'Cell', label: 'Cell' },
-        { value: 'Centre', label: 'Centre' },
-        { value: 'Club', label: 'Club' },
-        { value: 'Professional Body', label: 'Professional Body' },
-      ];
-    }
-
-    return allOptions;
-  }, [roleKey, proposals]);
+    return [ALL_BENEFICIARY_OPTION, ...options];
+  }, [availableBeneficiaryTypes]);
 
   useEffect(() => {
     const hasCurrent = beneficiaryOptions.some((option) => option.value === beneficiary?.value);
@@ -211,54 +158,14 @@ const AdminBudgetDashboard: React.FC = () => {
     }
   }, [beneficiary, beneficiaryOptions]);
 
-  const parseDateSafe = (value?: string) => {
-    if (!value) return null;
-    const direct = new Date(value);
-    if (!Number.isNaN(direct.getTime())) return direct;
-    const normalized = String(value).replace(' ', 'T');
-    const fallback = new Date(normalized);
-    if (!Number.isNaN(fallback.getTime())) return fallback;
-    return null;
-  };
-
-  const getInitialCutoffForFY = (fy?: string) => {
-    if (!fy) return null;
-    const fyStart = Number.parseInt(String(fy).split('-')[0], 10);
-    if (!Number.isInteger(fyStart)) return null;
-    return new Date(fyStart, 1, 1, 23, 59, 59, 999);
-  };
-
-  const isInitialBudgetProposal = (createdAt?: string, fy?: string) => {
-    const proposalDate = parseDateSafe(createdAt);
-    const cutoff = getInitialCutoffForFY(fy);
-    if (!proposalDate) return false;
-    if (!cutoff) return true;
-    return proposalDate.getTime() <= cutoff.getTime();
-  };
-
   const formatINR = (value: number) => Number(value || 0).toLocaleString('en-IN');
 
-  const resolveRoleEndpoint = (role: string) => {
-    switch (role) {
-      case 'hod':
-        return '/adminbudget/hod';
-      case 'coordinator':
-        return '/adminbudget/coordinator';
-      case 'ithead':
-        return '/adminbudget/ithead';
-      case 'dof':
-        return '/adminbudget/dof';
-      case 'super_admin':
-      case 'admin':
-      default:
-        return '/adminbudget/admin';
-    }
-  };
 
   useEffect(() => {
     const fetchConsolidatedData = async () => {
       if (!financialYear?.value) {
-        setProposals([]);
+        setConsolidatedRows([]);
+        setDetailsByHead({});
         return;
       }
 
@@ -267,89 +174,39 @@ const AdminBudgetDashboard: React.FC = () => {
         setError('');
 
         const fiscalYearNum = Number.parseInt(financialYear.value.split('-')[0], 10);
-        const response: any = await authenticityUtility.get(resolveRoleEndpoint(roleKey), {
-          params: { limit: 100, status: '', fiscalYear: fiscalYearNum },
+        const beneficiaryType = beneficiary?.value === 'all' ? '' : beneficiary?.value || '';
+
+        const response: any = await authenticityUtility.get('/adminbudget/consolidation', {
+          params: {
+            fiscalYear: fiscalYearNum,
+            beneficiaryType,
+            q: debouncedSearch,
+            role: roleKey
+          },
         });
 
-        const list = Array.isArray(response?.data) ? response.data : [];
-        if (!list.length) {
-          setProposals([]);
-          return;
+        if (response?.data) {
+          setConsolidatedRows(response.data.consolidatedRows || []);
+          setDetailsByHead(response.data.detailsByHead || {});
+          setAvailableBeneficiaryTypes(response.data.availableBeneficiaryTypes || []);
+        } else {
+          setConsolidatedRows([]);
+          setDetailsByHead({});
+          setAvailableBeneficiaryTypes([]);
         }
 
-        const batchIds = list.map((item: any) => item.id).join(',');
-        const batchResponse: any = await authenticityUtility.get('/adminbudget/batch', {
-          params: { ids: batchIds },
-        });
-
-        const batchData = Array.isArray(batchResponse?.data) ? batchResponse.data : [];
-        const fullProposals = batchData.map((detail: any) => {
-          const master = detail?.master || {};
-          const lines = detail?.lines || detail?.items || [];
-          const items: AdminBudgetLineItem[] = (Array.isArray(lines) ? lines : []).map(
-            (line: any) => ({
-              budgetHead: line.budget_head || line.budgetHead || 'Unknown',
-              subHead: line.sub_head || line.subHead || '-',
-              approvedAmount: Number.parseFloat(
-                line.approved_line_total ?? line.approvedLineTotal ?? line.line_total ?? line.lineTotal ?? 0
-              ),
-              expenditure: Number.parseFloat(line.expenditure ?? 0),
-            })
-          );
-
-          return {
-            id: master.id,
-            proposalRef: master.proposal_ref || '',
-            status: master.status || '',
-            beneficiaryType: master.beneficiary_type || '',
-            beneficiaryValue: master.beneficiary_value || '',
-            createdAt: master.created_at || '',
-            applicantName:
-              master.applicant_name ||
-              master.user_name ||
-              master.user_email ||
-              '',
-            items,
-          } as AdminProposalGroup;
-        });
-
-        setProposals(fullProposals);
       } catch (fetchError: any) {
         console.error('Failed to fetch consolidated budgets', fetchError);
         setError(fetchError?.response?.data?.message || 'Failed to load consolidated budget data.');
-        setProposals([]);
+        setConsolidatedRows([]);
+        setDetailsByHead({});
       } finally {
         setLoading(false);
       }
     };
 
     fetchConsolidatedData();
-  }, [financialYear?.value, roleKey]);
-
-  const filteredProposals = useMemo(() => {
-    const query = searchText.trim().toLowerCase();
-    const beneficiaryValue = String(beneficiary?.value || 'all').toLowerCase();
-    const hasEntityFilter =
-      (roleKey === 'dof' || roleKey === 'super_admin') && beneficiaryValue.includes('::');
-    const [filterType, filterName] = hasEntityFilter ? beneficiaryValue.split('::') : ['', ''];
-
-    return proposals.filter((proposal) => {
-      const matchesSearch =
-        !query ||
-        proposal.proposalRef.toLowerCase().includes(query) ||
-        proposal.applicantName.toLowerCase().includes(query);
-
-      const proposalType = String(proposal.beneficiaryType || '').toLowerCase();
-      const proposalValue = String(proposal.beneficiaryValue || '').toLowerCase();
-
-      const matchesBeneficiary =
-        beneficiaryValue === 'all' ||
-        (hasEntityFilter && proposalType === filterType && proposalValue === filterName) ||
-        (!hasEntityFilter && proposalType === beneficiaryValue);
-
-      return matchesSearch && matchesBeneficiary;
-    });
-  }, [beneficiary?.value, proposals, roleKey, searchText]);
+  }, [financialYear?.value, roleKey, beneficiary?.value, debouncedSearch]);
 
   const canViewAmounts =
     roleKey === 'super_admin' ||
@@ -359,78 +216,6 @@ const AdminBudgetDashboard: React.FC = () => {
     roleKey === 'ithead';
 
   const rupeeSymbol = '\u20B9';
-
-  const { consolidatedRows, detailsByHead } = useMemo(() => {
-    const statusKey = (value?: string) => String(value || '').toLowerCase();
-    const allowedStatusesByRole: Record<string, string[]> = {
-      hod: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
-      coordinator: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
-      ithead: ['ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
-      dof: ['dof_approved', 'principal_approved', 'completed'],
-      admin: ['principal_approved', 'completed'],
-      super_admin: ['principal_approved', 'completed'],
-    };
-
-    const allowedStatuses = allowedStatusesByRole[roleKey] || allowedStatusesByRole.admin;
-
-    const approvedProposals = filteredProposals.filter((proposal) =>
-      allowedStatuses.includes(statusKey(proposal.status))
-    );
-    const consolidationMap: Record<string, ConsolidatedRow> = {};
-    const detailMap: Record<
-      string,
-      {
-        proposalId: number;
-        applicantName: string;
-        subHead: string;
-        initialAmount: number;
-        additionalAmount: number;
-      }[]
-    > = {};
-
-    approvedProposals.forEach((proposal) => {
-      const isInitial = isInitialBudgetProposal(proposal.createdAt, financialYear?.value || '');
-      proposal.items.forEach((item) => {
-        if (!consolidationMap[item.budgetHead]) {
-          consolidationMap[item.budgetHead] = {
-            budgetHead: item.budgetHead,
-            initial: 0,
-            additional: 0,
-            expenditure: 0,
-            balance: 0,
-          };
-        }
-
-        if (isInitial) {
-          consolidationMap[item.budgetHead].initial += item.approvedAmount;
-        } else {
-          consolidationMap[item.budgetHead].additional += item.approvedAmount;
-        }
-
-        consolidationMap[item.budgetHead].expenditure += item.expenditure || 0;
-
-        if (!detailMap[item.budgetHead]) {
-          detailMap[item.budgetHead] = [];
-        }
-
-        detailMap[item.budgetHead].push({
-          proposalId: proposal.id,
-          applicantName: proposal.applicantName || 'Unknown',
-          subHead: item.subHead || '-',
-          initialAmount: isInitial ? item.approvedAmount : 0,
-          additionalAmount: isInitial ? 0 : item.approvedAmount,
-        });
-      });
-    });
-
-    return {
-      consolidatedRows: Object.values(consolidationMap).map((row) => ({
-        ...row,
-        balance: row.initial + row.additional - row.expenditure,
-      })),
-      detailsByHead: detailMap,
-    };
-  }, [filteredProposals, financialYear?.value, roleKey]);
 
   const consolidatedTotals = useMemo(
     () =>
