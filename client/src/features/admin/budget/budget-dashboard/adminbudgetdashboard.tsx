@@ -118,6 +118,49 @@ const AdminBudgetDashboard: React.FC = () => {
   ];
 
   const beneficiaryOptions: Option[] = useMemo(() => {
+    const statusKey = (value?: string) => String(value || '').toLowerCase();
+    const allowedStatusesByRole: Record<string, string[]> = {
+      hod: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
+      coordinator: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
+      ithead: ['ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
+      dof: ['dof_approved', 'principal_approved', 'completed'],
+      admin: ['principal_approved', 'completed'],
+      super_admin: ['principal_approved', 'completed'],
+    };
+    const allowedStatuses = allowedStatusesByRole[roleKey] || allowedStatusesByRole.admin;
+    const approvedProposals = proposals.filter((proposal) =>
+      allowedStatuses.includes(statusKey(proposal.status))
+    );
+
+    if (roleKey === 'dof' || roleKey === 'super_admin') {
+      const seen = new Set<string>();
+      const entityOrder = ['Department', 'Centre', 'Cell', 'Club', 'Professional Body', 'Institution'];
+      const entitySet = new Set(entityOrder.map((item) => item.toLowerCase()));
+      const entityOptions: Option[] = [];
+
+      approvedProposals.forEach((proposal) => {
+        const type = String(proposal.beneficiaryType || '').trim();
+        const value = String(proposal.beneficiaryValue || '').trim();
+        if (!type || !value) return;
+        if (!entitySet.has(type.toLowerCase())) return;
+        const key = `${type.toLowerCase()}::${value.toLowerCase()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        entityOptions.push({
+          value: `${type}::${value}`,
+          label: value,
+        });
+      });
+
+      entityOptions.sort((a, b) => a.label.localeCompare(b.label));
+
+      return [
+        ALL_BENEFICIARY_OPTION,
+        { value: 'Faculty', label: 'Faculty' },
+        ...entityOptions,
+      ];
+    }
+
     const allOptions: Option[] = [
       ALL_BENEFICIARY_OPTION,
       { value: 'Faculty', label: 'Faculty' },
@@ -148,7 +191,7 @@ const AdminBudgetDashboard: React.FC = () => {
     }
 
     return allOptions;
-  }, [roleKey]);
+  }, [roleKey, proposals]);
 
   useEffect(() => {
     const hasCurrent = beneficiaryOptions.some((option) => option.value === beneficiary?.value);
@@ -277,6 +320,9 @@ const AdminBudgetDashboard: React.FC = () => {
   const filteredProposals = useMemo(() => {
     const query = searchText.trim().toLowerCase();
     const beneficiaryValue = String(beneficiary?.value || 'all').toLowerCase();
+    const hasEntityFilter =
+      (roleKey === 'dof' || roleKey === 'super_admin') && beneficiaryValue.includes('::');
+    const [filterType, filterName] = hasEntityFilter ? beneficiaryValue.split('::') : ['', ''];
 
     return proposals.filter((proposal) => {
       const matchesSearch =
@@ -284,15 +330,26 @@ const AdminBudgetDashboard: React.FC = () => {
         proposal.proposalRef.toLowerCase().includes(query) ||
         proposal.applicantName.toLowerCase().includes(query);
 
+      const proposalType = String(proposal.beneficiaryType || '').toLowerCase();
+      const proposalValue = String(proposal.beneficiaryValue || '').toLowerCase();
+
       const matchesBeneficiary =
         beneficiaryValue === 'all' ||
-        proposal.beneficiaryType.toLowerCase() === beneficiaryValue;
+        (hasEntityFilter && proposalType === filterType && proposalValue === filterName) ||
+        (!hasEntityFilter && proposalType === beneficiaryValue);
 
       return matchesSearch && matchesBeneficiary;
     });
-  }, [beneficiary?.value, proposals, searchText]);
+  }, [beneficiary?.value, proposals, roleKey, searchText]);
 
-  const canViewAmounts = roleKey === 'super_admin' || roleKey === 'dof' || roleKey === 'hod';
+  const canViewAmounts =
+    roleKey === 'super_admin' ||
+    roleKey === 'dof' ||
+    roleKey === 'hod' ||
+    roleKey === 'coordinator' ||
+    roleKey === 'ithead';
+
+  const rupeeSymbol = '\u20B9';
 
   const { consolidatedRows, detailsByHead } = useMemo(() => {
     const statusKey = (value?: string) => String(value || '').toLowerCase();
@@ -412,13 +469,13 @@ const AdminBudgetDashboard: React.FC = () => {
       ...base,
       color: '#0f172a',
       fontSize: '0.95rem',
-      fontWeight: 600,
+      fontWeight: 500,
     }),
     placeholder: (base: any) => ({
       ...base,
       color: '#0f172a',
       fontSize: '0.95rem',
-      fontWeight: 600,
+      fontWeight: 500,
     }),
     indicatorSeparator: () => ({
       display: 'none',
@@ -461,7 +518,6 @@ const AdminBudgetDashboard: React.FC = () => {
               <h1 className="adminbudgetdashboard-title">Consolidated Budget</h1>
               <span className="adminbudgetdashboard-role-pill">{userRoleLabel}</span>
             </div>
-
             <div className="adminbudgetdashboard-header-right">
               <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--fy">
                 <Select
@@ -526,10 +582,10 @@ const AdminBudgetDashboard: React.FC = () => {
                       >
                         <td>{idx + 1}</td>
                         <td>{row.budgetHead}</td>
-                        <td>{canViewAmounts ? `₹${formatINR(row.initial)}` : '--'}</td>
-                        <td>{canViewAmounts ? `₹${formatINR(row.additional)}` : '--'}</td>
-                        <td>{canViewAmounts ? `₹${formatINR(row.expenditure)}` : '--'}</td>
-                        <td>{canViewAmounts ? `₹${formatINR(row.balance)}` : '--'}</td>
+                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.initial)}` : '--'}</td>
+                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.additional)}` : '--'}</td>
+                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.expenditure)}` : '--'}</td>
+                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.balance)}` : '--'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -540,16 +596,16 @@ const AdminBudgetDashboard: React.FC = () => {
                         <strong>Total</strong>
                       </td>
                       <td>
-                        <strong>{canViewAmounts ? `₹${formatINR(consolidatedTotals.initial)}` : '--'}</strong>
+                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.initial)}` : '--'}</strong>
                       </td>
                       <td>
-                        <strong>{canViewAmounts ? `₹${formatINR(consolidatedTotals.additional)}` : '--'}</strong>
+                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.additional)}` : '--'}</strong>
                       </td>
                       <td>
-                        <strong>{canViewAmounts ? `₹${formatINR(consolidatedTotals.expenditure)}` : '--'}</strong>
+                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.expenditure)}` : '--'}</strong>
                       </td>
                       <td>
-                        <strong>{canViewAmounts ? `₹${formatINR(consolidatedTotals.balance)}` : '--'}</strong>
+                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.balance)}` : '--'}</strong>
                       </td>
                     </tr>
                   </tfoot>
@@ -579,8 +635,8 @@ const AdminBudgetDashboard: React.FC = () => {
                           <td>{index + 1}</td>
                           <td>{detail.applicantName}</td>
                           <td>{detail.subHead}</td>
-                          <td>{canViewAmounts ? `₹${formatINR(detail.initialAmount)}` : '--'}</td>
-                          <td>{canViewAmounts ? `₹${formatINR(detail.additionalAmount)}` : '--'}</td>
+                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.initialAmount)}` : '--'}</td>
+                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.additionalAmount)}` : '--'}</td>
                         </tr>
                       ))}
                     </tbody>
