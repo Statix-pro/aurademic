@@ -1,6 +1,6 @@
 import React, { useState, useEffect, ChangeEvent, MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from '../../../shared/components/layout/navbar/navbar';
+
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import '../../user-dashboard/userdashboard.css';
 import './PublicationsPage.css';
@@ -546,7 +546,7 @@ const PublicationsPage: React.FC = () => {
 
   return (
     <div>
-      <Navbar />
+
       <div className="body-mode-dashboard publications-page container-fluid">
         <div className="row">
           <div className="col-12 main-content">

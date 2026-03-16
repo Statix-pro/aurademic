@@ -94,6 +94,7 @@
 .nav-item-wrapper.active {
   background-color: rgba(255, 255, 255, 0.1);
   text-decoration: none !important;
+  color: white !important;
 }
 
 .arrow-icon {

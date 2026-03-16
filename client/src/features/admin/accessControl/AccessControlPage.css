@@ -126,6 +126,55 @@
   padding-right: 4px;
 }
 
+.assigned-role-tag {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.assigned-role-tag-default {
+  background-color: #f8f9fa !important;
+  color: #495057 !important;
+  border-color: #dee2e6 !important;
+}
+
+.assigned-role-tag-admin {
+  background-color: #e6f4ea !important;
+  color: #0d652d !important;
+  border-color: #ceead6 !important;
+}
+
+.assigned-role-tag-super-admin {
+  background-color: #fce8e6 !important;
+  color: #a50e0e !important;
+  border-color: #fad2cf !important;
+}
+
+.assigned-role-tag-hod {
+  background-color: #e8f0fe !important;
+  color: #174ea6 !important;
+  border-color: #d2e3fc !important;
+}
+
+.assigned-role-tag-coordinator {
+  background-color: #fef7e0 !important;
+  color: #b06000 !important;
+  border-color: #feefc3 !important;
+}
+
+.assigned-role-tag-empty {
+  background-color: #f1f3f4 !important;
+  color: #5f6368 !important;
+  border-color: #dadce0 !important;
+  font-style: italic;
+}
+
 @media (max-width: 768px) {
   .access-control-wrapper {
     padding: 16px;
@@ -151,4 +200,102 @@
   opacity: 1 !important;
   visibility: visible !important;
   display: inline-flex !important;
+}
+
+/* Accordion Specific Styling */
+.user-accordion-header .accordion-button {
+  background-color: white !important;
+  box-shadow: none !important;
+  padding: 1rem 1.5rem;
+}
+
+.user-accordion-header .accordion-button:not(.collapsed) {
+  background-color: #f8f9fa !important;
+  color: inherit;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.user-accordion-header .accordion-button::after {
+  display: none !important;
+}
+
+.accordion-wrapper .badge {
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.fontSize-sm {
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
+}
+
+.custom-checkbox {
+  min-width: 140px;
+}
+
+.custom-checkbox .form-check-input {
+  cursor: pointer;
+  width: 1.1em;
+  height: 1.1em;
+  margin-top: 0.2em;
+}
+
+.custom-checkbox .form-check-label {
+  cursor: pointer;
+  user-select: none;
+  padding-left: 0.25rem;
+}
+
+/* Pagination Styling */
+.pagination-nav-btn {
+  transition: all 0.2s ease;
+  padding: 0.25rem 0.75rem !important;
+}
+
+.pagination-nav-btn:hover:not(:disabled) {
+  background-color: #f0f2f5 !important;
+  color: #0d6efd !important;
+}
+
+.pagination-nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.accordion-wrapper .btn-primary {
+  background-color: #0d6efd;
+  border-color: #0d6efd;
+}
+
+.accordion-wrapper .btn-primary:hover {
+  background-color: #0b5ed7;
+  border-color: #0a58ca;
+}
+
+.user-accordion-header .accordion-button:focus {
+  z-index: 3;
+  outline: 0;
+  box-shadow: none !important;
+}
+
+.user-accordion-header .accordion-button {
+  border-radius: 0 !important;
+}
+
+.user-accordion-header .accordion-button strong {
+  font-size: 0.95rem;
+}
+
+.user-accordion-header .accordion-button .badge {
+  font-size: 0.75rem;
+  padding: 0.4em 1em !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.accordion-wrapper .bg-primary {
+  background-color: #0d6efd !important;
+}
+
+.accordion-wrapper .bg-opacity-10 {
+  --bs-bg-opacity: 0.1;
 }

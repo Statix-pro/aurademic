@@ -6,10 +6,11 @@
 }
 
 .login-body {
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
+  padding: 16px;
   background-color: #f8f9fb;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50'%3E%3Cpath d='M0 0 L0 50 L50 50 L50 0 Z M0 25 H50 M25 0 V50' stroke='%23b0b0b0' stroke-opacity='0.1' fill='none'/%3E%3C/svg%3E");
   background-repeat: repeat;
@@ -26,8 +27,8 @@
 
 .login-body .login-wrapper {
   display: flex;
-  width: 900px;
-  height: 480px; /* Adjusted height to fit content better */
+  width: min(92vw, 900px);
+  height: min(84vh, 480px);
   background: rgba(255, 255, 255, 0.97);
   border-radius: 18px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
@@ -96,12 +97,12 @@
 
 .login-body .right-panel {
   width: 50%;
-  padding: 15px 25px; /* Adjusted padding to reduce space */
+  padding: 15px 22px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   position: relative;
-  overflow-y: auto; /* Added back to allow scrolling if content overflows */
+  overflow: hidden;
 }
 
 .login-body .right-panel-content {
@@ -268,6 +269,52 @@
 .login-body .social-btn img {
   width: 18px;
   margin-right: 8px;
+}
+
+@media (max-width: 1366px) and (min-width: 901px) {
+  .login-body .login-wrapper {
+    width: min(94vw, 840px);
+    height: min(82vh, 460px);
+  }
+  .login-body .left-panel {
+    padding: 16px;
+  }
+  .login-body .college-logo {
+    width: 78px;
+    margin-bottom: 10px;
+  }
+  .login-body .left-panel h2 {
+    font-size: 21px;
+  }
+  .login-body .left-panel h4 {
+    font-size: 14px;
+  }
+  .login-body .left-panel .college-website-left {
+    font-size: 14px;
+    bottom: 18px;
+  }
+  .login-body .right-panel {
+    padding: 12px 18px;
+  }
+  .login-body .typing-text {
+    font-size: 16px;
+  }
+  .login-body .input-group label {
+    font-size: 14px;
+  }
+  .login-body .input-group input {
+    font-size: 15px;
+    padding: 7px 10px;
+  }
+  .login-body .social-btn {
+    font-size: 14px;
+  }
+}
+
+@media (max-height: 760px) and (min-width: 901px) {
+  .login-body .login-wrapper {
+    height: min(84vh, 440px);
+  }
 }
 
 @media (max-width: 900px) {
