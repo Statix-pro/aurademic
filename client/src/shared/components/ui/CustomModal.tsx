@@ -11,6 +11,9 @@ interface CustomModalProps {
   size?: 'sm' | 'lg' | 'xl';
   centered?: boolean;
   className?: string;
+  backdrop?: boolean | 'static';
+  keyboard?: boolean;
+  hideCloseButton?: boolean;
 }
 
 const CustomModal: React.FC<CustomModalProps> = ({
@@ -22,6 +25,7 @@ const CustomModal: React.FC<CustomModalProps> = ({
   size = 'lg',
   centered = true,
   className = '',
+  hideCloseButton = false,
   ...props
 }) => {
   return (
@@ -33,7 +37,7 @@ const CustomModal: React.FC<CustomModalProps> = ({
       className={`custom-modal ${className}`}
       {...props}
     >
-      <Modal.Header closeButton>
+      <Modal.Header closeButton={!hideCloseButton}>
         <Modal.Title>{title}</Modal.Title>
       </Modal.Header>
       <Modal.Body>

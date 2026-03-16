@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, ChangeEvent, FormEvent } from 
 import { Table, Button, Form, Modal, Alert } from "react-bootstrap";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import "./FormManagementStyles.css";
+import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
 
 interface ProjectOption {
   id: number;
@@ -18,6 +19,26 @@ const ProjectFormOptions: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [currentOption, setCurrentOption] = useState<Partial<ProjectOption>>({ name: "" });
   const [isEditing, setIsEditing] = useState(false);
+
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+    onConfirm?: () => void;
+    showCancel?: boolean;
+    confirmText?: string;
+  }>({
+    show: false,
+    message: "",
+    type: "info"
+  });
+
+  const showAlert = (message: React.ReactNode, type: AlertType = "info", title?: string, showCancel = false, confirmText = "OK", onConfirm?: () => void) => {
+    setAlertConfig({ show: true, message, type, title, onConfirm, showCancel, confirmText });
+  };
+
+  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
 
   const fetchOptions = useCallback(async () => {
     try {
@@ -64,20 +85,28 @@ const ProjectFormOptions: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (window.confirm("Are you sure you want to delete this option?")) {
-      try {
-        setLoading(true);
-        setError("");
-        await authenticityUtility.delete(`/form-options/project-options/${activeTab}/${id}`);
-        fetchOptions();
-      } catch (err: unknown) {
-        console.error("Error deleting option:", err);
-        const error = err as { response?: { data?: { message?: string } } };
-        setError("Failed to delete option. " + (error.response?.data?.message || "Please try again later."));
-      } finally {
-        setLoading(false);
+    showAlert(
+      "Are you sure you want to delete this option?",
+      "warning",
+      "Confirm Deletion",
+      true,
+      "Delete",
+      async () => {
+        closeAlert();
+        try {
+          setLoading(true);
+          setError("");
+          await authenticityUtility.delete(`/form-options/project-options/${activeTab}/${id}`);
+          fetchOptions();
+        } catch (err: unknown) {
+          console.error("Error deleting option:", err);
+          const error = err as { response?: { data?: { message?: string } } };
+          setError("Failed to delete option. " + (error.response?.data?.message || "Please try again later."));
+        } finally {
+          setLoading(false);
+        }
       }
-    }
+    );
   };
 
   const handleEdit = (option: ProjectOption) => {
@@ -161,6 +190,17 @@ const ProjectFormOptions: React.FC = () => {
           </Form>
         </Modal.Body>
       </Modal>
+
+      <AlertModal
+        show={alertConfig.show}
+        onHide={closeAlert}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        showCancel={alertConfig.showCancel}
+        confirmText={alertConfig.confirmText}
+        onConfirm={alertConfig.onConfirm}
+      />
     </div>
   );
 };

@@ -1,14 +1,14 @@
 import React from 'react';
 import 'bootstrap/dist/css/bootstrap.css';
 import './home.css';
-import Navbar from '../../shared/components/layout/navbar/navbar';
+
 import Bannerimage from '../../shared/assets/images/dashboard-images/banner-img.png';
 import AboutImg from '../../shared/assets/images/dashboard-images/about-ksrct.png';
 
 const Home: React.FC = () => {
   return (
     <div className="home">
-      <Navbar />
+
 
       <div
         className="banner-container"

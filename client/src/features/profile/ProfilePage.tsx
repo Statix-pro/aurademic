@@ -1,12 +1,12 @@
 import React from 'react';
-import Navbar from '../../shared/components/layout/navbar/navbar';
+
 import ProfileCard from '../user-dashboard/profilecard/profilecard';
 import { User } from 'lucide-react';
 
 const ProfilePage: React.FC = () => {
     return (
         <div className="profile-page" style={{ minHeight: '100vh', backgroundColor: 'var(--bg-light, #f0f6ff)' }}>
-            <Navbar />
+
             <div className="container py-4">
                 <div className="d-flex align-items-center gap-3 mb-4 mt-3">
                     <div

@@ -72,3 +72,22 @@ export const canManageAccessControl = (user?: User | null) => {
 
   return hasAnyPermission(user, ['access_control.manage']);
 };
+
+export const canAccessBudgetApproval = (user?: User | null) => {
+  if (!user) {
+    return false;
+  }
+
+  if (isSuperAdmin(user)) {
+    return true;
+  }
+
+  return hasAnyPermission(user, [
+    'budget.admin.view',
+    'budget.admin.manage',
+    'budget.workflow.level1',
+    'budget.workflow.ithead',
+    'budget.workflow.dof',
+    'budget.workflow.principal',
+  ]);
+};

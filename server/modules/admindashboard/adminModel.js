@@ -757,6 +757,90 @@ const adminModel = {
       throw new Error(`Error updating admin reply: ${error.message}`);
     }
   },
+
+async getAllBudgets(page, perPage, filters = {}) {
+  const offset = (page - 1) * perPage;
+  const { fiscalYear, status, beneficiaryType } = filters;
+  
+  let whereClause = '';
+  const params = [];
+  
+  if (fiscalYear) {
+    whereClause += ' WHERE bp.fiscal_year = ?';
+    params.push(fiscalYear);
+  }
+  
+  if (status) {
+    whereClause += whereClause ? ' AND' : ' WHERE';
+    whereClause += ' bp.status = ?';
+    params.push(status);
+  }
+  
+  if (beneficiaryType) {
+    whereClause += whereClause ? ' AND' : ' WHERE';
+    whereClause += ' bp.beneficiary_type = ?';
+    params.push(beneficiaryType);
+  }
+  
+  const [rows] = await db.query(`
+    SELECT 
+      bp.*,
+      md.name as department,
+      md.code as department_code,
+      me.name as org_unit_name,
+      met.name as org_unit_type,
+      met.code as org_unit_type_code,
+      COUNT(DISTINCT bpl.id) as line_count,
+      COALESCE(SUM(bpl.line_total), bp.total_amount) as total_amount
+    FROM budget_proposals bp
+    LEFT JOIN master_departments md ON bp.department_id = md.id
+    LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+    LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
+    LEFT JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
+    ${whereClause}
+    GROUP BY bp.id, md.name, md.code, me.name, met.name, met.code
+    ORDER BY bp.created_at DESC
+    LIMIT ? OFFSET ?
+  `, [...params, perPage, offset]);
+  
+  const [count] = await db.query(`
+    SELECT COUNT(DISTINCT bp.id) as total 
+    FROM budget_proposals bp
+    ${whereClause}
+  `, params);
+  
+  return { budgets: rows, total: count[0].total };
+},
+
+  async getBudgetStats(fiscalYear = null) {
+    const fyClause = fiscalYear ? 'AND fiscal_year = ?' : '';
+    const params = fiscalYear ? [fiscalYear] : [];
+    
+    const [approved] = await db.query(`
+      SELECT COUNT(*) as approved 
+      FROM budget_proposals 
+      WHERE status IN ('principal_approved', 'completed') ${fyClause}
+    `, params);
+    
+    const [pending] = await db.query(`
+      SELECT COUNT(*) as pending 
+      FROM budget_proposals 
+      WHERE status IN ('submitted', 'hod_approved', 'dof_approved') ${fyClause}
+    `, params);
+    
+    const [rejected] = await db.query(`
+      SELECT COUNT(*) as rejected 
+      FROM budget_proposals 
+      WHERE status IN ('hod_rejected', 'dof_rejected', 'principal_rejected') ${fyClause}
+    `, params);
+    
+    return { 
+      approved: approved[0].approved, 
+      pending: pending[0].pending,
+      rejected: rejected[0].rejected
+    };
+  },
+  
 };
 
 export default adminModel;

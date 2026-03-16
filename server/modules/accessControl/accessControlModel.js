@@ -10,6 +10,10 @@ const LEGACY_ADMIN_PERMISSION_KEYS = [
   'form_options.read',
   'form_options.edit',
   'form_options.manage',
+  'budget.proposal.manage',
+  'budget.workflow.level1',
+  'budget.admin.view',
+  'budget.admin.manage',
   'access_control.read',
   'access_control.manage',
 ];
@@ -62,6 +66,48 @@ const SYSTEM_PERMISSION_SEED = [
     action_key: 'manage',
     permission_key: 'form_options.manage',
     description: 'Full control over form options',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_proposal',
+    action_key: 'manage',
+    permission_key: 'budget.proposal.manage',
+    description: 'Create, edit, delete, and view own budget proposals',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_workflow',
+    action_key: 'level1',
+    permission_key: 'budget.workflow.level1',
+    description: 'View Level-1 queue and process HOD/Coordinator approvals',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_workflow',
+    action_key: 'dof',
+    permission_key: 'budget.workflow.dof',
+    description: 'View DoF queue and process DoF-stage approvals',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_workflow',
+    action_key: 'principal',
+    permission_key: 'budget.workflow.principal',
+    description: 'View Principal queue and process Principal-stage approvals',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_admin',
+    action_key: 'view',
+    permission_key: 'budget.admin.view',
+    description: 'View budget admin dashboards, reports, and exports',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_admin',
+    action_key: 'manage',
+    permission_key: 'budget.admin.manage',
+    description: 'Manage budget approval configuration and entity masters',
     is_system: true,
   },
   {
@@ -226,6 +272,35 @@ const makeRbacError = (message, statusCode = 500) => {
   return error;
 };
 
+const ensureSystemPermissionSeed = async (connection = db) => {
+  for (const permission of SYSTEM_PERMISSION_SEED) {
+    await connection.query(
+      `
+        INSERT INTO permissions (
+          module_key,
+          action_key,
+          permission_key,
+          description,
+          is_system
+        )
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          module_key = VALUES(module_key),
+          action_key = VALUES(action_key),
+          description = VALUES(description),
+          is_system = VALUES(is_system)
+      `,
+      [
+        permission.module_key,
+        permission.action_key,
+        permission.permission_key,
+        permission.description,
+        permission.is_system ? 1 : 0,
+      ]
+    );
+  }
+};
+
 const getEmptyAuthorizationSnapshot = () => ({
   roles: [],
   permissions: [],
@@ -324,32 +399,40 @@ const accessControlModel = {
       : [];
 
     try {
+      // Get roles from both global (user_roles) and contextual (user_entity_roles) assignments
       const [roleRows] = await db.query(
         `
-          SELECT
+          SELECT DISTINCT
             r.id,
             r.role_code,
             r.role_name,
             r.is_admin_role
-          FROM user_roles ur
-          JOIN roles r ON r.id = ur.role_id
-          WHERE ur.user_id = ?
+          FROM (
+            SELECT role_id FROM user_roles WHERE user_id = ?
+            UNION
+            SELECT role_id FROM user_entity_roles WHERE user_id = ?
+          ) combined_roles
+          JOIN roles r ON r.id = combined_roles.role_id
           ORDER BY r.role_name ASC
         `,
-        [parsedUserId]
+        [parsedUserId, parsedUserId]
       );
 
+      // Get permissions from both global and contextual roles
       const [permissionRows] = await db.query(
         `
           SELECT DISTINCT
             p.permission_key
-          FROM user_roles ur
-          JOIN role_permissions rp ON rp.role_id = ur.role_id
+          FROM (
+            SELECT role_id FROM user_roles WHERE user_id = ?
+            UNION
+            SELECT role_id FROM user_entity_roles WHERE user_id = ?
+          ) combined_roles
+          JOIN role_permissions rp ON rp.role_id = combined_roles.role_id
           JOIN permissions p ON p.id = rp.permission_id
-          WHERE ur.user_id = ?
           ORDER BY p.permission_key ASC
         `,
-        [parsedUserId]
+        [parsedUserId, parsedUserId]
       );
 
       const roles = roleRows.map((role) => role.role_code);
@@ -384,6 +467,8 @@ const accessControlModel = {
 
   async getAllPermissions() {
     try {
+      await ensureSystemPermissionSeed();
+
       const [rows] = await db.query(
         `
           SELECT
@@ -605,8 +690,12 @@ const accessControlModel = {
             COALESCE(p.is_system, 0) AS permission_is_system
           FROM roles r
           LEFT JOIN (
-            SELECT role_id, COUNT(*) AS assigned_user_count
-            FROM user_roles
+            SELECT role_id, SUM(cnt) AS assigned_user_count
+            FROM (
+              SELECT role_id, COUNT(*) AS cnt FROM user_roles GROUP BY role_id
+              UNION ALL
+              SELECT role_id, COUNT(*) AS cnt FROM user_entity_roles GROUP BY role_id
+            ) AS combined_counts
             GROUP BY role_id
           ) ru ON ru.role_id = r.id
           LEFT JOIN role_permissions rp ON rp.role_id = r.id
@@ -854,8 +943,13 @@ const accessControlModel = {
     }
 
     const [usageRows] = await db.query(
-      'SELECT COUNT(*) AS total FROM user_roles WHERE role_id = ?',
-      [parsedRoleId]
+      `SELECT SUM(cnt) AS total 
+       FROM (
+         SELECT COUNT(*) AS cnt FROM user_roles WHERE role_id = ?
+         UNION ALL
+         SELECT COUNT(*) AS cnt FROM user_entity_roles WHERE role_id = ?
+       ) AS combined_counts`,
+      [parsedRoleId, parsedRoleId]
     );
 
     if (Number(usageRows[0]?.total || 0) > 0) {
@@ -977,6 +1071,7 @@ const accessControlModel = {
 
       const userMap = new Map();
 
+      // Ensure every user is initialized fully
       rows.forEach((row) => {
         if (!userMap.has(row.id)) {
           userMap.set(row.id, {
@@ -986,6 +1081,7 @@ const accessControlModel = {
             is_admin: Boolean(row.is_admin),
             is_super_admin: false,
             roles: [],
+            entity_roles: [], // the new contextual roles array
           });
         }
 
@@ -1003,6 +1099,41 @@ const accessControlModel = {
           }
         }
       });
+
+      // Join the contextual `user_entity_roles` mappings to each respective user if they exist
+      const userIdsChunk = Array.from(userMap.keys());
+      if (userIdsChunk.length > 0) {
+        const [entityRoleRows] = await db.query(
+          `
+            SELECT 
+              uer.user_id,
+              uer.entity_id,
+              uer.entity_type,
+              r.role_code,
+              r.role_name,
+              COALESCE(d.name, me.name, 'Unknown') AS entity_name
+            FROM user_entity_roles uer
+            JOIN roles r ON uer.role_id = r.id
+            LEFT JOIN master_departments d ON uer.entity_id = d.id AND uer.entity_type = 'DEPARTMENT'
+            LEFT JOIN master_entities me ON uer.entity_id = me.id AND uer.entity_type != 'DEPARTMENT'
+            WHERE uer.user_id IN (?)
+          `,
+          [userIdsChunk]
+        );
+
+        entityRoleRows.forEach((er) => {
+          const user = userMap.get(er.user_id);
+          if (user) {
+            user.entity_roles.push({
+              entity_id: er.entity_id,
+              entity_type: er.entity_type,
+              role_code: er.role_code,
+              role_name: er.role_name,
+              entity_name: er.entity_name
+            });
+          }
+        });
+      }
 
       return Array.from(userMap.values());
     } catch (error) {
@@ -1052,7 +1183,7 @@ const accessControlModel = {
     }
   },
 
-  async updateUserRoles(userId, roleCodes = [], assignedBy = null) {
+  async updateUserRoles(userId, roleCodes = [], entityRolesPayload = [], assignedBy = null) {
     const parsedUserId = Number(userId);
 
     if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
@@ -1107,6 +1238,33 @@ const accessControlModel = {
           `,
           [parsedUserId, role.id, assignedBy || null]
         );
+      }
+
+      // Handle the Contextual Roles (user_entity_roles)
+      if (Array.isArray(entityRolesPayload)) {
+        await connection.query('DELETE FROM user_entity_roles WHERE user_id = ?', [parsedUserId]);
+
+        for (const entityRole of entityRolesPayload) {
+          const [targetRoleRows] = await connection.query(
+            'SELECT id FROM roles WHERE role_code = ? LIMIT 1',
+            [entityRole.role_code]
+          );
+
+          if (targetRoleRows.length > 0) {
+            await connection.query(
+              `
+                  INSERT INTO user_entity_roles (user_id, entity_id, entity_type, role_id)
+                  VALUES (?, ?, ?, ?)
+                `,
+              [
+                parsedUserId,
+                entityRole.entity_id,
+                entityRole.entity_type,
+                targetRoleRows[0].id
+              ]
+            );
+          }
+        }
       }
 
       await this.ensureAtLeastOneSuperAdmin(connection);
@@ -1222,7 +1380,33 @@ const accessControlModel = {
         [parsedUserId]
       );
 
-      return groupUserRows(rows);
+      const groupedUser = groupUserRows(rows);
+
+      if (groupedUser) {
+        // Fetch explicit entity roles for this user
+        const [entityRoleRows] = await db.query(
+          `
+            SELECT 
+              uer.entity_id,
+              uer.entity_type,
+              r.role_code,
+              r.role_name
+            FROM user_entity_roles uer
+            JOIN roles r ON uer.role_id = r.id
+            WHERE uer.user_id = ?
+          `,
+          [parsedUserId]
+        );
+
+        groupedUser.entity_roles = entityRoleRows.map((er) => ({
+          entity_id: er.entity_id,
+          entity_type: er.entity_type,
+          role_code: er.role_code,
+          role_name: er.role_name
+        }));
+      }
+
+      return groupedUser;
     } catch (error) {
       if (isMissingRbacTableError(error)) {
         throw makeRbacError(RBAC_MIGRATION_MESSAGE);
