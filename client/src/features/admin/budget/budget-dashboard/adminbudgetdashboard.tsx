@@ -277,44 +277,42 @@ const AdminBudgetDashboard: React.FC = () => {
           return;
         }
 
-        const detailPromises = list.map(async (item: any) => {
-          try {
-            const detail: any = await authenticityUtility.get(`/adminbudget/${item.id}`);
-            const master = detail?.data?.master || detail?.data || {};
-            const lines = detail?.data?.lines || detail?.data?.items || [];
-            const items: AdminBudgetLineItem[] = (Array.isArray(lines) ? lines : []).map(
-              (line: any) => ({
-                budgetHead: line.budget_head || line.budgetHead || 'Unknown',
-                subHead: line.sub_head || line.subHead || '-',
-                approvedAmount: Number.parseFloat(
-                  line.approved_line_total ?? line.approvedLineTotal ?? line.line_total ?? line.lineTotal ?? 0
-                ),
-                expenditure: Number.parseFloat(line.expenditure ?? 0),
-              })
-            );
-
-            return {
-              id: item.id,
-              proposalRef: item.proposal_ref || master.proposal_ref || '',
-              status: master.status || item.status || '',
-              beneficiaryType: item.beneficiary_type || master.beneficiary_type || '',
-              beneficiaryValue: item.beneficiary_value || master.beneficiary_value || '',
-              createdAt: master.created_at || item.created_date || item.created_at || '',
-              applicantName:
-                item.applicant_name ||
-                master.applicant_name ||
-                master.user_name ||
-                master.user_email ||
-                '',
-              items,
-            } as AdminProposalGroup;
-          } catch (detailError) {
-            console.error('Failed to fetch admin budget detail', detailError);
-            return null;
-          }
+        const batchIds = list.map((item: any) => item.id).join(',');
+        const batchResponse: any = await authenticityUtility.get('/adminbudget/batch', {
+          params: { ids: batchIds },
         });
 
-        const fullProposals = (await Promise.all(detailPromises)).filter(Boolean) as AdminProposalGroup[];
+        const batchData = Array.isArray(batchResponse?.data) ? batchResponse.data : [];
+        const fullProposals = batchData.map((detail: any) => {
+          const master = detail?.master || {};
+          const lines = detail?.lines || detail?.items || [];
+          const items: AdminBudgetLineItem[] = (Array.isArray(lines) ? lines : []).map(
+            (line: any) => ({
+              budgetHead: line.budget_head || line.budgetHead || 'Unknown',
+              subHead: line.sub_head || line.subHead || '-',
+              approvedAmount: Number.parseFloat(
+                line.approved_line_total ?? line.approvedLineTotal ?? line.line_total ?? line.lineTotal ?? 0
+              ),
+              expenditure: Number.parseFloat(line.expenditure ?? 0),
+            })
+          );
+
+          return {
+            id: master.id,
+            proposalRef: master.proposal_ref || '',
+            status: master.status || '',
+            beneficiaryType: master.beneficiary_type || '',
+            beneficiaryValue: master.beneficiary_value || '',
+            createdAt: master.created_at || '',
+            applicantName:
+              master.applicant_name ||
+              master.user_name ||
+              master.user_email ||
+              '',
+            items,
+          } as AdminProposalGroup;
+        });
+
         setProposals(fullProposals);
       } catch (fetchError: any) {
         console.error('Failed to fetch consolidated budgets', fetchError);

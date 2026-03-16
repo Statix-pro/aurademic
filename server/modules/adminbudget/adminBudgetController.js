@@ -1462,3 +1462,36 @@ export async function updateFlowConfig(req, res) {
     });
   }
 }
+
+export async function getBatch(req, res) {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing proposal IDs',
+      });
+    }
+
+    const proposalIds = ids.split(',').map((id) => Number.parseInt(id.trim(), 10)).filter(Boolean);
+    if (!proposalIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid proposal IDs',
+      });
+    }
+
+    const batchData = await AdminBudgetModel.getManyFull(proposalIds);
+
+    return res.json({
+      success: true,
+      data: batchData,
+    });
+  } catch (error) {
+    console.error('Batch fetch error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch batch details',
+    });
+  }
+}
