@@ -181,7 +181,7 @@ const AdminBudgetDashboard: React.FC = () => {
             fiscalYear: fiscalYearNum,
             beneficiaryType,
             q: debouncedSearch,
-            role: roleKey
+            scope: roleKey
           },
         });
 
