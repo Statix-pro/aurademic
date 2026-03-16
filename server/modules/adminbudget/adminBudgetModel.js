@@ -1830,6 +1830,77 @@ export async function getFull(proposalId) {
   };
 }
 
+export async function getManyFull(proposalIds) {
+  if (!Array.isArray(proposalIds) || !proposalIds.length) return [];
+
+  // 1. Fetch masters
+  const [masters] = await db.query(
+    'SELECT * FROM budget_proposals WHERE id IN (?)',
+    [proposalIds]
+  );
+
+  if (!masters.length) return [];
+
+  const foundIds = masters.map((m) => m.id);
+
+  // 2. Fetch lines
+  const [lines] = await db.query(
+    'SELECT * FROM budget_proposal_lines WHERE budget_proposal_id IN (?) ORDER BY id ASC',
+    [foundIds]
+  );
+
+  // 3. Fetch allocations
+  const [allocations] = await db.query(
+    `SELECT l.id AS line_id, m.month, m.amount, l.budget_head, l.sub_head, l.budget_proposal_id
+       FROM budget_proposal_lines l
+       JOIN budget_line_month_allocations m ON l.id = m.budget_line_id
+       WHERE l.budget_proposal_id IN (?)
+       ORDER BY l.id, FIELD(m.month, ${VALID_MONTHS.map((month) => `'${month}'`).join(',')})`,
+    [foundIds]
+  );
+
+  // 4. Group data by proposal
+  return masters.map((master) => {
+    const proposalLines = lines.filter((l) => l.budget_proposal_id === master.id);
+    const lineIds = proposalLines.map(l => l.id);
+    const proposalAllocations = allocations.filter((a) => a.budget_proposal_id === master.id);
+    
+    const approvedAllocationsByLineId = {};
+    for (const line of proposalLines) {
+      const lineId = Number(line?.id);
+      if (!Number.isInteger(lineId)) continue;
+      const raw = line?.approved_month_allocations_json;
+      if (!raw) continue;
+      
+      let parsed = null;
+      try {
+        parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      } catch {
+        parsed = null;
+      }
+      
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+      
+      const normalized = {};
+      for (const month of VALID_MONTHS) {
+        normalized[month] = Number(parsed?.[month] || 0);
+      }
+      
+      const hasAny = Object.values(normalized).some((v) => Number(v) !== 0);
+      if (hasAny) {
+        approvedAllocationsByLineId[lineId] = normalized;
+      }
+    }
+
+    return {
+      master,
+      lines: proposalLines,
+      allocations: groupAllocationsByLine(proposalAllocations),
+      approved_allocations: Object.keys(approvedAllocationsByLineId).length > 0 ? approvedAllocationsByLineId : null,
+    };
+  });
+}
+
 export async function validateUserAccess(proposalId, userId, userEmail, role, department, departmentId) {
   const proposal = await getBudgetById(proposalId);
   if (!proposal) return false;
