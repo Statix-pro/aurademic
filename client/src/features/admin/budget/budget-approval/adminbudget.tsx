@@ -228,7 +228,7 @@ const AdminBudget: React.FC = () => {
       const response: any = await authenticityUtility.get("/adminbudget/kpi-stats", {
         params: {
           fiscalYear,
-          role: activeQueueTab.key,
+          scope: activeQueueTab.key,
           q: searchTerm || undefined,
           beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter,
           departmentFilter: departmentFilter || undefined
@@ -428,6 +428,7 @@ const AdminBudget: React.FC = () => {
           limit: itemsPerPage,
           status: statusFilter === "all" ? "" : statusFilter,
           fiscalYear,
+          scope: activeQueueTab.key,
           q: searchTerm || undefined,
           beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter,
           departmentFilter: departmentFilter || undefined
