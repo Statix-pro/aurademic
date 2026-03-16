@@ -22,6 +22,10 @@ const canViewBudgetAdmin = permissionMiddleware([
     BUDGET_PERMISSIONS.adminManage,
 ]);
 const canManageBudgetAdmin = permissionMiddleware([BUDGET_PERMISSIONS.adminManage]);
+const canManageFreeze = permissionMiddleware([
+    BUDGET_PERMISSIONS.adminManage,
+    BUDGET_PERMISSIONS.workflowDof,
+]);
 const canToggleArchive = permissionMiddleware([
     BUDGET_PERMISSIONS.workflowLevel1,
     BUDGET_PERMISSIONS.workflowIthead,
@@ -43,14 +47,28 @@ const canProcessWorkflow = permissionMiddleware([
     BUDGET_PERMISSIONS.adminManage,
 ]);
 
+/**
+ * Statistics and aggregation routes should be accessible to all roles 
+ * participating in the budget workflow, as the controller handles 
+ * the scoping within the request handler.
+ */
+const canViewAnyBudgetStats = permissionMiddleware([
+    BUDGET_PERMISSIONS.adminView,
+    BUDGET_PERMISSIONS.adminManage,
+    BUDGET_PERMISSIONS.workflowPrincipal,
+    BUDGET_PERMISSIONS.workflowDof,
+    BUDGET_PERMISSIONS.workflowIthead,
+    BUDGET_PERMISSIONS.workflowLevel1,
+]);
+
 // Apply authentication middleware to all routes
 router.use(authMiddleware);
 
 // Approval flows
 router.get('/approval-flows', canViewBudgetAdmin, AdminBudgetController.getApprovalFlows);
 router.patch('/admin/flow/:id(\\d+)', canManageBudgetAdmin, AdminBudgetController.updateFlowConfig);
-router.get('/freeze-config', AdminBudgetController.getFreezeConfig);
-router.put('/freeze-config', AdminBudgetController.upsertFreezeConfig);
+router.get('/freeze-config', canManageFreeze, AdminBudgetController.getFreezeConfig);
+router.put('/freeze-config', canManageFreeze, AdminBudgetController.upsertFreezeConfig);
 
 // Admin budget page workflow endpoints (moved from /budget/* usage)
 router.get('/faculty', AdminBudgetController.getFacultyDetails);
@@ -59,6 +77,8 @@ router.get('/search-applicant', AdminBudgetController.searchApplicant);
 router.get('/tags', AdminBudgetController.getBudgetTags);
 router.get('/org-units', AdminBudgetController.getAllOrgUnits);
 router.get('/org-units/:type', AdminBudgetController.getOrgUnits);
+router.get('/batch', canViewAnyBudgetStats, AdminBudgetController.getBatch);
+router.get('/consolidation', canViewAnyBudgetStats, AdminBudgetController.getConsolidation);
 router.get('/hod', canAccessLevel1Queue, AdminBudgetController.getHodBudgets);
 router.get('/coordinator', canAccessLevel1Queue, AdminBudgetController.getCoordinatorBudgets);
 router.get('/ithead', canAccessItheadQueue, AdminBudgetController.getItheadBudgets);
@@ -79,9 +99,9 @@ router.get('/entities/:type/:id(\\d+)/contacts', canManageBudgetAdmin, AdminBudg
 router.put('/entities/:type/:id(\\d+)/contacts', canManageBudgetAdmin, AdminBudgetController.updateEntityContacts);
 
 // Aggregates & Dashboard Stats
-router.get('/aggregates', canViewBudgetAdmin, AdminBudgetController.getAggregates);
-router.get('/stats', canViewBudgetAdmin, AdminBudgetController.getStats);
-router.get('/kpi-stats', AdminBudgetController.getKpiStats);
+router.get('/aggregates', canViewAnyBudgetStats, AdminBudgetController.getAggregates);
+router.get('/stats', canViewAnyBudgetStats, AdminBudgetController.getStats);
+router.get('/kpi-stats', canViewAnyBudgetStats, AdminBudgetController.getKpiStats);
 router.get('/admin', canViewBudgetAdmin, AdminBudgetController.adminList);
 router.get('/superadmin/flow', superAdminMiddleware, AdminBudgetController.getSuperAdminFlowDashboard);
 

@@ -16,10 +16,10 @@ import {
   Lock,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
-import authenticityUtility from "../../../shared/utils/authenticityUtility";
-import { useAuth } from "../../../contexts/AuthContext";
-import { hasPermission, isSuperAdmin } from "../../../shared/utils/permissionUtils";
-import AlertModal, { type AlertType } from "../../../shared/components/ui/AlertModal";
+import authenticityUtility from "../../../../shared/utils/authenticityUtility";
+import { useAuth } from "../../../../contexts/AuthContext";
+import { hasPermission, isSuperAdmin } from "../../../../shared/utils/permissionUtils";
+import AlertModal, { type AlertType } from "../../../../shared/components/ui/AlertModal";
 
 type ActionType = "return" | "reject" | null;
 type QueueTabKey = "hod" | "coordinator" | "ithead" | "dof" | "principal" | "admin";
@@ -152,7 +152,8 @@ const AdminBudget: React.FC = () => {
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [fiscalYear, setFiscalYear] = useState<number>(() => {
     const d = new Date();
-    return d.getMonth() < 2 ? d.getFullYear() - 1 : d.getFullYear();
+    // FY starts in February (month 1). If month is 0 (January), it's the previous year.
+    return d.getMonth() < 1 ? d.getFullYear() - 1 : d.getFullYear();
   });
   const [freezeDate, setFreezeDate] = useState<string>(() => `${new Date().getFullYear()}-02-01`);
   const [isTimeFrozen, setIsTimeFrozen] = useState<boolean>(false);
@@ -227,7 +228,7 @@ const AdminBudget: React.FC = () => {
       const response: any = await authenticityUtility.get("/adminbudget/kpi-stats", {
         params: {
           fiscalYear,
-          role: activeQueueTab.key,
+          scope: activeQueueTab.key,
           q: searchTerm || undefined,
           beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter,
           departmentFilter: departmentFilter || undefined
@@ -427,6 +428,7 @@ const AdminBudget: React.FC = () => {
           limit: itemsPerPage,
           status: statusFilter === "all" ? "" : statusFilter,
           fiscalYear,
+          scope: activeQueueTab.key,
           q: searchTerm || undefined,
           beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter,
           departmentFilter: departmentFilter || undefined

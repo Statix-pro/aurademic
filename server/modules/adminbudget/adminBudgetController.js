@@ -13,6 +13,7 @@ import {
   getPermissionSet,
   hasPermission,
   resolveAccessRoleFromPermissions,
+  getAuthorizedRole,
 } from '../shared/budget/controllerPermissions.js';
 
 function isValidDateOnlyString(value) {
@@ -1084,21 +1085,16 @@ export async function upsertFreezeConfig(req, res) {
   }
 }
 
-
-
-
-
-
-
-
-
-
 export async function getAggregates(req, res) {
   try {
     const { fiscalYear } = req.query;
+    const department = await resolveUserDepartment(req);
+    const departmentId = await resolveUserDepartmentId(req);
 
     const aggregates = await AdminBudgetModel.dashboardAggregates({
-      role: 'admin',
+      role: getAuthorizedRole(req, req.query.scope),
+      department,
+      departmentId,
       fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
     });
 
@@ -1191,13 +1187,12 @@ export async function toggleArchive(req, res) {
   }
 }
 
-
 export async function adminList(req, res) {
   try {
-    const { page = 1, limit = 20, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
+    const { page = 1, limit = 20, status, fiscalYear, q, departmentFilter, beneficiaryType, scope: scopeParam } = req.query;
 
     const budgets = await AdminBudgetModel.listBudgets({
-      role: 'admin',
+      role: getAuthorizedRole(req, scopeParam),
       page: Number.parseInt(page, 10),
       limit: Number.parseInt(limit, 10),
       status,
@@ -1307,9 +1302,6 @@ export async function search(req, res) {
   }
 }
 
-
-
-
 async function exportBudgets(req, res) {
   try {
     const { fiscalYear, status, format = 'csv' } = req.query;
@@ -1361,9 +1353,10 @@ export { exportBudgets as export };
 
 export async function getStats(req, res) {
   try {
-    const { fiscalYear } = req.query;
+    const { fiscalYear, scope: scopeParam } = req.query;
     const fy = fiscalYear ? Number.parseInt(fiscalYear, 10) : AdminBudgetModel.getCurrentFinancialYear();
-    const stats = await AdminBudgetModel.getBudgetStatsByFY(fy);
+    const role = getAuthorizedRole(req, scopeParam);
+    const stats = await AdminBudgetModel.getBudgetStatsByFY(fy, { role });
 
     return res.json({
       success: true,
@@ -1386,8 +1379,8 @@ export async function getKpiStats(req, res) {
     const userEmail = normalizeText(req.user?.email);
     const userId = getUserId(req);
     const isSuperAdmin = hasSuperAdminAccess(req);
-    const { fiscalYear, q, role: roleParam, departmentFilter, beneficiaryType } = req.query;
-    const role = roleParam || resolveAccessRoleFromPermissions(req);
+    const { fiscalYear, q, scope: scopeParam, departmentFilter, beneficiaryType } = req.query;
+    const role = getAuthorizedRole(req, scopeParam);
 
     const stats = await AdminBudgetModel.getKpiStats({
       userId,
@@ -1459,6 +1452,100 @@ export async function updateFlowConfig(req, res) {
     return res.status(500).json({
       success: false,
       message: 'Failed to update approval flow config',
+    });
+  }
+}
+
+export async function getBatch(req, res) {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing proposal IDs',
+      });
+    }
+
+    const proposalIds = ids.split(',').map((id) => Number.parseInt(id.trim(), 10)).filter(Boolean);
+    if (!proposalIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid proposal IDs',
+      });
+    }
+
+    const userId = getUserId(req);
+    const userEmail = normalizeText(req.user?.email);
+    const userRole = resolveAccessRoleFromPermissions(req);
+    const userDepartment = await resolveUserDepartment(req);
+    const userDepartmentId = await resolveUserDepartmentId(req);
+
+    const authorizedProposalIds = [];
+    for (const proposalId of proposalIds) {
+      const hasAccess = await AdminBudgetModel.validateUserAccess(
+        proposalId,
+        userId,
+        userEmail,
+        userRole,
+        userDepartment,
+        userDepartmentId
+      );
+      if (hasAccess) {
+        authorizedProposalIds.push(proposalId);
+      }
+    }
+
+    if (!authorizedProposalIds.length) {
+      return res.json({
+        success: true,
+        data: [],
+      });
+    }
+
+    const batchData = await AdminBudgetModel.getManyFull(authorizedProposalIds);
+
+    return res.json({
+      success: true,
+      data: batchData,
+    });
+  } catch (error) {
+    console.error('Batch fetch error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch batch details',
+    });
+  }
+}
+
+export async function getConsolidation(req, res) {
+  try {
+    const department = await resolveUserDepartment(req);
+    const departmentId = await resolveUserDepartmentId(req);
+    const userEmail = normalizeText(req.user?.email);
+    const userId = getUserId(req);
+    const { fiscalYear, scope: scopeParam, beneficiaryType, q } = req.query;
+    const role = getAuthorizedRole(req, scopeParam);
+
+    const consolidatedData = await AdminBudgetModel.getConsolidatedData({
+      userId,
+      userEmail,
+      department,
+      departmentId,
+      role,
+      fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      beneficiaryType,
+      q,
+    });
+
+    return res.json({
+      success: true,
+      data: consolidatedData,
+    });
+  } catch (error) {
+    console.error('Consolidation fetch error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch consolidated data',
     });
   }
 }
