@@ -91,3 +91,55 @@ export const resolveAccessRoleFromPermissions = (req) => {
 
     return 'user';
 };
+
+/**
+ * Validates and returns an authorized role string based on user permissions.
+ * Prevents privilege escalation by ensuring users only assume roles they are allowed to.
+ * 
+ * @param {Object} req - Express request
+ * @param {string} requestedRole - The role string requested (usually from query/body)
+ * @returns {string} The authorized role code (e.g., 'admin', 'hod', 'super_admin')
+ */
+export const getAuthorizedRole = (req, requestedRole) => {
+    const baseRole = resolveAccessRoleFromPermissions(req);
+    const normalizedRequested = normalizeText(requestedRole)?.toLowerCase();
+
+    // If no role is requested, use the base role resolved from permissions
+    if (!normalizedRequested) {
+        return baseRole;
+    }
+
+    // Super Admin is omnipotent
+    if (baseRole === 'super_admin') {
+        return normalizedRequested;
+    }
+
+    // Exact matches are always fine
+    if (normalizedRequested === baseRole) {
+        return baseRole;
+    }
+
+    /** 
+     * Capability Matrix: which roles can assume which viewing scopes.
+     * Note: 'hod' and 'coordinator' are both 'workflowLevel1' internally but mapped 
+     * based on context. We allow level1 users to switch between them if they have 
+     * multiple assignments.
+     */
+    const capabilityMap = {
+        admin: ['hod', 'coordinator', 'ithead', 'dof', 'principal', 'admin', 'user'],
+        dof: ['dof', 'user'],
+        principal: ['principal', 'user'],
+        ithead: ['ithead', 'user'],
+        hod: ['hod', 'coordinator', 'user'],
+        coordinator: ['hod', 'coordinator', 'user'],
+    };
+
+    const allowedScopes = capabilityMap[baseRole] || ['user'];
+
+    if (allowedScopes.includes(normalizedRequested)) {
+        return normalizedRequested;
+    }
+
+    // Fallback to their authorized base role if they attempt to escalate or assume an invalid scope
+    return baseRole;
+};
