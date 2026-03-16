@@ -258,18 +258,18 @@ const AccessControlPage: React.FC = () => {
   const hodOptions = useMemo(() => {
     return masterEntities
       .filter(e => e.entity_type === 'DEPARTMENT')
-      .map(e => ({ label: e.entity_name, value: e.entity_id }))
+      .map(e => ({ label: e.entity_name, value: e.entity_id, type: 'DEPARTMENT' }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [masterEntities]);
 
   const coordinatorOptions = useMemo(() => {
     const nonDepts = masterEntities.filter(e => e.entity_type !== 'DEPARTMENT');
-    const groups: Record<string, { label: string; value: number }[]> = {};
+    const groups: Record<string, { label: string; value: number, type: string }[]> = {};
 
     nonDepts.forEach(e => {
       const type = e.entity_type || 'OTHER';
       if (!groups[type]) groups[type] = [];
-      groups[type].push({ label: e.entity_name, value: e.entity_id });
+      groups[type].push({ label: e.entity_name, value: e.entity_id, type: e.entity_type });
     });
 
     return Object.keys(groups)
@@ -594,8 +594,10 @@ const AccessControlPage: React.FC = () => {
     });
   };
 
-  const addUserEntityRoleDraft = (userId: number, roleCode: string, entityId: number) => {
-    const selectedEntity = masterEntities.find(e => e.entity_id === entityId);
+  const addUserEntityRoleDraft = (userId: number, roleCode: string, entityId: number, entityType?: string) => {
+    const selectedEntity = masterEntities.find(e => 
+      e.entity_id === entityId && (!entityType || e.entity_type === entityType)
+    );
     let selectedRole = roles.find(r => r.role_code === roleCode);
 
     if (!selectedEntity || !selectedRole) return;
@@ -1026,9 +1028,9 @@ const AccessControlPage: React.FC = () => {
                                       classNamePrefix="react-select"
                                       options={hodOptions}
                                       value={null}
-                                      onChange={(selectedOption) => {
+                                      onChange={(selectedOption: any) => {
                                         if (selectedOption) {
-                                          addUserEntityRoleDraft(accessUser.id, 'hod', selectedOption.value);
+                                          addUserEntityRoleDraft(accessUser.id, 'hod', selectedOption.value, selectedOption.type);
                                         }
                                       }}
                                       placeholder="Select Department..."
@@ -1051,9 +1053,9 @@ const AccessControlPage: React.FC = () => {
                                         Group: CollapsibleGroup
                                       }}
                                       value={null}
-                                      onChange={(selectedOption) => {
+                                      onChange={(selectedOption: any) => {
                                         if (selectedOption) {
-                                          addUserEntityRoleDraft(accessUser.id, 'coordinator', selectedOption.value);
+                                          addUserEntityRoleDraft(accessUser.id, 'coordinator', selectedOption.value, selectedOption.type);
                                         }
                                       }}
                                       placeholder="Select Entity..."
