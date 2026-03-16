@@ -248,6 +248,28 @@ export async function getAllOrgUnits(req, res) {
   }
 }
 
+export async function getAllDepartments(req, res) {
+  try {
+    const { beneficiaryType } = req.query;
+    const departments = await AdminBudgetModel.getAllDepartments(beneficiaryType);
+    const deptNames = departments
+      .map((d) => d.name)
+      .filter((name, idx, self) => name && self.indexOf(name) === idx)
+      .sort();
+
+    return res.json({
+      success: true,
+      data: deptNames,
+    });
+  } catch (error) {
+    console.error('Admin get all departments error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch departments',
+    });
+  }
+}
+
 export async function get(req, res) {
   try {
     const proposalId = Number.parseInt(req.params.id, 10);

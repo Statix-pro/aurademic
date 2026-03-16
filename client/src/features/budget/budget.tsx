@@ -274,12 +274,12 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Beta',
     'Others',
   ],
-  'Conferences & Conclaves': ['National Conference', 'International Conference', 'Conclave', 'Convention', 'Networking Event', 'Industry Interaction'],
-  'Association Activities': ['Association Function', 'Alumni Meeting', 'Alumni Interaction', 'Parents Meeting'],
-  'Outreach Event': ['School Visit', 'Awareness Program', 'Campaigns', 'Mini Marathon', 'Education Fair', 'Rally'],
-  'Cultural & Celebrations': ['Celebration Day', 'Festival Celebrations', 'Harmonicks', 'Hostel Day'],
-  'Sports': ['Sports Meet', 'Sports Day'],
-  'Competitions': ['Hackathons', 'Competitions', 'Club Activities', 'Project Expo', 'Ideathon', 'Start-up meet'],
+  'Conferences & Conclaves': ['National Conference', 'International Conference', 'Conclave', 'Convention', 'Networking Event', 'Industry Interaction', 'Consumables'],
+  'Association Activities': ['Association Function', 'Alumni Meeting', 'Alumni Interaction', 'Parents Meeting', 'Consumables'],
+  'Outreach Event': ['School Visit', 'Awareness Program', 'Campaigns', 'Mini Marathon', 'Education Fair', 'Rally', 'Consumables'],
+  'Cultural & Celebrations': ['Celebration Day', 'Festival Celebrations', 'Harmonicks', 'Hostel Day', 'Consumables'],
+  'Sports': ['Sports Meet', 'Sports Day', 'Consumables'],
+  'Competitions': ['Hackathons', 'Competitions', 'Club Activities', 'Project Expo', 'Ideathon', 'Start-up meet', 'Consumables'],
 
   'Institutional Governance Meetings': ['Governing Body Meeting', 'Research Advisory Board Meeting', 'Finance Committee Meeting', 'Result Passing Board (RPB) Meeting', 'Examination Committee Meeting'
     , 'Placement Meeting'],
@@ -310,7 +310,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'STTP (Short-Term Training Programme)',
     'MoU Inking',
     'Industry Visit',
-    'Expert Visit'
+    'Expert Visit',
+    'Consumables'
   ],
 
   'College Events': [
@@ -321,7 +322,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Dakshaa',
     'Science Day',
     'Womens Day',
-    'Founder Day'
+    'Founder Day',
+    'Consumables'
   ],
   'Staff Empowerment': [
     'Registration fee',
@@ -413,7 +415,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'International Travel',
     'Testing Charges', 'Legal Expenses'
   ],
-  'Licenses & Taxes': ['DTCP Approval', 'Water Tax', 'Road Tax', 'Property Tax', 'Building Tax'],
+  'Licenses & Taxes': ['DTCP Approval', 'Water Tax', 'Road Tax', 'Property Tax', 'Building Tax', 'Spirit License', 'License Renewal'],
   'Salary:': [
     'Monthly Salary',
     'Provident Fund',
