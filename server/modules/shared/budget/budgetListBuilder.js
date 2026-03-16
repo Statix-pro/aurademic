@@ -6,7 +6,7 @@
  */
 
 import db from '../../../config/connection.js';
-import { normalizeText, normalizeBudgetRole, getCurrentFinancialYear } from './budgetUtils.js';
+import { normalizeText, normalizeBudgetRole, getCurrentFinancialYear, isEntityBeneficiaryType, normalizeBeneficiaryType } from './budgetUtils.js';
 
 /**
  * Builds and executes the budget list query.
@@ -287,8 +287,17 @@ export async function buildBudgetList(options) {
         }
     }
     if (normalizeText(departmentFilter)) {
-        where.push('md.name = ?');
-        params.push(normalizeText(departmentFilter));
+        const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
+        if (isEntityBeneficiaryType(normalizedBeneficiaryType)) {
+            where.push('me.name = ?');
+            params.push(normalizeText(departmentFilter));
+        } else if (['Faculty', 'Staff', 'Department'].includes(normalizedBeneficiaryType)) {
+            where.push('md.name = ?');
+            params.push(normalizeText(departmentFilter));
+        } else {
+            where.push('(md.name = ? OR me.name = ?)');
+            params.push(normalizeText(departmentFilter), normalizeText(departmentFilter));
+        }
     }
     if (normalizeText(beneficiaryType)) {
         where.push('LOWER(TRIM(bp.beneficiary_type)) = LOWER(TRIM(?))');
@@ -427,7 +436,19 @@ export async function buildBudgetKpiStats(options) {
             break;
     }
 
-    if (normalizeText(departmentFilter)) { where.push('md.name = ?'); params.push(normalizeText(departmentFilter)); }
+    if (normalizeText(departmentFilter)) {
+        const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
+        if (isEntityBeneficiaryType(normalizedBeneficiaryType)) {
+            where.push('me.name = ?');
+            params.push(normalizeText(departmentFilter));
+        } else if (['Faculty', 'Staff', 'Department'].includes(normalizedBeneficiaryType)) {
+            where.push('md.name = ?');
+            params.push(normalizeText(departmentFilter));
+        } else {
+            where.push('(md.name = ? OR me.name = ?)');
+            params.push(normalizeText(departmentFilter), normalizeText(departmentFilter));
+        }
+    }
     if (normalizeText(beneficiaryType)) {
         where.push('LOWER(TRIM(bp.beneficiary_type)) = LOWER(TRIM(?))');
         params.push(normalizeText(beneficiaryType));

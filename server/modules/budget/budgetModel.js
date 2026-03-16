@@ -388,19 +388,17 @@ async function resolveBeneficiaryEntity(conn, beneficiaryType, beneficiaryValue,
     const beneficiaryEntityId = Number(employeeContext?.entity_id);
     const beneficiaryEntityTypeCode = normalizeEntityTypeCode(employeeContext?.entity_type_code);
 
-    if (!Number.isInteger(beneficiaryEntityId) || beneficiaryEntityId <= 0 || !beneficiaryEntityTypeCode) {
-      return { entityTypeCode: null, beneficiaryEntityId: null };
+    if (Number.isInteger(beneficiaryEntityId) && beneficiaryEntityId > 0) {
+      const entityRecord = await getEntityById(conn, beneficiaryEntityId);
+      if (entityRecord && entityRecord.is_active === 1) {
+        return {
+          entityTypeCode: beneficiaryEntityTypeCode || null,
+          beneficiaryEntityId,
+        };
+      }
     }
 
-    const entityRecord = await getEntityById(conn, beneficiaryEntityId);
-    if (!entityRecord || entityRecord.is_active !== 1) {
-      return { entityTypeCode: null, beneficiaryEntityId: null };
-    }
-
-    return {
-      entityTypeCode: beneficiaryEntityTypeCode,
-      beneficiaryEntityId,
-    };
+    return { entityTypeCode: null, beneficiaryEntityId: null };
   }
 
   if (!entityTypeCode) {

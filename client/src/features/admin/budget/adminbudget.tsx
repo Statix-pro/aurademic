@@ -148,6 +148,8 @@ const AdminBudget: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [searchTerm, setSearchTerm] = useState("");
   const [beneficiaryFilter, setBeneficiaryFilter] = useState("All Beneficiary");
+  const [departmentFilter, setDepartmentFilter] = useState<string>("");
+  const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [fiscalYear, setFiscalYear] = useState<number>(() => {
     const d = new Date();
     return d.getMonth() < 2 ? d.getFullYear() - 1 : d.getFullYear();
@@ -227,7 +229,8 @@ const AdminBudget: React.FC = () => {
           fiscalYear,
           role: activeQueueTab.key,
           q: searchTerm || undefined,
-          beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter
+          beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter,
+          departmentFilter: departmentFilter || undefined
         },
       });
       if (response?.success && response.data) {
@@ -236,7 +239,7 @@ const AdminBudget: React.FC = () => {
     } catch (error) {
       console.error("Failed to fetch KPI stats:", error);
     }
-  }, [activeQueueTab, fiscalYear, searchTerm, beneficiaryFilter]);
+  }, [activeQueueTab, fiscalYear, searchTerm, beneficiaryFilter, departmentFilter]);
 
   // Action popups
   const [actionPopupOpen, setActionPopupOpen] = useState(false);
@@ -323,6 +326,27 @@ const AdminBudget: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const response: any = await authenticityUtility.get("/adminbudget/departments", {
+          params: {
+            beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter
+          }
+        });
+        if (response?.success && Array.isArray(response?.data)) {
+          setDepartmentsList(response.data);
+        } else {
+          setDepartmentsList([]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch departments:", error);
+      }
+    };
+
+    fetchDepartments();
+  }, [beneficiaryFilter]);
+
+  useEffect(() => {
     if (!queueTabs.length) {
       setActiveQueueTabKey(null);
       return;
@@ -404,7 +428,8 @@ const AdminBudget: React.FC = () => {
           status: statusFilter === "all" ? "" : statusFilter,
           fiscalYear,
           q: searchTerm || undefined,
-          beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter
+          beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter,
+          departmentFilter: departmentFilter || undefined
         },
       });
 
@@ -425,6 +450,7 @@ const AdminBudget: React.FC = () => {
       }));
 
       setData(normalizedRows);
+
       if (response.pagination) {
         setPagination(response.pagination);
       }
@@ -437,7 +463,7 @@ const AdminBudget: React.FC = () => {
       if (requestSeq !== fetchRequestSeqRef.current) return;
       setLoading(false);
     }
-  }, [activeQueueTab, fiscalYear, currentPage, statusFilter, searchTerm, itemsPerPage]);
+  }, [activeQueueTab, fiscalYear, currentPage, statusFilter, searchTerm, itemsPerPage, beneficiaryFilter, departmentFilter]);
 
   useEffect(() => {
     fetchDashboard();
@@ -1250,7 +1276,10 @@ const AdminBudget: React.FC = () => {
                     <select
                       className="adminbudget-control"
                       value={beneficiaryFilter}
-                      onChange={(e) => setBeneficiaryFilter(e.target.value)}
+                      onChange={(e) => {
+                        setBeneficiaryFilter(e.target.value);
+                        setDepartmentFilter("");
+                      }}
                       title="Beneficiary"
                     >
                       {filteredBeneficiaryOptions.map((opt) => (
@@ -1259,6 +1288,28 @@ const AdminBudget: React.FC = () => {
                         </option>
                       ))}
                     </select>
+
+                    {(isSuperAdminLogin || isDofLogin || hasPermission(user, "budget.workflow.principal")) && (
+                      <select
+                        className="adminbudget-control"
+                        value={departmentFilter}
+                        onChange={(e) => setDepartmentFilter(e.target.value)}
+                        title={beneficiaryFilter === "All Beneficiary" || ["Faculty", "Staff", "Department"].includes(beneficiaryFilter) ? "Department" : beneficiaryFilter}
+                      >
+                        <option value="">
+                          {beneficiaryFilter === "All Beneficiary" || ["Faculty", "Staff", "Department"].includes(beneficiaryFilter) 
+                            ? "All Departments" 
+                            : beneficiaryFilter === "Professional Body" 
+                              ? "All Professional Bodies"
+                              : `All ${beneficiaryFilter}s`}
+                        </option>
+                        {departmentsList.map((dept) => (
+                          <option key={dept} value={dept}>
+                            {dept}
+                          </option>
+                        ))}
+                      </select>
+                    )}
 
                     <input
                       className="adminbudget-control"

@@ -405,8 +405,9 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Give away',
     'T-Shirt',
     'Bag',
+    'Consumables',
     'Others',
-  ],
+],
 
   'Meetings & Audits': [
     'Remuneration',
@@ -518,6 +519,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Autonomous Charges',
     'DTCP Approval',
     'Licenses & Taxes',
+    'Spirit License',
+    'License Renewal',
     'Insurance Charges',
     'Water Charges',
     'Stamp Charges',
