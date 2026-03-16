@@ -13,7 +13,7 @@ import {
   Archive,
   Trash2,
   CalendarDays,
-  Snowflake,
+  Lock,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import authenticityUtility from "../../../../shared/utils/authenticityUtility";
@@ -55,6 +55,7 @@ interface BudgetRequestItem {
   status: string;
   current_stage: string;
   created_date: string;
+  level1_route_type?: string | null;
 }
 
 interface BudgetHistoryEntry {
@@ -90,6 +91,7 @@ const BENEFICIARY_OPTIONS = [
 ];
 
 const ARCHIVE_TRANSITION_MS = 280;
+const ADMIN_FETCH_PAGE_SIZE = 100;
 const TAB_PRIORITY: QueueTabKey[] = ["hod", "coordinator", "ithead", "dof", "principal", "admin"];
 
 const STAGE_PERMISSION_MAP: Record<string, string> = {
@@ -107,8 +109,12 @@ const STAGE_DISPLAY_MAP: Record<string, string> = {
 };
 
 const ENTITY_BENEFICIARY_TYPES = ["Centre", "Cell", "Club", "Professional Body"];
+const ROWS_PER_PAGE_OPTIONS = [5, 10, 25, 50];
 
-const getLevel1Label = (beneficiaryType: string) => {
+const getLevel1Label = (beneficiaryType: string, routeType?: string | null) => {
+  if (String(routeType || "").toLowerCase() === "entity_contact") {
+    return "Coordinator";
+  }
   const type = (beneficiaryType || "").toLowerCase();
   const entityTypes = ENTITY_BENEFICIARY_TYPES.map((t) => t.toLowerCase());
   return entityTypes.includes(type) ? "Coordinator" : "HOD";
@@ -135,11 +141,15 @@ const AdminBudget: React.FC = () => {
   const [data, setData] = useState<BudgetRequestItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [accessError, setAccessError] = useState("");
+  const [kpiStats, setKpiStats] = useState({ total: 0, pending: 0, returned: 0, rejected: 0, approved: 0, archived: 0 });
+  const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 100, pages: 1 });
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [searchTerm, setSearchTerm] = useState("");
   const [beneficiaryFilter, setBeneficiaryFilter] = useState("All Beneficiary");
+  const [departmentFilter, setDepartmentFilter] = useState<string>("");
+  const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [fiscalYear, setFiscalYear] = useState<number>(() => {
     const d = new Date();
     return d.getMonth() < 2 ? d.getFullYear() - 1 : d.getFullYear();
@@ -150,15 +160,86 @@ const AdminBudget: React.FC = () => {
   const [freezeSaving, setFreezeSaving] = useState<boolean>(false);
   const [freezePopupOpen, setFreezePopupOpen] = useState<boolean>(false);
   const freezePopoverRef = useRef<HTMLDivElement | null>(null);
+  const fetchRequestSeqRef = useRef(0);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
 
   // Queue/role handling
   const [assignments, setAssignments] = useState<RbacAssignment[]>([]);
   const [activeAssignmentIndex, setActiveAssignmentIndex] = useState<number>(0);
   const [activeQueueTabKey, setActiveQueueTabKey] = useState<QueueTabKey | null>(null);
+
+  const currentActiveAssignment = useMemo<RbacAssignment | null>(() => {
+    return assignments.length > 0 ? assignments[activeAssignmentIndex] : null;
+  }, [assignments, activeAssignmentIndex]);
+
+  const queueTabs = useMemo<QueueTab[]>(() => {
+    const tabs: QueueTab[] = [];
+    const superUser = isSuperAdmin(user);
+    const hasLevel1Context =
+      currentActiveAssignment?.permissions?.includes("budget.workflow.level1") ||
+      hasPermission(user, "budget.workflow.level1");
+    const isAcademicContext = currentActiveAssignment
+      ? currentActiveAssignment.entity_type === "DEPARTMENT"
+      : true;
+
+    if (superUser || (hasLevel1Context && isAcademicContext)) {
+      tabs.push({ key: "hod", label: "HOD", endpoint: "/adminbudget/hod" });
+    }
+
+    if (superUser || (hasLevel1Context && !isAcademicContext)) {
+      tabs.push({ key: "coordinator", label: "Coordinator", endpoint: "/adminbudget/coordinator" });
+    }
+
+    if (superUser || hasPermission(user, "budget.workflow.ithead")) {
+      tabs.push({ key: "ithead", label: "IT Head", endpoint: "/adminbudget/ithead" });
+    }
+
+    if (superUser || hasPermission(user, "budget.workflow.dof")) {
+      tabs.push({ key: "dof", label: "DoF", endpoint: "/adminbudget/dof" });
+    }
+
+    if (superUser || hasPermission(user, "budget.workflow.principal")) {
+      tabs.push({ key: "principal", label: "Principal", endpoint: "/adminbudget/principal" });
+    }
+
+    if (
+      superUser ||
+      hasPermission(user, "budget.admin.view") ||
+      hasPermission(user, "budget.admin.manage")
+    ) {
+      tabs.push({ key: "admin", label: "All Proposals", endpoint: "/adminbudget/admin" });
+    }
+
+    return tabs;
+  }, [user, currentActiveAssignment]);
+
+  const activeQueueTab = useMemo(
+    () => queueTabs.find((tab) => tab.key === activeQueueTabKey) || null,
+    [queueTabs, activeQueueTabKey]
+  );
+
+  const fetchKpiStats = useCallback(async () => {
+    if (!activeQueueTab) return;
+    try {
+      const response: any = await authenticityUtility.get("/adminbudget/kpi-stats", {
+        params: {
+          fiscalYear,
+          role: activeQueueTab.key,
+          q: searchTerm || undefined,
+          beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter,
+          departmentFilter: departmentFilter || undefined
+        },
+      });
+      if (response?.success && response.data) {
+        setKpiStats(response.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch KPI stats:", error);
+    }
+  }, [activeQueueTab, fiscalYear, searchTerm, beneficiaryFilter, departmentFilter]);
 
   // Action popups
   const [actionPopupOpen, setActionPopupOpen] = useState(false);
@@ -227,56 +308,6 @@ const AdminBudget: React.FC = () => {
     setAlertConfig((prev) => ({ ...prev, show: false, onConfirm: undefined }));
   };
 
-  const currentActiveAssignment = useMemo<RbacAssignment | null>(() => {
-    return assignments.length > 0 ? assignments[activeAssignmentIndex] : null;
-  }, [assignments, activeAssignmentIndex]);
-
-  const queueTabs = useMemo<QueueTab[]>(() => {
-    const tabs: QueueTab[] = [];
-    const superUser = isSuperAdmin(user);
-    const hasLevel1Context =
-      currentActiveAssignment?.permissions?.includes("budget.workflow.level1") ||
-      hasPermission(user, "budget.workflow.level1");
-    const isAcademicContext = currentActiveAssignment
-      ? currentActiveAssignment.entity_type === "DEPARTMENT"
-      : true;
-
-    if (superUser || (hasLevel1Context && isAcademicContext)) {
-      tabs.push({ key: "hod", label: "HOD", endpoint: "/adminbudget/hod" });
-    }
-
-    if (superUser || (hasLevel1Context && !isAcademicContext)) {
-      tabs.push({ key: "coordinator", label: "Coordinator", endpoint: "/adminbudget/coordinator" });
-    }
-
-    if (superUser || hasPermission(user, "budget.workflow.ithead")) {
-      tabs.push({ key: "ithead", label: "IT Head", endpoint: "/adminbudget/ithead" });
-    }
-
-    if (superUser || hasPermission(user, "budget.workflow.dof")) {
-      tabs.push({ key: "dof", label: "DoF", endpoint: "/adminbudget/dof" });
-    }
-
-    if (superUser || hasPermission(user, "budget.workflow.principal")) {
-      tabs.push({ key: "principal", label: "Principal", endpoint: "/adminbudget/principal" });
-    }
-
-    if (
-      superUser ||
-      hasPermission(user, "budget.admin.view") ||
-      hasPermission(user, "budget.admin.manage")
-    ) {
-      tabs.push({ key: "admin", label: "All Proposals", endpoint: "/adminbudget/admin" });
-    }
-
-    return tabs;
-  }, [user, currentActiveAssignment]);
-
-  const activeQueueTab = useMemo(
-    () => queueTabs.find((tab) => tab.key === activeQueueTabKey) || null,
-    [queueTabs, activeQueueTabKey]
-  );
-
   useEffect(() => {
     const fetchAssignments = async () => {
       try {
@@ -293,6 +324,27 @@ const AdminBudget: React.FC = () => {
 
     fetchAssignments();
   }, []);
+
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const response: any = await authenticityUtility.get("/adminbudget/departments", {
+          params: {
+            beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter
+          }
+        });
+        if (response?.success && Array.isArray(response?.data)) {
+          setDepartmentsList(response.data);
+        } else {
+          setDepartmentsList([]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch departments:", error);
+      }
+    };
+
+    fetchDepartments();
+  }, [beneficiaryFilter]);
 
   useEffect(() => {
     if (!queueTabs.length) {
@@ -363,39 +415,60 @@ const AdminBudget: React.FC = () => {
       return;
     }
 
+    const requestSeq = ++fetchRequestSeqRef.current;
+
     try {
       setLoading(true);
       setAccessError("");
 
       const response: any = await authenticityUtility.get(activeQueueTab.endpoint, {
-        params: { limit: 100, status: "", fiscalYear },
+        params: {
+          page: currentPage,
+          limit: itemsPerPage,
+          status: statusFilter === "all" ? "" : statusFilter,
+          fiscalYear,
+          q: searchTerm || undefined,
+          beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter,
+          departmentFilter: departmentFilter || undefined
+        },
       });
 
-      if (response?.success) {
-        const normalizedRows: BudgetRequestItem[] = Array.isArray(response.data)
-          ? response.data.map((row: any) => ({
-            ...row,
-            applicant_name: String(
-              row?.applicant_name || row?.faculty_name || row?.user_name || row?.user_email || ""
-            ).trim(),
-          }))
-          : [];
-        setData(normalizedRows);
-      } else {
+      if (!response?.success) {
+        if (requestSeq !== fetchRequestSeqRef.current) return;
         setData([]);
+        return;
+      }
+
+      if (requestSeq !== fetchRequestSeqRef.current) return;
+
+      const rows = Array.isArray(response.data) ? response.data : [];
+      const normalizedRows: BudgetRequestItem[] = rows.map((row: any) => ({
+        ...row,
+        applicant_name: String(
+          row?.applicant_name || row?.faculty_name || row?.user_name || row?.user_email || ""
+        ).trim(),
+      }));
+
+      setData(normalizedRows);
+
+      if (response.pagination) {
+        setPagination(response.pagination);
       }
     } catch (error: any) {
+      if (requestSeq !== fetchRequestSeqRef.current) return;
       console.error("Fetch budget error:", error);
       setData([]);
       setAccessError(error?.response?.data?.message || "Failed to fetch budget requests");
     } finally {
+      if (requestSeq !== fetchRequestSeqRef.current) return;
       setLoading(false);
     }
-  }, [activeQueueTab, fiscalYear]);
+  }, [activeQueueTab, fiscalYear, currentPage, statusFilter, searchTerm, itemsPerPage, beneficiaryFilter, departmentFilter]);
 
   useEffect(() => {
     fetchDashboard();
-  }, [fetchDashboard]);
+    fetchKpiStats();
+  }, [fetchDashboard, fetchKpiStats]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -618,49 +691,33 @@ const AdminBudget: React.FC = () => {
   }, [activeQueueTabKey]);
 
   const baseFilteredData = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-    const ben = beneficiaryFilter;
+    let results = [...data];
+    if (beneficiaryFilter !== "All Beneficiary") {
+      results = results.filter((item) => item.beneficiary_type === beneficiaryFilter);
+    }
+    return results;
+  }, [data, beneficiaryFilter]);
 
-    return data.filter((item) => {
-      const matchesSearch =
-        !query ||
-        item.proposal_ref.toLowerCase().includes(query) ||
-        (item.applicant_name || "").toLowerCase().includes(query);
-      const matchesBeneficiary =
-        ben === "All Beneficiary" || item.beneficiary_type.toLowerCase() === ben.toLowerCase();
+  const stats = useMemo(() => {
+    return kpiStats;
+  }, [kpiStats]);
 
-      return matchesSearch && matchesBeneficiary;
-    });
-  }, [data, searchTerm, beneficiaryFilter]);
-
-  const [statsFilter, setStatsFilter] = useState<string>("pending");
+  const [localStatsFilter, setLocalStatsFilter] = useState<string>("pending");
 
   const handleStatsFilter = useCallback((filter: string) => {
-    setStatsFilter(filter);
+    setLocalStatsFilter(filter);
     setStatusFilter(filter === "total" ? "all" : filter);
     setCurrentPage(1);
   }, []);
 
   useEffect(() => {
-    setStatsFilter(statusFilter === "all" ? "total" : statusFilter);
+    setLocalStatsFilter(statusFilter === "all" ? "total" : statusFilter);
   }, [statusFilter]);
 
-  const filteredData = useMemo(() => {
-    const selected = statusFilter.trim().toLowerCase();
-    if (!selected || selected === "all") return baseFilteredData;
-
-    return baseFilteredData.filter((item) => getStatusCategory(item) === selected);
-  }, [baseFilteredData, statusFilter, getStatusCategory]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [statusFilter, searchTerm, beneficiaryFilter, activeQueueTabKey, fiscalYear]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
-  const safeCurrentPage = Math.min(currentPage, totalPages);
-  const indexOfLast = safeCurrentPage * itemsPerPage;
-  const indexOfFirst = indexOfLast - itemsPerPage;
-  const currentItems = filteredData.slice(indexOfFirst, indexOfLast);
+  const currentItems = baseFilteredData;
+  const totalItemsCount = pagination.total;
+  const totalPagesCount = pagination.pages;
+  const safeCurrentPage = pagination.page;
 
   const statusClass = (item: BudgetRequestItem) => {
     const category = getStatusCategory(item);
@@ -681,20 +738,10 @@ const AdminBudget: React.FC = () => {
     const stageKey = (item.current_stage || "").toLowerCase();
     let stageLabel = STAGE_DISPLAY_MAP[stageKey] || (item.current_stage ? item.current_stage.toUpperCase() : "");
     if (stageKey === "level1") {
-      stageLabel = getLevel1Label(item.beneficiary_type);
+      stageLabel = getLevel1Label(item.beneficiary_type, item.level1_route_type);
     }
     return "Pending " + stageLabel;
   };
-
-  const stats = useMemo(() => {
-    const total = baseFilteredData.length;
-    const pendingCount = baseFilteredData.filter((item) => getStatusCategory(item) === "pending").length;
-    const returnedCount = baseFilteredData.filter((item) => getStatusCategory(item) === "returned").length;
-    const rejectedCount = baseFilteredData.filter((item) => getStatusCategory(item) === "rejected").length;
-    const approvedCount = baseFilteredData.filter((item) => getStatusCategory(item) === "approved").length;
-    const archivedCount = baseFilteredData.filter((item) => getStatusCategory(item) === "archived").length;
-    return { total, pending: pendingCount, returned: returnedCount, rejected: rejectedCount, approved: approvedCount, archived: archivedCount };
-  }, [baseFilteredData, getStatusCategory]);
 
   const isHodBudgetView = useMemo(() => {
     const roles = Array.isArray(user?.roles) ? user.roles.map((role) => String(role).toLowerCase()) : [];
@@ -894,10 +941,9 @@ const AdminBudget: React.FC = () => {
   const getRoleLabelForLog = (role?: string) => {
     const normalized = String(role || "").toLowerCase();
     if (normalized === "level1") {
-      const isEntity = ["club", "cell", "center", "centre", "professional body"].includes(
-        String(logProposal?.beneficiary_type || "").toLowerCase().trim()
-      );
-      return isEntity ? "Coordinator" : "HoD";
+      return getLevel1Label(logProposal?.beneficiary_type || "", logProposal?.level1_route_type) === "Coordinator"
+        ? "Coordinator"
+        : "HoD";
     }
     const map: Record<string, string> = {
       hod: "HoD",
@@ -1134,7 +1180,7 @@ const AdminBudget: React.FC = () => {
                           title="Freeze Budget Time"
                           aria-label="Freeze Budget Time"
                         >
-                          <Snowflake size={20} />
+                          <Lock size={18} />
                         </button>
 
                         {freezePopupOpen && (
@@ -1230,7 +1276,10 @@ const AdminBudget: React.FC = () => {
                     <select
                       className="adminbudget-control"
                       value={beneficiaryFilter}
-                      onChange={(e) => setBeneficiaryFilter(e.target.value)}
+                      onChange={(e) => {
+                        setBeneficiaryFilter(e.target.value);
+                        setDepartmentFilter("");
+                      }}
                       title="Beneficiary"
                     >
                       {filteredBeneficiaryOptions.map((opt) => (
@@ -1239,6 +1288,28 @@ const AdminBudget: React.FC = () => {
                         </option>
                       ))}
                     </select>
+
+                    {(isSuperAdminLogin || isDofLogin || hasPermission(user, "budget.workflow.principal")) && (
+                      <select
+                        className="adminbudget-control"
+                        value={departmentFilter}
+                        onChange={(e) => setDepartmentFilter(e.target.value)}
+                        title={beneficiaryFilter === "All Beneficiary" || ["Faculty", "Staff", "Department"].includes(beneficiaryFilter) ? "Department" : beneficiaryFilter}
+                      >
+                        <option value="">
+                          {beneficiaryFilter === "All Beneficiary" || ["Faculty", "Staff", "Department"].includes(beneficiaryFilter) 
+                            ? "All Departments" 
+                            : beneficiaryFilter === "Professional Body" 
+                              ? "All Professional Bodies"
+                              : `All ${beneficiaryFilter}s`}
+                        </option>
+                        {departmentsList.map((dept) => (
+                          <option key={dept} value={dept}>
+                            {dept}
+                          </option>
+                        ))}
+                      </select>
+                    )}
 
                     <input
                       className="adminbudget-control"
@@ -1252,7 +1323,7 @@ const AdminBudget: React.FC = () => {
 
                 <div className="adminbudget-stats">
                   <div
-                    className={`adminbudget-stats-card total ${statsFilter === "total" ? "active" : ""}`}
+                    className={`adminbudget-stats-card total ${localStatsFilter === "total" ? "active" : ""}`}
                     onClick={() => handleStatsFilter("total")}
                     title="Show All Budgets"
                   >
@@ -1265,7 +1336,7 @@ const AdminBudget: React.FC = () => {
                     </div>
                   </div>
                   <div
-                    className={`adminbudget-stats-card pending ${statsFilter === "pending" ? "active" : ""}`}
+                    className={`adminbudget-stats-card pending ${localStatsFilter === "pending" ? "active" : ""}`}
                     onClick={() => handleStatsFilter("pending")}
                     title="Filter Pending"
                   >
@@ -1278,7 +1349,7 @@ const AdminBudget: React.FC = () => {
                     </div>
                   </div>
                   <div
-                    className={`adminbudget-stats-card returned ${statsFilter === "returned" ? "active" : ""}`}
+                    className={`adminbudget-stats-card returned ${localStatsFilter === "returned" ? "active" : ""}`}
                     onClick={() => handleStatsFilter("returned")}
                     title="Filter Returned"
                   >
@@ -1291,7 +1362,7 @@ const AdminBudget: React.FC = () => {
                     </div>
                   </div>
                   <div
-                    className={`adminbudget-stats-card rejected ${statsFilter === "rejected" ? "active" : ""}`}
+                    className={`adminbudget-stats-card rejected ${localStatsFilter === "rejected" ? "active" : ""}`}
                     onClick={() => handleStatsFilter("rejected")}
                     title="Filter Rejected"
                   >
@@ -1304,7 +1375,7 @@ const AdminBudget: React.FC = () => {
                     </div>
                   </div>
                   <div
-                    className={`adminbudget-stats-card approved ${statsFilter === "approved" ? "active" : ""}`}
+                    className={`adminbudget-stats-card approved ${localStatsFilter === "approved" ? "active" : ""}`}
                     onClick={() => handleStatsFilter("approved")}
                     title="Filter Approved"
                   >
@@ -1317,7 +1388,7 @@ const AdminBudget: React.FC = () => {
                     </div>
                   </div>
                   <div
-                    className={`adminbudget-stats-card archived ${statsFilter === "archived" ? "active" : ""}`}
+                    className={`adminbudget-stats-card archived ${localStatsFilter === "archived" ? "active" : ""}`}
                     onClick={() => handleStatsFilter("archived")}
                     title="Filter Archived"
                   >
@@ -1334,11 +1405,11 @@ const AdminBudget: React.FC = () => {
                 <div className="adminbudget-body">
                   {loading && <div className="adminbudget-state">Loading budget requests...</div>}
                   {!loading && accessError && <div className="adminbudget-state">{accessError}</div>}
-                  {!loading && !accessError && filteredData.length === 0 && (
+                  {!loading && !accessError && baseFilteredData.length === 0 && (
                     <div className="adminbudget-state">No budget requests found</div>
                   )}
 
-                  {!loading && !accessError && filteredData.length > 0 && (
+                  {!loading && !accessError && baseFilteredData.length > 0 && (
                     <>
                       <div className="adminbudget-cards-container">
                         {currentItems.map((item) => {
@@ -1545,25 +1616,56 @@ const AdminBudget: React.FC = () => {
                       </div>
 
                       <div className="adminbudget-pagination">
-                        <button
-                          className="adminbudget-pagebtn"
-                          disabled={safeCurrentPage <= 1}
-                          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                        >
-                          Previous
-                        </button>
+                        <div className="adminbudget-pagination-left">
+                          <div className="adminbudget-rows-control">
+                            <label htmlFor="adminbudget-rows-per-page" className="adminbudget-rows-label">
+                              Rows per page
+                            </label>
+                            <select
+                              id="adminbudget-rows-per-page"
+                              className="adminbudget-rows-select"
+                              value={itemsPerPage}
+                              onChange={(e) => {
+                                const next = Number(e.target.value);
+                                setItemsPerPage(Number.isFinite(next) ? next : 10);
+                              }}
+                            >
+                              {ROWS_PER_PAGE_OPTIONS.map((size) => (
+                                <option key={size} value={size}>
+                                  {size}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                        <span className="adminbudget-pageinfo">
-                          Page {safeCurrentPage} of {totalPages}
-                        </span>
+                          <span className="adminbudget-pagecount">
+                            {totalItemsCount === 0
+                              ? "0-0 of 0"
+                              : `${(safeCurrentPage - 1) * itemsPerPage + 1}-${Math.min(safeCurrentPage * itemsPerPage, totalItemsCount)} of ${totalItemsCount}`}
+                          </span>
+                        </div>
 
-                        <button
-                          className="adminbudget-pagebtn"
-                          disabled={safeCurrentPage >= totalPages}
-                          onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                        >
-                          Next
-                        </button>
+                        <div className="adminbudget-pagination-right">
+                          <button
+                            className="adminbudget-pagebtn"
+                            disabled={safeCurrentPage <= 1}
+                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                          >
+                            Previous
+                          </button>
+
+                          <span className="adminbudget-pageinfo">
+                            Page {safeCurrentPage} of {totalPagesCount}
+                          </span>
+
+                          <button
+                            className="adminbudget-pagebtn"
+                            disabled={safeCurrentPage >= totalPagesCount}
+                            onClick={() => setCurrentPage((p) => Math.min(totalPagesCount, p + 1))}
+                          >
+                            Next
+                          </button>
+                        </div>
                       </div>
                     </>
                   )}
