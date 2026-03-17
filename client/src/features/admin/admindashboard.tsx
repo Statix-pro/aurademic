@@ -5,6 +5,7 @@ import { Modal, Button, Dropdown } from "react-bootstrap";
 
 import "./admindashboard.css";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
+import { useLocation } from "react-router-dom";
 import JournalManagement from "./formManagement/JournalFormOptions";
 import ProjectFormOptions from "./formManagement/ProjectFormOptions";
 import JournalStatusUpdates from "./components/JournalStatusUpdates";
@@ -90,7 +91,7 @@ interface EditRequestActionsProps {
   itemId: number;
 }
 
-type TabType = 'projects' | 'journals' | 'journal-requests' | 'project-requests' | 'journal-status-updates';
+type TabType = 'projects' | 'journals' | 'journal-requests' | 'project-requests' | 'journal-status-updates' | 'journal-management' | 'project-management';
 
 const defaultColumnConfig: ColumnConfig = {
   projects: {
@@ -157,7 +158,18 @@ const EditRequestActions: React.FC<EditRequestActionsProps> = ({ status, onUpdat
 };
 
 const Dashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>("projects");
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<TabType>("journals");
+
+  // Handle URL pathname for initial tab selection and subsequent changes
+  useEffect(() => {
+    const path = location.pathname;
+    if (path === '/project-dashboard') {
+      setActiveTab('projects');
+    } else if (path === '/publication-dashboard' || path === '/admin-dashboard') {
+      setActiveTab('journals');
+    }
+  }, [location.pathname]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [journals, setJournals] = useState<Journal[]>([]);
   const [journalRequests, setJournalRequests] = useState<JournalRequest[]>([]);
@@ -244,6 +256,11 @@ const Dashboard: React.FC = () => {
         endpoint = "/admin/project-requests";
       } else if (activeTab === "journal-status-updates") {
         endpoint = "/admin/journal-status-updates";
+      }
+
+      if (!endpoint) {
+        setLoading(false);
+        return;
       }
 
       const response = await authenticityUtility.get(endpoint, {
@@ -586,8 +603,12 @@ const Dashboard: React.FC = () => {
 
     switch (column.key) {
       case "status":
-      case "publication_status":
-        return (projectItem.status as string) || (projectItem.publication_status as string) || "-";
+      case "publication_status": {
+        const status = (projectItem.status as string) || (projectItem.publication_status as string) || "-";
+        if (status === "-" || !status) return "-";
+        const statusClass = status.toLowerCase().replace(/\s+/g, '_');
+        return <span className={`badge ${statusClass}`}>{status}</span>;
+      }
 
       case "submission_date":
       case "date_of_submission":
@@ -610,29 +631,29 @@ const Dashboard: React.FC = () => {
                   : "Pending"}
             </span>
             <div className="submission-approval-actions">
-              {approvalStatus !== "approved" && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-success"
-                  onClick={() =>
-                    handleJournalSubmissionApproval(item.id, "approved")
-                  }
-                  title="Approve submission"
-                >
-                  <Check size={14} />
-                </button>
-              )}
-              {approvalStatus !== "rejected" && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-danger"
-                  onClick={() =>
-                    handleJournalSubmissionApproval(item.id, "rejected")
-                  }
-                  title="Reject submission"
-                >
-                  <X size={14} />
-                </button>
+              {approvalStatus === "pending" && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-success"
+                    onClick={() =>
+                      handleJournalSubmissionApproval(item.id, "approved")
+                    }
+                    title="Approve submission"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    onClick={() =>
+                      handleJournalSubmissionApproval(item.id, "rejected")
+                    }
+                    title="Reject submission"
+                  >
+                    <X size={14} />
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -825,56 +846,57 @@ const Dashboard: React.FC = () => {
     const groupOrder = ["Essential", ...Object.keys(groupedColumns).filter((g) => g !== "Essential").sort((a, b) => a.localeCompare(b))];
 
     return (
-      <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
+      <div ref={dropdownRef} className="position-relative d-inline-block">
         <button
-          className="btn btn-primary dropdown-toggle"
+          className="column-toggle-button"
           type="button"
           onClick={() => setIsColumnDropdownOpen(!isColumnDropdownOpen)}
         >
-          <Settings size={16} className="me-2" /> Configure Columns
+          <Settings size={18} />
+          <span>Configure Columns</span>
         </button>
         {isColumnDropdownOpen && (
           <div
-            className="dropdown-menu show p-2"
+            className="dropdown-menu show p-3"
             style={{
               position: 'absolute',
-              top: '100%',
+              top: 'calc(100% + 8px)',
               right: 0,
-              minWidth: '100%',
-              width: 'max-content',
-              maxHeight: '70vh',
+              width: '480px',
+              maxHeight: '400px',
               overflowY: 'auto',
+              border: '1px solid var(--border-color)',
+              borderRadius: '0.75rem',
+              boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
               zIndex: 1050
             }}
           >
             {groupOrder.map((group) => (
-              <div key={group}>
-                {group !== "Essential" && (
-                  <hr className="dropdown-divider my-2" />
-                )}
-                <h6 className="dropdown-header fw-bold text-dark mb-2">{group}</h6>
-                {groupedColumns[group]?.sort((a, b) => a[1].order - b[1].order).map(([key, config]) => (
-                  <div key={key} className="dropdown-item-text">
-                    <div className="form-check">
-                      <input
-                        type="checkbox"
-                        className="form-check-input"
-                        id={`column-toggle-${key}`}
-                        checked={config.show}
-                        onChange={() => toggleColumn(key)}
-                        disabled={group === "Essential"}
-                      />
-                      <label
-                        className={`form-check-label user-select-none ${group === "Essential" ? "text-muted" : ""}`}
-                        htmlFor={`column-toggle-${key}`}
-                        style={{ cursor: group === "Essential" ? "default" : "pointer" }}
-                        title={group === "Essential" ? "Essential columns cannot be hidden" : ""}
-                      >
-                        {config.label}
-                      </label>
+              <div key={group} className="mb-3 last:mb-0">
+                <h6 className="dropdown-header px-0 pb-2 text-uppercase fw-bold text-muted small" style={{ letterSpacing: '0.05em', borderBottom: '1px solid var(--border-color)', marginBottom: '10px' }}>{group}</h6>
+                <div className="row g-2">
+                  {groupedColumns[group]?.sort((a, b) => a[1].order - b[1].order).map(([key, config]) => (
+                    <div key={key} className="col-6">
+                      <div className="form-check py-1">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          id={`column-toggle-${key}`}
+                          checked={config.show}
+                          onChange={() => toggleColumn(key)}
+                          disabled={group === "Essential"}
+                        />
+                        <label
+                          className={`form-check-label user-select-none small ms-1 ${group === "Essential" ? "text-muted opacity-75" : "text-dark"}`}
+                          htmlFor={`column-toggle-${key}`}
+                          style={{ cursor: group === "Essential" ? "default" : "pointer" }}
+                        >
+                          {config.label}
+                        </label>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -886,7 +908,13 @@ const Dashboard: React.FC = () => {
   const renderTable = () => {
     const items = activeTab === "projects" ? projects : journals;
     if (!items || items.length === 0) {
-      return <div className="text-center p-3">No {activeTab} found</div>;
+      return (
+        <div className="loading py-5">
+          <div className="text-center">
+            <p className="mb-0">No {activeTab} found</p>
+          </div>
+        </div>
+      );
     }
 
     const visibleColumns = getVisibleColumns();
@@ -894,10 +922,10 @@ const Dashboard: React.FC = () => {
     return (
       <div className="table-responsive">
         <DragDropContext onDragEnd={handleColumnReorder}>
-          <table className="table table-striped">
+          <table className="table">
             <Droppable droppableId="table-header" direction="horizontal">
               {(provided) => (
-                <thead className="table-dark" ref={provided.innerRef} {...provided.droppableProps}>
+                <thead ref={provided.innerRef} {...provided.droppableProps}>
                   <tr>
                     {visibleColumns.map((column, index) => (
                       <Draggable key={column.key} draggableId={column.key} index={index}>
@@ -908,13 +936,13 @@ const Dashboard: React.FC = () => {
                             {...provided.dragHandleProps}
                             style={{
                               ...provided.draggableProps.style,
-                              ...darkHeaderCellStyle,
+                              opacity: snapshot.isDragging ? 0.8 : 1,
                               cursor: snapshot.isDragging ? "grabbing" : "grab",
-                              padding: "12px 16px",
-                              userSelect: "none",
                             }}
                           >
-                            {column.label}
+                            <div className="d-flex align-items-center gap-2">
+                              {column.label}
+                            </div>
                           </th>
                         )}
                       </Draggable>
@@ -935,7 +963,11 @@ const Dashboard: React.FC = () => {
     const totalPages = Math.ceil(totalItems / itemsPerPage);
     const pages: JSX.Element[] = [];
 
-    for (let i = 1; i <= totalPages; i++) {
+    // Simple visible pages logic
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, startPage + 4);
+
+    for (let i = startPage; i <= endPage; i++) {
       pages.push(
         <li key={i} className={`page-item ${currentPage === i ? "active" : ""}`}>
           <button className="page-link" onClick={() => setCurrentPage(i)}>{i}</button>
@@ -944,31 +976,35 @@ const Dashboard: React.FC = () => {
     }
 
     return (
-      <div className="d-flex justify-content-between align-items-center mt-3">
-        <select
-          className="form-select w-auto"
-          value={itemsPerPage}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-            setItemsPerPage(Number(e.target.value));
-            setCurrentPage(1);
-          }}
-        >
-          <option value="5">5 per page</option>
-          <option value="10">10 per page</option>
-          <option value="20">20 per page</option>
-          <option value="50">50 per page</option>
-          <option value="100">100 per page</option>
-        </select>
+      <div className="d-flex justify-content-between align-items-center px-2">
+        <div className="d-flex align-items-center gap-3">
+          <span className="text-secondary small">
+            Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)}-{Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems}
+          </span>
+          <select
+            className="form-select border-0 bg-light w-auto small"
+            style={{ fontSize: '0.8rem', padding: '0.25rem 2rem 0.25rem 0.75rem' }}
+            value={itemsPerPage}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+              setItemsPerPage(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+          >
+            <option value="10">10 / page</option>
+            <option value="20">20 / page</option>
+            <option value="50">50 / page</option>
+          </select>
+        </div>
         <ul className="pagination mb-0">
           <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
             <button className="page-link" onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
-              Previous
+              &lsaquo;
             </button>
           </li>
           {pages}
           <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
             <button className="page-link" onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
-              Next
+              &rsaquo;
             </button>
           </li>
         </ul>
@@ -1348,42 +1384,58 @@ const Dashboard: React.FC = () => {
     <div>
 
       <div className="dashboard-container">
-        <div className="tab-buttons">
-          <div className={`tab-button ${activeTab === "projects" ? "active" : ""}`} onClick={() => { setActiveTab("projects"); setCurrentPage(1); }}>Projects</div>
-          <div className={`tab-button ${activeTab === "journals" ? "active" : ""}`} onClick={() => { setActiveTab("journals"); setCurrentPage(1); }}>Journals</div>
-          <div className={`tab-button ${activeTab === "journal-requests" ? "active" : ""}`} onClick={() => { setActiveTab("journal-requests"); setCurrentPage(1); }}>Journal Requests</div>
-          <div className={`tab-button ${activeTab === "project-requests" ? "active" : ""}`} onClick={() => { setActiveTab("project-requests"); setCurrentPage(1); }}>Project Requests</div>
-          <div className={`tab-button ${activeTab === "journal-status-updates" ? "active" : ""}`} onClick={() => { setActiveTab("journal-status-updates"); setCurrentPage(1); }}>Journal Status Updates</div>
+        <div className="w-100 max-w-1400">
+          <div className="tab-buttons">
+            {location.pathname === '/project-dashboard' ? (
+              <>
+                <div className={`tab-button ${activeTab === "projects" ? "active" : ""}`} onClick={() => { setActiveTab("projects"); setCurrentPage(1); }}>Projects</div>
+                <div className={`tab-button ${activeTab === "project-requests" ? "active" : ""}`} onClick={() => { setActiveTab("project-requests"); setCurrentPage(1); }}>Project Requests</div>
+                <div className={`tab-button ${activeTab === "project-management" ? "active" : ""}`} onClick={() => { setActiveTab("project-management"); setCurrentPage(1); }}>Project Management</div>
+              </>
+            ) : (
+              <>
+                <div className={`tab-button ${activeTab === "journals" ? "active" : ""}`} onClick={() => { setActiveTab("journals"); setCurrentPage(1); }}>Publications</div>
+                <div className={`tab-button ${activeTab === "journal-requests" ? "active" : ""}`} onClick={() => { setActiveTab("journal-requests"); setCurrentPage(1); }}>Publication Requests</div>
+                <div className={`tab-button ${activeTab === "journal-status-updates" ? "active" : ""}`} onClick={() => { setActiveTab("journal-status-updates"); setCurrentPage(1); }}>Publication Status Updates</div>
+                <div className={`tab-button ${activeTab === "journal-management" ? "active" : ""}`} onClick={() => { setActiveTab("journal-management"); setCurrentPage(1); }}>Publication Management</div>
+              </>
+            )}
+          </div>
         </div>
 
         {loading ? (
-          <div className="loading">Loading...</div>
+          <div className="loading">
+            <div className="spinner-border spinner-border-sm me-2" role="status"></div>
+            Loading Dashboard...
+          </div>
         ) : error ? (
           <div className="error-message">{error}</div>
         ) : (
-          <>
+          <div className="w-100 max-w-1400">
             {(activeTab === "projects" || activeTab === "journals") && (
               <>
-                <div className="d-flex justify-content-end mb-3" style={{ width: '90%' }}>
+                <div className="d-flex justify-content-end mb-4 px-2">
                   {renderColumnToggleDropdown()}
                 </div>
                 <div className="table-container">
                   {renderTable()}
-                  {renderPagination()}
+                  <div className="table-footer">
+                    {renderPagination()}
+                  </div>
                 </div>
-                {activeTab === "journals" && <div className="journal-management-container"><JournalManagement /></div>}
-                {activeTab === "projects" && <div className="project-management-container"><ProjectFormOptions /></div>}
               </>
             )}
             {activeTab === "journal-requests" && <div className="table-container">{renderJournalRequestsTable()}</div>}
             {activeTab === "project-requests" && <div className="table-container">{renderProjectRequestsTable()}</div>}
             {activeTab === "journal-status-updates" && <div className="table-container"><JournalStatusUpdates /></div>}
-          </>
+            {activeTab === "journal-management" && <div className="table-container"><JournalManagement /></div>}
+            {activeTab === "project-management" && <div className="table-container"><ProjectFormOptions /></div>}
+          </div>
         )}
 
         <Modal show={showModal} onHide={() => setShowModal(false)} size="lg" className="details-modal">
           <Modal.Header closeButton>
-            <Modal.Title>{activeTab === "projects" ? "Project Details" : "Journal Details"}</Modal.Title>
+            <Modal.Title>{activeTab === "projects" ? "Project Details" : "Publication Details"}</Modal.Title>
           </Modal.Header>
           <Modal.Body className="modal-body-scroll">
             {activeTab === "projects" ? renderProjectDetails() : renderJournalDetails()}

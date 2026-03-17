@@ -291,6 +291,8 @@ const JournalForm: React.FC = () => {
     availableOnline: false,
   });
   const [doi, setDoi] = useState<string>('');
+  const [scopusId, setScopusId] = useState<string>('');
+  const [scieId, setScieId] = useState<string>('');
 
   // Add new state for page/article number choice
   const [pageOrArticleChoice, setPageOrArticleChoice] = useState<PageOrArticleChoice>('pages');
@@ -1140,6 +1142,8 @@ const JournalForm: React.FC = () => {
 
       // Set DOI value
       setDoi(journalData.doi || '');
+      setScopusId(journalData.scopus_id || '');
+      setScieId(journalData.scie_id || '');
 
       // Set page/article choice based on existing data
       if (journalData.pages_from && journalData.pages_to) {
@@ -2573,6 +2577,8 @@ const JournalForm: React.FC = () => {
           ? getFormValue('articleNumberInput')
           : null,
       doi: getFormValue('doiInput'),
+      scopus_id: scopusId,
+      scie_id: scieId,
       credit_to: selectedCreditTo,
       reference_number: referenceNumber,
       accepted_date: getFormValue('acceptedDateInput'),
@@ -4422,6 +4428,38 @@ const JournalForm: React.FC = () => {
                     <div className="col-lg-6">
                       {/* Right Column - Date(s), Accepted for Publications, Available Online, Upload */}
                       {/* <label className="form-section-title mb-3">Date(s)</label> */}
+
+                      {/* Scopus ID Field */}
+                      {selectedIndexes.includes('Scopus') && (
+                        <div className="metric-item-vertical mb-3">
+                          <label className="form-label mb-2">Scopus ID</label>
+                          <input
+                            type="text"
+                            id="scopusIdInput"
+                            className="form-control reference-number-input"
+                            value={scopusId}
+                            onChange={(e) => setScopusId(e.target.value)}
+                            placeholder="Enter Scopus ID"
+                            disabled={!editMode && isViewMode}
+                          />
+                        </div>
+                      )}
+
+                      {/* SCIE ID Field */}
+                      {selectedIndexes.includes('SCIE') && (
+                        <div className="metric-item-vertical mb-3">
+                          <label className="form-label mb-2">SCIE ID</label>
+                          <input
+                            type="text"
+                            id="scieIdInput"
+                            className="form-control reference-number-input"
+                            value={scieId}
+                            onChange={(e) => setScieId(e.target.value)}
+                            placeholder="Enter SCIE ID"
+                            disabled={!editMode && isViewMode}
+                          />
+                        </div>
+                      )}
 
                       {/* Credit To Field */}
                       {(selectedIndexes.includes('SCIE') || selectedIndexes.includes('Scopus') || selectedIndexes.includes('PubMed') || selectedIndexes.includes('Google Scholar')) && authors.length > 0 && (

@@ -196,8 +196,7 @@ const userDashboardModel = {
                         DISTINCT 
                         CONCAT(va.author_name,
                             CASE 
-                                WHEN aj.is_first_author THEN '*'
-                                WHEN aj.is_primary THEN ' (Primary Author)'
+                                WHEN aj.is_first_author OR aj.is_primary THEN '*'
                                 ELSE ''
                             END
                         ) ORDER BY aj.is_first_author DESC, aj.is_primary DESC SEPARATOR ', '
@@ -458,8 +457,7 @@ const userDashboardModel = {
               DISTINCT CONCAT(
                 va.author_name,
                 CASE
-                  WHEN aj.is_first_author THEN '*'
-                  WHEN aj.is_primary THEN ' (Primary Author)'
+                  WHEN aj.is_first_author OR aj.is_primary THEN '*'
                   ELSE ''
                 END
               ) ORDER BY aj.is_first_author DESC, aj.is_primary DESC SEPARATOR ', '

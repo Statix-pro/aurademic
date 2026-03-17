@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, ChangeEvent, FormEvent } from "react";
 import { Table, Button, Form, Modal, Alert } from "react-bootstrap";
+import { Pencil, Trash2 } from "lucide-react";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import "./FormManagementStyles.css";
 import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
@@ -122,7 +123,7 @@ const ProjectFormOptions: React.FC = () => {
   };
 
   return (
-    <div className="project-management container mt-4">
+    <div className="project-management">
       {error && <Alert variant="danger">{error}</Alert>}
 
       <div className="d-flex justify-content-between align-items-center mb-4">
@@ -152,8 +153,14 @@ const ProjectFormOptions: React.FC = () => {
               <tr key={option.id}>
                 <td>{option.name}</td>
                 <td>
-                  <Button variant="primary" size="sm" className="me-2" onClick={() => handleEdit(option)}>Edit</Button>
-                  <Button variant="danger" size="sm" onClick={() => handleDelete(option.id)}>Delete</Button>
+                  <div className="btn-group">
+                    <Button variant="primary" size="sm" onClick={() => handleEdit(option)} title="Edit">
+                      <Pencil size={16} />
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={() => handleDelete(option.id)} title="Delete">
+                      <Trash2 size={16} />
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))
