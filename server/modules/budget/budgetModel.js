@@ -938,10 +938,10 @@ export async function update(
       && normalizeText(payload?.beneficiary_value) === normalizeText(proposal?.beneficiary_value);
 
     if (shouldPreserveExistingFacultyRouting) {
-      departmentId = Number.isInteger(Number(proposal?.department_id))
+      departmentId = proposal?.department_id != null && Number.isInteger(Number(proposal.department_id))
         ? Number(proposal.department_id)
         : departmentId;
-      beneficiaryEntityId = Number.isInteger(Number(proposal?.beneficiary_entity_id))
+      beneficiaryEntityId = proposal?.beneficiary_entity_id != null && Number.isInteger(Number(proposal.beneficiary_entity_id))
         ? Number(proposal.beneficiary_entity_id)
         : beneficiaryEntityId;
     }
