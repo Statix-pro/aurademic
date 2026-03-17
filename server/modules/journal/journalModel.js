@@ -119,6 +119,8 @@ const journalModel = {
         accepted_date: journalData.accepted_date,
         available_online_date: journalData.available_online_date,
         publication_details: journalData.publication_details ? JSON.stringify(journalData.publication_details) : null,
+        scopus_id: journalData.scopus_id,
+        scie_id: journalData.scie_id,
       };
 
       // Insert journal
@@ -466,7 +468,7 @@ const journalModel = {
         // Return top 20 active faculty if query is empty
         sql = `SELECT 
           e.id,
-          CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+          TRIM(CONCAT(e.first_name, ' ', COALESCE(e.last_name, ''))) AS name,
           e.email,
           e.designation,
           e.erp_id AS author_id,
@@ -485,7 +487,7 @@ const journalModel = {
         // Search by query
         sql = `SELECT 
           e.id,
-          CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+          TRIM(CONCAT(e.first_name, ' ', COALESCE(e.last_name, ''))) AS name,
           e.email,
           e.designation,
           e.erp_id AS author_id,

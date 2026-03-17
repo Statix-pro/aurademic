@@ -128,14 +128,15 @@
 }
 
 .dropdown li {
-  padding: 10px 15px;
+  padding: 6px 15px;
+  /* Reduced from 10px 15px */
   cursor: pointer;
   color: #333;
   transition: background-color 0.3s;
 }
 
 .dropdown li:hover {
-  background-color: #f8f9fa;
+  background-color: #e3f2fd;
 }
 
 .dropdown-li {

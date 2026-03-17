@@ -79,6 +79,8 @@ function App() {
 
                   {/* ADMIN MANAGEMENT ROUTES */}
                   <Route path="/admin-dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
+                  <Route path="/publication-dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
+                  <Route path="/project-dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
                   <Route path="/admin/journals" element={<AdminRoute><JournalManagement /></AdminRoute>} />
                   <Route path="/admin/form-management/project-options" element={<AdminRoute><ProjectFormOptions /></AdminRoute>} />
                   <Route path="/access-control" element={<SuperAdminRoute><AccessControlPage /></SuperAdminRoute>} />

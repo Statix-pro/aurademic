@@ -1,5 +1,6 @@
 import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { Table, Button, Form, Modal, Alert } from "react-bootstrap";
+import { Pencil, Trash2 } from "lucide-react";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import "./FormManagementStyles.css";
 import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
@@ -144,7 +145,7 @@ const JournalManagement: React.FC = () => {
   };
 
   return (
-    <div className="journal-management container mt-4">
+    <div className="journal-management">
       {error && <Alert variant="danger">{error}</Alert>}
       {loading && (
         <div className="text-center mb-3">
@@ -192,8 +193,14 @@ const JournalManagement: React.FC = () => {
                 <td>{journal.cite_score ?? "-"}</td>
                 <td>{journal.website}</td>
                 <td>
-                  <Button variant="primary" size="sm" className="me-2" onClick={() => handleEdit(journal)}>Edit</Button>
-                  <Button variant="danger" size="sm" onClick={() => handleDelete(journal.id)}>Delete</Button>
+                  <div className="btn-group">
+                    <Button variant="primary" size="sm" onClick={() => handleEdit(journal)} title="Edit">
+                      <Pencil size={16} />
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={() => handleDelete(journal.id)} title="Delete">
+                      <Trash2 size={16} />
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))

@@ -147,7 +147,10 @@ const JournalStatusUpdates: React.FC = () => {
     const totalPages = Math.ceil(totalItems / itemsPerPage);
     const pages: JSX.Element[] = [];
 
-    for (let i = 1; i <= totalPages; i++) {
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, startPage + 4);
+
+    for (let i = startPage; i <= endPage; i++) {
       pages.push(
         <li key={i} className={`page-item ${currentPage === i ? "active" : ""}`}>
           <button className="page-link" onClick={() => setCurrentPage(i)}>{i}</button>
@@ -156,30 +159,35 @@ const JournalStatusUpdates: React.FC = () => {
     }
 
     return (
-      <div className="d-flex justify-content-between align-items-center">
-        <select
-          className="form-select w-auto"
-          value={itemsPerPage}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-            setItemsPerPage(Number(e.target.value));
-            setCurrentPage(1);
-          }}
-        >
-          <option value="5">5 per page</option>
-          <option value="10">10 per page</option>
-          <option value="20">20 per page</option>
-          <option value="50">50 per page</option>
-        </select>
+      <div className="d-flex justify-content-between align-items-center mt-4 px-2">
+        <div className="d-flex align-items-center gap-3">
+          <span className="text-secondary small">
+            Results: {totalItems}
+          </span>
+          <select
+            className="form-select border-0 bg-light w-auto small"
+            style={{ fontSize: '0.8rem', padding: '0.25rem 2rem 0.25rem 0.75rem' }}
+            value={itemsPerPage}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+              setItemsPerPage(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+          >
+            <option value="10">10 / page</option>
+            <option value="20">20 / page</option>
+            <option value="50">50 / page</option>
+          </select>
+        </div>
         <ul className="pagination mb-0">
           <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
             <button className="page-link" onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
-              Previous
+              &lsaquo;
             </button>
           </li>
           {pages}
           <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
             <button className="page-link" onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
-              Next
+              &rsaquo;
             </button>
           </li>
         </ul>
@@ -199,24 +207,24 @@ const JournalStatusUpdates: React.FC = () => {
 
   return (
     <div className="journal-status-updates">
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h4>Journal Status Updates</h4>
-        <div className="d-flex gap-2">
+      <div className="filter-controls">
+        <h4 className="m-0 fs-5 fw-bold text-dark">Status Updates</h4>
+        <div className="ms-auto d-flex gap-2">
           <Form.Select
+            className="status-filter"
             value={statusFilter}
             onChange={(e: ChangeEvent<HTMLSelectElement>) => {
               setStatusFilter(e.target.value);
               setCurrentPage(1);
             }}
-            style={{ width: "auto" }}
           >
             {statusOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </Form.Select>
           {statusFilter && (
-            <Button variant="outline-secondary" size="sm" onClick={() => { setStatusFilter(""); setCurrentPage(1); }}>
-              <X size={16} />
+            <Button variant="light" size="sm" className="border" onClick={() => { setStatusFilter(""); setCurrentPage(1); }}>
+              <X size={18} />
             </Button>
           )}
         </div>
@@ -233,16 +241,16 @@ const JournalStatusUpdates: React.FC = () => {
       ) : (
         <>
           <div className="table-responsive">
-            <table className="table table-striped">
-              <thead className="table-dark">
+            <table className="table">
+              <thead>
                 <tr>
                   <th>Journal</th>
                   <th>User</th>
                   <th>Status</th>
-                  <th>User Comment</th>
-                  <th>Admin Reply</th>
+                  <th>Comment</th>
+                  <th>Reply</th>
                   <th>Date</th>
-                  <th>Actions</th>
+                  <th className="text-center">Action</th>
                 </tr>
               </thead>
               <tbody>

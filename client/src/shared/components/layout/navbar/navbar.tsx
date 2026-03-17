@@ -320,64 +320,85 @@ const Navbar: React.FC = () => {
               </div>
               <ul className={`dropdown ${activeMenu === "Admin" ? "show" : ""}`}>
                 {showAdminDashboard && (
-                  <Link
-                    to="/admin-dashboard"
-                    className="dropdown-li"
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      document.body.classList.remove('menu-open');
-                    }}
-                  >
-                    <li>Dashboard</li>
-                  </Link>
+                  <>
+                    <li className="dropdown-header text-uppercase fw-bold text-muted px-3 mb-0" style={{ fontSize: '0.70rem' }}>Research Approvals</li>
+                    <Link
+                      to="/publication-dashboard"
+                      className="dropdown-li"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        document.body.classList.remove('menu-open');
+                      }}
+                    >
+                      <li>Publication Approval</li>
+                    </Link>
+                    <Link
+                      to="/project-dashboard"
+                      className="dropdown-li"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        document.body.classList.remove('menu-open');
+                      }}
+                    >
+                      <li>Project Approval</li>
+                    </Link>
+                  </>
                 )}
+
                 {showBudgetApproval && (
-                  <Link
-                    to="/admin/budgetdashboard"
-                    className="dropdown-li"
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      document.body.classList.remove('menu-open');
-                    }}
-                  >
-                    <li>Budget-Dashboard</li>
-                  </Link>
+                  <>
+                    <li className="dropdown-header text-uppercase fw-bold text-muted px-3 mb-0" style={{ fontSize: '0.70rem' }}>Financial Approvals</li>
+                    <Link
+                      to="/admin/budgetdashboard"
+                      className="dropdown-li"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        document.body.classList.remove('menu-open');
+                      }}
+                    >
+                      <li>Budget Dashboard</li>
+                    </Link>
+                    <Link
+                      to="/admin/budget"
+                      className="dropdown-li"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        document.body.classList.remove('menu-open');
+                      }}
+                    >
+                      <li>Budget Approval</li>
+                    </Link>
+                  </>
                 )}
-                {showBudgetApproval && (
-                  <Link
-                    to="/admin/budget"
-                    className="dropdown-li"
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      document.body.classList.remove('menu-open');
-                    }}
-                  >
-                    <li>Budget-Approval</li>
-                  </Link>
-                )}
-                {showAccessControl && (
-                  <Link
-                    to="/access-control"
-                    className="dropdown-li"
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      document.body.classList.remove('menu-open');
-                    }}
-                  >
-                    <li>Access Control</li>
-                  </Link>
-                )}
-                {showMasterData && (
-                  <Link
-                    to="/admin/master-data"
-                    className="dropdown-li"
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      document.body.classList.remove('menu-open');
-                    }}
-                  >
-                    <li>Master Data</li>
-                  </Link>
+
+                {(showAccessControl || showMasterData) && (
+                  <>
+                    <li className="dropdown-header text-uppercase fw-bold text-muted px-3 mb-0" style={{ fontSize: '0.70rem' }}>System Administration</li>
+                    {showAccessControl && (
+                      <Link
+                        to="/access-control"
+                        className="dropdown-li"
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          document.body.classList.remove('menu-open');
+                        }}
+                      >
+                        <li>Access Control</li>
+                      </Link>
+                    )}
+                    {showMasterData && (
+                      <Link
+                        to="/admin/master-data"
+                        className="dropdown-li"
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          document.body.classList.remove('menu-open');
+                        }}
+                      >
+                        <li>Master Data</li>
+                      </Link>
+                    )}
+                  </>
                 )}
               </ul>
             </li>
