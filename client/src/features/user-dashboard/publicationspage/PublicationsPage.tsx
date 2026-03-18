@@ -347,13 +347,7 @@ const PublicationsPage: React.FC = () => {
                 {journal.authors?.split(', ').map((author, index) => {
                   let displayName = author;
                   let hasStar = false;
-                  
-                  // Check for corresponding/primary author marker
-                  if (displayName.endsWith(' (Primary Author)')) {
-                    hasStar = true;
-                    displayName = displayName.replace(' (Primary Author)', '');
-                  }
-                  
+
                   // Check for first author asterisk
                   if (displayName.endsWith('*')) {
                     hasStar = true;

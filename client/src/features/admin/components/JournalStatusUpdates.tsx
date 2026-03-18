@@ -159,38 +159,57 @@ const JournalStatusUpdates: React.FC = () => {
     }
 
     return (
-      <div className="d-flex justify-content-between align-items-center mt-4 px-2">
-        <div className="d-flex align-items-center gap-3">
-          <span className="text-secondary small">
-            Results: {totalItems}
+      <div className="adminbudget-pagination">
+        <div className="adminbudget-pagination-left">
+          <div className="adminbudget-rows-control">
+            <label htmlFor="adminbudget-rows-per-page" className="adminbudget-rows-label">
+              Rows per page
+            </label>
+            <select
+              id="adminbudget-rows-per-page"
+              className="adminbudget-rows-select"
+              value={itemsPerPage}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+            >
+              {[10, 20, 50].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <span className="adminbudget-pagecount">
+            {totalItems === 0
+              ? "0-0 of 0"
+              : `${(currentPage - 1) * itemsPerPage + 1}-${Math.min(currentPage * itemsPerPage, totalItems)} of ${totalItems}`}
           </span>
-          <select
-            className="form-select border-0 bg-light w-auto small"
-            style={{ fontSize: '0.8rem', padding: '0.25rem 2rem 0.25rem 0.75rem' }}
-            value={itemsPerPage}
-            onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-              setItemsPerPage(Number(e.target.value));
-              setCurrentPage(1);
-            }}
-          >
-            <option value="10">10 / page</option>
-            <option value="20">20 / page</option>
-            <option value="50">50 / page</option>
-          </select>
         </div>
-        <ul className="pagination mb-0">
-          <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-            <button className="page-link" onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
-              &lsaquo;
-            </button>
-          </li>
-          {pages}
-          <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
-            <button className="page-link" onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
-              &rsaquo;
-            </button>
-          </li>
-        </ul>
+
+        <div className="adminbudget-pagination-right">
+          <button
+            className="adminbudget-pagebtn"
+            disabled={currentPage <= 1}
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          >
+            Previous
+          </button>
+
+          <span className="adminbudget-pageinfo">
+            Page {currentPage} of {totalPages}
+          </span>
+
+          <button
+            className="adminbudget-pagebtn"
+            disabled={currentPage >= totalPages}
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Next
+          </button>
+        </div>
       </div>
     );
   };
