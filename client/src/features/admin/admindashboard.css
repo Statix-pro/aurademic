@@ -1,132 +1,94 @@
-:root {
-  --primary-color: #0f172a;
-  --accent-color: #2563eb;
-  --bg-color: #f8fafc;
-  --card-bg: #ffffff;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --border-color: #e2e8f0;
-  --success-bg: #f0fdf4;
-  --success-text: #166534;
-  --warning-bg: #fefce8;
-  --warning-text: #854d0e;
-  --danger-bg: #fef2f2;
-  --danger-text: #991b1b;
-  --info-bg: #f0f9ff;
-  --info-text: #0369a1;
-  --hover-bg: #f1f5f9;
-}
+.publication-approval-dashboard {
+  --admin-primary: #0f172a;
+  --admin-accent: #2563eb;
+  --admin-bg: #f8fafc;
+  --admin-card-bg: #ffffff;
+  --admin-text-primary: #0f172a;
+  --admin-text-secondary: #475569;
+  --admin-border: #e2e8f0;
+  --admin-success-bg: #f0fdf4;
+  --admin-success-text: #166534;
+  --admin-warning-bg: #fefce8;
+  --admin-warning-text: #854d0e;
+  --admin-danger-bg: #fef2f2;
+  --admin-danger-text: #991b1b;
+  --admin-info-bg: #f0f9ff;
+  --admin-info-text: #0369a1;
+  --admin-hover-bg: #f1f5f9;
 
-.dashboard-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 2rem;
-  background-color: var(--bg-color);
+  background-color: var(--admin-bg);
   min-height: 100vh;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-/* Tabs Redesign */
-.tab-buttons {
+.publication-approval-dashboard .tab-buttons {
   display: flex;
   justify-content: flex-start;
   gap: 2rem;
   margin-bottom: 2rem;
   width: 100%;
   max-width: 1400px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--admin-border);
   padding-bottom: 0;
 }
 
-.tab-button {
+.publication-approval-dashboard .tab-button {
   padding: 12px 4px;
   cursor: pointer;
   font-size: 0.95rem;
   font-weight: 400;
-  color: var(--text-secondary);
+  color: var(--admin-text-secondary);
   border-bottom: 2px solid transparent;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
   letter-spacing: 0.01em;
 }
 
-.tab-button:hover {
-  color: var(--text-primary);
+.publication-approval-dashboard .tab-button:hover {
+  color: var(--admin-text-primary);
   border-bottom: 2px solid #cbd5e1;
 }
 
-.tab-button.active {
-  border-bottom: 2px solid var(--accent-color);
-  color: var(--accent-color);
+.publication-approval-dashboard .tab-button.active {
+  border-bottom: 2px solid var(--admin-accent);
+  color: var(--admin-accent);
 }
 
-/* Table Container Redesign */
-.table-container {
+.publication-approval-dashboard .table-container {
   width: 100%;
   max-width: 1400px;
-  background-color: var(--card-bg);
+  background-color: var(--admin-card-bg);
   padding: 0;
   border: 1px solid #f1f5f9;
-  /* Very subtle border */
   box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
   border-radius: 0.75rem;
   margin: 0 auto;
   overflow: hidden;
 }
 
-.w-100 {
-  width: 100%;
-}
-
-.max-w-1400 {
-  max-width: 1400px;
-}
-
-/* Premium Table Styling */
-.table {
+.publication-approval-dashboard .table {
   width: 100%;
   min-width: 1200px;
-  /* Force horizontal scroll for many columns */
   margin-bottom: 0;
   border-collapse: separate;
   border-spacing: 0;
 }
 
-.table-responsive {
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #94a3b8 transparent;
-  border-radius: 0.5rem;
-}
-
-.table-responsive::-webkit-scrollbar {
-  height: 8px;
-  width: 8px;
-}
-
-.table-responsive::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 10px;
-}
-
-.table-responsive::-webkit-scrollbar-track {
-  background: #f8fafc;
-}
-
-.table th,
-.table td {
+.publication-approval-dashboard .table th,
+.publication-approval-dashboard .table td {
   padding: 1.1rem 1.25rem;
   font-size: 0.8rem;
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border-color);
+  color: var(--admin-text-primary);
+  border-bottom: 1px solid var(--admin-border);
   vertical-align: middle;
-  transition: background-color 0.2s ease;
 }
 
-.table th {
+.publication-approval-dashboard .table th {
   background-color: #f1f5f9 !important;
-  /* Increased contrast */
   color: #0069ab;
   font-weight: 700;
   font-size: 0.8rem;
@@ -138,36 +100,7 @@
   white-space: nowrap;
 }
 
-.table td {
-  font-size: 0.875rem;
-}
-
-/* Specific Column Handling */
-.table td:has(.badge),
-.table td:has(.btn-group),
-.table td:has(.submission-approval-cell) {
-  white-space: nowrap;
-}
-
-/* Title and long text wrapping */
-.table td:first-child,
-.table td:nth-child(2) {
-  min-width: 250px;
-  max-width: 400px;
-  white-space: normal;
-  line-height: 1.5;
-}
-
-.table tr:last-child td {
-  border-bottom: none;
-}
-
-.table tr:hover td {
-  background-color: var(--hover-bg);
-}
-
-/* Status Badges Redesign */
-.badge {
+.publication-approval-dashboard .badge {
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.75rem;
@@ -177,186 +110,59 @@
   text-transform: capitalize;
 }
 
-.badge.bg-success,
-.approved,
-.published {
-  background-color: var(--success-bg) !important;
-  color: var(--success-text) !important;
+.publication-approval-dashboard .badge.bg-success {
+  background-color: var(--admin-success-bg) !important;
+  color: var(--admin-success-text) !important;
   border: 1px solid #b7e4c7;
 }
 
-.badge.bg-warning,
-.pending {
-  background-color: var(--warning-bg) !important;
-  color: var(--warning-text) !important;
+.publication-approval-dashboard .badge.bg-warning {
+  background-color: var(--admin-warning-bg) !important;
+  color: var(--admin-warning-text) !important;
   border: 1px solid #fde68a;
 }
 
-.badge.bg-danger,
-.rejected {
-  background-color: var(--danger-bg) !important;
-  color: var(--danger-text) !important;
+.publication-approval-dashboard .badge.bg-danger {
+  background-color: var(--admin-danger-bg) !important;
+  color: var(--admin-danger-text) !important;
   border: 1px solid #fecaca;
 }
 
-.badge.bg-secondary,
-.no_request,
-.waiting {
+.publication-approval-dashboard .badge.bg-secondary {
   background-color: #f1f5f9 !important;
   color: #475569 !important;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--admin-border);
 }
 
-.badge.bg-info {
-  background-color: var(--info-bg) !important;
-  color: var(--info-text) !important;
+.publication-approval-dashboard .badge.bg-info {
+  background-color: var(--admin-info-bg) !important;
+  color: var(--admin-info-text) !important;
   border: 1px solid #bfdbfe;
 }
 
-.badge.bg-primary {
+.publication-approval-dashboard .badge.bg-primary {
   background-color: #eff6ff !important;
-  color: var(--accent-color) !important;
+  color: var(--admin-accent) !important;
   border: 1px solid #bfdbfe;
 }
 
-/* Action Buttons */
-.btn-group .btn {
-  padding: 0.45rem;
-  border-radius: 0.5rem;
-  margin: 0 3px;
-  transition: all 0.2s ease;
-  border: 1px solid transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-group .btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-}
-
-.btn-info {
-  background-color: #f0f9ff !important;
-  color: #0369a1 !important;
-}
-
-.btn-primary {
-  background-color: #eff6ff !important;
-  color: #1d4ed8 !important;
-}
-
-.btn-danger {
-  background-color: #fef2f2 !important;
-  color: #b91c1c !important;
-}
-
-.btn-success {
-  background-color: #f0fdf4 !important;
-  color: #15803d !important;
-}
-
-/* Modal Customization */
-.details-modal .modal-dialog {
-  max-width: 1000px;
-  width: 95%;
-}
-
-.details-modal .modal-content {
-  border-radius: 1rem;
-  border: none;
-  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
-}
-
-.details-modal .modal-header {
-  border-bottom: 1px solid var(--border-color);
-  padding: 1.5rem;
-  background: var(--bg-color);
-  border-top-left-radius: 1rem;
-  border-top-right-radius: 1rem;
-}
-
-.details-modal .modal-title {
-  font-weight: 700;
-  color: var(--primary-color);
-  font-size: 1.25rem;
-}
-
-.detail-section {
-  background: #fff;
-  padding: 1.5rem;
-  border-radius: 0.75rem;
-  border: 1px solid var(--border-color);
-  margin-bottom: 1.5rem;
-}
-
-.detail-section h4 {
-  font-size: 0.875rem;
-  font-weight: 700;
-  text-transform: none !important;
-  color: var(--text-secondary);
-  letter-spacing: 0.01em;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.detail-section p {
-  color: var(--text-primary);
-  margin-bottom: 0.5rem;
-  font-size: 0.95rem;
-}
-
-.detail-section strong {
-  font-weight: 600;
-  color: var(--text-secondary);
-  width: 140px;
-  display: inline-block;
-}
-
-/* Column Toggle Dropdown */
-.column-toggle-button {
-  background: white;
-  border: 1px solid var(--border-color);
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  font-weight: 500;
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: all 0.2s;
-}
-
-.column-toggle-button:hover {
-  background: var(--hover-bg);
-  border-color: #cbd5e1;
-}
-
-/* Pagination Redesign */
-.pagination {
-  margin-top: 1.5rem;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.pagination .page-link {
+.publication-approval-dashboard .pagination .page-link {
   border-radius: 0.375rem !important;
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
+  border: 1px solid var(--admin-border);
+  color: var(--admin-text-primary);
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
-  transition: all 0.2s;
 }
 
-.pagination .page-item.active .page-link {
-  background-color: var(--accent-color);
-  border-color: var(--accent-color);
+.publication-approval-dashboard .pagination .page-item.active .page-link {
+  background-color: var(--admin-accent);
+  border-color: var(--admin-accent);
   color: white;
 }
 
+
 .pagination .page-link:hover:not(.active) {
-  background-color: var(--hover-bg);
+  background-color: var(--admin-hover-bg);
 }
 
 /* Submission Approval Cell */
@@ -378,7 +184,7 @@
   justify-content: center;
   align-items: center;
   min-height: 200px;
-  color: var(--text-secondary);
+  color: var(--admin-text-secondary);
   font-weight: 500;
 }
 
@@ -485,18 +291,192 @@
   font-weight: 700;
 }
 
+/* Management & Workflow Cell Styles */
+.workflow-cell {
+  display: flex;
+}
+
+.workflow-status-block {
+  min-height: 40px;
+}
+
+.publication-approval-dashboard .workflow-badge {
+  font-size: 0.75rem;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.publication-approval-dashboard .workflow-badge-dot {
+  display: inline-block;
+  border-radius: 50%;
+}
+
+.publication-approval-dashboard .workflow-subtext {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Badge variants */
+.publication-approval-dashboard .workflow-badge-success {
+  background-color: var(--admin-success-bg) !important;
+  color: var(--admin-success-text) !important;
+  border: 1px solid #b7e4c7;
+}
+
+.publication-approval-dashboard .workflow-badge-warning {
+  background-color: var(--admin-warning-bg) !important;
+  color: var(--admin-warning-text) !important;
+  border: 1px solid #fde68a;
+}
+
+.publication-approval-dashboard .workflow-badge-danger {
+  background-color: var(--admin-danger-bg) !important;
+  color: var(--admin-danger-text) !important;
+  border: 1px solid #fecaca;
+}
+
+.publication-approval-dashboard .workflow-badge-info {
+  background-color: var(--admin-info-bg) !important;
+  color: var(--admin-info-text) !important;
+  border: 1px solid #bfdbfe;
+}
+
+.publication-approval-dashboard .workflow-badge-primary {
+  background-color: #eff6ff !important;
+  color: var(--admin-info-text) !important;
+  border: 1px solid #bfdbfe;
+}
+
+.publication-approval-dashboard .workflow-badge-secondary {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  border: 1px solid var(--admin-border);
+}
+
+.workflow-actions .dropdown-toggle::after {
+  display: none !important;
+}
+
+.workflow-actions .btn-group {
+  border: 1px solid var(--admin-border);
+  background: white;
+}
+
+.workflow-actions .btn-group .btn {
+  border: none;
+  border-radius: 0;
+  margin: 0;
+}
+
+.workflow-actions .btn-group .btn:first-child {
+  border-right: 1px solid var(--admin-border);
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+.workflow-actions .btn-group .btn:last-child {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+.workflow-actions .dropdown-item {
+  font-size: 0.85rem;
+  color: var(--admin-text-secondary);
+}
+
+.workflow-actions .dropdown-item:hover {
+  background-color: var(--admin-hover-bg);
+  color: var(--admin-text-primary);
+}
+
+.publication-approval-dashboard .workflow-actions .dropdown-item.text-danger:hover {
+  background-color: var(--admin-danger-bg);
+  color: var(--admin-danger-text);
+}
+
+/* Column Toggle Dropdown */
+.publication-approval-dashboard .column-toggle-button {
+  background: white;
+  border: 1px solid var(--admin-border);
+  padding: 0.6rem 1.25rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--admin-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+}
+
+.publication-approval-dashboard .column-toggle-button:hover {
+  background: var(--admin-hover-bg);
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.publication-approval-dashboard .column-toggle-button:active {
+  transform: translateY(0);
+}
+
+.publication-approval-dashboard .column-toggle-button svg {
+  color: var(--admin-accent);
+}
+
+.publication-approval-dashboard .column-config-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 420px;
+  max-height: 480px;
+  background: white;
+  border: 1px solid var(--admin-border);
+  border-radius: 1rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+  z-index: 1050;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.publication-approval-dashboard .column-group-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--admin-text-secondary);
+  border-bottom: 1px solid var(--admin-border);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  margin-top: 1rem;
+}
+
+.publication-approval-dashboard .column-group-title:first-child {
+  margin-top: 0;
+}
+
+.publication-approval-dashboard .form-check-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--admin-text-primary);
+  cursor: pointer;
+}
+
 @media (max-width: 768px) {
-  .dashboard-container {
+  .publication-approval-dashboard {
     padding: 1rem;
   }
 
-  .tab-buttons {
+  .publication-approval-dashboard .tab-buttons {
     gap: 1rem;
     overflow-x: auto;
     padding-bottom: 0.5rem;
   }
 
-  .table-container {
+  .publication-approval-dashboard .table-container {
     padding: 1rem;
   }
 }
