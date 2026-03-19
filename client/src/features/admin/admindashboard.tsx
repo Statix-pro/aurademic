@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, ChangeEvent, useRef } from "react";
 import authenticityUtility from "../../shared/utils/authenticityUtility";
-import { Pencil, Trash2, Eye, Check, X, Settings } from "lucide-react";
+import { Pencil, Trash2, Eye, Check, X, Settings, MoreVertical, History } from "lucide-react";
 import { Modal, Button, Dropdown } from "react-bootstrap";
 
 import "./admindashboard.css";
@@ -17,6 +17,7 @@ interface ColumnConfigItem {
   order: number;
   label: string;
   group: string;
+  hideFromConfig?: boolean;
 }
 
 interface ColumnConfig {
@@ -42,12 +43,13 @@ interface Journal {
   title: string;
   journal_name?: string;
   publication_status?: string;
-  admin_approval_status?: string;
   admin_approval_comment?: string | null;
+  created_at?: string;
   submission_date?: string;
   author_names?: string[];
   index_names?: string[];
   edit_request_status?: string;
+  status?: string;
   [key: string]: unknown;
 }
 
@@ -99,8 +101,8 @@ const defaultColumnConfig: ColumnConfig = {
     project_category: { show: true, order: 1, label: "Category", group: "Essential" },
     agency: { show: true, order: 2, label: "Agency", group: "Essential" },
     scheme: { show: true, order: 3, label: "Scheme", group: "Essential" },
-    submission_status: { show: true, order: 4, label: "Status", group: "Essential" },
-    date_of_submission: { show: true, order: 5, label: "Submission Date", group: "Essential" },
+    submission_status: { show: true, order: 98, label: "Status", group: "Essential", hideFromConfig: true },
+    date_of_submission: { show: false, order: 5, label: "Submission Date", group: "Details" },
     project_type: { show: false, order: 6, label: "Project Type", group: "Details" },
     project_duration: { show: false, order: 7, label: "Duration", group: "Details" },
     sanctioned_amount: { show: false, order: 9, label: "Sanctioned Amount (₹)", group: "Financial" },
@@ -109,14 +111,13 @@ const defaultColumnConfig: ColumnConfig = {
     investigators: { show: false, order: 13, label: "Investigators", group: "Team" },
     collaborating_institute: { show: false, order: 14, label: "Collaborating Institute", group: "Team" },
     edit_request_status: { show: true, order: 18, label: "Edit Request", group: "Essential" },
-    actions: { show: true, order: 19, label: "Actions", group: "Essential" },
+    actions: { show: true, order: 99, label: "Actions", group: "Essential", hideFromConfig: true },
   },
   journals: {
     title: { show: true, order: 0, label: "Title", group: "Essential" },
     journal_name: { show: true, order: 1, label: "Journal Name", group: "Essential" },
-    publication_status: { show: true, order: 2, label: "Status", group: "Essential" },
-    submission_approval_status: { show: true, order: 3, label: "Submission Approval", group: "Essential" },
-    submission_date: { show: true, order: 4, label: "Submission Date", group: "Essential" },
+    management_workflow: { show: true, order: 98, label: "Workflow", group: "Essential", hideFromConfig: true },
+    submission_date: { show: false, order: 4, label: "Submission Date", group: "Details" },
     author_names: { show: true, order: 5, label: "Authors", group: "Details" },
     volume: { show: false, order: 6, label: "Volume", group: "Details" },
     issue: { show: false, order: 7, label: "Issue", group: "Details" },
@@ -125,10 +126,163 @@ const defaultColumnConfig: ColumnConfig = {
     publication_date: { show: false, order: 10, label: "Publication Date", group: "Timeline" },
     publisher: { show: false, order: 11, label: "Publisher", group: "Details" },
     index_names: { show: true, order: 12, label: "Indexing", group: "Metrics" },
-    edit_request_status: { show: true, order: 17, label: "Edit Request", group: "Essential" },
-    status_updates: { show: true, order: 18, label: "Status Updates", group: "Essential" },
-    actions: { show: true, order: 19, label: "Actions", group: "Essential" },
   },
+};
+
+interface JournalWorkflowCellProps {
+  item: Journal;
+  onViewDetails: (id: number) => void;
+  onDelete: (id: number) => void;
+  onSubmissionApproval: (id: number, status: "approved" | "rejected") => void;
+  onEditRequestStatus: (id: number, status: string) => void;
+  onViewStatusUpdates: (id: number) => void;
+}
+
+const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
+  item,
+  onViewDetails,
+  onDelete,
+  onSubmissionApproval,
+  onEditRequestStatus,
+  onViewStatusUpdates
+}) => {
+  const getBadgeDetails = () => {
+    let variant = 'secondary';
+    const statusVal = item.status || '';
+    const pubStatusVal = (item.publication_status as string) || '';
+    let label = statusVal || pubStatusVal || 'Unknown';
+    let subText: React.ReactNode = null;
+    let dateText: string = '';
+    let pendingActions: string[] = [];
+
+    const dateVal = (item.created_at as string) || (item.submission_date as string);
+    const dateFormatted = dateVal ? new Date(dateVal).toLocaleDateString() : '';
+
+    if (item.admin_approval_status === "pending") pendingActions.push('submission');
+    if (item.edit_request_status === "pending") pendingActions.push('edit');
+
+    // 1. Rejected state takes precedence
+    if (item.admin_approval_status === "rejected") {
+      variant = "danger";
+      label = "Rejected";
+      subText = <span className="text-danger" style={{ fontSize: '0.75rem', maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block' }}>REASON: {item.admin_approval_comment || "Not specified"}</span>;
+    }
+    // 2. Pending Actions take precedence over approved/published statuses
+    else if (item.admin_approval_status === "pending") {
+      variant = "warning";
+      label = "Pending Approval";
+      if (pendingActions.length > 1) {
+        subText = <span className="text-danger fw-bold" style={{ fontSize: '0.75rem' }}>MULTIPLE ACTIONS REQ.</span>;
+      } else {
+        subText = <span className="text-danger fw-bold" style={{ fontSize: '0.75rem' }}>REQ. APPROVAL</span>;
+      }
+    }
+    else if (item.edit_request_status === "pending") {
+      variant = "warning";
+      label = "Edit Requested";
+      subText = <span className="text-danger fw-bold" style={{ fontSize: '0.75rem' }}>REQ. REVIEW</span>;
+    }
+    // 3. Approved state, check publication lifecycle pipeline
+    else if (item.admin_approval_status === "approved") {
+      // The API returns 'status' from journals (j.status), but to be safe we check 'publication_status' too
+      const pubStatus = (statusVal || pubStatusVal).toLowerCase();
+
+      if (pubStatus === 'published' || pubStatus === 'accepted') {
+        variant = "success";
+        label = pubStatus.charAt(0).toUpperCase() + pubStatus.slice(1);
+        subText = <span className="text-muted" style={{ fontSize: '0.75rem' }}>Processed</span>;
+        dateText = dateFormatted;
+      } else if (pubStatus === 'under review' || pubStatus === 'peer_review' || pubStatus === 'peer review') {
+        variant = "warning";
+        label = "Peer Review";
+        subText = <span className="text-muted" style={{ fontSize: '0.75rem' }}>In Progress</span>;
+        dateText = dateFormatted;
+      } else if (pubStatus === 'archived') {
+        variant = "primary";
+        label = "Archived";
+        subText = <span className="text-muted" style={{ fontSize: '0.75rem' }}>Legacy Status</span>;
+        dateText = dateFormatted;
+      } else if (pubStatus === 'rejected') {
+        variant = "danger";
+        label = "Rejected";
+        dateText = dateFormatted;
+      } else if (pubStatus === 'waiting' || pubStatus === '') {
+        // Submission was approved by Admin, but hasn't entered 'Published/Peer Review' yet 
+        variant = "info";
+        label = "Submission Approved";
+        subText = <span className="text-muted" style={{ fontSize: '0.75rem' }}>Awaiting Publication</span>;
+        dateText = dateFormatted;
+      } else {
+        variant = "secondary";
+        label = pubStatus ? pubStatus.charAt(0).toUpperCase() + pubStatus.slice(1) : "Unknown";
+        dateText = dateFormatted;
+      }
+    } else {
+      // Catch-all for any other unhandled states
+      variant = "secondary";
+      label = statusVal || pubStatusVal || "Unknown";
+      dateText = dateFormatted;
+    }
+
+    return { variant, label, subText, dateText, pendingActions };
+  };
+
+  const { variant, label, subText, dateText, pendingActions } = getBadgeDetails();
+
+  return (
+    <div className="workflow-cell d-flex justify-content-between align-items-center w-100" style={{ minWidth: '220px' }}>
+      <div className="workflow-status-block d-flex flex-column align-items-start h-100 justify-content-center" style={{ minWidth: '150px' }}>
+        <span className={`workflow-badge fw-medium px-2 py-1 rounded-pill d-inline-flex align-items-center workflow-badge-${variant}`}>
+          <span className={`workflow-badge-dot rounded-circle me-1 bg-${variant}`} style={{ width: '8px', height: '8px' }}></span>
+          <span style={{ fontSize: '0.8rem' }}>{label}</span>
+        </span>
+        {subText && <div className="workflow-subtext mt-1 lh-1">{subText}</div>}
+      </div>
+
+      <div className="workflow-right-side d-flex flex-column align-items-end gap-1">
+        <div className="workflow-actions d-flex align-items-center gap-1">
+        {pendingActions.includes('submission') && (
+          <div className="d-flex flex-column align-items-center p-1 bg-white rounded border border-warning shadow-sm" style={{ minWidth: '70px', borderStyle: 'dashed' }}>
+            <span className="text-muted mb-1 text-uppercase" style={{ fontSize: '0.65rem', lineHeight: 1, fontWeight: 700 }}>Submission</span>
+            <div className="btn-group align-items-center rounded">
+              <button type="button" className="btn btn-sm btn-success p-1 lh-1" onClick={() => onSubmissionApproval(item.id, "approved")} title="Approve Submission"><Check size={14} /></button>
+              <button type="button" className="btn btn-sm btn-danger p-1 lh-1" onClick={() => onSubmissionApproval(item.id, "rejected")} title="Reject Submission"><X size={14} /></button>
+            </div>
+          </div>
+        )}
+        {pendingActions.includes('edit') && (
+          <div className="d-flex flex-column align-items-center p-1 bg-white rounded border border-warning shadow-sm" style={{ minWidth: '70px', borderStyle: 'dashed' }}>
+            <span className="text-muted mb-1 text-uppercase" style={{ fontSize: '0.65rem', lineHeight: 1, fontWeight: 700 }}>Edit Req</span>
+            <div className="btn-group align-items-center rounded">
+              <button type="button" className="btn btn-sm btn-success p-1 lh-1" onClick={() => onEditRequestStatus(item.id, "approved")} title="Approve Edit Request"><Check size={14} /></button>
+              <button type="button" className="btn btn-sm btn-danger p-1 lh-1" onClick={() => onEditRequestStatus(item.id, "rejected")} title="Reject Edit Request"><X size={14} /></button>
+            </div>
+          </div>
+        )}
+
+        <div className="d-flex align-items-center ml-auto">
+          <button type="button" className="btn btn-sm btn-light border-0 text-secondary bg-transparent p-1" onClick={() => onViewDetails(item.id)} title="View Publication Details">
+            <Eye size={16} />
+          </button>
+          <button type="button" className="btn btn-sm btn-light border-0 text-secondary bg-transparent p-1" onClick={() => onViewStatusUpdates(item.id)} title="View Status Updates">
+            <History size={16} />
+          </button>
+          <button type="button" className="btn btn-sm btn-light border-0 text-secondary bg-transparent p-1" title="Edit">
+            <Pencil size={16} />
+          </button>
+          <button type="button" className="btn btn-sm btn-light border-0 text-danger bg-transparent p-1" onClick={() => onDelete(item.id)} title="Delete Journal Item">
+            <Trash2 size={16} />
+          </button>
+        </div>
+        </div>
+        {dateText && (
+          <div className="workflow-date mt-n1 text-end" style={{ width: '100%', fontSize: '0.65rem', color: '#888', fontWeight: 500 }}>
+             Submitted: {dateText}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 const EditRequestActions: React.FC<EditRequestActionsProps> = ({ status, onUpdateStatus }) => {
@@ -228,7 +382,46 @@ const Dashboard: React.FC = () => {
     const savedConfig = localStorage.getItem("columnConfig");
     if (savedConfig) {
       try {
-        return JSON.parse(savedConfig);
+        const parsed = JSON.parse(savedConfig);
+        // Force reset the config for journals if the new 'management_workflow' column is missing 
+        // to ensure the user gets the updated layout.
+        if (parsed?.journals && !parsed.journals.management_workflow) {
+          return { ...parsed, journals: defaultColumnConfig.journals };
+        }
+
+        // Hide submission_date column as it's now integrated under action buttons
+        if (parsed?.journals?.submission_date) {
+          parsed.journals.submission_date.show = false;
+          parsed.journals.submission_date.group = "Details";
+        }
+
+        // Force hide and reposition constant columns for existing users
+        if (parsed?.journals?.management_workflow) {
+          parsed.journals.management_workflow.hideFromConfig = true;
+          parsed.journals.management_workflow.order = 98;
+          parsed.journals.management_workflow.show = true;
+        }
+        if (parsed?.journals?.actions) {
+          parsed.journals.actions.hideFromConfig = true;
+          parsed.journals.actions.order = 99;
+          parsed.journals.actions.show = true;
+        }
+        if (parsed?.projects?.submission_status) {
+          parsed.projects.submission_status.hideFromConfig = true;
+          parsed.projects.submission_status.order = 98;
+          parsed.projects.submission_status.show = true;
+        }
+        if (parsed?.projects?.actions) {
+          parsed.projects.actions.hideFromConfig = true;
+          parsed.projects.actions.order = 99;
+          parsed.projects.actions.show = true;
+        }
+        if (parsed?.projects?.date_of_submission) {
+          parsed.projects.date_of_submission.group = "Details";
+          parsed.projects.date_of_submission.show = false;
+        }
+        
+        return parsed;
       } catch (e) {
         console.error("Error parsing columnConfig from localStorage", e);
       }
@@ -746,6 +939,21 @@ const Dashboard: React.FC = () => {
           />
         );
 
+      case "management_workflow":
+        return (
+          <JournalWorkflowCell
+            item={journalItem}
+            onViewDetails={handleViewDetails}
+            onDelete={handleDelete}
+            onSubmissionApproval={handleJournalSubmissionApproval}
+            onEditRequestStatus={handleEditRequestStatus}
+            onViewStatusUpdates={(id) => {
+              setSelectedJournalForStatus(id);
+              setShowStatusDetailsModal(true);
+            }}
+          />
+        );
+
       case "status_updates":
         return (
           <Button
@@ -834,7 +1042,7 @@ const Dashboard: React.FC = () => {
       return null;
     }
 
-    const columns = Object.entries(columnConfig[tabKey]);
+    const columns = Object.entries(columnConfig[tabKey]).filter(([_, config]) => !config.hideFromConfig);
 
     const groupedColumns = columns.reduce((acc, [key, config]) => {
       const group = config.group || "Other";
@@ -856,24 +1064,10 @@ const Dashboard: React.FC = () => {
           <span>Configure Columns</span>
         </button>
         {isColumnDropdownOpen && (
-          <div
-            className="dropdown-menu show p-3"
-            style={{
-              position: 'absolute',
-              top: 'calc(100% + 8px)',
-              right: 0,
-              width: '480px',
-              maxHeight: '400px',
-              overflowY: 'auto',
-              border: '1px solid var(--border-color)',
-              borderRadius: '0.75rem',
-              boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-              zIndex: 1050
-            }}
-          >
+          <div className="column-config-dropdown shadow-lg border">
             {groupOrder.map((group) => (
-              <div key={group} className="mb-3 last:mb-0">
-                <h6 className="dropdown-header px-0 pb-2 text-uppercase fw-bold text-muted small" style={{ letterSpacing: '0.05em', borderBottom: '1px solid var(--border-color)', marginBottom: '10px' }}>{group}</h6>
+              <div key={group} className="mb-3">
+                <h6 className="column-group-title">{group}</h6>
                 <div className="row g-2">
                   {groupedColumns[group]?.sort((a, b) => a[1].order - b[1].order).map(([key, config]) => (
                     <div key={key} className="col-6">
@@ -887,7 +1081,7 @@ const Dashboard: React.FC = () => {
                           disabled={group === "Essential"}
                         />
                         <label
-                          className={`form-check-label user-select-none small ms-1 ${group === "Essential" ? "text-muted opacity-75" : "text-dark"}`}
+                          className={`form-check-label user-select-none small ms-1 ${group === "Essential" ? "text-muted opacity-75" : ""}`}
                           htmlFor={`column-toggle-${key}`}
                           style={{ cursor: group === "Essential" ? "default" : "pointer" }}
                         >
@@ -1402,7 +1596,7 @@ const Dashboard: React.FC = () => {
   return (
     <div>
 
-      <div className="dashboard-container">
+      <div className="publication-approval-dashboard">
         <div className="w-100 max-w-1400">
           <div className="tab-buttons">
             {location.pathname === '/project-dashboard' ? (
@@ -1433,7 +1627,7 @@ const Dashboard: React.FC = () => {
           <div className="w-100 max-w-1400">
             {(activeTab === "projects" || activeTab === "journals") && (
               <>
-                <div className="d-flex justify-content-end mb-4 px-2">
+                <div className="d-flex justify-content-end mb-4 pe-4">
                   {renderColumnToggleDropdown()}
                 </div>
                 <div className="table-container">
