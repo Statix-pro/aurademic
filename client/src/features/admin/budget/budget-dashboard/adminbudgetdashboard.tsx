@@ -422,13 +422,7 @@ const AdminBudgetDashboard: React.FC = () => {
     proposedProposals.forEach((proposal) => {
       proposal.items.forEach((item) => {
         ensureRow(item.budgetHead);
-        const isInitial = isInitialBudgetProposal(proposal.createdAt, financialYear?.value || '');
         consolidationMap[item.budgetHead].proposed += item.proposedAmount;
-        if (isInitial) {
-          consolidationMap[item.budgetHead].initial += item.proposedAmount;
-        } else {
-          consolidationMap[item.budgetHead].additional += item.proposedAmount;
-        }
         const detailKey = `${proposal.id}::${item.subHead || '-'}`;
         upsertDetail(item.budgetHead, detailKey, {
           proposalId: proposal.id,
@@ -436,8 +430,8 @@ const AdminBudgetDashboard: React.FC = () => {
           subHead: item.subHead || '-',
           proposedAmount: item.proposedAmount,
           approvedAmount: 0,
-          initialAmount: isInitial ? item.proposedAmount : 0,
-          additionalAmount: isInitial ? 0 : item.proposedAmount,
+          initialAmount: 0,
+          additionalAmount: 0,
         });
       });
     });
@@ -447,6 +441,11 @@ const AdminBudgetDashboard: React.FC = () => {
         ensureRow(item.budgetHead);
         const isInitial = isInitialBudgetProposal(proposal.createdAt, financialYear?.value || '');
         consolidationMap[item.budgetHead].approved += item.approvedAmount;
+        if (isInitial) {
+          consolidationMap[item.budgetHead].initial += item.approvedAmount;
+        } else {
+          consolidationMap[item.budgetHead].additional += item.approvedAmount;
+        }
         consolidationMap[item.budgetHead].expenditure += item.expenditure || 0;
         const detailKey = `${proposal.id}::${item.subHead || '-'}`;
         upsertDetail(item.budgetHead, detailKey, {
@@ -455,8 +454,8 @@ const AdminBudgetDashboard: React.FC = () => {
           subHead: item.subHead || '-',
           proposedAmount: item.proposedAmount,
           approvedAmount: item.approvedAmount,
-          initialAmount: isInitial ? item.proposedAmount : 0,
-          additionalAmount: isInitial ? 0 : item.proposedAmount,
+          initialAmount: isInitial ? item.approvedAmount : 0,
+          additionalAmount: isInitial ? 0 : item.approvedAmount,
         });
       });
     });
