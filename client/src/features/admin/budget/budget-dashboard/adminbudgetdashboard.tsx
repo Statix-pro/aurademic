@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Form } from 'react-bootstrap';
+import { NavLink } from 'react-router-dom';
+import Select from 'react-select';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { hasPermission, isSuperAdmin } from '../../../../shared/utils/permissionUtils';
 import authenticityUtility from '../../../../shared/utils/authenticityUtility';
@@ -13,6 +14,7 @@ type Option = {
 type AdminBudgetLineItem = {
   budgetHead: string;
   subHead: string;
+  proposedAmount: number;
   approvedAmount: number;
   expenditure: number;
 };
@@ -30,6 +32,8 @@ type AdminProposalGroup = {
 
 type ConsolidatedRow = {
   budgetHead: string;
+  proposed: number;
+  approved: number;
   initial: number;
   additional: number;
   expenditure: number;
@@ -38,54 +42,33 @@ type ConsolidatedRow = {
 
 const ALL_BENEFICIARY_OPTION: Option = { value: 'all', label: 'All Beneficiary' };
 
-const getCurrentFiscalYearOption = (): Option => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth(); // 0-indexed
-  // FY starts in February (month 1)
-  const fyStart = month >= 1 ? year : year - 1;
-  const value = `${fyStart}-${String(fyStart + 1).slice(2)}`;
-  return { value, label: `FY ${value}` };
-};
-
 const AdminBudgetDashboard: React.FC = () => {
   const { user } = useAuth();
-  const [financialYear, setFinancialYear] = useState<Option | null>(getCurrentFiscalYearOption());
+  const [financialYear, setFinancialYear] = useState<Option | null>({
+    value: '2026-27',
+    label: 'FY 2026-27',
+  });
 
   const [beneficiary, setBeneficiary] = useState<Option | null>(ALL_BENEFICIARY_OPTION);
   const [searchText, setSearchText] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [consolidatedRows, setConsolidatedRows] = useState<ConsolidatedRow[]>([]);
-  const [detailsByHead, setDetailsByHead] = useState<Record<string, any[]>>({});
-  const [availableBeneficiaryTypes, setAvailableBeneficiaryTypes] = useState<string[]>([]);
+  const [proposals, setProposals] = useState<AdminProposalGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [expandedHead, setExpandedHead] = useState<string | null>(null);
 
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchText);
-    }, 500);
-    return () => clearTimeout(handler);
-  }, [searchText]);
-
   const roleKey = useMemo(() => {
     const roleCodes = Array.isArray(user?.roles)
       ? user.roles
-        .map((role: any) => {
-          if (!role) return '';
-          if (typeof role === 'string') return role;
-          return role.role_code || role.role_name || '';
-        })
-        .map((role) => String(role).toLowerCase())
+          .map((role: any) => {
+            if (!role) return '';
+            if (typeof role === 'string') return role;
+            return role.role_code || role.role_name || '';
+          })
+          .map((role) => String(role).toLowerCase())
       : [];
 
     if (isSuperAdmin(user)) {
       return 'super_admin';
-    }
-
-    if (roleCodes.some((code) => code.includes('principal'))) {
-      return 'principal';
     }
 
     if (roleCodes.some((code) => code.includes('dof')) || hasPermission(user, 'budget.workflow.dof')) {
@@ -132,28 +115,80 @@ const AdminBudgetDashboard: React.FC = () => {
     }
   }, [roleKey]);
 
-  const financialYearOptions: Option[] = useMemo(() => {
-    const currentOption = getCurrentFiscalYearOption();
-    const currentStart = parseInt(currentOption.value.split('-')[0], 10);
-    // Show current year and 2 previous years
-    return [currentStart - 2, currentStart - 1, currentStart].map((year) => ({
-      value: `${year}-${String(year + 1).slice(2)}`,
-      label: `FY ${year}-${String(year + 1).slice(2)}`,
-    }));
-  }, []);
+  const financialYearOptions: Option[] = [
+    { value: '2024-25', label: 'FY 2024-25' },
+    { value: '2025-26', label: 'FY 2025-26' },
+    { value: '2026-27', label: 'FY 2026-27' },
+  ];
 
   const beneficiaryOptions: Option[] = useMemo(() => {
-    if (!availableBeneficiaryTypes || availableBeneficiaryTypes.length === 0) {
-      return [ALL_BENEFICIARY_OPTION];
+    const statusKey = (value?: string) => String(value || '').toLowerCase();
+    const isRejectedOrReturnedOrArchived = (status: string) =>
+      ['rejected', 'returned', 'archived', 'archive'].some((token) => status.includes(token));
+    const visibleProposals = proposals.filter(
+      (proposal) => !isRejectedOrReturnedOrArchived(statusKey(proposal.status))
+    );
+
+    if (roleKey === 'dof' || roleKey === 'super_admin') {
+      const seen = new Set<string>();
+      const entityOrder = ['Department', 'Centre', 'Cell', 'Club', 'Professional Body', 'Institution'];
+      const entitySet = new Set(entityOrder.map((item) => item.toLowerCase()));
+      const entityOptions: Option[] = [];
+
+      visibleProposals.forEach((proposal) => {
+        const type = String(proposal.beneficiaryType || '').trim();
+        const value = String(proposal.beneficiaryValue || '').trim();
+        if (!type || !value) return;
+        if (!entitySet.has(type.toLowerCase())) return;
+        const key = `${type.toLowerCase()}::${value.toLowerCase()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        entityOptions.push({
+          value: `${type}::${value}`,
+          label: value,
+        });
+      });
+
+      entityOptions.sort((a, b) => a.label.localeCompare(b.label));
+
+      return [
+        ALL_BENEFICIARY_OPTION,
+        { value: 'Faculty', label: 'Faculty' },
+        ...entityOptions,
+      ];
     }
 
-    const options = availableBeneficiaryTypes.map((type) => ({
-      value: type,
-      label: type,
-    }));
+    const allOptions: Option[] = [
+      ALL_BENEFICIARY_OPTION,
+      { value: 'Faculty', label: 'Faculty' },
+      { value: 'Department', label: 'Department' },
+      { value: 'Centre', label: 'Centre' },
+      { value: 'Cell', label: 'Cell' },
+      { value: 'Club', label: 'Club' },
+      { value: 'Professional Body', label: 'Professional Body' },
+      { value: 'Institution', label: 'Institution' },
+    ];
 
-    return [ALL_BENEFICIARY_OPTION, ...options];
-  }, [availableBeneficiaryTypes]);
+    if (roleKey === 'hod') {
+      return [
+        ALL_BENEFICIARY_OPTION,
+        { value: 'Faculty', label: 'Faculty' },
+        { value: 'Department', label: 'Department' },
+      ];
+    }
+
+    if (roleKey === 'coordinator') {
+      return [
+        ALL_BENEFICIARY_OPTION,
+        { value: 'Cell', label: 'Cell' },
+        { value: 'Centre', label: 'Centre' },
+        { value: 'Club', label: 'Club' },
+        { value: 'Professional Body', label: 'Professional Body' },
+      ];
+    }
+
+    return allOptions;
+  }, [roleKey, proposals]);
 
   useEffect(() => {
     const hasCurrent = beneficiaryOptions.some((option) => option.value === beneficiary?.value);
@@ -162,14 +197,54 @@ const AdminBudgetDashboard: React.FC = () => {
     }
   }, [beneficiary, beneficiaryOptions]);
 
+  const parseDateSafe = (value?: string) => {
+    if (!value) return null;
+    const direct = new Date(value);
+    if (!Number.isNaN(direct.getTime())) return direct;
+    const normalized = String(value).replace(' ', 'T');
+    const fallback = new Date(normalized);
+    if (!Number.isNaN(fallback.getTime())) return fallback;
+    return null;
+  };
+
+  const getInitialCutoffForFY = (fy?: string) => {
+    if (!fy) return null;
+    const fyStart = Number.parseInt(String(fy).split('-')[0], 10);
+    if (!Number.isInteger(fyStart)) return null;
+    return new Date(fyStart, 1, 1, 23, 59, 59, 999);
+  };
+
+  const isInitialBudgetProposal = (createdAt?: string, fy?: string) => {
+    const proposalDate = parseDateSafe(createdAt);
+    const cutoff = getInitialCutoffForFY(fy);
+    if (!proposalDate) return false;
+    if (!cutoff) return true;
+    return proposalDate.getTime() <= cutoff.getTime();
+  };
+
   const formatINR = (value: number) => Number(value || 0).toLocaleString('en-IN');
 
+  const resolveRoleEndpoint = (role: string) => {
+    switch (role) {
+      case 'hod':
+        return '/adminbudget/hod';
+      case 'coordinator':
+        return '/adminbudget/coordinator';
+      case 'ithead':
+        return '/adminbudget/ithead';
+      case 'dof':
+        return '/adminbudget/dof';
+      case 'super_admin':
+      case 'admin':
+      default:
+        return '/adminbudget/admin';
+    }
+  };
 
   useEffect(() => {
     const fetchConsolidatedData = async () => {
       if (!financialYear?.value) {
-        setConsolidatedRows([]);
-        setDetailsByHead({});
+        setProposals([]);
         return;
       }
 
@@ -178,44 +253,96 @@ const AdminBudgetDashboard: React.FC = () => {
         setError('');
 
         const fiscalYearNum = Number.parseInt(financialYear.value.split('-')[0], 10);
-        const beneficiaryType = beneficiary?.value === 'all' ? '' : beneficiary?.value || '';
-
-        const response: any = await authenticityUtility.get('/adminbudget/consolidation', {
-          params: {
-            fiscalYear: fiscalYearNum,
-            beneficiaryType,
-            q: debouncedSearch,
-            scope: roleKey
-          },
+        const response: any = await authenticityUtility.get(resolveRoleEndpoint(roleKey), {
+          params: { limit: 100, status: '', fiscalYear: fiscalYearNum },
         });
 
-        if (response?.data) {
-          setConsolidatedRows(response.data.consolidatedRows || []);
-          setDetailsByHead(response.data.detailsByHead || {});
-          setAvailableBeneficiaryTypes(response.data.availableBeneficiaryTypes || []);
-        } else {
-          setConsolidatedRows([]);
-          setDetailsByHead({});
-          setAvailableBeneficiaryTypes([]);
+        const list = Array.isArray(response?.data) ? response.data : [];
+        if (!list.length) {
+          setProposals([]);
+          return;
         }
 
+        const detailPromises = list.map(async (item: any) => {
+          try {
+            const detail: any = await authenticityUtility.get(`/adminbudget/${item.id}`);
+            const master = detail?.data?.master || detail?.data || {};
+            const lines = detail?.data?.lines || detail?.data?.items || [];
+            const items: AdminBudgetLineItem[] = (Array.isArray(lines) ? lines : []).map((line: any) => {
+              const proposedAmount = Number.parseFloat(line.line_total ?? line.lineTotal ?? 0);
+              const approvedAmount = Number.parseFloat(line.approved_line_total ?? line.approvedLineTotal ?? 0);
+
+              return {
+                budgetHead: line.budget_head || line.budgetHead || 'Unknown',
+                subHead: line.sub_head || line.subHead || '-',
+                proposedAmount: Number.isFinite(proposedAmount) ? proposedAmount : 0,
+                approvedAmount: Number.isFinite(approvedAmount) ? approvedAmount : 0,
+                expenditure: Number.parseFloat(line.expenditure ?? 0),
+              };
+            });
+
+            return {
+              id: item.id,
+              proposalRef: item.proposal_ref || master.proposal_ref || '',
+              status: master.status || item.status || '',
+              beneficiaryType: item.beneficiary_type || master.beneficiary_type || '',
+              beneficiaryValue: item.beneficiary_value || master.beneficiary_value || '',
+              createdAt: master.created_at || item.created_date || item.created_at || '',
+              applicantName:
+                item.applicant_name ||
+                master.applicant_name ||
+                master.user_name ||
+                master.user_email ||
+                '',
+              items,
+            } as AdminProposalGroup;
+          } catch (detailError) {
+            console.error('Failed to fetch admin budget detail', detailError);
+            return null;
+          }
+        });
+
+        const fullProposals = (await Promise.all(detailPromises)).filter(Boolean) as AdminProposalGroup[];
+        setProposals(fullProposals);
       } catch (fetchError: any) {
         console.error('Failed to fetch consolidated budgets', fetchError);
         setError(fetchError?.response?.data?.message || 'Failed to load consolidated budget data.');
-        setConsolidatedRows([]);
-        setDetailsByHead({});
+        setProposals([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchConsolidatedData();
-  }, [financialYear?.value, roleKey, beneficiary?.value, debouncedSearch]);
+  }, [financialYear?.value, roleKey]);
+
+  const filteredProposals = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    const beneficiaryValue = String(beneficiary?.value || 'all').toLowerCase();
+    const hasEntityFilter =
+      (roleKey === 'dof' || roleKey === 'super_admin') && beneficiaryValue.includes('::');
+    const [filterType, filterName] = hasEntityFilter ? beneficiaryValue.split('::') : ['', ''];
+
+    return proposals.filter((proposal) => {
+      const matchesSearch =
+        !query ||
+        proposal.proposalRef.toLowerCase().includes(query) ||
+        proposal.applicantName.toLowerCase().includes(query);
+
+      const proposalType = String(proposal.beneficiaryType || '').toLowerCase();
+      const proposalValue = String(proposal.beneficiaryValue || '').toLowerCase();
+
+      const matchesBeneficiary =
+        beneficiaryValue === 'all' ||
+        (hasEntityFilter && proposalType === filterType && proposalValue === filterName) ||
+        (!hasEntityFilter && proposalType === beneficiaryValue);
+
+      return matchesSearch && matchesBeneficiary;
+    });
+  }, [beneficiary?.value, proposals, roleKey, searchText]);
 
   const canViewAmounts =
     roleKey === 'super_admin' ||
-    roleKey === 'principal' ||
-    roleKey === 'admin' ||
     roleKey === 'dof' ||
     roleKey === 'hod' ||
     roleKey === 'coordinator' ||
@@ -223,16 +350,138 @@ const AdminBudgetDashboard: React.FC = () => {
 
   const rupeeSymbol = '\u20B9';
 
+  const { consolidatedRows, detailsByHead } = useMemo(() => {
+    const statusKey = (value?: string) => String(value || '').toLowerCase();
+    const allowedStatusesByRole: Record<string, string[]> = {
+      hod: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
+      coordinator: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
+      ithead: ['ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
+      dof: ['dof_approved', 'principal_approved', 'completed'],
+      admin: ['principal_approved', 'completed'],
+      super_admin: ['principal_approved', 'completed'],
+    };
+
+    const allowedStatuses = allowedStatusesByRole[roleKey] || allowedStatusesByRole.admin;
+    const isRejectedOrReturnedOrArchived = (status: string) =>
+      ['rejected', 'returned', 'archived', 'archive'].some((token) => status.includes(token));
+
+    const approvedProposals = filteredProposals.filter((proposal) =>
+      allowedStatuses.includes(statusKey(proposal.status))
+    );
+    const proposedProposals = filteredProposals.filter(
+      (proposal) => !isRejectedOrReturnedOrArchived(statusKey(proposal.status))
+    );
+    const consolidationMap: Record<string, ConsolidatedRow> = {};
+    const detailMap: Record<
+      string,
+      {
+        detailKey: string;
+        proposalId: number;
+        applicantName: string;
+        subHead: string;
+        proposedAmount: number;
+        approvedAmount: number;
+        initialAmount: number;
+        additionalAmount: number;
+      }[]
+    > = {};
+
+    const ensureRow = (budgetHead: string) => {
+      if (!consolidationMap[budgetHead]) {
+        consolidationMap[budgetHead] = {
+          budgetHead,
+          proposed: 0,
+          approved: 0,
+          initial: 0,
+          additional: 0,
+          expenditure: 0,
+          balance: 0,
+        };
+      }
+    };
+
+    const upsertDetail = (
+      budgetHead: string,
+      detailKey: string,
+      entry: Omit<(typeof detailMap)[string][number], 'detailKey'>
+    ) => {
+      if (!detailMap[budgetHead]) {
+        detailMap[budgetHead] = [];
+      }
+      const existing = detailMap[budgetHead].find((detail) => detail.detailKey === detailKey);
+      if (existing) {
+        existing.proposedAmount = entry.proposedAmount;
+        existing.approvedAmount = entry.approvedAmount;
+        existing.initialAmount = entry.initialAmount;
+        existing.additionalAmount = entry.additionalAmount;
+        return;
+      }
+      detailMap[budgetHead].push({ detailKey, ...entry });
+    };
+
+    proposedProposals.forEach((proposal) => {
+      proposal.items.forEach((item) => {
+        ensureRow(item.budgetHead);
+        const isInitial = isInitialBudgetProposal(proposal.createdAt, financialYear?.value || '');
+        consolidationMap[item.budgetHead].proposed += item.proposedAmount;
+        if (isInitial) {
+          consolidationMap[item.budgetHead].initial += item.proposedAmount;
+        } else {
+          consolidationMap[item.budgetHead].additional += item.proposedAmount;
+        }
+        const detailKey = `${proposal.id}::${item.subHead || '-'}`;
+        upsertDetail(item.budgetHead, detailKey, {
+          proposalId: proposal.id,
+          applicantName: proposal.applicantName || 'Unknown',
+          subHead: item.subHead || '-',
+          proposedAmount: item.proposedAmount,
+          approvedAmount: 0,
+          initialAmount: isInitial ? item.proposedAmount : 0,
+          additionalAmount: isInitial ? 0 : item.proposedAmount,
+        });
+      });
+    });
+
+    approvedProposals.forEach((proposal) => {
+      proposal.items.forEach((item) => {
+        ensureRow(item.budgetHead);
+        const isInitial = isInitialBudgetProposal(proposal.createdAt, financialYear?.value || '');
+        consolidationMap[item.budgetHead].approved += item.approvedAmount;
+        consolidationMap[item.budgetHead].expenditure += item.expenditure || 0;
+        const detailKey = `${proposal.id}::${item.subHead || '-'}`;
+        upsertDetail(item.budgetHead, detailKey, {
+          proposalId: proposal.id,
+          applicantName: proposal.applicantName || 'Unknown',
+          subHead: item.subHead || '-',
+          proposedAmount: item.proposedAmount,
+          approvedAmount: item.approvedAmount,
+          initialAmount: isInitial ? item.proposedAmount : 0,
+          additionalAmount: isInitial ? 0 : item.proposedAmount,
+        });
+      });
+    });
+
+    return {
+      consolidatedRows: Object.values(consolidationMap).map((row) => ({
+        ...row,
+        balance: row.approved - row.expenditure,
+      })),
+      detailsByHead: detailMap,
+    };
+  }, [filteredProposals, financialYear?.value, roleKey]);
+
   const consolidatedTotals = useMemo(
     () =>
       consolidatedRows.reduce(
         (acc, row) => ({
+          proposed: acc.proposed + row.proposed,
+          approved: acc.approved + row.approved,
           initial: acc.initial + row.initial,
           additional: acc.additional + row.additional,
           expenditure: acc.expenditure + row.expenditure,
           balance: acc.balance + row.balance,
         }),
-        { initial: 0, additional: 0, expenditure: 0, balance: 0 }
+        { proposed: 0, approved: 0, initial: 0, additional: 0, expenditure: 0, balance: 0 }
       ),
     [consolidatedRows]
   );
@@ -243,9 +492,96 @@ const AdminBudgetDashboard: React.FC = () => {
     }
   }, [detailsByHead, expandedHead]);
 
+  const selectStyles = {
+    control: (base: any, state: any) => ({
+      ...base,
+      minHeight: '42px',
+      height: '42px',
+      borderRadius: '12px',
+      border: '1px solid rgba(15, 23, 42, 0.18)',
+      boxShadow: state.isFocused
+        ? '0 0 0 4px rgba(0, 105, 171, 0.15), 0 10px 22px rgba(2, 6, 23, 0.08)'
+        : '0 6px 18px rgba(2, 6, 23, 0.06)',
+      backgroundColor: 'rgba(255, 255, 255, 0.92)',
+      paddingLeft: '4px',
+      paddingRight: '4px',
+      '&:hover': {
+        borderColor: '#0069ab',
+      },
+    }),
+    valueContainer: (base: any) => ({
+      ...base,
+      padding: '0 12px',
+      height: '42px',
+    }),
+    singleValue: (base: any) => ({
+      ...base,
+      color: '#0f172a',
+      fontSize: '0.95rem',
+      fontWeight: 500,
+    }),
+    placeholder: (base: any) => ({
+      ...base,
+      color: '#0f172a',
+      fontSize: '0.95rem',
+      fontWeight: 500,
+    }),
+    indicatorSeparator: () => ({
+      display: 'none',
+    }),
+    dropdownIndicator: (base: any) => ({
+      ...base,
+      color: '#0f172a',
+      paddingRight: '8px',
+    }),
+    menu: (base: any) => ({
+      ...base,
+      borderRadius: '10px',
+      overflow: 'hidden',
+      marginTop: '4px',
+      boxShadow: '0 8px 22px rgba(15, 23, 42, 0.14)',
+      border: '1px solid rgba(15, 23, 42, 0.14)',
+      zIndex: 9999,
+    }),
+    menuList: (base: any) => ({
+      ...base,
+      paddingTop: 0,
+      paddingBottom: 0,
+    }),
+    option: (base: any, state: any) => ({
+      ...base,
+      backgroundColor: state.isSelected ? '#2a6fd6' : state.isFocused ? '#eef4ff' : '#fff',
+      color: state.isSelected ? '#fff' : '#111827',
+      fontSize: '0.95rem',
+      padding: '12px 18px',
+      cursor: 'pointer',
+    }),
+  };
+
   return (
     <div className="adminbudgetdashboard-page">
       <div className="adminbudgetdashboard-container">
+        {(roleKey === 'dof' || roleKey === 'super_admin') && (
+          <div className="adminbudget-tabs">
+            <NavLink
+              to="/admin/budgetdashboard"
+              className={({ isActive }) =>
+                `adminbudget-tab${isActive ? ' is-active' : ''}`
+              }
+            >
+              Budget Head
+            </NavLink>
+            <NavLink
+              to="/admin/budgetsummary"
+              className={({ isActive }) =>
+                `adminbudget-tab${isActive ? ' is-active' : ''}`
+              }
+            >
+              Beneficiary Summary
+            </NavLink>
+          </div>
+        )}
+
         <div className="adminbudgetdashboard-card">
           <div className="adminbudgetdashboard-header">
             <div className="adminbudgetdashboard-header-left">
@@ -254,149 +590,153 @@ const AdminBudgetDashboard: React.FC = () => {
             </div>
             <div className="adminbudgetdashboard-header-right">
               <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--fy">
-                <Form.Select
-                  value={financialYear?.value || ''}
-                  onChange={(e) => {
-                    const option = financialYearOptions.find(opt => opt.value === e.target.value);
-                    if (option) setFinancialYear(option);
-                  }}
-                  className="adminbudgetdashboard-select"
-                >
-                  {financialYearOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Form.Select>
+                <Select
+                  value={financialYear}
+                  onChange={(option) => setFinancialYear(option)}
+                  options={financialYearOptions}
+                  styles={selectStyles}
+                  isSearchable={false}
+                />
               </div>
 
               <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--beneficiary">
-                <Form.Select
-                  value={beneficiary?.value || 'all'}
-                  onChange={(e) => {
-                    const option = beneficiaryOptions.find(opt => opt.value === e.target.value);
-                    if (option) setBeneficiary(option);
-                  }}
-                  className="adminbudgetdashboard-select"
-                >
-                  {beneficiaryOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Form.Select>
+                <Select
+                  value={beneficiary}
+                  onChange={(option) => setBeneficiary(option)}
+                  options={beneficiaryOptions}
+                  styles={selectStyles}
+                  placeholder="All Beneficiary"
+                  isClearable={false}
+                 isSearchable={roleKey === 'dof' || roleKey === 'super_admin'}
+                />
               </div>
 
               <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--search">
-                <Form.Control
+                <input
                   type="text"
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
                   placeholder="Search Budget ID or Applicant"
-                  className="adminbudgetdashboard-search-input"
+                  className="adminbudgetdashboard-search"
                 />
               </div>
             </div>
           </div>
 
           <div className="adminbudgetdashboard-body">
-            {loading && <div className="adminbudgetdashboard-state">Loading...</div>}
-            {!loading && error && <div className="adminbudgetdashboard-state adminbudgetdashboard-state--error">{error}</div>}
+          {loading && <div className="adminbudgetdashboard-state">Loading...</div>}
+          {!loading && error && <div className="adminbudgetdashboard-state adminbudgetdashboard-state--error">{error}</div>}
 
-            {!loading && !error && consolidatedRows.length > 0 && (
-              <div className="adminbudgetdashboard-table-section">
-                <div className="adminbudgetdashboard-table-wrapper">
-                  <table className="adminbudgetdashboard-table">
+          {!loading && !error && consolidatedRows.length > 0 && (
+            <div className="adminbudgetdashboard-table-section">
+              <div className="adminbudgetdashboard-table-wrapper">
+                <table className="adminbudgetdashboard-table">
+                  <thead>
+                    <tr>
+                      <th>S.No</th>
+                      <th>Budget Head</th>
+                      <th>Proposed</th>
+                      <th>Approved</th>
+                      <th>Initial</th>
+                      <th>Additional</th>
+                      <th>Expenditure</th>
+                      <th>Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {consolidatedRows.map((row, idx) => (
+                      <tr
+                        key={`${row.budgetHead}-${idx}`}
+                        className="adminbudgetdashboard-row-clickable"
+                        onClick={() =>
+                          setExpandedHead((prev) => (prev === row.budgetHead ? null : row.budgetHead))
+                        }
+                      >
+                        <td>{idx + 1}</td>
+                        <td>{row.budgetHead}</td>
+                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.proposed)}` : '--'}</td>
+                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.approved)}` : '--'}</td>
+                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.initial)}` : '--'}</td>
+                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.additional)}` : '--'}</td>
+                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.expenditure)}` : '--'}</td>
+                        <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.balance)}` : '--'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="adminbudgetdashboard-total-row">
+                      <td></td>
+                      <td>
+                        <strong>Total</strong>
+                      </td>
+                      <td>
+                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.proposed)}` : '--'}</strong>
+                      </td>
+                      <td>
+                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.approved)}` : '--'}</strong>
+                      </td>
+                      <td>
+                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.initial)}` : '--'}</strong>
+                      </td>
+                      <td>
+                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.additional)}` : '--'}</strong>
+                      </td>
+                      <td>
+                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.expenditure)}` : '--'}</strong>
+                      </td>
+                      <td>
+                        <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.balance)}` : '--'}</strong>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {!loading && !error && expandedHead && (
+            <div className="adminbudgetdashboard-detail-section">
+              <div className="adminbudgetdashboard-detail-title">{expandedHead}</div>
+              {(detailsByHead[expandedHead] || []).length > 0 ? (
+                <div className="adminbudgetdashboard-detail-table-wrapper">
+                  <table className="adminbudgetdashboard-detail-table">
                     <thead>
                       <tr>
                         <th>S.No</th>
-                        <th>Budget Head</th>
+                        <th>Applicant</th>
+                        <th>Sub Head</th>
                         <th>Initial</th>
                         <th>Additional</th>
-                        <th>Expenditure</th>
-                        <th>Balance</th>
+                        <th>Proposed</th>
+                        <th>Approved</th>
+                        
                       </tr>
                     </thead>
                     <tbody>
-                      {consolidatedRows.map((row, idx) => (
-                        <tr
-                          key={`${row.budgetHead}-${idx}`}
-                          className="adminbudgetdashboard-row-clickable"
-                          onClick={() =>
-                            setExpandedHead((prev) => (prev === row.budgetHead ? null : row.budgetHead))
-                          }
-                        >
-                          <td>{idx + 1}</td>
-                          <td>{row.budgetHead}</td>
-                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.initial)}` : '--'}</td>
-                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.additional)}` : '--'}</td>
-                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.expenditure)}` : '--'}</td>
-                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.balance)}` : '--'}</td>
+                      {(detailsByHead[expandedHead] || []).map((detail, index) => (
+                        <tr key={`${expandedHead}-${detail.detailKey}`}>
+                          <td>{index + 1}</td>
+                          <td>{detail.applicantName}</td>
+                          <td>{detail.subHead}</td>
+                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.initialAmount)}` : '--'}</td>
+                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.additionalAmount)}` : '--'}</td>
+                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.proposedAmount)}` : '--'}</td>
+                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.approvedAmount)}` : '--'}</td>
+                          
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot>
-                      <tr className="adminbudgetdashboard-total-row">
-                        <td></td>
-                        <td>
-                          <strong>Total</strong>
-                        </td>
-                        <td>
-                          <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.initial)}` : '--'}</strong>
-                        </td>
-                        <td>
-                          <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.additional)}` : '--'}</strong>
-                        </td>
-                        <td>
-                          <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.expenditure)}` : '--'}</strong>
-                        </td>
-                        <td>
-                          <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.balance)}` : '--'}</strong>
-                        </td>
-                      </tr>
-                    </tfoot>
                   </table>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="adminbudgetdashboard-state">No approved proposals found for this budget head.</div>
+              )}
+            </div>
+          )}
 
-            {!loading && !error && expandedHead && (
-              <div className="adminbudgetdashboard-detail-section">
-                <div className="adminbudgetdashboard-detail-title">{expandedHead}</div>
-                {(detailsByHead[expandedHead] || []).length > 0 ? (
-                  <div className="adminbudgetdashboard-detail-table-wrapper">
-                    <table className="adminbudgetdashboard-detail-table">
-                      <thead>
-                        <tr>
-                          <th>S.No</th>
-                          <th>Applicant</th>
-                          <th>Sub Head</th>
-                          <th>Initial</th>
-                          <th>Additional</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(detailsByHead[expandedHead] || []).map((detail, index) => (
-                          <tr key={`${expandedHead}-${detail.proposalId}-${index}`}>
-                            <td>{index + 1}</td>
-                            <td>{detail.applicantName}</td>
-                            <td>{detail.subHead}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.initialAmount)}` : '--'}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.additionalAmount)}` : '--'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="adminbudgetdashboard-state">No approved proposals found for this budget head.</div>
-                )}
-              </div>
-            )}
-
-            {!loading && !error && consolidatedRows.length === 0 && (
-              <div className="adminbudgetdashboard-state">No consolidated budget data found.</div>
-            )}
+          {!loading && !error && consolidatedRows.length === 0 && (
+            <div className="adminbudgetdashboard-state">No consolidated budget data found.</div>
+          )}
           </div>
         </div>
       </div>

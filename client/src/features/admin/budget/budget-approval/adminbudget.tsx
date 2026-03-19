@@ -960,8 +960,10 @@ const AdminBudget: React.FC = () => {
 
   const buildAdminLogEvents = useMemo<AdminLogEvent[]>(() => {
     const events: AdminLogEvent[] = [];
-    const createdAt = logProposal?.created_at || logProposal?.createdAt;
-    const updatedAt = logProposal?.updated_at || logProposal?.updatedAt;
+    const createdAt =
+      logProposal?.created_at || logProposal?.createdAt || logProposal?.created_date;
+    const updatedAt =
+      logProposal?.updated_at || logProposal?.updatedAt || logProposal?.updated_date;
     const createdAtMs = createdAt ? new Date(createdAt).getTime() : 0;
     const updatedAtMs = updatedAt ? new Date(updatedAt).getTime() : 0;
     const submitterEmail = normalizeEmailForLog(logProposal?.user_email || logProposal?.userEmail);
@@ -985,7 +987,7 @@ const AdminBudget: React.FC = () => {
     const editLogs = Array.isArray(logEdits) ? logEdits : [];
     if (editLogs.length > 0) {
       editLogs.forEach((edit: any, idx: number) => {
-        const editCreatedAt = edit.created_at || edit.createdAt;
+        const editCreatedAt = edit.created_at || edit.createdAt || edit.created_at_formatted;
         const editCreatedMs = editCreatedAt ? new Date(editCreatedAt).getTime() : createdAtMs;
         const summary = normalizeTextForLog(edit.summary);
         let parsedDetails: any = null;
@@ -1028,6 +1030,9 @@ const AdminBudget: React.FC = () => {
                 : Array.isArray(parsed?.lineChanges)
                   ? parsed.lineChanges
                   : [];
+            const proposalChanges = Array.isArray(parsed?.proposalChanges)
+              ? parsed.proposalChanges
+              : [];
             if (lines.length > 0) {
               const numericRows = lines
                 .map((line: any) => Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no))
@@ -1050,6 +1055,13 @@ const AdminBudget: React.FC = () => {
               });
               detailSummary = details.join(" | ");
             }
+            if (proposalChanges.length > 0) {
+              const proposalSummary = proposalChanges
+                .map((change: any) => normalizeTextForLog(change))
+                .filter(Boolean)
+                .join("; ");
+              detailSummary = [detailSummary, proposalSummary].filter(Boolean).join(" | ");
+            }
           } catch {
             // Keep summary fallback if details parse fails.
           }
@@ -1066,7 +1078,7 @@ const AdminBudget: React.FC = () => {
           actorIsAdmin,
           actorBadgeLabel,
           timestamp: editCreatedMs,
-          dateLabel: editCreatedAt ? formatDateTimeForLog(editCreatedAt) : "-",
+          dateLabel: formatDateTimeForLog(editCreatedAt || updatedAt || createdAt),
           decision: "updated",
         });
       });

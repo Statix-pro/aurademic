@@ -92,7 +92,10 @@ export async function buildBudgetList(options) {
       bp.status,
       bp.current_stage,
       bp.approval_flow,
-      DATE_FORMAT(bp.created_at, '%Y-%m-%d %H:%i') AS created_date,
+      MAX(bp.created_at) AS created_at,
+      MAX(bp.updated_at) AS updated_at,
+      DATE_FORMAT(MAX(bp.created_at), '%Y-%m-%d %H:%i') AS created_date,
+      DATE_FORMAT(MAX(bp.updated_at), '%Y-%m-%d %H:%i') AS updated_date,
       COUNT(DISTINCT bpl.id) AS line_count,
       COUNT(DISTINCT bpa.id) AS approval_count
       ${adminFields}

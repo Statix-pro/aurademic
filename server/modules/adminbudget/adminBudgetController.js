@@ -714,7 +714,7 @@ export async function updateApprovedAmounts(req, res) {
 
     return res.json({
       success: true,
-      message: 'Approved amounts updated successfully',
+      message: 'Budget updated successfully',
     });
   } catch (error) {
     console.error('Admin approved amount update error:', error);

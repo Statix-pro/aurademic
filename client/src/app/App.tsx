@@ -37,7 +37,7 @@ import MasterDataPage from '../features/admin/masterData/MasterDataPage';
 import { AbilityProvider } from '../shared/casl/AbilityContext';
 import MainLayout from '../shared/components/layout/MainLayout';
 import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/adminbudgetdashboard';
-
+import AdminBudgetSummary from '../features/admin/budget/budget-summary/adminbudgetsummary';
 function App() {
   return (
     <MsalProvider>
@@ -51,51 +51,273 @@ function App() {
 
                 {/* All other routes share the MainLayout (Navbar + Outlet) */}
                 <Route element={<MainLayout />}>
-                  <Route path="/events" element={<ProtectedRoute><EventDashboard /></ProtectedRoute>} />
-                  <Route path="/event/:eventId" element={<ProtectedRoute><EventPage /></ProtectedRoute>} />
-                  <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-                  <Route path="/project" element={<ProtectedRoute><Projectform /></ProtectedRoute>} />
-                  <Route path="/project/:id" element={<ProtectedRoute><Projectform /></ProtectedRoute>} />
-                  <Route path="/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
-                  <Route path="/journal" element={<ProtectedRoute><Journalform /></ProtectedRoute>} />
-                  <Route path="/journal/conference" element={<ProtectedRoute><Journalform /></ProtectedRoute>} />
-                  <Route path="/journal/book" element={<ProtectedRoute><Journalform /></ProtectedRoute>} />
-                  <Route path="/journal/book-chapter" element={<ProtectedRoute><Journalform /></ProtectedRoute>} />
-                  <Route path="/journal/:journalId" element={<ProtectedRoute><Journalform /></ProtectedRoute>} />
-                  <Route path="/publications" element={<ProtectedRoute><PublicationsPage /></ProtectedRoute>} />
-                  <Route path="/projects" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
+                  <Route
+                    path="/events"
+                    element={
+                      <ProtectedRoute>
+                        <EventDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/event/:eventId"
+                    element={
+                      <ProtectedRoute>
+                        <EventPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/home"
+                    element={
+                      <ProtectedRoute>
+                        <Home />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/project"
+                    element={
+                      <ProtectedRoute>
+                        <Projectform />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/project/:id"
+                    element={
+                      <ProtectedRoute>
+                        <Projectform />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <UserDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/journal"
+                    element={
+                      <ProtectedRoute>
+                        <Journalform />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/journal/conference"
+                    element={
+                      <ProtectedRoute>
+                        <Journalform />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/journal/book"
+                    element={
+                      <ProtectedRoute>
+                        <Journalform />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/journal/book-chapter"
+                    element={
+                      <ProtectedRoute>
+                        <Journalform />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/journal/:journalId"
+                    element={
+                      <ProtectedRoute>
+                        <Journalform />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/publications"
+                    element={
+                      <ProtectedRoute>
+                        <PublicationsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/projects"
+                    element={
+                      <ProtectedRoute>
+                        <ProjectsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route 
+                    path="/admin/budgetdashboard" 
+                    element={
+                      <ProtectedRoute>
+                        <AdminBudgetDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin-dashboard"
+                    element={
+                      <AdminRoute>
+                        <Dashboard />
+                      </AdminRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/journals"
+                    element={
+                      <AdminRoute>
+                        {' '}
+                        <JournalManagement />{' '}
+                      </AdminRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/form-management/project-options"
+                    element={
+                      <AdminRoute>
+                        <ProjectFormOptions />
+                      </AdminRoute>
+                    }
+                  />
+                  <Route
+                    path="/access-control"
+                    element={
+                      <SuperAdminRoute>
+                        <AccessControlPage />
+                      </SuperAdminRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/master-data"
+                    element={
+                      <SuperAdminRoute>
+                        <MasterDataPage />
+                      </SuperAdminRoute>
+                    }
+                  />
+                  <Route path="/" element={<Navigate to="/home" />} />
+                  <Route
+                    path="/eventdashboard"
+                    element={
+                      <ProtectedRoute>
+                        <EventDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/event-entry"
+                    element={
+                      <ProtectedRoute>
+                        <EventEntry />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="/storybook" element={<Storybook />} />
 
-                  {/* FINANCE & GUESTHOUSE ROUTES */}
-                  <Route path="/finance/new" element={<ProtectedRoute><FinanceApproval /></ProtectedRoute>} />
-                  <Route path="/financecard" element={<ProtectedRoute><FinanceCard /></ProtectedRoute>} />
-                  <Route path="/guesthouse-booking" element={<ProtectedRoute><GuestHouseBooking /></ProtectedRoute>} />
-                  <Route path="/guestHouse-dashboard" element={<ProtectedRoute><GuestHouseDashboard /></ProtectedRoute>} />
+                  {/* Finance & Guesthouse Routes */}
+                  <Route
+                    path="/finance/new"
+                    element={
+                      <ProtectedRoute>
+                        <FinanceApproval />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/financecard"
+                    element={
+                      <ProtectedRoute>
+                        <FinanceCard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/guesthouse-booking"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseBooking />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/guestHouse-dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
 
                   {/*  BUDGET ROUTES */}
-                  <Route path="/budgetcard" element={<ProtectedRoute><BudgetDashboard /></ProtectedRoute>} />
-                  <Route path="/budget/new" element={<ProtectedRoute><Budget /></ProtectedRoute>} />
-                  <Route path="/budget/:id" element={<ProtectedRoute><Budget /></ProtectedRoute>} />
-                  <Route path="/budget/:id/edit" element={<ProtectedRoute><Budget /></ProtectedRoute>} />
+                  <Route
+                    path="/budgetcard"
+                    element={
+                      <ProtectedRoute>
+                        <BudgetDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/budget/new"
+                    element={
+                      <ProtectedRoute>
+                        <Budget />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/budget/:id"
+                    element={
+                      <ProtectedRoute>
+                        <Budget />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/budget/:id/edit"
+                    element={
+                      <ProtectedRoute>
+                        <Budget />
+                      </ProtectedRoute>
+                    }
+                  />
 
-                  {/* ADMIN MANAGEMENT ROUTES */}
-                  <Route path="/admin-dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
-                  <Route path="/admin/journals" element={<AdminRoute><JournalManagement /></AdminRoute>} />
-                  <Route path="/admin/form-management/project-options" element={<AdminRoute><ProjectFormOptions /></AdminRoute>} />
-                  <Route path="/access-control" element={<SuperAdminRoute><AccessControlPage /></SuperAdminRoute>} />
-                  <Route path="/admin/master-data" element={<SuperAdminRoute><MasterDataPage /></SuperAdminRoute>} />
+                  <Route
+                    path="/admin/budget"
+                    element={
+                      <BudgetApprovalRoute>
+                        <AdminBudget />
+                      </BudgetApprovalRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/budget/:tab"
+                    element={
+                      <BudgetApprovalRoute>
+                        <AdminBudget />
+                      </BudgetApprovalRoute>
+                    }
+                  />
+                  <Route 
+                    path="/admin/budgetsummary" 
+                    element={
+                      <ProtectedRoute>
+                        <AdminBudgetSummary />
+                      </ProtectedRoute>
+                    }
+                  />
 
-                  {/* ADMIN BUDGET ROUTES */}
-                  <Route path="/admin/budgetdashboard" element={<BudgetApprovalRoute><AdminBudgetDashboard /></BudgetApprovalRoute>} />
-                  <Route path="/admin/budget" element={<BudgetApprovalRoute><AdminBudget /></BudgetApprovalRoute>} />
-                  <Route path="/admin/budget/:tab" element={<BudgetApprovalRoute><AdminBudget /></BudgetApprovalRoute>} />
                   <Route path="/adminbudget" element={<Navigate to="/admin/budget" replace />} />
                   <Route path="/adminbudget/*" element={<Navigate to="/admin/budget/approval" replace />} />
-
-                  {/* UTILITY ROUTES */}
-                  <Route path="/eventdashboard" element={<ProtectedRoute><EventDashboard /></ProtectedRoute>} />
-                  <Route path="/event-entry" element={<ProtectedRoute><EventEntry /></ProtectedRoute>} />
-                  <Route path="/storybook" element={<Storybook />} />
-                  <Route path="/" element={<Navigate to="/home" />} />
 
                   {/* Under Construction Pages */}
                   <Route path="/vehicle-booking" element={<ProtectedRoute><UnderConstruction pageName="Vehicle Booking" /></ProtectedRoute>} />

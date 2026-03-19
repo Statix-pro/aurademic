@@ -8,7 +8,7 @@ import {
   canAccessAdminArea,
   canAccessBudgetApproval,
   canManageAccessControl,
-  isSuperAdmin,
+  isSuperAdmin,hasPermission
 } from "../../../utils/permissionUtils";
 
 const Navbar: React.FC = () => {
@@ -20,7 +20,9 @@ const Navbar: React.FC = () => {
   const showBudgetApproval = canAccessBudgetApproval(user);
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
-  const showAdminMenu = showAdminDashboard || showBudgetApproval || showAccessControl || showMasterData;
+ const showAdminMenu = showAdminDashboard || showBudgetApproval || showAccessControl || showMasterData;
+  const showBudgetSummary =
+    isSuperAdmin(user) || hasPermission(user, 'budget.workflow.dof');
 
   const toggleDropdown = (menuName: string) => {
     setActiveMenu((prev) => (prev === menuName ? null : menuName));
@@ -343,6 +345,7 @@ const Navbar: React.FC = () => {
                     <li>Budget-Dashboard</li>
                   </Link>
                 )}
+                 
                 {showBudgetApproval && (
                   <Link
                     to="/admin/budget"
