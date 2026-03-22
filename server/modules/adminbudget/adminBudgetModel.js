@@ -401,7 +401,7 @@ export async function updateApprovedAmounts(
     }
 
     const [existingLines] = await conn.execute(
-      `SELECT id, budget_head, sub_head, quantity, unit_amount, line_total, approved_unit_amount, approved_line_total, approved_month_allocations_json
+      `SELECT id, budget_head, sub_head, line_description, quantity, unit_amount, line_total, approved_unit_amount, approved_line_total, approved_month_allocations_json
          FROM budget_proposal_lines
          WHERE budget_proposal_id = ?
          ORDER BY id`,
@@ -420,10 +420,26 @@ export async function updateApprovedAmounts(
          WHERE l.budget_proposal_id = ?`,
       [proposalId]
     );
+    const normalizeMonthKey = (value) => {
+      const monthValue = normalizeText(value);
+      if (!monthValue) return '';
+      const direct = VALID_MONTHS.find((month) => month === monthValue);
+      if (direct) return direct;
+      const lower = monthValue.toLowerCase();
+      return VALID_MONTHS.find((month) => month.toLowerCase() === lower) || '';
+    };
+
     const normalizeMonthMap = (raw = {}) => {
       const out = {};
       for (const month of VALID_MONTHS) {
         out[month] = Number(raw?.[month] || 0);
+      }
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        for (const [monthKey, amount] of Object.entries(raw)) {
+          const normalizedMonth = normalizeMonthKey(monthKey);
+          if (!normalizedMonth) continue;
+          out[normalizedMonth] = Number(amount || 0);
+        }
       }
       return out;
     };
@@ -432,7 +448,7 @@ export async function updateApprovedAmounts(
       const map = new Map();
       for (const row of rows) {
         const lineId = Number(row?.line_id);
-        const month = normalizeText(row?.month);
+        const month = normalizeMonthKey(row?.month);
         if (!Number.isInteger(lineId) || !VALID_MONTHS.includes(month)) continue;
         if (!map.has(lineId)) map.set(lineId, {});
         map.get(lineId)[month] = Number(row?.amount || 0);
@@ -458,6 +474,7 @@ export async function updateApprovedAmounts(
     const upto = Math.min(existingLines.length, incomingLines.length);
     const changedRows = [];
     const lineChangeDetails = [];
+    const proposalChanges = [];
     const normalizedEditorRole = normalizeText(editorRole).toLowerCase();
     const logRole = normalizedEditorRole === 'level1'
       ? (isEntityBeneficiaryType(proposal.beneficiary_type) ? 'coordinator' : 'hod')
@@ -473,10 +490,151 @@ export async function updateApprovedAmounts(
       }
     };
 
+    const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
+    const hasBudgetTagColumn = await hasBudgetProposalColumn('budget_tag');
+    const hasTagInput = hasBudgetTagColumn && hasOwn(payload, 'budget_tag');
+    const hasBeneficiaryEmployeeInput =
+      Number.isInteger(Number.parseInt(payload?.beneficiary_employee_id, 10))
+      && Number(payload?.beneficiary_employee_id) > 0;
+    const hasBeneficiaryInput =
+      hasOwn(payload, 'beneficiary_type') ||
+      hasOwn(payload, 'beneficiary_value') ||
+      hasBeneficiaryEmployeeInput;
+
+    if (hasTagInput || hasBeneficiaryInput) {
+      const oldBeneficiaryType = normalizeBeneficiaryType(proposal?.beneficiary_type);
+      const oldBeneficiaryValue = normalizeText(proposal?.beneficiary_value);
+      const oldTag = normalizeText(proposal?.budget_tag);
+      const oldApprovalFlow = normalizeText(proposal?.approval_flow);
+
+      const nextBeneficiaryType = hasOwn(payload, 'beneficiary_type')
+        ? normalizeBeneficiaryType(payload?.beneficiary_type)
+        : oldBeneficiaryType;
+      const nextBeneficiaryValue = hasOwn(payload, 'beneficiary_value')
+        ? normalizeText(payload?.beneficiary_value)
+        : oldBeneficiaryValue;
+      const nextBeneficiaryEmployeeId = hasOwn(payload, 'beneficiary_employee_id')
+        ? payload?.beneficiary_employee_id
+        : null;
+      const nextTag = hasTagInput ? normalizeText(payload?.budget_tag) : oldTag;
+
+      let nextDepartmentId = await resolveDepartmentId(conn, {
+        beneficiary_type: nextBeneficiaryType,
+        beneficiary_value: nextBeneficiaryValue,
+        department: payload?.department || proposal?.department,
+      });
+      const shouldPreserveExistingFacultyRouting =
+        ['Faculty', 'Staff'].includes(normalizeBeneficiaryType(nextBeneficiaryType))
+        && !Number.isInteger(Number.parseInt(nextBeneficiaryEmployeeId, 10))
+        && normalizeBeneficiaryType(nextBeneficiaryType) === normalizeBeneficiaryType(proposal?.beneficiary_type)
+        && nextBeneficiaryValue === normalizeText(proposal?.beneficiary_value);
+      let entityTypeCode = null;
+      let beneficiaryEntityId = null;
+
+      if (shouldPreserveExistingFacultyRouting) {
+        nextDepartmentId =
+          proposal?.department_id != null && Number.isInteger(Number(proposal.department_id))
+            ? Number(proposal.department_id)
+            : nextDepartmentId;
+        beneficiaryEntityId =
+          proposal?.beneficiary_entity_id != null && Number.isInteger(Number(proposal.beneficiary_entity_id))
+            ? Number(proposal.beneficiary_entity_id)
+            : null;
+
+        if (Number.isInteger(Number(beneficiaryEntityId)) && Number(beneficiaryEntityId) > 0) {
+          const existingEntity = await getEntityById(conn, Number(beneficiaryEntityId));
+          entityTypeCode = normalizeEntityTypeCode(existingEntity?.type_code);
+        }
+      } else {
+        const resolvedBeneficiary = await resolveBeneficiaryEntity(
+          conn,
+          nextBeneficiaryType,
+          nextBeneficiaryValue,
+          nextBeneficiaryEmployeeId
+        );
+        entityTypeCode = resolvedBeneficiary.entityTypeCode;
+        beneficiaryEntityId = resolvedBeneficiary.beneficiaryEntityId;
+      }
+
+      if (
+        nextDepartmentId == null &&
+        !hasOwn(payload, 'department') &&
+        normalizeBeneficiaryType(nextBeneficiaryType) !== 'Department'
+      ) {
+        nextDepartmentId =
+          proposal?.department_id != null && Number.isInteger(Number(proposal.department_id))
+            ? Number(proposal.department_id)
+            : null;
+      }
+
+      const flow = await resolveApprovalFlow(nextBeneficiaryType, entityTypeCode, conn, {
+        budgetTag: nextTag,
+      });
+      const nextApprovalFlow = formatApprovalFlowString(flow);
+
+      if (oldBeneficiaryType !== nextBeneficiaryType) {
+        proposalChanges.push(`Beneficiary Type changed from "${oldBeneficiaryType || '-'}" to "${nextBeneficiaryType || '-'}"`);
+      }
+      if (oldBeneficiaryValue !== nextBeneficiaryValue) {
+        proposalChanges.push(`Beneficiary Value changed from "${oldBeneficiaryValue || '-'}" to "${nextBeneficiaryValue || '-'}"`);
+      }
+      if (oldTag !== nextTag) {
+        proposalChanges.push(`Tag changed from "${oldTag || '-'}" to "${nextTag || '-'}"`);
+      }
+      if (oldApprovalFlow !== nextApprovalFlow) {
+        proposalChanges.push(`Approval Flow changed from "${oldApprovalFlow || '-'}" to "${nextApprovalFlow || '-'}"`);
+      }
+
+      const proposalSet = [
+        'beneficiary_type = ?',
+        'beneficiary_value = ?',
+        'beneficiary_entity_id = ?',
+        'department_id = ?',
+        'approval_flow = ?',
+      ];
+      const toNullablePositiveInt = (value) => {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+      };
+
+      const proposalParams = [
+        nextBeneficiaryType,
+        nextBeneficiaryValue || null,
+        toNullablePositiveInt(beneficiaryEntityId),
+        toNullablePositiveInt(nextDepartmentId),
+        nextApprovalFlow,
+      ];
+
+      if (hasBudgetTagColumn) {
+        proposalSet.push('budget_tag = ?');
+        proposalParams.push(nextTag || null);
+      }
+
+      await conn.execute(
+        `UPDATE budget_proposals
+           SET ${proposalSet.join(', ')},
+               updated_at = NOW()
+           WHERE id = ?`,
+        [...proposalParams, proposalId]
+      );
+    }
+
     for (let idx = 0; idx < upto; idx += 1) {
       const prevLine = existingLines[idx];
       const incoming = incomingByLineId.get(Number(prevLine.id)) || incomingLines[idx] || {};
       const lineNo = idx + 1;
+      const oldBudgetHead = normalizeText(prevLine.budget_head);
+      const oldSubHead = normalizeText(prevLine.sub_head);
+      const oldDescription = normalizeText(prevLine.line_description);
+      const nextBudgetHead = hasOwn(incoming, 'budget_head')
+        ? normalizeText(incoming?.budget_head)
+        : oldBudgetHead;
+      const nextSubHead = hasOwn(incoming, 'sub_head')
+        ? normalizeText(incoming?.sub_head)
+        : oldSubHead;
+      const nextDescription = hasOwn(incoming, 'line_description')
+        ? normalizeText(incoming?.line_description)
+        : oldDescription;
       const previousApprovedUnit = Number(prevLine.approved_unit_amount ?? prevLine.unit_amount) || 0;
       const previousApprovedLineTotal = Number(prevLine.approved_line_total ?? prevLine.line_total) || 0;
       const inferredApprovedQuantity =
@@ -526,20 +684,45 @@ export async function updateApprovedAmounts(
         changes.push(`Month allocations changed (${monthDiffs.join(', ')})`);
       }
 
+      if (oldBudgetHead !== nextBudgetHead) {
+        changes.push(`Budget Head changed from "${oldBudgetHead || '-'}" to "${nextBudgetHead || '-'}"`);
+      }
+
+      if (oldSubHead !== nextSubHead) {
+        changes.push(`Sub Head changed from "${oldSubHead || '-'}" to "${nextSubHead || '-'}"`);
+      }
+
+      if (oldDescription !== nextDescription) {
+        changes.push('Description updated');
+      }
+
       if (changes.length > 0) {
         await conn.execute(
           `UPDATE budget_proposal_lines
-             SET approved_unit_amount = ?,
+             SET budget_head = ?,
+                 sub_head = ?,
+                 line_description = ?,
+                 approved_unit_amount = ?,
                  approved_line_total = ?,
                  approved_month_allocations_json = ?
              WHERE id = ?`,
-          [nextApprovedUnit, nextApprovedLineTotal, JSON.stringify(nextMonthMap), prevLine.id]
+          [
+            nextBudgetHead || null,
+            nextSubHead || null,
+            nextDescription || null,
+            nextApprovedUnit,
+            nextApprovedLineTotal,
+            JSON.stringify(nextMonthMap),
+            prevLine.id,
+          ]
         );
 
         changedRows.push(lineNo);
         lineChangeDetails.push({ lineNo, changes });
       }
     }
+
+    const hasAnyEdit = changedRows.length > 0 || proposalChanges.length > 0;
 
     if (changedRows.length > 0) {
       await conn.execute(
@@ -555,8 +738,15 @@ export async function updateApprovedAmounts(
       );
     }
 
-    if (changedRows.length > 0) {
-      const editSummary = `${lineChangeDetails.length} line(s) approved amount updated`;
+    if (hasAnyEdit) {
+      const summaryParts = [];
+      if (lineChangeDetails.length > 0) {
+        summaryParts.push(`${lineChangeDetails.length} line(s) updated`);
+      }
+      if (proposalChanges.length > 0) {
+        summaryParts.push(`${proposalChanges.length} proposal field(s) updated`);
+      }
+      const editSummary = summaryParts.join(' | ') || 'Proposal updated';
 
       try {
         await conn.execute(
@@ -568,7 +758,11 @@ export async function updateApprovedAmounts(
             editorUserId || null,
             normalizeText(editorEmail) || null,
             editSummary,
-            JSON.stringify({ editorRole: normalizedEditorRole || 'admin', lines: lineChangeDetails }),
+            JSON.stringify({
+              editorRole: normalizedEditorRole || 'admin',
+              lines: lineChangeDetails,
+              proposalChanges,
+            }),
           ]
         );
       } catch (error) {
@@ -577,7 +771,14 @@ export async function updateApprovedAmounts(
         }
       }
 
-      const rowText = `Approved values updated for Row No. ${changedRows.join(', ')}`;
+      const feedbackParts = [];
+      if (changedRows.length > 0) {
+        feedbackParts.push(`Approved values updated for Row No. ${changedRows.join(', ')}`);
+      }
+      if (proposalChanges.length > 0) {
+        feedbackParts.push(`Proposal fields updated: ${proposalChanges.join('; ')}`);
+      }
+      const rowText = feedbackParts.join(' | ') || 'Proposal updated';
 
       await conn.execute(
         `INSERT INTO budget_proposal_approvals(

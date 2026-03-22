@@ -374,8 +374,8 @@ const BudgetDashboard: React.FC = () => {
           beneficiaryValue: master.beneficiary_value,
           currentStage: master.current_stage,
           approvalFlow: master.approval_flow,
-          createdAt: master.created_at,
-          updatedAt: master.updated_at,
+          createdAt: master.created_at || master.created_date || "",
+          updatedAt: master.updated_at || master.updated_date || "",
           items: items,
           approvals: Array.isArray(data.approvals)
             ? data.approvals
@@ -519,7 +519,7 @@ const BudgetDashboard: React.FC = () => {
     const editLogs = Array.isArray(proposal.edits) ? proposal.edits : [];
     if (editLogs.length > 0) {
       editLogs.forEach((edit: any, idx: number) => {
-        const createdAt = edit.created_at || edit.createdAt;
+        const createdAt = edit.created_at || edit.createdAt || edit.created_at_formatted;
         const createdMs = createdAt ? new Date(createdAt).getTime() : createdAtMs;
         const summary = normalizeText(edit.summary);
         let parsedDetails: any = null;
@@ -560,6 +560,9 @@ const BudgetDashboard: React.FC = () => {
                 : Array.isArray(parsed?.lineChanges)
                   ? parsed.lineChanges
                   : [];
+            const proposalChanges = Array.isArray(parsed?.proposalChanges)
+              ? parsed.proposalChanges
+              : [];
             if (lines.length > 0) {
               const numericRows = lines
                 .map((line: any) => Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no))
@@ -584,6 +587,13 @@ const BudgetDashboard: React.FC = () => {
               });
               detailSummary = details.join(' | ');
             }
+            if (proposalChanges.length > 0) {
+              const proposalSummary = proposalChanges
+                .map((change: any) => normalizeText(change))
+                .filter(Boolean)
+                .join('; ');
+              detailSummary = [detailSummary, proposalSummary].filter(Boolean).join(' | ');
+            }
           } catch {
             // ignore parse errors, keep summary fallback
           }
@@ -600,7 +610,7 @@ const BudgetDashboard: React.FC = () => {
           actorIsAdmin,
           actorBadgeLabel,
           timestamp: createdMs,
-          dateLabel: createdAt ? formatDateTime(createdAt) : "-",
+          dateLabel: formatDateTime(createdAt || proposal.updatedAt || proposal.createdAt),
           decision: "updated",
         });
       });

@@ -319,7 +319,7 @@ const AccessControlPage: React.FC = () => {
           params: { search: searchValue.trim() },
         }) as Promise<ApiCollectionResponse<AccessUser>>,
         // Need lists of all entities to map against
-        authenticityUtility.get('/budget/org-units').catch(() => ({ data: { data: { all: [] } } }))
+        authenticityUtility.get('/adminbudget/org-units').catch(() => ({ data: { data: { all: [] } } }))
       ]);
 
       const fetchedPermissions = Array.isArray(permissionResponse.data)

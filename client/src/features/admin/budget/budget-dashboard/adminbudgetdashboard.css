@@ -11,6 +11,39 @@
   width: 100%;
 }
 
+.adminbudgetdashboard-tabs-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.adminbudgetdashboard-tab-toggle {
+  display: flex;
+  justify-content: center;
+  background-color: #e1f0ff;
+  border-radius: 50px;
+  padding: 5px;
+  width: 520px;
+  max-width: 100%;
+}
+
+.adminbudgetdashboard-tab-toggle button {
+  border: none;
+  background-color: transparent;
+  color: #5d6b8a;
+  padding: 8px 20px;
+  border-radius: 50px;
+  font-weight: 500;
+  width: 50%;
+  transition: all 0.3s ease;
+}
+
+.adminbudgetdashboard-tab-toggle button.active {
+  background-color: #0069ab;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
+}
+
 .adminbudgetdashboard-card {
   background: #ffffff;
   border-radius: 18px;
@@ -192,6 +225,22 @@
   background: #f8fafc;
 }
 
+.adminbudgetdashboard-row-toggle-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.adminbudgetdashboard-row-toggle-btn:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .adminbudgetdashboard-total-row td {
   background: #f3f6f9 !important;
   font-weight: 800 !important;
@@ -313,6 +362,15 @@
 @media (max-width: 768px) {
   .adminbudgetdashboard-page {
     padding: 16px;
+  }
+
+  .adminbudgetdashboard-tab-toggle {
+    width: 100%;
+  }
+
+  .adminbudgetdashboard-tab-toggle button {
+    padding: 8px 10px;
+    font-size: 0.9rem;
   }
 
   .adminbudgetdashboard-header {
