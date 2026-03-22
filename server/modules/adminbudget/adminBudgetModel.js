@@ -1490,6 +1490,8 @@ export async function getConsolidatedData({
   const sql = `
     SELECT
       bpl.budget_head AS budgetHead,
+      SUM(bpl.line_total) AS proposed,
+      SUM(COALESCE(bpl.approved_line_total, bpl.line_total, 0)) AS approved,
       SUM(CASE WHEN bp.created_at <= ${cutoffExpr} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END) AS initial,
       SUM(CASE WHEN bp.created_at > ${cutoffExpr} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END) AS additional,
       0 AS expenditure
@@ -1518,6 +1520,8 @@ export async function getConsolidatedData({
       bpl.sub_head,
       bp.id AS proposalId,
       ${applicantNameExpr} AS applicantName,
+      bpl.line_total AS proposedAmount,
+      COALESCE(bpl.approved_line_total, bpl.line_total, 0) AS approvedAmount,
       CASE WHEN bp.created_at <= ${cutoffExpr} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END AS initialAmount,
       CASE WHEN bp.created_at > ${cutoffExpr} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END AS additionalAmount
     FROM budget_proposals bp
@@ -1540,6 +1544,8 @@ export async function getConsolidatedData({
       proposalId: row.proposalId,
       applicantName: row.applicantName,
       subHead: row.sub_head,
+      proposedAmount: Number(row.proposedAmount || 0),
+      approvedAmount: Number(row.approvedAmount || 0),
       initialAmount: Number(row.initialAmount || 0),
       additionalAmount: Number(row.additionalAmount || 0),
     });
@@ -1548,6 +1554,8 @@ export async function getConsolidatedData({
   return {
     consolidatedRows: rows.map(r => ({
       ...r,
+      proposed: Number(r.proposed || 0),
+      approved: Number(r.approved || 0),
       initial: Number(r.initial || 0),
       additional: Number(r.additional || 0),
       expenditure: Number(r.expenditure || 0),

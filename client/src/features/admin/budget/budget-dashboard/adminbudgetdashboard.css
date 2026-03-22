@@ -14,28 +14,30 @@
 .adminbudgetdashboard-tabs-wrap {
   display: flex;
   justify-content: center;
-  margin-bottom: 14px;
+  margin-bottom: 24px;
 }
 
 .adminbudgetdashboard-tab-toggle {
-  display: flex;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
   background-color: #e1f0ff;
   border-radius: 50px;
-  padding: 5px;
-  width: 520px;
-  max-width: 100%;
+  padding: 4px 6px;
+  margin: 0 auto;
 }
 
 .adminbudgetdashboard-tab-toggle button {
   border: none;
   background-color: transparent;
   color: #5d6b8a;
-  padding: 8px 20px;
+  padding: 6px 20px;
   border-radius: 50px;
   font-weight: 500;
-  width: 50%;
+  white-space: nowrap;
   transition: all 0.3s ease;
+  flex: 0 0 auto;
+  font-size: 0.95rem;
 }
 
 .adminbudgetdashboard-tab-toggle button.active {
@@ -194,13 +196,13 @@
 
 .adminbudgetdashboard-table th:nth-child(1),
 .adminbudgetdashboard-table td:nth-child(1) {
-  width: 7%;
+  width: 5%;
   text-align: center;
 }
 
 .adminbudgetdashboard-table th:nth-child(2),
 .adminbudgetdashboard-table td:nth-child(2) {
-  width: 33%;
+  width: 23%;
   text-align: left;
 }
 
@@ -211,8 +213,12 @@
 .adminbudgetdashboard-table th:nth-child(5),
 .adminbudgetdashboard-table td:nth-child(5),
 .adminbudgetdashboard-table th:nth-child(6),
-.adminbudgetdashboard-table td:nth-child(6) {
-  width: 15%;
+.adminbudgetdashboard-table td:nth-child(6),
+.adminbudgetdashboard-table th:nth-child(7),
+.adminbudgetdashboard-table td:nth-child(7),
+.adminbudgetdashboard-table th:nth-child(8),
+.adminbudgetdashboard-table td:nth-child(8) {
+  width: 12%;
   text-align: right;
   white-space: nowrap;
 }
@@ -306,18 +312,18 @@
 
 .adminbudgetdashboard-detail-table th:nth-child(1),
 .adminbudgetdashboard-detail-table td:nth-child(1) {
-  width: 8%;
+  width: 6%;
   text-align: center;
 }
 
 .adminbudgetdashboard-detail-table th:nth-child(2),
 .adminbudgetdashboard-detail-table td:nth-child(2) {
-  width: 30%;
+  width: 22%;
 }
 
 .adminbudgetdashboard-detail-table th:nth-child(3),
 .adminbudgetdashboard-detail-table td:nth-child(3) {
-  width: 28%;
+  width: 20%;
 }
 
 .adminbudgetdashboard-detail-table td:nth-child(3) {
@@ -328,8 +334,12 @@
 .adminbudgetdashboard-detail-table th:nth-child(4),
 .adminbudgetdashboard-detail-table td:nth-child(4),
 .adminbudgetdashboard-detail-table th:nth-child(5),
-.adminbudgetdashboard-detail-table td:nth-child(5) {
-  width: 17%;
+.adminbudgetdashboard-detail-table td:nth-child(5),
+.adminbudgetdashboard-detail-table th:nth-child(6),
+.adminbudgetdashboard-detail-table td:nth-child(6),
+.adminbudgetdashboard-detail-table th:nth-child(7),
+.adminbudgetdashboard-detail-table td:nth-child(7) {
+  width: 13%;
   text-align: right;
   white-space: nowrap;
 }
