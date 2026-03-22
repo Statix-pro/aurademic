@@ -3,6 +3,7 @@ import { Form } from 'react-bootstrap';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { hasPermission, isSuperAdmin } from '../../../../shared/utils/permissionUtils';
 import authenticityUtility from '../../../../shared/utils/authenticityUtility';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 import './adminbudgetsummary.css';
 
 type Option = {
@@ -573,13 +574,22 @@ const AdminBudgetSummary: React.FC = () => {
                 </Form.Select>
               </div>
 
-              <div className="adminbudgetsummary-filter adminbudgetsummary-filter--beneficiary">
+              <div className="adminbudgetsummary-filter adminbudgetsummary-filter--collapse">
                 <button
                   type="button"
                   className="adminbudgetsummary-toggle-btn"
                   onClick={toggleAllSections}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 >
-                  {isAllExpanded ? 'Collapse All' : 'Expand All'}
+                  {isAllExpanded ? (
+                    <>
+                      <ChevronUp size={18} /> Collapse All
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={18} /> Expand All
+                    </>
+                  )}
                 </button>
               </div>
 
@@ -619,8 +629,17 @@ const AdminBudgetSummary: React.FC = () => {
                         type="button"
                         className="adminbudgetsummary-section-toggle-btn"
                         onClick={() => toggleSection(type)}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                       >
-                        {isExpanded ? 'Collapse' : 'Expand'}
+                        {isExpanded ? (
+                          <>
+                            <ChevronUp size={16} /> Collapse
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown size={16} /> Expand
+                          </>
+                        )}
                       </button>
                     </div>
                     <div className="adminbudgetsummary-table-wrapper">
