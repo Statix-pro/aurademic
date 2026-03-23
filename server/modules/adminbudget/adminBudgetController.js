@@ -1419,14 +1419,25 @@ export async function updateFlowConfig(req, res) {
       });
     }
 
+    const bodyFlow = Array.isArray(req.body?.flow) ? req.body.flow : [];
+    const normalizedFlow = bodyFlow
+      .map((stage) => normalizeText(stage).toLowerCase())
+      .filter(Boolean);
     const requiresLevel1 = Number(req.body?.requiresLevel1);
     const requiresDof = Number(req.body?.requiresDof);
     const requiresPrincipal = Number(req.body?.requiresPrincipal);
 
-    if (![0, 1].includes(requiresLevel1) || ![0, 1].includes(requiresDof) || ![0, 1].includes(requiresPrincipal)) {
+    if (
+      !normalizedFlow.length
+      && (
+        ![0, 1].includes(requiresLevel1)
+        || ![0, 1].includes(requiresDof)
+        || ![0, 1].includes(requiresPrincipal)
+      )
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'requiresLevel1, requiresDof, requiresPrincipal must be 0 or 1',
+        message: 'Provide either flow[] or requiresLevel1/requiresDof/requiresPrincipal as 0/1',
       });
     }
 
@@ -1434,6 +1445,7 @@ export async function updateFlowConfig(req, res) {
       requiresLevel1,
       requiresDof,
       requiresPrincipal,
+      flow: normalizedFlow,
     });
 
     if (!updated) {
@@ -1449,9 +1461,12 @@ export async function updateFlowConfig(req, res) {
     });
   } catch (error) {
     console.error('Update flow config error:', error);
-    return res.status(500).json({
+    const statusCode = /invalid stage key/i.test(String(error?.message || '')) ? 400 : 500;
+    return res.status(statusCode).json({
       success: false,
-      message: 'Failed to update approval flow config',
+      message: statusCode === 400
+        ? (error.message || 'Invalid flow configuration')
+        : 'Failed to update approval flow config',
     });
   }
 }

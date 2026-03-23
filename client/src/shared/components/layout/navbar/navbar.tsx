@@ -7,6 +7,7 @@ import { useAuth } from "../../../../contexts/AuthContext";
 import {
   canAccessAdminArea,
   canAccessBudgetApproval,
+  canAccessFinanceWorkflow,
   canManageAccessControl,
   isSuperAdmin,
 } from "../../../utils/permissionUtils";
@@ -18,6 +19,7 @@ const Navbar: React.FC = () => {
   const navbarRef = useRef<HTMLElement>(null);
   const showAdminDashboard = canAccessAdminArea(user);
   const showBudgetApproval = canAccessBudgetApproval(user);
+  const showFinanceWorkflow = canAccessFinanceWorkflow(user);
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
   const showAdminMenu = showAdminDashboard || showBudgetApproval || showAccessControl || showMasterData;
@@ -193,6 +195,18 @@ const Navbar: React.FC = () => {
               >
                 <li>Budget</li>
               </Link>
+              {showFinanceWorkflow && (
+                <Link
+                  to="/workflow/finance"
+                  className="dropdown-li"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    document.body.classList.remove('menu-open');
+                  }}
+                >
+                  <li>Finance Workflow</li>
+                </Link>
+              )}
             </ul>
           </li>
 

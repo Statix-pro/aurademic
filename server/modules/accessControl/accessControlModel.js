@@ -14,6 +14,9 @@ const LEGACY_ADMIN_PERMISSION_KEYS = [
   'budget.workflow.level1',
   'budget.admin.view',
   'budget.admin.manage',
+  'finance.workflow.level1',
+  'finance.workflow.dof',
+  'finance.workflow.principal',
   'access_control.read',
   'access_control.manage',
 ];
@@ -129,6 +132,27 @@ const SYSTEM_PERMISSION_SEED = [
     action_key: 'approve',
     permission_key: 'finance.approve',
     description: 'Approve finance requests',
+    is_system: true,
+  },
+  {
+    module_key: 'finance_workflow',
+    action_key: 'level1',
+    permission_key: 'finance.workflow.level1',
+    description: 'Process finance Level-1 approvals',
+    is_system: true,
+  },
+  {
+    module_key: 'finance_workflow',
+    action_key: 'dof',
+    permission_key: 'finance.workflow.dof',
+    description: 'Process finance DoF-stage approvals',
+    is_system: true,
+  },
+  {
+    module_key: 'finance_workflow',
+    action_key: 'principal',
+    permission_key: 'finance.workflow.principal',
+    description: 'Process finance Principal-stage approvals',
     is_system: true,
   },
   {
