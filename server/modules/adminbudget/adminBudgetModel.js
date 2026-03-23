@@ -37,6 +37,7 @@ const LEVEL1_ASSIGNMENT_STATUS = SHARED_LEVEL1_ASSIGNMENT_STATUS;
 const WORKFLOW_STAGES = SHARED_WORKFLOW_STAGES;
 const normalizeText = sharedNormalizeText;
 const ARCHIVE_META_PREFIX = '__archive_meta__:';
+const WORKFLOW_STAGE_KEY_REGEX = /^[a-z][a-z0-9_]*$/;
 
 export const normalizeBeneficiaryType = (beneficiaryType) => sharedNormalizeBeneficiaryType(beneficiaryType);
 const BUDGET_PROPOSAL_COLUMN_EXISTS_CACHE = new Map();
@@ -2372,21 +2373,57 @@ export async function getApprovalFlowConfigs() {
        FROM approval_flow_config afc
        LEFT JOIN master_entity_types met ON afc.entity_type_code = met.code
        WHERE afc.is_active = 1
+         AND LOWER(TRIM(afc.module_key)) IN ('budget', '*')
        ORDER BY afc.beneficiary_type, met.name`
   );
 
-  return rows;
+  return rows.map((row) => {
+    let flow = [];
+    try {
+      const parsedFlow = typeof row.flow === 'string' ? JSON.parse(row.flow) : row.flow;
+      flow = Array.isArray(parsedFlow)
+        ? parsedFlow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
+        : [];
+    } catch {
+      flow = [];
+    }
+
+    return {
+      ...row,
+      flow,
+      requiresLevel1: flow.includes('level1') ? 1 : 0,
+      requiresDof: flow.includes('dof') ? 1 : 0,
+      requiresPrincipal: flow.includes('principal') ? 1 : 0,
+    };
+  });
 }
 
-export async function updateApprovalFlowConfig(id, { requiresLevel1, requiresDof, requiresPrincipal }) {
+export async function updateApprovalFlowConfig(id, { requiresLevel1, requiresDof, requiresPrincipal, flow }) {
+  let resolvedFlow = Array.isArray(flow)
+    ? [...new Set(flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean))]
+    : [];
+
+  if (!resolvedFlow.length) {
+    resolvedFlow = [];
+    if (Number(requiresLevel1) === 1) resolvedFlow.push('level1');
+    if (Number(requiresDof) === 1) resolvedFlow.push('dof');
+    if (Number(requiresPrincipal) === 1) resolvedFlow.push('principal');
+  }
+
+  if (!resolvedFlow.length) {
+    resolvedFlow = ['level1', 'dof', 'principal'];
+  }
+
+  if (resolvedFlow.some((stage) => !WORKFLOW_STAGE_KEY_REGEX.test(stage))) {
+    throw new Error('Flow contains invalid stage key. Use lowercase snake_case stage keys only.');
+  }
+
   const [result] = await db.execute(
     `UPDATE approval_flow_config
-       SET requires_level1 = ?,
-           requires_dof = ?,
-           requires_principal = ?,
+       SET flow = ?,
            updated_at = NOW()
        WHERE id = ?`,
-    [requiresLevel1, requiresDof, requiresPrincipal, id]
+    [JSON.stringify(resolvedFlow), id]
   );
 
   return result.affectedRows > 0;

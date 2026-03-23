@@ -1,0 +1,197 @@
+import db from '../../../config/connection.js';
+import {
+  WorkflowError,
+  normalizeText,
+  validateStagePolicyMeta,
+  isSuperAdminActor,
+} from './workflowValidators.js';
+
+const toPositiveInt = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const normalizeRoleCodes = (roleCodes = []) =>
+  [...new Set(roleCodes.map((roleCode) => normalizeText(roleCode).toLowerCase()).filter(Boolean))];
+
+const getActorUserId = (actor = {}) =>
+  toPositiveInt(actor?.userId || actor?.id || actor?.actorUserId);
+
+async function loadAssignmentBuckets(conn, userId, roleCodes = []) {
+  const departmentIds = new Set();
+  const entityIds = new Set();
+
+  const normalizedUserId = toPositiveInt(userId);
+  if (!normalizedUserId) {
+    return { departmentIds, entityIds };
+  }
+
+  const normalizedRoleCodes = normalizeRoleCodes(roleCodes);
+  let sql = `
+    SELECT
+      uer.entity_id,
+      uer.entity_type,
+      LOWER(TRIM(r.role_code)) AS role_code
+    FROM user_entity_roles uer
+    JOIN roles r ON r.id = uer.role_id
+    WHERE uer.user_id = ?
+  `;
+  const params = [normalizedUserId];
+
+  if (normalizedRoleCodes.length > 0) {
+    sql += ' AND LOWER(TRIM(r.role_code)) IN (?)';
+    params.push(normalizedRoleCodes);
+  }
+
+  const [rows] = await conn.query(sql, params);
+
+  for (const row of rows) {
+    const entityId = toPositiveInt(row.entity_id);
+    if (!entityId) continue;
+
+    const entityType = normalizeText(row.entity_type).toUpperCase();
+    if (entityType === 'DEPARTMENT') {
+      departmentIds.add(entityId);
+    } else {
+      entityIds.add(entityId);
+    }
+  }
+
+  return { departmentIds, entityIds };
+}
+
+async function loadPrimaryEmployeeContext(conn, userId) {
+  const normalizedUserId = toPositiveInt(userId);
+  if (!normalizedUserId) {
+    return { departmentId: null, entityId: null };
+  }
+
+  const [rows] = await conn.query(
+    `SELECT department_id, entity_id
+       FROM master_employees
+       WHERE user_id = ?
+         AND status = 'Active'
+       ORDER BY id ASC
+       LIMIT 1`,
+    [normalizedUserId]
+  );
+
+  if (!rows.length) {
+    return { departmentId: null, entityId: null };
+  }
+
+  return {
+    departmentId: toPositiveInt(rows[0].department_id),
+    entityId: toPositiveInt(rows[0].entity_id),
+  };
+}
+
+async function resolveScopedActorIds(conn, actor, stagePolicy) {
+  const scopeType = normalizeText(stagePolicy?.scopeType || stagePolicy?.scope_type).toLowerCase();
+  const normalizedMeta = validateStagePolicyMeta({
+    scopeType,
+    meta: stagePolicy?.meta,
+  });
+
+  const userId = getActorUserId(actor);
+  const superAdmin = isSuperAdminActor(actor);
+
+  if (superAdmin || scopeType === 'global') {
+    return {
+      scopeType,
+      requireAssignment: false,
+      departmentIds: new Set(),
+      entityIds: new Set(),
+      forceAll: true,
+      forceEmpty: false,
+    };
+  }
+
+  const assignmentRoleCodes = normalizeRoleCodes(normalizedMeta?.assignmentRoleCodes || []);
+  const requireAssignment = Boolean(normalizedMeta?.requireAssignment);
+  const assignmentBuckets = await loadAssignmentBuckets(conn, userId, assignmentRoleCodes);
+  const primaryContext = await loadPrimaryEmployeeContext(conn, userId);
+
+  if (scopeType === 'department') {
+    if (!assignmentBuckets.departmentIds.size && !requireAssignment && primaryContext.departmentId) {
+      assignmentBuckets.departmentIds.add(primaryContext.departmentId);
+    }
+
+    return {
+      scopeType,
+      requireAssignment,
+      departmentIds: assignmentBuckets.departmentIds,
+      entityIds: new Set(),
+      forceAll: false,
+      forceEmpty: assignmentBuckets.departmentIds.size === 0,
+    };
+  }
+
+  if (scopeType === 'entity') {
+    if (!assignmentBuckets.entityIds.size && !requireAssignment && primaryContext.entityId) {
+      assignmentBuckets.entityIds.add(primaryContext.entityId);
+    }
+
+    return {
+      scopeType,
+      requireAssignment,
+      departmentIds: new Set(),
+      entityIds: assignmentBuckets.entityIds,
+      forceAll: false,
+      forceEmpty: assignmentBuckets.entityIds.size === 0,
+    };
+  }
+
+  throw new WorkflowError(`Unsupported stage policy scope: ${scopeType}`, 500, 'INVALID_SCOPE_TYPE');
+}
+
+export async function resolveQueueScopeFilters({
+  conn = db,
+  actor,
+  stagePolicy,
+}) {
+  return resolveScopedActorIds(conn, actor, stagePolicy);
+}
+
+export async function assertRecordScopeAccess({
+  conn = db,
+  actor,
+  stagePolicy,
+  recordContext,
+}) {
+  const resolvedScope = await resolveScopedActorIds(conn, actor, stagePolicy);
+
+  if (resolvedScope.forceAll) {
+    return true;
+  }
+
+  if (resolvedScope.scopeType === 'department') {
+    const departmentId = toPositiveInt(recordContext?.departmentId);
+
+    if (!departmentId) {
+      throw new WorkflowError('Department scope requires record department_id', 403, 'SCOPE_CONTEXT_MISSING');
+    }
+
+    if (!resolvedScope.departmentIds.has(departmentId)) {
+      throw new WorkflowError('Record is outside your department workflow scope', 403, 'WORKFLOW_SCOPE_DENIED');
+    }
+
+    return true;
+  }
+
+  if (resolvedScope.scopeType === 'entity') {
+    const entityId = toPositiveInt(recordContext?.beneficiaryEntityId);
+
+    if (!entityId) {
+      throw new WorkflowError('Entity scope requires record beneficiary_entity_id', 403, 'SCOPE_CONTEXT_MISSING');
+    }
+
+    if (!resolvedScope.entityIds.has(entityId)) {
+      throw new WorkflowError('Record is outside your entity workflow scope', 403, 'WORKFLOW_SCOPE_DENIED');
+    }
+
+    return true;
+  }
+
+  return true;
+}
