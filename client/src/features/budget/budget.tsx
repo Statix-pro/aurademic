@@ -577,7 +577,7 @@ const Budget: React.FC = () => {
 
 
   const isNewMode = !id;
-  const isReviewerAmountOnlyEdit = isAdminContextEdit && isEditMode;
+  const isReviewerAmountOnlyEdit = false;
 
 
   const [isEditable, setIsEditable] = useState(isNewMode);
@@ -1013,8 +1013,12 @@ const Budget: React.FC = () => {
     
     const requestPayload = isPrivilegedReviewer
       ? {
+          ...payload,
           lines: formattedLines.map((line, lineIndex) => ({
             line_id: budgetLines[lineIndex]?.lineId,
+            budget_head: line.budget_head,
+            sub_head: line.sub_head,
+            line_description: line.line_description,
             unit_amount: Number(line.unit_amount),
             quantity: Number(line.quantity),
             month_allocations: line.month_allocations || {},
@@ -1032,7 +1036,7 @@ const Budget: React.FC = () => {
 
     showAlert(
       isPrivilegedReviewer
-        ? 'Approved amounts updated successfully!'
+        ? 'Budget updated successfully!'
         : isEditMode
         ? `Budget updated successfully!`
         : (
