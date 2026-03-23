@@ -37,6 +37,7 @@ export async function buildBudgetList(options) {
     const pLimit = Number.parseInt(limit, 10) || 10;
     const pOffset = (pPage - 1) * pLimit;
     const currentFY = Number.parseInt(fiscalYear, 10) || getCurrentFinancialYear();
+    const requestedStatus = normalizeText(status).toLowerCase();
     const safeUserId = Number(userId) > 0 ? Number(userId) : -1;
     const safeRole = normalizeBudgetRole(role);
 
@@ -152,6 +153,16 @@ export async function buildBudgetList(options) {
         AND LOWER(TRIM(bpa_archive.role)) = 'ithead'
     )
   )`;
+    const level1ProgressionPredicate = `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed"))`;
+    const level1ApprovedHistoryPredicate = `EXISTS (
+      SELECT 1
+      FROM budget_proposal_approvals bpa_level1
+      WHERE bpa_level1.budget_proposal_id = bp.id
+        AND LOWER(TRIM(bpa_level1.decision)) = 'approved'
+        AND LOWER(TRIM(bpa_level1.role)) IN ('level1', 'hod', 'coordinator')
+    )`;
+    const includeLevel1ApprovedHistoryInList =
+        requestedStatus === 'approved' || requestedStatus === '' || requestedStatus === 'all' || requestedStatus === 'total';
 
     switch (safeRole) {
         case 'hod': {
@@ -162,12 +173,21 @@ export async function buildBudgetList(options) {
             if (!isQueueSuperAdminView) {
                 where.push('md.type = "Academic"');
                 const actionQueueExpr = isAdminView
-                    ? `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed") OR ${archivedByLevel1Predicate})`
-                    : `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed"))`;
+                    ? `(${level1ProgressionPredicate}${includeLevel1ApprovedHistoryInList ? ` OR ${level1ApprovedHistoryPredicate}` : ''} OR ${archivedByLevel1Predicate})`
+                    : `(${level1ProgressionPredicate}${includeLevel1ApprovedHistoryInList ? ` OR ${level1ApprovedHistoryPredicate}` : ''})`;
                 where.push(actionQueueExpr);
 
                 const normalizedDepartment = normalizeText(department);
                 const hodScope = [];
+                if (safeUserId > 0) {
+                    hodScope.push(`bp.department_id IN (
+                        SELECT entity_id
+                        FROM user_entity_roles
+                        WHERE user_id = ?
+                          AND entity_type = 'DEPARTMENT'
+                    )`);
+                    params.push(safeUserId);
+                }
                 if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
                     hodScope.push('bp.department_id = ?');
                     params.push(Number(departmentId));
@@ -190,8 +210,8 @@ export async function buildBudgetList(options) {
             )`);
             if (!isQueueSuperAdminView) {
                 const actionQueueExpr = isAdminView
-                    ? `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed") OR ${archivedByLevel1Predicate})`
-                    : `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed"))`;
+                    ? `(${level1ProgressionPredicate}${includeLevel1ApprovedHistoryInList ? ` OR ${level1ApprovedHistoryPredicate}` : ''} OR ${archivedByLevel1Predicate})`
+                    : `(${level1ProgressionPredicate}${includeLevel1ApprovedHistoryInList ? ` OR ${level1ApprovedHistoryPredicate}` : ''})`;
                 where.push(actionQueueExpr);
 
                 const filterConditions = [];
@@ -376,6 +396,14 @@ export async function buildBudgetKpiStats(options) {
     const archivedByDofPredicate = `(${archivedStatusPredicate} AND EXISTS (SELECT 1 FROM budget_proposal_approvals bpa_archive WHERE bpa_archive.budget_proposal_id = bp.id AND LOWER(TRIM(bpa_archive.decision)) IN ('archived', 'archive') AND LOWER(TRIM(bpa_archive.role)) = 'dof'))`;
     const archivedByPrincipalPredicate = `(${archivedStatusPredicate} AND EXISTS (SELECT 1 FROM budget_proposal_approvals bpa_archive WHERE bpa_archive.budget_proposal_id = bp.id AND LOWER(TRIM(bpa_archive.decision)) IN ('archived', 'archive') AND LOWER(TRIM(bpa_archive.role)) = 'principal'))`;
     const archivedByItheadPredicate = `(${archivedStatusPredicate} AND EXISTS (SELECT 1 FROM budget_proposal_approvals bpa_archive WHERE bpa_archive.budget_proposal_id = bp.id AND LOWER(TRIM(bpa_archive.decision)) IN ('archived', 'archive') AND LOWER(TRIM(bpa_archive.role)) = 'ithead'))`;
+    const level1ProgressionPredicate = `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed"))`;
+    const level1ApprovedHistoryPredicate = `EXISTS (
+        SELECT 1
+        FROM budget_proposal_approvals bpa_level1
+        WHERE bpa_level1.budget_proposal_id = bp.id
+          AND LOWER(TRIM(bpa_level1.decision)) = 'approved'
+          AND LOWER(TRIM(bpa_level1.role)) IN ('level1', 'hod', 'coordinator')
+    )`;
 
     switch (safeRole) {
         case 'hod': {
@@ -383,11 +411,20 @@ export async function buildBudgetKpiStats(options) {
             if (!isQueueSuperAdminView) {
                 where.push('md.type = "Academic"');
                 const actionQueueExpr = isAdminView
-                    ? `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed") OR ${archivedByLevel1Predicate})`
-                    : `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed"))`;
+                    ? `(${level1ProgressionPredicate} OR ${level1ApprovedHistoryPredicate} OR ${archivedByLevel1Predicate})`
+                    : `(${level1ProgressionPredicate} OR ${level1ApprovedHistoryPredicate})`;
                 where.push(actionQueueExpr);
                 const normalizedDepartment = normalizeText(department);
                 const hodScope = [];
+                if (safeUserId > 0) {
+                    hodScope.push(`bp.department_id IN (
+                        SELECT entity_id
+                        FROM user_entity_roles
+                        WHERE user_id = ?
+                          AND entity_type = 'DEPARTMENT'
+                    )`);
+                    params.push(safeUserId);
+                }
                 if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) { hodScope.push('bp.department_id = ?'); params.push(Number(departmentId)); }
                 if (normalizedDepartment) { hodScope.push(`(LOWER(TRIM(md.name)) = LOWER(TRIM(?)) OR LOWER(TRIM(md.code)) = LOWER(TRIM(?)) OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(?)))`); params.push(normalizedDepartment, normalizedDepartment, normalizedDepartment); }
                 where.push(hodScope.length ? `(${hodScope.join(' OR ')})` : '1 = 0');
@@ -398,8 +435,8 @@ export async function buildBudgetKpiStats(options) {
             where.push(`(LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body') OR (LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff') AND bp.beneficiary_entity_id IS NOT NULL))`);
             if (!isQueueSuperAdminView) {
                 const actionQueueExpr = isAdminView
-                    ? `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed") OR ${archivedByLevel1Predicate})`
-                    : `(bp.current_stage = "level1" OR (bp.status LIKE "level1_%" AND bp.status != "completed"))`;
+                    ? `(${level1ProgressionPredicate} OR ${level1ApprovedHistoryPredicate} OR ${archivedByLevel1Predicate})`
+                    : `(${level1ProgressionPredicate} OR ${level1ApprovedHistoryPredicate})`;
                 where.push(actionQueueExpr);
                 const filterConditions = [];
                 if (safeUserId > 0) { filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'))`); params.push(safeUserId); }

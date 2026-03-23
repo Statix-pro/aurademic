@@ -1398,6 +1398,15 @@ export async function getConsolidatedData({
       )`);
       where.push('md.type = "Academic"');
       const hodScope = [];
+      if (safeUserId > 0) {
+        hodScope.push(`bp.department_id IN (
+          SELECT entity_id
+          FROM user_entity_roles
+          WHERE user_id = ?
+            AND entity_type = 'DEPARTMENT'
+        )`);
+        params.push(safeUserId);
+      }
       if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
         hodScope.push('bp.department_id = ?');
         params.push(Number(departmentId));

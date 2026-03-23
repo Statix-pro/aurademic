@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Briefcase, CheckCircle2, Clock, RotateCcw, XCircle } from 'lucide-react';
 import authenticityUtility from '../../utils/authenticityUtility';
 import {
   WorkflowApprovalModuleConfig,
@@ -7,6 +8,8 @@ import {
   WorkflowQueueResult,
   WorkflowTimelineItem,
 } from '../../workflow/workflowApprovalTypes';
+import './WorkflowApprovalPage.css';
+import '../../../features/admin/budget/budget-approval/adminbudget.css';
 
 const DEFAULT_DECISIONS: WorkflowDecision[] = ['approved', 'returned', 'rejected'];
 const DEFAULT_FEEDBACK_REQUIRED: WorkflowDecision[] = ['returned', 'rejected'];
@@ -44,8 +47,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [meta, setMeta] = useState<WorkflowMeta | null>(null);
   const [activeStage, setActiveStage] = useState<string>('');
   const [rows, setRows] = useState<Record<string, any>[]>([]);
+  const [totalRows, setTotalRows] = useState<number>(0);
+  const [page, setPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(config.queueDefaultLimit || 20);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<'total' | 'pending' | 'approved' | 'returned' | 'rejected'>('pending');
   const [actingRecordId, setActingRecordId] = useState<number | string | null>(null);
   const [expandedTimelineId, setExpandedTimelineId] = useState<number | string | null>(null);
   const [timelineById, setTimelineById] = useState<Record<string, WorkflowTimelineItem[]>>({});
@@ -101,9 +109,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }, [getMetaEndpoint]);
 
   const loadQueue = useCallback(
-    async (stage: string) => {
+    async (stage: string, requestedPage = 1) => {
       if (!stage) {
         setRows([]);
+        setTotalRows(0);
         return;
       }
 
@@ -112,20 +121,24 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       try {
         const response = await authenticityUtility.get(getQueueEndpoint(stage), {
           params: {
-            page: config.queueParams?.page || 1,
-            limit: config.queueParams?.limit || config.queueDefaultLimit || 20,
+            page: requestedPage,
+            limit,
           },
         });
         const mapped = mapQueueResponse(response);
         setRows(Array.isArray(mapped.items) ? mapped.items : []);
+        setTotalRows(Number(mapped.total || 0));
+        setPage(Number(mapped.page || requestedPage || 1));
+        setLimit(Number(mapped.limit || limit || config.queueDefaultLimit || 20));
       } catch (queueError: any) {
         setRows([]);
+        setTotalRows(0);
         setError(queueError?.response?.data?.message || queueError?.message || 'Failed to load queue');
       } finally {
         setLoading(false);
       }
     },
-    [config.queueDefaultLimit, config.queueParams?.limit, config.queueParams?.page, getQueueEndpoint, mapQueueResponse]
+    [config.queueDefaultLimit, getQueueEndpoint, limit, mapQueueResponse]
   );
 
   const loadTimeline = useCallback(
@@ -154,11 +167,15 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
   useEffect(() => {
     if (!activeStage) return;
-    loadQueue(activeStage).catch((queueError: any) => {
+    loadQueue(activeStage, page).catch((queueError: any) => {
       setError(queueError?.response?.data?.message || queueError?.message || 'Failed to load queue');
       setLoading(false);
     });
-  }, [activeStage, loadQueue]);
+  }, [activeStage, loadQueue, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeStage]);
 
   const handleDecision = async (record: Record<string, any>, decision: WorkflowDecision) => {
     const recordId = getRecordId(record);
@@ -185,7 +202,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         decision,
         feedback: feedback || undefined,
       });
-      await loadQueue(activeStage);
+      await loadQueue(activeStage, page);
       if (expandedTimelineId === recordId) {
         await loadTimeline(recordId);
       }
@@ -224,19 +241,69 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     rejected: 'btn-danger',
   };
 
+  const resolveStatusCategory = useCallback((record: Record<string, any>) => {
+    const token = String(record.workflow_status || record.status || '').toLowerCase();
+    if (token.includes('rejected')) return 'rejected';
+    if (token.includes('returned') || token.includes('return')) return 'returned';
+    if (token.includes('approved') || token === 'completed') return 'approved';
+    return 'pending';
+  }, []);
+
+  const statusStats = useMemo(() => {
+    const stats = { total: rows.length, pending: 0, approved: 0, returned: 0, rejected: 0 };
+    for (const row of rows) {
+      const category = resolveStatusCategory(row);
+      stats[category] += 1;
+    }
+    return stats;
+  }, [rows, resolveStatusCategory]);
+
+  const filteredRows = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return rows.filter((record) => {
+      const matchesStatus = statusFilter === 'total' ? true : resolveStatusCategory(record) === statusFilter;
+      if (!matchesStatus) return false;
+      if (!query) return true;
+      const searchable = [
+        record.id,
+        record.applicant_name,
+        record.beneficiary_type,
+        record.primary_head,
+        record.workflow_status,
+        record.workflow_stage,
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .join(' ');
+      return searchable.includes(query);
+    });
+  }, [rows, searchTerm, statusFilter, resolveStatusCategory]);
+
+  const totalPages = Math.max(1, Math.ceil((totalRows || 0) / (limit || 20)));
+
   return (
-    <div className="container py-4">
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h4 className="mb-0">{config.title}</h4>
-      </div>
+    <div className="adminbudget-page">
+      <div className="adminbudget-container">
+        <div className="adminbudget-card">
+        <div className="adminbudget-header">
+          <h4 className="adminbudget-title">{config.title}</h4>
+          <div className="adminbudget-header-actions">
+            <input
+              type="text"
+              className="adminbudget-control"
+              placeholder="Search ID, applicant, beneficiary..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </div>
+        </div>
 
       {permittedStages.length > 0 && (
-        <div className="d-flex gap-2 flex-wrap mb-3">
+        <div className="adminbudget-role-tabs" style={{ padding: '0 20px 10px 20px' }}>
           {permittedStages.map((stage) => (
             <button
               key={stage}
               type="button"
-              className={`btn ${activeStage === stage ? 'btn-primary' : 'btn-outline-primary'}`}
+              className={`adminbudget-role-tab ${activeStage === stage ? 'active' : ''}`}
               onClick={() => setActiveStage(stage)}
             >
               {formatStageLabel(stage, config.stageLabels)}
@@ -245,15 +312,54 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         </div>
       )}
 
-      {error && <div className="alert alert-danger py-2">{error}</div>}
+      <div className="adminbudget-stats">
+        <button type="button" className={`adminbudget-stats-card total ${statusFilter === 'total' ? 'active' : ''}`} onClick={() => setStatusFilter('total')}>
+          <span className="adminbudget-stats-icon"><Briefcase size={18} /></span>
+          <span className="adminbudget-stats-text">
+            <span className="adminbudget-stats-label">Total</span>
+            <span className="adminbudget-stats-number">{totalRows || statusStats.total}</span>
+          </span>
+        </button>
+        <button type="button" className={`adminbudget-stats-card pending ${statusFilter === 'pending' ? 'active' : ''}`} onClick={() => setStatusFilter('pending')}>
+          <span className="adminbudget-stats-icon"><Clock size={18} /></span>
+          <span className="adminbudget-stats-text">
+            <span className="adminbudget-stats-label">Pending</span>
+            <span className="adminbudget-stats-number">{statusStats.pending}</span>
+          </span>
+        </button>
+        <button type="button" className={`adminbudget-stats-card approved ${statusFilter === 'approved' ? 'active' : ''}`} onClick={() => setStatusFilter('approved')}>
+          <span className="adminbudget-stats-icon"><CheckCircle2 size={18} /></span>
+          <span className="adminbudget-stats-text">
+            <span className="adminbudget-stats-label">Approved</span>
+            <span className="adminbudget-stats-number">{statusStats.approved}</span>
+          </span>
+        </button>
+        <button type="button" className={`adminbudget-stats-card returned ${statusFilter === 'returned' ? 'active' : ''}`} onClick={() => setStatusFilter('returned')}>
+          <span className="adminbudget-stats-icon"><RotateCcw size={18} /></span>
+          <span className="adminbudget-stats-text">
+            <span className="adminbudget-stats-label">Return</span>
+            <span className="adminbudget-stats-number">{statusStats.returned}</span>
+          </span>
+        </button>
+        <button type="button" className={`adminbudget-stats-card rejected ${statusFilter === 'rejected' ? 'active' : ''}`} onClick={() => setStatusFilter('rejected')}>
+          <span className="adminbudget-stats-icon"><XCircle size={18} /></span>
+          <span className="adminbudget-stats-text">
+            <span className="adminbudget-stats-label">Reject</span>
+            <span className="adminbudget-stats-number">{statusStats.rejected}</span>
+          </span>
+        </button>
+      </div>
+
+      <div className="adminbudget-body">
+      {error && <div className="adminbudget-state">{error}</div>}
 
       {loading ? (
-        <div className="text-muted">Loading queue...</div>
-      ) : rows.length === 0 ? (
-        <div className="alert alert-light border">No records in this stage queue.</div>
+        <div className="adminbudget-state">Loading queue...</div>
+      ) : filteredRows.length === 0 ? (
+        <div className="adminbudget-state">No records in this stage queue.</div>
       ) : (
-        <div className="table-responsive">
-          <table className="table table-sm align-middle">
+        <div className="workflow-table-wrap">
+          <table className="workflow-table">
             <thead>
               <tr>
                 {config.columns.map((column) => (
@@ -265,7 +371,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
               </tr>
             </thead>
             <tbody>
-              {rows.map((record, rowIndex) => {
+              {filteredRows.map((record, rowIndex) => {
                 const recordId = getRecordId(record) ?? `row-${rowIndex}`;
                 const timelineKey = String(recordId);
                 const timelineEntries = timelineById[timelineKey] || [];
@@ -280,10 +386,18 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                             : (record[column.key] ?? '-')}
                         </td>
                       ))}
-                      <td>{formatStageLabel(String(record.workflow_stage || ''), config.stageLabels)}</td>
-                      <td>{String(record.workflow_status || '-')}</td>
                       <td>
-                        <div className="d-flex gap-1 flex-wrap">
+                        <span className="workflow-stage-pill">
+                          {formatStageLabel(String(record.workflow_stage || ''), config.stageLabels)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`adminbudget-status adminbudget-status--${resolveStatusCategory(record)}`}>
+                          {String(record.workflow_status || '-')}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="workflow-actions">
                           {decisions.map((decision) => (
                             <button
                               key={`${timelineKey}-${decision}`}
@@ -309,11 +423,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                       <tr>
                         <td colSpan={config.columns.length + 3}>
                           {timelineLoadingId === recordId ? (
-                            <span className="text-muted">Loading timeline...</span>
+                            <span className="workflow-state-inline">Loading timeline...</span>
                           ) : timelineEntries.length === 0 ? (
-                            <span className="text-muted">No timeline entries.</span>
+                            <span className="workflow-state-inline">No timeline entries.</span>
                           ) : (
-                            <ul className="mb-0 ps-3">
+                            <ul className="workflow-timeline">
                               {timelineEntries.map((entry) => (
                                 <li key={entry.id}>
                                   <strong>{formatStageLabel(entry.stage, config.stageLabels)}</strong> - {entry.decision}
@@ -333,6 +447,34 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
           </table>
         </div>
       )}
+
+      <div className="workflow-pagination">
+        <div className="adminbudget-pagination-left">
+          <span className="adminbudget-pagecount">Page {page} of {totalPages}</span>
+          <span className="adminbudget-pageinfo">{totalRows} total</span>
+        </div>
+        <div className="adminbudget-pagination-right">
+          <button
+            type="button"
+            className="adminbudget-pagebtn"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            className="adminbudget-pagebtn"
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+      </div>
+      </div>
+      </div>
     </div>
   );
 };
