@@ -26,7 +26,7 @@ import PublicationsPage from '../features/user-dashboard/publicationspage/Public
 import ProjectsPage from '../features/user-dashboard/projectpage/ProjectsPage';
 import Storybook from '../features/storybook/Storybook';
 import FinanceApproval from '../features/finance/financeapproval';
-import FinanceWorkflowQueue from '../features/admin/finance/FinanceWorkflowQueue';
+
 import FinanceCard from '../features/user-dashboard/financecard/financecard';
 import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
 import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
@@ -40,7 +40,7 @@ import MasterDataPage from '../features/admin/masterData/MasterDataPage';
 import { AbilityProvider } from '../shared/casl/AbilityContext';
 import MainLayout from '../shared/components/layout/MainLayout';
 import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/adminbudgetdashboard';
-import WorkflowModulePage from '../shared/components/workflow/WorkflowModulePage';
+import WorkflowModulePage from '../shared/pages/workflow/WorkflowModulePage';
 
 function App() {
   return (
@@ -71,7 +71,7 @@ function App() {
 
                   {/* FINANCE & GUESTHOUSE ROUTES */}
                   <Route path="/finance/new" element={<ProtectedRoute><FinanceApproval /></ProtectedRoute>} />
-                  <Route path="/finance/workflow" element={<FinanceWorkflowRoute><FinanceWorkflowQueue /></FinanceWorkflowRoute>} />
+
                   <Route path="/workflow/:moduleKey" element={<ModuleWorkflowRoute><WorkflowModulePage /></ModuleWorkflowRoute>} />
                   <Route path="/financecard" element={<ProtectedRoute><FinanceCard /></ProtectedRoute>} />
                   <Route path="/guesthouse-booking" element={<ProtectedRoute><GuestHouseBooking /></ProtectedRoute>} />

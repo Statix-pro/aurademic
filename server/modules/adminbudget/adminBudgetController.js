@@ -328,6 +328,7 @@ export async function get(req, res) {
 
 export async function getHodBudgets(req, res) {
   try {
+    const userId = getUserId(req);
     const department = await resolveUserDepartment(req);
     const departmentId = await resolveUserDepartmentId(req);
     const userEmail = normalizeText(req.user?.email);
@@ -343,6 +344,7 @@ export async function getHodBudgets(req, res) {
     const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
 
     const budgets = await AdminBudgetModel.listBudgets({
+      userId,
       department,
       departmentId,
       userEmail,
