@@ -900,12 +900,22 @@ export async function update(
       [proposalId]
     );
     const previousMonthByLineId = new Map();
+    const normalizeMonthKey = (value) => {
+      const monthValue = normalizeText(value);
+      if (!monthValue) return '';
+      const direct = VALID_MONTHS.find((month) => month === monthValue);
+      if (direct) return direct;
+      const lower = monthValue.toLowerCase();
+      return VALID_MONTHS.find((month) => month.toLowerCase() === lower) || '';
+    };
+
     for (const row of previousAllocationRows) {
       if (!previousMonthByLineId.has(row.line_id)) {
         previousMonthByLineId.set(row.line_id, {});
       }
-      if (row.month) {
-        previousMonthByLineId.get(row.line_id)[row.month] = Number(row.amount || 0);
+      const normalizedMonth = normalizeMonthKey(row.month);
+      if (normalizedMonth) {
+        previousMonthByLineId.get(row.line_id)[normalizedMonth] = Number(row.amount || 0);
       }
     }
 
@@ -920,10 +930,18 @@ export async function update(
       for (const month of VALID_MONTHS) {
         out[month] = Number(raw?.[month] || 0);
       }
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        for (const [monthKey, amount] of Object.entries(raw)) {
+          const normalizedMonth = normalizeMonthKey(monthKey);
+          if (!normalizedMonth) continue;
+          out[normalizedMonth] = Number(amount || 0);
+        }
+      }
       return out;
     };
     const incomingLines = Array.isArray(payload.lines) ? payload.lines : [];
     const lineChangeDetails = [];
+    const proposalChanges = [];
     let departmentId = await resolveDepartmentId(conn, payload);
     let { entityTypeCode, beneficiaryEntityId } = await resolveBeneficiaryEntity(
       conn,
@@ -966,6 +984,13 @@ export async function update(
 
     const hasApplicantNameColumn = await hasBudgetProposalColumn('applicant_name');
     const hasBudgetTagColumn = await hasBudgetProposalColumn('budget_tag');
+    if (hasBudgetTagColumn) {
+      const oldTag = normalizeText(proposal?.budget_tag);
+      const newTag = normalizeText(payload?.budget_tag);
+      if (oldTag !== newTag) {
+        proposalChanges.push(`Tag changed from "${oldTag || '-'}" to "${newTag || '-'}"`);
+      }
+    }
     const applicantNameSetClause = hasApplicantNameColumn ? 'applicant_name = ?,' : '';
     const budgetTagSetClause = hasBudgetTagColumn ? 'budget_tag = ?,' : '';
     const updateParams = [];
@@ -1112,10 +1137,14 @@ export async function update(
       }
     }
 
-    const editSummary =
-      lineChangeDetails.length > 0
-        ? `${lineChangeDetails.length} line(s) updated`
-        : 'Proposal edited';
+    const summaryParts = [];
+    if (lineChangeDetails.length > 0) {
+      summaryParts.push(`${lineChangeDetails.length} line(s) updated`);
+    }
+    if (proposalChanges.length > 0) {
+      summaryParts.push(`${proposalChanges.length} proposal field(s) updated`);
+    }
+    const editSummary = summaryParts.join(' | ') || 'Proposal edited';
 
     try {
       await conn.execute(
@@ -1127,7 +1156,11 @@ export async function update(
           editedByUserId || null,
           normalizeText(editedByEmail) || null,
           editSummary,
-          JSON.stringify({ editorRole: normalizeText(editedByRole).toLowerCase(), lines: lineChangeDetails }),
+          JSON.stringify({
+            editorRole: normalizeText(editedByRole).toLowerCase(),
+            lines: lineChangeDetails,
+            proposalChanges,
+          }),
         ]
       );
     } catch (error) {
