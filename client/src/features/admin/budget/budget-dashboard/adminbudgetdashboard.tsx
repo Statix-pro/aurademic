@@ -136,6 +136,8 @@ const AdminBudgetDashboard: React.FC = () => {
     }
   }, [roleKey]);
 
+  const canAccessBeneficiarySummary = roleKey === 'super_admin' || roleKey === 'dof';
+
   const financialYearOptions: Option[] = useMemo(() => {
     const currentOption = getCurrentFiscalYearOption();
     const currentStart = parseInt(currentOption.value.split('-')[0], 10);
@@ -254,27 +256,35 @@ const AdminBudgetDashboard: React.FC = () => {
     }
   }, [detailsByHead, expandedHead]);
 
+  useEffect(() => {
+    if (!canAccessBeneficiarySummary && activeTab === 'beneficiary-summary') {
+      setActiveTab('budget-head');
+    }
+  }, [canAccessBeneficiarySummary, activeTab]);
+
   return (
     <div className="adminbudgetdashboard-page">
       <div className="adminbudgetdashboard-container">
-        <div className="adminbudgetdashboard-tabs-wrap">
-          <div className="category-toggle-container adminbudgetdashboard-tab-toggle">
-            <button
-              type="button"
-              className={activeTab === 'budget-head' ? 'active' : ''}
-              onClick={() => setActiveTab('budget-head')}
-            >
-              Budget Head
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'beneficiary-summary' ? 'active' : ''}
-              onClick={() => setActiveTab('beneficiary-summary')}
-            >
-              Beneficiary Summary
-            </button>
+        {canAccessBeneficiarySummary && (
+          <div className="adminbudgetdashboard-tabs-wrap">
+            <div className="category-toggle-container adminbudgetdashboard-tab-toggle">
+              <button
+                type="button"
+                className={activeTab === 'budget-head' ? 'active' : ''}
+                onClick={() => setActiveTab('budget-head')}
+              >
+                Budget Head
+              </button>
+              <button
+                type="button"
+                className={activeTab === 'beneficiary-summary' ? 'active' : ''}
+                onClick={() => setActiveTab('beneficiary-summary')}
+              >
+                Beneficiary Summary
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {activeTab === 'budget-head' ? (
           <div className="adminbudgetdashboard-card">

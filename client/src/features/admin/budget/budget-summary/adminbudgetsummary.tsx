@@ -40,6 +40,21 @@ type BeneficiarySummaryRow = {
 };
 
 const BENEFICIARY_TYPES = ['Department', 'Centre', 'Cell', 'Club', 'Professional Body'];
+const ENTITY_TYPE_TO_LABEL: Record<string, string> = {
+  DEPARTMENT: 'Department',
+  CENTRE: 'Centre',
+  CELL: 'Cell',
+  CLUB: 'Club',
+  PROFESSIONAL_BODY: 'Professional Body',
+  PROF_BODY: 'Professional Body',
+};
+
+type MasterBeneficiary = {
+  key: string;
+  beneficiaryLabel: string;
+  beneficiaryTypeKey: string;
+  beneficiaryTypeLabel: string;
+};
 
 const getCurrentFiscalYearOption = (): Option => {
   const now = new Date();
@@ -55,6 +70,7 @@ const AdminBudgetSummary: React.FC = () => {
   const [financialYear, setFinancialYear] = useState<Option | null>(getCurrentFiscalYearOption());
   const [searchText, setSearchText] = useState('');
   const [proposals, setProposals] = useState<AdminProposalGroup[]>([]);
+  const [masterBeneficiaries, setMasterBeneficiaries] = useState<MasterBeneficiary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isAllExpanded, setIsAllExpanded] = useState(true);
@@ -106,14 +122,7 @@ const AdminBudgetSummary: React.FC = () => {
     return 'admin';
   }, [user]);
 
-  const canAccessSummary =
-    roleKey === 'super_admin' ||
-    roleKey === 'principal' ||
-    roleKey === 'admin' ||
-    roleKey === 'dof' ||
-    roleKey === 'hod' ||
-    roleKey === 'coordinator' ||
-    roleKey === 'ithead';
+  const canAccessSummary = roleKey === 'super_admin' || roleKey === 'dof';
 
   const userRoleLabel = useMemo(() => {
     switch (roleKey) {
@@ -144,6 +153,67 @@ const AdminBudgetSummary: React.FC = () => {
   }, []);
 
   const formatINR = (value: number) => Number(value || 0).toLocaleString('en-IN');
+
+  useEffect(() => {
+    const fetchMasterBeneficiaries = async () => {
+      if (!canAccessSummary) {
+        setMasterBeneficiaries([]);
+        return;
+      }
+
+      try {
+        const response: any = await authenticityUtility.get('/adminbudget/org-units');
+        const grouped = response?.data?.grouped;
+        const allRows = Array.isArray(response?.data?.all) ? response.data.all : [];
+        const sourceRows =
+          grouped && typeof grouped === 'object'
+            ? Object.values(grouped).flatMap((rows: any) => (Array.isArray(rows) ? rows : []))
+            : allRows;
+
+        const rows = Array.isArray(sourceRows) ? sourceRows : [];
+        const next: MasterBeneficiary[] = [];
+        const seen = new Set<string>();
+
+        rows.forEach((unit: any) => {
+          const rawType = String(unit?.type_code || '').trim().toUpperCase();
+          const mappedTypeLabel = ENTITY_TYPE_TO_LABEL[rawType];
+          if (!mappedTypeLabel || !BENEFICIARY_TYPES.includes(mappedTypeLabel)) return;
+
+          const id = Number(unit?.id);
+          if (!Number.isInteger(id) || id <= 0) return;
+
+          const label = String(unit?.name || '').trim();
+          if (!label) return;
+
+          const typeKey = mappedTypeLabel.toLowerCase();
+          const key = `${typeKey}::${id}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+
+          next.push({
+            key,
+            beneficiaryLabel: label,
+            beneficiaryTypeKey: typeKey,
+            beneficiaryTypeLabel: mappedTypeLabel,
+          });
+        });
+
+        next.sort((a, b) => {
+          const aType = BENEFICIARY_TYPES.indexOf(a.beneficiaryTypeLabel);
+          const bType = BENEFICIARY_TYPES.indexOf(b.beneficiaryTypeLabel);
+          if (aType !== bType) return aType - bType;
+          return a.beneficiaryLabel.localeCompare(b.beneficiaryLabel);
+        });
+
+        setMasterBeneficiaries(next);
+      } catch (fetchError) {
+        console.error('Failed to fetch master beneficiary units', fetchError);
+        setMasterBeneficiaries([]);
+      }
+    };
+
+    fetchMasterBeneficiaries();
+  }, [canAccessSummary]);
 
   useEffect(() => {
     const fetchSummaryData = async () => {
@@ -280,6 +350,17 @@ const AdminBudgetSummary: React.FC = () => {
       return { key, typeKey, typeLabel, label };
     };
 
+    masterBeneficiaries.forEach((master) => {
+      const labelMatch = !query || master.beneficiaryLabel.toLowerCase().includes(query);
+      if (!labelMatch) return;
+      ensureRow(
+        master.key,
+        master.beneficiaryLabel,
+        master.beneficiaryTypeKey,
+        master.beneficiaryTypeLabel
+      );
+    });
+
     proposedProposals.forEach((proposal) => {
       const { key, typeKey, typeLabel, label } = resolveBeneficiaryMeta(proposal);
       if (!isProposalSearchMatch(proposal, label)) return;
@@ -299,7 +380,7 @@ const AdminBudgetSummary: React.FC = () => {
       summaryMap[key].approved += approvedAmount;
     });
     return Object.values(summaryMap);
-  }, [approvedProposals, proposedProposals, searchText]);
+  }, [approvedProposals, proposedProposals, searchText, masterBeneficiaries]);
 
   const summaryTotals = useMemo(
     () =>
@@ -326,20 +407,19 @@ const AdminBudgetSummary: React.FC = () => {
       }
       grouped.get(typeLabel)!.push(row);
     });
-    const preferredOrder = BENEFICIARY_TYPES.map((type) => type.toLowerCase());
-    return [...grouped.entries()]
+    const preferredTypes = BENEFICIARY_TYPES.map((type) => ({
+      type,
+      rows: (grouped.get(type) || []).sort((a, b) => a.beneficiaryLabel.localeCompare(b.beneficiaryLabel)),
+    }));
+    const remainingTypes = [...grouped.entries()]
+      .filter(([type]) => !BENEFICIARY_TYPES.includes(type))
       .map(([type, rows]) => ({
         type,
         rows: rows.sort((a, b) => a.beneficiaryLabel.localeCompare(b.beneficiaryLabel)),
       }))
-      .sort((a, b) => {
-        const aIdx = preferredOrder.indexOf(a.type.toLowerCase());
-        const bIdx = preferredOrder.indexOf(b.type.toLowerCase());
-        const aRank = aIdx === -1 ? Number.MAX_SAFE_INTEGER : aIdx;
-        const bRank = bIdx === -1 ? Number.MAX_SAFE_INTEGER : bIdx;
-        if (aRank !== bRank) return aRank - bRank;
-        return a.type.localeCompare(b.type);
-      });
+      .sort((a, b) => a.type.localeCompare(b.type));
+
+    return [...preferredTypes, ...remainingTypes];
   }, [beneficiarySummaryRows]);
 
   useEffect(() => {
