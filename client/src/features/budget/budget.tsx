@@ -99,7 +99,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
   {
     label: 'Academics',
     options: [
-      'Faculty Empowerment', 'Staff Empowerment', 'Sudent Empowerment', 'Student Capacity Building', 'Accreditation Expenses', 'Examination Expenses',
+       'Faculty Empowerment', 'Staff Empowerment', 'Sudent Empowerment', 'Student Capacity Building', 'Accreditation Expenses', 'Examination Expenses',
     ],
   },
   {
@@ -288,6 +288,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Board of Studies (Bos) Meeting', 'DAB Meeting'],
   'Institutional Audits': ['Academic Audit', 'Administrative Audit', 'Energy & Green Audit'],
   'Government Meetings': ['Government Meetings'],
+
   'Faculty Empowerment': [
     'Registration fee',
     'Travel Allowance',
@@ -2769,7 +2770,7 @@ const Budget: React.FC = () => {
       </fieldset>
 
       {/* ADMIN ACTION BUTTONS - Only for admin=true */}
-      {new URLSearchParams(location.search).get('admin') === 'true'   &&  !isSuperAdmin(user) && !isEditMode && (
+      {new URLSearchParams(location.search).get('admin') === 'true'   &&  !isSuperAdmin(user) && isEditMode && (
         <div
           className="budget-admin-actions"
           style={{

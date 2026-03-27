@@ -74,6 +74,147 @@ async function hasBudgetProposalColumn(columnName) {
   return exists;
 }
 
+async function hasBudgetAnnualTable(conn = db) {
+  const [rows] = await conn.execute(
+    `SELECT COUNT(*) AS count
+       FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'Budget_annual'`
+  );
+  return Number(rows?.[0]?.count || 0) > 0;
+}
+
+async function applyBudgetAnnualDeltaByProposalId(proposalId, conn, direction = 'add') {
+  const proposalIdentifier = Number(proposalId);
+  if (!Number.isInteger(proposalIdentifier) || proposalIdentifier <= 0) {
+    return;
+  }
+
+  const tableExists = await hasBudgetAnnualTable(conn);
+  if (!tableExists) {
+    return;
+  }
+
+  const [rows] = await conn.execute(
+    `SELECT id,
+            fiscal_year,
+            beneficiary_type,
+            beneficiary_entity_id,
+            department_id,
+            created_at,
+            approved_total_amount
+       FROM budget_proposals
+      WHERE id = ?
+      LIMIT 1`,
+    [proposalIdentifier]
+  );
+
+  const proposal = rows?.[0];
+  if (!proposal) {
+    return;
+  }
+
+  const amount = Number(proposal.approved_total_amount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return;
+  }
+
+  const delta = direction === 'subtract' ? -amount : amount;
+  const fiscalYear = Number.parseInt(proposal.fiscal_year, 10) || getCurrentFinancialYear();
+  const proposalCreatedAt = proposal?.created_at ? new Date(proposal.created_at) : null;
+  const cutoffAt = new Date(`${fiscalYear}-02-01T23:59:59`);
+  const isInitial = proposalCreatedAt && !Number.isNaN(proposalCreatedAt.getTime())
+    ? proposalCreatedAt.getTime() <= cutoffAt.getTime()
+    : true;
+  const initialDelta = isInitial ? delta : 0;
+  const additionalDelta = isInitial ? 0 : delta;
+  const normalizedTypeRaw = normalizeText(proposal.beneficiary_type);
+  const normalizedTypeLower = normalizedTypeRaw.toLowerCase();
+  const beneficiaryType = ['faculty', 'staff'].includes(normalizedTypeLower)
+    ? 'Department'
+    : (normalizedTypeRaw || 'Unknown');
+  const departmentId =
+    Number.isInteger(Number(proposal.department_id)) && Number(proposal.department_id) > 0
+      ? Number(proposal.department_id)
+      : null;
+  const beneficiaryEntityId =
+    Number.isInteger(Number(proposal.beneficiary_entity_id)) && Number(proposal.beneficiary_entity_id) > 0
+      ? Number(proposal.beneficiary_entity_id)
+      : null;
+
+  const [updated] = await conn.execute(
+    `UPDATE Budget_annual
+        SET proposed_total_amount = proposed_total_amount + ?,
+            approved_total_amount = approved_total_amount + ?,
+            initial_total_amount = initial_total_amount + ?,
+            additional_total_amount = additional_total_amount + ?,
+            annual_total_amount = annual_total_amount + ?,
+            balance_total_amount = (initial_total_amount + ?) + (additional_total_amount + ?) - expenditure_total_amount
+      WHERE fiscal_year = ?
+        AND LOWER(TRIM(beneficiary_type)) = LOWER(TRIM(?))
+        AND department_id <=> ?
+        AND COALESCE(entity_id, beneficiary_entity_id) <=> ?`,
+    [
+      delta,
+      delta,
+      initialDelta,
+      additionalDelta,
+      delta,
+      initialDelta,
+      additionalDelta,
+      fiscalYear,
+      beneficiaryType,
+      departmentId,
+      beneficiaryEntityId,
+    ]
+  );
+
+  if (Number(updated?.affectedRows || 0) === 0 && delta > 0) {
+    await conn.execute(
+      `INSERT INTO Budget_annual (
+          fiscal_year,
+          beneficiary_type,
+          beneficiary_entity_id,
+          department_id,
+          entity_id,
+          proposed_total_amount,
+          approved_total_amount,
+          initial_total_amount,
+          additional_total_amount,
+          expenditure_total_amount,
+          balance_total_amount,
+          annual_total_amount
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      [
+        fiscalYear,
+        beneficiaryType,
+        beneficiaryEntityId,
+        departmentId,
+        beneficiaryEntityId,
+        amount,
+        amount,
+        isInitial ? amount : 0,
+        isInitial ? 0 : amount,
+        amount,
+        amount,
+      ]
+    );
+  }
+
+  if (delta < 0) {
+    await conn.execute(
+      `DELETE FROM Budget_annual
+        WHERE fiscal_year = ?
+          AND LOWER(TRIM(beneficiary_type)) = LOWER(TRIM(?))
+          AND department_id <=> ?
+          AND COALESCE(entity_id, beneficiary_entity_id) <=> ?
+          AND annual_total_amount <= 0
+          AND approved_total_amount <= 0`,
+      [fiscalYear, beneficiaryType, departmentId, beneficiaryEntityId]
+    );
+  }
+}
+
 export async function getBudgetTags() {
   try {
     const [rows] = await db.execute(
@@ -387,6 +528,16 @@ export async function updateApprovedAmounts(
   const proposal = await getBudgetById(proposalId);
   if (!proposal) {
     throw new Error('Proposal not found');
+  }
+
+  const normalizedCurrentStatus = normalizeText(proposal.status).toLowerCase();
+  const isTerminalStatus =
+    ['archived', 'archive', 'completed'].includes(normalizedCurrentStatus)
+    || normalizedCurrentStatus.includes('rejected')
+    || normalizedCurrentStatus.includes('returned');
+
+  if (isTerminalStatus && normalizedDecision !== 'archived') {
+    throw new Error(`Proposal cannot be processed from status: ${proposal.status}`);
   }
 
   return withTransaction(async (conn) => {
@@ -1576,6 +1727,116 @@ export async function getConsolidatedData({
   };
 }
 
+export async function listBudgetAnnualSummaryEntries({
+  userId,
+  userEmail,
+  department,
+  departmentId,
+  role,
+  fiscalYear,
+  q,
+}) {
+  const tableExists = await hasBudgetAnnualTable(db);
+  if (!tableExists) {
+    return [];
+  }
+
+  const currentFY = Number.parseInt(fiscalYear, 10) || getCurrentFinancialYear();
+  const safeRole = normalizeBudgetRole(role);
+  const safeUserId = Number(userId) > 0 ? Number(userId) : -1;
+  const safeEmail = normalizeText(userEmail);
+  const where = ['ba.fiscal_year = ?'];
+  const params = [Number(currentFY)];
+
+  switch (safeRole) {
+    case 'hod': {
+      where.push(`LOWER(TRIM(ba.beneficiary_type)) = 'department'`);
+      where.push('md.type = "Academic"');
+      const hodScope = [];
+      if (safeUserId > 0) {
+        hodScope.push(`ba.department_id IN (
+          SELECT entity_id
+          FROM user_entity_roles
+          WHERE user_id = ?
+            AND entity_type = 'DEPARTMENT'
+        )`);
+        params.push(safeUserId);
+      }
+      if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
+        hodScope.push('ba.department_id = ?');
+        params.push(Number(departmentId));
+      }
+      if (normalizeText(department)) {
+        const normalizedDept = normalizeText(department);
+        hodScope.push(`(LOWER(TRIM(md.name)) = LOWER(TRIM(?)) OR LOWER(TRIM(md.code)) = LOWER(TRIM(?)))`);
+        params.push(normalizedDept, normalizedDept);
+      }
+      where.push(hodScope.length ? `(${hodScope.join(' OR ')})` : '1 = 0');
+      break;
+    }
+    case 'coordinator': {
+      where.push(`LOWER(TRIM(ba.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')`);
+      const filterConditions = [];
+      if (safeUserId > 0) {
+        filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'))`);
+        params.push(safeUserId);
+      }
+      if (safeEmail) {
+        filterConditions.push('EXISTS (SELECT 1 FROM master_entity_contacts mec_sub WHERE mec_sub.entity_id = me.id AND LOWER(TRIM(mec_sub.email)) = LOWER(TRIM(?)))');
+        params.push(safeEmail);
+      }
+      where.push(filterConditions.length ? `(${filterConditions.join(' OR ')})` : '1 = 0');
+      break;
+    }
+    case 'ithead':
+    case 'dof':
+    case 'principal':
+    case 'admin':
+    case 'super_admin':
+      break;
+    default:
+      where.push('1 = 0');
+      break;
+  }
+
+  if (normalizeText(q)) {
+    const searchPattern = `%${normalizeText(q)}%`;
+    where.push(`(
+      ba.beneficiary_type LIKE ?
+      OR md.name LIKE ?
+      OR me.name LIKE ?
+    )`);
+    params.push(searchPattern, searchPattern, searchPattern);
+  }
+
+  const sql = `
+    SELECT
+      ba.id,
+      'completed' AS status,
+      ba.beneficiary_type,
+      ba.department_id,
+      COALESCE(ba.entity_id, ba.beneficiary_entity_id) AS beneficiary_entity_id,
+      md.name AS department,
+      COALESCE(md.name, me.name, CONCAT(ba.beneficiary_type, ' #', ba.id)) AS beneficiary_label,
+      ba.created_at AS created_at,
+      ba.proposed_total_amount,
+      ba.approved_total_amount,
+      ba.initial_total_amount,
+      ba.additional_total_amount,
+      ba.expenditure_total_amount,
+      ba.balance_total_amount,
+      ba.annual_total_amount
+    FROM Budget_annual ba
+    LEFT JOIN master_departments md ON ba.department_id = md.id
+    LEFT JOIN master_entities me ON COALESCE(ba.entity_id, ba.beneficiary_entity_id) = me.id
+    WHERE ${where.join(' AND ')}
+    ORDER BY ba.beneficiary_type ASC, beneficiary_label ASC
+  `;
+
+  const [rows] = await db.execute(sql, params);
+  return Array.isArray(rows) ? rows : [];
+}
+
 /* =====================================================
    8. ORG UNIT / ENTITY HELPERS
 ===================================================== */
@@ -1913,6 +2174,7 @@ async function deleteBudgetProposal(proposalId) {
 
     await conn.execute('DELETE FROM budget_proposal_lines WHERE budget_proposal_id = ?', [proposalId]);
     await conn.execute('DELETE FROM budget_proposal_approvals WHERE budget_proposal_id = ?', [proposalId]);
+    await applyBudgetAnnualDeltaByProposalId(proposalId, conn, 'subtract');
 
     const [result] = await conn.execute('DELETE FROM budget_proposals WHERE id = ?', [proposalId]);
     return result.affectedRows > 0;
@@ -2034,6 +2296,10 @@ export async function processApproval(proposalId, { role, decision, feedback, ap
           ) VALUES(?, 'principal', ?, ?, 'approved', 'Auto-approved after DoF clearance', 0, NOW())`,
         [proposalId, approverUserId, 'system-auto@ksrct.ac.in']
       );
+    }
+
+    if (normalizedDecision === 'approved' && newStatus === 'completed') {
+      await applyBudgetAnnualDeltaByProposalId(proposalId, conn, 'add');
     }
   });
 }
