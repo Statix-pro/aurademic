@@ -984,6 +984,32 @@ export async function update(
 
     const hasApplicantNameColumn = await hasBudgetProposalColumn('applicant_name');
     const hasBudgetTagColumn = await hasBudgetProposalColumn('budget_tag');
+    const oldBeneficiaryType = normalizeBeneficiaryType(proposal?.beneficiary_type);
+    const newBeneficiaryType = normalizeBeneficiaryType(payload?.beneficiary_type);
+    const oldBeneficiaryValue = normalizeText(proposal?.beneficiary_value);
+    const newBeneficiaryValue = normalizeText(payload?.beneficiary_value);
+    const oldApprovalFlow = normalizeText(proposal?.approval_flow);
+    const newApprovalFlow = normalizeText(approvalFlowString);
+    const oldDepartmentId = Number.parseInt(proposal?.department_id, 10);
+    const newDepartmentId = Number.parseInt(departmentId, 10);
+
+    if (oldBeneficiaryType !== newBeneficiaryType) {
+      proposalChanges.push(`Beneficiary Type changed from "${oldBeneficiaryType || '-'}" to "${newBeneficiaryType || '-'}"`);
+    }
+    if (oldBeneficiaryValue !== newBeneficiaryValue) {
+      proposalChanges.push(`Beneficiary Value changed from "${oldBeneficiaryValue || '-'}" to "${newBeneficiaryValue || '-'}"`);
+    }
+    if (
+      Number.isInteger(oldDepartmentId)
+      && Number.isInteger(newDepartmentId)
+      && oldDepartmentId !== newDepartmentId
+    ) {
+      proposalChanges.push(`Department changed (ID ${oldDepartmentId} -> ${newDepartmentId})`);
+    }
+    if (oldApprovalFlow !== newApprovalFlow) {
+      proposalChanges.push(`Approval Flow changed from "${oldApprovalFlow || '-'}" to "${newApprovalFlow || '-'}"`);
+    }
+
     if (hasBudgetTagColumn) {
       const oldTag = normalizeText(proposal?.budget_tag);
       const newTag = normalizeText(payload?.budget_tag);

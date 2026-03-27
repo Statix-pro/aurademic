@@ -423,8 +423,12 @@ export async function getItheadBudgets(req, res) {
   try {
     const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
     const isSuperAdminUser = hasSuperAdminAccess(req);
+    const userId = getUserId(req);
+    const userEmail = normalizeText(req.user?.email);
 
     const budgets = await AdminBudgetModel.listBudgets({
+      userId,
+      userEmail,
       role: 'ithead',
       superAdminQueueView: isSuperAdminUser,
       page: Number.parseInt(page, 10),
@@ -455,8 +459,12 @@ export async function getDofBudgets(req, res) {
   try {
     const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
     const isSuperAdmin = hasSuperAdminAccess(req);
+    const userId = getUserId(req);
+    const userEmail = normalizeText(req.user?.email);
 
     const budgets = await AdminBudgetModel.listBudgets({
+      userId,
+      userEmail,
       role: 'dof',
       superAdminQueueView: isSuperAdmin,
       page: Number.parseInt(page, 10),
@@ -487,8 +495,12 @@ export async function getPrincipalBudgets(req, res) {
   try {
     const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
     const isSuperAdmin = hasSuperAdminAccess(req);
+    const userId = getUserId(req);
+    const userEmail = normalizeText(req.user?.email);
 
     const budgets = await AdminBudgetModel.listBudgets({
+      userId,
+      userEmail,
       role: 'principal',
       superAdminQueueView: isSuperAdmin,
       page: Number.parseInt(page, 10),
@@ -1141,6 +1153,19 @@ export async function toggleArchive(req, res) {
     const isSuperAdmin = hasSuperAdminAccess(req);
 
     if (!isArchived) {
+      const normalizedStatus = normalizeText(proposal.status).toLowerCase();
+      const isTerminalForArchive =
+        normalizedStatus === 'completed'
+        || normalizedStatus.includes('rejected')
+        || normalizedStatus.includes('returned');
+
+      if (isTerminalForArchive) {
+        return res.status(400).json({
+          success: false,
+          message: `Archive not allowed for proposal status: ${proposal.status}`,
+        });
+      }
+
       if (!requiredPermission) {
         return res.status(400).json({
           success: false,
@@ -1563,6 +1588,39 @@ export async function getConsolidation(req, res) {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch consolidated data',
+    });
+  }
+}
+
+export async function getAnnualSummary(req, res) {
+  try {
+    const department = await resolveUserDepartment(req);
+    const departmentId = await resolveUserDepartmentId(req);
+    const userEmail = normalizeText(req.user?.email);
+    const userId = getUserId(req);
+    const { fiscalYear, scope: scopeParam, q } = req.query;
+    const role = getAuthorizedRole(req, scopeParam);
+
+    const rows = await AdminBudgetModel.listBudgetAnnualSummaryEntries({
+      userId,
+      userEmail,
+      department,
+      departmentId,
+      role,
+      fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      q,
+    });
+
+    return res.json({
+      success: true,
+      data: rows,
+      count: rows.length,
+    });
+  } catch (error) {
+    console.error('Annual summary fetch error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch annual summary data',
     });
   }
 }

@@ -67,7 +67,6 @@ interface BeneficiaryScopeOption {
 
 const BudgetDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [budgetHeadSearch, setBudgetHeadSearch] = useState("");
 
   // State
   const [proposals, setProposals] = useState<ProposalGroup[]>([]);
@@ -780,10 +779,12 @@ const BudgetDashboard: React.FC = () => {
 
   // Filtered Consolidated Data
   const filteredConsolidated = useMemo(() => {
-    if (!budgetHeadSearch.trim()) return scopedConsolidatedData;
-    const q = budgetHeadSearch.toLowerCase();
-    return scopedConsolidatedData.filter(d => d.budgetHead.toLowerCase().includes(q));
-  }, [scopedConsolidatedData, budgetHeadSearch]);
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return scopedConsolidatedData;
+    return scopedConsolidatedData.filter((d) =>
+      String(d.budgetHead || "").toLowerCase().includes(q)
+    );
+  }, [scopedConsolidatedData, searchTerm]);
 
   const consolidatedTotals = useMemo(() => filteredConsolidated.reduce((acc, row) => ({
     initial: acc.initial + row.initial,
@@ -794,12 +795,19 @@ const BudgetDashboard: React.FC = () => {
 
   // Filtered Proposal List
   const filteredProposals = useMemo(() => {
-    if (!budgetHeadSearch.trim()) return scopeFilteredProposals;
-    const q = budgetHeadSearch.toLowerCase();
-    return scopeFilteredProposals.filter(p =>
-      p.items.some(i => i.budgetHead.toLowerCase().includes(q) || i.subHead.toLowerCase().includes(q))
-    );
-  }, [scopeFilteredProposals, budgetHeadSearch]);
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return scopeFilteredProposals;
+
+    return scopeFilteredProposals.filter((p) => {
+      const nameMatch = String(p.applicantName || "").toLowerCase().includes(q);
+      const refMatch = String(p.proposalRef || "").toLowerCase().includes(q);
+      const lineMatch = p.items.some((i) =>
+        String(i.budgetHead || "").toLowerCase().includes(q)
+        || String(i.subHead || "").toLowerCase().includes(q)
+      );
+      return nameMatch || refMatch || lineMatch;
+    });
+  }, [scopeFilteredProposals, searchTerm]);
 
   // --- Timeline Logic ---
   const getTimelineState = (proposal: ProposalGroup, step: string) => {
@@ -866,7 +874,7 @@ const BudgetDashboard: React.FC = () => {
                   <input
                     type="text"
                     className="budgetdashboard-search"
-                    placeholder="Search Proposals..."
+                    placeholder="Search by name, budget head or reference id"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     style={{ marginRight: '10px' }}
@@ -901,7 +909,7 @@ const BudgetDashboard: React.FC = () => {
                   disabled={!canAddForCurrentFY()}
                   style={{ opacity: canAddForCurrentFY() ? 1 : 0.5 }}
                 >
-                  <Plus size={16} /> Add
+                  Add +
                 </button>
               </div>
             </div>
