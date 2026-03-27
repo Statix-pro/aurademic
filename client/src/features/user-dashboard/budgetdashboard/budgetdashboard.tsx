@@ -28,6 +28,8 @@ interface ProposalGroup {
   beneficiaryValue: string;
   approvalFlow: string;
   createdAt: string;
+  requestDate?: string;
+  budgetWindowType?: string;
   updatedAt: string;
   items: DashboardLineItem[];
   approvals: any[];
@@ -161,10 +163,32 @@ const BudgetDashboard: React.FC = () => {
 
   const parseDateSafe = (value?: string) => {
     if (!value) return null;
-    const direct = new Date(value);
+    const raw = String(value).trim();
+
+    // Handle common DB/UI formats explicitly first:
+    // - DD-MM-YYYY
+    // - DD/MM/YYYY
+    // - DD-MM-YYYY HH:mm[:ss]
+    // - DD/MM/YYYY HH:mm[:ss]
+    const dmyMatch = raw.match(
+      /^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
+    );
+    if (dmyMatch) {
+      const day = Number(dmyMatch[1]);
+      const month = Number(dmyMatch[2]);
+      const yearRaw = Number(dmyMatch[3]);
+      const year = yearRaw < 100 ? (2000 + yearRaw) : yearRaw;
+      const hour = Number(dmyMatch[4] || 0);
+      const minute = Number(dmyMatch[5] || 0);
+      const second = Number(dmyMatch[6] || 0);
+      const parsedDmy = new Date(year, month - 1, day, hour, minute, second, 0);
+      if (!Number.isNaN(parsedDmy.getTime())) return parsedDmy;
+    }
+
+    const direct = new Date(raw);
     if (!Number.isNaN(direct.getTime())) return direct;
 
-    const normalized = String(value).replace(' ', 'T');
+    const normalized = raw.replace(' ', 'T');
     const fallback = new Date(normalized);
     if (!Number.isNaN(fallback.getTime())) return fallback;
     return null;
@@ -208,7 +232,8 @@ const BudgetDashboard: React.FC = () => {
       return new Date(fyStart, INITIAL_WINDOW_MONTH, INITIAL_WINDOW_DAY, 23, 59, 59, 999);
     })();
 
-    const sourceDate = freezeCutoffDate || getDefaultCutoffDateForFY(fy);
+    const sourceDateRaw = String(freezeCutoffDate || getDefaultCutoffDateForFY(fy) || "").trim();
+    const sourceDate = sourceDateRaw.includes("T") ? sourceDateRaw.split("T")[0] : sourceDateRaw;
     if (!sourceDate) return fallback;
 
     const parsed = new Date(`${sourceDate}T23:59:59.999`);
@@ -216,12 +241,25 @@ const BudgetDashboard: React.FC = () => {
     return parsed;
   };
 
-  const isInitialBudgetProposal = (createdAt?: string) => {
-    const proposalDate = parseDateSafe(createdAt);
+  const isInitialBudgetProposal = (proposal: ProposalGroup) => {
+    const persistedWindowType = String(proposal.budgetWindowType || "").trim().toLowerCase();
+    if (persistedWindowType === "initial") return true;
+    if (persistedWindowType === "additional") return false;
+
+    const proposalDate = parseDateSafe(proposal.requestDate || proposal.createdAt);
     const cutoff = getInitialWindowCutoff(financialYear);
     if (!proposalDate) return false;
     if (!cutoff) return true;
-    return proposalDate.getTime() <= cutoff.getTime();
+    const proposalDateOnly = new Date(
+      proposalDate.getFullYear(),
+      proposalDate.getMonth(),
+      proposalDate.getDate(),
+      23,
+      59,
+      59,
+      999
+    );
+    return proposalDateOnly.getTime() <= cutoff.getTime();
   };
 
   // Close on outside click
@@ -374,6 +412,8 @@ const BudgetDashboard: React.FC = () => {
           currentStage: master.current_stage,
           approvalFlow: master.approval_flow,
           createdAt: master.created_at || master.created_date || "",
+          requestDate: master.request_date || "",
+          budgetWindowType: master.budget_window_type || "",
           updatedAt: master.updated_at || master.updated_date || "",
           items: items,
           approvals: Array.isArray(data.approvals)
@@ -744,13 +784,14 @@ const BudgetDashboard: React.FC = () => {
   }, [proposals, beneficiaryScope]);
 
   const scopedConsolidatedData = useMemo(() => {
-    const approvedProposals = scopeFilteredProposals.filter((proposal) =>
-      ["principal_approved", "completed"].includes(proposal.status)
-    );
+    const activeProposals = scopeFilteredProposals.filter((proposal) => {
+      const status = String(proposal.status || "").toLowerCase();
+      return !status.includes("rejected") && !status.includes("returned") && !status.includes("archive");
+    });
     const consolidationMap: Record<string, ConsolidatedRow> = {};
 
-    approvedProposals.forEach((proposal) => {
-      const isInitial = isInitialBudgetProposal(proposal.createdAt);
+    activeProposals.forEach((proposal) => {
+      const isInitial = isInitialBudgetProposal(proposal);
 
       proposal.items.forEach((item) => {
         if (!consolidationMap[item.budgetHead]) {
@@ -763,10 +804,11 @@ const BudgetDashboard: React.FC = () => {
           };
         }
 
+        const amount = Number(item.proposedAmount || 0);
         if (isInitial) {
-          consolidationMap[item.budgetHead].initial += item.approvedAmount;
+          consolidationMap[item.budgetHead].initial += amount;
         } else {
-          consolidationMap[item.budgetHead].additional += item.approvedAmount;
+          consolidationMap[item.budgetHead].additional += amount;
         }
       });
     });
@@ -965,7 +1007,7 @@ const BudgetDashboard: React.FC = () => {
                 let initialBudgetCount = 0;
                 let additionalBudgetCount = 0;
                 return filteredProposals.map((proposal) => {
-                  const isInitialBudget = isInitialBudgetProposal(proposal.createdAt);
+                  const isInitialBudget = isInitialBudgetProposal(proposal);
                   const label = isInitialBudget
                     ? `Initial Budget ${++initialBudgetCount}`
                     : `Additional Budget ${++additionalBudgetCount}`;
