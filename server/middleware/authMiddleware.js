@@ -266,13 +266,34 @@ export const permissionMiddleware = (
       }
 
       const userPermissionSet = new Set(uniqueStringArray(user.permissions));
+      const matchesPermissionRequirement = (requiredPermission) => {
+        const normalizedRequiredPermission = String(requiredPermission || '').trim();
+
+        if (!normalizedRequiredPermission) {
+          return false;
+        }
+
+        if (normalizedRequiredPermission.endsWith('*')) {
+          const prefix = normalizedRequiredPermission.slice(0, -1);
+          if (!prefix) {
+            return false;
+          }
+
+          for (const permission of userPermissionSet) {
+            if (permission.startsWith(prefix)) {
+              return true;
+            }
+          }
+
+          return false;
+        }
+
+        return userPermissionSet.has(normalizedRequiredPermission);
+      };
+
       const hasAccess = requireAll
-        ? requiredPermissionList.every((permission) =>
-          userPermissionSet.has(permission)
-        )
-        : requiredPermissionList.some((permission) =>
-          userPermissionSet.has(permission)
-        );
+        ? requiredPermissionList.every((permission) => matchesPermissionRequirement(permission))
+        : requiredPermissionList.some((permission) => matchesPermissionRequirement(permission));
 
       if (!hasAccess) {
         return res.status(403).json({

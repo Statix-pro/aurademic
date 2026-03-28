@@ -231,6 +231,18 @@
   background: #f8fafc;
 }
 
+.adminbudgetdashboard-row-selected td {
+  background: #e8f4ff;
+}
+
+.adminbudgetdashboard-row-selected td:first-child {
+  box-shadow: inset 4px 0 0 #0069ab;
+}
+
+.adminbudgetdashboard-row-selected:hover td {
+  background: #d9ecff;
+}
+
 .adminbudgetdashboard-row-toggle-btn {
   border: none;
   background: transparent;

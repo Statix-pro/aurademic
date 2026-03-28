@@ -145,6 +145,48 @@ export async function getFreezeConfig(fiscalYear) {
   };
 }
 
+async function resolveBudgetWindowTypeForProposal(conn, fiscalYear, requestDate, fallbackCreatedAt = null) {
+  const fy = Number.parseInt(fiscalYear, 10) || getCurrentFinancialYear();
+  const defaultCutoff = getDefaultFreezeCutoffDate(fy);
+  let cutoffDate = defaultCutoff;
+
+  try {
+    const [rows] = await conn.execute(
+      `SELECT cutoff_date
+         FROM budget_time_freeze_config
+         WHERE fiscal_year = ?
+         LIMIT 1`,
+      [fy]
+    );
+    if (rows?.[0]?.cutoff_date) {
+      cutoffDate = String(rows[0].cutoff_date);
+    }
+  } catch (error) {
+    if (error?.code !== 'ER_NO_SUCH_TABLE') {
+      throw error;
+    }
+  }
+
+  const proposalDateValue = normalizeText(requestDate) || normalizeText(fallbackCreatedAt);
+  const proposalDate = proposalDateValue ? new Date(proposalDateValue) : new Date();
+  const proposalDateOnly = new Date(
+    proposalDate.getFullYear(),
+    proposalDate.getMonth(),
+    proposalDate.getDate(),
+    23,
+    59,
+    59,
+    999
+  );
+  const cutoff = new Date(`${cutoffDate}T23:59:59.999`);
+
+  if (Number.isNaN(proposalDateOnly.getTime()) || Number.isNaN(cutoff.getTime())) {
+    return 'additional';
+  }
+
+  return proposalDateOnly.getTime() <= cutoff.getTime() ? 'initial' : 'additional';
+}
+
 export function beneficiaryTypeToEntityTypeCode(beneficiaryType) {
   return sharedBeneficiaryTypeToEntityTypeCode(beneficiaryType);
 }
@@ -524,10 +566,18 @@ export async function create(payload) {
 
       const hasApplicantNameColumn = await hasBudgetProposalColumn('applicant_name');
       const hasBudgetTagColumn = await hasBudgetProposalColumn('budget_tag');
+      const hasBudgetWindowTypeColumn = await hasBudgetProposalColumn('budget_window_type');
+      const budgetWindowType = await resolveBudgetWindowTypeForProposal(
+        conn,
+        fyYear,
+        payload.request_date
+      );
       const applicantNameInsertColumn = hasApplicantNameColumn ? ', applicant_name' : '';
       const budgetTagInsertColumn = hasBudgetTagColumn ? ', budget_tag' : '';
+      const budgetWindowInsertColumn = hasBudgetWindowTypeColumn ? ', budget_window_type' : '';
       const applicantNameInsertValue = hasApplicantNameColumn ? ', ?' : '';
       const budgetTagInsertValue = hasBudgetTagColumn ? ', ?' : '';
+      const budgetWindowInsertValue = hasBudgetWindowTypeColumn ? ', ?' : '';
 
       const createParams = [
         proposalRef,
@@ -552,6 +602,9 @@ export async function create(payload) {
       if (hasBudgetTagColumn) {
         createParams.push(payload.budget_tag || null);
       }
+      if (hasBudgetWindowTypeColumn) {
+        createParams.push(budgetWindowType);
+      }
 
       const [proposalResult] = await conn.execute(
         `INSERT INTO budget_proposals(
@@ -570,9 +623,9 @@ export async function create(payload) {
             approved_total_amount,
             approval_flow,
             status,
-            current_stage${applicantNameInsertColumn}${budgetTagInsertColumn},
+            current_stage${applicantNameInsertColumn}${budgetTagInsertColumn}${budgetWindowInsertColumn},
             created_at
-          ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?${applicantNameInsertValue}${budgetTagInsertValue}, NOW())`,
+          ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?${applicantNameInsertValue}${budgetTagInsertValue}${budgetWindowInsertValue}, NOW())`,
         createParams
       );
 
@@ -984,6 +1037,38 @@ export async function update(
 
     const hasApplicantNameColumn = await hasBudgetProposalColumn('applicant_name');
     const hasBudgetTagColumn = await hasBudgetProposalColumn('budget_tag');
+    const hasBudgetWindowTypeColumn = await hasBudgetProposalColumn('budget_window_type');
+    const nextFiscalYear = Number.parseInt(payload?.fiscal_year, 10) || Number.parseInt(proposal?.fiscal_year, 10) || getCurrentFinancialYear();
+    const nextRequestDate = normalizeText(payload?.request_date) || normalizeText(proposal?.request_date) || null;
+    const nextBudgetWindowType = hasBudgetWindowTypeColumn
+      ? await resolveBudgetWindowTypeForProposal(conn, nextFiscalYear, nextRequestDate, proposal?.created_at)
+      : null;
+    const oldBeneficiaryType = normalizeBeneficiaryType(proposal?.beneficiary_type);
+    const newBeneficiaryType = normalizeBeneficiaryType(payload?.beneficiary_type);
+    const oldBeneficiaryValue = normalizeText(proposal?.beneficiary_value);
+    const newBeneficiaryValue = normalizeText(payload?.beneficiary_value);
+    const oldApprovalFlow = normalizeText(proposal?.approval_flow);
+    const newApprovalFlow = normalizeText(approvalFlowString);
+    const oldDepartmentId = Number.parseInt(proposal?.department_id, 10);
+    const newDepartmentId = Number.parseInt(departmentId, 10);
+
+    if (oldBeneficiaryType !== newBeneficiaryType) {
+      proposalChanges.push(`Beneficiary Type changed from "${oldBeneficiaryType || '-'}" to "${newBeneficiaryType || '-'}"`);
+    }
+    if (oldBeneficiaryValue !== newBeneficiaryValue) {
+      proposalChanges.push(`Beneficiary Value changed from "${oldBeneficiaryValue || '-'}" to "${newBeneficiaryValue || '-'}"`);
+    }
+    if (
+      Number.isInteger(oldDepartmentId)
+      && Number.isInteger(newDepartmentId)
+      && oldDepartmentId !== newDepartmentId
+    ) {
+      proposalChanges.push(`Department changed (ID ${oldDepartmentId} -> ${newDepartmentId})`);
+    }
+    if (oldApprovalFlow !== newApprovalFlow) {
+      proposalChanges.push(`Approval Flow changed from "${oldApprovalFlow || '-'}" to "${newApprovalFlow || '-'}"`);
+    }
+
     if (hasBudgetTagColumn) {
       const oldTag = normalizeText(proposal?.budget_tag);
       const newTag = normalizeText(payload?.budget_tag);
@@ -993,6 +1078,7 @@ export async function update(
     }
     const applicantNameSetClause = hasApplicantNameColumn ? 'applicant_name = ?,' : '';
     const budgetTagSetClause = hasBudgetTagColumn ? 'budget_tag = ?,' : '';
+    const budgetWindowSetClause = hasBudgetWindowTypeColumn ? 'budget_window_type = ?,' : '';
     const updateParams = [];
 
     if (hasApplicantNameColumn) {
@@ -1013,6 +1099,9 @@ export async function update(
     if (hasBudgetTagColumn) {
       updateParams.push(payload.budget_tag || null);
     }
+    if (hasBudgetWindowTypeColumn) {
+      updateParams.push(nextBudgetWindowType);
+    }
 
     updateParams.push(
       calculatedTotal,
@@ -1032,6 +1121,7 @@ export async function update(
         status = ?,
         proposal_description = ?,
         ${budgetTagSetClause}
+        ${budgetWindowSetClause}
         total_amount = ?,
         approved_total_amount = ?,
         updated_at = NOW()
@@ -1350,6 +1440,7 @@ export async function listBudgets({
 }) {
   const hasApplicantNameColumn = await hasBudgetProposalColumn('applicant_name');
   const hasBudgetTagColumn = await hasBudgetProposalColumn('budget_tag');
+  const hasBudgetWindowTypeColumn = await hasBudgetProposalColumn('budget_window_type');
   const result = await buildBudgetList({
     userId,
     userEmail,
@@ -1367,6 +1458,7 @@ export async function listBudgets({
     hasColumnCache: {
       applicant_name: hasApplicantNameColumn,
       budget_tag: hasBudgetTagColumn,
+      budget_window_type: hasBudgetWindowTypeColumn,
     },
   });
   const enrichedRows = await attachLevel1AssignmentMetadata(result.rows);

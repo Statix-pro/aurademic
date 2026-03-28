@@ -1,57 +1,41 @@
-// modules/finance/financeRoutes.js
-
 import express from 'express';
 import financeController from './financeController.js';
-import { authMiddleware } from '../../middleware/authMiddleware.js';
+import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-/* =====================================================
-   All Finance routes are PROTECTED
-   (same pattern as journals)
-====================================================== */
+const FINANCE_WORKFLOW_PERMISSIONS = [
+  'finance.workflow.*',
+];
+
+const canAccessFinanceWorkflow = permissionMiddleware(FINANCE_WORKFLOW_PERMISSIONS);
+
 router.use(authMiddleware);
 
-/* =====================================================
-   Finance Request CRUD
-====================================================== */
-
-// Create finance request
+// Core request APIs
 router.post('/', financeController.createFinanceRequest);
-
-// List finance requests (dashboard / approvals / my requests)
 router.get('/', financeController.listFinanceRequests);
-
-// Search applicant (for searchable dropdown)
 router.get('/search-applicant', financeController.searchApplicant);
-
-// Get current user's employee info (for auto-fill applicant data)
 router.get('/me', financeController.getCurrentEmployeeInfo);
 
-// Get full finance request (view / approval page)
-router.get('/:id', financeController.getFinanceRequest);
+// Workflow metadata + queues
+router.get('/workflow/meta', canAccessFinanceWorkflow, financeController.getWorkflowMeta);
+router.get('/queue/:stage', canAccessFinanceWorkflow, financeController.getFinanceQueue);
 
-// Update finance request (applicant only, pending state)
-router.put('/:id', financeController.updateFinanceRequest);
+// Workflow actions
+router.patch('/:id/approval', canAccessFinanceWorkflow, financeController.approveFinanceWorkflow);
+router.post('/:id/resubmit', financeController.resubmitFinanceRequest);
 
-/* =====================================================
-   Budget Breakup
-====================================================== */
+// Timeline / compatibility endpoint
+router.get('/:id/timeline', financeController.getFinanceTimeline);
+router.get('/:id/status-updates', financeController.getStatusUpdates);
 
-// Add budget breakup rows
+// Budget breakup
 router.post('/:id/budget', financeController.addBudgetBreakup);
-
-// Get budget breakup
 router.get('/:id/budget', financeController.getBudgetBreakup);
 
-/* =====================================================
-   Status / Approval Workflow
-====================================================== */
-
-// Add approval / status update
-router.post('/:id/status-updates', financeController.addStatusUpdate);
-
-// Get approval history
-router.get('/:id/status-updates', financeController.getStatusUpdates);
+// Request CRUD
+router.get('/:id', financeController.getFinanceRequest);
+router.put('/:id', financeController.updateFinanceRequest);
 
 export default router;
