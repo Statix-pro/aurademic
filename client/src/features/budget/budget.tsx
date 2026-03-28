@@ -8,7 +8,7 @@ import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils'
 import Select from 'react-select';
 import './budget.css';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
-import { Eye, Edit2, CheckCircle2, RotateCcw, XCircle, Briefcase, Clock, AlertTriangle, Archive, Trash2, } from "lucide-react";
+import { Eye, Edit2, CheckCircle2, RotateCcw, XCircle, Briefcase, Clock, AlertTriangle, Archive, Trash2, Bell } from "lucide-react";
 
 interface SelectOption {
   value: string;
@@ -99,7 +99,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
   {
     label: 'Academics',
     options: [
-      'Faculty Empowerment', 'Staff Empowerment', 'Sudent Empowerment', 'Student Capacity Building', 'Accreditation Expenses', 'Examination Expenses',
+      'Faculty Empowerment', 'Staff Empowerment', 'Student Empowerment', 'Student Capacity Building', 'Accreditation Expenses', 'Examination Expenses',
     ],
   },
   {
@@ -288,6 +288,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Board of Studies (Bos) Meeting', 'DAB Meeting'],
   'Institutional Audits': ['Academic Audit', 'Administrative Audit', 'Energy & Green Audit'],
   'Government Meetings': ['Government Meetings'],
+
   'Faculty Empowerment': [
     'Registration fee',
     'Travel Allowance',
@@ -508,6 +509,190 @@ const EMPTY_MONTHS: Record<string, string> = {
   Mar: '',
 };
 
+type GuidelineSectionId =
+  | "skill"
+  | "events"
+  | "research"
+  | "it"
+  | "lab"
+  | "departmentEvents"
+  | "assoc"
+  | "outreach"
+  | "academics"
+  | "office"
+  | "student";
+
+const guidelineSkillingRows = [
+  { designation: "Assistant Professor", registration: 3000, travel: 3000, food: 5000, accommodation: 5000 },
+  { designation: "Associate Professor", registration: 4000, travel: 4000, food: 6500, accommodation: 6500 },
+  { designation: "Professor", registration: 5000, travel: 5000, food: 8000, accommodation: 8000 },
+  { designation: "Leadership Team", registration: 10000, travel: 10000, food: 10000, accommodation: 10000 },
+  { designation: "Staff", registration: 2000, travel: 2000, food: 3000, accommodation: 3000 },
+];
+
+const guidelineDeptData: Record<Exclude<GuidelineSectionId, "skill" | "events" | "research">, string[]> = {
+  it: ["Hardwares", "Softwares", "Hard Disks", "Monitors", "Mouse", "Keyboard", "CMOS Battery", "Wi-fi Router", "Network Materials", "Laptops", "Interactive Displays", "Desktop Computers", "CCTV Materials", "Television", "Projectors", "Printers", "Mobiles & Tablet", "Mic & Speakers", "Amplifiers", "A/V Equipment", "Intercom", "Photocopy Machine"],
+  lab: ["Equipment", "Consumables", "Maintenance", "Calibration"],
+  departmentEvents: ["Webinar", "Guest Lecture", "Hands-on Training", "Conclave", "Convention", "Networking Event", "Industry Interaction"],
+  assoc: ["Association Function", "Alumni Meeting", "Alumni Interaction", "Parents Meeting"],
+  outreach: ["School Visit", "Awareness Program", "Campaigns", "Mini Marathon", "Education Fair", "Rally"],
+  academics: ["DAB Meeting", "BoS Meeting", "Printing"],
+  office: ["Stationary", "Test Notes", "Printing"],
+  student: ["Skill Development Training", "Aptitude Training", "Higher Education Coaching", "Competitive Exam Coaching", "Placement Training", "Placement Drives", "One Credit Course", "Value Added Course", "Certification Programs", "Exposure Visit", "Language Proficiency Courses"],
+};
+
+const guidelineHeadButtons: Array<{ id: GuidelineSectionId; label: string }> = [
+  { id: "skill", label: "Skilling" },
+  { id: "events", label: "Events" },
+  { id: "research", label: "Research" },
+  { id: "it", label: "IT Infrastructure" },
+  { id: "lab", label: "Laboratory" },
+  { id: "departmentEvents", label: "Events" },
+  { id: "assoc", label: "Association" },
+  { id: "outreach", label: "Outreach" },
+  { id: "academics", label: "Academics" },
+  { id: "office", label: "Office" },
+  { id: "student", label: "Skilling" },
+];
+
+const guidelineCurrency = (value: number) => `\u20B9 ${value}`;
+
+const BudgetProposalGuidelines: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
+  const [activeSection, setActiveSection] = useState<GuidelineSectionId | null>(null);
+
+  const renderButton = (id: GuidelineSectionId, label: string) => (
+    <button
+      key={`${id}-${label}`}
+      className={`budgetTabButton ${activeSection === id ? "active" : ""}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        setActiveSection((current) => (current === id ? null : id));
+      }}
+      type="button"
+    >
+      {label}
+    </button>
+  );
+
+  const renderDepartmentChips = (id: Exclude<GuidelineSectionId, "skill" | "events" | "research">) => (
+    <div className={`budgetSectionCard ${activeSection === id ? "isVisible" : ""}`} onClick={(event) => event.stopPropagation()}>
+      <div className="budgetSectionCardInner">
+        <div className="budgetChipContainer">
+          {guidelineDeptData[id].map((item) => (
+            <div className="budgetChip" key={item}>{item}</div>
+          ))}
+        </div>
+        {id === "it" ? (
+          <div className="budgetNote">
+            Budget for IT Infrastructure should be a separate one since it has to be approved by the <b>Director - IT</b>.
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className={`budgetPage ${embedded ? "budgetPageEmbedded" : ""}`} onClick={() => setActiveSection(null)}>
+      <div className={`budgetCard ${embedded ? "budgetCardEmbedded" : ""}`}>
+        <div className="cardContent">
+          <div className="budgetHeader">Budget Proposal Guidelines</div>
+          <div className="budgetSectionTitleWrap">
+            <div className="budgetSectionTitle">Faculty / Staff</div>
+            <div className="budgetSectionLine" />
+          </div>
+          <div className="budgetTabRow">
+            {renderButton("skill", "Skilling")}
+            {renderButton("events", "Events")}
+            {renderButton("research", "Research")}
+          </div>
+          <div className={`budgetSectionCard ${activeSection === "skill" ? "isVisible" : ""}`} onClick={(event) => event.stopPropagation()}>
+            <div className="budgetSectionCardInner">
+              <div className="budgetTableWrap">
+                <table className="budgetEntryTable">
+                  <thead>
+                    <tr><th>Designation</th><th>Registration</th><th>Travel</th><th>Food</th><th>Accommodation</th><th>Total</th></tr>
+                  </thead>
+                  <tbody>
+                    {guidelineSkillingRows.map((row) => {
+                      const total = row.registration + row.travel + row.food + row.accommodation;
+                      return (
+                        <tr key={row.designation}>
+                          <td>{row.designation}</td>
+                          <td className="centerTd">{row.registration}</td>
+                          <td className="centerTd">{row.travel}</td>
+                          <td className="centerTd">{row.food}</td>
+                          <td className="centerTd">{row.accommodation}</td>
+                          <td className="totalValueCell">{guidelineCurrency(total)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="budgetNote">Conference registration fee should be included under <b>Skilling</b>.</div>
+            </div>
+          </div>
+          <div className={`budgetSectionCard ${activeSection === "events" ? "isVisible" : ""}`} onClick={(event) => event.stopPropagation()}>
+            <div className="budgetSectionCardInner">
+              <div className="budgetTableWrap">
+                <p>For Handling Courses</p>
+                <table className="budgetEntryTable">
+                  <thead><tr><th>Event Type</th><th>Budget</th></tr></thead>
+                  <tbody>
+                    <tr><td>Webinar</td><td className="centerTd">{guidelineCurrency(1500)}</td></tr>
+                    <tr><td>Guest Lecture</td><td className="centerTd">{guidelineCurrency(3000)}+ {guidelineCurrency(2000)} (Travel)</td></tr>
+                    <tr><td>Hands-on Training</td><td className="centerTd">{guidelineCurrency(3000)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="budgetNote">Budget indicated is applicable per programme conducted.</div>
+            </div>
+          </div>
+          <div className={`budgetSectionCard ${activeSection === "research" ? "isVisible" : ""}`} onClick={(event) => event.stopPropagation()}>
+            <div className="budgetSectionCardInner">
+              <div className="budgetTableWrap">
+                <table className="budgetEntryTable">
+                  <thead><tr><th>Category</th><th>Budget</th></tr></thead>
+                  <tbody>
+                    <tr><td>IPR Filing</td><td className="centerTd">{guidelineCurrency(2400)}</td></tr>
+                    <tr><td>Seed Fund</td><td className="centerTd" rowSpan={2}>{guidelineCurrency(10000)}</td></tr>
+                    <tr><td>Consumables</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="budgetNote">
+                <ul>
+                  <li>IPR filing charge cannot be claimed for mandatory publication.</li>
+                  <li>The combined budget for Seed Fund and Consumables is limited to {` ${guidelineCurrency(10000)}.`}</li>
+                  <li>Seed fund may be increased for deserving research projects with approval.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div className="budgetSpacer" />
+          <div className="budgetSectionTitleWrap">
+            <div className="budgetSectionTitle">Department</div>
+            <div className="budgetSectionLine" />
+          </div>
+          <div className="budgetTabRow">
+            {guidelineHeadButtons.slice(3).map((button) => renderButton(button.id, button.label))}
+          </div>
+          <div onClick={(event) => event.stopPropagation()}>
+            {renderDepartmentChips("it")}
+            {renderDepartmentChips("lab")}
+            {renderDepartmentChips("departmentEvents")}
+            {renderDepartmentChips("assoc")}
+            {renderDepartmentChips("outreach")}
+            {renderDepartmentChips("academics")}
+            {renderDepartmentChips("office")}
+            {renderDepartmentChips("student")}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 const Budget: React.FC = () => {
   const [alertConfig, setAlertConfig] = useState<{
@@ -588,6 +773,22 @@ const Budget: React.FC = () => {
   const [actionPopupOpen, setActionPopupOpen] = useState(false);
   const [actionType, setActionType] = useState<'return' | 'reject' | null>(null);
   const [actionComment, setActionComment] = useState('');
+  const [showGuidelines, setShowGuidelines] = useState(false);
+  const openGuidelines = () => setShowGuidelines(true);
+  const closeGuidelines = () => setShowGuidelines(false);
+
+  useEffect(() => {
+    if (!showGuidelines) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeGuidelines();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showGuidelines]);
 
   const getCurrentFY = () => {
     const now = new Date();
@@ -887,132 +1088,132 @@ const Budget: React.FC = () => {
       return;
     }
 
-  for (let i = 0; i < budgetLines.length; i++) {
-    const line = budgetLines[i];
-    
-    // Budget Head required
-    if (!line.budgetHead?.trim()) {
-      showAlert(`Budget Head is required for line ${i + 1}`, 'warning');
-      return;
-    }
-    
-    // Sub Head required
-    if (!line.subHead?.trim()) {
-      showAlert(`Sub Head is required for line ${i + 1}`, 'warning');
-      return;
-    }
-    
-    // Unit Amount required and positive
-    const unitAmount = Number(line.amount);
-    if (!line.amount || unitAmount <= 0) {
-      showAlert(`Valid Unit Amount > 0 is required for line ${i + 1}`, 'warning');
-      return;
-    }
-    // Quantity required and positive (blocks 0 qty)
-    const quantity = Number(line.qty);
-    if (!line.qty || quantity <= 0) {
-      showAlert(`Valid Quantity > 0 is required for line ${i + 1}`, 'warning');
-      return;
-    }
+    for (let i = 0; i < budgetLines.length; i++) {
+      const line = budgetLines[i];
 
-    // Description required
-    if (!line.description?.trim()) {
-      showAlert(`Description is required for line ${i + 1}`, 'warning');
-      return;
-    }
+      // Budget Head required
+      if (!line.budgetHead?.trim()) {
+        showAlert(`Budget Head is required for line ${i + 1}`, 'warning');
+        return;
+      }
 
-    // Month splitup must EXACTLY match unit_amount * quantity
-    const totalMonthAmount = Object.values(line.monthAmounts || {}).reduce(
-      (sum, val) => sum + (Number(val) || 0), 0
-    );
+      // Sub Head required
+      if (!line.subHead?.trim()) {
+        showAlert(`Sub Head is required for line ${i + 1}`, 'warning');
+        return;
+      }
 
-    const expectedTotal = unitAmount * quantity;
-    if (Math.abs(totalMonthAmount - expectedTotal) > 0.01) {
-      showAlert(
-        `Line ${i + 1}: Month total (₹${totalMonthAmount.toFixed(2)}) must equal Unit Amount × Qty (₹${expectedTotal.toFixed(2)})`,
-        'warning'
+      // Unit Amount required and positive
+      const unitAmount = Number(line.amount);
+      if (!line.amount || unitAmount <= 0) {
+        showAlert(`Valid Unit Amount > 0 is required for line ${i + 1}`, 'warning');
+        return;
+      }
+      // Quantity required and positive (blocks 0 qty)
+      const quantity = Number(line.qty);
+      if (!line.qty || quantity <= 0) {
+        showAlert(`Valid Quantity > 0 is required for line ${i + 1}`, 'warning');
+        return;
+      }
+
+      // Description required
+      if (!line.description?.trim()) {
+        showAlert(`Description is required for line ${i + 1}`, 'warning');
+        return;
+      }
+
+      // Month splitup must EXACTLY match unit_amount * quantity
+      const totalMonthAmount = Object.values(line.monthAmounts || {}).reduce(
+        (sum, val) => sum + (Number(val) || 0), 0
       );
+
+      const expectedTotal = unitAmount * quantity;
+      if (Math.abs(totalMonthAmount - expectedTotal) > 0.01) {
+        showAlert(
+          `Line ${i + 1}: Month total (₹${totalMonthAmount.toFixed(2)}) must equal Unit Amount × Qty (₹${expectedTotal.toFixed(2)})`,
+          'warning'
+        );
+        return;
+      }
+    }
+
+    // Rest of validation (applicant, beneficiary, tag, FY)...
+    if (!applicantName?.trim()) {
+      showAlert('Applicant Name is required', 'warning');
       return;
     }
-  }
 
-  // Rest of validation (applicant, beneficiary, tag, FY)...
-  if (!applicantName?.trim()) {
-    showAlert('Applicant Name is required', 'warning');
-    return;
-  }
+    // Beneficiary validation
+    const getBeneficiaryDisplayValue = () => {
+      if (beneficiaryType === 'Institution') return 'K.S.Rangasamy College of Technology';
+      if (['Faculty', 'Staff'].includes(beneficiaryType || '')) return beneficiaryValue?.trim();
+      return categoryItem?.trim() || beneficiaryValue?.trim();
+    };
 
-  // Beneficiary validation
-  const getBeneficiaryDisplayValue = () => {
-    if (beneficiaryType === 'Institution') return 'K.S.Rangasamy College of Technology';
-    if (['Faculty', 'Staff'].includes(beneficiaryType || '')) return beneficiaryValue?.trim();
-    return categoryItem?.trim() || beneficiaryValue?.trim();
-  };
+    if (!beneficiaryType?.trim()) {
+      showAlert('Beneficiary Type is required', 'warning');
+      return;
+    }
 
-  if (!beneficiaryType?.trim()) {
-    showAlert('Beneficiary Type is required', 'warning');
-    return;
-  }
+    const displayBeneficiaryValue = getBeneficiaryDisplayValue();
+    if (!displayBeneficiaryValue) {
+      showAlert('Beneficiary selection is required for the chosen type', 'warning');
+      return;
+    }
 
-  const displayBeneficiaryValue = getBeneficiaryDisplayValue();
-  if (!displayBeneficiaryValue) {
-    showAlert('Beneficiary selection is required for the chosen type', 'warning');
-    return;
-  }
+    // Tag mandatory
+    if (!selectedTag?.trim()) {
+      showAlert('Budget Tag is required', 'warning');
+      return;
+    }
 
-  // Tag mandatory
-  if (!selectedTag?.trim()) {
-    showAlert('Budget Tag is required', 'warning');
-    return;
-  }
+    // Fiscal year validation
+    const safeFY = String(explicitFiscalYear);
+    const fiscalYearInt = parseInt(safeFY.split("-")[0]);
+    if (isNaN(fiscalYearInt)) {
+      showAlert("Error: Invalid Fiscal Year calculated. Please refresh.", 'error');
+      return;
+    }
 
-  // Fiscal year validation
-  const safeFY = String(explicitFiscalYear);
-  const fiscalYearInt = parseInt(safeFY.split("-")[0]);
-  if (isNaN(fiscalYearInt)) {
-    showAlert("Error: Invalid Fiscal Year calculated. Please refresh.", 'error');
-    return;
-  }
+    const formattedLines = budgetLines.map((line) => ({
+      budget_head: line.budgetHead?.trim(),
+      sub_head: line.subHead?.trim(),
+      unit_amount: Number(line.amount),
+      quantity: Number(line.qty),  // Now guaranteed > 0
+      line_description: line.description?.trim(),
+      month_allocations: line.monthAmounts || {},
+    }));
 
-  const formattedLines = budgetLines.map((line) => ({
-    budget_head: line.budgetHead?.trim(),
-    sub_head: line.subHead?.trim(),
-    unit_amount: Number(line.amount),
-    quantity: Number(line.qty),  // Now guaranteed > 0
-    line_description: line.description?.trim(),
-    month_allocations: line.monthAmounts || {},
-  }));
-
-  const payload = {
-    request_date: date,
-    fiscal_year: fiscalYearInt,
-    employee_id: Number.isInteger(Number(applicantEmployeeId)) && Number(applicantEmployeeId) > 0
-      ? Number(applicantEmployeeId)
-      : undefined,
-    beneficiary_type: beneficiaryType?.trim(),
-    beneficiary_employee_id:
-      ['Faculty', 'Staff'].includes(beneficiaryType) &&
-        Number.isInteger(Number(beneficiaryEmployeeId)) &&
-        Number(beneficiaryEmployeeId) > 0
-        ? Number(beneficiaryEmployeeId)
+    const payload = {
+      request_date: date,
+      fiscal_year: fiscalYearInt,
+      employee_id: Number.isInteger(Number(applicantEmployeeId)) && Number(applicantEmployeeId) > 0
+        ? Number(applicantEmployeeId)
         : undefined,
-    beneficiary_value: displayBeneficiaryValue,
-    proposal_description: '',
-    applicant_name: applicantName?.trim(),
-    applicant_entity: applicantEntity?.trim() || null,
-    budget_tag: selectedTag?.trim(),
-    lines: formattedLines,
-  };
+      beneficiary_type: beneficiaryType?.trim(),
+      beneficiary_employee_id:
+        ['Faculty', 'Staff'].includes(beneficiaryType) &&
+          Number.isInteger(Number(beneficiaryEmployeeId)) &&
+          Number(beneficiaryEmployeeId) > 0
+          ? Number(beneficiaryEmployeeId)
+          : undefined,
+      beneficiary_value: displayBeneficiaryValue,
+      proposal_description: '',
+      applicant_name: applicantName?.trim(),
+      applicant_entity: applicantEntity?.trim() || null,
+      budget_tag: selectedTag?.trim(),
+      lines: formattedLines,
+    };
 
-  try {
-    setIsSubmitting(true);
-    const isPrivilegedReviewer = isAdminContextEdit && isEditMode;
-    const endpoint = isPrivilegedReviewer
-      ? `/adminbudget/${id}`
-      : (isEditMode ? `${budgetApiBase}/${id}` : budgetApiBase);
-    
-    const requestPayload = isPrivilegedReviewer
-      ? {
+    try {
+      setIsSubmitting(true);
+      const isPrivilegedReviewer = isAdminContextEdit && isEditMode;
+      const endpoint = isPrivilegedReviewer
+        ? `/adminbudget/${id}`
+        : (isEditMode ? `${budgetApiBase}/${id}` : budgetApiBase);
+
+      const requestPayload = isPrivilegedReviewer
+        ? {
           ...payload,
           lines: formattedLines.map((line, lineIndex) => ({
             line_id: budgetLines[lineIndex]?.lineId,
@@ -1024,55 +1225,55 @@ const Budget: React.FC = () => {
             month_allocations: line.month_allocations || {},
           })),
         }
-      : payload;
-    
-    const httpMethod = isEditMode ? 'put' : 'post';
+        : payload;
 
-    const result = await (authenticityUtility as any)[httpMethod](endpoint, requestPayload);
+      const httpMethod = isEditMode ? 'put' : 'post';
 
-    if (!result.success) {
-      throw new Error(result.message || 'Submission failed on server');
-    }
+      const result = await (authenticityUtility as any)[httpMethod](endpoint, requestPayload);
 
-    showAlert(
-      isPrivilegedReviewer
-        ? 'Budget updated successfully!'
-        : isEditMode
-        ? `Budget updated successfully!`
-        : (
-            <>
-              Budget submitted successfully!
-              <br />
-              Reference No.: <strong>{result.data.proposalRef}</strong>
-            </>
-          ),
-      'success',
-      undefined,
-      () => {
-        closeAlert();
-        if (!isEditMode) {
-          // Reset form
-          setBudgetLines([{
-            budgetHead: '', subHead: '', amount: '', qty: '1', monthAmounts: { ...EMPTY_MONTHS }, description: '',
-          }]);
-          setExpandedRows([0]);
-          // ... rest of reset code
-        }
-        if (isPrivilegedReviewer) {
-          navigate("/admin/budget");
-        } else {
-          navigate("/budgetcard");
-        }
+      if (!result.success) {
+        throw new Error(result.message || 'Submission failed on server');
       }
-    );
-  } catch (error: unknown) {
-    const err = error as { response?: { data?: { message?: string } }; message?: string };
-    console.error('Submit error:', err);
-    showAlert(`Failed to submit: ${err.response?.data?.message || err.message}`, 'error');
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+
+      showAlert(
+        isPrivilegedReviewer
+          ? 'Budget updated successfully!'
+          : isEditMode
+            ? `Budget updated successfully!`
+            : (
+              <>
+                Budget submitted successfully!
+                <br />
+                Reference No.: <strong>{result.data.proposalRef}</strong>
+              </>
+            ),
+        'success',
+        undefined,
+        () => {
+          closeAlert();
+          if (!isEditMode) {
+            // Reset form
+            setBudgetLines([{
+              budgetHead: '', subHead: '', amount: '', qty: '1', monthAmounts: { ...EMPTY_MONTHS }, description: '',
+            }]);
+            setExpandedRows([0]);
+            // ... rest of reset code
+          }
+          if (isPrivilegedReviewer) {
+            navigate("/admin/budget");
+          } else {
+            navigate("/budgetcard");
+          }
+        }
+      );
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
+      console.error('Submit error:', err);
+      showAlert(`Failed to submit: ${err.response?.data?.message || err.message}`, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
 
 
@@ -1529,6 +1730,16 @@ const Budget: React.FC = () => {
 
   return (
     <div className="budgetPage">
+      <div className="budgetGuidelinesTrigger">
+        <button
+          type="button"
+          className="budgetGuidelinesButton"
+          onClick={openGuidelines}
+          aria-label="Open budget proposal guidelines"
+        >
+          <Bell size={20} />
+        </button>
+      </div>
 
       <fieldset disabled={isViewMode} style={{ border: 0, padding: 0, margin: 0 }}>
 
@@ -2769,7 +2980,7 @@ const Budget: React.FC = () => {
       </fieldset>
 
       {/* ADMIN ACTION BUTTONS - Only for admin=true */}
-      {new URLSearchParams(location.search).get('admin') === 'true'   &&  !isSuperAdmin(user) && !isEditMode && (
+      {new URLSearchParams(location.search).get('admin') === 'true' && !isSuperAdmin(user) && isEditMode && (
         <div
           className="budget-admin-actions"
           style={{
@@ -3020,6 +3231,23 @@ const Budget: React.FC = () => {
               >
                 Submit
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showGuidelines && (
+        <div className="budgetGuidelinesOverlay" onClick={closeGuidelines}>
+          <div className="budgetGuidelinesPanel" onClick={(event) => event.stopPropagation()}>
+            <div className="budgetGuidelinesPanelInner">
+              <button
+                type="button"
+                className="budgetGuidelinesClose"
+                aria-label="Close budget proposal guidelines"
+                onClick={closeGuidelines}
+              >
+                <XCircle size={20} />
+              </button>
+              <BudgetProposalGuidelines embedded />
             </div>
           </div>
         </div>

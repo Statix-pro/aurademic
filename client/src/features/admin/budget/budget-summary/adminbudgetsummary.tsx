@@ -13,15 +13,17 @@ type Option = {
 
 type AdminProposalGroup = {
   id: number;
-  proposalRef: string;
-  status: string;
   beneficiaryType: string;
-  beneficiaryValue?: string;
   departmentName?: string;
-  createdAt: string;
-  applicantName: string;
+  departmentId?: number | null;
+  beneficiaryEntityId?: number | null;
+  beneficiaryLabel?: string;
   proposedAmount: number;
   approvedAmount: number;
+  initialAmount: number;
+  additionalAmount: number;
+  expenditureAmount: number;
+  balanceAmount: number;
 };
 
 type BeneficiarySummaryRow = {
@@ -37,15 +39,21 @@ type BeneficiarySummaryRow = {
   balance: number;
 };
 
-const DEFAULT_APPROVED_STATUSES = ['principal_approved', 'completed'];
-
 const BENEFICIARY_TYPES = ['Department', 'Centre', 'Cell', 'Club', 'Professional Body'];
-const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
-  Department: 'DEPARTMENT',
-  Centre: 'CENTRE',
-  Cell: 'CELL',
-  Club: 'CLUB',
-  'Professional Body': 'PROFESSIONAL_BODY',
+const ENTITY_TYPE_TO_LABEL: Record<string, string> = {
+  DEPARTMENT: 'Department',
+  CENTRE: 'Centre',
+  CELL: 'Cell',
+  CLUB: 'Club',
+  PROFESSIONAL_BODY: 'Professional Body',
+  PROF_BODY: 'Professional Body',
+};
+
+type MasterBeneficiary = {
+  key: string;
+  beneficiaryLabel: string;
+  beneficiaryTypeKey: string;
+  beneficiaryTypeLabel: string;
 };
 
 const getCurrentFiscalYearOption = (): Option => {
@@ -62,7 +70,7 @@ const AdminBudgetSummary: React.FC = () => {
   const [financialYear, setFinancialYear] = useState<Option | null>(getCurrentFiscalYearOption());
   const [searchText, setSearchText] = useState('');
   const [proposals, setProposals] = useState<AdminProposalGroup[]>([]);
-  const [orgUnitsByType, setOrgUnitsByType] = useState<Record<string, string[]>>({});
+  const [masterBeneficiaries, setMasterBeneficiaries] = useState<MasterBeneficiary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isAllExpanded, setIsAllExpanded] = useState(true);
@@ -114,14 +122,7 @@ const AdminBudgetSummary: React.FC = () => {
     return 'admin';
   }, [user]);
 
-  const canAccessSummary =
-    roleKey === 'super_admin' ||
-    roleKey === 'principal' ||
-    roleKey === 'admin' ||
-    roleKey === 'dof' ||
-    roleKey === 'hod' ||
-    roleKey === 'coordinator' ||
-    roleKey === 'ithead';
+  const canAccessSummary = roleKey === 'super_admin' || roleKey === 'dof';
 
   const userRoleLabel = useMemo(() => {
     switch (roleKey) {
@@ -151,32 +152,68 @@ const AdminBudgetSummary: React.FC = () => {
     }));
   }, []);
 
-  const parseDateSafe = (value?: string) => {
-    if (!value) return null;
-    const direct = new Date(value);
-    if (!Number.isNaN(direct.getTime())) return direct;
-    const normalized = String(value).replace(' ', 'T');
-    const fallback = new Date(normalized);
-    if (!Number.isNaN(fallback.getTime())) return fallback;
-    return null;
-  };
-
-  const getInitialCutoffForFY = (fy?: string) => {
-    if (!fy) return null;
-    const fyStart = Number.parseInt(String(fy).split('-')[0], 10);
-    if (!Number.isInteger(fyStart)) return null;
-    return new Date(fyStart, 1, 1, 23, 59, 59, 999);
-  };
-
-  const isInitialBudgetProposal = (createdAt?: string, fy?: string) => {
-    const proposalDate = parseDateSafe(createdAt);
-    const cutoff = getInitialCutoffForFY(fy);
-    if (!proposalDate) return false;
-    if (!cutoff) return true;
-    return proposalDate.getTime() <= cutoff.getTime();
-  };
-
   const formatINR = (value: number) => Number(value || 0).toLocaleString('en-IN');
+
+  useEffect(() => {
+    const fetchMasterBeneficiaries = async () => {
+      if (!canAccessSummary) {
+        setMasterBeneficiaries([]);
+        return;
+      }
+
+      try {
+        const response: any = await authenticityUtility.get('/adminbudget/org-units');
+        const grouped = response?.data?.grouped;
+        const allRows = Array.isArray(response?.data?.all) ? response.data.all : [];
+        const sourceRows =
+          grouped && typeof grouped === 'object'
+            ? Object.values(grouped).flatMap((rows: any) => (Array.isArray(rows) ? rows : []))
+            : allRows;
+
+        const rows = Array.isArray(sourceRows) ? sourceRows : [];
+        const next: MasterBeneficiary[] = [];
+        const seen = new Set<string>();
+
+        rows.forEach((unit: any) => {
+          const rawType = String(unit?.type_code || '').trim().toUpperCase();
+          const mappedTypeLabel = ENTITY_TYPE_TO_LABEL[rawType];
+          if (!mappedTypeLabel || !BENEFICIARY_TYPES.includes(mappedTypeLabel)) return;
+
+          const id = Number(unit?.id);
+          if (!Number.isInteger(id) || id <= 0) return;
+
+          const label = String(unit?.name || '').trim();
+          if (!label) return;
+
+          const typeKey = mappedTypeLabel.toLowerCase();
+          const key = `${typeKey}::${id}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+
+          next.push({
+            key,
+            beneficiaryLabel: label,
+            beneficiaryTypeKey: typeKey,
+            beneficiaryTypeLabel: mappedTypeLabel,
+          });
+        });
+
+        next.sort((a, b) => {
+          const aType = BENEFICIARY_TYPES.indexOf(a.beneficiaryTypeLabel);
+          const bType = BENEFICIARY_TYPES.indexOf(b.beneficiaryTypeLabel);
+          if (aType !== bType) return aType - bType;
+          return a.beneficiaryLabel.localeCompare(b.beneficiaryLabel);
+        });
+
+        setMasterBeneficiaries(next);
+      } catch (fetchError) {
+        console.error('Failed to fetch master beneficiary units', fetchError);
+        setMasterBeneficiaries([]);
+      }
+    };
+
+    fetchMasterBeneficiaries();
+  }, [canAccessSummary]);
 
   useEffect(() => {
     const fetchSummaryData = async () => {
@@ -190,41 +227,15 @@ const AdminBudgetSummary: React.FC = () => {
         setError('');
 
         const fiscalYearNum = Number.parseInt(financialYear.value.split('-')[0], 10);
-        const endpoint = '/adminbudget/admin';
-        const pageSize = 100;
-        const fullList: any[] = [];
-        let page = 1;
+        const response: any = await authenticityUtility.get('/adminbudget/annual-summary', {
+          params: { fiscalYear: fiscalYearNum, scope: roleKey, q: '' },
+        });
 
-        while (true) {
-          const response: any = await authenticityUtility.get(endpoint, {
-            params: { page, limit: pageSize, status: '', fiscalYear: fiscalYearNum, scope: roleKey },
-          });
-
-          if (response?.success === false) {
-            throw new Error(response?.message || 'Failed to fetch admin budgets');
-          }
-
-          const pageRows = Array.isArray(response?.data) ? response.data : [];
-          if (pageRows.length === 0) {
-            break;
-          }
-
-          fullList.push(...pageRows);
-
-          const pagination = response?.pagination || {};
-          const totalPages = Number(pagination.pages || pagination.totalPages || pagination.total_pages || 0);
-          if (Number.isInteger(totalPages) && totalPages > 0) {
-            if (page >= totalPages) break;
-            page += 1;
-            continue;
-          }
-
-          if (pageRows.length < pageSize) {
-            break;
-          }
-
-          page += 1;
+        if (response?.success === false) {
+          throw new Error(response?.message || 'Failed to fetch annual summary rows');
         }
+
+        const fullList = Array.isArray(response?.data) ? response.data : [];
 
         if (!fullList.length) {
           setProposals([]);
@@ -232,24 +243,28 @@ const AdminBudgetSummary: React.FC = () => {
         }
 
         const fullProposals = fullList.map((item: any) => {
-          const proposedAmount = Number.parseFloat(item.total_amount ?? 0);
+          const proposedAmount = Number.parseFloat(item.proposed_total_amount ?? 0);
           const approvedAmount = Number.parseFloat(item.approved_total_amount ?? 0);
+          const initialAmount = Number.parseFloat(item.initial_total_amount ?? 0);
+          const additionalAmount = Number.parseFloat(item.additional_total_amount ?? 0);
+          const expenditureAmount = Number.parseFloat(item.expenditure_total_amount ?? 0);
+          const balanceAmount = Number.parseFloat(item.balance_total_amount ?? (initialAmount + additionalAmount - expenditureAmount));
 
           return {
             id: Number(item.id),
-            proposalRef: item.proposal_ref || '',
-            status: item.status || '',
             beneficiaryType: item.beneficiary_type || '',
-            beneficiaryValue: item.beneficiary_value || '',
             departmentName: item.department || '',
-            createdAt: item.created_date || item.created_at || '',
-            applicantName:
-              item.applicant_name ||
-              item.user_name ||
-              item.user_email ||
-              '',
+            departmentId: Number.isInteger(Number(item.department_id)) ? Number(item.department_id) : null,
+            beneficiaryEntityId: Number.isInteger(Number(item.beneficiary_entity_id))
+              ? Number(item.beneficiary_entity_id)
+              : null,
+            beneficiaryLabel: item.beneficiary_label || '',
             proposedAmount: Number.isFinite(proposedAmount) ? proposedAmount : 0,
             approvedAmount: Number.isFinite(approvedAmount) ? approvedAmount : 0,
+            initialAmount: Number.isFinite(initialAmount) ? initialAmount : 0,
+            additionalAmount: Number.isFinite(additionalAmount) ? additionalAmount : 0,
+            expenditureAmount: Number.isFinite(expenditureAmount) ? expenditureAmount : 0,
+            balanceAmount: Number.isFinite(balanceAmount) ? balanceAmount : 0,
           } as AdminProposalGroup;
         });
         setProposals(fullProposals);
@@ -265,93 +280,8 @@ const AdminBudgetSummary: React.FC = () => {
     fetchSummaryData();
   }, [canAccessSummary, financialYear?.value, roleKey]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const normalizeText = (value: string | null | undefined): string =>
-      String(value || '').trim();
-
-    const loadOrgUnits = async () => {
-      if (!canAccessSummary) {
-        if (!cancelled) {
-          setOrgUnitsByType({});
-        }
-        return;
-      }
-
-      const toNames = (rows: any[]) =>
-        rows
-          .map((row: any) => normalizeText(row?.name))
-          .filter(Boolean);
-
-      const nextOptions: Record<string, string[]> = {};
-
-      try {
-        const json = await authenticityUtility.get('/adminbudget/org-units');
-        const grouped = (json as any)?.data?.grouped;
-
-        if (grouped && typeof grouped === 'object') {
-          Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).forEach(([beneficiaryKey, apiType]) => {
-            const rows = Array.isArray((grouped as Record<string, any[]>)[apiType])
-              ? (grouped as Record<string, any[]>)[apiType]
-              : [];
-            nextOptions[beneficiaryKey] = toNames(rows);
-          });
-        } else {
-          throw new Error('Grouped org-units payload unavailable');
-        }
-      } catch (bulkError) {
-        console.error('Failed to fetch bulk org units, falling back to per-type calls:', bulkError);
-
-        for (const [beneficiaryKey, apiType] of Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE)) {
-          try {
-            const json = await authenticityUtility.get(`/adminbudget/org-units/${apiType}`);
-            const rows = Array.isArray((json as any)?.data) ? (json as any).data : [];
-            nextOptions[beneficiaryKey] = toNames(rows);
-          } catch (error) {
-            console.error(`Failed to fetch options for ${beneficiaryKey}:`, error);
-            nextOptions[beneficiaryKey] = [];
-          }
-        }
-      }
-
-      if (!cancelled) {
-        setOrgUnitsByType(nextOptions);
-      }
-    };
-
-    loadOrgUnits();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [canAccessSummary]);
-
-  const allowedStatuses = useMemo(() => {
-    if (roleKey === 'hod' || roleKey === 'coordinator') {
-      return ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed'];
-    }
-    if (roleKey === 'ithead') {
-      return ['ithead_approved', 'dof_approved', 'principal_approved', 'completed'];
-    }
-    if (roleKey === 'dof') {
-      return ['dof_approved', 'principal_approved', 'completed'];
-    }
-    return DEFAULT_APPROVED_STATUSES;
-  }, [roleKey]);
-
-  const statusKey = (value?: string) => String(value || '').toLowerCase();
-  const isRejectedOrReturnedOrArchived = (status: string) =>
-    ['rejected', 'returned', 'archived', 'archive'].some((token) => status.includes(token));
-
-  const approvedProposals = useMemo(() => {
-    return proposals.filter((proposal) => allowedStatuses.includes(statusKey(proposal.status)));
-  }, [allowedStatuses, proposals]);
-
-  const proposedProposals = useMemo(
-    () => proposals.filter((proposal) => !isRejectedOrReturnedOrArchived(statusKey(proposal.status))),
-    [proposals]
-  );
+  const approvedProposals = proposals;
+  const proposedProposals = proposals;
 
   const normalizeText = (value?: string) => String(value || '').trim();
   const titleCase = (value: string) => {
@@ -364,33 +294,15 @@ const AdminBudgetSummary: React.FC = () => {
       .join(' ');
   };
 
-  const orgUnitLabelMap = useMemo(() => {
-    const labelMap = new Map<string, string>();
-    for (const [type, names] of Object.entries(orgUnitsByType)) {
-      const typeKey = normalizeText(type).toLowerCase();
-      for (const name of Array.isArray(names) ? names : []) {
-        const normalizedName = normalizeText(name);
-        if (!normalizedName) continue;
-        labelMap.set(`${typeKey}::${normalizedName.toLowerCase()}`, normalizedName);
-      }
-    }
-    return labelMap;
-  }, [orgUnitsByType]);
-
   const beneficiarySummaryRows = useMemo(() => {
     const summaryMap: Record<string, BeneficiarySummaryRow> = {};
     const query = normalizeText(searchText).toLowerCase();
-    const isMetadataSearchMatch = (label: string) => !query || normalizeText(label).toLowerCase().includes(query);
     const isProposalSearchMatch = (proposal: AdminProposalGroup, label: string) => {
       if (!query) return true;
-      const proposalRef = normalizeText(proposal.proposalRef).toLowerCase();
-      const applicantName = normalizeText(proposal.applicantName).toLowerCase();
       const proposalId = String(proposal?.id ?? '').toLowerCase();
       const beneficiaryLabel = normalizeText(label).toLowerCase();
       return (
-        proposalRef.includes(query)
-        || applicantName.includes(query)
-        || proposalId.includes(query)
+        proposalId.includes(query)
         || beneficiaryLabel.includes(query)
       );
     };
@@ -412,65 +324,63 @@ const AdminBudgetSummary: React.FC = () => {
       }
     };
 
-    // Seed every known org-unit so entities with no requests still appear as zero rows.
-    Object.entries(orgUnitsByType).forEach(([typeLabel, names]) => {
-      const normalizedTypeLabel = normalizeText(typeLabel) || 'Unknown';
-      const typeKey = normalizedTypeLabel.toLowerCase();
-
-      (Array.isArray(names) ? names : []).forEach((name) => {
-        const normalizedName = normalizeText(name);
-        if (!normalizedName) return;
-        if (!isMetadataSearchMatch(normalizedName)) return;
-        const key = `${typeKey}::${normalizedName.toLowerCase()}`;
-        ensureRow(key, normalizedName, typeKey, normalizedTypeLabel);
-      });
-    });
-
     const resolveBeneficiaryMeta = (proposal: AdminProposalGroup) => {
       const proposalType = normalizeText(proposal.beneficiaryType).toLowerCase();
       const isFacultyOrStaff = proposalType === 'faculty' || proposalType === 'staff';
-      const rawType = isFacultyOrStaff ? 'Department' : normalizeText(proposal.beneficiaryType);
-      const rawName = isFacultyOrStaff
-        ? normalizeText(proposal.departmentName) || normalizeText(proposal.beneficiaryValue)
-        : normalizeText(proposal.beneficiaryValue);
-      const typeKey = (rawType || 'Unknown').toLowerCase();
-      const typeLabel = rawType || 'Unknown';
-      const normalizedName = rawName.toLowerCase();
-      const key = rawName ? `${typeKey}::${normalizedName}` : `${typeKey}::__unknown__`;
-      const labelFromMetadata = rawName ? orgUnitLabelMap.get(`${typeKey}::${normalizedName}`) : null;
-      const fallbackLabel = rawName || `Unknown ${titleCase(typeLabel)}`;
-      const label = labelFromMetadata || fallbackLabel;
+      const rawType = normalizeText(proposal.beneficiaryType);
+      const typeLabel = isFacultyOrStaff || proposalType === 'department'
+        ? 'Department'
+        : (rawType ? titleCase(rawType) : 'Unknown');
+      const typeKey = typeLabel.toLowerCase();
+
+      const beneficiaryId = isFacultyOrStaff || typeKey === 'department'
+        ? Number(proposal.departmentId || 0)
+        : Number(proposal.beneficiaryEntityId || 0);
+
+      const label = normalizeText(proposal.beneficiaryLabel)
+        || (isFacultyOrStaff
+          ? normalizeText(proposal.departmentName)
+          : '')
+        || `Unknown ${titleCase(typeLabel)}`;
+
+      const key = beneficiaryId > 0
+        ? `${typeKey}::${beneficiaryId}`
+        : `${typeKey}::${label.toLowerCase()}`;
 
       return { key, typeKey, typeLabel, label };
     };
+
+    masterBeneficiaries.forEach((master) => {
+      const labelMatch = !query || master.beneficiaryLabel.toLowerCase().includes(query);
+      if (!labelMatch) return;
+      ensureRow(
+        master.key,
+        master.beneficiaryLabel,
+        master.beneficiaryTypeKey,
+        master.beneficiaryTypeLabel
+      );
+    });
 
     proposedProposals.forEach((proposal) => {
       const { key, typeKey, typeLabel, label } = resolveBeneficiaryMeta(proposal);
       if (!isProposalSearchMatch(proposal, label)) return;
       ensureRow(key, label, typeKey, typeLabel);
       summaryMap[key].proposed += Number(proposal.proposedAmount || 0);
+      summaryMap[key].initial += Number(proposal.initialAmount || 0);
+      summaryMap[key].additional += Number(proposal.additionalAmount || 0);
+      summaryMap[key].expenditure += Number(proposal.expenditureAmount || 0);
+      summaryMap[key].balance += Number(proposal.balanceAmount || 0);
     });
 
     approvedProposals.forEach((proposal) => {
       const { key, typeKey, typeLabel, label } = resolveBeneficiaryMeta(proposal);
       if (!isProposalSearchMatch(proposal, label)) return;
       ensureRow(key, label, typeKey, typeLabel);
-
-      const isInitial = isInitialBudgetProposal(proposal.createdAt, financialYear?.value || '');
       const approvedAmount = Number(proposal.approvedAmount || 0);
       summaryMap[key].approved += approvedAmount;
-      if (isInitial) {
-        summaryMap[key].initial += approvedAmount;
-      } else {
-        summaryMap[key].additional += approvedAmount;
-      }
     });
-
-    return Object.values(summaryMap).map((row) => ({
-      ...row,
-      balance: row.initial + row.additional - row.expenditure,
-    }));
-  }, [approvedProposals, financialYear?.value, orgUnitLabelMap, orgUnitsByType, proposedProposals, searchText]);
+    return Object.values(summaryMap);
+  }, [approvedProposals, proposedProposals, searchText, masterBeneficiaries]);
 
   const summaryTotals = useMemo(
     () =>
@@ -497,20 +407,19 @@ const AdminBudgetSummary: React.FC = () => {
       }
       grouped.get(typeLabel)!.push(row);
     });
-    const preferredOrder = BENEFICIARY_TYPES.map((type) => type.toLowerCase());
-    return [...grouped.entries()]
+    const preferredTypes = BENEFICIARY_TYPES.map((type) => ({
+      type,
+      rows: (grouped.get(type) || []).sort((a, b) => a.beneficiaryLabel.localeCompare(b.beneficiaryLabel)),
+    }));
+    const remainingTypes = [...grouped.entries()]
+      .filter(([type]) => !BENEFICIARY_TYPES.includes(type))
       .map(([type, rows]) => ({
         type,
         rows: rows.sort((a, b) => a.beneficiaryLabel.localeCompare(b.beneficiaryLabel)),
       }))
-      .sort((a, b) => {
-        const aIdx = preferredOrder.indexOf(a.type.toLowerCase());
-        const bIdx = preferredOrder.indexOf(b.type.toLowerCase());
-        const aRank = aIdx === -1 ? Number.MAX_SAFE_INTEGER : aIdx;
-        const bRank = bIdx === -1 ? Number.MAX_SAFE_INTEGER : bIdx;
-        if (aRank !== bRank) return aRank - bRank;
-        return a.type.localeCompare(b.type);
-      });
+      .sort((a, b) => a.type.localeCompare(b.type));
+
+    return [...preferredTypes, ...remainingTypes];
   }, [beneficiarySummaryRows]);
 
   useEffect(() => {

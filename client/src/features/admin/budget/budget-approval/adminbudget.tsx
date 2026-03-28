@@ -472,6 +472,10 @@ const AdminBudget: React.FC = () => {
     fetchKpiStats();
   }, [fetchDashboard, fetchKpiStats]);
 
+  const refreshBudgetData = useCallback(async () => {
+    await Promise.allSettled([fetchDashboard(), fetchKpiStats()]);
+  }, [fetchDashboard, fetchKpiStats]);
+
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     if (deletePopupOpen && deleteCountdown > 0) {
@@ -536,7 +540,7 @@ const AdminBudget: React.FC = () => {
           });
 
           if (response?.success || response?.data?.success) {
-            fetchDashboard();
+            await refreshBudgetData();
             return;
           }
           showAlert(response?.message || "Failed to approve", "error");
@@ -574,7 +578,7 @@ const AdminBudget: React.FC = () => {
           const response: any = await authenticityUtility.patch(`/adminbudget/${id}/archive-toggle`, {});
 
           if (response?.success || response?.data?.success) {
-            fetchDashboard();
+            await refreshBudgetData();
           } else {
             setArchivingIds((prev) => {
               const next = new Set(prev);
@@ -603,7 +607,7 @@ const AdminBudget: React.FC = () => {
             next.delete(id);
             return next;
           });
-          fetchDashboard();
+          refreshBudgetData();
         }, ARCHIVE_TRANSITION_MS);
       },
       true,
@@ -634,7 +638,7 @@ const AdminBudget: React.FC = () => {
       if (response?.success || response?.data?.success) {
         showAlert(`${actionType === "return" ? "Returned" : "Rejected"} successfully`, "success");
         closeActionPopup();
-        fetchDashboard();
+        await refreshBudgetData();
         return;
       }
       showAlert(
@@ -666,7 +670,7 @@ const AdminBudget: React.FC = () => {
       if (response?.success || response?.data?.success) {
         showAlert("Budget proposal deleted successfully", "success");
         closeDeletePopup();
-        fetchDashboard();
+        await refreshBudgetData();
         return;
       }
       showAlert(
@@ -1457,6 +1461,12 @@ const AdminBudget: React.FC = () => {
                       <div className="adminbudget-cards-container">
                         {currentItems.map((item) => {
                           const canProcessCurrentStage = canProcessStage(item.current_stage);
+                          const normalizedStatus = (item.status || "").toLowerCase();
+                          const isArchivedStatus = ["archived", "archive"].some((token) => normalizedStatus.includes(token));
+                          const isRejectedStatus = normalizedStatus.includes("rejected");
+                          const isReturnedStatus = normalizedStatus.includes("returned");
+                          const isCompletedStatus = normalizedStatus.includes("completed");
+                          const isActionLocked = isArchivedStatus || isRejectedStatus || isReturnedStatus || isCompletedStatus;
                           const hasApprovedOverride = Number(item.has_approved_override ?? 0) > 0;
                           const isApprovedForDisplay = hasApprovedOverride || getStatusCategory(item) === "approved";
                           const displayAmountLabel = isApprovedForDisplay ? "Approved" : "Proposed";
@@ -1533,6 +1543,7 @@ const AdminBudget: React.FC = () => {
                                         e.stopPropagation();
                                         navigate(`/budget/${item.id}/edit?admin=true`);
                                       }}
+                                      disabled={isActionLocked}
                                     >
                                       <Edit2 size={16} />
                                     </button>
@@ -1562,8 +1573,7 @@ const AdminBudget: React.FC = () => {
                                               onApprove(item.id, item.current_stage);
                                             }}
                                             disabled={
-                                              item.status.toLowerCase().includes("completed") ||
-                                              item.status.toLowerCase().includes("archived") ||
+                                              isActionLocked ||
                                               !canProcessCurrentStage
                                             }
                                           >
@@ -1578,9 +1588,7 @@ const AdminBudget: React.FC = () => {
                                               openActionPopup("return", item.id, item.proposal_ref, item.current_stage);
                                             }}
                                             disabled={
-                                              ["completed", "rejected", "archived", "archive"].some((token) =>
-                                                item.status.toLowerCase().includes(token)
-                                              ) || !canProcessCurrentStage
+                                              isActionLocked || !canProcessCurrentStage
                                             }
                                           >
                                             <RotateCcw size={18} />
@@ -1594,9 +1602,7 @@ const AdminBudget: React.FC = () => {
                                               openActionPopup("reject", item.id, item.proposal_ref, item.current_stage);
                                             }}
                                             disabled={
-                                              item.status.toLowerCase().includes("rejected") ||
-                                              item.status.toLowerCase().includes("archived") ||
-                                              !canProcessCurrentStage
+                                              isActionLocked || !canProcessCurrentStage
                                             }
                                           >
                                             <XCircle size={18} />
@@ -1613,9 +1619,7 @@ const AdminBudget: React.FC = () => {
                                               e.stopPropagation();
                                               openActionPopup("return", item.id, item.proposal_ref, item.current_stage);
                                             }}
-                                            disabled={["completed", "rejected", "archived", "archive"].some((token) =>
-                                              item.status.toLowerCase().includes(token)
-                                            )}
+                                            disabled={isActionLocked}
                                           >
                                             <RotateCcw size={18} />
                                           </button>
@@ -1635,9 +1639,7 @@ const AdminBudget: React.FC = () => {
                                       <button
                                         className="adminbudget-action-btn adminbudget-action-btn--archive"
                                         title={
-                                          ["archived", "archive"].some((token) =>
-                                            item.status.toLowerCase().includes(token)
-                                          )
+                                          isArchivedStatus
                                             ? "Unarchive"
                                             : "Archive"
                                         }
@@ -1645,7 +1647,7 @@ const AdminBudget: React.FC = () => {
                                           e.stopPropagation();
                                           onArchiveToggle(item);
                                         }}
-                                        disabled={archivingIds.has(item.id)}
+                                        disabled={archivingIds.has(item.id) || (!isArchivedStatus && (isCompletedStatus || isRejectedStatus || isReturnedStatus))}
                                       >
                                         <Archive size={18} />
                                       </button>

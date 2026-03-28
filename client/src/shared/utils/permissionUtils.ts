@@ -91,3 +91,41 @@ export const canAccessBudgetApproval = (user?: User | null) => {
     'budget.workflow.principal',
   ]);
 };
+
+const getWorkflowPermissionPrefix = (moduleKey: string) => {
+  const normalizedModule = String(moduleKey || '').trim().toLowerCase();
+  return normalizedModule ? `${normalizedModule}.workflow.` : '';
+};
+
+export const getWorkflowPermissionsForModule = (
+  user: User | null | undefined,
+  moduleKey: string
+) => {
+  const workflowPrefix = getWorkflowPermissionPrefix(moduleKey);
+
+  if (!workflowPrefix) {
+    return [];
+  }
+
+  return normalizePermissionKeys(user).filter((permissionKey) =>
+    permissionKey.startsWith(workflowPrefix)
+  );
+};
+
+export const canAccessModuleWorkflow = (
+  user: User | null | undefined,
+  moduleKey: string
+) => {
+  if (!user) {
+    return false;
+  }
+
+  if (isSuperAdmin(user)) {
+    return true;
+  }
+
+  return getWorkflowPermissionsForModule(user, moduleKey).length > 0;
+};
+
+export const canAccessFinanceWorkflow = (user?: User | null) =>
+  canAccessModuleWorkflow(user, 'finance')

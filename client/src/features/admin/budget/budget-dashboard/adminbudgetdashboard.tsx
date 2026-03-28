@@ -136,6 +136,8 @@ const AdminBudgetDashboard: React.FC = () => {
     }
   }, [roleKey]);
 
+  const canAccessBeneficiarySummary = roleKey === 'super_admin' || roleKey === 'dof';
+
   const financialYearOptions: Option[] = useMemo(() => {
     const currentOption = getCurrentFiscalYearOption();
     const currentStart = parseInt(currentOption.value.split('-')[0], 10);
@@ -231,6 +233,9 @@ const AdminBudgetDashboard: React.FC = () => {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '') || 'unknown'}`;
+  const toggleBudgetHead = (budgetHead: string) => {
+    setExpandedHead((prev) => (prev === budgetHead ? null : budgetHead));
+  };
 
   const consolidatedTotals = useMemo(
     () =>
@@ -254,27 +259,35 @@ const AdminBudgetDashboard: React.FC = () => {
     }
   }, [detailsByHead, expandedHead]);
 
+  useEffect(() => {
+    if (!canAccessBeneficiarySummary && activeTab === 'beneficiary-summary') {
+      setActiveTab('budget-head');
+    }
+  }, [canAccessBeneficiarySummary, activeTab]);
+
   return (
     <div className="adminbudgetdashboard-page">
       <div className="adminbudgetdashboard-container">
-        <div className="adminbudgetdashboard-tabs-wrap">
-          <div className="category-toggle-container adminbudgetdashboard-tab-toggle">
-            <button
-              type="button"
-              className={activeTab === 'budget-head' ? 'active' : ''}
-              onClick={() => setActiveTab('budget-head')}
-            >
-              Budget Head
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'beneficiary-summary' ? 'active' : ''}
-              onClick={() => setActiveTab('beneficiary-summary')}
-            >
-              Beneficiary Summary
-            </button>
+        {canAccessBeneficiarySummary && (
+          <div className="adminbudgetdashboard-tabs-wrap">
+            <div className="category-toggle-container adminbudgetdashboard-tab-toggle">
+              <button
+                type="button"
+                className={activeTab === 'budget-head' ? 'active' : ''}
+                onClick={() => setActiveTab('budget-head')}
+              >
+                Budget Head
+              </button>
+              <button
+                type="button"
+                className={activeTab === 'beneficiary-summary' ? 'active' : ''}
+                onClick={() => setActiveTab('beneficiary-summary')}
+              >
+                Beneficiary Summary
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {activeTab === 'budget-head' ? (
           <div className="adminbudgetdashboard-card">
@@ -351,33 +364,40 @@ const AdminBudgetDashboard: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {consolidatedRows.map((row, idx) => (
-                          <tr
-                            key={`${row.budgetHead}-${idx}`}
-                          >
-                            <td>{idx + 1}</td>
-                            <td>
-                              <button
-                                type="button"
-                                className="adminbudgetdashboard-row-toggle-btn"
-                                onClick={() =>
-                                  setExpandedHead((prev) => (prev === row.budgetHead ? null : row.budgetHead))
-                                }
-                                aria-expanded={expandedHead === row.budgetHead}
-                                aria-controls={getDetailsPanelId(row.budgetHead)}
-                                aria-label={`Toggle details for ${row.budgetHead}`}
-                              >
-                                <span>{row.budgetHead}</span>
-                              </button>
-                            </td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.proposed)}` : '--'}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.approved)}` : '--'}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.initial)}` : '--'}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.additional)}` : '--'}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.expenditure)}` : '--'}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.balance)}` : '--'}</td>
-                          </tr>
-                        ))}
+                        {consolidatedRows.map((row, idx) => {
+                          const isSelected = expandedHead === row.budgetHead;
+                          return (
+                            <tr
+                              key={`${row.budgetHead}-${idx}`}
+                              className={`adminbudgetdashboard-row-clickable${isSelected ? ' adminbudgetdashboard-row-selected' : ''}`}
+                              onClick={() => toggleBudgetHead(row.budgetHead)}
+                              aria-selected={isSelected}
+                            >
+                              <td>{idx + 1}</td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="adminbudgetdashboard-row-toggle-btn"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleBudgetHead(row.budgetHead);
+                                  }}
+                                  aria-expanded={isSelected}
+                                  aria-controls={getDetailsPanelId(row.budgetHead)}
+                                  aria-label={`Toggle details for ${row.budgetHead}`}
+                                >
+                                  <span>{row.budgetHead}</span>
+                                </button>
+                              </td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.proposed)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.approved)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.initial)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.additional)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.expenditure)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.balance)}` : '--'}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                       <tfoot>
                         <tr className="adminbudgetdashboard-total-row">

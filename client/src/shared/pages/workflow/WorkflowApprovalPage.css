@@ -1,0 +1,241 @@
+.workflow-page {
+  background: #f4f7fb;
+  min-height: 100vh;
+  padding: 16px;
+}
+
+.workflow-container {
+  max-width: 1240px;
+  margin: 0 auto;
+  background: #ffffff;
+  border: 1px solid #e5e9f2;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(24, 39, 75, 0.06);
+  padding: 18px;
+}
+
+.workflow-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.workflow-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #15284d;
+}
+
+.workflow-subtitle {
+  color: #6d7a92;
+  font-size: 13px;
+}
+
+.workflow-search-wrap {
+  min-width: 300px;
+}
+
+.workflow-search {
+  width: 100%;
+  border: 1px solid #d9dfec;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.workflow-search:focus {
+  outline: none;
+  border-color: #1976d2;
+  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.12);
+}
+
+.workflow-stage-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.workflow-stage-tab {
+  border: 1px solid #c9d4ea;
+  background: #f8fbff;
+  color: #27416b;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workflow-stage-tab.active {
+  background: #1f6feb;
+  border-color: #1f6feb;
+  color: #fff;
+}
+
+.workflow-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.workflow-stat-card {
+  border: 1px solid #e0e6f1;
+  background: #fcfdff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.workflow-stat-card.active {
+  border-color: #1f6feb;
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.12);
+}
+
+.workflow-stat-card .label {
+  display: block;
+  color: #5f6f89;
+  font-size: 12px;
+}
+
+.workflow-stat-card .value {
+  display: block;
+  color: #1d2f4f;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.workflow-alert-error {
+  border: 1px solid #ffcdd2;
+  background: #fff3f4;
+  color: #b42332;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.workflow-state {
+  border: 1px dashed #d5dce8;
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+  color: #667793;
+}
+
+.workflow-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e7ebf4;
+  border-radius: 10px;
+}
+
+.workflow-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.workflow-table th {
+  background: #f5f8fd;
+  color: #1e3357;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 10px;
+  border-bottom: 1px solid #e7ebf4;
+}
+
+.workflow-table td {
+  padding: 10px;
+  border-bottom: 1px solid #eef2f9;
+  color: #2a3f62;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.workflow-stage-pill {
+  background: #e9f2ff;
+  border: 1px solid #cde1ff;
+  color: #184d92;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.workflow-status-pill {
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.workflow-status-pill.pending {
+  background: #fff7e6;
+  color: #8a5d00;
+  border-color: #ffe6b8;
+}
+
+.workflow-status-pill.approved {
+  background: #ebf8ef;
+  color: #216e3a;
+  border-color: #c8ead3;
+}
+
+.workflow-status-pill.returned {
+  background: #fff4e9;
+  color: #9c5a00;
+  border-color: #ffdcb6;
+}
+
+.workflow-status-pill.rejected {
+  background: #fdeff1;
+  color: #b42332;
+  border-color: #f9cad1;
+}
+
+.workflow-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.workflow-timeline {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.workflow-state-inline {
+  color: #6e7e98;
+}
+
+.workflow-pagination {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #5f6f89;
+  font-size: 13px;
+}
+
+.workflow-pagination-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 920px) {
+  .workflow-header {
+    flex-direction: column;
+  }
+
+  .workflow-search-wrap {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .workflow-stats-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+}

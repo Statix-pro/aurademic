@@ -67,6 +67,23 @@ const PERMISSION_MAP: Record<string, { action: Actions; subject: Subjects }> = {
     'access_control.manage': { action: 'manage', subject: 'AccessControl' },
 };
 
+const parseDynamicPermission = (permissionKey: string) => {
+    const tokens = String(permissionKey || '')
+        .trim()
+        .toLowerCase()
+        .split('.')
+        .filter(Boolean);
+
+    if (tokens.length < 2) {
+        return null;
+    }
+
+    return {
+        subject: tokens[0],
+        action: tokens.slice(1).join(':'),
+    };
+};
+
 // ─── Helper: check if user is super admin ──────────────────────────────
 const checkSuperAdmin = (user: User): boolean => {
     if (user.is_super_admin) return true;
@@ -111,6 +128,13 @@ export function defineAbilityFor(user: User | null): AppAbility {
         const mapping = PERMISSION_MAP[permissionKey];
         if (mapping) {
             can(mapping.action, mapping.subject);
+            continue;
+        }
+
+        // Dynamic convention: "<module>.<action...>" => subject="<module>", action="a:b:c"
+        const dynamicRule = parseDynamicPermission(permissionKey);
+        if (dynamicRule) {
+            can(dynamicRule.action as Actions, dynamicRule.subject as Subjects);
         }
     }
 
