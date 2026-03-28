@@ -233,6 +233,9 @@ const AdminBudgetDashboard: React.FC = () => {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '') || 'unknown'}`;
+  const toggleBudgetHead = (budgetHead: string) => {
+    setExpandedHead((prev) => (prev === budgetHead ? null : budgetHead));
+  };
 
   const consolidatedTotals = useMemo(
     () =>
@@ -361,33 +364,40 @@ const AdminBudgetDashboard: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {consolidatedRows.map((row, idx) => (
-                          <tr
-                            key={`${row.budgetHead}-${idx}`}
-                          >
-                            <td>{idx + 1}</td>
-                            <td>
-                              <button
-                                type="button"
-                                className="adminbudgetdashboard-row-toggle-btn"
-                                onClick={() =>
-                                  setExpandedHead((prev) => (prev === row.budgetHead ? null : row.budgetHead))
-                                }
-                                aria-expanded={expandedHead === row.budgetHead}
-                                aria-controls={getDetailsPanelId(row.budgetHead)}
-                                aria-label={`Toggle details for ${row.budgetHead}`}
-                              >
-                                <span>{row.budgetHead}</span>
-                              </button>
-                            </td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.proposed)}` : '--'}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.approved)}` : '--'}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.initial)}` : '--'}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.additional)}` : '--'}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.expenditure)}` : '--'}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.balance)}` : '--'}</td>
-                          </tr>
-                        ))}
+                        {consolidatedRows.map((row, idx) => {
+                          const isSelected = expandedHead === row.budgetHead;
+                          return (
+                            <tr
+                              key={`${row.budgetHead}-${idx}`}
+                              className={`adminbudgetdashboard-row-clickable${isSelected ? ' adminbudgetdashboard-row-selected' : ''}`}
+                              onClick={() => toggleBudgetHead(row.budgetHead)}
+                              aria-selected={isSelected}
+                            >
+                              <td>{idx + 1}</td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="adminbudgetdashboard-row-toggle-btn"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleBudgetHead(row.budgetHead);
+                                  }}
+                                  aria-expanded={isSelected}
+                                  aria-controls={getDetailsPanelId(row.budgetHead)}
+                                  aria-label={`Toggle details for ${row.budgetHead}`}
+                                >
+                                  <span>{row.budgetHead}</span>
+                                </button>
+                              </td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.proposed)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.approved)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.initial)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.additional)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.expenditure)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.balance)}` : '--'}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                       <tfoot>
                         <tr className="adminbudgetdashboard-total-row">

@@ -1597,9 +1597,9 @@ export async function getConsolidatedData({
         OR LOWER(TRIM(bp.beneficiary_type)) = 'department'
       )`);
       where.push('md.type = "Academic"');
-      const hodScope = [];
+      const hodAuthorizationScope = [];
       if (safeUserId > 0) {
-        hodScope.push(`bp.department_id IN (
+        hodAuthorizationScope.push(`bp.department_id IN (
           SELECT entity_id
           FROM user_entity_roles
           WHERE user_id = ?
@@ -1607,16 +1607,21 @@ export async function getConsolidatedData({
         )`);
         params.push(safeUserId);
       }
+      where.push(hodAuthorizationScope.length ? `(${hodAuthorizationScope.join(' OR ')})` : '1 = 0');
+
+      const hodFilterScope = [];
       if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
-        hodScope.push('bp.department_id = ?');
+        hodFilterScope.push('bp.department_id = ?');
         params.push(Number(departmentId));
       }
       if (normalizeText(department)) {
         const normalizedDept = normalizeText(department);
-        hodScope.push(`(LOWER(TRIM(md.name)) = LOWER(TRIM(?)) OR LOWER(TRIM(md.code)) = LOWER(TRIM(?)) OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(?)))`);
+        hodFilterScope.push(`(LOWER(TRIM(md.name)) = LOWER(TRIM(?)) OR LOWER(TRIM(md.code)) = LOWER(TRIM(?)) OR LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(?)))`);
         params.push(normalizedDept, normalizedDept, normalizedDept);
       }
-      where.push(hodScope.length ? `(${hodScope.join(' OR ')})` : '1 = 0');
+      if (hodFilterScope.length) {
+        where.push(`(${hodFilterScope.join(' OR ')})`);
+      }
       break;
     }
     case 'coordinator': {
@@ -1826,9 +1831,9 @@ export async function listBudgetAnnualSummaryEntries({
     case 'hod': {
       where.push(`LOWER(TRIM(ba.beneficiary_type)) = 'department'`);
       where.push('md.type = "Academic"');
-      const hodScope = [];
+      const hodAuthorizationScope = [];
       if (safeUserId > 0) {
-        hodScope.push(`ba.department_id IN (
+        hodAuthorizationScope.push(`ba.department_id IN (
           SELECT entity_id
           FROM user_entity_roles
           WHERE user_id = ?
@@ -1836,16 +1841,21 @@ export async function listBudgetAnnualSummaryEntries({
         )`);
         params.push(safeUserId);
       }
+      where.push(hodAuthorizationScope.length ? `(${hodAuthorizationScope.join(' OR ')})` : '1 = 0');
+
+      const hodFilterScope = [];
       if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
-        hodScope.push('ba.department_id = ?');
+        hodFilterScope.push('ba.department_id = ?');
         params.push(Number(departmentId));
       }
       if (normalizeText(department)) {
         const normalizedDept = normalizeText(department);
-        hodScope.push(`(LOWER(TRIM(md.name)) = LOWER(TRIM(?)) OR LOWER(TRIM(md.code)) = LOWER(TRIM(?)))`);
+        hodFilterScope.push(`(LOWER(TRIM(md.name)) = LOWER(TRIM(?)) OR LOWER(TRIM(md.code)) = LOWER(TRIM(?)))`);
         params.push(normalizedDept, normalizedDept);
       }
-      where.push(hodScope.length ? `(${hodScope.join(' OR ')})` : '1 = 0');
+      if (hodFilterScope.length) {
+        where.push(`(${hodFilterScope.join(' OR ')})`);
+      }
       break;
     }
     case 'coordinator': {
