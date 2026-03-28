@@ -198,7 +198,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
     options: [
       'Faculty Empowerment',
       'Staff Empowerment',
-      'Sudent Empowerment',
+      'Student Empowerment',
       'Student Capacity Building',
       'Learning Resources',
       'Accreditation Expenses',
@@ -282,6 +282,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
 
   Equipment: [
     'Lab Equipment',
+    'Minor Equipment',
     'Consultancy Equipment',
     'Research Equipment',
     'Equipment Upgrade',
@@ -450,7 +451,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Staff Welfare',
   ],
 
-  'Sudent Empowerment': [
+  'Student Empowerment': [
     'Registration fee',
     'Travel Support',
     'Food & Refreshment',
@@ -465,7 +466,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
 
   'Student Capacity Building': [
     'Skill Development Training',
-    'ApptitudeTraining',
+    'Aptitude Training',
     'Higher Education Coaching',
     'Competitive Exam Coaching',
     'Placement Training',
@@ -1537,7 +1538,7 @@ const FinanceApproval: React.FC = () => {
                       <optgroup label="Academics">
                         <option value="Faculty Empowerment">Faculty Empowerment</option>
                         <option value="Staff Empowerment">Staff Empowerment</option>
-                        <option value="Sudent Empowerment">Sudent Empowerment</option>
+                        <option value="Student Empowerment">Student Empowerment</option>
                         <option value="Student Capacity Building">
                           Student Capacity Building
                         </option>

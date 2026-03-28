@@ -167,6 +167,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   Vehicles: ['Two Wheeler', 'Light Motor Vehicle', 'Heavy Motor Vehicle'],
   Equipment: [
     'Lab Equipment',
+    'Minor Equipment',
     'Consultancy Equipment',
     'Research Equipment',
     'Equipment Upgrade', 'Sports Equipment', 'Office Equipment'
@@ -335,7 +336,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Incentives',
     'Staff Welfare', 'Medical Expenses'
   ],
-  'Sudent Empowerment': [
+  'Student Empowerment': [
     'Registration fee',
     'Travel Support',
     'Food & Refreshment',
@@ -349,7 +350,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   ],
   'Student Capacity Building': [
     'Skill Development Training',
-    'ApptitudeTraining',
+    'Aptitude Training',
     'Higher Education Coaching',
     'Competitive Exam Coaching',
     'Placement Training',
