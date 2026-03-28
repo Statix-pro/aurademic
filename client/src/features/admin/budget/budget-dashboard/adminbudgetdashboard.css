@@ -279,11 +279,36 @@
 }
 
 .adminbudgetdashboard-detail-title {
-  margin: 0 0 14px 0;
+  margin: 0;
   color: #0a2540;
   font-size: 1.4rem;
   font-weight: 500;
   line-height: 1;
+}
+
+.adminbudgetdashboard-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.adminbudgetdashboard-detail-filter-input {
+  width: 280px;
+  max-width: 100%;
+  border: 1px solid #d0d8e2;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  color: #1f2937;
+  background: #fff;
+}
+
+.adminbudgetdashboard-detail-filter-input:focus {
+  outline: none;
+  border-color: #0069ab;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
 }
 
 .adminbudgetdashboard-detail-table-wrapper {
@@ -316,6 +341,11 @@
   font-size: 0.88rem;
   color: #1f2937;
   vertical-align: middle;
+}
+
+.adminbudgetdashboard-detail-empty {
+  text-align: center;
+  color: #6b7280;
 }
 
 .adminbudgetdashboard-detail-table tbody tr:last-child td {
@@ -420,6 +450,15 @@
   .adminbudgetdashboard-filter--search {
     width: 100%;
     min-width: 100%;
+  }
+
+  .adminbudgetdashboard-detail-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .adminbudgetdashboard-detail-filter-input {
+    width: 100%;
   }
 }
 

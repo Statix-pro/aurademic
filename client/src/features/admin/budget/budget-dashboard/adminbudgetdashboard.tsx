@@ -65,6 +65,7 @@ const AdminBudgetDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [expandedHead, setExpandedHead] = useState<string | null>(null);
+  const [detailSubHeadFilter, setDetailSubHeadFilter] = useState('');
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -260,6 +261,21 @@ const AdminBudgetDashboard: React.FC = () => {
   }, [detailsByHead, expandedHead]);
 
   useEffect(() => {
+    setDetailSubHeadFilter('');
+  }, [expandedHead]);
+
+  const filteredDetailsForExpandedHead = useMemo(() => {
+    if (!expandedHead) return [];
+    const rows = detailsByHead[expandedHead] || [];
+    const query = detailSubHeadFilter.trim().toLowerCase();
+    if (!query) return rows;
+
+    return rows.filter((detail) =>
+      String(detail?.subHead || '').toLowerCase().includes(query)
+    );
+  }, [detailsByHead, expandedHead, detailSubHeadFilter]);
+
+  useEffect(() => {
     if (!canAccessBeneficiarySummary && activeTab === 'beneficiary-summary') {
       setActiveTab('budget-head');
     }
@@ -435,7 +451,16 @@ const AdminBudgetDashboard: React.FC = () => {
                   className="adminbudgetdashboard-detail-section"
                   id={getDetailsPanelId(expandedHead)}
                 >
-                  <div className="adminbudgetdashboard-detail-title">{expandedHead}</div>
+                  <div className="adminbudgetdashboard-detail-header">
+                    <div className="adminbudgetdashboard-detail-title">{expandedHead}</div>
+                    <input
+                      type="text"
+                      value={detailSubHeadFilter}
+                      onChange={(event) => setDetailSubHeadFilter(event.target.value)}
+                      className="adminbudgetdashboard-detail-filter-input"
+                      placeholder="Filter by sub head..."
+                    />
+                  </div>
                   {(detailsByHead[expandedHead] || []).length > 0 ? (
                     <div className="adminbudgetdashboard-detail-table-wrapper">
                       <table className="adminbudgetdashboard-detail-table">
@@ -451,7 +476,7 @@ const AdminBudgetDashboard: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {(detailsByHead[expandedHead] || []).map((detail, index) => (
+                          {filteredDetailsForExpandedHead.map((detail, index) => (
                             <tr key={`${expandedHead}-${detail.proposalId}-${index}`}>
                               <td>{index + 1}</td>
                               <td>{detail.applicantName}</td>
@@ -462,6 +487,13 @@ const AdminBudgetDashboard: React.FC = () => {
                               <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.additionalAmount)}` : '--'}</td>
                             </tr>
                           ))}
+                          {filteredDetailsForExpandedHead.length === 0 && (
+                            <tr>
+                              <td colSpan={7} className="adminbudgetdashboard-detail-empty">
+                                No matching sub head found.
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
