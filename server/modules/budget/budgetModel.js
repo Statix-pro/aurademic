@@ -21,6 +21,7 @@ import {
   resolveLevel1Route as sharedResolveLevel1Route,
   resolveStageLabel as sharedResolveStageLabel,
   formatApprovalFlowString as sharedFormatApprovalFlowString,
+  parsePositiveAmount as sharedParsePositiveAmount,
 } from '../shared/budget/budgetUtils.js';
 import * as userResolvers from '../shared/budget/userResolvers.js';
 import * as orgUnitQueries from '../shared/budget/orgUnitQueries.js';
@@ -36,6 +37,7 @@ const LEVEL1_ROUTE_TYPE = SHARED_LEVEL1_ROUTE_TYPE;
 const LEVEL1_ASSIGNMENT_STATUS = SHARED_LEVEL1_ASSIGNMENT_STATUS;
 const WORKFLOW_STAGES = SHARED_WORKFLOW_STAGES;
 const normalizeText = sharedNormalizeText;
+const parsePositiveAmount = sharedParsePositiveAmount;
 
 export const normalizeBeneficiaryType = (beneficiaryType) => sharedNormalizeBeneficiaryType(beneficiaryType);
 const BUDGET_PROPOSAL_COLUMN_EXISTS_CACHE = new Map();
@@ -1620,9 +1622,14 @@ async function insertBudgetLine(proposalId, line, conn) {
 }
 
 async function insertMonthAllocation(lineId, month, amount, conn) {
+  const normalizedAmount = parsePositiveAmount(amount);
+  if (normalizedAmount === null) {
+    throw new Error(`Invalid month allocation amount for ${month}`);
+  }
+
   await conn.execute(
     'INSERT INTO budget_line_month_allocations (budget_line_id, month, amount) VALUES (?, ?, ?)',
-    [lineId, month, Number(amount) || 0]
+    [lineId, month, normalizedAmount]
   );
 }
 

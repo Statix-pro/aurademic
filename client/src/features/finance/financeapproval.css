@@ -911,9 +911,7 @@
 }
 
 /* Bigger dropdown, NO BORDER */
-.hoac-primary-row CustomDropdown,
-.hoac-sub-row CustomDropdown,
-.hoac-form-group [class*="CustomDropdown"] {
+.hoac-form-group .react-select__control {
   min-height: 48px !important;
   height: 48px !important;
   padding: 0 20px !important;     /* More horizontal padding */
@@ -924,16 +922,14 @@
   box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; /* Subtle shadow */
 }
 
-.hoac-primary-row CustomDropdown:hover,
-.hoac-sub-row CustomDropdown:hover {
+.hoac-form-group .react-select__control:hover {
   background: #f0f4f8 !important; /* Hover state */
   box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
 }
 
-.hoac-primary-row CustomDropdown:focus-within,
-.hoac-sub-row CustomDropdown:focus {
+.hoac-form-group .react-select__control--is-focused,
+.hoac-form-group .react-select__control:focus-within {
   background: #fff !important;
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15), 0 2px 8px rgba(0,0,0,0.12) !important;
   outline: none !important;
 }
-

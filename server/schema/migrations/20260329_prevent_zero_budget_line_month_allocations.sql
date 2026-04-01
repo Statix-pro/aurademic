@@ -4,9 +4,11 @@
 --   1) Remove already-stored zero-value month allocations
 --   2) Prevent future inserts/updates from storing zero amounts
 
+SET @prev_sql_safe_updates := @@SQL_SAFE_UPDATES;
 SET SQL_SAFE_UPDATES = 0;
 DELETE FROM budget_line_month_allocations
 WHERE amount = 0.00;
+SET SQL_SAFE_UPDATES = @prev_sql_safe_updates;
 
 SET @has_zero_default := (
   SELECT COUNT(*)
@@ -19,7 +21,7 @@ SET @has_zero_default := (
 
 SET @sql_remove_zero_default := IF(
   @has_zero_default > 0,
-  'ALTER TABLE budget_line_month_allocations MODIFY COLUMN amount DECIMAL(15,2) NOT NULL',
+  'ALTER TABLE budget_line_month_allocations ALTER COLUMN amount DROP DEFAULT',
   'SELECT 1'
 );
 PREPARE stmt_remove_zero_default FROM @sql_remove_zero_default;

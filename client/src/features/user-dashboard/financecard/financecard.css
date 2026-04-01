@@ -897,10 +897,10 @@
 }
 
 
-.btn-success:hover { background: #ecfdf5; color: #059669; border-color: #10b981; }
-.btn-warning:hover { background: #fff7ed; color: #ea580c; border-color: #f97316; }
-.btn-danger:hover { background: #fef2f2; color: #dc2626; border-color: #ef4444; }
-.btn-info:hover { background: #eff6ff; color: #2563eb; border-color: #3b82f6; }
+.financecard-page .btn-success:hover { background: #ecfdf5; color: #059669; border-color: #10b981; }
+.financecard-page .btn-warning:hover { background: #fff7ed; color: #ea580c; border-color: #f97316; }
+.financecard-page .btn-danger:hover { background: #fef2f2; color: #dc2626; border-color: #ef4444; }
+.financecard-page .btn-info:hover { background: #eff6ff; color: #2563eb; border-color: #3b82f6; }
 
 /* Responsive */
 @media (max-width: 1024px) {

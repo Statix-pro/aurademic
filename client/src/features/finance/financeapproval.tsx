@@ -46,6 +46,12 @@ interface BudgetHeadGroup {
   options: string[];
 }
 
+interface BudgetHeadSearchOption extends OptionType {
+  budgetHead: string;
+  subHead: string;
+  optionType: 'budget-head' | 'head-sub-head';
+}
+
 // Beneficiary Type to Entity API Type Mapping
 const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
   Department: 'DEPARTMENT',
@@ -615,6 +621,37 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Irrecovable Fee', 'Legal Expenses', 'Others'
   ],
 };
+
+const getSubHeadOptionsForHeadSearch = (budgetHead: string): string[] => {
+  const headGroup = HEAD_TO_GROUP[budgetHead];
+  if (headGroup && HOAC_GROUPS.has(headGroup) && HOAC_SUBHEAD_OPTIONS[headGroup]) {
+    return HOAC_SUBHEAD_OPTIONS[headGroup];
+  }
+  return SUB_HEAD_BY_BUDGET_HEAD[budgetHead] ?? [];
+};
+
+const BUDGET_HEAD_SEARCH_OPTIONS: Array<{ label: string; options: BudgetHeadSearchOption[] }> =
+  BUDGET_HEAD_GROUPS.map((group) => ({
+    label: group.label,
+    options: group.options.flatMap((head) => {
+      const subHeads = getSubHeadOptionsForHeadSearch(head);
+      const headOption: BudgetHeadSearchOption = {
+        value: `head::${head}`,
+        label: head,
+        budgetHead: head,
+        subHead: '',
+        optionType: 'budget-head',
+      };
+      const subHeadOptions: BudgetHeadSearchOption[] = subHeads.map((subHead) => ({
+        value: `sub::${head}::${subHead}`,
+        label: `${subHead} (${head})`,
+        budgetHead: head,
+        subHead,
+        optionType: 'head-sub-head',
+      }));
+      return [headOption, ...subHeadOptions];
+    }),
+  }));
 
 const createIncomeRow = (): IncomeRow => ({
   id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -1247,6 +1284,36 @@ const getSubHeadOptions = (budgetHead: string): string[] => {
     setBudgetRows(updated);
   };
 
+  const handleBudgetHeadSelection = (index: number, option: OptionType | null) => {
+    const selected = option as BudgetHeadSearchOption | null;
+    const selectedHead = selected?.budgetHead ? String(selected.budgetHead) : '';
+    const selectedSubHead = selected?.subHead ? String(selected.subHead) : '';
+
+    setBudgetRows((prev) => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        category: selectedHead,
+        head: selectedSubHead,
+        amount: selectedHead ? '' : updated[index].amount,
+      };
+      return updated;
+    });
+
+    if (selectedHead && selectedSubHead) {
+      fetchBudgetAvailability(index, selectedHead, selectedSubHead);
+    } else {
+      setBudgetLineMetaByRow((prev) => ({
+        ...prev,
+        [index]: {
+          budgetLineId: null,
+          budgetProposalId: null,
+          availableAmount: 0,
+        },
+      }));
+    }
+  };
+
   const handleAddIncomeRow = () => {
     setIncomeRows((prev) => [...prev, createIncomeRow()]);
   };
@@ -1607,7 +1674,9 @@ const hasSubcategories = subcategoryList.length > 0;
         const budgetRowsFromApi = Array.isArray(record.budget) ? record.budget : [];
         const incomeRowsFromApi = Array.isArray(record.income_rows) ? record.income_rows : [];
 
-        setApplicantName(record.applicant_name || '');
+        const resolvedApplicantName = String(record.applicant_name || '').trim();
+        setApplicantName(resolvedApplicantName);
+        setApplicantSearchQuery(resolvedApplicantName);
         setDate(record.request_date ? String(record.request_date).slice(0, 10) : '');
         setDesignation(record.designation || '');
         setDepartment(record.department || '');
@@ -2057,7 +2126,7 @@ else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
                   <CustomInput
                     name="applicantName"
                     type="text"
-                    value={isExternalApplicant ? applicantName : applicantSearchQuery}
+                    value={isViewMode ? applicantName : (isExternalApplicant ? applicantName : applicantSearchQuery)}
                     onChange={(value) => {
                       if (isExternalApplicant) {
                         setApplicantName(value);
@@ -2659,11 +2728,32 @@ else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
                       <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
                         <CustomDropdown
                           name={`budgetHead-${index}`}
-                          options={PRIMARY_HEAD_OPTIONS}
-                          value={getSelectedOption(row.category, PRIMARY_HEAD_OPTIONS)}
+                          options={BUDGET_HEAD_SEARCH_OPTIONS}
+                          value={row.category ? {
+                            value: `head::${row.category}`,
+                            label: row.category,
+                            budgetHead: row.category,
+                            subHead: row.head || '',
+                            optionType: 'budget-head',
+                          } : null}
                           onChange={(option) => {
-                            const selected = option as OptionType | null;
-                            handleBudgetChange(index, 'category', selected?.value ? String(selected.value) : '');
+                            handleBudgetHeadSelection(index, option as OptionType | null);
+                          }}
+                          filterOption={(candidate: any, input: string) => {
+                            const option = (candidate?.data || {}) as BudgetHeadSearchOption;
+                            const query = normalizeText(input).toLowerCase();
+                            const budgetHead = normalizeText(option.budgetHead).toLowerCase();
+                            const subHead = normalizeText(option.subHead).toLowerCase();
+
+                            if (!query) {
+                              return option.optionType === 'budget-head';
+                            }
+
+                            if (option.optionType === 'head-sub-head') {
+                              return subHead.includes(query) || budgetHead.includes(query);
+                            }
+
+                            return budgetHead.includes(query);
                           }}
                           placeholder="Select"
                           isDisabled={!primaryHead}

@@ -20,6 +20,7 @@ interface CustomDropdownProps {
   isMulti?: boolean;
   className?: string;
   centerSelect?: boolean;
+  filterOption?: ((option: { label: string; value: string; data: OptionType }, inputValue: string) => boolean) | null;
 }
 
 const CustomDropdown: React.FC<CustomDropdownProps> = ({

@@ -20,6 +20,20 @@ const normalizeActor = (req) => ({
   isSuperAdmin: Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin),
 });
 
+const resolveFinanceLevel1QueueRole = (req) => {
+  const normalizedRoles = Array.isArray(req.user?.roles)
+    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
+    : [];
+
+  const hasCoordinatorRole = normalizedRoles.includes('coordinator') || normalizedRoles.includes('entity_approver');
+  const hasHodRole = normalizedRoles.includes('hod');
+
+  if (hasCoordinatorRole && !hasHodRole) return 'coordinator';
+  if (hasHodRole && !hasCoordinatorRole) return 'hod';
+
+  return null;
+};
+
 const hasAnyFinanceWorkflowPermission = (req) => {
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
   return permissions.some((permission) => normalizeText(permission).startsWith('finance.workflow.'));
@@ -693,7 +707,13 @@ const financeController = {
   async getFinanceQueue(req, res) {
     try {
       const stage = normalizeText(req.params.stage).toLowerCase();
-      const { page, limit, workflowStatus } = req.query;
+      const { page, limit, workflowStatus, level1Role } = req.query;
+      const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
+      const effectiveLevel1Role = stage === 'level1'
+        ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
+            ? normalizedLevel1Role
+            : resolveFinanceLevel1QueueRole(req))
+        : null;
 
       const queue = await workflowService.listQueue({
         moduleKey: 'finance',
@@ -703,6 +723,7 @@ const financeController = {
           page,
           limit,
           workflowStatus,
+          level1Role: effectiveLevel1Role,
         },
       });
 
@@ -815,11 +836,14 @@ const financeController = {
         decidedAt: row.decided_at || row.created_at || null,
         snapshotBefore: row.snapshot_before || null,
         meta: row.meta || null,
+        summary: row.summary ?? row.comment ?? row.feedback ?? null,
+        details: row.details ?? null,
+        isAdmin: row.is_admin ?? null,
         role: row.role || null,
         status: row.status || null,
-        comment: row.comment || null,
-        created_at: row.created_at || null,
-        user_name: row.user_name || null,
+        comment: row.comment ?? row.feedback ?? null,
+        createdAt: row.created_at || null,
+        userName: row.user_name || null,
       }));
 
       return res.status(200).json({

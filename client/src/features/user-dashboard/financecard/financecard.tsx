@@ -9,6 +9,7 @@ import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
 interface FinanceCardItem {
   id: number;
+  proposal_ref?: string | null;
   applicant_name: string;
   beneficiary_type: string;
   primary_head: string;
@@ -26,6 +27,7 @@ interface FinanceCardItem {
   workflow_state?: {
     status: string;
     currentStage: string;
+    lastDecision?: string | null;
     isEditableByApplicant?: boolean;
     submittedTotalBudget?: number | string | null;
   };
@@ -38,13 +40,15 @@ interface FinanceStatusUpdate {
   status?: string | null;
   decision?: string | null;
   comment?: string | null;
+  feedback?: string | null;
   summary?: string | null;
   details?: any;
-  created_at?: string | null;
-  user_name?: string | null;
-  actor_email?: string | null;
-  actor_role?: string | null;
-  is_admin?: number | boolean | null;
+  createdAt?: string | null;
+  decidedAt?: string | null;
+  userName?: string | null;
+  actorEmail?: string | null;
+  actorRole?: string | null;
+  isAdmin?: number | boolean | null;
 }
 
 interface FinanceLogEvent {
@@ -250,7 +254,8 @@ const FinanceCard: React.FC = () => {
   };
 
   const getProposalRef = (item: FinanceCardItem) =>
-    `#F-${new Date(item.created_at).getFullYear()}-${String(item.id).padStart(4, '0')}`;
+    String(item.proposal_ref || '').trim()
+    || `#F-${new Date(item.created_at).getFullYear()}-${String(item.id).padStart(4, '0')}`;
 
   const buildFinanceLogEvents = (item: FinanceCardItem, updates: FinanceStatusUpdate[]): FinanceLogEvent[] => {
     const formatActorIdentity = (name?: string | null, email?: string | null, fallback?: string | null) => {
@@ -283,18 +288,24 @@ const FinanceCard: React.FC = () => {
     updates.forEach((update, index) => {
       const decision = String(update.decision || update.status || '').toLowerCase();
       const stage = formatLabel(update.stage || update.role);
-      const actorValue = formatActorIdentity(update.user_name, update.actor_email, update.actor_role || 'Workflow');
+      const actorName = update.userName;
+      const actorEmail = update.actorEmail;
+      const actorRole = update.actorRole;
+      const eventSummary = update.summary ?? update.feedback ?? update.comment;
+      const eventCreatedAt = update.createdAt ?? update.decidedAt ?? null;
+      const actorValue = formatActorIdentity(actorName, actorEmail, actorRole || 'Workflow');
       const isSubmitted = decision.includes('submitted');
       const isReturned = decision.includes('returned');
       const isRejected = decision.includes('rejected');
       const isApproved = decision.includes('approved') || decision.includes('completed');
       const isUpdated = decision === 'updated';
-      const isAdmin = Boolean(update.is_admin) || ['admin', 'super_admin', 'superadmin'].includes(String(update.actor_role || '').toLowerCase());
+      const isAdmin = Boolean(update.isAdmin)
+        || ['admin', 'super_admin', 'superadmin'].includes(String(actorRole || '').toLowerCase());
 
       let badge = 'UPDATED';
       let title = 'Proposal edited';
       let actorLabel = 'Updated By';
-      let subtitle = String(update.summary || '').trim();
+      let subtitle = String(eventSummary || '').trim();
       let actorBadgeLabel = '';
 
       if (isSubmitted) {
@@ -320,7 +331,7 @@ const FinanceCard: React.FC = () => {
               .map((field: any) => `${field.label}: ${field.before} -> ${field.after}`)
               .join(' | ')
           : '';
-        subtitle = [String(update.summary || '').trim(), fieldSummary].filter(Boolean).join(' | ') || 'Proposal updated';
+        subtitle = [String(eventSummary || '').trim(), fieldSummary].filter(Boolean).join(' | ') || 'Proposal updated';
         if (isAdmin) {
           actorBadgeLabel = 'SUPERADMIN';
         }
@@ -334,8 +345,8 @@ const FinanceCard: React.FC = () => {
         actorLabel,
         actorValue,
         actorBadgeLabel: isUpdated ? actorBadgeLabel : (stage !== '-' ? stage : ''),
-        timestamp: update.created_at || item.created_at,
-        dateLabel: formatDateTime(update.created_at || item.created_at),
+        timestamp: eventCreatedAt || item.created_at,
+        dateLabel: formatDateTime(eventCreatedAt || item.created_at),
         decision,
       });
     });
@@ -682,7 +693,7 @@ const FinanceCard: React.FC = () => {
                       <div key={item.id} className="financecard-item-card">
                         <div className="card-row-top">
                           <div className="card-header-left">
-                            <span className="card-id-pill">#F-{new Date(item.created_at).getFullYear()}-{String(item.id).padStart(4, '0')}</span>
+                            <span className="card-id-pill">{getProposalRef(item)}</span>
                             <span className="card-applicant-name">{item.applicant_name}</span>
                             <span className="card-category-tag">{item.budget_tag || '-'}</span>
                           </div>

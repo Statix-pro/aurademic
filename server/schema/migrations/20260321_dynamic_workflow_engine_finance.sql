@@ -296,12 +296,12 @@ JOIN permissions p ON p.permission_key IN (
 WHERE r.role_code = 'super_admin'
 ON DUPLICATE KEY UPDATE granted_at = granted_at;
 
--- HOD -> level1
+-- Level-1 approvers (HOD + Coordinator/Entity approver) -> level1
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r
 JOIN permissions p ON p.permission_key = 'finance.workflow.level1'
-WHERE r.role_code = 'hod'
+WHERE r.role_code IN ('hod', 'coordinator', 'entity_approver')
 ON DUPLICATE KEY UPDATE granted_at = granted_at;
 
 -- Finance admin -> dof
@@ -340,7 +340,7 @@ ON DUPLICATE KEY UPDATE
 
 INSERT INTO workflow_stage_policies (module_key, stage_key, scope_type, meta, is_active)
 VALUES
-  ('finance', 'level1', 'department', JSON_OBJECT('assignmentRoleCodes', JSON_ARRAY('hod'), 'requireAssignment', FALSE), 1),
+  ('finance', 'level1', 'department', JSON_OBJECT('assignmentRoleCodes', JSON_ARRAY('hod', 'coordinator', 'entity_approver'), 'requireAssignment', FALSE), 1),
   ('finance', 'dof', 'global', NULL, 1),
   ('finance', 'principal', 'global', NULL, 1)
 ON DUPLICATE KEY UPDATE
