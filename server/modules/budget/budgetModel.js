@@ -1622,7 +1622,18 @@ async function insertBudgetLine(proposalId, line, conn) {
 }
 
 async function insertMonthAllocation(lineId, month, amount, conn) {
-  const normalizedAmount = parsePositiveAmount(amount);
+  const parsedAmount = Number(amount);
+
+  if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
+    throw new Error(`Invalid month allocation amount for ${month}`);
+  }
+
+  // Zero allocations are treated as no-op so unused months are not persisted.
+  if (parsedAmount === 0) {
+    return;
+  }
+
+  const normalizedAmount = parsePositiveAmount(parsedAmount);
   if (normalizedAmount === null) {
     throw new Error(`Invalid month allocation amount for ${month}`);
   }

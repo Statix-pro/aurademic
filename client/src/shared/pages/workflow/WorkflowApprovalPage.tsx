@@ -412,11 +412,20 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         return;
       }
 
+      const matchingTabs = stageTabs.filter((tab) => tab.stage === normalizedNextStage);
+      if (matchingTabs.length > 0) {
+        const currentTabForStage = matchingTabs.find((tab) => tab.key === activeStageTabKey) || null;
+        const targetTab = currentTabForStage || matchingTabs[0];
+        if (targetTab?.key && targetTab.key !== activeStageTabKey) {
+          setActiveStageTabKey(targetTab.key);
+        }
+      }
+
       setActiveStage(normalizedNextStage);
       setPage(1);
       await loadQueue(normalizedNextStage, 1);
     },
-    [loadQueue, permittedStages]
+    [activeStageTabKey, loadQueue, permittedStages, stageTabs]
   );
 
   const fetchFullTimeline = useCallback(async (id: number | string, ref: string) => {
