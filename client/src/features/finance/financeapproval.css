@@ -793,3 +793,52 @@
     width: 100%;
   }
 }
+/* ONLY Head of Accounts - Clean, No Outer Border */
+.hoac-form-group {
+  margin-bottom: 16px;
+}
+
+.hoac-primary-row {
+  display: flex !important;
+  gap: 8px !important;
+  align-items: stretch !important;
+  width: 100% !important;
+}
+
+.hoac-primary-row > *:first-child {
+  flex: 1 !important;
+}
+
+.hoac-sub-row {
+  margin-top: 8px !important;
+  width: 100% !important;
+  
+}
+
+/* Bigger dropdown, NO BORDER */
+.hoac-primary-row CustomDropdown,
+.hoac-sub-row CustomDropdown,
+.hoac-form-group [class*="CustomDropdown"] {
+  min-height: 48px !important;
+  height: 48px !important;
+  padding: 0 20px !important;     /* More horizontal padding */
+  font-size: 14px !important;
+  border: none !important;        /* NO BORDER */
+  background: #fafbfc !important; /* Light clean background */
+  border-radius: 12px !important; /* Rounded corners */
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; /* Subtle shadow */
+}
+
+.hoac-primary-row CustomDropdown:hover,
+.hoac-sub-row CustomDropdown:hover {
+  background: #f0f4f8 !important; /* Hover state */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+}
+
+.hoac-primary-row CustomDropdown:focus-within,
+.hoac-sub-row CustomDropdown:focus {
+  background: #fff !important;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15), 0 2px 8px rgba(0,0,0,0.12) !important;
+  outline: none !important;
+}
+

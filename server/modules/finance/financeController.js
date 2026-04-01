@@ -25,6 +25,22 @@ const hasAnyFinanceWorkflowPermission = (req) => {
   return permissions.some((permission) => normalizeText(permission).startsWith('finance.workflow.'));
 };
 
+const hasFinanceStagePermission = (req, stage) => {
+  const normalizedStage = normalizeText(stage).toLowerCase();
+  if (!normalizedStage) {
+    return false;
+  }
+
+  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)) {
+    return true;
+  }
+
+  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+  const normalizedPermissions = permissions.map((permission) => normalizeText(permission).toLowerCase());
+
+  return normalizedPermissions.includes(`finance.workflow.${normalizedStage}`);
+};
+
 const canAccessFinanceRecord = (req, financeRecord) => {
   const actorUserId = toPositiveInt(req.user?.id);
 
@@ -73,6 +89,13 @@ const financeController = {
         });
       }
 
+      if (!Array.isArray(data.budget_rows) || data.budget_rows.length === 0) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'At least one budget row is required',
+        });
+      }
+
       if (!userId) {
         return res.status(401).json({
           status: 'error',
@@ -80,7 +103,12 @@ const financeController = {
         });
       }
 
-      const financeId = await financeModel.createFinanceRequest(data, userId);
+      const financeId = await financeModel.createFinanceRequest(data, userId, normalizeText(req.user?.email) || null);
+      const budgetRows = Array.isArray(data.budget_rows) ? data.budget_rows : [];
+      const totalBudgetAmount = budgetRows.length
+        ? budgetRows.reduce((sum, row) => sum + Number(row?.amount || 0), 0)
+        : Number(data.total_budget || 0);
+      const amountBand = Number(totalBudgetAmount) > 10000 ? 'gt_10k' : 'lte_10k';
 
       await workflowService.startWorkflow({
         moduleKey: 'finance',
@@ -91,6 +119,7 @@ const financeController = {
           moduleMetaVersion: 1,
           moduleMeta: {
             trigger: 'create_finance_request',
+            amountBand,
           },
         },
       });
@@ -201,6 +230,7 @@ const financeController = {
           moduleMetaVersion: 1,
           moduleMeta: {
             trigger: 'applicant_resubmit',
+            amountBand: Number(finance.total_budget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
           },
         },
       });
@@ -240,6 +270,7 @@ const financeController = {
       }
 
       const budget = await financeModel.getBudgetBreakup(financeId);
+      const incomeRows = await financeModel.getIncomeRows(financeId);
       const statusUpdates = await financeModel.getStatusUpdates(financeId);
 
       return res.status(200).json({
@@ -247,6 +278,7 @@ const financeController = {
         data: {
           ...finance,
           budget,
+          income_rows: incomeRows,
           status_updates: statusUpdates,
         },
       });
@@ -334,6 +366,98 @@ const financeController = {
     }
   },
 
+  async getBudgetTags(req, res) {
+    try {
+      const tags = await financeModel.getBudgetTags();
+      return res.status(200).json({
+        success: true,
+        status: 'success',
+        data: tags,
+      });
+    } catch (error) {
+      return handleWorkflowError(res, error, 'Error in getBudgetTags');
+    }
+  },
+
+  async getOrgUnits(req, res) {
+    try {
+      const type = req.params.type;
+      const units = await financeModel.getOrgUnitsByType(type);
+      return res.status(200).json({
+        success: true,
+        status: 'success',
+        data: units,
+        count: units.length,
+      });
+    } catch (error) {
+      return handleWorkflowError(res, error, 'Error in getOrgUnits');
+    }
+  },
+
+  async getAllOrgUnits(req, res) {
+    try {
+      const units = await financeModel.getAllOrgUnits();
+      const grouped = units.reduce((acc, unit) => {
+        const key = unit.type_code;
+        if (!acc[key]) {
+          acc[key] = [];
+        }
+        acc[key].push(unit);
+        return acc;
+      }, {});
+
+      return res.status(200).json({
+        success: true,
+        status: 'success',
+        data: {
+          all: units,
+          grouped,
+        },
+        count: units.length,
+      });
+    } catch (error) {
+      return handleWorkflowError(res, error, 'Error in getAllOrgUnits');
+    }
+  },
+
+  async getBudgetAvailability(req, res) {
+    try {
+      const userId = toPositiveInt(req.user?.id);
+      const budgetHead = normalizeText(req.query?.budget_head || req.query?.head);
+      const subHead = normalizeText(req.query?.sub_head || req.query?.subHead);
+      const preferredBudgetLineId = toPositiveInt(req.query?.budget_line_id);
+
+      if (!userId) {
+        return res.status(401).json({
+          status: 'error',
+          message: 'Invalid user context',
+        });
+      }
+
+      if (!budgetHead || !subHead) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'budget_head and sub_head are required',
+        });
+      }
+
+      const availability = await financeModel.getBudgetAvailabilityForUser({
+        userId,
+        userEmail: normalizeText(req.user?.email) || null,
+        budgetHead,
+        subHead,
+        preferredBudgetLineId,
+      });
+
+      return res.status(200).json({
+        status: 'success',
+        data: availability,
+      });
+    } catch (error) {
+      return handleWorkflowError(res, error, 'Error in getBudgetAvailability');
+    }
+  },
+
   async approveFinanceWorkflow(req, res) {
     try {
       const financeId = toPositiveInt(req.params.id);
@@ -372,6 +496,96 @@ const financeController = {
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in approveFinanceWorkflow');
+    }
+  },
+
+  async toggleArchiveStatus(req, res) {
+    try {
+      const financeId = toPositiveInt(req.params.id);
+
+      if (!financeId) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Invalid finance request ID',
+        });
+      }
+
+      const finance = await financeModel.getFinanceRequestById(financeId);
+      if (!finance) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Finance request not found',
+        });
+      }
+
+      if (!canAccessFinanceRecord(req, finance)) {
+        return res.status(403).json({
+          status: 'error',
+          message: 'Access denied',
+        });
+      }
+
+      const workflowStatus = normalizeText(
+        finance.workflow_state?.status || finance.workflow_status || finance.overall_status
+      ).toLowerCase();
+      const isArchived = workflowStatus === 'archived' || workflowStatus === 'archive';
+
+      if (isArchived) {
+        const latestArchive = await financeModel.getLatestArchiveAction(financeId);
+        const archivedStage = normalizeText(latestArchive?.stage).toLowerCase();
+
+        if (!hasFinanceStagePermission(req, archivedStage)) {
+          return res.status(403).json({
+            status: 'error',
+            message: archivedStage
+              ? `Only ${archivedStage.toUpperCase()} stage users (or super admin) can unarchive this request`
+              : 'You are not allowed to unarchive this request',
+          });
+        }
+
+        const restoreResult = await financeModel.restoreWorkflowSnapshotFromLatestArchive(financeId);
+        if (!restoreResult.restored) {
+          return res.status(409).json({
+            status: 'error',
+            message: restoreResult.reason || 'Unable to unarchive this request',
+          });
+        }
+
+        return res.status(200).json({
+          status: 'success',
+          message: 'Finance request unarchived successfully',
+          data: {
+            workflow_state: restoreResult.restoredState,
+          },
+        });
+      }
+
+      const archiveResult = await workflowService.actOnWorkflow({
+        moduleKey: 'finance',
+        recordId: financeId,
+        decision: 'archived',
+        feedback: normalizeText(req.body?.feedback) || undefined,
+        actor: normalizeActor(req),
+        metadata: {
+          origin: 'api',
+          requestId: null,
+          moduleMetaVersion: 1,
+          moduleMeta: {
+            route: 'PATCH /api/finance-requests/:id/archive-toggle',
+          },
+        },
+      });
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Finance request archived successfully',
+        data: {
+          previousState: archiveResult.previousState,
+          currentState: archiveResult.currentState,
+        },
+      });
+    } catch (error) {
+      return handleWorkflowError(res, error, 'Error in toggleArchiveStatus');
     }
   },
 
