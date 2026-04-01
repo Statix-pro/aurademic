@@ -41,6 +41,9 @@ const hasFinanceStagePermission = (req, stage) => {
   return normalizedPermissions.includes(`finance.workflow.${normalizedStage}`);
 };
 
+const hasFinanceWorkflowEditorAccess = (req) =>
+  Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || hasAnyFinanceWorkflowPermission(req);
+
 const canAccessFinanceRecord = (req, financeRecord) => {
   const actorUserId = toPositiveInt(req.user?.id);
 
@@ -110,19 +113,28 @@ const financeController = {
         : Number(data.total_budget || 0);
       const amountBand = Number(totalBudgetAmount) > 10000 ? 'gt_10k' : 'lte_10k';
 
-      await workflowService.startWorkflow({
-        moduleKey: 'finance',
-        recordId: financeId,
-        metadata: {
-          origin: 'system',
-          requestId: null,
-          moduleMetaVersion: 1,
-          moduleMeta: {
-            trigger: 'create_finance_request',
-            amountBand,
+      try {
+        await workflowService.startWorkflow({
+          moduleKey: 'finance',
+          recordId: financeId,
+          metadata: {
+            origin: 'system',
+            requestId: null,
+            moduleMetaVersion: 1,
+            moduleMeta: {
+              trigger: 'create_finance_request',
+              amountBand,
+            },
           },
-        },
-      });
+        });
+      } catch (workflowError) {
+        try {
+          await financeModel.deleteFinanceRequest(financeId);
+        } catch (cleanupError) {
+          console.error('Failed to clean up finance request after workflow start failure', cleanupError);
+        }
+        throw workflowError;
+      }
 
       return res.status(201).json({
         status: 'success',
@@ -154,21 +166,40 @@ const financeController = {
         });
       }
 
-      if (!userId || toPositiveInt(finance.created_by) !== userId) {
+      const isCreator = Boolean(userId && toPositiveInt(finance.created_by) === userId);
+      const isWorkflowEditor = hasFinanceWorkflowEditorAccess(req);
+      const workflowStatus = normalizeText(finance.workflow_state?.status).toLowerCase();
+      const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(workflowStatus);
+
+      if (!isCreator && !isWorkflowEditor) {
         return res.status(403).json({
           status: 'error',
           message: 'You are not allowed to update this request',
         });
       }
 
-      if (!finance.workflow_state?.isEditableByApplicant) {
+      const currentStage = normalizeText(finance.workflow_state?.currentStage).toLowerCase();
+      const isApplicantEditable =
+        Boolean(finance.workflow_state?.isEditableByApplicant) ||
+        workflowStatus === 'returned' ||
+        workflowStatus === 'submitted' ||
+        currentStage === 'level1';
+
+      if (isCreator && !isApplicantEditable) {
         return res.status(403).json({
           status: 'error',
           message: 'This request is not editable in current workflow state',
         });
       }
 
-      const result = await financeModel.updateFinanceRequest(financeId, req.body || {});
+      if (isWorkflowEditor && isTerminalWorkflow && !Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)) {
+        return res.status(403).json({
+          status: 'error',
+          message: 'This request is not editable in current workflow state',
+        });
+      }
+
+      const result = await financeModel.updateFinanceRequest(financeId, req.body || {}, normalizeActor(req));
 
       if (result.affectedRows > 0) {
         return res.status(200).json({
@@ -221,7 +252,7 @@ const financeController = {
         });
       }
 
-      await workflowService.startWorkflow({
+      const restartResult = await workflowService.startWorkflow({
         moduleKey: 'finance',
         recordId: financeId,
         metadata: {
@@ -235,12 +266,82 @@ const financeController = {
         },
       });
 
+      const resubmittedAt = new Date().toISOString();
+      await financeModel.updateFinanceWorkflowSnapshot(financeId, {
+        ...(restartResult.state || {}),
+        status: 'in_progress',
+        currentStage: 'level1',
+        isEditableByApplicant: false,
+        lastDecision: 'resubmitted',
+        lastFeedback: null,
+        resubmittedAt,
+        updatedAt: resubmittedAt,
+        resolvedAt: null,
+      });
+
       return res.status(200).json({
         status: 'success',
         message: 'Finance request resubmitted successfully',
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in resubmitFinanceRequest');
+    }
+  },
+
+  async deleteFinanceRequest(req, res) {
+    try {
+      const financeId = toPositiveInt(req.params.id);
+      const userId = toPositiveInt(req.user?.id);
+
+      if (!financeId) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Invalid finance request ID',
+        });
+      }
+
+      const finance = await financeModel.getFinanceRequestById(financeId);
+      if (!finance) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Finance request not found',
+        });
+      }
+
+      if (!userId || toPositiveInt(finance.created_by) !== userId) {
+        return res.status(403).json({
+          status: 'error',
+          message: 'Only applicant can delete this request',
+        });
+      }
+
+      const workflowState = finance.workflow_state || null;
+      const workflowStatus = normalizeText(workflowState?.status).toLowerCase();
+      const currentStage = normalizeText(workflowState?.currentStage).toLowerCase();
+      const hasStartedApproval = Boolean(workflowState) && currentStage && currentStage !== 'level1';
+
+      if (workflowStatus && ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(workflowStatus)) {
+        return res.status(409).json({
+          status: 'error',
+          message: 'This request can no longer be deleted',
+        });
+      }
+
+      if (hasStartedApproval) {
+        return res.status(409).json({
+          status: 'error',
+          message: 'This request can only be deleted before Level-1 approval',
+        });
+      }
+
+      await financeModel.deleteFinanceRequest(financeId);
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Finance request deleted successfully',
+      });
+    } catch (error) {
+      return handleWorkflowError(res, error, 'Error in deleteFinanceRequest');
     }
   },
 
@@ -592,7 +693,7 @@ const financeController = {
   async getFinanceQueue(req, res) {
     try {
       const stage = normalizeText(req.params.stage).toLowerCase();
-      const { page, limit } = req.query;
+      const { page, limit, workflowStatus } = req.query;
 
       const queue = await workflowService.listQueue({
         moduleKey: 'finance',
@@ -601,6 +702,7 @@ const financeController = {
         filters: {
           page,
           limit,
+          workflowStatus,
         },
       });
 

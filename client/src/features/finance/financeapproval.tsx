@@ -1,6 +1,7 @@
 import React, { useState, useRef, CSSProperties, useEffect, ChangeEvent, MouseEvent } from 'react';
-import { Info, Library } from 'lucide-react';
+import { Info, Library, CheckCircle2, RotateCcw, XCircle, Archive } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -1305,6 +1306,10 @@ const getSubHeadOptions = (budgetHead: string): string[] => {
 
   const handleSubmit = async (): Promise<void> => {
     try {
+      if (isViewMode) {
+        return;
+      }
+
       for (let index = 0; index < budgetRows.length; index += 1) {
         const row = budgetRows[index];
         const requestedAmount = Number(row.amount || 0);
@@ -1343,6 +1348,7 @@ const getSubHeadOptions = (budgetHead: string): string[] => {
 
         beneficiary_type: beneficiaryType,
         beneficiary_value: beneficiaryValue,
+        budget_tag: selectedTag || null,
 
         primary_head: primaryHead,
         event_sub_head: eventSubHead,
@@ -1355,7 +1361,7 @@ const getSubHeadOptions = (budgetHead: string): string[] => {
         income_status: primaryIncomeRow?.creditAccount || '',
         income_amount_type: primaryIncomeRow?.contribution || '',
         credit_status: primaryIncomeRow?.status || '',
-        debit_status: debitStatus,
+        debit_status: debitStatus || null,
         partial_amount: primaryIncomeRow?.amount || null,
         budget_rows: budgetRows.map((row, index) => ({
           budget_head: row.category,
@@ -1368,18 +1374,86 @@ const getSubHeadOptions = (budgetHead: string): string[] => {
         income_rows: showIncomeSection ? incomeRows : [],
       };
 
-      const result = await authenticityUtility.post('/finance-requests', payload) as { status: string; message?: string };
+      const result = (isEditMode && id
+        ? await authenticityUtility.put(`/finance-requests/${id}`, payload)
+        : await authenticityUtility.post('/finance-requests', payload)) as { status: string; message?: string };
 
       if (result.status !== 'success') {
         showAlert(result.message || 'Submission failed', 'error');
         return;
       }
 
-      showAlert('Finance request submitted successfully', 'success');
-      handleReset(true);
+      if (isEditMode && loadedWorkflowStatus === 'returned' && !isAdminWorkflowContext) {
+        const resubmitResult = await authenticityUtility.post(`/finance-requests/${id}/resubmit`, {}) as { status?: string; message?: string };
+        if (resubmitResult.status !== 'success') {
+          showAlert(resubmitResult.message || 'Finance request updated, but resubmission failed', 'error');
+          return;
+        }
+      }
+
+      showAlert(
+        isEditMode ? 'Finance request updated successfully' : 'Finance request submitted successfully',
+        'success',
+        undefined,
+        false,
+        'OK',
+        () => navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard')
+      );
     } catch (error) {
       console.error('Finance submit error:', error);
-      showAlert('Something went wrong while submitting', 'error');
+      const apiMessage =
+        (error as any)?.response?.data?.message ||
+        (error as any)?.response?.data?.error ||
+        (error as any)?.message;
+      showAlert(apiMessage ? String(apiMessage) : 'Something went wrong while submitting', 'error');
+    }
+  };
+
+  const handleWorkflowAction = async (decision: 'approved' | 'returned' | 'rejected' | 'archived') => {
+    if (!id) return;
+
+    try {
+      setIsLoading(true);
+
+      let feedback: string | undefined;
+      if (decision === 'returned' || decision === 'rejected') {
+        const entered = window.prompt(`Enter comments for ${decision}`);
+        if (entered === null) {
+          return;
+        }
+        feedback = entered.trim() || undefined;
+      }
+
+      const response = (decision === 'archived'
+        ? await authenticityUtility.patch(`/finance-requests/${id}/archive-toggle`, {})
+        : await authenticityUtility.patch(`/finance-requests/${id}/approval`, {
+            decision,
+            feedback,
+          })) as { status?: string; success?: boolean; message?: string; data?: { message?: string } };
+
+      if (response?.status !== 'success' && response?.success !== true) {
+        showAlert(response?.message || response?.data?.message || `Failed to ${decision}`, 'error');
+        return;
+      }
+
+      showAlert(
+        decision === 'approved'
+          ? 'Finance request approved successfully'
+          : decision === 'returned'
+            ? 'Finance request returned successfully'
+            : decision === 'rejected'
+              ? 'Finance request rejected successfully'
+              : 'Finance request archived successfully',
+        'success',
+        undefined,
+        false,
+        'OK',
+        () => navigate('/workflow/finance')
+      );
+    } catch (error: any) {
+      showAlert(error?.response?.data?.message || error?.message || `Failed to ${decision}`, 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1468,6 +1542,15 @@ const hasSubcategories = subcategoryList.length > 0;
 
   // Tag
   const [selectedTag, setSelectedTag] = useState<string>('');
+  const [loadedWorkflowStatus, setLoadedWorkflowStatus] = useState<string>('');
+
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { id } = useParams<{ id?: string }>();
+  const isEditMode = Boolean(id) && location.pathname.includes('/edit');
+  const isViewMode = Boolean(id) && !isEditMode;
+  const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
+  const isApprovalMode = isViewMode && isAdminWorkflowContext;
 
   // Tag auto-selection based on beneficiary type
   useEffect(() => {
@@ -1494,6 +1577,108 @@ const hasSubcategories = subcategoryList.length > 0;
       return '';
     });
   }, [beneficiaryType]);
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    const requestId = Number(id);
+    if (!Number.isInteger(requestId) || requestId <= 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadFinanceRequest = async () => {
+      try {
+        setIsLoading(true);
+        const response = await authenticityUtility.get(`/finance-requests/${requestId}`) as {
+          status?: string;
+          data?: any;
+          message?: string;
+        };
+
+        if (response?.status !== 'success' || !response?.data || cancelled) {
+          return;
+        }
+
+        const record = response.data;
+        const budgetRowsFromApi = Array.isArray(record.budget) ? record.budget : [];
+        const incomeRowsFromApi = Array.isArray(record.income_rows) ? record.income_rows : [];
+
+        setApplicantName(record.applicant_name || '');
+        setDate(record.request_date ? String(record.request_date).slice(0, 10) : '');
+        setDesignation(record.designation || '');
+        setDepartment(record.department || '');
+        setEmail(record.email || '');
+        setMobile(record.mobile || '');
+        setDescription(record.description || '');
+        setEmployeeId(record.employee_id ? Number(record.employee_id) : null);
+        setIsExternalApplicant(!record.employee_id);
+        setBeneficiaryType(record.beneficiary_type || '');
+        setBeneficiaryValue(record.beneficiary_value || '');
+        setPrimaryHead(record.primary_head || '');
+        setEventSubHead(record.event_sub_head || '');
+        setIsBudgetProposed(record.is_budget_proposed || 'No');
+        setAmountProposed(record.proposed_amount !== null && record.proposed_amount !== undefined ? String(record.proposed_amount) : '');
+        setBalanceAmount(record.balance_amount !== null && record.balance_amount !== undefined ? String(record.balance_amount) : '');
+        setDebitStatus(record.debit_status || '');
+        setSelectedTag(record.budget_tag || '');
+        setLoadedWorkflowStatus(String(record.workflow_state?.status || record.workflow_status || record.overall_status || '').toLowerCase());
+        setCategorySelections(
+          String(record.beneficiary_value || '')
+            .split(',')
+            .map((item: string) => item.trim())
+            .filter(Boolean)
+        );
+        setShowIncomeSection(incomeRowsFromApi.length > 0);
+        setBudgetRows(
+          budgetRowsFromApi.length > 0
+            ? budgetRowsFromApi.map((row: any) => ({
+                category: String(row?.budget_head || ''),
+                head: String(row?.sub_head || ''),
+                amount: String(row?.amount ?? ''),
+              }))
+            : [{ category: '', head: '', amount: '' }]
+        );
+        setBudgetLineMetaByRow(
+          budgetRowsFromApi.reduce((acc: Record<number, BudgetLineMeta>, row: any, index: number) => {
+            acc[index] = {
+              budgetLineId: row?.budget_line_id ? Number(row.budget_line_id) : null,
+              budgetProposalId: row?.budget_proposal_id ? Number(row.budget_proposal_id) : null,
+              availableAmount: Number(row?.available_amount_snapshot ?? 0),
+            };
+            return acc;
+          }, {})
+        );
+        setIncomeRows(
+          incomeRowsFromApi.length > 0
+            ? incomeRowsFromApi.map((row: any, index: number) => ({
+                id: row?.id ? String(row.id) : `${Date.now()}-${index}`,
+                incomeSource: String(row?.income_source || ''),
+                contribution: String(row?.contribution || ''),
+                amount: String(row?.amount ?? ''),
+                status: String(row?.status || ''),
+                creditAccount: String(row?.credit_account || ''),
+              }))
+            : [createIncomeRow()]
+        );
+      } catch (error) {
+        console.error('Failed to load finance request', error);
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadFinanceRequest();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   const handleBeneficiarySearch = async (query: string) => {
     setBeneficiarySearchQuery(query);
@@ -1851,7 +2036,8 @@ else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
     <div className="finance-approval-body" style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}>
 
       {!showPreview && (
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
+          <div style={isViewMode ? { pointerEvents: 'none', userSelect: 'none' } : undefined}>
           {/* Applicant Details Section */}
           <div style={{
             backgroundColor: '#fff',
@@ -2902,11 +3088,31 @@ else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
               </div>
             </div>
           </div>
+          </div>
         </div>
       )}
 
       <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0' }}>
-        <div style={{ maxWidth: '500px', margin: '0 auto', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            maxWidth: '100%',
+            margin: '0 auto',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '18px',
+          }}
+        >
+          <div
+            className="finance-top-actions"
+            style={{
+              display: 'flex',
+              gap: '10px',
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
           <button
             onClick={() => setShowPreview(!showPreview)}
             style={{
@@ -2946,30 +3152,90 @@ else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
           </button>
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={() => navigate('/financecard')}
             style={{
-              backgroundColor: '#0069ab',
-              color: '#fff',
-              border: 'none',
-              padding: '12px 24px',
+              backgroundColor: '#edf4fb',
+              color: '#0f172a',
+              border: '1px solid #cbd5e1',
+              padding: '10px 20px',
               borderRadius: '12px',
-              fontSize: '0.95rem',
-              fontWeight: '500',
-              cursor: isLoading ? 'not-allowed' : 'pointer',
+              fontWeight: '600',
+              cursor: 'pointer',
               transition: 'all 0.3s ease',
-              minWidth: '140px',
-              opacity: isLoading ? 0.7 : 1,
             }}
-            disabled={isLoading}
-            onMouseEnter={(e) => {
-              if (!isLoading) e.currentTarget.style.backgroundColor = '#005492';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#0069ab';
-            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#e2ebf5')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#edf4fb')}
           >
-            {isLoading ? 'Submitting...' : 'Submit Form'}
+            Back to Dashboard
           </button>
+          </div>
+          {isApprovalMode ? (
+            <div className="finance-workflow-actions">
+              <button
+                type="button"
+                className="finance-workflow-btn finance-workflow-btn--approve"
+                onClick={() => handleWorkflowAction('approved')}
+                disabled={isLoading}
+              >
+                <CheckCircle2 size={18} />
+                Approve
+              </button>
+              <button
+                type="button"
+                className="finance-workflow-btn finance-workflow-btn--return"
+                onClick={() => handleWorkflowAction('returned')}
+                disabled={isLoading}
+              >
+                <RotateCcw size={18} />
+                Return
+              </button>
+              <button
+                type="button"
+                className="finance-workflow-btn finance-workflow-btn--reject"
+                onClick={() => handleWorkflowAction('rejected')}
+                disabled={isLoading}
+              >
+                <XCircle size={18} />
+                Reject
+              </button>
+              <button
+                type="button"
+                className="finance-workflow-btn finance-workflow-btn--archive"
+                onClick={() => handleWorkflowAction('archived')}
+                disabled={isLoading}
+              >
+                <Archive size={18} />
+                Archive
+              </button>
+            </div>
+          ) : !isViewMode ? (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              style={{
+                backgroundColor: '#0069ab',
+                color: '#fff',
+                border: 'none',
+                padding: '12px 24px',
+                borderRadius: '12px',
+                fontSize: '0.95rem',
+                fontWeight: '500',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease',
+                minWidth: '140px',
+                opacity: isLoading ? 0.7 : 1,
+              }}
+              disabled={isLoading}
+              onMouseEnter={(e) => {
+                if (!isLoading) e.currentTarget.style.backgroundColor = '#005492';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#0069ab';
+              }}
+            >
+              {isLoading ? 'Submitting...' : (isEditMode ? 'Update Form' : 'Submit Form')}
+            </button>
+          ) : null}
         </div>
       </div>
 

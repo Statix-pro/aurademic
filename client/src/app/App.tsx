@@ -36,7 +36,7 @@ import FinanceApproval from '../features/finance/financeapproval';
 
 import FinanceCard from '../features/user-dashboard/financecard/financecard';
 import ExpenditureDashboard from '../features/user-dashboard/expendituredashboard/expendituredashboard';
-import ExpenditureApproval from '../features/expenditure/expenditure';
+//import ExpenditureApproval from '../features/expenditure/expenditure';
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
 import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
 import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
@@ -84,6 +84,8 @@ function App() {
 
                   {/* FINANCE */}
                   <Route path="/finance/new" element={<ProtectedRoute><FinanceApproval /></ProtectedRoute>} />
+                  <Route path="/finance/:id" element={<ProtectedRoute><FinanceApproval /></ProtectedRoute>} />
+                  <Route path="/finance/:id/edit" element={<ProtectedRoute><FinanceApproval /></ProtectedRoute>} />
                   <Route path="/workflow/:moduleKey" element={<ModuleWorkflowRoute><WorkflowModulePage /></ModuleWorkflowRoute>} />
                   <Route path="/financecard" element={<ProtectedRoute><FinanceCard /></ProtectedRoute>} />
 
@@ -99,10 +101,10 @@ function App() {
 
                   {/* EXPENDITURE */}
                   <Route path="/expenditure" element={<ProtectedRoute><ExpenditureDashboard /></ProtectedRoute>} />
-                  <Route path="/expenditure/new" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
-                  <Route path="/expenditure/:id" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
+                {/*  <Route path="/expenditure/new" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
+                 <Route path="/expenditure/:id" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
                   <Route path="/expenditure/:id/edit" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
-                  <Route path="/expenditure/approval" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
+                  <Route path="/expenditure/approval" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />*/}
                   
                   {/* ADMIN */}
                   <Route path="/admin-dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />

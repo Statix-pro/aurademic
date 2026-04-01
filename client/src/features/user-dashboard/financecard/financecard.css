@@ -43,9 +43,9 @@
 /* Stats Row - Inside Card */
 .financecard-stats-row-inside {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 18px;
-  padding: 12px 24px 26px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 16px;
+  padding: 18px 24px 26px;
   background: transparent;
 }
 
@@ -54,11 +54,12 @@
   width: 100%;
   background: #fff;
   border-radius: 18px;
-  padding: 18px 18px 18px 20px;
+  padding: 18px 18px 18px 18px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+  gap: 14px;
+  min-height: 96px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
   cursor: pointer;
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
   border: 1px solid #d8e1ec;
@@ -74,6 +75,15 @@
 .stats-card.active {
   border-color: rgba(0, 105, 171, 0.28);
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.14), 0 14px 28px rgba(0, 105, 171, 0.16);
+}
+
+.stats-card:first-child {
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  border-color: rgba(0, 105, 171, 0.18);
+}
+
+.stats-card:first-child .stats-count {
+  color: #0a69a9;
 }
 
 .stats-card:focus-visible {
@@ -97,18 +107,20 @@
 .stats-content {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  min-width: 0;
 }
 
 .stats-name {
-  font-size: 0.8rem;
+  font-size: 0.84rem;
   color: #5a6f8f;
   font-weight: 500;
   line-height: 1.1;
+  letter-spacing: 0.01em;
 }
 
 .stats-count {
-  font-size: 2rem;
+  font-size: 1.9rem;
   font-weight: 700;
   color: #40557a;
   line-height: 1;
@@ -564,6 +576,11 @@
   background: #fdfdfd;
 }
 
+.financecard-log-entry--admin {
+  border-color: #fed7aa;
+  background: #fffaf5;
+}
+
 .financecard-log-entry-top {
   display: flex;
   justify-content: space-between;
@@ -631,6 +648,14 @@
   font-weight: 600;
 }
 
+.financecard-log-role {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
 .financecard-log-comment {
   color: #1f334d;
   font-size: 0.82rem;
@@ -653,6 +678,21 @@
   font-size: 0.68rem;
   font-weight: 800;
   white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+.financecard-log-admin-mark {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fb923c;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 800;
   letter-spacing: 0.2px;
 }
 
@@ -825,6 +865,7 @@
   box-shadow: 0 0 0 2px rgba(0, 105, 171, 0.12);
 }
 
+.status-submitted { background: #eaf3ff; color: #1661a9; border-color: #b8d4ef; }
 .status-pending { background: #fff4d6; color: #a97900; border-color: #f3d58f; }
 .status-approved { background: #e7f8ef; color: #137a3a; border-color: #b9e5c6; }
 .status-rejected { background: #fdecec; color: #c64848; border-color: #f0c2c2; }
@@ -934,8 +975,8 @@
   }
 
   .financecard-stats-row-inside {
-    grid-template-columns: repeat(2, 1fr);
-    padding: 8px 16px 18px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 12px 16px 18px;
   }
 
   .financecard-header-single,
@@ -950,8 +991,9 @@
 
   .stats-card {
     border-radius: 16px;
-    padding: 16px;
-    gap: 14px;
+    padding: 14px;
+    gap: 12px;
+    min-height: 88px;
   }
 
   .stats-icon-box {

@@ -192,7 +192,7 @@ async function resolveStagePolicy(conn, { moduleKey, stageKey }) {
   };
 }
 
-const buildInitialState = (flow) => {
+const buildInitialState = (flow, extras = {}) => {
   const nowIso = new Date().toISOString();
 
   return {
@@ -206,6 +206,7 @@ const buildInitialState = (flow) => {
     resolvedAt: null,
     lastDecision: null,
     lastFeedback: null,
+    ...extras,
   };
 };
 
@@ -383,7 +384,9 @@ export async function startWorkflow({ moduleKey, recordId, metadata = {} }) {
       entityTypeCode,
     });
 
-    const initialState = buildInitialState(flow);
+    const initialState = buildInitialState(flow, {
+      submittedTotalBudget: Number(context.totalBudget || 0),
+    });
     const normalizedMeta = await validateAdapterModuleMeta({
       moduleConfig,
       normalizedMeta: validateWorkflowMeta(metadata),
