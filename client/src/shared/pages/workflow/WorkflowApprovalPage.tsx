@@ -157,6 +157,21 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     [config]
   );
 
+  const getFinanceRoute = useCallback(
+    (recordId: number | string, mode: 'view' | 'edit' = 'view') => {
+      if (config.moduleKey === 'finance') {
+        return mode === 'edit'
+          ? `/finance/${recordId}/edit?admin=true`
+          : `/finance/${recordId}?admin=true`;
+      }
+
+      return mode === 'edit'
+        ? `${config.apiBasePath}/${recordId}/edit`
+        : `${config.apiBasePath}/${recordId}`;
+    },
+    [config]
+  );
+
   const mapQueueResponse = config.mapQueueResponse || defaultQueueMapper;
   const mapTimelineResponse = config.mapTimelineResponse || defaultTimelineMapper;
 
@@ -166,6 +181,21 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
   const getRecordCurrentStage = useCallback((record: Record<string, any>) => {
     return String(record.workflow_state?.currentStage || record.workflow_stage || '').toLowerCase();
+  }, []);
+
+  const getRecordStageDecision = useCallback((record: Record<string, any>) => {
+    return String(
+      record.workflow_stage_decision ||
+      record.workflow_stage_status ||
+      record.stage_decision ||
+      record.stage_status ||
+      record.decision ||
+      ''
+    ).toLowerCase();
+  }, []);
+
+  const getRecordWorkflowDecision = useCallback((record: Record<string, any>) => {
+    return String(record.workflow_state?.lastDecision || record.lastDecision || '').toLowerCase();
   }, []);
 
   // Enhanced approved status detection for current stage
@@ -194,16 +224,25 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
   // Properly categorize item status
   const resolveStatusCategory = useCallback((record: Record<string, any>) => {
+    const workflowDecision = getRecordWorkflowDecision(record);
+    const stageDecision = getRecordStageDecision(record);
     const token = String(record.workflow_status || record.status || '').toLowerCase();
-    
+
+    if (workflowDecision === 'resubmitted') return 'pending';
     if (token.includes('archived') || token.includes('archive')) return 'archived';
     if (token.includes('rejected')) return 'rejected';
     if (token.includes('returned') || token.includes('return')) return 'returned';
-    
+    if (token.includes('completed') || token.includes('approved')) return 'approved';
+
+    if (stageDecision.includes('archived') || stageDecision.includes('archive')) return 'archived';
+    if (stageDecision.includes('rejected')) return 'rejected';
+    if (stageDecision.includes('returned') || stageDecision.includes('return')) return 'returned';
+    if (stageDecision.includes('approved')) return 'approved';
+
     if (isApprovedForCurrentStage(record)) return 'approved';
     
     return 'pending';
-  }, [isApprovedForCurrentStage]);
+  }, [getRecordStageDecision, getRecordWorkflowDecision, isApprovedForCurrentStage]);
 
   const isVisibleInWorkflowList = useCallback(
     (record: Record<string, any>, stage: string) => {
@@ -289,6 +328,24 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     ]
   );
 
+  const switchToWorkflowStage = useCallback(
+    async (nextStage: string | null | undefined) => {
+      const normalizedNextStage = String(nextStage || '').toLowerCase();
+      if (!normalizedNextStage) {
+        return;
+      }
+
+      if (permittedStages.length > 0 && !permittedStages.includes(normalizedNextStage)) {
+        return;
+      }
+
+      setActiveStage(normalizedNextStage);
+      setPage(1);
+      await loadQueue(normalizedNextStage, 1);
+    },
+    [loadQueue, permittedStages]
+  );
+
   const fetchFullTimeline = useCallback(async (id: number | string, ref: string) => {
     setLogLoading(true);
     setLogRef(ref);
@@ -339,9 +396,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         decision: "approved",
       });
 
-      if (response?.success || response?.data?.success) {
-        setPage(1);
-        await loadQueue(activeStage, 1);
+      if (response?.status === 'success' || response?.success || response?.data?.success) {
+        const nextStage = response?.data?.currentState?.currentStage || response?.currentState?.currentStage;
+        await switchToWorkflowStage(nextStage || activeStage);
         window.alert("Approved successfully");
       } else {
         window.alert(response?.message || response?.data?.message || "Failed to approve");
@@ -388,11 +445,16 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         feedback: comment,
       });
 
-      if (response?.success || response?.data?.success) {
+      if (response?.status === 'success' || response?.success || response?.data?.success) {
         window.alert(`${actionType === "return" ? "Returned" : "Rejected"} successfully`);
         closeActionPopup();
-        setPage(1);
-        await loadQueue(activeStage, 1);
+        const nextStage = response?.data?.currentState?.currentStage || response?.currentState?.currentStage;
+        if (nextStage) {
+          await switchToWorkflowStage(nextStage);
+        } else {
+          setPage(1);
+          await loadQueue(activeStage, 1);
+        }
       } else {
         window.alert(response?.message || response?.data?.message || `Failed to ${actionType}`);
       }
@@ -405,12 +467,16 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
   const getDisplayStatus = useCallback((record: Record<string, any>) => {
     const status = String(record.workflow_status || record.status || '').toLowerCase();
+    const workflowDecision = getRecordWorkflowDecision(record);
+    const stageDecision = getRecordStageDecision(record);
     const category = resolveStatusCategory(record);
     
     if (category === 'archived') return 'Archived';
     if (category === 'rejected') return 'Reject';
     if (category === 'returned') return 'Return';
+    if (workflowDecision === 'resubmitted') return 'Resubmitted';
     if (category === 'approved') {
+      if (stageDecision.includes('approved')) return 'Approved';
       if (status === 'level1_approved') return 'Approved Level-1';
       if (status === 'hod_approved') return 'Approved HOD';
       if (status === 'ithead_approved') return 'Approved IT Head';
@@ -423,7 +489,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     
     const stage = formatStageLabel(String(record.workflow_stage || ''), config.stageLabels);
     return `Pending ${stage}`;
-  }, [resolveStatusCategory, config.stageLabels]);
+  }, [getRecordStageDecision, getRecordWorkflowDecision, resolveStatusCategory, config.stageLabels]);
 
   const statusStats = useMemo(() => {
     const stats = { total: rows.length, pending: 0, approved: 0, returned: 0, rejected: 0, archived: 0 };
@@ -695,11 +761,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                           className={`adminbudget-item adminbudget-item--clickable ${archivingIds.has(recordId) ? 'adminbudget-item--archiving' : ''}`}
                           role="button"
                           tabIndex={0}
-                          onClick={() => navigate(`/finance/${recordId}`)}
+                          onClick={() => navigate(getFinanceRoute(recordId, 'view'))}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault();
-                              navigate(`/finance/${recordId}`);
+                              navigate(getFinanceRoute(recordId, 'view'));
                             }
                           }}
                         >
@@ -753,7 +819,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                 title="View"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(`/finance/${recordId}`);
+                                  navigate(getFinanceRoute(recordId, 'view'));
                                 }}
                               >
                                 <Eye size={16} />
@@ -764,7 +830,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                 title="Edit"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(`/finance/${recordId}/edit`);
+                                  navigate(getFinanceRoute(recordId, 'edit'));
                                 }}
                               >
                                 <Edit2 size={16} />

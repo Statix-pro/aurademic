@@ -192,6 +192,15 @@ const FINANCE_SELECT_SQL = `
     fr.workflow_state,
     fr.workflow_status,
     fr.workflow_stage,
+    (
+      SELECT wa.decision
+        FROM workflow_actions wa
+       WHERE wa.module_key = 'finance'
+         AND wa.record_id = fr.id
+         AND LOWER(TRIM(wa.stage)) = ?
+       ORDER BY wa.decided_at DESC, wa.id DESC
+       LIMIT 1
+    ) AS workflow_stage_decision,
     frr.request_ref AS proposal_ref,
     fr.created_at,
     fr.updated_at
@@ -223,6 +232,104 @@ const normalizeWorkflowState = (workflowState) => {
     currentStage: normalizeText(parsed.currentStage).toLowerCase() || null,
     status: normalizeText(parsed.status).toLowerCase() || null,
     isEditableByApplicant: Boolean(parsed.isEditableByApplicant),
+  };
+};
+
+const collectChangedFields = (previousRecord, nextRecord, fieldMap = []) => {
+  const changes = [];
+
+  for (const field of fieldMap) {
+    const previousValue = normalizeText(previousRecord?.[field.storageKey]);
+    const nextValue = normalizeText(nextRecord?.[field.storageKey]);
+
+    if (previousValue === nextValue) {
+      continue;
+    }
+
+    changes.push({
+      key: field.storageKey,
+      label: field.label,
+      before: previousValue || '-',
+      after: nextValue || '-',
+    });
+  }
+
+  return changes;
+};
+
+const buildFinanceUpdateAudit = ({
+  previousRecord,
+  updateData,
+  budgetRowsInput = null,
+  incomeRowsInput = null,
+  budgetRowsChanged = false,
+  incomeRowsChanged = false,
+  actor = null,
+}) => {
+  const nextRecord = {
+    request_date: updateData.request_date ?? previousRecord.request_date,
+    description: updateData.description ?? previousRecord.description,
+    beneficiary_type: updateData.beneficiary_type ?? previousRecord.beneficiary_type,
+    beneficiary_value: updateData.beneficiary_value ?? previousRecord.beneficiary_value,
+    budget_tag: updateData.budget_tag ?? previousRecord.budget_tag,
+    primary_head: updateData.primary_head ?? previousRecord.primary_head,
+    event_sub_head: updateData.event_sub_head ?? previousRecord.event_sub_head,
+    proposed_amount: updateData.proposed_amount ?? previousRecord.proposed_amount,
+    balance_amount: updateData.balance_amount ?? previousRecord.balance_amount,
+    total_budget: updateData.total_budget ?? previousRecord.total_budget,
+    income_type: updateData.income_type ?? previousRecord.income_type,
+    income_status: updateData.income_status ?? previousRecord.income_status,
+    income_amount_type: updateData.income_amount_type ?? previousRecord.income_amount_type,
+    credit_status: updateData.credit_status ?? previousRecord.credit_status,
+    debit_status: updateData.debit_status ?? previousRecord.debit_status,
+    partial_amount: updateData.partial_amount ?? previousRecord.partial_amount,
+  };
+
+  const fieldChanges = collectChangedFields(previousRecord, nextRecord, [
+    { storageKey: 'request_date', label: 'Request date' },
+    { storageKey: 'description', label: 'Description' },
+    { storageKey: 'beneficiary_type', label: 'Beneficiary type' },
+    { storageKey: 'beneficiary_value', label: 'Beneficiary value' },
+    { storageKey: 'budget_tag', label: 'Budget tag' },
+    { storageKey: 'primary_head', label: 'Primary head' },
+    { storageKey: 'event_sub_head', label: 'Event sub head' },
+    { storageKey: 'proposed_amount', label: 'Proposed amount' },
+    { storageKey: 'balance_amount', label: 'Balance amount' },
+    { storageKey: 'total_budget', label: 'Total budget' },
+    { storageKey: 'income_type', label: 'Income type' },
+    { storageKey: 'income_status', label: 'Income status' },
+    { storageKey: 'income_amount_type', label: 'Income amount type' },
+    { storageKey: 'credit_status', label: 'Credit status' },
+    { storageKey: 'debit_status', label: 'Debit status' },
+    { storageKey: 'partial_amount', label: 'Partial amount' },
+  ]);
+
+  const rowChanges = [];
+  if (budgetRowsInput) {
+    rowChanges.push(`Budget breakup ${budgetRowsChanged ? 'updated' : 'reviewed'} (${budgetRowsInput.length} row(s))`);
+  }
+  if (incomeRowsInput) {
+    rowChanges.push(`Income rows ${incomeRowsChanged ? 'updated' : 'reviewed'} (${incomeRowsInput.length} row(s))`);
+  }
+
+  const summaryParts = [];
+  if (fieldChanges.length > 0) {
+    summaryParts.push(`${fieldChanges.length} field(s) updated`);
+  }
+  summaryParts.push(...rowChanges);
+
+  return {
+    summary: summaryParts.join(' | ') || 'Finance request updated',
+    details: {
+      changedFields: fieldChanges,
+      budgetRowsChanged: Boolean(budgetRowsInput),
+      incomeRowsChanged: Boolean(incomeRowsInput),
+      budgetRowsCount: budgetRowsInput ? budgetRowsInput.length : 0,
+      incomeRowsCount: incomeRowsInput ? incomeRowsInput.length : 0,
+      actorRole: normalizeText(actor?.role).toLowerCase() || null,
+      actorEmail: normalizeText(actor?.email).toLowerCase() || null,
+      actorIsAdmin: Boolean(actor?.isSuperAdmin || ['admin', 'super_admin', 'superadmin'].includes(normalizeText(actor?.role).toLowerCase())),
+    },
   };
 };
 
@@ -778,7 +885,7 @@ const financeModel = {
     }
   },
 
-  async updateFinanceRequest(id, financeData) {
+  async updateFinanceRequest(id, financeData, actor = null) {
     const connection = await db.getConnection();
 
     try {
@@ -788,7 +895,7 @@ const financeModel = {
         `SELECT fr.id, fr.created_by, fr.employee_id, fr.beneficiary_type, fr.beneficiary_value, u.email AS created_by_email
            FROM finance_requests fr
            LEFT JOIN users u ON u.id = fr.created_by
-           WHERE id = ?
+           WHERE fr.id = ?
            LIMIT 1`,
         [id]
       );
@@ -815,14 +922,39 @@ const financeModel = {
       const incomeRows = hasIncomeRowsInput
         ? normalizeIncomeRows(Array.isArray(financeData.income_rows) ? financeData.income_rows : [])
         : [];
+      const [previousBudgetRows] = hasBudgetRowsInput
+        ? await connection.query(
+            `SELECT budget_head, sub_head, amount
+               FROM finance_budget_breakup
+               WHERE finance_id = ?
+               ORDER BY sort_order ASC, id ASC`,
+            [id]
+          )
+        : [[]];
+      const [previousIncomeRows] = hasIncomeRowsInput
+        ? await connection.query(
+            `SELECT income_source, contribution, amount, status, credit_account
+               FROM finance_income_rows
+               WHERE finance_id = ?
+               ORDER BY sort_order ASC, id ASC`,
+            [id]
+          )
+        : [[]];
       const updateData = Object.fromEntries(
-        Object.entries(financeData).filter(([_, value]) => value !== undefined && value !== null)
+        Object.entries(financeData)
+          .filter(([_, value]) => value !== undefined && value !== null)
+          .map(([key, value]) => [key, value === '' ? null : value])
       );
       delete updateData.budget_rows;
       delete updateData.income_rows;
-
       if (updateData.enclosures) {
         updateData.enclosures = JSON.stringify(updateData.enclosures);
+      }
+      if (Object.prototype.hasOwnProperty.call(updateData, 'debit_status')) {
+        const normalizedDebitStatus = normalizeText(updateData.debit_status).toLowerCase();
+        updateData.debit_status = ['credited', 'reimbursement'].includes(normalizedDebitStatus)
+          ? normalizedDebitStatus
+          : null;
       }
       if (Object.prototype.hasOwnProperty.call(updateData, 'budget_tag')) {
         updateData.budget_tag = normalizeText(updateData.budget_tag) || null;
@@ -852,6 +984,63 @@ const financeModel = {
       }
 
       const [result] = await connection.query('UPDATE finance_requests SET ? WHERE id = ?', [updateData, id]);
+
+      try {
+        const previousBudgetSnapshot = previousBudgetRows.map((row) => ({
+          budget_head: normalizeText(row.budget_head),
+          sub_head: normalizeText(row.sub_head),
+          amount: toMoney(row.amount),
+        }));
+        const nextBudgetSnapshot = budgetRows.map((row) => ({
+          budget_head: normalizeText(row.budget_head),
+          sub_head: normalizeText(row.sub_head),
+          amount: toMoney(row.amount),
+        }));
+        const previousIncomeSnapshot = previousIncomeRows.map((row) => ({
+          income_source: normalizeText(row.income_source),
+          contribution: normalizeText(row.contribution),
+          amount: toMoney(row.amount),
+          status: normalizeText(row.status),
+          credit_account: normalizeText(row.credit_account),
+        }));
+        const nextIncomeSnapshot = incomeRows.map((row) => ({
+          income_source: normalizeText(row.income_source),
+          contribution: normalizeText(row.contribution),
+          amount: toMoney(row.amount),
+          status: normalizeText(row.status),
+          credit_account: normalizeText(row.credit_account),
+        }));
+
+        const audit = buildFinanceUpdateAudit({
+          previousRecord: existingRecord,
+          updateData,
+          budgetRowsInput: hasBudgetRowsInput ? budgetRows : null,
+          incomeRowsInput: hasIncomeRowsInput ? incomeRows : null,
+          budgetRowsChanged: hasBudgetRowsInput && JSON.stringify(previousBudgetSnapshot) !== JSON.stringify(nextBudgetSnapshot),
+          incomeRowsChanged: hasIncomeRowsInput && JSON.stringify(previousIncomeSnapshot) !== JSON.stringify(nextIncomeSnapshot),
+          actor,
+        });
+
+        await connection.query(
+          `INSERT INTO finance_request_edits
+             (finance_request_id, edited_by_user_id, edited_by_email, edited_by_role, is_admin, summary, details)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            toPositiveInt(actor?.id) || null,
+            normalizeText(actor?.email) || null,
+            normalizeText(actor?.role).toLowerCase() || null,
+            Boolean(actor?.isSuperAdmin || ['admin', 'super_admin', 'superadmin'].includes(normalizeText(actor?.role).toLowerCase())) ? 1 : 0,
+            audit.summary,
+            JSON.stringify(audit.details),
+          ]
+        );
+      } catch (auditError) {
+        if (auditError?.code !== 'ER_NO_SUCH_TABLE') {
+          throw auditError;
+        }
+      }
+
       await connection.commit();
       return result;
     } catch (error) {
@@ -864,7 +1053,7 @@ const financeModel = {
 
   async getFinanceRequestById(id) {
     try {
-      const [rows] = await db.query(`${FINANCE_SELECT_SQL} WHERE fr.id = ? LIMIT 1`, [id]);
+      const [rows] = await db.query(`${FINANCE_SELECT_SQL} WHERE fr.id = ? LIMIT 1`, ['', id]);
 
       if (!rows.length) return null;
 
@@ -881,7 +1070,7 @@ const financeModel = {
   async listFinanceRequests({ userId, mine, status }) {
     try {
       let query = `${FINANCE_SELECT_SQL} WHERE 1 = 1`;
-      const params = [];
+      const params = [''];
 
       if (mine) {
         query += ' AND fr.created_by = ?';
@@ -1008,7 +1197,7 @@ const financeModel = {
 
   async getStatusUpdates(financeId) {
     try {
-      const [rows] = await db.query(
+      const [workflowRows] = await db.query(
         `SELECT
            wa.id,
            wa.record_id AS finance_id,
@@ -1034,10 +1223,53 @@ const financeModel = {
         [financeId]
       );
 
-      return rows.map((row) => ({
+      let editRows = [];
+      try {
+        const [rows] = await db.query(
+          `SELECT
+             e.id,
+             e.finance_request_id AS finance_id,
+             e.edited_by_user_id AS user_id,
+             e.edited_by_role AS role,
+             'updated' AS status,
+             'updated' AS decision,
+             e.summary AS comment,
+             e.summary,
+             e.details,
+             e.created_at,
+             u.name AS user_name,
+             e.edited_by_email AS actor_email,
+             e.edited_by_role AS actor_role,
+             e.is_admin,
+             NULL AS snapshot_before,
+             NULL AS meta
+           FROM finance_request_edits e
+           LEFT JOIN users u ON u.id = e.edited_by_user_id
+           WHERE e.finance_request_id = ?
+           ORDER BY e.created_at ASC, e.id ASC`,
+          [financeId]
+        );
+        editRows = rows;
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE') {
+          throw error;
+        }
+      }
+
+      const merged = [...workflowRows, ...editRows].sort((left, right) => {
+        const leftTime = new Date(left.decided_at || left.created_at || 0).getTime();
+        const rightTime = new Date(right.decided_at || right.created_at || 0).getTime();
+        if (leftTime !== rightTime) {
+          return leftTime - rightTime;
+        }
+        return (toPositiveInt(left.id) || 0) - (toPositiveInt(right.id) || 0);
+      });
+
+      return merged.map((row) => ({
         ...row,
         snapshot_before: safeParseJSON(row.snapshot_before, null),
         meta: safeParseJSON(row.meta, null),
+        details: safeParseJSON(row.details, null),
       }));
     } catch (error) {
       throw new Error(`Error fetching status updates: ${error.message}`);
@@ -1047,6 +1279,24 @@ const financeModel = {
   async doesFinanceExist(id) {
     const [rows] = await db.query('SELECT 1 FROM finance_requests WHERE id = ? LIMIT 1', [id]);
     return rows.length > 0;
+  },
+
+  async deleteFinanceRequest(id) {
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      await connection.query('DELETE FROM finance_requests WHERE id = ?', [id]);
+
+      await connection.commit();
+      return true;
+    } catch (error) {
+      await connection.rollback();
+      throw new Error(`Error deleting finance request: ${error.message}`);
+    } finally {
+      connection.release();
+    }
   },
 
   async getEmployeeByEmail(email) {
@@ -1194,7 +1444,8 @@ const financeModel = {
          fr.created_by,
          fr.beneficiary_type,
          fr.beneficiary_entity_id,
-         fr.department_id
+         fr.department_id,
+         fr.total_budget
        FROM finance_requests fr
        WHERE fr.id = ?${lockClause}`,
       [normalizedRecordId]
@@ -1210,6 +1461,7 @@ const financeModel = {
       beneficiaryType: normalizeBeneficiaryType(row.beneficiary_type),
       beneficiaryEntityId: toPositiveInt(row.beneficiary_entity_id),
       departmentId: toPositiveInt(row.department_id),
+      totalBudget: toMoney(row.total_budget),
       applicantUserId: toPositiveInt(row.created_by),
     };
   },
@@ -1411,7 +1663,7 @@ const financeModel = {
        ${whereClause}
        ORDER BY fr.created_at DESC
        LIMIT ? OFFSET ?`,
-      [...whereParams, limit, offset]
+      [normalizedStage, ...whereParams, limit, offset]
     );
 
     return {

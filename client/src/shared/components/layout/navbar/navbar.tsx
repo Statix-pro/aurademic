@@ -193,7 +193,7 @@ const Navbar: React.FC = () => {
                   document.body.classList.remove('menu-open');
                 }}
               >
-                <li>Finance</li>
+                <li>Approval</li>
               </Link>
               <Link
                 to="/expenditure"

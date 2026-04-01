@@ -1,7 +1,7 @@
 // client/src/features/user-dashboard/financecard/financecard.tsx
 import React, { useEffect, useState } from 'react';
 import './financecard.css';
-import { Eye, Edit2, Briefcase, Clock, RotateCcw, XCircle, CheckCircle, Archive, Search, Info } from 'lucide-react';
+import { Eye, Edit2, Briefcase, Clock, RotateCcw, XCircle, CheckCircle, Archive, Search, Info, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
@@ -16,6 +16,7 @@ interface FinanceCardItem {
   amount?: number;
   proposed_amount?: number | string | null;
   total_budget?: number | string | null;
+  approved_total_amount?: number | string | null;
   overall_status: string;
   workflow_status?: string;
   created_at: string;
@@ -26,6 +27,7 @@ interface FinanceCardItem {
     status: string;
     currentStage: string;
     isEditableByApplicant?: boolean;
+    submittedTotalBudget?: number | string | null;
   };
 }
 
@@ -36,9 +38,26 @@ interface FinanceStatusUpdate {
   status?: string | null;
   decision?: string | null;
   comment?: string | null;
+  summary?: string | null;
+  details?: any;
   created_at?: string | null;
   user_name?: string | null;
+  actor_email?: string | null;
   actor_role?: string | null;
+  is_admin?: number | boolean | null;
+}
+
+interface FinanceLogEvent {
+  key: string;
+  badge: string;
+  title: string;
+  subtitle?: string;
+  actorLabel: string;
+  actorValue: string;
+  actorBadgeLabel?: string;
+  timestamp: string | number;
+  dateLabel: string;
+  decision?: string;
 }
 
 const FinanceCard: React.FC = () => {
@@ -93,6 +112,7 @@ const FinanceCard: React.FC = () => {
   const fetchDashboard = async () => {
     try {
       setLoading(true);
+      setStatusUpdatesById({});
       const res = await authenticityUtility.get('/finance-requests?mine=true') as {
         status: string;
         data?: FinanceCardItem[];
@@ -122,19 +142,32 @@ const FinanceCard: React.FC = () => {
   const formatFiscalYearLabel = (startYear: string) =>
     `FY ${startYear}-${String(Number(startYear) + 1).slice(-2)}`;
 
+  const getWorkflowStatus = (item: FinanceCardItem) =>
+    String(item.workflow_state?.status || item.workflow_status || item.overall_status || '').toLowerCase();
+
+  const getCurrentStage = (item: FinanceCardItem) =>
+    String(item.workflow_state?.currentStage || '').toLowerCase();
+
   const getNormalizedStatus = (item: FinanceCardItem) => {
-    const status = (item.workflow_state?.status || item.overall_status || '').toLowerCase();
+    const status = getWorkflowStatus(item);
+    const currentStage = getCurrentStage(item);
+    const lastDecision = String(item.workflow_state?.lastDecision || '').toLowerCase();
     if (status === 'archived' || status === 'archive') return 'archived';
     if (status === 'returned') return 'returned';
     if (status === 'rejected') return 'rejected';
     if (status === 'completed' || status === 'approved') return 'approved';
+    if (lastDecision === 'resubmitted') return 'resubmitted';
+    if (currentStage === 'level1' && status === 'submitted') {
+      return 'submitted';
+    }
+    if (status === 'submitted' || status === 'in_progress' || status === 'pending' || !status) return 'pending';
     return 'pending';
   };
 
   const getFinanceTimelineState = (item: FinanceCardItem, stage: string) => {
     const normalizedStatus = getNormalizedStatus(item);
-    const workflowStatus = String(item.workflow_state?.status || item.workflow_status || item.overall_status || '').toLowerCase();
-    const currentStage = String(item.workflow_state?.currentStage || workflowStatus || '').toLowerCase();
+    const workflowStatus = getWorkflowStatus(item);
+    const currentStage = getCurrentStage(item) || workflowStatus;
     const stages = ['hod', 'dof', 'principal'];
     const stageIndex = stages.indexOf(stage);
     const currentIndex = stages.indexOf(currentStage);
@@ -157,6 +190,11 @@ const FinanceCard: React.FC = () => {
       return 'pending';
     }
 
+    if (normalizedStatus === 'submitted') {
+      if (stageIndex === 0) return 'current';
+      return 'pending';
+    }
+
     if (currentIndex >= 0 && stageIndex < currentIndex) return 'completed';
     if (currentIndex >= 0 && stageIndex === currentIndex) return 'current';
     if (currentIndex < 0 && stageIndex === 0) return 'current';
@@ -165,15 +203,27 @@ const FinanceCard: React.FC = () => {
 
   const getFinanceStatusLabel = (item: FinanceCardItem) => {
     const normalizedStatus = getNormalizedStatus(item);
+    if (normalizedStatus === 'submitted') return 'Submitted';
+    if (normalizedStatus === 'pending') return 'Pending';
     if (normalizedStatus === 'approved') return 'Approved';
     if (normalizedStatus === 'rejected') return 'Rejected';
     if (normalizedStatus === 'returned') return 'Returned';
     if (normalizedStatus === 'archived') return 'Archive';
-    return 'Pending';
+    if (normalizedStatus === 'resubmitted') return 'Resubmitted';
+    return 'Submitted';
+  };
+
+  const isPendingLikeStatus = (item: FinanceCardItem) => {
+    const normalizedStatus = getNormalizedStatus(item);
+    const currentStage = getCurrentStage(item);
+    return normalizedStatus === 'pending' || normalizedStatus === 'submitted' || normalizedStatus === 'resubmitted' || currentStage === 'level1';
   };
 
   const getDisplayAmount = (item: FinanceCardItem) => {
-    const rawAmount = item.amount ?? item.proposed_amount ?? item.total_budget ?? 0;
+    const normalizedStatus = getNormalizedStatus(item);
+    const rawAmount = normalizedStatus === 'approved'
+      ? (item.approved_total_amount ?? item.total_budget ?? item.proposed_amount ?? 0)
+      : (item.workflow_state?.submittedTotalBudget ?? item.proposed_amount ?? item.total_budget ?? item.amount ?? 0);
     const parsedAmount = Number(rawAmount);
     return Number.isFinite(parsedAmount) ? parsedAmount : 0;
   };
@@ -202,31 +252,50 @@ const FinanceCard: React.FC = () => {
   const getProposalRef = (item: FinanceCardItem) =>
     `#F-${new Date(item.created_at).getFullYear()}-${String(item.id).padStart(4, '0')}`;
 
-  const buildFinanceLogEvents = (item: FinanceCardItem, updates: FinanceStatusUpdate[]) => {
-    if (!updates.length) {
-      return [{
-        key: `created-${item.id}`,
-        badge: 'SUBMITTED',
-        title: 'Proposal created',
-        actorLabel: 'Submitted By',
-        actorValue: item.applicant_name,
-        actorBadge: '',
-        timestamp: item.created_at,
-      }];
-    }
+  const buildFinanceLogEvents = (item: FinanceCardItem, updates: FinanceStatusUpdate[]): FinanceLogEvent[] => {
+    const formatActorIdentity = (name?: string | null, email?: string | null, fallback?: string | null) => {
+      const normalizedName = String(name || '').trim();
+      const normalizedEmail = String(email || '').trim();
+      const normalizedFallback = String(fallback || '').trim();
 
-    return updates.map((update, index) => {
+      if (normalizedName && normalizedEmail && normalizedName.toLowerCase() !== normalizedEmail.toLowerCase()) {
+        return `${normalizedName} (${normalizedEmail})`;
+      }
+
+      if (normalizedName) return normalizedName;
+      if (normalizedEmail) return normalizedEmail;
+      return normalizedFallback || '-';
+    };
+
+    const events: FinanceLogEvent[] = [{
+      key: `created-${item.id}`,
+      badge: 'SUBMITTED',
+      title: 'Proposal created',
+      subtitle: 'Initial finance request submitted',
+      actorLabel: 'Submitted By',
+      actorValue: item.applicant_name,
+      actorBadgeLabel: '',
+      timestamp: item.created_at,
+      dateLabel: formatDateTime(item.created_at),
+      decision: 'submitted',
+    }];
+
+    updates.forEach((update, index) => {
       const decision = String(update.decision || update.status || '').toLowerCase();
       const stage = formatLabel(update.stage || update.role);
-      const actorValue = update.user_name || update.actor_role || 'Workflow';
-      const isSubmitted = index === 0 || decision.includes('submitted');
+      const actorValue = formatActorIdentity(update.user_name, update.actor_email, update.actor_role || 'Workflow');
+      const isSubmitted = decision.includes('submitted');
       const isReturned = decision.includes('returned');
       const isRejected = decision.includes('rejected');
       const isApproved = decision.includes('approved') || decision.includes('completed');
+      const isUpdated = decision === 'updated';
+      const isAdmin = Boolean(update.is_admin) || ['admin', 'super_admin', 'superadmin'].includes(String(update.actor_role || '').toLowerCase());
 
       let badge = 'UPDATED';
       let title = 'Proposal edited';
       let actorLabel = 'Updated By';
+      let subtitle = String(update.summary || '').trim();
+      let actorBadgeLabel = '';
 
       if (isSubmitted) {
         badge = 'SUBMITTED';
@@ -241,18 +310,37 @@ const FinanceCard: React.FC = () => {
       } else if (isApproved) {
         badge = 'APPROVED';
         title = 'Proposal approved';
+      } else if (isUpdated) {
+        badge = 'UPDATED';
+        title = 'Proposal updated';
+        const details = update.details && typeof update.details === 'object' ? update.details : null;
+        const changedFields = Array.isArray(details?.changedFields) ? details.changedFields : [];
+        const fieldSummary = changedFields.length
+          ? changedFields
+              .map((field: any) => `${field.label}: ${field.before} -> ${field.after}`)
+              .join(' | ')
+          : '';
+        subtitle = [String(update.summary || '').trim(), fieldSummary].filter(Boolean).join(' | ') || 'Proposal updated';
+        if (isAdmin) {
+          actorBadgeLabel = 'SUPERADMIN';
+        }
       }
 
-      return {
+      events.push({
         key: `${update.id}-${index}`,
         badge,
         title,
+        subtitle,
         actorLabel,
         actorValue,
-        actorBadge: stage !== '-' ? stage : '',
+        actorBadgeLabel: isUpdated ? actorBadgeLabel : (stage !== '-' ? stage : ''),
         timestamp: update.created_at || item.created_at,
-      };
+        dateLabel: formatDateTime(update.created_at || item.created_at),
+        decision,
+      });
     });
+
+    return events;
   };
 
   const fetchStatusUpdates = async (requestId: number) => {
@@ -295,13 +383,13 @@ const FinanceCard: React.FC = () => {
   };
 
   const canEditRequest = (item: FinanceCardItem) => {
-    const workflowStatus = String(item.workflow_state?.status || item.workflow_status || '').toLowerCase();
     const normalizedStatus = getNormalizedStatus(item);
+    const currentStage = getCurrentStage(item);
 
     return Boolean(item.workflow_state?.isEditableByApplicant) ||
-      normalizedStatus === 'pending' ||
       normalizedStatus === 'returned' ||
-      ['submitted', 'resubmitted', 're_submitted', 'returned'].includes(workflowStatus);
+      normalizedStatus === 'submitted' ||
+      currentStage === 'level1';
   };
 
   const handleEditClick = (item: FinanceCardItem) => {
@@ -309,10 +397,44 @@ const FinanceCard: React.FC = () => {
     navigate(`/finance/${item.id}/edit`);
   };
 
+  const canDeleteRequest = (item: FinanceCardItem) => {
+    const normalizedStatus = getNormalizedStatus(item);
+    const currentStage = getCurrentStage(item);
+
+    return currentStage === 'level1' &&
+      !['approved', 'rejected', 'returned', 'archived'].includes(normalizedStatus);
+  };
+
+  const handleDeleteClick = async (item: FinanceCardItem) => {
+    if (!canDeleteRequest(item)) return;
+
+    const confirmed = window.confirm('Delete this finance request? This action cannot be undone.');
+    if (!confirmed) return;
+
+    try {
+      const response = await authenticityUtility.delete(`/finance-requests/${item.id}`) as { status?: string; message?: string };
+      if (response.status !== 'success') {
+        window.alert(response.message || 'Failed to delete finance request');
+        return;
+      }
+
+      if (activeInfoId === item.id) {
+        setActiveInfoId(null);
+      }
+
+      await fetchDashboard();
+    } catch (error) {
+      console.error('Failed to delete finance request', error);
+      window.alert((error as any)?.response?.data?.message || 'Failed to delete finance request');
+    }
+  };
+
   const applyFilters = () => {
     let result = [...data];
 
-    if (selectedStatus !== 'all') {
+    if (selectedStatus === 'pending') {
+      result = result.filter(item => isPendingLikeStatus(item));
+    } else if (selectedStatus !== 'all') {
       result = result.filter(item => getNormalizedStatus(item) === selectedStatus);
     }
 
@@ -337,7 +459,7 @@ const FinanceCard: React.FC = () => {
 
   const stats = {
     total: data.length,
-    pending: data.filter(item => getNormalizedStatus(item) === 'pending').length,
+    pending: data.filter(item => isPendingLikeStatus(item)).length,
     returned: data.filter(item => getNormalizedStatus(item) === 'returned').length,
     rejected: data.filter(item => getNormalizedStatus(item) === 'rejected').length,
     approved: data.filter(item => getNormalizedStatus(item) === 'approved').length,
@@ -554,6 +676,7 @@ const FinanceCard: React.FC = () => {
                   {paginatedData.map((item) => {
                     const status = getNormalizedStatus(item);
                     const canEdit = canEditRequest(item);
+                    const canDelete = canDeleteRequest(item);
                     const isStatusExpanded = Boolean(showFinanceStatusDetail[item.id]);
                     return (
                       <div key={item.id} className="financecard-item-card">
@@ -561,7 +684,7 @@ const FinanceCard: React.FC = () => {
                           <div className="card-header-left">
                             <span className="card-id-pill">#F-{new Date(item.created_at).getFullYear()}-{String(item.id).padStart(4, '0')}</span>
                             <span className="card-applicant-name">{item.applicant_name}</span>
-                            <span className="card-category-tag">{item.budget_tag || item.beneficiary_type}</span>
+                            <span className="card-category-tag">{item.budget_tag || '-'}</span>
                           </div>
                           
                           <div className="card-header-right">
@@ -595,6 +718,16 @@ const FinanceCard: React.FC = () => {
                               >
                                 <Edit2 size={18} />
                               </button>
+                              {canDelete && (
+                                <button
+                                  type="button"
+                                  className="icon-btn-subtle"
+                                  title="Delete"
+                                  onClick={() => handleDeleteClick(item)}
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -712,7 +845,12 @@ const FinanceCard: React.FC = () => {
                   <div className="financecard-log-empty">Loading updates...</div>
                 ) : (
                   activeLogEvents.map((event) => (
-                    <div key={event.key} className="financecard-log-entry financecard-log-entry-modal">
+                    <div key={event.key} className={`financecard-log-entry financecard-log-entry-modal${event.actorBadgeLabel ? ' financecard-log-entry--admin' : ''}`}>
+                      {event.actorBadgeLabel === 'SUPERADMIN' && (
+                        <span className="financecard-log-admin-mark" title="Updated by Admin">
+                          {`\u2605 ${event.actorBadgeLabel}`}
+                        </span>
+                      )}
                       <div className="financecard-log-entry-top">
                         <div className="financecard-log-entry-title">
                           <span className={`financecard-log-badge financecard-log-badge--${event.badge.toLowerCase()}`}>
@@ -720,15 +858,16 @@ const FinanceCard: React.FC = () => {
                           </span>
                           <span className="financecard-log-title-text">{event.title}</span>
                         </div>
-                        {event.actorBadge && (
-                          <span className="financecard-log-stage-pill">★ {event.actorBadge}</span>
+                        {event.actorBadgeLabel && !['SUPERADMIN', 'HOD', 'DOF'].includes(event.actorBadgeLabel) && (
+                          <span className="financecard-log-stage-pill">{event.actorBadgeLabel}</span>
                         )}
                       </div>
+                      <div className="financecard-log-role">{event.subtitle || 'Status update'}</div>
                       <div className="financecard-log-actor-line">
                         <strong>{event.actorLabel}:</strong> {event.actorValue}
                       </div>
                       <div className="financecard-log-date financecard-log-date-right">
-                        {formatDateTime(event.timestamp)}
+                        {event.dateLabel}
                       </div>
                     </div>
                   ))

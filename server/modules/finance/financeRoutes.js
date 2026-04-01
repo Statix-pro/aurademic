@@ -30,6 +30,7 @@ router.get('/queue/:stage', canAccessFinanceWorkflow, financeController.getFinan
 router.patch('/:id/approval', canAccessFinanceWorkflow, financeController.approveFinanceWorkflow);
 router.patch('/:id/archive-toggle', canAccessFinanceWorkflow, financeController.toggleArchiveStatus);
 router.post('/:id/resubmit', financeController.resubmitFinanceRequest);
+router.delete('/:id', financeController.deleteFinanceRequest);
 
 // Timeline / compatibility endpoint
 router.get('/:id/timeline', financeController.getFinanceTimeline);
