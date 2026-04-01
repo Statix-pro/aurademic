@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Briefcase, CheckCircle2, Clock, RotateCcw, XCircle, Eye, Info, Edit2, Archive } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import authenticityUtility from '../../utils/authenticityUtility';
+import { useAuth } from '../../../contexts/AuthContext';
 import {
   WorkflowApprovalModuleConfig,
   WorkflowDecision,
@@ -88,7 +89,15 @@ interface WorkflowApprovalPageProps {
   config: WorkflowApprovalModuleConfig;
 }
 
+interface WorkflowStageTab {
+  key: string;
+  stage: string;
+  label: string;
+  level1Role?: 'hod' | 'coordinator';
+}
+
 const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [meta, setMeta] = useState<WorkflowMeta | null>(null);
   const [activeStage, setActiveStage] = useState<string>('');
@@ -121,8 +130,52 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     return d.getMonth() < 1 ? d.getFullYear() - 1 : d.getFullYear();
   });
   const [beneficiaryFilter, setBeneficiaryFilter] = useState<string>("All Beneficiary");
+  const [activeStageTabKey, setActiveStageTabKey] = useState<string>('');
 
   const permittedStages = useMemo(() => meta?.permittedStages || [], [meta]);
+
+  const stageTabs = useMemo<WorkflowStageTab[]>(() => {
+    const roleTokens = Array.isArray(user?.roles) ? user.roles : [];
+    const normalizedRoles = roleTokens.map((role) => String(role || '').trim().toLowerCase());
+
+    return permittedStages.flatMap((stage) => {
+      const normalizedStage = String(stage || '').trim().toLowerCase();
+      if (config.moduleKey === 'finance' && normalizedStage === 'level1') {
+        if (meta?.isSuperAdmin) {
+          return [
+            { key: 'level1-hod', stage: 'level1', label: 'HOD', level1Role: 'hod' as const },
+            {
+              key: 'level1-coordinator',
+              stage: 'level1',
+              label: 'Coordinator',
+              level1Role: 'coordinator' as const,
+            },
+          ];
+        }
+
+        if (normalizedRoles.includes('coordinator') || normalizedRoles.includes('entity_approver')) {
+          return [
+            {
+              key: 'level1-coordinator',
+              stage: 'level1',
+              label: 'Coordinator',
+              level1Role: 'coordinator' as const,
+            },
+          ];
+        }
+
+        return [{ key: 'level1-hod', stage: 'level1', label: 'HOD', level1Role: 'hod' as const }];
+      }
+
+      return [
+        {
+          key: normalizedStage || stage,
+          stage: normalizedStage || stage,
+          label: formatStageLabel(stage, config.stageLabels),
+        },
+      ];
+    });
+  }, [config.moduleKey, config.stageLabels, meta?.isSuperAdmin, permittedStages, user?.roles]);
 
   const getRecordId = useCallback(
     (record: Record<string, any>) => {
@@ -227,14 +280,21 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     const workflowDecision = getRecordWorkflowDecision(record);
     const stageDecision = getRecordStageDecision(record);
     const token = String(record.workflow_status || record.status || '').toLowerCase();
+    const currentStage = getRecordCurrentStage(record);
+    const activeStageKey = String(activeStage || '').toLowerCase();
 
-    if (workflowDecision === 'resubmitted') return 'pending';
     if (token.includes('archived') || token.includes('archive')) return 'archived';
     if (token.includes('rejected')) return 'rejected';
     if (token.includes('returned') || token.includes('return')) return 'returned';
     if (token.includes('completed') || token.includes('approved')) return 'approved';
+    if (workflowDecision === 'resubmitted') return 'pending';
 
-    if (stageDecision.includes('archived') || stageDecision.includes('archive')) return 'archived';
+    // For the active queue stage, treat current in-progress rows as pending.
+    // This prevents stale historical stage decisions (e.g. old returned) from overriding fresh cycles.
+    if (token === 'in_progress' && currentStage && currentStage === activeStageKey) {
+      return 'pending';
+    }
+
     if (stageDecision.includes('rejected')) return 'rejected';
     if (stageDecision.includes('returned') || stageDecision.includes('return')) return 'returned';
     if (stageDecision.includes('approved')) return 'approved';
@@ -242,7 +302,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     if (isApprovedForCurrentStage(record)) return 'approved';
     
     return 'pending';
-  }, [getRecordStageDecision, getRecordWorkflowDecision, isApprovedForCurrentStage]);
+  }, [activeStage, getRecordCurrentStage, getRecordStageDecision, getRecordWorkflowDecision, isApprovedForCurrentStage]);
 
   const isVisibleInWorkflowList = useCallback(
     (record: Record<string, any>, stage: string) => {
@@ -282,12 +342,22 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       setError('');
       try {
         const endpoint = getQueueEndpoint(stage);
+        const activeTab = stageTabs.find((tab) => tab.key === activeStageTabKey) || null;
+        const normalizedStage = String(stage || '').toLowerCase();
+        const level1RoleFilter =
+          config.moduleKey === 'finance' &&
+          normalizedStage === 'level1' &&
+          activeTab?.level1Role
+            ? activeTab.level1Role
+            : null;
+
         const response = await authenticityUtility.get(endpoint, {
           params: {
             page: requestedPage,
             limit,
             workflowStatus: 'all',
             fiscalYear,
+            ...(level1RoleFilter ? { level1Role: level1RoleFilter } : {}),
             ...(beneficiaryFilter !== 'All Beneficiary' ? { beneficiaryType: beneficiaryFilter } : {}),
             ...(searchTerm ? { q: searchTerm } : {}),
           },
@@ -318,13 +388,16 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       }
     },
     [
+      activeStageTabKey,
       getQueueEndpoint,
       isVisibleInWorkflowList,
       limit,
       mapQueueResponse,
+      config.moduleKey,
       fiscalYear,
       beneficiaryFilter,
       searchTerm,
+      stageTabs,
     ]
   );
 
@@ -376,6 +449,29 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       setLoading(false);
     });
   }, [activeStage, loadQueue, page, fiscalYear, beneficiaryFilter, searchTerm]);
+
+  useEffect(() => {
+    if (!stageTabs.length) {
+      if (activeStageTabKey) {
+        setActiveStageTabKey('');
+      }
+      return;
+    }
+
+    const activeTab = stageTabs.find((tab) => tab.key === activeStageTabKey);
+    if (!activeTab) {
+      const firstTab = stageTabs[0];
+      setActiveStageTabKey(firstTab.key);
+      if (firstTab.stage !== activeStage) {
+        setActiveStage(firstTab.stage);
+      }
+      return;
+    }
+
+    if (activeTab.stage !== activeStage) {
+      setActiveStage(activeTab.stage);
+    }
+  }, [activeStage, activeStageTabKey, stageTabs]);
 
   useEffect(() => {
     setPage(1);
@@ -491,18 +587,38 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     return `Pending ${stage}`;
   }, [getRecordStageDecision, getRecordWorkflowDecision, resolveStatusCategory, config.stageLabels]);
 
+  const resolveFinanceLevel1Role = useCallback((record: Record<string, any>): 'hod' | 'coordinator' => {
+    const routeType = String(record.level1_route_type || record.level1RouteType || '').trim().toLowerCase();
+    if (routeType === 'entity_contact') {
+      return 'coordinator';
+    }
+    return 'hod';
+  }, []);
+
+  const stageScopedRows = useMemo(() => {
+    const activeTab = stageTabs.find((tab) => tab.key === activeStageTabKey) || null;
+    const activeLevel1Role = activeTab?.level1Role || null;
+
+    let filtered = rows;
+    if (config.moduleKey === 'finance' && activeStage === 'level1' && activeLevel1Role) {
+      filtered = filtered.filter((record) => resolveFinanceLevel1Role(record) === activeLevel1Role);
+    }
+
+    return filtered;
+  }, [activeStage, activeStageTabKey, config.moduleKey, resolveFinanceLevel1Role, rows, stageTabs]);
+
   const statusStats = useMemo(() => {
-    const stats = { total: rows.length, pending: 0, approved: 0, returned: 0, rejected: 0, archived: 0 };
-    for (const row of rows) {
+    const stats = { total: stageScopedRows.length, pending: 0, approved: 0, returned: 0, rejected: 0, archived: 0 };
+    for (const row of stageScopedRows) {
       const category = resolveStatusCategory(row);
       stats[category] += 1;
     }
     return stats;
-  }, [rows, resolveStatusCategory]);
+  }, [resolveStatusCategory, stageScopedRows]);
 
   const filteredRows = useMemo(() => {
-    let filtered = rows;
-    
+    let filtered = stageScopedRows;
+
     if (statusFilter !== 'total') {
       filtered = filtered.filter(record => resolveStatusCategory(record) === statusFilter);
     }
@@ -526,7 +642,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
     
     return filtered;
-  }, [rows, searchTerm, statusFilter, resolveStatusCategory]);
+  }, [searchTerm, stageScopedRows, statusFilter, resolveStatusCategory]);
 
   const paginatedRows = useMemo(() => {
     const startIndex = Math.max(0, (page - 1) * (limit || 20));
@@ -578,9 +694,20 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     });
 
     try {
-      await authenticityUtility.patch(getArchiveEndpoint(recordId), {});
-      setPage(1);
-      await loadQueue(activeStage, 1);
+      const response: any = await authenticityUtility.patch(getArchiveEndpoint(recordId), {});
+      const restoredStage = String(
+        response?.data?.workflow_state?.currentStage
+        || response?.data?.currentState?.currentStage
+        || ''
+      ).toLowerCase();
+
+      if (isArchived && restoredStage) {
+        setStatusFilter('pending');
+        await switchToWorkflowStage(restoredStage);
+      } else {
+        setPage(1);
+        await loadQueue(activeStage, 1);
+      }
     } catch (archiveError: any) {
       setError(archiveError?.response?.data?.message || archiveError?.message || 'Failed to archive/unarchive item');
     } finally {
@@ -613,18 +740,24 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
           <div className="adminbudget-header">
             <h5 className="adminbudget-title">{config.title}</h5>
 
-            {permittedStages.length > 0 && (
+            {stageTabs.length > 0 && (
               <div className="adminbudget-role-tabs" role="tablist">
-                {permittedStages.map((stage) => (
+                {stageTabs.map((tab) => (
                   <button
-                    key={stage}
+                    key={tab.key}
                     type="button"
-                    className={`adminbudget-role-tab ${activeStage === stage ? 'active' : ''}`}
-                    onClick={() => setActiveStage(stage)}
+                    className={`adminbudget-role-tab ${activeStageTabKey === tab.key ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveStageTabKey(tab.key);
+                      if (activeStage !== tab.stage) {
+                        setActiveStage(tab.stage);
+                      }
+                      setPage(1);
+                    }}
                     role="tab"
-                    aria-selected={activeStage === stage}
+                    aria-selected={activeStageTabKey === tab.key}
                   >
-                    {formatStageLabel(stage, config.stageLabels)}
+                    {tab.label}
                   </button>
                 ))}
               </div>
@@ -675,7 +808,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
               <span className="adminbudget-stats-icon"><Briefcase size={18} /></span>
               <div className="adminbudget-stats-text">
                 <span className="adminbudget-stats-label">Total</span>
-                <span className="adminbudget-stats-number">{totalRows || statusStats.total}</span>
+                <span className="adminbudget-stats-number">{statusStats.total}</span>
               </div>
             </div>
             <div

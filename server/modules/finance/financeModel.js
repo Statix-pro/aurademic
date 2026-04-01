@@ -12,6 +12,52 @@ const safeParseJSON = (value, fallback = null) => {
 };
 
 const normalizeText = (value) => String(value || '').trim();
+const FINANCE_REQUEST_COLUMN_EXISTS_CACHE = new Map();
+const FINANCE_BUDGET_BREAKUP_COLUMN_EXISTS_CACHE = new Map();
+
+const hasFinanceRequestColumn = async (columnName, { tx = db } = {}) => {
+  const normalizedColumn = normalizeText(columnName);
+  if (!normalizedColumn) return false;
+
+  if (FINANCE_REQUEST_COLUMN_EXISTS_CACHE.has(normalizedColumn)) {
+    return FINANCE_REQUEST_COLUMN_EXISTS_CACHE.get(normalizedColumn) === true;
+  }
+
+  const [rows] = await tx.query(
+    `SELECT COUNT(*) AS count
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'finance_requests'
+         AND COLUMN_NAME = ?`,
+    [normalizedColumn]
+  );
+
+  const exists = Number(rows?.[0]?.count || 0) > 0;
+  FINANCE_REQUEST_COLUMN_EXISTS_CACHE.set(normalizedColumn, exists);
+  return exists;
+};
+
+const hasFinanceBudgetBreakupColumn = async (columnName, { tx = db } = {}) => {
+  const normalizedColumn = normalizeText(columnName);
+  if (!normalizedColumn) return false;
+
+  if (FINANCE_BUDGET_BREAKUP_COLUMN_EXISTS_CACHE.has(normalizedColumn)) {
+    return FINANCE_BUDGET_BREAKUP_COLUMN_EXISTS_CACHE.get(normalizedColumn) === true;
+  }
+
+  const [rows] = await tx.query(
+    `SELECT COUNT(*) AS count
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'finance_budget_breakup'
+         AND COLUMN_NAME = ?`,
+    [normalizedColumn]
+  );
+
+  const exists = Number(rows?.[0]?.count || 0) > 0;
+  FINANCE_BUDGET_BREAKUP_COLUMN_EXISTS_CACHE.set(normalizedColumn, exists);
+  return exists;
+};
 
 const normalizeBeneficiaryTypeForStorage = (beneficiaryType) => {
   const normalized = normalizeText(beneficiaryType).toLowerCase();
@@ -54,6 +100,32 @@ const normalizeBeneficiaryType = (beneficiaryType) => {
   return normalized || 'Institution';
 };
 
+const LEVEL1_COORDINATOR_BENEFICIARY_TYPES = Object.freeze([
+  'centre',
+  'cell',
+  'club',
+  'professional body',
+  'professional bodies',
+]);
+
+const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY = Object.freeze(['faculty', 'staff']);
+const escapeSqlLiteral = (value) => `'${String(value || '').replace(/'/g, "''")}'`;
+
+const resolveFinanceLevel1RouteType = (record = {}) => {
+  const beneficiaryType = normalizeBeneficiaryType(record?.beneficiary_type).toLowerCase();
+  const beneficiaryEntityId = toPositiveInt(record?.beneficiary_entity_id);
+
+  if (LEVEL1_COORDINATOR_BENEFICIARY_TYPES.includes(beneficiaryType)) {
+    return 'entity_contact';
+  }
+
+  if (LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY.includes(beneficiaryType) && beneficiaryEntityId) {
+    return 'entity_contact';
+  }
+
+  return 'department_hod';
+};
+
 const normalizeEntityTypeCode = (typeCode) => {
   const normalized = normalizeText(typeCode).toUpperCase().replace(/[\s-]+/g, '_');
 
@@ -68,20 +140,70 @@ const normalizeEntityTypeCode = (typeCode) => {
   return normalized || null;
 };
 
-const normalizeBudgetRows = (rows = []) =>
-  rows
-    .map((row, index) => ({
-      budget_head: normalizeText(row?.budget_head || row?.category),
-      sub_head: normalizeText(row?.sub_head || row?.head),
-      amount: toMoney(row?.amount),
+const normalizeBudgetRows = (rows = []) => {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error('At least one budget breakup row is required');
+  }
+
+  const normalizedRows = [];
+  const errors = [];
+
+  rows.forEach((row, index) => {
+    const rowNo = index + 1;
+    const budgetHead = normalizeText(row?.budget_head || row?.category);
+    const subHead = normalizeText(row?.sub_head || row?.head);
+    const parsedAmount = Number(row?.amount);
+    const hasAvailableSnapshot =
+      row?.available_amount_snapshot !== undefined && row?.available_amount_snapshot !== null;
+    const parsedAvailableSnapshot = hasAvailableSnapshot
+      ? Number(row.available_amount_snapshot)
+      : null;
+    const rowErrors = [];
+
+    if (!budgetHead) {
+      rowErrors.push(`Row ${rowNo}: budget head is required`);
+    }
+
+    if (!subHead) {
+      rowErrors.push(`Row ${rowNo}: sub head is required`);
+    }
+
+    if (!Number.isFinite(parsedAmount)) {
+      rowErrors.push(`Row ${rowNo}: amount must be a valid number`);
+    } else if (parsedAmount <= 0) {
+      rowErrors.push(`Row ${rowNo}: amount must be greater than 0`);
+    }
+
+    if (hasAvailableSnapshot && !Number.isFinite(parsedAvailableSnapshot)) {
+      rowErrors.push(`Row ${rowNo}: available amount snapshot must be a valid number`);
+    }
+
+    if (rowErrors.length > 0) {
+      errors.push(...rowErrors);
+      return;
+    }
+
+    normalizedRows.push({
+      budget_head: budgetHead,
+      sub_head: subHead,
+      amount: toMoney(parsedAmount),
       budget_line_id: toPositiveInt(row?.budget_line_id),
       budget_proposal_id: toPositiveInt(row?.budget_proposal_id),
-      available_amount_snapshot: row?.available_amount_snapshot === undefined || row?.available_amount_snapshot === null
-        ? null
-        : toMoney(row?.available_amount_snapshot),
+      available_amount_snapshot: hasAvailableSnapshot ? toMoney(parsedAvailableSnapshot) : null,
       sort_order: index,
-    }))
-    .filter((row) => row.budget_head && row.sub_head);
+    });
+  });
+
+  if (errors.length > 0) {
+    throw new Error(`Invalid budget breakup rows: ${errors.join(' | ')}`);
+  }
+
+  if (normalizedRows.length === 0) {
+    throw new Error('At least one valid budget breakup row is required');
+  }
+
+  return normalizedRows;
+};
 
 const normalizeIncomeRows = (rows = []) =>
   rows.map((row, index) => ({
@@ -145,7 +267,40 @@ const isLooseTextMatch = (leftValue, rightValue) => {
   return commonCount >= 1 && similarity >= 0.5;
 };
 
-const FINANCE_SELECT_SQL = `
+const WORKFLOW_STATUS_SQL_EXPR = `
+  COALESCE(
+    NULLIF(LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.status')))), ''),
+    NULLIF(LOWER(TRIM(fr.workflow_status)), ''),
+    'in_progress'
+  )
+`;
+
+const WORKFLOW_STAGE_SQL_EXPR = `
+  COALESCE(
+    NULLIF(LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.currentStage')))), ''),
+    NULLIF(LOWER(TRIM(fr.workflow_stage)), ''),
+    ''
+  )
+`;
+
+const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_SQL = LEVEL1_COORDINATOR_BENEFICIARY_TYPES
+  .map(escapeSqlLiteral)
+  .join(', ');
+const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY_SQL = LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY
+  .map(escapeSqlLiteral)
+  .join(', ');
+
+const LEVEL1_COORDINATOR_ROUTE_SQL_EXPR = `
+  (
+    LOWER(TRIM(COALESCE(fr.beneficiary_type, ''))) IN (${LEVEL1_COORDINATOR_BENEFICIARY_TYPES_SQL})
+    OR (
+      LOWER(TRIM(COALESCE(fr.beneficiary_type, ''))) IN (${LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY_SQL})
+      AND COALESCE(fr.beneficiary_entity_id, 0) > 0
+    )
+  )
+`;
+
+const buildFinanceSelectSql = ({ budgetTagSelectSql = 'NULL AS budget_tag' } = {}) => `
   SELECT
     fr.id,
     fr.employee_id,
@@ -164,7 +319,7 @@ const FINANCE_SELECT_SQL = `
     fr.description,
     fr.beneficiary_type,
     fr.beneficiary_value,
-    fr.budget_tag,
+    ${budgetTagSelectSql},
     fr.department_id,
     fr.beneficiary_entity_id,
     fr.primary_head,
@@ -190,8 +345,8 @@ const FINANCE_SELECT_SQL = `
     fr.chairman_comment,
     fr.overall_status,
     fr.workflow_state,
-    fr.workflow_status,
-    fr.workflow_stage,
+    ${WORKFLOW_STATUS_SQL_EXPR} AS workflow_status,
+    ${WORKFLOW_STAGE_SQL_EXPR} AS workflow_stage,
     (
       SELECT wa.decision
         FROM workflow_actions wa
@@ -209,6 +364,13 @@ const FINANCE_SELECT_SQL = `
   LEFT JOIN master_employees e ON fr.employee_id = e.id
   LEFT JOIN master_departments d ON e.department_id = d.id
 `;
+
+const getFinanceSelectSql = async ({ tx = db } = {}) => {
+  const hasBudgetTag = await hasFinanceRequestColumn('budget_tag', { tx });
+  return buildFinanceSelectSql({
+    budgetTagSelectSql: hasBudgetTag ? 'fr.budget_tag' : 'NULL AS budget_tag',
+  });
+};
 
 const mapWorkflowStatusToOverallStatus = (workflowState) => {
   const status = normalizeText(workflowState?.status).toLowerCase();
@@ -322,8 +484,8 @@ const buildFinanceUpdateAudit = ({
     summary: summaryParts.join(' | ') || 'Finance request updated',
     details: {
       changedFields: fieldChanges,
-      budgetRowsChanged: Boolean(budgetRowsInput),
-      incomeRowsChanged: Boolean(incomeRowsInput),
+      budgetRowsChanged: Boolean(budgetRowsChanged),
+      incomeRowsChanged: Boolean(incomeRowsChanged),
       budgetRowsCount: budgetRowsInput ? budgetRowsInput.length : 0,
       incomeRowsCount: incomeRowsInput ? incomeRowsInput.length : 0,
       actorRole: normalizeText(actor?.role).toLowerCase() || null,
@@ -531,21 +693,38 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
     return;
   }
 
+  const hasBudgetProposalIdColumn = await hasFinanceBudgetBreakupColumn('budget_proposal_id', { tx: conn });
+
   for (const row of budgetRows) {
+    const columns = [
+      'finance_id',
+      'budget_line_id',
+      'budget_head',
+      'sub_head',
+      'amount',
+      'available_amount_snapshot',
+      'sort_order',
+    ];
+    const values = [
+      financeId,
+      row.budget_line_id || null,
+      row.budget_head,
+      row.sub_head,
+      row.amount,
+      row.available_amount_snapshot,
+      row.sort_order,
+    ];
+
+    if (hasBudgetProposalIdColumn) {
+      columns.splice(1, 0, 'budget_proposal_id');
+      values.splice(1, 0, row.budget_proposal_id || null);
+    }
+
     await conn.query(
       `INSERT INTO finance_budget_breakup
-       (finance_id, budget_proposal_id, budget_line_id, budget_head, sub_head, amount, available_amount_snapshot, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        financeId,
-        row.budget_proposal_id || null,
-        row.budget_line_id || null,
-        row.budget_head,
-        row.sub_head,
-        row.amount,
-        row.available_amount_snapshot,
-        row.sort_order,
-      ]
+       (${columns.join(', ')})
+       VALUES (${columns.map(() => '?').join(', ')})`,
+      values
     );
   }
 };
@@ -736,8 +915,16 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
     const budgetLineId = toPositiveInt(row.budget_line_id);
     const requestedAmount = toMoney(row.amount);
 
-    if (!budgetLineId || requestedAmount <= 0) {
-      continue;
+    if (!budgetLineId) {
+      throw new Error(
+        `Budget line mapping is missing for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`
+      );
+    }
+
+    if (requestedAmount <= 0) {
+      throw new Error(
+        `Requested amount must be greater than 0 for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`
+      );
     }
 
     const budgetLine = await getBudgetLineAvailabilityById(conn, budgetLineId);
@@ -824,6 +1011,7 @@ const financeModel = {
 
     try {
       await connection.beginTransaction();
+      const hasBudgetTagColumn = await hasFinanceRequestColumn('budget_tag', { tx: connection });
 
       const workflowContext = await resolveFinanceWorkflowContext(connection, financeData);
       const normalizedBudgetRows = normalizeBudgetRows(Array.isArray(financeData.budget_rows) ? financeData.budget_rows : []);
@@ -846,7 +1034,6 @@ const financeModel = {
 
         beneficiary_type: normalizeBeneficiaryTypeForStorage(financeData.beneficiary_type),
         beneficiary_value: financeData.beneficiary_value || null,
-        budget_tag: normalizeText(financeData.budget_tag) || null,
         department_id: workflowContext.departmentId,
         beneficiary_entity_id: workflowContext.beneficiaryEntityId,
 
@@ -869,6 +1056,9 @@ const financeModel = {
         total_budget: totalBudget,
         created_by: userId,
       };
+      if (hasBudgetTagColumn) {
+        financeEntry.budget_tag = normalizeText(financeData.budget_tag) || null;
+      }
 
       const [result] = await connection.query('INSERT INTO finance_requests SET ?', [financeEntry]);
       await insertFinanceRequestReference(connection, result.insertId, financeData.request_date);
@@ -890,13 +1080,35 @@ const financeModel = {
 
     try {
       await connection.beginTransaction();
+      const hasBudgetTagColumn = await hasFinanceRequestColumn('budget_tag', { tx: connection });
+      const budgetTagSelectSql = hasBudgetTagColumn ? 'fr.budget_tag' : 'NULL AS budget_tag';
 
       const [existingRows] = await connection.query(
-        `SELECT fr.id, fr.created_by, fr.employee_id, fr.beneficiary_type, fr.beneficiary_value, u.email AS created_by_email
-           FROM finance_requests fr
-           LEFT JOIN users u ON u.id = fr.created_by
-           WHERE fr.id = ?
-           LIMIT 1`,
+        `SELECT
+           fr.id,
+           fr.created_by,
+           fr.employee_id,
+           fr.request_date,
+           fr.description,
+           fr.beneficiary_type,
+           fr.beneficiary_value,
+           ${budgetTagSelectSql},
+           fr.primary_head,
+           fr.event_sub_head,
+           fr.proposed_amount,
+           fr.balance_amount,
+           fr.total_budget,
+           fr.income_type,
+           fr.income_status,
+           fr.income_amount_type,
+           fr.credit_status,
+           fr.debit_status,
+           fr.partial_amount,
+           u.email AS created_by_email
+         FROM finance_requests fr
+         LEFT JOIN users u ON u.id = fr.created_by
+         WHERE fr.id = ?
+         LIMIT 1`,
         [id]
       );
 
@@ -957,7 +1169,11 @@ const financeModel = {
           : null;
       }
       if (Object.prototype.hasOwnProperty.call(updateData, 'budget_tag')) {
-        updateData.budget_tag = normalizeText(updateData.budget_tag) || null;
+        if (hasBudgetTagColumn) {
+          updateData.budget_tag = normalizeText(updateData.budget_tag) || null;
+        } else {
+          delete updateData.budget_tag;
+        }
       }
 
       const mergedRecordForContext = {
@@ -1053,13 +1269,15 @@ const financeModel = {
 
   async getFinanceRequestById(id) {
     try {
-      const [rows] = await db.query(`${FINANCE_SELECT_SQL} WHERE fr.id = ? LIMIT 1`, ['', id]);
+      const financeSelectSql = await getFinanceSelectSql();
+      const [rows] = await db.query(`${financeSelectSql} WHERE fr.id = ? LIMIT 1`, ['', id]);
 
       if (!rows.length) return null;
 
       const finance = rows[0];
       finance.enclosures = safeParseJSON(finance.enclosures, []);
       finance.workflow_state = normalizeWorkflowState(finance.workflow_state);
+      finance.level1_route_type = resolveFinanceLevel1RouteType(finance);
 
       return finance;
     } catch (error) {
@@ -1069,7 +1287,8 @@ const financeModel = {
 
   async listFinanceRequests({ userId, mine, status }) {
     try {
-      let query = `${FINANCE_SELECT_SQL} WHERE 1 = 1`;
+      const financeSelectSql = await getFinanceSelectSql();
+      let query = `${financeSelectSql} WHERE 1 = 1`;
       const params = [''];
 
       if (mine) {
@@ -1090,6 +1309,7 @@ const financeModel = {
         ...row,
         enclosures: safeParseJSON(row.enclosures, []),
         workflow_state: normalizeWorkflowState(row.workflow_state),
+        level1_route_type: resolveFinanceLevel1RouteType(row),
       }));
     } catch (error) {
       throw new Error(`Error listing finance requests: ${error.message}`);
@@ -1143,11 +1363,16 @@ const financeModel = {
 
   async getBudgetBreakup(financeId) {
     try {
+      const hasBudgetProposalIdColumn = await hasFinanceBudgetBreakupColumn('budget_proposal_id');
+      const budgetProposalSelectSql = hasBudgetProposalIdColumn
+        ? 'budget_proposal_id'
+        : 'NULL AS budget_proposal_id';
+
       const [rows] = await db.query(
         `SELECT
            id,
            finance_id,
-           budget_proposal_id,
+           ${budgetProposalSelectSql},
            budget_line_id,
            budget_head,
            sub_head,
@@ -1593,6 +1818,7 @@ const financeModel = {
     const normalizedStage = normalizeText(stage).toLowerCase();
     const workflowStatus = normalizeText(filters.workflowStatus).toLowerCase() || 'in_progress';
     const isSuperAdmin = Boolean(filters.isSuperAdmin);
+    const level1Role = normalizeText(filters.level1Role).toLowerCase();
 
     const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
     const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
@@ -1607,7 +1833,7 @@ const financeModel = {
       } else {
         whereParts.push(
           `( 
-            (fr.workflow_stage = ? AND fr.workflow_status IN ('in_progress', 'returned'))
+            (${WORKFLOW_STAGE_SQL_EXPR} = ? AND ${WORKFLOW_STATUS_SQL_EXPR} IN ('in_progress', 'returned'))
             OR EXISTS (
               SELECT 1
               FROM workflow_actions wa
@@ -1621,11 +1847,19 @@ const financeModel = {
         whereParams.push(normalizedStage, normalizedStage);
       }
     } else {
-      whereParts.push('fr.workflow_stage = ?', 'fr.workflow_status = ?');
+      whereParts.push(`${WORKFLOW_STAGE_SQL_EXPR} = ?`, `${WORKFLOW_STATUS_SQL_EXPR} = ?`);
       whereParams.push(normalizedStage, workflowStatus);
     }
 
     const scopeFilters = filters.scopeFilters || {};
+
+    if (normalizedStage === 'level1' && ['hod', 'coordinator'].includes(level1Role)) {
+      if (level1Role === 'coordinator') {
+        whereParts.push(LEVEL1_COORDINATOR_ROUTE_SQL_EXPR);
+      } else {
+        whereParts.push(`NOT ${LEVEL1_COORDINATOR_ROUTE_SQL_EXPR}`);
+      }
+    }
 
     if (!scopeFilters.forceAll) {
       if (scopeFilters.scopeType === 'department') {
@@ -1658,8 +1892,9 @@ const financeModel = {
 
     const total = Number(countRows?.[0]?.total || 0);
 
+    const financeSelectSql = await getFinanceSelectSql({ tx });
     const [rows] = await tx.query(
-      `${FINANCE_SELECT_SQL}
+      `${financeSelectSql}
        ${whereClause}
        ORDER BY fr.created_at DESC
        LIMIT ? OFFSET ?`,
@@ -1671,6 +1906,7 @@ const financeModel = {
         ...row,
         enclosures: safeParseJSON(row.enclosures, []),
         workflow_state: normalizeWorkflowState(row.workflow_state),
+        level1_route_type: resolveFinanceLevel1RouteType(row),
       })),
       total,
       page,

@@ -1,9 +1,23 @@
--- Migration: Rebuild finance module tables with budget references
--- Date: 2026-03-31
--- Notes:
---   - Designed for environments where finance tables were dropped.
---   - Reuses budget_tags (no finance_tags table).
---   - Keeps workflow as level1 -> dof -> principal (principal manual approval).
+-- ============================================================
+-- FINANCE MODULE RESET + REBUILD (no legacy data preservation)
+-- ============================================================
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- Drop in dependency order
+DROP TABLE IF EXISTS finance_budget_usage_ledger;
+DROP TABLE IF EXISTS finance_budget_line_usage;
+DROP TABLE IF EXISTS finance_income_rows;
+DROP TABLE IF EXISTS finance_budget_breakup;
+DROP TABLE IF EXISTS finance_request_refs;
+DROP TABLE IF EXISTS finance_request_ref_tracker;
+DROP TABLE IF EXISTS finance_requests;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- ============================================================
+-- Rebuild finance module tables with budget references
+-- ============================================================
 
 CREATE TABLE IF NOT EXISTS finance_requests (
   id INT NOT NULL AUTO_INCREMENT,
@@ -50,7 +64,7 @@ CREATE TABLE IF NOT EXISTS finance_requests (
   chairman_status ENUM('pending','approved','rejected') DEFAULT 'pending',
   chairman_comment TEXT NULL,
 
-  created_by INT NOT NULL,
+  created_by INT NULL,
   overall_status ENUM('pending','approved','rejected','archived') DEFAULT 'pending',
   workflow_state JSON NULL,
   workflow_status VARCHAR(32)
@@ -79,7 +93,7 @@ CREATE TABLE IF NOT EXISTS finance_requests (
 
   CONSTRAINT fk_finance_requests_user
     FOREIGN KEY (created_by) REFERENCES users(id)
-    ON DELETE CASCADE ON UPDATE CASCADE,
+    ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT fk_finance_requests_employee
     FOREIGN KEY (employee_id) REFERENCES master_employees(id)
     ON DELETE SET NULL ON UPDATE CASCADE,
