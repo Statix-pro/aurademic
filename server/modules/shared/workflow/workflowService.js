@@ -442,10 +442,6 @@ export async function actOnWorkflow({ moduleKey, recordId, decision, feedback, a
 
     const { currentStage } = assertWorkflowActionable(previousState);
 
-    if (normalizedDecision === 'archived' && !isSuperAdminActor(normalizedActor)) {
-      throw new WorkflowError('Only super admin can archive workflows', 403, 'WORKFLOW_PERMISSION_DENIED');
-    }
-
     assertDecisionPermission({
       moduleKey: normalizeText(moduleKey).toLowerCase(),
       currentStage,
@@ -557,6 +553,7 @@ export async function listQueue({ moduleKey, stage, actor, filters = {} }) {
         ...filters,
         workflowStatus: normalizeText(filters.workflowStatus).toLowerCase() || 'in_progress',
         moduleKey: normalizeText(moduleKey).toLowerCase(),
+        isSuperAdmin: isSuperAdminActor(normalizedActor),
         scopeFilters,
       },
       { tx: conn }

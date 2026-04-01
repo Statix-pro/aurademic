@@ -15,6 +15,10 @@ router.use(authMiddleware);
 // Core request APIs
 router.post('/', financeController.createFinanceRequest);
 router.get('/', financeController.listFinanceRequests);
+router.get('/tags', financeController.getBudgetTags);
+router.get('/org-units', financeController.getAllOrgUnits);
+router.get('/org-units/:type', financeController.getOrgUnits);
+router.get('/budget-availability', financeController.getBudgetAvailability);
 router.get('/search-applicant', financeController.searchApplicant);
 router.get('/me', financeController.getCurrentEmployeeInfo);
 
@@ -24,6 +28,7 @@ router.get('/queue/:stage', canAccessFinanceWorkflow, financeController.getFinan
 
 // Workflow actions
 router.patch('/:id/approval', canAccessFinanceWorkflow, financeController.approveFinanceWorkflow);
+router.patch('/:id/archive-toggle', canAccessFinanceWorkflow, financeController.toggleArchiveStatus);
 router.post('/:id/resubmit', financeController.resubmitFinanceRequest);
 
 // Timeline / compatibility endpoint

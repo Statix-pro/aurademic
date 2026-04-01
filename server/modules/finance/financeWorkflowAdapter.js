@@ -2,7 +2,8 @@ import financeModel from './financeModel.js';
 import { registerWorkflowModule } from '../shared/workflow/workflowModuleRegistry.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
-const ALLOWED_META_KEYS = new Set(['trigger', 'route']);
+const ALLOWED_META_KEYS = new Set(['trigger', 'route', 'amountBand']);
+const ALLOWED_AMOUNT_BANDS = new Set(['lte_10k', 'gt_10k']);
 
 const financeWorkflowAdapter = {
   async getRecordContext(recordId, options = {}) {
@@ -44,6 +45,14 @@ const financeWorkflowAdapter = {
       if (value !== null && value !== undefined && typeof value !== 'string') {
         throw new WorkflowError(
           `finance workflow moduleMeta.${key} must be a string or null`,
+          400,
+          'INVALID_WORKFLOW_META'
+        );
+      }
+
+      if (key === 'amountBand' && value !== null && value !== undefined && !ALLOWED_AMOUNT_BANDS.has(value)) {
+        throw new WorkflowError(
+          `finance workflow moduleMeta.amountBand must be one of: ${Array.from(ALLOWED_AMOUNT_BANDS).join(', ')}`,
           400,
           'INVALID_WORKFLOW_META'
         );
