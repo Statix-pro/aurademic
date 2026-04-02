@@ -6,7 +6,7 @@ const formatCurrencyINR = (value: number) =>
 export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfig> = {
   finance: {
     moduleKey: 'finance',
-    title: 'Finance Workflow Queue',
+    title: 'Finance Requests',
     apiBasePath: '/finance-requests',
     stageLabels: {
       level1: 'Level-1',
