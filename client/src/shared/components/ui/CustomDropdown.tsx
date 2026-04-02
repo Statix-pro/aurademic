@@ -19,6 +19,8 @@ interface CustomDropdownProps {
   isDisabled?: boolean;
   isMulti?: boolean;
   className?: string;
+  centerSelect?: boolean;
+  filterOption?: ((option: { label: string; value: string; data: OptionType }, inputValue: string) => boolean) | null;
 }
 
 const CustomDropdown: React.FC<CustomDropdownProps> = ({
@@ -32,6 +34,7 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
   isDisabled = false,
   isMulti = false,
   className = '',
+  centerSelect = false,
   ...props
 }) => {
 
@@ -78,22 +81,61 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
   };
 
   return (
-    <div className={`custom-input-group ${className}`}>
-      {label && <label className="custom-label" htmlFor={name}>{label}</label>}
-      <Select
-        inputId={name}
-        name={name}
-        options={options}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        isDisabled={isDisabled}
-        isMulti={isMulti}
-        styles={customStyles}
-        classNamePrefix="react-select"
-        {...props}
-      />
-      {error && <div className="custom-error-text">{error}</div>}
+    <div className={`custom-input-group ${className}`} style={{ 
+      display: 'flex', 
+      flexDirection: 'column',
+      width: '100%'
+    }}>
+      {label && (
+        <label className="custom-label" htmlFor={name} style={{ 
+          alignSelf: 'flex-start',
+          width: '100%',
+          textAlign: 'left',
+         
+        }}>
+          {label}
+        </label>
+      )}
+      <div style={{ 
+        width: '100%',
+        display: 'flex',
+        justifyContent: centerSelect ? 'center' : 'flex-start',
+      
+        
+      }}>
+        <div style={{ 
+          width: centerSelect ? 'auto' : '100%',
+          minWidth: centerSelect ? '250px' : 'auto',
+          flex: centerSelect ? '0 1 auto' : '1',
+          
+          height:'15px',
+          marginBottom:'10px'
+
+        }}>
+          <Select
+            inputId={name}
+            name={name}
+            options={options}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            isDisabled={isDisabled}
+            isMulti={isMulti}
+            styles={customStyles}
+            classNamePrefix="react-select"
+            {...props}
+          />
+        </div>
+      </div>
+      {error && (
+        <div className="custom-error-text" style={{ 
+          alignSelf: 'flex-start',
+          width: '100%',
+          textAlign: 'left'
+        }}>
+          {error}
+        </div>
+      )}
     </div>
   );
 };

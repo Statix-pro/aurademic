@@ -472,6 +472,10 @@ const AdminBudget: React.FC = () => {
     fetchKpiStats();
   }, [fetchDashboard, fetchKpiStats]);
 
+  const refreshBudgetData = useCallback(async () => {
+    await Promise.allSettled([fetchDashboard(), fetchKpiStats()]);
+  }, [fetchDashboard, fetchKpiStats]);
+
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     if (deletePopupOpen && deleteCountdown > 0) {
@@ -536,7 +540,7 @@ const AdminBudget: React.FC = () => {
           });
 
           if (response?.success || response?.data?.success) {
-            fetchDashboard();
+            await refreshBudgetData();
             return;
           }
           showAlert(response?.message || "Failed to approve", "error");
@@ -574,7 +578,7 @@ const AdminBudget: React.FC = () => {
           const response: any = await authenticityUtility.patch(`/adminbudget/${id}/archive-toggle`, {});
 
           if (response?.success || response?.data?.success) {
-            fetchDashboard();
+            await refreshBudgetData();
           } else {
             setArchivingIds((prev) => {
               const next = new Set(prev);
@@ -603,7 +607,7 @@ const AdminBudget: React.FC = () => {
             next.delete(id);
             return next;
           });
-          fetchDashboard();
+          refreshBudgetData();
         }, ARCHIVE_TRANSITION_MS);
       },
       true,
@@ -634,7 +638,7 @@ const AdminBudget: React.FC = () => {
       if (response?.success || response?.data?.success) {
         showAlert(`${actionType === "return" ? "Returned" : "Rejected"} successfully`, "success");
         closeActionPopup();
-        fetchDashboard();
+        await refreshBudgetData();
         return;
       }
       showAlert(
@@ -666,7 +670,7 @@ const AdminBudget: React.FC = () => {
       if (response?.success || response?.data?.success) {
         showAlert("Budget proposal deleted successfully", "success");
         closeDeletePopup();
-        fetchDashboard();
+        await refreshBudgetData();
         return;
       }
       showAlert(
@@ -901,8 +905,9 @@ const AdminBudget: React.FC = () => {
       return `${day}-${month}-${year}`;
     }
 
-    const parsed = new Date(raw);
-    if (Number.isNaN(parsed.getTime())) return raw;
+    const parsedMs = parseDateMsForLog(raw);
+    if (!parsedMs) return raw;
+    const parsed = new Date(parsedMs);
     const day = String(parsed.getDate()).padStart(2, "0");
     const month = String(parsed.getMonth() + 1).padStart(2, "0");
     const year = String(parsed.getFullYear());
@@ -912,11 +917,39 @@ const AdminBudget: React.FC = () => {
   const normalizeTextForLog = (value?: string | null) => String(value || "").trim();
   const normalizeEmailForLog = (value?: string | null) => normalizeTextForLog(value).toLowerCase();
 
+  const normalizeDateTimeForLog = (value?: string | null) => {
+    const raw = normalizeTextForLog(value);
+    if (!raw) return "";
+
+    // Safari-safe normalization for "YYYY-MM-DD HH:mm" / "YYYY-MM-DD HH:mm:ss"
+    // Convert to strict ISO with seconds + timezone when timezone is missing.
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(raw)) {
+      return `${raw.replace(" ", "T")}:00Z`;
+    }
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
+      return `${raw.replace(" ", "T")}Z`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) {
+      return `${raw}:00Z`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(raw)) {
+      return `${raw}Z`;
+    }
+    return raw;
+  };
+
+  const parseDateMsForLog = (value?: string | null) => {
+    const normalized = normalizeDateTimeForLog(value);
+    if (!normalized) return 0;
+    const parsed = new Date(normalized);
+    const ms = parsed.getTime();
+    return Number.isNaN(ms) ? 0 : ms;
+  };
+
   const formatDateTimeForLog = (value?: string) => {
-    if (!value) return "-";
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return "-";
-    return parsed.toLocaleString("en-IN");
+    const ms = parseDateMsForLog(value);
+    if (!ms) return "-";
+    return new Date(ms).toLocaleString("en-IN");
   };
 
   const readActorEmail = (record: any, keys: string[]) => {
@@ -960,10 +993,12 @@ const AdminBudget: React.FC = () => {
 
   const buildAdminLogEvents = useMemo<AdminLogEvent[]>(() => {
     const events: AdminLogEvent[] = [];
-    const createdAt = logProposal?.created_at || logProposal?.createdAt;
-    const updatedAt = logProposal?.updated_at || logProposal?.updatedAt;
-    const createdAtMs = createdAt ? new Date(createdAt).getTime() : 0;
-    const updatedAtMs = updatedAt ? new Date(updatedAt).getTime() : 0;
+    const createdAt =
+      logProposal?.created_at || logProposal?.createdAt || logProposal?.created_date;
+    const updatedAt =
+      logProposal?.updated_at || logProposal?.updatedAt || logProposal?.updated_date;
+    const createdAtMs = parseDateMsForLog(createdAt);
+    const updatedAtMs = parseDateMsForLog(updatedAt);
     const submitterEmail = normalizeEmailForLog(logProposal?.user_email || logProposal?.userEmail);
     const approvalLogs = Array.isArray(logEntries) ? logEntries : [];
     const hasApprovalUpdate = approvalLogs.some(
@@ -985,8 +1020,8 @@ const AdminBudget: React.FC = () => {
     const editLogs = Array.isArray(logEdits) ? logEdits : [];
     if (editLogs.length > 0) {
       editLogs.forEach((edit: any, idx: number) => {
-        const editCreatedAt = edit.created_at || edit.createdAt;
-        const editCreatedMs = editCreatedAt ? new Date(editCreatedAt).getTime() : createdAtMs;
+        const editCreatedAt = edit.created_at || edit.createdAt || edit.created_at_formatted;
+        const editCreatedMs = parseDateMsForLog(editCreatedAt) || createdAtMs;
         const summary = normalizeTextForLog(edit.summary);
         let parsedDetails: any = null;
 
@@ -1028,6 +1063,9 @@ const AdminBudget: React.FC = () => {
                 : Array.isArray(parsed?.lineChanges)
                   ? parsed.lineChanges
                   : [];
+            const proposalChanges = Array.isArray(parsed?.proposalChanges)
+              ? parsed.proposalChanges
+              : [];
             if (lines.length > 0) {
               const numericRows = lines
                 .map((line: any) => Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no))
@@ -1050,6 +1088,13 @@ const AdminBudget: React.FC = () => {
               });
               detailSummary = details.join(" | ");
             }
+            if (proposalChanges.length > 0) {
+              const proposalSummary = proposalChanges
+                .map((change: any) => normalizeTextForLog(change))
+                .filter(Boolean)
+                .join("; ");
+              detailSummary = [detailSummary, proposalSummary].filter(Boolean).join(" | ");
+            }
           } catch {
             // Keep summary fallback if details parse fails.
           }
@@ -1066,7 +1111,7 @@ const AdminBudget: React.FC = () => {
           actorIsAdmin,
           actorBadgeLabel,
           timestamp: editCreatedMs,
-          dateLabel: editCreatedAt ? formatDateTimeForLog(editCreatedAt) : "-",
+          dateLabel: formatDateTimeForLog(editCreatedAt || updatedAt || createdAt),
           decision: "updated",
         });
       });
@@ -1102,7 +1147,7 @@ const AdminBudget: React.FC = () => {
         "email",
       ]);
       const decidedAt = app.decided_at || app.decidedAt || app.decided_at_formatted;
-      const decidedAtMs = decidedAt ? new Date(decidedAt).getTime() : 0;
+      const decidedAtMs = parseDateMsForLog(decidedAt);
       const feedbackNote = feedback && !feedback.startsWith("__archive_meta__:")
         ? `Note: ${feedback}`
         : "";
@@ -1416,6 +1461,12 @@ const AdminBudget: React.FC = () => {
                       <div className="adminbudget-cards-container">
                         {currentItems.map((item) => {
                           const canProcessCurrentStage = canProcessStage(item.current_stage);
+                          const normalizedStatus = (item.status || "").toLowerCase();
+                          const isArchivedStatus = ["archived", "archive"].some((token) => normalizedStatus.includes(token));
+                          const isRejectedStatus = normalizedStatus.includes("rejected");
+                          const isReturnedStatus = normalizedStatus.includes("returned");
+                          const isCompletedStatus = normalizedStatus.includes("completed");
+                          const isActionLocked = isArchivedStatus || isRejectedStatus || isReturnedStatus || isCompletedStatus;
                           const hasApprovedOverride = Number(item.has_approved_override ?? 0) > 0;
                           const isApprovedForDisplay = hasApprovedOverride || getStatusCategory(item) === "approved";
                           const displayAmountLabel = isApprovedForDisplay ? "Approved" : "Proposed";
@@ -1492,6 +1543,7 @@ const AdminBudget: React.FC = () => {
                                         e.stopPropagation();
                                         navigate(`/budget/${item.id}/edit?admin=true`);
                                       }}
+                                      disabled={isActionLocked}
                                     >
                                       <Edit2 size={16} />
                                     </button>
@@ -1521,8 +1573,7 @@ const AdminBudget: React.FC = () => {
                                               onApprove(item.id, item.current_stage);
                                             }}
                                             disabled={
-                                              item.status.toLowerCase().includes("completed") ||
-                                              item.status.toLowerCase().includes("archived") ||
+                                              isActionLocked ||
                                               !canProcessCurrentStage
                                             }
                                           >
@@ -1537,9 +1588,7 @@ const AdminBudget: React.FC = () => {
                                               openActionPopup("return", item.id, item.proposal_ref, item.current_stage);
                                             }}
                                             disabled={
-                                              ["completed", "rejected", "archived", "archive"].some((token) =>
-                                                item.status.toLowerCase().includes(token)
-                                              ) || !canProcessCurrentStage
+                                              isActionLocked || !canProcessCurrentStage
                                             }
                                           >
                                             <RotateCcw size={18} />
@@ -1553,9 +1602,7 @@ const AdminBudget: React.FC = () => {
                                               openActionPopup("reject", item.id, item.proposal_ref, item.current_stage);
                                             }}
                                             disabled={
-                                              item.status.toLowerCase().includes("rejected") ||
-                                              item.status.toLowerCase().includes("archived") ||
-                                              !canProcessCurrentStage
+                                              isActionLocked || !canProcessCurrentStage
                                             }
                                           >
                                             <XCircle size={18} />
@@ -1572,9 +1619,7 @@ const AdminBudget: React.FC = () => {
                                               e.stopPropagation();
                                               openActionPopup("return", item.id, item.proposal_ref, item.current_stage);
                                             }}
-                                            disabled={["completed", "rejected", "archived", "archive"].some((token) =>
-                                              item.status.toLowerCase().includes(token)
-                                            )}
+                                            disabled={isActionLocked}
                                           >
                                             <RotateCcw size={18} />
                                           </button>
@@ -1594,9 +1639,7 @@ const AdminBudget: React.FC = () => {
                                       <button
                                         className="adminbudget-action-btn adminbudget-action-btn--archive"
                                         title={
-                                          ["archived", "archive"].some((token) =>
-                                            item.status.toLowerCase().includes(token)
-                                          )
+                                          isArchivedStatus
                                             ? "Unarchive"
                                             : "Archive"
                                         }
@@ -1604,7 +1647,7 @@ const AdminBudget: React.FC = () => {
                                           e.stopPropagation();
                                           onArchiveToggle(item);
                                         }}
-                                        disabled={archivingIds.has(item.id)}
+                                        disabled={archivingIds.has(item.id) || (!isArchivedStatus && (isCompletedStatus || isRejectedStatus || isReturnedStatus))}
                                       >
                                         <Archive size={18} />
                                       </button>
@@ -1896,8 +1939,8 @@ const AdminBudget: React.FC = () => {
               </div>
 
               {(logProposal?.updated_at || logProposal?.updatedAt) && (logProposal?.created_at || logProposal?.createdAt) && (
-                new Date(logProposal.updated_at || logProposal.updatedAt).getTime() >
-                new Date(logProposal.created_at || logProposal.createdAt).getTime()
+                parseDateMsForLog(logProposal.updated_at || logProposal.updatedAt) >
+                parseDateMsForLog(logProposal.created_at || logProposal.createdAt)
               ) && (
                   <div className="budgetdashboard-log-item">
                     <span className="log-label">Last Edited:</span>

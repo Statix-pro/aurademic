@@ -1,9 +1,11 @@
 import React, { ReactNode } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   canAccessAdminArea,
   canAccessBudgetApproval,
+  canAccessFinanceWorkflow,
+  canAccessModuleWorkflow,
   canManageAccessControl,
 } from "../utils/permissionUtils";
 
@@ -61,6 +63,36 @@ export const BudgetApprovalRoute: React.FC<RouteProps> = ({ children }) => {
   }
 
   if (!user || !canAccessBudgetApproval(user)) {
+    return <Navigate to="/home" />;
+  }
+
+  return <>{children}</>;
+};
+
+export const FinanceWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user || !canAccessFinanceWorkflow(user)) {
+    return <Navigate to="/home" />;
+  }
+
+  return <>{children}</>;
+};
+
+export const ModuleWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
+  const { user, loading } = useAuth();
+  const params = useParams<{ moduleKey?: string }>();
+  const moduleKey = String(params.moduleKey || "").trim().toLowerCase();
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user || !moduleKey || !canAccessModuleWorkflow(user, moduleKey)) {
     return <Navigate to="/home" />;
   }
 

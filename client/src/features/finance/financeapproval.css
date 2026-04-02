@@ -105,6 +105,101 @@
   box-shadow: var(--shadow-focus, 0 0 0 3px rgba(0, 105, 171, 0.15));
 }
 
+/* Workflow approval actions */
+.finance-top-actions {
+  width: 100%;
+}
+
+.finance-workflow-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding: 10px 0 6px;
+  width: 100%;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.finance-workflow-btn {
+  min-width: 150px;
+  height: 54px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 16px;
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.10);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  white-space: nowrap;
+}
+
+.finance-workflow-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 26px rgba(15, 23, 42, 0.14);
+  filter: brightness(1.01);
+}
+
+.finance-workflow-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  transform: none;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.finance-workflow-btn--approve {
+  background: #e8f8ee;
+  color: #0d7a37;
+}
+
+.finance-workflow-btn--return {
+  background: #fff3cf;
+  color: #b07a00;
+}
+
+.finance-workflow-btn--reject {
+  background: #fde3e3;
+  color: #c51d1d;
+}
+
+.finance-workflow-btn--archive {
+  background: #eef2ff;
+  color: #334155;
+}
+
+.finance-workflow-btn--back {
+  background: #0069ab;
+  color: #ffffff;
+}
+
+@media (max-width: 900px) {
+  .finance-workflow-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .finance-workflow-actions {
+    gap: 10px;
+    padding-top: 8px;
+  }
+
+  .finance-workflow-btn {
+    min-width: 136px;
+    height: 50px;
+    padding: 0 14px;
+    font-size: 0.94rem;
+  }
+}
+
 /* Form Card */
 .finance-approval-body .form-card {
   background: var(--bg-surface, #ffffff);
@@ -792,4 +887,49 @@
   .pdf-preview-footer .btn-cancel {
     width: 100%;
   }
+}
+/* ONLY Head of Accounts - Clean, No Outer Border */
+.hoac-form-group {
+  margin-bottom: 16px;
+}
+
+.hoac-primary-row {
+  display: flex !important;
+  gap: 8px !important;
+  align-items: stretch !important;
+  width: 100% !important;
+}
+
+.hoac-primary-row > *:first-child {
+  flex: 1 !important;
+}
+
+.hoac-sub-row {
+  margin-top: 8px !important;
+  width: 100% !important;
+  
+}
+
+/* Bigger dropdown, NO BORDER */
+.hoac-form-group .react-select__control {
+  min-height: 48px !important;
+  height: 48px !important;
+  padding: 0 20px !important;     /* More horizontal padding */
+  font-size: 14px !important;
+  border: none !important;        /* NO BORDER */
+  background: #fafbfc !important; /* Light clean background */
+  border-radius: 12px !important; /* Rounded corners */
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; /* Subtle shadow */
+}
+
+.hoac-form-group .react-select__control:hover {
+  background: #f0f4f8 !important; /* Hover state */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+}
+
+.hoac-form-group .react-select__control--is-focused,
+.hoac-form-group .react-select__control:focus-within {
+  background: #fff !important;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15), 0 2px 8px rgba(0,0,0,0.12) !important;
+  outline: none !important;
 }

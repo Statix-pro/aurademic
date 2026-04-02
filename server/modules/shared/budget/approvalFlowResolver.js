@@ -8,6 +8,27 @@
 import db from '../../../config/connection.js';
 import { normalizeBeneficiaryType, normalizeText, isEntityBeneficiaryType } from './budgetUtils.js';
 
+const parseJsonFlow = (rawFlow) => {
+    if (!rawFlow) return [];
+
+    if (Array.isArray(rawFlow)) {
+        return rawFlow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean);
+    }
+
+    if (typeof rawFlow === 'string') {
+        try {
+            const parsed = JSON.parse(rawFlow);
+            if (Array.isArray(parsed)) {
+                return parsed.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean);
+            }
+        } catch {
+            return [];
+        }
+    }
+
+    return [];
+};
+
 /**
  * Resolves the configuration for the approval flow.
  *
@@ -24,34 +45,50 @@ export async function resolveApprovalFlow(beneficiaryType, entityTypeCode = null
         return { requiresLevel1: 0, requiresIthead: 0, requiresDof: 1, requiresPrincipal: 1 };
     }
 
-    const [rows] = entityTypeCode
-        ? await conn.execute(
-            `SELECT requires_level1, requires_dof, requires_principal
-         FROM approval_flow_config
-         WHERE beneficiary_type = ?
-      AND entity_type_code = ?
-        AND module IN ('BUDGET', 'BOTH')
-           AND is_active = 1
-         LIMIT 1`,
-            [normalizedBeneficiaryType, entityTypeCode]
-        )
-        : await conn.execute(
-            `SELECT requires_level1, requires_dof, requires_principal
-         FROM approval_flow_config
-         WHERE beneficiary_type = ?
-      AND entity_type_code IS NULL
-           AND module IN ('BUDGET', 'BOTH')
-           AND is_active = 1
-         LIMIT 1`,
-            [normalizedBeneficiaryType]
-        );
+    const normalizedEntityTypeCode = normalizeText(entityTypeCode).toUpperCase() || null;
 
-    const resolvedFlow = rows.length > 0
+    const [rows] = await conn.execute(
+        `SELECT flow
+         FROM approval_flow_config
+         WHERE is_active = 1
+           AND LOWER(TRIM(module_key)) IN ('budget', '*')
+           AND LOWER(TRIM(beneficiary_type)) IN (LOWER(TRIM(?)), '*')
+           AND (
+             (? IS NULL AND entity_type_code IS NULL)
+             OR (? IS NOT NULL AND (
+               UPPER(TRIM(entity_type_code)) = ?
+               OR entity_type_code IS NULL
+             ))
+           )
+         ORDER BY
+           CASE WHEN LOWER(TRIM(beneficiary_type)) = LOWER(TRIM(?)) THEN 0 ELSE 1 END,
+           CASE
+             WHEN ? IS NOT NULL AND UPPER(TRIM(entity_type_code)) = ? THEN 0
+             WHEN entity_type_code IS NULL THEN 1
+             ELSE 2
+           END
+         LIMIT 1`,
+        [
+            normalizedBeneficiaryType,
+            normalizedEntityTypeCode,
+            normalizedEntityTypeCode,
+            normalizedEntityTypeCode,
+            normalizedBeneficiaryType,
+            normalizedEntityTypeCode,
+            normalizedEntityTypeCode,
+        ]
+    );
+
+    const resolvedStages = rows.length > 0
+        ? parseJsonFlow(rows[0].flow)
+        : [];
+
+    const resolvedFlow = resolvedStages.length > 0
         ? {
-            requiresLevel1: Number(rows[0].requires_level1) ? 1 : 0,
-            requiresIthead: 0,
-            requiresDof: Number(rows[0].requires_dof) ? 1 : 0,
-            requiresPrincipal: Number(rows[0].requires_principal) ? 1 : 0,
+            requiresLevel1: resolvedStages.includes('level1') ? 1 : 0,
+            requiresIthead: resolvedStages.includes('ithead') ? 1 : 0,
+            requiresDof: resolvedStages.includes('dof') ? 1 : 0,
+            requiresPrincipal: resolvedStages.includes('principal') ? 1 : 0,
         }
         : ['Faculty', 'Staff', 'Department'].includes(normalizedBeneficiaryType)
             ? { requiresLevel1: 1, requiresIthead: 0, requiresDof: 1, requiresPrincipal: 1 }
