@@ -1191,6 +1191,7 @@ const FinanceApproval: React.FC = () => {
 
   const handleAddRow = () => {
     const firstRowCategory = budgetRows[0]?.category || '';
+    const newIndex = budgetRows.length;
 
     setBudgetRows(prev => [
       ...prev,
@@ -1200,13 +1201,32 @@ const FinanceApproval: React.FC = () => {
         amount: ''
       }
     ]);
-    setBudgetLineMetaByRow({});
+    setBudgetLineMetaByRow((prev) => ({
+      ...prev,
+      [newIndex]: {
+        budgetLineId: null,
+        budgetProposalId: null,
+        availableAmount: 0,
+      },
+    }));
   };
 
   const handleDeleteRow = (index: number): void => {
     const updated = budgetRows.filter((_, i) => i !== index);
     setBudgetRows(updated.length ? updated : [{ category: 'Individual', head: '', amount: '' }]);
-    setBudgetLineMetaByRow({});
+    setBudgetLineMetaByRow((prev) => {
+      const nextMeta: Record<number, BudgetLineMeta> = {};
+      updated.forEach((_, nextIndex) => {
+        const oldIndex = nextIndex >= index ? nextIndex + 1 : nextIndex;
+        const existing = prev[oldIndex];
+        nextMeta[nextIndex] = existing || {
+          budgetLineId: null,
+          budgetProposalId: null,
+          availableAmount: 0,
+        };
+      });
+      return nextMeta;
+    });
   };
 
   const fetchBudgetAvailability = async (rowIndex: number, budgetHead: string, subHead: string) => {
@@ -1773,6 +1793,60 @@ const hideWorkflowActionsForFinalStatus =
       cancelled = true;
     };
   }, [id]);
+
+  useEffect(() => {
+    if (id || applicantName || isExternalApplicant) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadLoggedInApplicant = async () => {
+      try {
+        const response = await authenticityUtility.get('/finance-requests/me') as {
+          status?: string;
+          data?: {
+            employee_id?: number | null;
+            name?: string;
+            designation?: string;
+            department?: string;
+            email?: string;
+            mobile?: string;
+          };
+        };
+
+        if (cancelled || response?.status !== 'success' || !response?.data) {
+          return;
+        }
+
+        const data = response.data;
+        const resolvedName = String(data.name || '').trim();
+        if (!resolvedName) {
+          return;
+        }
+
+        setEmployeeId(
+          Number.isInteger(Number(data.employee_id)) && Number(data.employee_id) > 0
+            ? Number(data.employee_id)
+            : null
+        );
+        setApplicantName(resolvedName);
+        setApplicantSearchQuery(resolvedName);
+        setDesignation(String(data.designation || ''));
+        setDepartment(String(data.department || ''));
+        setEmail(String(data.email || ''));
+        setMobile(String(data.mobile || ''));
+      } catch (error) {
+        console.error('Failed to auto-fill finance applicant details', error);
+      }
+    };
+
+    loadLoggedInApplicant();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, applicantName, isExternalApplicant]);
 
   const handleBeneficiarySearch = async (query: string) => {
     setBeneficiarySearchQuery(query);
