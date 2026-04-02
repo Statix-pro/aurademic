@@ -3,6 +3,7 @@ import { Form } from 'react-bootstrap';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { hasPermission, isSuperAdmin } from '../../../../shared/utils/permissionUtils';
 import authenticityUtility from '../../../../shared/utils/authenticityUtility';
+import AdminBudgetSummary from '../budget-summary/adminbudgetsummary';
 import './adminbudgetdashboard.css';
 
 type Option = {
@@ -30,6 +31,8 @@ type AdminProposalGroup = {
 
 type ConsolidatedRow = {
   budgetHead: string;
+  proposed: number;
+  approved: number;
   initial: number;
   additional: number;
   expenditure: number;
@@ -50,6 +53,7 @@ const getCurrentFiscalYearOption = (): Option => {
 
 const AdminBudgetDashboard: React.FC = () => {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'budget-head' | 'beneficiary-summary'>('budget-head');
   const [financialYear, setFinancialYear] = useState<Option | null>(getCurrentFiscalYearOption());
 
   const [beneficiary, setBeneficiary] = useState<Option | null>(ALL_BENEFICIARY_OPTION);
@@ -61,6 +65,7 @@ const AdminBudgetDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [expandedHead, setExpandedHead] = useState<string | null>(null);
+  const [detailSubHeadFilter, setDetailSubHeadFilter] = useState('');
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -131,6 +136,8 @@ const AdminBudgetDashboard: React.FC = () => {
         return 'Admin';
     }
   }, [roleKey]);
+
+  const canAccessBeneficiarySummary = roleKey === 'super_admin' || roleKey === 'dof';
 
   const financialYearOptions: Option[] = useMemo(() => {
     const currentOption = getCurrentFiscalYearOption();
@@ -222,17 +229,27 @@ const AdminBudgetDashboard: React.FC = () => {
     roleKey === 'ithead';
 
   const rupeeSymbol = '\u20B9';
+  const getDetailsPanelId = (budgetHead: string) =>
+    `adminbudgetdashboard-details-${String(budgetHead || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') || 'unknown'}`;
+  const toggleBudgetHead = (budgetHead: string) => {
+    setExpandedHead((prev) => (prev === budgetHead ? null : budgetHead));
+  };
 
   const consolidatedTotals = useMemo(
     () =>
       consolidatedRows.reduce(
         (acc, row) => ({
+          proposed: acc.proposed + row.proposed,
+          approved: acc.approved + row.approved,
           initial: acc.initial + row.initial,
           additional: acc.additional + row.additional,
           expenditure: acc.expenditure + row.expenditure,
           balance: acc.balance + row.balance,
         }),
-        { initial: 0, additional: 0, expenditure: 0, balance: 0 }
+        { proposed: 0, approved: 0, initial: 0, additional: 0, expenditure: 0, balance: 0 }
       ),
     [consolidatedRows]
   );
@@ -243,162 +260,257 @@ const AdminBudgetDashboard: React.FC = () => {
     }
   }, [detailsByHead, expandedHead]);
 
+  useEffect(() => {
+    setDetailSubHeadFilter('');
+  }, [expandedHead]);
+
+  const filteredDetailsForExpandedHead = useMemo(() => {
+    if (!expandedHead) return [];
+    const rows = detailsByHead[expandedHead] || [];
+    const query = detailSubHeadFilter.trim().toLowerCase();
+    if (!query) return rows;
+
+    return rows.filter((detail) =>
+      String(detail?.subHead || '').toLowerCase().includes(query)
+    );
+  }, [detailsByHead, expandedHead, detailSubHeadFilter]);
+
+  useEffect(() => {
+    if (!canAccessBeneficiarySummary && activeTab === 'beneficiary-summary') {
+      setActiveTab('budget-head');
+    }
+  }, [canAccessBeneficiarySummary, activeTab]);
+
   return (
     <div className="adminbudgetdashboard-page">
       <div className="adminbudgetdashboard-container">
-        <div className="adminbudgetdashboard-card">
-          <div className="adminbudgetdashboard-header">
-            <div className="adminbudgetdashboard-header-left">
-              <h1 className="adminbudgetdashboard-title">Consolidated Budget</h1>
-              <span className="adminbudgetdashboard-role-pill">{userRoleLabel}</span>
-            </div>
-            <div className="adminbudgetdashboard-header-right">
-              <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--fy">
-                <Form.Select
-                  value={financialYear?.value || ''}
-                  onChange={(e) => {
-                    const option = financialYearOptions.find(opt => opt.value === e.target.value);
-                    if (option) setFinancialYear(option);
-                  }}
-                  className="adminbudgetdashboard-select"
-                >
-                  {financialYearOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Form.Select>
-              </div>
-
-              <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--beneficiary">
-                <Form.Select
-                  value={beneficiary?.value || 'all'}
-                  onChange={(e) => {
-                    const option = beneficiaryOptions.find(opt => opt.value === e.target.value);
-                    if (option) setBeneficiary(option);
-                  }}
-                  className="adminbudgetdashboard-select"
-                >
-                  {beneficiaryOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Form.Select>
-              </div>
-
-              <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--search">
-                <Form.Control
-                  type="text"
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  placeholder="Search Budget ID or Applicant"
-                  className="adminbudgetdashboard-search-input"
-                />
-              </div>
+        {canAccessBeneficiarySummary && (
+          <div className="adminbudgetdashboard-tabs-wrap">
+            <div className="category-toggle-container adminbudgetdashboard-tab-toggle">
+              <button
+                type="button"
+                className={activeTab === 'budget-head' ? 'active' : ''}
+                onClick={() => setActiveTab('budget-head')}
+              >
+                Budget Head
+              </button>
+              <button
+                type="button"
+                className={activeTab === 'beneficiary-summary' ? 'active' : ''}
+                onClick={() => setActiveTab('beneficiary-summary')}
+              >
+                Beneficiary Summary
+              </button>
             </div>
           </div>
+        )}
 
-          <div className="adminbudgetdashboard-body">
-            {loading && <div className="adminbudgetdashboard-state">Loading...</div>}
-            {!loading && error && <div className="adminbudgetdashboard-state adminbudgetdashboard-state--error">{error}</div>}
+        {activeTab === 'budget-head' ? (
+          <div className="adminbudgetdashboard-card">
+            <div className="adminbudgetdashboard-header">
+              <div className="adminbudgetdashboard-header-left">
+                <h1 className="adminbudgetdashboard-title">Consolidated Budget</h1>
+                <span className="adminbudgetdashboard-role-pill">{userRoleLabel}</span>
+              </div>
+              <div className="adminbudgetdashboard-header-right">
+                <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--fy">
+                  <Form.Select
+                    value={financialYear?.value || ''}
+                    onChange={(e) => {
+                      const option = financialYearOptions.find(opt => opt.value === e.target.value);
+                      if (option) setFinancialYear(option);
+                    }}
+                    className="adminbudgetdashboard-select"
+                  >
+                    {financialYearOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </div>
 
-            {!loading && !error && consolidatedRows.length > 0 && (
-              <div className="adminbudgetdashboard-table-section">
-                <div className="adminbudgetdashboard-table-wrapper">
-                  <table className="adminbudgetdashboard-table">
-                    <thead>
-                      <tr>
-                        <th>S.No</th>
-                        <th>Budget Head</th>
-                        <th>Initial</th>
-                        <th>Additional</th>
-                        <th>Expenditure</th>
-                        <th>Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {consolidatedRows.map((row, idx) => (
-                        <tr
-                          key={`${row.budgetHead}-${idx}`}
-                          className="adminbudgetdashboard-row-clickable"
-                          onClick={() =>
-                            setExpandedHead((prev) => (prev === row.budgetHead ? null : row.budgetHead))
-                          }
-                        >
-                          <td>{idx + 1}</td>
-                          <td>{row.budgetHead}</td>
-                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.initial)}` : '--'}</td>
-                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.additional)}` : '--'}</td>
-                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.expenditure)}` : '--'}</td>
-                          <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.balance)}` : '--'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="adminbudgetdashboard-total-row">
-                        <td></td>
-                        <td>
-                          <strong>Total</strong>
-                        </td>
-                        <td>
-                          <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.initial)}` : '--'}</strong>
-                        </td>
-                        <td>
-                          <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.additional)}` : '--'}</strong>
-                        </td>
-                        <td>
-                          <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.expenditure)}` : '--'}</strong>
-                        </td>
-                        <td>
-                          <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.balance)}` : '--'}</strong>
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
+                <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--beneficiary">
+                  <Form.Select
+                    value={beneficiary?.value || 'all'}
+                    onChange={(e) => {
+                      const option = beneficiaryOptions.find(opt => opt.value === e.target.value);
+                      if (option) setBeneficiary(option);
+                    }}
+                    className="adminbudgetdashboard-select"
+                  >
+                    {beneficiaryOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </div>
+
+                <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--search">
+                  <Form.Control
+                    type="text"
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    placeholder="Search Budget ID or Applicant"
+                    className="adminbudgetdashboard-search-input"
+                  />
                 </div>
               </div>
-            )}
+            </div>
 
-            {!loading && !error && expandedHead && (
-              <div className="adminbudgetdashboard-detail-section">
-                <div className="adminbudgetdashboard-detail-title">{expandedHead}</div>
-                {(detailsByHead[expandedHead] || []).length > 0 ? (
-                  <div className="adminbudgetdashboard-detail-table-wrapper">
-                    <table className="adminbudgetdashboard-detail-table">
+            <div className="adminbudgetdashboard-body">
+              {loading && <div className="adminbudgetdashboard-state">Loading...</div>}
+              {!loading && error && <div className="adminbudgetdashboard-state adminbudgetdashboard-state--error">{error}</div>}
+
+              {!loading && !error && consolidatedRows.length > 0 && (
+                <div className="adminbudgetdashboard-table-section">
+                  <div className="adminbudgetdashboard-table-wrapper">
+                    <table className="adminbudgetdashboard-table">
                       <thead>
                         <tr>
                           <th>S.No</th>
-                          <th>Applicant</th>
-                          <th>Sub Head</th>
+                          <th>Budget Head</th>
+                          <th>Proposed</th>
+                          <th>Approved</th>
                           <th>Initial</th>
                           <th>Additional</th>
+                          <th>Expenditure</th>
+                          <th>Balance</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {(detailsByHead[expandedHead] || []).map((detail, index) => (
-                          <tr key={`${expandedHead}-${detail.proposalId}-${index}`}>
-                            <td>{index + 1}</td>
-                            <td>{detail.applicantName}</td>
-                            <td>{detail.subHead}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.initialAmount)}` : '--'}</td>
-                            <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.additionalAmount)}` : '--'}</td>
-                          </tr>
-                        ))}
+                        {consolidatedRows.map((row, idx) => {
+                          const isSelected = expandedHead === row.budgetHead;
+                          return (
+                            <tr
+                              key={`${row.budgetHead}-${idx}`}
+                              className={`adminbudgetdashboard-row-clickable${isSelected ? ' adminbudgetdashboard-row-selected' : ''}`}
+                              onClick={() => toggleBudgetHead(row.budgetHead)}
+                              aria-selected={isSelected}
+                            >
+                              <td>{idx + 1}</td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="adminbudgetdashboard-row-toggle-btn"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleBudgetHead(row.budgetHead);
+                                  }}
+                                  aria-expanded={isSelected}
+                                  aria-controls={getDetailsPanelId(row.budgetHead)}
+                                  aria-label={`Toggle details for ${row.budgetHead}`}
+                                >
+                                  <span>{row.budgetHead}</span>
+                                </button>
+                              </td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.proposed)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.approved)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.initial)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.additional)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.expenditure)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.balance)}` : '--'}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
+                      <tfoot>
+                        <tr className="adminbudgetdashboard-total-row">
+                          <td></td>
+                          <td>
+                            <strong>Total</strong>
+                          </td>
+                          <td>
+                            <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.proposed)}` : '--'}</strong>
+                          </td>
+                          <td>
+                            <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.approved)}` : '--'}</strong>
+                          </td>
+                          <td>
+                            <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.initial)}` : '--'}</strong>
+                          </td>
+                          <td>
+                            <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.additional)}` : '--'}</strong>
+                          </td>
+                          <td>
+                            <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.expenditure)}` : '--'}</strong>
+                          </td>
+                          <td>
+                            <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.balance)}` : '--'}</strong>
+                          </td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
-                ) : (
-                  <div className="adminbudgetdashboard-state">No approved proposals found for this budget head.</div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
 
-            {!loading && !error && consolidatedRows.length === 0 && (
-              <div className="adminbudgetdashboard-state">No consolidated budget data found.</div>
-            )}
+              {!loading && !error && expandedHead && (
+                <div
+                  className="adminbudgetdashboard-detail-section"
+                  id={getDetailsPanelId(expandedHead)}
+                >
+                  <div className="adminbudgetdashboard-detail-header">
+                    <div className="adminbudgetdashboard-detail-title">{expandedHead}</div>
+                    <input
+                      type="text"
+                      value={detailSubHeadFilter}
+                      onChange={(event) => setDetailSubHeadFilter(event.target.value)}
+                      className="adminbudgetdashboard-detail-filter-input"
+                      placeholder="Filter by sub head..."
+                    />
+                  </div>
+                  {(detailsByHead[expandedHead] || []).length > 0 ? (
+                    <div className="adminbudgetdashboard-detail-table-wrapper">
+                      <table className="adminbudgetdashboard-detail-table">
+                        <thead>
+                          <tr>
+                            <th>S.No</th>
+                            <th>Applicant</th>
+                            <th>Sub Head</th>
+                            <th>Proposed</th>
+                            <th>Approved</th>
+                            <th>Initial</th>
+                            <th>Additional</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredDetailsForExpandedHead.map((detail, index) => (
+                            <tr key={`${expandedHead}-${detail.proposalId}-${index}`}>
+                              <td>{index + 1}</td>
+                              <td>{detail.applicantName}</td>
+                              <td>{detail.subHead}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.proposedAmount)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.approvedAmount)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.initialAmount)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.additionalAmount)}` : '--'}</td>
+                            </tr>
+                          ))}
+                          {filteredDetailsForExpandedHead.length === 0 && (
+                            <tr>
+                              <td colSpan={7} className="adminbudgetdashboard-detail-empty">
+                                No matching sub head found.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="adminbudgetdashboard-state">No approved proposals found for this budget head.</div>
+                  )}
+                </div>
+              )}
+
+              {!loading && !error && consolidatedRows.length === 0 && (
+                <div className="adminbudgetdashboard-state">No consolidated budget data found.</div>
+              )}
+            </div>
           </div>
-        </div>
+        ) : (
+          <AdminBudgetSummary />
+        )}
       </div>
     </div>
   );

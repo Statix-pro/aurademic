@@ -149,6 +149,14 @@ export const groupAllocationsByLine = (allocations) => {
     return grouped;
 };
 
+export const parsePositiveAmount = (value) => {
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount <= 0) {
+        return null;
+    }
+    return amount;
+};
+
 export const resolveLevel1AssignmentStatus = ({ routeType, assigneeEmail } = {}) => {
     if (routeType === LEVEL1_ROUTE_TYPE.entityContact && !normalizeText(assigneeEmail)) {
         return LEVEL1_ASSIGNMENT_STATUS.unassigned;
