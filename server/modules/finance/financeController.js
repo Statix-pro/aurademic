@@ -385,9 +385,14 @@ const financeController = {
       }
 
       const budget = await financeModel.getBudgetBreakup(financeId);
-      const incomeRows = await financeModel.getIncomeRows(financeId);
-      const statusUpdates = await financeModel.getStatusUpdates(financeId);
+const incomeRows = await financeModel.getIncomeRows(financeId);
 
+let statusUpdates = [];
+try {
+  statusUpdates = await financeModel.getStatusUpdates(financeId);
+} catch (statusError) {
+  console.error('Failed to fetch finance status updates:', statusError);
+}
       return res.status(200).json({
         status: 'success',
         data: {

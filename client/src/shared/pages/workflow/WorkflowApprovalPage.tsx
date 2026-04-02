@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Briefcase, CheckCircle2, Clock, RotateCcw, XCircle, Eye, Info, Edit2, Archive } from 'lucide-react';
+import { Briefcase, CheckCircle2, Clock, RotateCcw, XCircle, Eye, Info, Edit2, Archive, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import authenticityUtility from '../../utils/authenticityUtility';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -64,6 +64,7 @@ const formatStageLabel = (stage: string, labels: Record<string, string> = {}) =>
     .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
     .join(' ');
 };
+
 
 const defaultQueueMapper = (response: any): WorkflowQueueResult => ({
   items: Array.isArray(response?.data) ? response.data : [],
@@ -175,6 +176,54 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     [closeAlert]
   );
 
+  const handleDeleteRecord = async (record: Record<string, any>) => {
+  const recordId = getRecordId(record);
+
+  if (recordId === undefined || recordId === null) {
+    setError('Unable to delete this row because record id is missing.');
+    return;
+  }
+
+  showAlert(
+    'Are you sure you want to delete this finance request? This action cannot be undone.',
+    'warning',
+    'Confirm Delete',
+    async () => {
+      setActingRecordId(recordId);
+      setError('');
+
+      try {
+        const response: any = await authenticityUtility.delete(`${config.apiBasePath}/${recordId}`);
+
+        if (
+          response?.status === 'success' ||
+          response?.success === true ||
+          response?.data?.success
+        ) {
+          showAlert('Deleted successfully.', 'success');
+          await loadQueue(activeStage, 1);
+          return;
+        }
+
+        showAlert(
+          response?.message || response?.data?.message || 'Failed to delete item.',
+          'error'
+        );
+      } catch (deleteError: any) {
+        showAlert(
+          deleteError?.response?.data?.message || deleteError?.message || 'Failed to delete item.',
+          'error'
+        );
+      } finally {
+        setActingRecordId(null);
+      }
+    },
+    true,
+    'Delete',
+    'Cancel'
+  );
+};
+const isSuperAdminView = Boolean(meta?.isSuperAdmin);
   // Filter states
   const [fiscalYear, setFiscalYear] = useState<number>(() => {
     const d = new Date();
@@ -1075,60 +1124,100 @@ showAlert(
                                 </span>
                               </div>
                               <div className="adminbudget-actions-row">
-                                {!isArchived && !isApproved && (
-                                  <>
-                                    <button
-                                      className="adminbudget-action-btn adminbudget-action-btn--approve"
-                                      title="Approve"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onApprove(recordId, record.workflow_stage);
-                                      }}
-                                      disabled={actingRecordId === recordId || !isPending}
-                                    >
-                                      <CheckCircle2 size={18} />
-                                    </button>
+  {!isArchived && !isApproved && (
+    <>
+      {isSuperAdminView ? (
+        <>
+          <button
+            className="adminbudget-action-btn adminbudget-action-btn--return"
+            title="Return"
+            onClick={(e) => {
+              e.stopPropagation();
+              openActionPopup('return', recordId, proposalRef, record.workflowstage);
+            }}
+            disabled={actingRecordId === recordId || !isPending}
+          >
+            <RotateCcw size={18} />
+          </button>
 
-                                    <button
-                                      className="adminbudget-action-btn adminbudget-action-btn--return"
-                                      title="Return"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        openActionPopup("return", recordId, proposalRef, record.workflow_stage);
-                                      }}
-                                      disabled={actingRecordId === recordId || !isPending}
-                                    >
-                                      <RotateCcw size={18} />
-                                    </button>
+          <button
+            className="adminbudget-action-btn adminbudget-action-btn--delete"
+            title="Delete"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteRecord(record);
+            }}
+            disabled={actingRecordId === recordId}
+          >
+            <Trash2 size={18} />
+          </button>
 
-                                    <button
-                                      className="adminbudget-action-btn adminbudget-action-btn--reject"
-                                      title="Reject"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        openActionPopup("reject", recordId, proposalRef, record.workflow_stage);
-                                      }}
-                                      disabled={actingRecordId === recordId || !isPending}
-                                    >
-                                      <XCircle size={18} />
-                                    </button>
-                                  </>
-                                )}
+          <button
+            className="adminbudget-action-btn adminbudget-action-btn--archive"
+            title={isArchived ? 'Unarchive' : 'Archive'}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleArchiveToggle(record);
+            }}
+            disabled={archivingIds.has(recordId)}
+          >
+            <Archive size={18} />
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            className="adminbudget-action-btn adminbudget-action-btn--approve"
+            title="Approve"
+            onClick={(e) => {
+              e.stopPropagation();
+              onApprove(recordId, record.workflowstage);
+            }}
+            disabled={actingRecordId === recordId || !isPending}
+          >
+            <CheckCircle2 size={18} />
+          </button>
 
-                                {!isApproved && (
-                                  <button
-                                    className="adminbudget-action-btn adminbudget-action-btn--archive"
-                                    title={isArchived ? 'Unarchive' : 'Archive'}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleArchiveToggle(record);
-                                    }}
-                                    disabled={archivingIds.has(recordId)}
-                                  >
-                                    <Archive size={18} />
-                                  </button>
-                                )}
-                              </div>
+          <button
+            className="adminbudget-action-btn adminbudget-action-btn--return"
+            title="Return"
+            onClick={(e) => {
+              e.stopPropagation();
+              openActionPopup('return', recordId, proposalRef, record.workflowstage);
+            }}
+            disabled={actingRecordId === recordId || !isPending}
+          >
+            <RotateCcw size={18} />
+          </button>
+
+          <button
+            className="adminbudget-action-btn adminbudget-action-btn--reject"
+            title="Reject"
+            onClick={(e) => {
+              e.stopPropagation();
+              openActionPopup('reject', recordId, proposalRef, record.workflowstage);
+            }}
+            disabled={actingRecordId === recordId || !isPending}
+          >
+            <XCircle size={18} />
+          </button>
+
+          <button
+            className="adminbudget-action-btn adminbudget-action-btn--archive"
+            title={isArchived ? 'Unarchive' : 'Archive'}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleArchiveToggle(record);
+            }}
+            disabled={archivingIds.has(recordId)}
+          >
+            <Archive size={18} />
+          </button>
+        </>
+      )}
+    </>
+  )}
+</div>
                             </div>
                           </div>
                         </div>

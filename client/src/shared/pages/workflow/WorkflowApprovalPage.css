@@ -795,3 +795,12 @@
     height: 86px;
   }
 }
+.adminbudget-action-btn--delete {
+  background: #fdeaea;
+  color: #b42318;
+}
+
+.adminbudget-action-btn--delete:hover:not(:disabled) {
+  background: #f7c6c6;
+  transform: translateY(-1px);
+}
