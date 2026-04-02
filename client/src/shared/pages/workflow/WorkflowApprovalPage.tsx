@@ -11,10 +11,10 @@ import {
   WorkflowTimelineItem,
 } from '../../workflow/workflowApprovalTypes';
 import './WorkflowApprovalPage.css';
+import AlertModal, { type AlertType } from "../../../shared/components/ui/AlertModal";
 
 const DEFAULT_DECISIONS: WorkflowDecision[] = ['approved', 'returned', 'rejected'];
 const DEFAULT_FEEDBACK_REQUIRED: WorkflowDecision[] = ['returned', 'rejected'];
-
 const BENEFICIARY_OPTIONS = [
   "All Beneficiary",
   "Faculty",
@@ -99,6 +99,20 @@ interface WorkflowStageTab {
 const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+    onConfirm?: () => void | Promise<void>;
+    showCancel?: boolean;
+    confirmText?: string;
+    cancelText?: string;
+  }>({
+    show: false,
+    message: '',
+    type: 'info',
+  });
   const [meta, setMeta] = useState<WorkflowMeta | null>(null);
   const [activeStage, setActiveStage] = useState<string>('');
   const [rows, setRows] = useState<Record<string, any>[]>([]);
@@ -123,6 +137,43 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [actionRef, setActionRef] = useState<string>("");
   const [actionComment, setActionComment] = useState<string>("");
   const [actionStage, setActionStage] = useState<string>("");
+
+  const closeAlert = useCallback(() => {
+    setAlertConfig((prev) => ({
+      ...prev,
+      show: false,
+      onConfirm: undefined,
+    }));
+  }, []);
+
+  const showAlert = useCallback(
+    (
+      message: React.ReactNode,
+      type: AlertType = 'info',
+      title?: string,
+      onConfirm?: () => void | Promise<void>,
+      showCancel = false,
+      confirmText = 'OK',
+      cancelText = 'Cancel'
+    ) => {
+      setAlertConfig({
+        show: true,
+        message,
+        type,
+        title,
+        onConfirm: onConfirm
+          ? async () => {
+              closeAlert();
+              await onConfirm();
+            }
+          : undefined,
+        showCancel,
+        confirmText,
+        cancelText,
+      });
+    },
+    [closeAlert]
+  );
 
   // Filter states
   const [fiscalYear, setFiscalYear] = useState<number>(() => {
@@ -487,33 +538,43 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }, [activeStage, fiscalYear, beneficiaryFilter, searchTerm]);
 
   const onApprove = async (recordId?: number | string, stage?: string) => {
-    if (!recordId) {
-      window.alert("Missing record id.");
-      return;
-    }
+  if (!recordId) {
+  showAlert('Missing record id.', 'warning');
+  return;
+}
 
-    if (!window.confirm("Are you sure you want to approve this item?")) return;
-
+showAlert(
+  'Are you sure you want to approve this proposal?',
+  'warning',
+  'Confirm Approval',
+  async () => {
     setActingRecordId(recordId);
     setError('');
+
     try {
       const response: any = await authenticityUtility.patch(getApprovalEndpoint(recordId), {
-        decision: "approved",
+        decision: 'approved',
       });
 
       if (response?.status === 'success' || response?.success || response?.data?.success) {
-        const nextStage = response?.data?.currentState?.currentStage || response?.currentState?.currentStage;
-        await switchToWorkflowStage(nextStage || activeStage);
-        window.alert("Approved successfully");
-      } else {
-        window.alert(response?.message || response?.data?.message || "Failed to approve");
+        showAlert('Approved successfully', 'success');
+
+        await loadQueue(activeStage, 1);
+        return;
       }
+
+      showAlert(response?.message || response?.data?.message || 'Failed to approve', 'error');
     } catch (approvalError: any) {
-      window.alert(approvalError?.response?.data?.message || "Failed to approve");
+      showAlert(approvalError?.response?.data?.message || 'Failed to approve', 'error');
     } finally {
       setActingRecordId(null);
     }
-  };
+  },
+  true,
+  'Approve',
+  'Cancel'
+);
+};
 
   const openActionPopup = (type: "return" | "reject", id: number | string, ref: string, stage: string) => {
     setActionType(type);
@@ -538,9 +599,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     const comment = actionComment.trim();
     if (!comment) {
-      window.alert("Please enter comments.");
-      return;
-    }
+  showAlert('Please enter comments.', 'warning');
+  return;
+}
 
     setActingRecordId(actionId);
     setError('');
@@ -551,20 +612,15 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       });
 
       if (response?.status === 'success' || response?.success || response?.data?.success) {
-        window.alert(`${actionType === "return" ? "Returned" : "Rejected"} successfully`);
+        showAlert(actionType === 'return' ? 'Returned successfully' : 'Rejected successfully', 'success');
         closeActionPopup();
-        const nextStage = response?.data?.currentState?.currentStage || response?.currentState?.currentStage;
-        if (nextStage) {
-          await switchToWorkflowStage(nextStage);
-        } else {
-          setPage(1);
-          await loadQueue(activeStage, 1);
-        }
+        setPage(1);
+        await loadQueue(activeStage, 1);
       } else {
-        window.alert(response?.message || response?.data?.message || `Failed to ${actionType}`);
+       showAlert(response?.message || response?.data?.message || `Failed to ${actionType}`, 'error');
       }
     } catch (approvalError: any) {
-      window.alert(approvalError?.response?.data?.message || `Failed to ${actionType}`);
+    showAlert(approvalError?.response?.data?.message || `Failed to ${actionType}`, 'error');
     } finally {
       setActingRecordId(null);
     }
@@ -683,50 +739,64 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   };
 
   const handleArchiveToggle = async (record: Record<string, any>) => {
-    const recordId = getRecordId(record);
-    if (recordId === undefined || recordId === null) {
-      setError('Unable to process this row because record id is missing.');
-      return;
-    }
+  const recordId = getRecordId(record);
 
-    const isArchived = resolveStatusCategory(record) === 'archived';
-    const confirmMessage = isArchived
-      ? 'Are you sure you want to unarchive this item?'
-      : 'Are you sure you want to archive this item?';
+  if (recordId === undefined || recordId === null) {
+    setError('Unable to process this row because record id is missing.');
+    return;
+  }
 
-    if (!window.confirm(confirmMessage)) return;
+  const isArchived = resolveStatusCategory(record) === 'archived';
+  const confirmMessage = isArchived
+    ? 'Are you sure you want to unarchive this item?'
+    : 'Are you sure you want to archive this item?';
 
-    setArchivingIds((prev) => {
-      const next = new Set(prev);
-      next.add(recordId);
-      return next;
-    });
-
-    try {
-      const response: any = await authenticityUtility.patch(getArchiveEndpoint(recordId), {});
-      const restoredStage = String(
-        response?.data?.workflow_state?.currentStage
-        || response?.data?.currentState?.currentStage
-        || ''
-      ).toLowerCase();
-
-      if (isArchived && restoredStage) {
-        setStatusFilter('pending');
-        await switchToWorkflowStage(restoredStage);
-      } else {
-        setPage(1);
-        await loadQueue(activeStage, 1);
-      }
-    } catch (archiveError: any) {
-      setError(archiveError?.response?.data?.message || archiveError?.message || 'Failed to archive/unarchive item');
-    } finally {
+  showAlert(
+    confirmMessage,
+    'warning',
+    isArchived ? 'Confirm Unarchive' : 'Confirm Archive',
+    async () => {
       setArchivingIds((prev) => {
         const next = new Set(prev);
-        next.delete(recordId);
+        next.add(recordId);
         return next;
       });
-    }
-  };
+
+      try {
+        const response: any = await authenticityUtility.patch(getArchiveEndpoint(recordId), {});
+        const restoredStage = String(
+          response?.data?.workflow_state?.currentStage ||
+            response?.data?.currentState?.currentStage ||
+            ''
+        ).toLowerCase();
+
+        if (isArchived && restoredStage) {
+          setStatusFilter('pending');
+          await switchToWorkflowStage(restoredStage);
+        } else {
+          setPage(1);
+          await loadQueue(activeStage, 1);
+        }
+      } catch (archiveError: any) {
+        showAlert(
+          archiveError?.response?.data?.message ||
+            archiveError?.message ||
+            'Failed to archive/unarchive item',
+          'error'
+        );
+      } finally {
+        setArchivingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(recordId);
+          return next;
+        });
+      }
+    },
+    true,
+    isArchived ? 'Unarchive' : 'Archive',
+    'Cancel'
+  );
+};
 
   const filteredColumns = useMemo(() => {
     return config.columns.filter(column => 
@@ -888,6 +958,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                     const statusCategory = resolveStatusCategory(record);
                     const isPending = statusCategory === 'pending' && getRecordCurrentStage(record) === activeStage.toLowerCase();
                     const isArchived = statusCategory === 'archived';
+                    const isApproved = statusCategory === 'approved';
                     const proposedAmount = record.total_amount || record.total_budget || record.amount || 0;
                     const approvedAmount = record.approved_total_amount || record.approved_amount || null;
                     const showApprovedAmount = approvedAmount !== null && approvedAmount !== undefined && approvedAmount !== 0;
@@ -972,8 +1043,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                 title="Edit"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(getFinanceRoute(recordId, 'edit'));
+                                  if (!isApproved) {
+                                    navigate(getFinanceRoute(recordId, 'edit'));
+                                  }
                                 }}
+                                disabled={isApproved}
                               >
                                 <Edit2 size={16} />
                               </button>
@@ -1001,7 +1075,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                 </span>
                               </div>
                               <div className="adminbudget-actions-row">
-                                {!isArchived && (
+                                {!isArchived && !isApproved && (
                                   <>
                                     <button
                                       className="adminbudget-action-btn adminbudget-action-btn--approve"
@@ -1041,17 +1115,19 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                   </>
                                 )}
 
-                                <button
-                                  className="adminbudget-action-btn adminbudget-action-btn--archive"
-                                  title={isArchived ? 'Unarchive' : 'Archive'}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleArchiveToggle(record);
-                                  }}
-                                  disabled={archivingIds.has(recordId)}
-                                >
-                                  <Archive size={18} />
-                                </button>
+                                {!isApproved && (
+                                  <button
+                                    className="adminbudget-action-btn adminbudget-action-btn--archive"
+                                    title={isArchived ? 'Unarchive' : 'Archive'}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleArchiveToggle(record);
+                                    }}
+                                    disabled={archivingIds.has(recordId)}
+                                  >
+                                    <Archive size={18} />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1121,7 +1197,17 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
           </div>
         </div>
       </div>
-
+         <AlertModal
+  show={alertConfig.show}
+  onHide={closeAlert}
+  message={alertConfig.message}
+  type={alertConfig.type}
+  title={alertConfig.title}
+  onConfirm={alertConfig.onConfirm}
+  showCancel={alertConfig.showCancel}
+  confirmText={alertConfig.confirmText}
+  cancelText={alertConfig.cancelText}
+/>
       {actionPopupOpen && (
         <div
           style={{
