@@ -1,6 +1,5 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Home from '../features/home/home';
 import Login from '../features/auth/login/login';
 import EventPage from '../features/events/components/EventPage';
 import Journalform from '../features/journals/journalform';
@@ -66,7 +65,6 @@ function App() {
                   {/* USER ROUTES */}
                   <Route path="/events" element={<ProtectedRoute><EventDashboard /></ProtectedRoute>} />
                   <Route path="/event/:eventId" element={<ProtectedRoute><EventPage /></ProtectedRoute>} />
-                  <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
                   <Route path="/project" element={<ProtectedRoute><Projectform /></ProtectedRoute>} />
                   <Route path="/project/:id" element={<ProtectedRoute><Projectform /></ProtectedRoute>} />
                   <Route path="/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
@@ -122,7 +120,7 @@ function App() {
                   <Route path="/eventdashboard" element={<ProtectedRoute><EventDashboard /></ProtectedRoute>} />
                   <Route path="/event-entry" element={<ProtectedRoute><EventEntry /></ProtectedRoute>} />
                   <Route path="/storybook" element={<Storybook />} />
-                  <Route path="/" element={<Navigate to="/home" />} />
+                  <Route path="/" element={<Navigate to="/dashboard" />} />
 
                   {/* UNDER CONSTRUCTION */}
                   <Route path="/vehicle-booking" element={<ProtectedRoute><UnderConstruction pageName="Vehicle Booking" /></ProtectedRoute>} />
