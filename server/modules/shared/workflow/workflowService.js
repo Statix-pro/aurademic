@@ -192,7 +192,7 @@ async function resolveStagePolicy(conn, { moduleKey, stageKey }) {
   };
 }
 
-const buildInitialState = (flow) => {
+const buildInitialState = (flow, extras = {}) => {
   const nowIso = new Date().toISOString();
 
   return {
@@ -206,6 +206,7 @@ const buildInitialState = (flow) => {
     resolvedAt: null,
     lastDecision: null,
     lastFeedback: null,
+    ...extras,
   };
 };
 
@@ -383,7 +384,9 @@ export async function startWorkflow({ moduleKey, recordId, metadata = {} }) {
       entityTypeCode,
     });
 
-    const initialState = buildInitialState(flow);
+    const initialState = buildInitialState(flow, {
+      submittedTotalBudget: Number(context.totalBudget || 0),
+    });
     const normalizedMeta = await validateAdapterModuleMeta({
       moduleConfig,
       normalizedMeta: validateWorkflowMeta(metadata),
@@ -441,10 +444,6 @@ export async function actOnWorkflow({ moduleKey, recordId, decision, feedback, a
     });
 
     const { currentStage } = assertWorkflowActionable(previousState);
-
-    if (normalizedDecision === 'archived' && !isSuperAdminActor(normalizedActor)) {
-      throw new WorkflowError('Only super admin can archive workflows', 403, 'WORKFLOW_PERMISSION_DENIED');
-    }
 
     assertDecisionPermission({
       moduleKey: normalizeText(moduleKey).toLowerCase(),
@@ -557,6 +556,7 @@ export async function listQueue({ moduleKey, stage, actor, filters = {} }) {
         ...filters,
         workflowStatus: normalizeText(filters.workflowStatus).toLowerCase() || 'in_progress',
         moduleKey: normalizeText(moduleKey).toLowerCase(),
+        isSuperAdmin: isSuperAdminActor(normalizedActor),
         scopeFilters,
       },
       { tx: conn }
