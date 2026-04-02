@@ -1421,87 +1421,105 @@ const financeModel = {
   },
 
   async getStatusUpdates(financeId) {
+  try {
+    const [workflowRows] = await db.query(
+      `SELECT
+          wa.id,
+          wa.record_id AS finance_id,
+          wa.actor_user_id AS user_id,
+          wa.stage AS role,
+          wa.stage,
+          wa.decision AS status,
+          wa.decision,
+          wa.feedback AS comment,
+          wa.feedback,
+          wa.decided_at AS created_at,
+          wa.decided_at,
+          COALESCE(
+            NULLIF(
+              TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))),
+              ''
+            ),
+            u.name
+          ) AS user_name,
+          wa.actor_email,
+          wa.actor_role,
+          wa.snapshot_before,
+          wa.meta
+       FROM workflow_actions wa
+       LEFT JOIN users u ON u.id = wa.actor_user_id
+       LEFT JOIN master_employees emp
+         ON emp.email COLLATE utf8mb4_unicode_ci =
+            wa.actor_email COLLATE utf8mb4_unicode_ci
+       WHERE wa.module_key = 'finance'
+         AND wa.record_id = ?
+       ORDER BY wa.decided_at ASC, wa.id ASC`,
+      [financeId]
+    );
+
+    let editRows = [];
     try {
-      const [workflowRows] = await db.query(
+      const [rows] = await db.query(
         `SELECT
-           wa.id,
-           wa.record_id AS finance_id,
-           wa.actor_user_id AS user_id,
-           wa.stage AS role,
-           wa.stage,
-           wa.decision AS status,
-           wa.decision,
-           wa.feedback AS comment,
-           wa.feedback,
-           wa.decided_at AS created_at,
-           wa.decided_at,
-           COALESCE(NULLIF(TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))), ''), u.name) AS user_name,
-           wa.actor_email,
-           wa.actor_role,
-           wa.snapshot_before,
-           wa.meta
-         FROM workflow_actions wa
-         LEFT JOIN users u ON u.id = wa.actor_user_id
-         LEFT JOIN master_employees emp ON emp.email = wa.actor_email
-         WHERE wa.module_key = 'finance'
-           AND wa.record_id = ?
-         ORDER BY wa.decided_at ASC, wa.id ASC`,
+            e.id,
+            e.finance_request_id AS finance_id,
+            e.edited_by_user_id AS user_id,
+            e.edited_by_role AS role,
+            'updated' AS status,
+            'updated' AS decision,
+            e.summary AS comment,
+            e.summary,
+            e.details,
+            e.created_at,
+            COALESCE(
+              NULLIF(
+                TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))),
+                ''
+              ),
+              u.name
+            ) AS user_name,
+            e.edited_by_email AS actor_email,
+            e.edited_by_role AS actor_role,
+            e.is_admin,
+            NULL AS snapshot_before,
+            NULL AS meta
+         FROM finance_request_edits e
+         LEFT JOIN users u ON u.id = e.edited_by_user_id
+         LEFT JOIN master_employees emp
+           ON emp.email COLLATE utf8mb4_unicode_ci =
+              e.edited_by_email COLLATE utf8mb4_unicode_ci
+         WHERE e.finance_request_id = ?
+         ORDER BY e.created_at ASC, e.id ASC`,
         [financeId]
       );
+      editRows = rows;
+    } catch (error) {
+      if (error?.code !== 'ER_NO_SUCH_TABLE') {
+        throw error;
+      }
+    }
 
-      let editRows = [];
-      try {
-        const [rows] = await db.query(
-          `SELECT
-             e.id,
-             e.finance_request_id AS finance_id,
-             e.edited_by_user_id AS user_id,
-             e.edited_by_role AS role,
-             'updated' AS status,
-             'updated' AS decision,
-             e.summary AS comment,
-             e.summary,
-             e.details,
-             e.created_at,
-             COALESCE(NULLIF(TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))), ''), u.name) AS user_name,
-             e.edited_by_email AS actor_email,
-             e.edited_by_role AS actor_role,
-             e.is_admin,
-             NULL AS snapshot_before,
-             NULL AS meta
-           FROM finance_request_edits e
-           LEFT JOIN users u ON u.id = e.edited_by_user_id
-           LEFT JOIN master_employees emp ON emp.email = e.edited_by_email
-           WHERE e.finance_request_id = ?
-           ORDER BY e.created_at ASC, e.id ASC`,
-          [financeId]
-        );
-        editRows = rows;
-      } catch (error) {
-        if (error?.code !== 'ER_NO_SUCH_TABLE') {
-          throw error;
-        }
+    const merged = [...workflowRows, ...editRows].sort((left, right) => {
+      const leftTime = new Date(left.decided_at || left.created_at || 0).getTime();
+      const rightTime = new Date(right.decided_at || right.created_at || 0).getTime();
+
+      if (leftTime !== rightTime) {
+        return leftTime - rightTime;
       }
 
-      const merged = [...workflowRows, ...editRows].sort((left, right) => {
-        const leftTime = new Date(left.decided_at || left.created_at || 0).getTime();
-        const rightTime = new Date(right.decided_at || right.created_at || 0).getTime();
-        if (leftTime !== rightTime) {
-          return leftTime - rightTime;
-        }
-        return (toPositiveInt(left.id) || 0) - (toPositiveInt(right.id) || 0);
-      });
+      return (Number(left.id) || 0) - (Number(right.id) || 0);
+    });
 
-      return merged.map((row) => ({
-        ...row,
-        snapshot_before: safeParseJSON(row.snapshot_before, null),
-        meta: safeParseJSON(row.meta, null),
-        details: safeParseJSON(row.details, null),
-      }));
-    } catch (error) {
-      throw new Error(`Error fetching status updates: ${error.message}`);
-    }
-  },
+    return merged.map((row) => ({
+      ...row,
+      snapshot_before: safeParseJSON(row.snapshot_before, null),
+      meta: safeParseJSON(row.meta, null),
+      details: safeParseJSON(row.details, null),
+    }));
+  } catch (error) {
+    throw new Error(`Error fetching status updates: ${error.message}`);
+  }
+},
 
   async doesFinanceExist(id) {
     const [rows] = await db.query('SELECT 1 FROM finance_requests WHERE id = ? LIMIT 1', [id]);

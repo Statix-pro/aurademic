@@ -1631,10 +1631,17 @@ const FinanceApproval: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams<{ id?: string }>();
-  const isEditMode = Boolean(id) && location.pathname.includes('/edit');
-  const isViewMode = Boolean(id) && !isEditMode;
-  const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
-  const isApprovalMode = isViewMode && isAdminWorkflowContext;
+  const isEditMode = Boolean(id && location.pathname.includes('edit'));
+const isViewMode = Boolean(id && !isEditMode);
+const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
+const isApprovalMode = isViewMode && isAdminWorkflowContext;
+
+const normalizedWorkflowStatus = String(
+  loadedWorkflowStatus || ''
+).toLowerCase();
+
+const hideWorkflowActionsForFinalStatus =
+  ['approved', 'completed', 'rejected', 'archived'].includes(normalizedWorkflowStatus);
 
   // Tag auto-selection based on beneficiary type
   useEffect(() => {
@@ -3200,152 +3207,140 @@ const FinanceApproval: React.FC = () => {
         </div>
       )}
 
-      <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0' }}>
-        <div
+    <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0' }}>
+  <div
+    style={{
+      maxWidth: '100%',
+      margin: '0 auto',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '18px',
+    }}
+  >
+    <div
+      className="finance-top-actions"
+      style={{
+        display: 'flex',
+        gap: '10px',
+        flexWrap: 'nowrap',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      <button
+        onClick={() => setShowPreview(!showPreview)}
+        style={{
+          backgroundColor: '#0069ab',
+          color: '#fff',
+          border: 'none',
+          padding: '10px 20px',
+          borderRadius: '12px',
+          fontWeight: '500',
+          cursor: 'pointer',
+          transition: 'all 0.3s ease',
+          whiteSpace: 'nowrap',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
+        disabled={isLoading}
+      >
+        {showPreview ? 'Hide Preview' : 'Show Preview'}
+      </button>
+
+      <button
+        onClick={generatePDF}
+        style={{
+          backgroundColor: '#0069ab',
+          color: '#fff',
+          border: 'none',
+          padding: '10px 20px',
+          borderRadius: '12px',
+          fontWeight: '500',
+          cursor: 'pointer',
+          transition: 'all 0.3s ease',
+          whiteSpace: 'nowrap',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
+        disabled={isLoading || !showPreview}
+      >
+        {isLoading ? 'Generating...' : 'Download PDF'}
+      </button>
+
+      {!isApprovalMode && !isViewMode && (
+        <button
+          type="button"
+          onClick={handleSubmit}
           style={{
-            maxWidth: '100%',
-            margin: '0 auto',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '18px',
+            backgroundColor: '#0069ab',
+            color: '#fff',
+            border: 'none',
+            padding: '12px 24px',
+            borderRadius: '12px',
+            fontSize: '0.95rem',
+            fontWeight: '500',
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            transition: 'all 0.3s ease',
+            minWidth: '140px',
+            opacity: isLoading ? 0.7 : 1,
+            whiteSpace: 'nowrap',
+          }}
+          disabled={isLoading}
+          onMouseEnter={(e) => {
+            if (!isLoading) e.currentTarget.style.backgroundColor = '#005492';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#0069ab';
           }}
         >
-          <div
-            className="finance-top-actions"
-            style={{
-              display: 'flex',
-              gap: '10px',
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <button
-              onClick={() => setShowPreview(!showPreview)}
-              style={{
-                backgroundColor: '#0069ab',
-                color: '#fff',
-                border: 'none',
-                padding: '10px 20px',
-                borderRadius: '12px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
-              disabled={isLoading}
-            >
-              {showPreview ? 'Hide Preview' : 'Show Preview'}
-            </button>
+          {isLoading ? 'Submitting...' : isEditMode ? 'Update Form' : 'Submit Form'}
+        </button>
+      )}
+    </div>
 
-            <button
-              onClick={generatePDF}
-              style={{
-                backgroundColor: '#0069ab',
-                color: '#fff',
-                border: 'none',
-                padding: '10px 20px',
-                borderRadius: '12px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
-              disabled={isLoading || !showPreview}
-            >
-              {isLoading ? 'Generating...' : 'Download PDF'}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/financecard')}
-              style={{
-                backgroundColor: '#edf4fb',
-                color: '#0f172a',
-                border: '1px solid #cbd5e1',
-                padding: '10px 20px',
-                borderRadius: '12px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#e2ebf5')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#edf4fb')}
-            >
-              Back to Dashboard
-            </button>
-          </div>
-          {isApprovalMode ? (
-            <div className="finance-workflow-actions">
-              <button
-                type="button"
-                className="finance-workflow-btn finance-workflow-btn--approve"
-                onClick={() => handleWorkflowAction('approved')}
-                disabled={isLoading}
-              >
-                <CheckCircle2 size={18} />
-                Approve
-              </button>
-              <button
-                type="button"
-                className="finance-workflow-btn finance-workflow-btn--return"
-                onClick={() => handleWorkflowAction('returned')}
-                disabled={isLoading}
-              >
-                <RotateCcw size={18} />
-                Return
-              </button>
-              <button
-                type="button"
-                className="finance-workflow-btn finance-workflow-btn--reject"
-                onClick={() => handleWorkflowAction('rejected')}
-                disabled={isLoading}
-              >
-                <XCircle size={18} />
-                Reject
-              </button>
-              <button
-                type="button"
-                className="finance-workflow-btn finance-workflow-btn--archive"
-                onClick={() => handleWorkflowAction('archived')}
-                disabled={isLoading}
-              >
-                <Archive size={18} />
-                Archive
-              </button>
-            </div>
-          ) : !isViewMode ? (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              style={{
-                backgroundColor: '#0069ab',
-                color: '#fff',
-                border: 'none',
-                padding: '12px 24px',
-                borderRadius: '12px',
-                fontSize: '0.95rem',
-                fontWeight: '500',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                minWidth: '140px',
-                opacity: isLoading ? 0.7 : 1,
-              }}
-              disabled={isLoading}
-              onMouseEnter={(e) => {
-                if (!isLoading) e.currentTarget.style.backgroundColor = '#005492';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#0069ab';
-              }}
-            >
-              {isLoading ? 'Submitting...' : (isEditMode ? 'Update Form' : 'Submit Form')}
-            </button>
-          ) : null}
-        </div>
+    {isApprovalMode && !hideWorkflowActionsForFinalStatus ? (
+      <div className="finance-workflow-actions">
+        <button
+          type="button"
+          className="finance-workflow-btn finance-workflow-btn--approve"
+          onClick={() => handleWorkflowAction('approved')}
+          disabled={isLoading}
+        >
+          <CheckCircle2 size={18} />
+          Approve
+        </button>
+        <button
+          type="button"
+          className="finance-workflow-btn finance-workflow-btn--return"
+          onClick={() => handleWorkflowAction('returned')}
+          disabled={isLoading}
+        >
+          <RotateCcw size={18} />
+          Return
+        </button>
+        <button
+          type="button"
+          className="finance-workflow-btn finance-workflow-btn--reject"
+          onClick={() => handleWorkflowAction('rejected')}
+          disabled={isLoading}
+        >
+          <XCircle size={18} />
+          Reject
+        </button>
+        <button
+          type="button"
+          className="finance-workflow-btn finance-workflow-btn--archive"
+          onClick={() => handleWorkflowAction('archived')}
+          disabled={isLoading}
+        >
+          <Archive size={18} />
+          Archive
+        </button>
       </div>
+    ) : null}
+  </div>
+</div>
 
       {showPreview && (() => {
         const getApprovalDetailUi = (stageKeys: string[]) => {
