@@ -618,15 +618,15 @@ const resolveBudgetAvailabilityForUser = async (conn, {
 
   const matches = rows
     .map((row) => ({
-    budgetLineId: toPositiveInt(row.budget_line_id),
-    budgetProposalId: toPositiveInt(row.budget_proposal_id),
-    proposalRef: normalizeText(row.proposal_ref) || null,
-    fiscalYear: row.fiscal_year ? Number(row.fiscal_year) : null,
-    budgetHead: normalizeText(row.budget_head),
-    subHead: normalizeText(row.sub_head),
-    budgetLineAmount: toMoney(row.budget_line_amount),
-    consumedAmount: toMoney(row.consumed_amount),
-    availableAmount: Math.max(0, toMoney(row.available_amount)),
+      budgetLineId: toPositiveInt(row.budget_line_id),
+      budgetProposalId: toPositiveInt(row.budget_proposal_id),
+      proposalRef: normalizeText(row.proposal_ref) || null,
+      fiscalYear: row.fiscal_year ? Number(row.fiscal_year) : null,
+      budgetHead: normalizeText(row.budget_head),
+      subHead: normalizeText(row.sub_head),
+      budgetLineAmount: toMoney(row.budget_line_amount),
+      consumedAmount: toMoney(row.consumed_amount),
+      availableAmount: Math.max(0, toMoney(row.available_amount)),
     }))
     .filter((row) =>
       isLooseTextMatch(row.budgetHead, normalizedBudgetHead) &&
@@ -1136,21 +1136,21 @@ const financeModel = {
         : [];
       const [previousBudgetRows] = hasBudgetRowsInput
         ? await connection.query(
-            `SELECT budget_head, sub_head, amount
+          `SELECT budget_head, sub_head, amount
                FROM finance_budget_breakup
                WHERE finance_id = ?
                ORDER BY sort_order ASC, id ASC`,
-            [id]
-          )
+          [id]
+        )
         : [[]];
       const [previousIncomeRows] = hasIncomeRowsInput
         ? await connection.query(
-            `SELECT income_source, contribution, amount, status, credit_account
+          `SELECT income_source, contribution, amount, status, credit_account
                FROM finance_income_rows
                WHERE finance_id = ?
                ORDER BY sort_order ASC, id ASC`,
-            [id]
-          )
+          [id]
+        )
         : [[]];
       const updateData = Object.fromEntries(
         Object.entries(financeData)
@@ -1435,13 +1435,14 @@ const financeModel = {
            wa.feedback,
            wa.decided_at AS created_at,
            wa.decided_at,
-           u.name AS user_name,
+           COALESCE(NULLIF(TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))), ''), u.name) AS user_name,
            wa.actor_email,
            wa.actor_role,
            wa.snapshot_before,
            wa.meta
          FROM workflow_actions wa
          LEFT JOIN users u ON u.id = wa.actor_user_id
+         LEFT JOIN master_employees emp ON emp.email = wa.actor_email
          WHERE wa.module_key = 'finance'
            AND wa.record_id = ?
          ORDER BY wa.decided_at ASC, wa.id ASC`,
@@ -1462,7 +1463,7 @@ const financeModel = {
              e.summary,
              e.details,
              e.created_at,
-             u.name AS user_name,
+             COALESCE(NULLIF(TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))), ''), u.name) AS user_name,
              e.edited_by_email AS actor_email,
              e.edited_by_role AS actor_role,
              e.is_admin,
@@ -1470,6 +1471,7 @@ const financeModel = {
              NULL AS meta
            FROM finance_request_edits e
            LEFT JOIN users u ON u.id = e.edited_by_user_id
+           LEFT JOIN master_employees emp ON emp.email = e.edited_by_email
            WHERE e.finance_request_id = ?
            ORDER BY e.created_at ASC, e.id ASC`,
           [financeId]

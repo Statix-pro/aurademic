@@ -298,7 +298,7 @@ const getHoacGroupForHead = (head: string): string | undefined => {
 };
 
 const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
- 
+
   'Civil Infrastructure': [
     'Construction Works',
     'Partition Works',
@@ -693,6 +693,7 @@ const FinanceApproval: React.FC = () => {
   const [showIncomeSection, setShowIncomeSection] = useState<boolean>(false);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([createIncomeRow()]);
   const [budgetLineMetaByRow, setBudgetLineMetaByRow] = useState<Record<number, BudgetLineMeta>>({});
+  const [statusUpdates, setStatusUpdates] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [isExternalApplicant, setIsExternalApplicant] = useState<boolean>(false);
@@ -701,9 +702,9 @@ const FinanceApproval: React.FC = () => {
   const [showApplicantDropdown, setShowApplicantDropdown] = useState<boolean>(false);
   const componentRef = useRef<HTMLDivElement>(null);
 
-// State for dynamic subcategory options (Department, Centre, Cell, Club, Professional Body)
+  // State for dynamic subcategory options (Department, Centre, Cell, Club, Professional Body)
   const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
-  
+
   // State for tag options
   const [tagOptions, setTagOptions] = useState<SelectOption[]>(FALLBACK_TAG_OPTIONS);
 
@@ -727,7 +728,7 @@ const FinanceApproval: React.FC = () => {
 
   const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
 
-// Load all beneficiary options (Department, Centre, Cell, Club, Professional Body) - SAME AS BUDGET.TSX
+  // Load all beneficiary options (Department, Centre, Cell, Club, Professional Body) - SAME AS BUDGET.TSX
   useEffect(() => {
     let cancelled = false;
 
@@ -741,7 +742,7 @@ const FinanceApproval: React.FC = () => {
       const nextOptions: Record<string, SelectOption[]> = {};
 
       try {
-       const response = await authenticityUtility.get('budget/org-units') as any; 
+        const response = await authenticityUtility.get('budget/org-units') as any;
         const grouped = response?.data?.grouped;
 
         if (grouped && typeof grouped === 'object') {
@@ -797,7 +798,7 @@ const FinanceApproval: React.FC = () => {
               label: String(row?.tag_name || '').trim(),
             }))
             .filter((opt: SelectOption) => opt.value.length > 0);
-          
+
           setTagOptions(options.length > 0 ? options : FALLBACK_TAG_OPTIONS);
         } else {
           setTagOptions(FALLBACK_TAG_OPTIONS);
@@ -850,14 +851,14 @@ const FinanceApproval: React.FC = () => {
     setShowApplicantDropdown(false);
   };
 
-const getSubHeadOptions = (budgetHead: string): string[] => {
-  const headGroup = HEAD_TO_GROUP[budgetHead];
-  if (headGroup && HOAC_GROUPS.has(headGroup) && HOAC_SUBHEAD_OPTIONS[headGroup]) {
-    return HOAC_SUBHEAD_OPTIONS[headGroup];
-  }
-  return SUB_HEAD_BY_BUDGET_HEAD[budgetHead] ?? [];
-};
-  
+  const getSubHeadOptions = (budgetHead: string): string[] => {
+    const headGroup = HEAD_TO_GROUP[budgetHead];
+    if (headGroup && HOAC_GROUPS.has(headGroup) && HOAC_SUBHEAD_OPTIONS[headGroup]) {
+      return HOAC_SUBHEAD_OPTIONS[headGroup];
+    }
+    return SUB_HEAD_BY_BUDGET_HEAD[budgetHead] ?? [];
+  };
+
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
     pageStyle: `
@@ -880,7 +881,7 @@ const getSubHeadOptions = (budgetHead: string): string[] => {
     `,
     documentTitle: "Finance_Approval_Request",
   });
-  
+
   const generatePDF = async (): Promise<void> => {
     try {
       setIsLoading(true);
@@ -1060,7 +1061,7 @@ const getSubHeadOptions = (budgetHead: string): string[] => {
             { content: row.status || '' },
           ],
           [
-            { content: 'Credit Account', colSpan: 2, styles: { fontStyle: '', fillColor: [245, 245, 245] }},
+            { content: 'Credit Account', colSpan: 2, styles: { fontStyle: '', fillColor: [245, 245, 245] } },
             { content: row.creditAccount || '', colSpan: 3 },
           ],
         ]));
@@ -1092,68 +1093,84 @@ const getSubHeadOptions = (budgetHead: string): string[] => {
         yPos = (pdf as any).lastAutoTable.finalY;
       }
 
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 38, fontStyle: 'bold' },
-          1: { cellWidth: 100 },
-          2: { cellWidth: tableWidth - 38 - 100 }
-        },
-        body: [
-          [{ content: 'For Office use of Director - Finance and Purchase', colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } }],
-          [{ content: 'Comments', styles: { fontStyle: 'bold', minCellHeight: 12 } }, { content: directorComments || '', colSpan: 2, styles: { minCellHeight: 12 } }],
-          [{ content: 'Status', styles: { fontStyle: 'bold' } }, 'Recommended / Not Recommended', ''],
-        ],
-      });
+      const getApprovalDetail = (stageKeys: string[]) => {
+        let lastResetIdx = -1;
+        for (let i = statusUpdates.length - 1; i >= 0; i--) {
+          const dec = String(statusUpdates[i].decision).toLowerCase();
+          const stat = String(statusUpdates[i].status).toLowerCase();
+          if (dec === 'returned' || dec === 'rejected' || stat === 'returned' || stat === 'rejected' || dec === 'resubmitted' || dec.includes('resubmit')) {
+            lastResetIdx = i;
+            break;
+          }
+        }
+        const currentFlowUpdates = statusUpdates.slice(lastResetIdx + 1);
 
-      yPos = (pdf as any).lastAutoTable.finalY;
+        const approved = currentFlowUpdates.filter(u =>
+          stageKeys.includes(String(u.stage).toLowerCase()) &&
+          (String(u.status).toLowerCase() === 'approved' || String(u.decision).toLowerCase() === 'approved' || String(u.status).toLowerCase().includes('approved'))
+        );
+        if (approved.length === 0) return { name: '', date: '' };
 
-      const principalStatusText = totalBudget > 10000 ? 'Recommended / Not Recommended' : 'Approved / Not Approved';
-
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 38, fontStyle: 'bold' },
-          1: { cellWidth: 100 },
-          2: { cellWidth: tableWidth - 38 - 100 }
-        },
-        body: [
-          [{ content: "Principal's Approval", colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } }],
-          [{ content: 'Comments', styles: { fontStyle: 'bold', minCellHeight: 12 } }, { content: principalComments || '', colSpan: 2, styles: { minCellHeight: 12 } }],
-          [{ content: 'Status', styles: { fontStyle: 'bold' } }, principalStatusText, ''],
-        ],
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY;
-
-      if (totalBudget > 10000) {
-        autoTable(pdf, {
-          startY: yPos,
-          margin: { left: margin, right: margin },
-          theme: 'grid',
-          tableWidth: tableWidth,
-          styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-          columnStyles: {
-            0: { cellWidth: 38, fontStyle: 'bold' },
-            1: { cellWidth: 100 },
-            2: { cellWidth: tableWidth - 38 - 100 }
-          },
-          body: [
-            [{ content: 'Priority', styles: { fontStyle: 'bold' } }, '[ ] Routine      [ ] Urgent      [ ] Most Urgent', ''],
-            [{ content: "Chairman's Approval", colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } }],
-            [{ content: 'Comments', styles: { fontStyle: 'bold', minCellHeight: 12 } }, { content: chairmanComments || '', colSpan: 2, styles: { minCellHeight: 12 } }],
-            [{ content: 'Status', styles: { fontStyle: 'bold' } }, 'Approved / Not Approved', ''],
-          ],
+        approved.sort((a, b) => {
+          const tA = new Date(a.decided_at || a.created_at || 0).getTime();
+          const tB = new Date(b.decided_at || b.created_at || 0).getTime();
+          return tB - tA; // latest first
         });
+        const latest = approved[0];
+        const dateStr = latest.decided_at || latest.created_at;
+        const formattedDate = dateStr ? new Date(dateStr).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true }) : '';
+        return { name: latest.user_name || latest.actor_name || '', date: formattedDate };
+      };
+
+      const level1Approval = getApprovalDetail(['level1', 'hod', 'coordinator', 'ithead']);
+      const dofApproval = getApprovalDetail(['dof']);
+      const principalApproval = getApprovalDetail(['principal']);
+      const chairmanApproval = getApprovalDetail(['chairman']);
+
+      const digitalSignBody: any[] = [
+        [{ content: 'Digitally Signed By:', colSpan: 3, styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }],
+        [
+          { content: 'Head of Dept. / Coordinator', styles: { fontStyle: 'bold' } },
+          { content: level1Approval.name ? `Name: ${level1Approval.name}` : 'Name:' },
+          { content: level1Approval.date ? `Date & Time: ${level1Approval.date}` : 'Date & Time:' }
+        ],
+        [
+          { content: 'Director of Finance', styles: { fontStyle: 'bold' } },
+          { content: dofApproval.name ? `Name: ${dofApproval.name}` : 'Name:' },
+          { content: dofApproval.date ? `Date & Time: ${dofApproval.date}` : 'Date & Time:' }
+        ]
+      ];
+
+      if (totalBudget <= 10000) {
+        digitalSignBody.push([
+          { content: 'Principal', styles: { fontStyle: 'bold' } },
+          { content: principalApproval.name ? `Name: ${principalApproval.name}` : 'Name:' },
+          { content: principalApproval.date ? `Date & Time: ${principalApproval.date}` : 'Date & Time:' }
+        ]);
+      } else {
+        const principalText = principalApproval.name ? `Principal\nName: ${principalApproval.name}\nDate & Time: ${principalApproval.date}` : 'Principal';
+        const chairmanText = chairmanApproval.name ? `Chairman\nName: ${chairmanApproval.name}\nDate & Time: ${chairmanApproval.date}` : 'Chairman';
+
+        digitalSignBody.push([
+          { content: principalText, styles: { fontStyle: 'bold', halign: 'left' } },
+          { content: '' },
+          { content: chairmanText, styles: { fontStyle: 'bold', halign: 'right' } }
+        ]);
       }
+
+      autoTable(pdf, {
+        startY: yPos + 5,
+        margin: { left: margin, right: margin },
+        theme: 'grid',
+        tableWidth: tableWidth,
+        styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
+        columnStyles: {
+          0: { cellWidth: 56 },
+          1: { cellWidth: (tableWidth - 56) / 2 },
+          2: { cellWidth: (tableWidth - 56) / 2 }
+        },
+        body: digitalSignBody,
+      });
 
       const totalPages = pdf.getNumberOfPages();
       for (let i = 1; i <= totalPages; i++) {
@@ -1353,14 +1370,14 @@ const getSubHeadOptions = (budgetHead: string): string[] => {
   const deleteIconBtn: CSSProperties = {
     ...iconBtn,
     background: '#ffe6e6',
-    alignItems:'center'
+    alignItems: 'center'
   };
 
   const incomeCellStyle: CSSProperties = {
     padding: '8px',
     border: '1px solid #e0e0e0',
     textAlign: 'left',
-    
+
   };
   const incomeSubRowLabelStyle: CSSProperties = {
     padding: '8px',
@@ -1494,9 +1511,9 @@ const getSubHeadOptions = (budgetHead: string): string[] => {
       const response = (decision === 'archived'
         ? await authenticityUtility.patch(`/finance-requests/${id}/archive-toggle`, {})
         : await authenticityUtility.patch(`/finance-requests/${id}/approval`, {
-            decision,
-            feedback,
-          })) as { status?: string; success?: boolean; message?: string; data?: { message?: string } };
+          decision,
+          feedback,
+        })) as { status?: string; success?: boolean; message?: string; data?: { message?: string } };
 
       if (response?.status !== 'success' && response?.success !== true) {
         showAlert(response?.message || response?.data?.message || `Failed to ${decision}`, 'error');
@@ -1570,24 +1587,24 @@ const getSubHeadOptions = (budgetHead: string): string[] => {
       );
     }
   };
-  
+
   const getSubcategoryLabel = (category: string) => {
     if (!category) return "Sub category";
     return category;
   };
-  
+
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [beneficiaryType, setBeneficiaryType] = useState<string>('');
   const [beneficiaryValue, setBeneficiaryValue] = useState<string>('');
   // Get subcategory options from the loaded data (dynamic from API) - SAME AS BUDGET.TSX
   // SAME AS BUDGET.TSX - Dynamic subcategory list from API
-// SAME AS BUDGET.TSX
-const subcategoryOptions: SelectOption[] = beneficiaryType ? subcategoryOptionsByType[beneficiaryType] || [] : [];
-const subcategoryList = subcategoryOptions.map(option => option.value);
-const hasSubcategories = subcategoryList.length > 0;
- 
-  
+  // SAME AS BUDGET.TSX
+  const subcategoryOptions: SelectOption[] = beneficiaryType ? subcategoryOptionsByType[beneficiaryType] || [] : [];
+  const subcategoryList = subcategoryOptions.map(option => option.value);
+  const hasSubcategories = subcategoryList.length > 0;
+
+
   const isMultipleSelect = (type: string) =>
     type === "Faculty" || type === "Staff";
 
@@ -1598,7 +1615,7 @@ const hasSubcategories = subcategoryList.length > 0;
   const MAX_AMOUNT = 999999999;
   const [selectedBudgetHeadForModal, setSelectedBudgetHeadForModal] = useState<string>('');
   const [showBudgetHeadModal, setShowBudgetHeadModal] = useState<boolean>(false);
-  
+
   // Beneficiary search (for Faculty/Staff types)
   const [beneficiarySearchQuery, setBeneficiarySearchQuery] = useState<string>('');
   const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<Array<{
@@ -1630,15 +1647,15 @@ const hasSubcategories = subcategoryList.length > 0;
       if (prev && prev.trim() !== '') {
         return prev;
       }
-      
+
       if (beneficiaryType === 'Staff' || beneficiaryType === 'Faculty') {
         return 'Skilling';
       }
       if (beneficiaryType === 'Department') {
         return '';
       }
-        if (beneficiaryType === 'Centre' || beneficiaryType === 'Cell' || 
-            beneficiaryType === 'Club' || beneficiaryType === 'Institution' || beneficiaryType === 'Professional Body') {
+      if (beneficiaryType === 'Centre' || beneficiaryType === 'Cell' ||
+        beneficiaryType === 'Club' || beneficiaryType === 'Institution' || beneficiaryType === 'Professional Body') {
         return 'Essentials';
       }
       return '';
@@ -1705,10 +1722,10 @@ const hasSubcategories = subcategoryList.length > 0;
         setBudgetRows(
           budgetRowsFromApi.length > 0
             ? budgetRowsFromApi.map((row: any) => ({
-                category: String(row?.budget_head || ''),
-                head: String(row?.sub_head || ''),
-                amount: String(row?.amount ?? ''),
-              }))
+              category: String(row?.budget_head || ''),
+              head: String(row?.sub_head || ''),
+              amount: String(row?.amount ?? ''),
+            }))
             : [{ category: '', head: '', amount: '' }]
         );
         setBudgetLineMetaByRow(
@@ -1724,15 +1741,16 @@ const hasSubcategories = subcategoryList.length > 0;
         setIncomeRows(
           incomeRowsFromApi.length > 0
             ? incomeRowsFromApi.map((row: any, index: number) => ({
-                id: row?.id ? String(row.id) : `${Date.now()}-${index}`,
-                incomeSource: String(row?.income_source || ''),
-                contribution: String(row?.contribution || ''),
-                amount: String(row?.amount ?? ''),
-                status: String(row?.status || ''),
-                creditAccount: String(row?.credit_account || ''),
-              }))
+              id: row?.id ? String(row.id) : `${Date.now()}-${index}`,
+              incomeSource: String(row?.income_source || ''),
+              contribution: String(row?.contribution || ''),
+              amount: String(row?.amount ?? ''),
+              status: String(row?.status || ''),
+              creditAccount: String(row?.credit_account || ''),
+            }))
             : [createIncomeRow()]
         );
+        setStatusUpdates(record.status_updates || []);
       } catch (error) {
         console.error('Failed to load finance request', error);
       } finally {
@@ -1752,9 +1770,9 @@ const hasSubcategories = subcategoryList.length > 0;
   const handleBeneficiarySearch = async (query: string) => {
     setBeneficiarySearchQuery(query);
     try {
-     let typeParam = '';
-if (beneficiaryType === 'Faculty') typeParam = '&type=Teaching';
-else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
+      let typeParam = '';
+      if (beneficiaryType === 'Faculty') typeParam = '&type=Teaching';
+      else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
       const response = await (authenticityUtility as any).get(
         `finance-requests/search-applicant?q=${encodeURIComponent(query)}${typeParam}`
       ) as any;
@@ -1836,7 +1854,7 @@ else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
 
     return titleCased + " Rupees only";
   };
-  
+
   const formatDMY = (value: string | Date | null | undefined) => {
     if (!value) return "";
     const d = new Date(value);
@@ -1854,13 +1872,13 @@ else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
       setTotalPages(Math.ceil(contentHeight / pageHeight));
     }
   }, [showPreview, applicantName, department, totalBudget]);
-  
+
   const activeHoacGroup = getHoacGroupForHead(primaryHead);
   const extraDropdownVisible = Boolean(activeHoacGroup);
   const hoacSubheadDropdownOptions = toOptions(
     SUB_HEAD_BY_BUDGET_HEAD[primaryHead] ||
-      HOAC_SUBHEAD_OPTIONS[activeHoacGroup || ''] ||
-      []
+    HOAC_SUBHEAD_OPTIONS[activeHoacGroup || ''] ||
+    []
   );
   useEffect(() => {
     if (!activeHoacGroup || !primaryHead) return;
@@ -1874,7 +1892,7 @@ else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [expandedHead, setExpandedHead] = useState<string>('');
   const [activeSubHead, setActiveSubHead] = useState<string>('');
-  
+
   const SearchBudgetModal = () => {
     if (!showSearchModal) return null;
     const query = searchTerm.trim().toLowerCase();
@@ -1899,7 +1917,7 @@ else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
         const bScore = b.head.toLowerCase().includes(query) ? 0 : 1;
         return aScore - bScore;
       });
-    
+
     useEffect(() => {
       if (!expandedHead) return;
 
@@ -1975,7 +1993,7 @@ else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
                 cursor: "pointer",
                 background: "none",
                 border: "none",
-                
+
               }}
             >
               ×
@@ -2105,1079 +2123,1079 @@ else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
     <div className="finance-approval-body" style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}>
 
       {!showPreview && (
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
           <div style={isViewMode ? { pointerEvents: 'none', userSelect: 'none' } : undefined}>
-          {/* Applicant Details Section */}
-          <div style={{
-            backgroundColor: '#fff',
-            padding: '24px',
-            marginBottom: '30px',
-            marginTop: '30px',
-            borderRadius: '18px',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.06)',
-          }}>
-            <div className="row mb-3" style={{ marginBottom: '15px' }}>
-              <div className="col-md-7">
-                <div className="form-group" style={{ position: 'relative' }}>
-                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-                    Applicant Name
-                    {isExternalApplicant && <span style={{ fontSize: '12px', color: '#6c757d', marginLeft: '8px' }}>(External)</span>}
-                  </label>
-                  <CustomInput
-                    name="applicantName"
-                    type="text"
-                    value={isViewMode ? applicantName : (isExternalApplicant ? applicantName : applicantSearchQuery)}
-                    onChange={(value) => {
-                      if (isExternalApplicant) {
-                        setApplicantName(value);
-                      } else {
-                        handleApplicantSearch(value);
-                      }
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#0069ab';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                      if (!isExternalApplicant && !showApplicantDropdown) {
-                        handleApplicantSearch(applicantSearchQuery);
-                      }
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.boxShadow = 'none';
-                      setTimeout(() => setShowApplicantDropdown(false), 200);
-                    }}
-                    placeholder={isExternalApplicant ? "Enter external applicant name" : "Search employee by name or ERP ID"}
-                  />
-                  {showApplicantDropdown && applicantSearchResults.length > 0 && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      backgroundColor: '#fff',
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '12px',
-                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                      zIndex: 1000,
-                      maxHeight: '250px',
-                      overflowY: 'auto',
-                      marginTop: '4px'
-                    }}>
-                      <div
-                        onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
-                        style={{
-                          padding: '10px 15px',
-                          cursor: 'pointer',
-                          backgroundColor: '#f8f9fa',
-                          color: '#0069ab',
-                          fontWeight: '600',
-                          borderBottom: '2px solid #e0e0e0'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                      >
-                        + Add External Applicant
-                      </div>
-                      {applicantSearchResults.map((emp) => (
+            {/* Applicant Details Section */}
+            <div style={{
+              backgroundColor: '#fff',
+              padding: '24px',
+              marginBottom: '30px',
+              marginTop: '30px',
+              borderRadius: '18px',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.06)',
+            }}>
+              <div className="row mb-3" style={{ marginBottom: '15px' }}>
+                <div className="col-md-7">
+                  <div className="form-group" style={{ position: 'relative' }}>
+                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                      Applicant Name
+                      {isExternalApplicant && <span style={{ fontSize: '12px', color: '#6c757d', marginLeft: '8px' }}>(External)</span>}
+                    </label>
+                    <CustomInput
+                      name="applicantName"
+                      type="text"
+                      value={isViewMode ? applicantName : (isExternalApplicant ? applicantName : applicantSearchQuery)}
+                      onChange={(value) => {
+                        if (isExternalApplicant) {
+                          setApplicantName(value);
+                        } else {
+                          handleApplicantSearch(value);
+                        }
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = '#0069ab';
+                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                        if (!isExternalApplicant && !showApplicantDropdown) {
+                          handleApplicantSearch(applicantSearchQuery);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#e0e0e0';
+                        e.currentTarget.style.boxShadow = 'none';
+                        setTimeout(() => setShowApplicantDropdown(false), 200);
+                      }}
+                      placeholder={isExternalApplicant ? "Enter external applicant name" : "Search employee by name or ERP ID"}
+                    />
+                    {showApplicantDropdown && applicantSearchResults.length > 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        backgroundColor: '#fff',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '12px',
+                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                        zIndex: 1000,
+                        maxHeight: '250px',
+                        overflowY: 'auto',
+                        marginTop: '4px'
+                      }}>
                         <div
-                          key={emp.employee_id}
-                          onMouseDown={(e) => { e.preventDefault(); handleSelectApplicant(emp); }}
+                          onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
                           style={{
                             padding: '10px 15px',
                             cursor: 'pointer',
-                            borderBottom: '1px solid #f0f0f0',
-                            transition: 'background-color 0.2s'
+                            backgroundColor: '#f8f9fa',
+                            color: '#0069ab',
+                            fontWeight: '600',
+                            borderBottom: '2px solid #e0e0e0'
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
                         >
-                          <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
-                          <div style={{ fontSize: '12px', color: '#6c757d' }}>
-                            {emp.designation} | {emp.department}
-                          </div>
+                          + Add External Applicant
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  {showApplicantDropdown && applicantSearchQuery.length >= 2 && applicantSearchResults.length === 0 && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      backgroundColor: '#fff',
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '12px',
-                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                      zIndex: 1000,
-                      marginTop: '4px'
-                    }}>
-                      <div style={{ padding: '10px 15px', color: '#6c757d' }}>No employees found</div>
-                      <div
-                        onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
-                        style={{
-                          padding: '10px 15px',
-                          cursor: 'pointer',
-                          backgroundColor: '#f8f9fa',
-                          color: '#0069ab',
-                          fontWeight: '600',
-                          borderTop: '1px solid #e0e0e0'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                      >
-                        + Add External Applicant
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="col-md-5">
-                <div className="form-group">
-                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-                    Date
-                  </label>
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setDate(e.target.value)}
-                    style={{
-                      borderRadius: '12px',
-                      border: '1px solid #e0e0e0',
-                      padding: '10px 15px',
-                      fontSize: '0.95rem',
-                      width: '100%',
-                      fontFamily: 'inherit',
-                      backgroundColor: '#fcfdff',
-                      transition: 'all 0.3s ease',
-                      outline: 'none'
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#0069ab';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="row md-3" style={{ marginBottom: '15px' }}>
-              <div className="col-md-7">
-                <div className="form-group">
-                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Department</label>
-                  <input
-                    type="text"
-                    value={department}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setDepartment(e.target.value)}
-                    style={{
-                      borderRadius: '12px',
-                      border: '1px solid #e0e0e0',
-                      padding: '10px 15px',
-                      fontSize: '0.95rem',
-                      width: '100%',
-                      fontFamily: 'inherit',
-                      backgroundColor: '#fcfdff',
-                      transition: 'all 0.3s ease',
-                      outline: 'none'
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#0069ab';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                    placeholder="Department name"
-                  />
-                </div>
-              </div>
-              <div className="col-md-5">
-                <div className="form-group">
-                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Designation</label>
-                  <input
-                    type="text"
-                    value={designation}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setDesignation(e.target.value)}
-                    style={{
-                      borderRadius: '12px',
-                      border: '1px solid #e0e0e0',
-                      padding: '10px 15px',
-                      fontSize: '0.95rem',
-                      width: '100%',
-                      fontFamily: 'inherit',
-                      backgroundColor: '#fcfdff',
-                      transition: 'all 0.3s ease',
-                      outline: 'none'
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#0069ab';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                    placeholder="e.g., Manager, Staff"
-                  />
-                </div>
-              </div>
-            </div>
-            
-            <div className="row mb-3" style={{ marginBottom: '15px' }}>
-              <div className="col-md-7">
-                <div className="form-group">
-                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    style={{
-                      borderRadius: '12px',
-                      border: '1px solid #e0e0e0',
-                      padding: '10px 15px',
-                      fontSize: '0.95rem',
-                      width: '100%',
-                      fontFamily: 'inherit',
-                      backgroundColor: '#fcfdff',
-                      transition: 'all 0.3s ease',
-                      outline: 'none'
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#0069ab';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                    placeholder="example@email.com"
-                  />
-                </div>
-              </div>
-              <div className="col-md-5">
-                <div className="form-group">
-                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '6px', fontWeight: '600', display: 'block' }}>Mobile</label>
-                  <input
-                    type="tel"
-                    value={mobile}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setMobile(e.target.value)}
-                    style={{
-                      borderRadius: '12px',
-                      border: '1px solid #e0e0e0',
-                      padding: '10px 15px',
-                      fontSize: '0.95rem',
-                      width: '100%',
-                      fontFamily: 'inherit',
-                      backgroundColor: '#fcfdff',
-                      transition: 'all 0.3s ease',
-                      outline: 'none'
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#0069ab';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                    placeholder="10 digit mobile"
-                    pattern="[0-9]{10}"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Beneficiary Section */}
-          <div style={{
-            backgroundColor: '#fff',
-            padding: '30px',
-            borderRadius: '20px',
-            marginBottom: '20px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
-          }}>
-            <div className="row mb-3">
-              <div className="col-md-13">
-                <div className="form-group">
-                  <div className="row mb-3" style={{ alignItems: 'flex-start' }}>
-                    <div className="col-md-3">
-                      <div className="form-group">
-                        <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
-                          Beneficiary
-                        </label>
-                       <CustomDropdown
-    name="beneficiaryType"
-    options={[
-      { value: 'Faculty', label: 'Faculty' },
-      { value: 'Staff', label: 'Staff' },
-      { value: 'Department', label: 'Department' },
-      { value: 'Centre', label: 'Centre' },
-      { value: 'Cell', label: 'Cell' },
-      { value: 'Club', label: 'Club' },
-      { value: 'Professional Body', label: 'Professional Body' },
-      { value: 'Institution', label: 'Institution' }
-    ]}
-    value={beneficiaryType ? { value: beneficiaryType, label: beneficiaryType } : null}
-    onChange={(option) => {
-      const selected = option as OptionType | null;
-      const next = selected?.value ? String(selected.value) : '';
-      setBeneficiaryType(next);
-      setBeneficiaryValue('');
-      setBeneficiaryEmployeeId(null);
-      setBeneficiarySearchQuery('');
-      setBeneficiarySearchResults([]);
-      setShowBeneficiaryDropdown(false);
-      setSelectedTag('');
-      if (next === 'Institution') setBeneficiaryValue('K.S.Rangasamy College of Technology');
-    }}
-  />
-                      </div>
-                    </div>
-
-                    <div className="col-md-6">
-                      {/* Faculty / Staff */}
-                      {['Faculty', 'Staff'].includes(beneficiaryType) && (
-                        <div className="form-group" style={{ position: 'relative' }}>
-                          <label style={{ fontSize: 14, color: '#495057', marginBottom:'8px', fontWeight: 600, display: 'block' }}>
-                            {beneficiaryType === 'Staff' ? 'Staff Name' : 'Faculty Name'}
-                          </label>
-                          <input
-                            type="text"
-                            value={beneficiarySearchQuery || beneficiaryValue}
-                            onChange={(e) => {
-                              setBeneficiaryValue(e.target.value);
-                              setBeneficiaryEmployeeId(null);
-                              setBeneficiarySearchQuery(e.target.value);
-                              handleBeneficiarySearch(e.target.value);
-                            }}
-                            onFocus={(e) => {
-                              e.currentTarget.style.borderColor = '#0069ab';
-                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,105,171,0.15)';
-                              if (!showBeneficiaryDropdown) handleBeneficiarySearch(beneficiarySearchQuery);
-                            }}
-                            onBlur={(e) => {
-                              e.currentTarget.style.borderColor = '#e0e0e0';
-                              e.currentTarget.style.boxShadow = 'none';
-                              setTimeout(() => setShowBeneficiaryDropdown(false), 200);
-                            }}
-                            placeholder={beneficiaryType === 'Staff' ? "Search staff by name or ERP ID" : "Search faculty by name or ERP ID"}
+                        {applicantSearchResults.map((emp) => (
+                          <div
+                            key={emp.employee_id}
+                            onMouseDown={(e) => { e.preventDefault(); handleSelectApplicant(emp); }}
                             style={{
-                              borderRadius: '12px',
-                              border: '1px solid #e0e0e0',
-                              padding: '8px 14px',
-                              fontSize: '0.95rem',
-                              width: '100%',
-                              backgroundColor: '#fcfdff',
-                              outline: 'none'
+                              padding: '10px 15px',
+                              cursor: 'pointer',
+                              borderBottom: '1px solid #f0f0f0',
+                              transition: 'background-color 0.2s'
                             }}
-                            required
-                          />
-                          {showBeneficiaryDropdown && beneficiarySearchResults.length > 0 && (
-                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 1001, maxHeight: 250, overflowY: 'auto', marginTop: 4 }}>
-                              {beneficiarySearchResults.map((emp) => (
-                                <div key={emp.employeeid} onMouseDown={(e) => { e.preventDefault(); handleSelectBeneficiary(emp); }}
-                                  style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
-                                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fff')}>
-                                  <div style={{ fontWeight: 600, color: '#333' }}>{emp.name}</div>
-                                  <div style={{ fontSize: 12, color: '#6c757d' }}>{emp.designation} — {emp.department}</div>
-                                </div>
-                              ))}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
+                          >
+                            <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
+                            <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                              {emp.designation} | {emp.department}
                             </div>
-                          )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {showApplicantDropdown && applicantSearchQuery.length >= 2 && applicantSearchResults.length === 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        backgroundColor: '#fff',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '12px',
+                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                        zIndex: 1000,
+                        marginTop: '4px'
+                      }}>
+                        <div style={{ padding: '10px 15px', color: '#6c757d' }}>No employees found</div>
+                        <div
+                          onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
+                          style={{
+                            padding: '10px 15px',
+                            cursor: 'pointer',
+                            backgroundColor: '#f8f9fa',
+                            color: '#0069ab',
+                            fontWeight: '600',
+                            borderTop: '1px solid #e0e0e0'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                        >
+                          + Add External Applicant
                         </div>
-                      )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="col-md-5">
+                  <div className="form-group">
+                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                      Date
+                    </label>
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setDate(e.target.value)}
+                      style={{
+                        borderRadius: '12px',
+                        border: '1px solid #e0e0e0',
+                        padding: '10px 15px',
+                        fontSize: '0.95rem',
+                        width: '100%',
+                        fontFamily: 'inherit',
+                        backgroundColor: '#fcfdff',
+                        transition: 'all 0.3s ease',
+                        outline: 'none'
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = '#0069ab';
+                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#e0e0e0';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
 
-                      {/* Institution */}
-                      {beneficiaryType === 'Institution' && (
-                        <div className="form-group">
-                          <label style={{ fontSize: 14, color: '#495057', marginBottom: '25px', fontWeight: 600, display: 'block' }}>Institution</label>
-                          <input type="text" value="K.S.Rangasamy College of Technology" readOnly
-                            style={{ borderRadius: 12, border: '1px solid #e0e0e0', padding: '10px 15px', fontSize: '0.95rem', width: '100%', backgroundColor: '#e9ecef', color: '#495057', cursor: 'not-allowed', outline: 'none' }} />
-                        </div>
-                      )}
+              <div className="row md-3" style={{ marginBottom: '15px' }}>
+                <div className="col-md-7">
+                  <div className="form-group">
+                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Department</label>
+                    <input
+                      type="text"
+                      value={department}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setDepartment(e.target.value)}
+                      style={{
+                        borderRadius: '12px',
+                        border: '1px solid #e0e0e0',
+                        padding: '10px 15px',
+                        fontSize: '0.95rem',
+                        width: '100%',
+                        fontFamily: 'inherit',
+                        backgroundColor: '#fcfdff',
+                        transition: 'all 0.3s ease',
+                        outline: 'none'
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = '#0069ab';
+                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#e0e0e0';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                      placeholder="Department name"
+                    />
+                  </div>
+                </div>
+                <div className="col-md-5">
+                  <div className="form-group">
+                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Designation</label>
+                    <input
+                      type="text"
+                      value={designation}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setDesignation(e.target.value)}
+                      style={{
+                        borderRadius: '12px',
+                        border: '1px solid #e0e0e0',
+                        padding: '10px 15px',
+                        fontSize: '0.95rem',
+                        width: '100%',
+                        fontFamily: 'inherit',
+                        backgroundColor: '#fcfdff',
+                        transition: 'all 0.3s ease',
+                        outline: 'none'
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = '#0069ab';
+                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#e0e0e0';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                      placeholder="e.g., Manager, Staff"
+                    />
+                  </div>
+                </div>
+              </div>
 
-                      {/* Professional Body */}
-                      {beneficiaryType === 'Professional Body' && (
-                        <div className="form-group">
-                          <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
-                            Professional Body
-                          </label>
-                          <CustomDropdown
-                            name="professionalBody"
-                            options={subcategoryOptionsByType['Professional Body'] || []}
-                            value={getSelectedOption(beneficiaryValue, subcategoryOptionsByType['Professional Body'] || [])}
-                            onChange={(option) => {
-                              const selected = option as OptionType | null;
-                              setBeneficiaryValue(selected?.value ? String(selected.value) : '');
-                              setCategorySelections([]);
-                            }}
-                            placeholder="Select Professional Body"
-                          />
-                        </div>
-                      )}
-
-                      {/* Department / Centre / Cell / Club */}
-                      {hasSubcategories && !['Faculty', 'Staff', 'Institution', 'Professional Body'].includes(beneficiaryType) && (
-                        <div className="form-group">
-                          <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
-                            {getSubcategoryLabel(beneficiaryType)}
-                          </label>
-                          {isMultipleSelect(beneficiaryType) ? (
-                            <CustomTagInput
-                              name="categorySelections"
-                              value={categorySelections}
-                              onChange={(tags) => { setCategorySelections(tags); setBeneficiaryValue(tags.join(', ')); }}
-                              suggestions={subcategoryList.filter((sub) => !categorySelections.includes(sub))}
-                              placeholder=""
-                              disabled={false}
-                              className="mb-0"
-                            />
-                          ) : (
-                            <CustomDropdown
-                              name="beneficiaryValue"
-                              options={subcategoryOptions}
-                              value={getSelectedOption(beneficiaryValue, subcategoryOptions)}
-                              onChange={(option) => {
-                                const selected = option as OptionType | null;
-                                setBeneficiaryValue(selected?.value ? String(selected.value) : '');
-                                setCategorySelections([]);
-                              }}
-                              placeholder="Select"
-                            />
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="col-md-3">
-                      {beneficiaryType && (
-                        <div className="form-group">
-                          <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>Tag</label>
-                          <CustomDropdown
-                            name="selectedTag"
-                            options={tagOptions}
-                            value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
-                            onChange={(option) => {
-                              const selected = option as OptionType | null;
-                              setSelectedTag(selected?.value ? String(selected.value) : '');
-                            }}
-                            placeholder="Select Tag"
-                          />
-                        </div>
-                      )}
-                    </div>
+              <div className="row mb-3" style={{ marginBottom: '15px' }}>
+                <div className="col-md-7">
+                  <div className="form-group">
+                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      style={{
+                        borderRadius: '12px',
+                        border: '1px solid #e0e0e0',
+                        padding: '10px 15px',
+                        fontSize: '0.95rem',
+                        width: '100%',
+                        fontFamily: 'inherit',
+                        backgroundColor: '#fcfdff',
+                        transition: 'all 0.3s ease',
+                        outline: 'none'
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = '#0069ab';
+                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#e0e0e0';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                      placeholder="example@email.com"
+                    />
+                  </div>
+                </div>
+                <div className="col-md-5">
+                  <div className="form-group">
+                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '6px', fontWeight: '600', display: 'block' }}>Mobile</label>
+                    <input
+                      type="tel"
+                      value={mobile}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setMobile(e.target.value)}
+                      style={{
+                        borderRadius: '12px',
+                        border: '1px solid #e0e0e0',
+                        padding: '10px 15px',
+                        fontSize: '0.95rem',
+                        width: '100%',
+                        fontFamily: 'inherit',
+                        backgroundColor: '#fcfdff',
+                        transition: 'all 0.3s ease',
+                        outline: 'none'
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = '#0069ab';
+                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#e0e0e0';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                      placeholder="10 digit mobile"
+                      pattern="[0-9]{10}"
+                      required
+                    />
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="form-group">
-              <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Description</label>
-              <textarea
-                value={description}
-                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
-                style={{
-                  borderRadius: '12px',
-                  border: '1px solid #e0e0e0',
-                  padding: '10px 15px',
-                  fontSize: '0.95rem',
-                  width: '100%',
-                  fontFamily: 'inherit',
-                  backgroundColor: '#fcfdff',
-                  transition: 'all 0.3s ease',
-                  resize: 'vertical',
-                  outline: 'none'
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#0069ab';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#e0e0e0';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-                rows={3}
-                placeholder="Enter short description"
-              />
-            </div>
-          </div>
-
-          {/* Budget Table Section */}
-          <div
-            style={{
+            {/* Beneficiary Section */}
+            <div style={{
               backgroundColor: '#fff',
               padding: '30px',
               borderRadius: '20px',
               marginBottom: '20px',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
-            }}
-          >
-            <div className="row mb-3">
-              <div className="col-md-12">
-                <div className="form-group hoac-form-group">
-                  <label
-                    style={{
-                      fontSize: '14px',
-                      color: '#495057',
-                      marginBottom: '4px',
-                      fontWeight: 600,
-                      display: 'block',
-                    }}
-                  >
-                    Head of Accounts
-                  </label>
-
-                  {extraDropdownVisible ? (
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '12px',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: '220px' }}>
-                        <CustomDropdown
-                          name="primaryHead"
-                          options={PRIMARY_HEAD_OPTIONS}
-                          value={getSelectedOption(primaryHead, PRIMARY_HEAD_OPTIONS)}
-                          onChange={(option) => {
-                            const selected = option as OptionType | null;
-                            setPrimaryHead(selected?.value ? String(selected.value) : '');
-                            setEventSubHead('');
-                          }}
-                          placeholder="Select Primary Head"
-                        />
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+            }}>
+              <div className="row mb-3">
+                <div className="col-md-13">
+                  <div className="form-group">
+                    <div className="row mb-3" style={{ alignItems: 'flex-start' }}>
+                      <div className="col-md-3">
+                        <div className="form-group">
+                          <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
+                            Beneficiary
+                          </label>
+                          <CustomDropdown
+                            name="beneficiaryType"
+                            options={[
+                              { value: 'Faculty', label: 'Faculty' },
+                              { value: 'Staff', label: 'Staff' },
+                              { value: 'Department', label: 'Department' },
+                              { value: 'Centre', label: 'Centre' },
+                              { value: 'Cell', label: 'Cell' },
+                              { value: 'Club', label: 'Club' },
+                              { value: 'Professional Body', label: 'Professional Body' },
+                              { value: 'Institution', label: 'Institution' }
+                            ]}
+                            value={beneficiaryType ? { value: beneficiaryType, label: beneficiaryType } : null}
+                            onChange={(option) => {
+                              const selected = option as OptionType | null;
+                              const next = selected?.value ? String(selected.value) : '';
+                              setBeneficiaryType(next);
+                              setBeneficiaryValue('');
+                              setBeneficiaryEmployeeId(null);
+                              setBeneficiarySearchQuery('');
+                              setBeneficiarySearchResults([]);
+                              setShowBeneficiaryDropdown(false);
+                              setSelectedTag('');
+                              if (next === 'Institution') setBeneficiaryValue('K.S.Rangasamy College of Technology');
+                            }}
+                          />
+                        </div>
                       </div>
 
-                      <div style={{ flex: 1, minWidth: '220px' }}>
-                        <CustomDropdown
-                          name="eventSubHead"
-                          options={hoacSubheadDropdownOptions}
-                          value={getSelectedOption(eventSubHead, hoacSubheadDropdownOptions)}
-                          onChange={(option) => {
-                            const selected = option as OptionType | null;
-                            setEventSubHead(selected?.value ? String(selected.value) : '');
-                          }}
-                          placeholder="Select Sub Head"
-                        />
+                      <div className="col-md-6">
+                        {/* Faculty / Staff */}
+                        {['Faculty', 'Staff'].includes(beneficiaryType) && (
+                          <div className="form-group" style={{ position: 'relative' }}>
+                            <label style={{ fontSize: 14, color: '#495057', marginBottom: '8px', fontWeight: 600, display: 'block' }}>
+                              {beneficiaryType === 'Staff' ? 'Staff Name' : 'Faculty Name'}
+                            </label>
+                            <input
+                              type="text"
+                              value={beneficiarySearchQuery || beneficiaryValue}
+                              onChange={(e) => {
+                                setBeneficiaryValue(e.target.value);
+                                setBeneficiaryEmployeeId(null);
+                                setBeneficiarySearchQuery(e.target.value);
+                                handleBeneficiarySearch(e.target.value);
+                              }}
+                              onFocus={(e) => {
+                                e.currentTarget.style.borderColor = '#0069ab';
+                                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,105,171,0.15)';
+                                if (!showBeneficiaryDropdown) handleBeneficiarySearch(beneficiarySearchQuery);
+                              }}
+                              onBlur={(e) => {
+                                e.currentTarget.style.borderColor = '#e0e0e0';
+                                e.currentTarget.style.boxShadow = 'none';
+                                setTimeout(() => setShowBeneficiaryDropdown(false), 200);
+                              }}
+                              placeholder={beneficiaryType === 'Staff' ? "Search staff by name or ERP ID" : "Search faculty by name or ERP ID"}
+                              style={{
+                                borderRadius: '12px',
+                                border: '1px solid #e0e0e0',
+                                padding: '8px 14px',
+                                fontSize: '0.95rem',
+                                width: '100%',
+                                backgroundColor: '#fcfdff',
+                                outline: 'none'
+                              }}
+                              required
+                            />
+                            {showBeneficiaryDropdown && beneficiarySearchResults.length > 0 && (
+                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 1001, maxHeight: 250, overflowY: 'auto', marginTop: 4 }}>
+                                {beneficiarySearchResults.map((emp) => (
+                                  <div key={emp.employeeid} onMouseDown={(e) => { e.preventDefault(); handleSelectBeneficiary(emp); }}
+                                    style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
+                                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fff')}>
+                                    <div style={{ fontWeight: 600, color: '#333' }}>{emp.name}</div>
+                                    <div style={{ fontSize: 12, color: '#6c757d' }}>{emp.designation} — {emp.department}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Institution */}
+                        {beneficiaryType === 'Institution' && (
+                          <div className="form-group">
+                            <label style={{ fontSize: 14, color: '#495057', marginBottom: '25px', fontWeight: 600, display: 'block' }}>Institution</label>
+                            <input type="text" value="K.S.Rangasamy College of Technology" readOnly
+                              style={{ borderRadius: 12, border: '1px solid #e0e0e0', padding: '10px 15px', fontSize: '0.95rem', width: '100%', backgroundColor: '#e9ecef', color: '#495057', cursor: 'not-allowed', outline: 'none' }} />
+                          </div>
+                        )}
+
+                        {/* Professional Body */}
+                        {beneficiaryType === 'Professional Body' && (
+                          <div className="form-group">
+                            <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
+                              Professional Body
+                            </label>
+                            <CustomDropdown
+                              name="professionalBody"
+                              options={subcategoryOptionsByType['Professional Body'] || []}
+                              value={getSelectedOption(beneficiaryValue, subcategoryOptionsByType['Professional Body'] || [])}
+                              onChange={(option) => {
+                                const selected = option as OptionType | null;
+                                setBeneficiaryValue(selected?.value ? String(selected.value) : '');
+                                setCategorySelections([]);
+                              }}
+                              placeholder="Select Professional Body"
+                            />
+                          </div>
+                        )}
+
+                        {/* Department / Centre / Cell / Club */}
+                        {hasSubcategories && !['Faculty', 'Staff', 'Institution', 'Professional Body'].includes(beneficiaryType) && (
+                          <div className="form-group">
+                            <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
+                              {getSubcategoryLabel(beneficiaryType)}
+                            </label>
+                            {isMultipleSelect(beneficiaryType) ? (
+                              <CustomTagInput
+                                name="categorySelections"
+                                value={categorySelections}
+                                onChange={(tags) => { setCategorySelections(tags); setBeneficiaryValue(tags.join(', ')); }}
+                                suggestions={subcategoryList.filter((sub) => !categorySelections.includes(sub))}
+                                placeholder=""
+                                disabled={false}
+                                className="mb-0"
+                              />
+                            ) : (
+                              <CustomDropdown
+                                name="beneficiaryValue"
+                                options={subcategoryOptions}
+                                value={getSelectedOption(beneficiaryValue, subcategoryOptions)}
+                                onChange={(option) => {
+                                  const selected = option as OptionType | null;
+                                  setBeneficiaryValue(selected?.value ? String(selected.value) : '');
+                                  setCategorySelections([]);
+                                }}
+                                placeholder="Select"
+                              />
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="col-md-3">
+                        {beneficiaryType && (
+                          <div className="form-group">
+                            <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>Tag</label>
+                            <CustomDropdown
+                              name="selectedTag"
+                              options={tagOptions}
+                              value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
+                              onChange={(option) => {
+                                const selected = option as OptionType | null;
+                                setSelectedTag(selected?.value ? String(selected.value) : '');
+                              }}
+                              placeholder="Select Tag"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
-                  ) : (
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '12px',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: '250px' }}>
-                        <CustomDropdown
-                          name="primaryHead"
-                          options={PRIMARY_HEAD_OPTIONS}
-                          value={getSelectedOption(primaryHead, PRIMARY_HEAD_OPTIONS)}
-                          onChange={(option) => {
-                            const selected = option as OptionType | null;
-                            setPrimaryHead(selected?.value ? String(selected.value) : '');
-                            setEventSubHead('');
-                          }}
-                          placeholder="Select Primary Head"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  
-                  <SearchBudgetModal />
+                  </div>
                 </div>
+              </div>
+
+              <div className="form-group">
+                <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Description</label>
+                <textarea
+                  value={description}
+                  onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
+                  style={{
+                    borderRadius: '12px',
+                    border: '1px solid #e0e0e0',
+                    padding: '10px 15px',
+                    fontSize: '0.95rem',
+                    width: '100%',
+                    fontFamily: 'inherit',
+                    backgroundColor: '#fcfdff',
+                    transition: 'all 0.3s ease',
+                    resize: 'vertical',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = '#0069ab';
+                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = '#e0e0e0';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                  rows={3}
+                  placeholder="Enter short description"
+                />
               </div>
             </div>
 
-            <div style={{ overflowX: 'visible' }}>
-              <table style={{
-                width: '100%',
-                borderCollapse: 'collapse',
+            {/* Budget Table Section */}
+            <div
+              style={{
                 backgroundColor: '#fff',
-                border: '1px solid #e0e0e0'
-              }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f0f6ff' }}>
-                    <th style={{ width: '6%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>S.No</th>
-                    <th style={{ width: '30%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget Head</th>
-                    <th style={{ width: '30%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Sub Head</th>
-                    <th style={{ width: '15%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Amount</th>
-                    <th style={{ width: '8%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Actions</th>
-                   </tr>
-                </thead>
-                <tbody>
-                  {budgetRows.map((row, index) => (
-                    <tr key={index} style={{ borderBottom: '1px solid #e0e0e0', opacity: primaryHead ? 1 : 0.6 }}>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', color: '#495057' }}>
-                        {index + 1}
-                      </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                        <CustomDropdown
-                          name={`budgetHead-${index}`}
-                          options={BUDGET_HEAD_SEARCH_OPTIONS}
-                          value={row.category ? {
-                            value: `head::${row.category}`,
-                            label: row.category,
-                            budgetHead: row.category,
-                            subHead: row.head || '',
-                            optionType: 'budget-head',
-                          } : null}
-                          onChange={(option) => {
-                            handleBudgetHeadSelection(index, option as OptionType | null);
-                          }}
-                          filterOption={(candidate: any, input: string) => {
-                            const option = (candidate?.data || {}) as BudgetHeadSearchOption;
-                            const query = normalizeText(input).toLowerCase();
-                            const budgetHead = normalizeText(option.budgetHead).toLowerCase();
-                            const subHead = normalizeText(option.subHead).toLowerCase();
+                padding: '30px',
+                borderRadius: '20px',
+                marginBottom: '20px',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+              }}
+            >
+              <div className="row mb-3">
+                <div className="col-md-12">
+                  <div className="form-group hoac-form-group">
+                    <label
+                      style={{
+                        fontSize: '14px',
+                        color: '#495057',
+                        marginBottom: '4px',
+                        fontWeight: 600,
+                        display: 'block',
+                      }}
+                    >
+                      Head of Accounts
+                    </label>
 
-                            if (!query) {
-                              return option.optionType === 'budget-head';
-                            }
+                    {extraDropdownVisible ? (
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: '12px',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: '220px' }}>
+                          <CustomDropdown
+                            name="primaryHead"
+                            options={PRIMARY_HEAD_OPTIONS}
+                            value={getSelectedOption(primaryHead, PRIMARY_HEAD_OPTIONS)}
+                            onChange={(option) => {
+                              const selected = option as OptionType | null;
+                              setPrimaryHead(selected?.value ? String(selected.value) : '');
+                              setEventSubHead('');
+                            }}
+                            placeholder="Select Primary Head"
+                          />
+                        </div>
 
-                            if (option.optionType === 'head-sub-head') {
-                              return subHead.includes(query) || budgetHead.includes(query);
-                            }
+                        <div style={{ flex: 1, minWidth: '220px' }}>
+                          <CustomDropdown
+                            name="eventSubHead"
+                            options={hoacSubheadDropdownOptions}
+                            value={getSelectedOption(eventSubHead, hoacSubheadDropdownOptions)}
+                            onChange={(option) => {
+                              const selected = option as OptionType | null;
+                              setEventSubHead(selected?.value ? String(selected.value) : '');
+                            }}
+                            placeholder="Select Sub Head"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: '12px',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: '250px' }}>
+                          <CustomDropdown
+                            name="primaryHead"
+                            options={PRIMARY_HEAD_OPTIONS}
+                            value={getSelectedOption(primaryHead, PRIMARY_HEAD_OPTIONS)}
+                            onChange={(option) => {
+                              const selected = option as OptionType | null;
+                              setPrimaryHead(selected?.value ? String(selected.value) : '');
+                              setEventSubHead('');
+                            }}
+                            placeholder="Select Primary Head"
+                          />
+                        </div>
+                      </div>
+                    )}
 
-                            return budgetHead.includes(query);
-                          }}
-                          placeholder="Select"
-                          isDisabled={!primaryHead}
-                        />
-                      </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                        <CustomDropdown
-                          name={`subHead-${index}`}
-                          options={toOptions(getSubHeadOptions(row.category))}
-                          value={getSelectedOption(row.head, toOptions(getSubHeadOptions(row.category)))}
-                          onChange={(option) => {
-                            const selected = option as OptionType | null;
-                            handleBudgetChange(index, 'head', selected?.value ? String(selected.value) : '');
-                          }}
-                          placeholder="Select"
-                          isDisabled={!row.category || !primaryHead}
-                        />
-                      </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                    <SearchBudgetModal />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ overflowX: 'visible' }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  backgroundColor: '#fff',
+                  border: '1px solid #e0e0e0'
+                }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f0f6ff' }}>
+                      <th style={{ width: '6%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>S.No</th>
+                      <th style={{ width: '30%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget Head</th>
+                      <th style={{ width: '30%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Sub Head</th>
+                      <th style={{ width: '15%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Amount</th>
+                      <th style={{ width: '8%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {budgetRows.map((row, index) => (
+                      <tr key={index} style={{ borderBottom: '1px solid #e0e0e0', opacity: primaryHead ? 1 : 0.6 }}>
+                        <td style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', color: '#495057' }}>
+                          {index + 1}
+                        </td>
+                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                          <CustomDropdown
+                            name={`budgetHead-${index}`}
+                            options={BUDGET_HEAD_SEARCH_OPTIONS}
+                            value={row.category ? {
+                              value: `head::${row.category}`,
+                              label: row.category,
+                              budgetHead: row.category,
+                              subHead: row.head || '',
+                              optionType: 'budget-head',
+                            } : null}
+                            onChange={(option) => {
+                              handleBudgetHeadSelection(index, option as OptionType | null);
+                            }}
+                            filterOption={(candidate: any, input: string) => {
+                              const option = (candidate?.data || {}) as BudgetHeadSearchOption;
+                              const query = normalizeText(input).toLowerCase();
+                              const budgetHead = normalizeText(option.budgetHead).toLowerCase();
+                              const subHead = normalizeText(option.subHead).toLowerCase();
+
+                              if (!query) {
+                                return option.optionType === 'budget-head';
+                              }
+
+                              if (option.optionType === 'head-sub-head') {
+                                return subHead.includes(query) || budgetHead.includes(query);
+                              }
+
+                              return budgetHead.includes(query);
+                            }}
+                            placeholder="Select"
+                            isDisabled={!primaryHead}
+                          />
+                        </td>
+                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                          <CustomDropdown
+                            name={`subHead-${index}`}
+                            options={toOptions(getSubHeadOptions(row.category))}
+                            value={getSelectedOption(row.head, toOptions(getSubHeadOptions(row.category)))}
+                            onChange={(option) => {
+                              const selected = option as OptionType | null;
+                              handleBudgetChange(index, 'head', selected?.value ? String(selected.value) : '');
+                            }}
+                            placeholder="Select"
+                            isDisabled={!row.category || !primaryHead}
+                          />
+                        </td>
+                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
                           <input
                             type="text"
                             value={row.amount}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => handleBudgetChange(index, 'amount', e.target.value)}
                             disabled={!primaryHead}
                             placeholder={`₹ ${(budgetLineMetaByRow[index]?.availableAmount ?? 0).toFixed(2)}`}
-                          style={{
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '8px',
-                            padding: '8px 12px',
-                            fontSize: '0.9rem',
-                            width: '120px',
-                            fontFamily: 'inherit',
-                            backgroundColor: primaryHead ? '#fcfdff' : '#f8f9fa',
-                            color: primaryHead ? '#000' : '#6c757d',
-                            cursor: primaryHead ? 'pointer' : 'not-allowed',
-                            outline: 'none',
-                            textAlign: 'left',
-                            margin: '0 auto',
-                            display: 'block'
-                          }}
-                          onFocus={(e) => {
-                            e.currentTarget.style.borderColor = '#0069ab';
-                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                          }}
-                          onBlur={(e) => {
-                            e.currentTarget.style.borderColor = '#e0e0e0';
-                            e.currentTarget.style.boxShadow = 'none';
-                          }}
-                        />
+                            style={{
+                              border: '1px solid #e0e0e0',
+                              borderRadius: '8px',
+                              padding: '8px 12px',
+                              fontSize: '0.9rem',
+                              width: '120px',
+                              fontFamily: 'inherit',
+                              backgroundColor: primaryHead ? '#fcfdff' : '#f8f9fa',
+                              color: primaryHead ? '#000' : '#6c757d',
+                              cursor: primaryHead ? 'pointer' : 'not-allowed',
+                              outline: 'none',
+                              textAlign: 'left',
+                              margin: '0 auto',
+                              display: 'block'
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            gap: '10px'
+                          }}>
+                            {(index > 0 || (index === 0 && budgetRows.length > 1)) && (
+                              <button
+                                onClick={(e: MouseEvent<HTMLButtonElement>) => {
+                                  e.preventDefault();
+                                  handleDeleteRow(index);
+                                }}
+                                style={{
+                                  width: '36px',
+                                  height: '36px',
+                                  borderRadius: '50%',
+                                  border: 'none',
+                                  background: '#ffe6e6',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '18px',
+                                  transition: 'all 0.15s ease'
+                                }}
+                                title="Delete Row"
+                                onMouseEnter={(e) => {
+                                  (e.currentTarget as HTMLButtonElement).style.background = '#ffcccc';
+                                }}
+                                onMouseLeave={(e) => {
+                                  (e.currentTarget as HTMLButtonElement).style.background = '#ffe6e6';
+                                }}
+                              >
+                                ×
+                              </button>
+                            )}
+                            {index === budgetRows.length - 1 && (
+                              <button
+                                onClick={(e: MouseEvent<HTMLButtonElement>) => {
+                                  e.preventDefault();
+                                  handleAddRow();
+                                }}
+                                disabled={!primaryHead}
+                                style={{
+                                  width: '36px',
+                                  height: '36px',
+                                  borderRadius: '50%',
+                                  border: 'none',
+                                  background: '#f5f6f8',
+                                  cursor: primaryHead ? 'pointer' : 'not-allowed',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '18px',
+                                  transition: 'all 0.15s ease',
+                                  opacity: primaryHead ? 1 : 0.5
+                                }}
+                                title="Add Row"
+                                onMouseEnter={(e) => {
+                                  if (primaryHead) {
+                                    (e.currentTarget as HTMLButtonElement).style.background = '#e8f5e9';
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  (e.currentTarget as HTMLButtonElement).style.background = '#f5f6f8';
+                                }}
+                              >
+                                +
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ backgroundColor: '#f0f6ff' }}>
+                      <td colSpan={3} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>
+                        Total Budget
                       </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                        <div style={{
-                          display: 'flex',
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          gap: '10px'
-                        }}>
-                          {(index > 0 || (index === 0 && budgetRows.length > 1)) && (
-  <button
-    onClick={(e: MouseEvent<HTMLButtonElement>) => {
-      e.preventDefault();
-      handleDeleteRow(index);
-    }}
-    style={{
-      width: '36px',
-      height: '36px',
-      borderRadius: '50%',
-      border: 'none',
-      background: '#ffe6e6',
-      cursor: 'pointer',
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '18px',
-      transition: 'all 0.15s ease'
-    }}
-    title="Delete Row"
-    onMouseEnter={(e) => {
-      (e.currentTarget as HTMLButtonElement).style.background = '#ffcccc';
-    }}
-    onMouseLeave={(e) => {
-      (e.currentTarget as HTMLButtonElement).style.background = '#ffe6e6';
-    }}
-  >
-    ×
-  </button>
-)}
-                          {index === budgetRows.length - 1 && (
-                            <button
-                              onClick={(e: MouseEvent<HTMLButtonElement>) => {
-                                e.preventDefault();
-                                handleAddRow();
-                              }}
-                              disabled={!primaryHead}
-                              style={{
-                                width: '36px',
-                                height: '36px',
-                                borderRadius: '50%',
-                                border: 'none',
-                                background: '#f5f6f8',
-                                cursor: primaryHead ? 'pointer' : 'not-allowed',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '18px',
-                                transition: 'all 0.15s ease',
-                                opacity: primaryHead ? 1 : 0.5
-                              }}
-                              title="Add Row"
-                              onMouseEnter={(e) => {
-                                if (primaryHead) {
-                                  (e.currentTarget as HTMLButtonElement).style.background = '#e8f5e9';
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                (e.currentTarget as HTMLButtonElement).style.background = '#f5f6f8';
-                              }}
-                            >
-                              +
-                            </button>
-                          )}
-                        </div>
+                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
+                        ₹ {totalBudget.toFixed(2)}
                       </td>
+                      <td style={{ border: '1px solid #e0e0e0' }}></td>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr style={{ backgroundColor: '#f0f6ff' }}>
-                    <td colSpan={3} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>
-                      Total Budget
-                    </td>
-                    <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
-                      ₹ {totalBudget.toFixed(2)}
-                    </td>
-                    <td style={{ border: '1px solid #e0e0e0' }}></td>
-                  </tr>
-                </tfoot>
-              </table>
+                  </tfoot>
+                </table>
 
-              <div
-                style={{
-                  marginTop: "10px",
-                  padding: "10px 14px",
-                  borderRadius: "10px",
-                  backgroundColor: "#f0f6ff",
-                  border: "1px solid #cfe2ff",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "0.9rem",
-                  color: "#0b3d75",
-                  textAlign: "center",
-                  width: "100%",
-                }}
-              >
-                <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                <span style={{ fontWeight: 600 }}>
-                  {numberToIndianWords(totalBudget)
-                    .replace(/\b\w/g, l => l.toUpperCase())
-                    .replace(/[^\s][A-Z]/g, l => l.toLowerCase())
-                  }
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Income Section */}
-          <div
-            style={{
-              backgroundColor: '#fff',
-              padding: '30px',
-              borderRadius: '20px',
-              marginBottom: '20px',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
-            }}
-          >
-            <div className="row mt-3">
-              <div className="col-md-12">
-                <div className="form-group">
-                  <div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        marginBottom: "20px",
-                      }}
-                    >
-                      <span style={{ fontSize: "16px", color: "#495057", fontWeight: 600 }}>
-                        Income
-                      </span>
-                      <CustomToggle
-                        name="incomeToggle"
-                        checked={showIncomeSection}
-                        onChange={(checked) => setShowIncomeSection(checked)}
-                      />
-                    </div>
-                    <div
-                      style={{
-                        height: "2px",
-                        backgroundColor: "#e0e0e0",
-                        marginBottom: "20px",
-                      }}
-                    />
-                  </div>
-{showIncomeSection && (
-  <>
-    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
-      <thead>
-        <tr style={{ backgroundColor: '#f0f6ff' }}>
-          <th style={{ width: '6%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>S.No</th>
-          <th style={{ width: '25%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Income Source</th>
-          <th style={{ width: '25%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Contribution</th>
-          <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Amount</th>
-          <th style={{ width: '20%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Status</th>
-          <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Action</th>
-         </tr>
-      </thead>
-      <tbody>
-        {incomeRows.map((row, index) => {
-          const isLastRow = index === incomeRows.length - 1;
-
-          return (
-            <React.Fragment key={row.id}>
-              {/* First Row - Income Details */}
-              <tr>
-                <td style={incomeCellStyle}>{index + 1}</td>
-                <td style={incomeCellStyle}>
-                  <CustomDropdown
-                    name={`incomeSource-${row.id}`}
-                    options={toOptions(INCOME_SOURCE_OPTIONS)}
-                    value={getSelectedOption(row.incomeSource, toOptions(INCOME_SOURCE_OPTIONS))}
-                    onChange={(option) => {
-                      const selected = option as OptionType | null;
-                      handleIncomeRowChange(row.id, "incomeSource", selected?.value ? String(selected.value) : "");
-                    }}
-                    placeholder="Select"
-                  />
-                </td>
-                <td style={incomeCellStyle}>
-                  <CustomDropdown
-                    name={`contribution-${row.id}`}
-                    options={toOptions(CONTRIBUTION_OPTIONS)}
-                    value={getSelectedOption(row.contribution, toOptions(CONTRIBUTION_OPTIONS))}
-                    onChange={(option) => {
-                      const selected = option as OptionType | null;
-                      handleIncomeRowChange(row.id, "contribution", selected?.value ? String(selected.value) : "");
-                    }}
-                    placeholder="Select"
-                  />
-                </td>
-                <td style={incomeCellStyle}>
-                  <input
-                    type="text"
-                    value={row.amount}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      handleIncomeRowChange(row.id, "amount", e.target.value)
-                    }
-                    placeholder="₹ 0"
-                    min="0"
-                    step="0"
-                    style={{
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '8px',
-                      padding: '6px 8px',
-                      fontSize: '0.9rem',
-                      width: '100%',
-                      fontFamily: 'inherit',
-                      backgroundColor:'#fcfdff',
-                      color:  '#000',
-                      cursor:'pointer',
-                      outline: 'none',
-                      marginTop:'2px'
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#0069ab';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                  />
-                </td>
-                <td style={incomeCellStyle}>
-                  <CustomDropdown
-                    name={`status-${row.id}`}
-                    options={toOptions(STATUS_OPTIONS)}
-                    value={getSelectedOption(row.status, toOptions(STATUS_OPTIONS))}
-                    onChange={(option) => {
-                      const selected = option as OptionType | null;
-                      handleIncomeRowChange(row.id, "status", selected?.value ? String(selected.value) : "");
-                    }}
-                    placeholder="Select"
-                  />
-                </td>
-                {/* Action cell with vertical centering spanning both rows */}
-                <td rowSpan={2} style={{
-                  padding: '8px',
-                  border: '1px solid #e0e0e0',
-                  textAlign: 'center',
-                  verticalAlign: 'middle',
-                  backgroundColor: '#fff'
-                }}>
-                  <div style={actionCell}>
-                    {(index > 0 || (index === 0 && incomeRows.length > 1)) && (
-  <button
-    type="button"
-    onClick={(e: MouseEvent<HTMLButtonElement>) => {
-      e.preventDefault();
-      handleDeleteIncomeRow(row.id);
-    }}
-    style={deleteIconBtn}
-    title="Delete Row"
-    className="btn-sm"
-    onMouseEnter={(e) => {
-      (e.currentTarget as HTMLButtonElement).style.background = '#ffcccc';
-    }}
-    onMouseLeave={(e) => {
-      (e.currentTarget as HTMLButtonElement).style.background = '#ffe6e6';
-    }}
-  >
-    ×
-  </button>
-)}
-                    {isLastRow && (
-                      <button
-                        onClick={(e: MouseEvent<HTMLButtonElement>) => {
-                          e.preventDefault();
-                          handleAddIncomeRow();
-                        }}
-                        style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '50%',
-                          border: 'none',
-                          background: '#f5f6f8',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '18px',
-                          transition: 'all 0.15s ease',
-                        }}
-                        title="Add Row"
-                        className="btn-sm"
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.background = '#e8f5e9';
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.background = '#f5f6f8';
-                        }}
-                      >
-                        +
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-              {/* Second Row - Credit Account (Reduced width) */}
-              <tr>
-                <td 
-                  colSpan={2} 
+                <div
                   style={{
-                    padding: '5px',
-                    border: '1px solid #e0e0e0',
-                    backgroundColor: 'white',
-                    textAlign: 'center',
-                    fontWeight: 600,
-                    color: '#0069ab',
-                    fontSize: '13px',
-                    verticalAlign: 'middle',
+                    marginTop: "10px",
+                    padding: "10px 14px",
+                    borderRadius: "10px",
+                    backgroundColor: "#f0f6ff",
+                    border: "1px solid #cfe2ff",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "0.9rem",
+                    color: "#0b3d75",
+                    textAlign: "center",
+                    width: "100%",
                   }}
                 >
-                  Credit Account
-                </td>
-                <td
-                  colSpan={3} 
-                  style={{
-                    padding: '5px',
-                    border: '1px solid #e0e0e0',
-                    backgroundColor: '#ffffff',
-                  }}>
-                  <CustomDropdown
-                    name={`creditAccount-${row.id}`}
-                    options={toOptions(CREDIT_ACCOUNT_OPTIONS)}
-                    value={getSelectedOption(row.creditAccount, toOptions(CREDIT_ACCOUNT_OPTIONS))}
-                    onChange={(option) => {
-                      const selected = option as OptionType | null;
-                      handleIncomeRowChange(row.id, "creditAccount", selected?.value ? String(selected.value) : "");
-                    }}
-                    placeholder="Select"
-                  />
-                </td>
-              </tr>
-            </React.Fragment>
-          );
-        })}
-      </tbody>
-      <tfoot>
-        <tr style={{ backgroundColor: '#f0f6ff' }}>
-          <td colSpan={3} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>Total Income</td>
-          <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
-            ₹ {incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0).toFixed(2)}
-          </td>
-          <td colSpan={2} style={{ border: '1px solid #e0e0e0' }}></td>
-        </tr>
-      </tfoot>
-    </table>
-    
-    {/* Rupees in words */}
-    <div style={{ marginTop: "10px", padding: "10px 14px", borderRadius: "10px", backgroundColor: "#f0f6ff", border: "1px solid #cfe2ff", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", fontSize: "0.9rem", color: "#0b3d75", textAlign: "center", width: "100%" }}>
-      <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-      <span style={{ fontWeight: 600 }}>
-        {numberToIndianWords(incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)).replace(/\b\w/g, l => l.toUpperCase()).replace(/[^\s][A-Z]/g, l => l.toLowerCase())}
-      </span>
-    </div>
-  </>
-)}
+                  <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
+                  <span style={{ fontWeight: 600 }}>
+                    {numberToIndianWords(totalBudget)
+                      .replace(/\b\w/g, l => l.toUpperCase())
+                      .replace(/[^\s][A-Z]/g, l => l.toLowerCase())
+                    }
+                  </span>
                 </div>
               </div>
             </div>
-          </div>
+
+            {/* Income Section */}
+            <div
+              style={{
+                backgroundColor: '#fff',
+                padding: '30px',
+                borderRadius: '20px',
+                marginBottom: '20px',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+              }}
+            >
+              <div className="row mt-3">
+                <div className="col-md-12">
+                  <div className="form-group">
+                    <div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          marginBottom: "20px",
+                        }}
+                      >
+                        <span style={{ fontSize: "16px", color: "#495057", fontWeight: 600 }}>
+                          Income
+                        </span>
+                        <CustomToggle
+                          name="incomeToggle"
+                          checked={showIncomeSection}
+                          onChange={(checked) => setShowIncomeSection(checked)}
+                        />
+                      </div>
+                      <div
+                        style={{
+                          height: "2px",
+                          backgroundColor: "#e0e0e0",
+                          marginBottom: "20px",
+                        }}
+                      />
+                    </div>
+                    {showIncomeSection && (
+                      <>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f0f6ff' }}>
+                              <th style={{ width: '6%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>S.No</th>
+                              <th style={{ width: '25%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Income Source</th>
+                              <th style={{ width: '25%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Contribution</th>
+                              <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Amount</th>
+                              <th style={{ width: '20%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Status</th>
+                              <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {incomeRows.map((row, index) => {
+                              const isLastRow = index === incomeRows.length - 1;
+
+                              return (
+                                <React.Fragment key={row.id}>
+                                  {/* First Row - Income Details */}
+                                  <tr>
+                                    <td style={incomeCellStyle}>{index + 1}</td>
+                                    <td style={incomeCellStyle}>
+                                      <CustomDropdown
+                                        name={`incomeSource-${row.id}`}
+                                        options={toOptions(INCOME_SOURCE_OPTIONS)}
+                                        value={getSelectedOption(row.incomeSource, toOptions(INCOME_SOURCE_OPTIONS))}
+                                        onChange={(option) => {
+                                          const selected = option as OptionType | null;
+                                          handleIncomeRowChange(row.id, "incomeSource", selected?.value ? String(selected.value) : "");
+                                        }}
+                                        placeholder="Select"
+                                      />
+                                    </td>
+                                    <td style={incomeCellStyle}>
+                                      <CustomDropdown
+                                        name={`contribution-${row.id}`}
+                                        options={toOptions(CONTRIBUTION_OPTIONS)}
+                                        value={getSelectedOption(row.contribution, toOptions(CONTRIBUTION_OPTIONS))}
+                                        onChange={(option) => {
+                                          const selected = option as OptionType | null;
+                                          handleIncomeRowChange(row.id, "contribution", selected?.value ? String(selected.value) : "");
+                                        }}
+                                        placeholder="Select"
+                                      />
+                                    </td>
+                                    <td style={incomeCellStyle}>
+                                      <input
+                                        type="text"
+                                        value={row.amount}
+                                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                                          handleIncomeRowChange(row.id, "amount", e.target.value)
+                                        }
+                                        placeholder="₹ 0"
+                                        min="0"
+                                        step="0"
+                                        style={{
+                                          border: '1px solid #e0e0e0',
+                                          borderRadius: '8px',
+                                          padding: '6px 8px',
+                                          fontSize: '0.9rem',
+                                          width: '100%',
+                                          fontFamily: 'inherit',
+                                          backgroundColor: '#fcfdff',
+                                          color: '#000',
+                                          cursor: 'pointer',
+                                          outline: 'none',
+                                          marginTop: '2px'
+                                        }}
+                                        onFocus={(e) => {
+                                          e.currentTarget.style.borderColor = '#0069ab';
+                                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                                        }}
+                                        onBlur={(e) => {
+                                          e.currentTarget.style.borderColor = '#e0e0e0';
+                                          e.currentTarget.style.boxShadow = 'none';
+                                        }}
+                                      />
+                                    </td>
+                                    <td style={incomeCellStyle}>
+                                      <CustomDropdown
+                                        name={`status-${row.id}`}
+                                        options={toOptions(STATUS_OPTIONS)}
+                                        value={getSelectedOption(row.status, toOptions(STATUS_OPTIONS))}
+                                        onChange={(option) => {
+                                          const selected = option as OptionType | null;
+                                          handleIncomeRowChange(row.id, "status", selected?.value ? String(selected.value) : "");
+                                        }}
+                                        placeholder="Select"
+                                      />
+                                    </td>
+                                    {/* Action cell with vertical centering spanning both rows */}
+                                    <td rowSpan={2} style={{
+                                      padding: '8px',
+                                      border: '1px solid #e0e0e0',
+                                      textAlign: 'center',
+                                      verticalAlign: 'middle',
+                                      backgroundColor: '#fff'
+                                    }}>
+                                      <div style={actionCell}>
+                                        {(index > 0 || (index === 0 && incomeRows.length > 1)) && (
+                                          <button
+                                            type="button"
+                                            onClick={(e: MouseEvent<HTMLButtonElement>) => {
+                                              e.preventDefault();
+                                              handleDeleteIncomeRow(row.id);
+                                            }}
+                                            style={deleteIconBtn}
+                                            title="Delete Row"
+                                            className="btn-sm"
+                                            onMouseEnter={(e) => {
+                                              (e.currentTarget as HTMLButtonElement).style.background = '#ffcccc';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                              (e.currentTarget as HTMLButtonElement).style.background = '#ffe6e6';
+                                            }}
+                                          >
+                                            ×
+                                          </button>
+                                        )}
+                                        {isLastRow && (
+                                          <button
+                                            onClick={(e: MouseEvent<HTMLButtonElement>) => {
+                                              e.preventDefault();
+                                              handleAddIncomeRow();
+                                            }}
+                                            style={{
+                                              width: '36px',
+                                              height: '36px',
+                                              borderRadius: '50%',
+                                              border: 'none',
+                                              background: '#f5f6f8',
+                                              cursor: 'pointer',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              fontSize: '18px',
+                                              transition: 'all 0.15s ease',
+                                            }}
+                                            title="Add Row"
+                                            className="btn-sm"
+                                            onMouseEnter={(e) => {
+                                              (e.currentTarget as HTMLButtonElement).style.background = '#e8f5e9';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                              (e.currentTarget as HTMLButtonElement).style.background = '#f5f6f8';
+                                            }}
+                                          >
+                                            +
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  {/* Second Row - Credit Account (Reduced width) */}
+                                  <tr>
+                                    <td
+                                      colSpan={2}
+                                      style={{
+                                        padding: '5px',
+                                        border: '1px solid #e0e0e0',
+                                        backgroundColor: 'white',
+                                        textAlign: 'center',
+                                        fontWeight: 600,
+                                        color: '#0069ab',
+                                        fontSize: '13px',
+                                        verticalAlign: 'middle',
+                                      }}
+                                    >
+                                      Credit Account
+                                    </td>
+                                    <td
+                                      colSpan={3}
+                                      style={{
+                                        padding: '5px',
+                                        border: '1px solid #e0e0e0',
+                                        backgroundColor: '#ffffff',
+                                      }}>
+                                      <CustomDropdown
+                                        name={`creditAccount-${row.id}`}
+                                        options={toOptions(CREDIT_ACCOUNT_OPTIONS)}
+                                        value={getSelectedOption(row.creditAccount, toOptions(CREDIT_ACCOUNT_OPTIONS))}
+                                        onChange={(option) => {
+                                          const selected = option as OptionType | null;
+                                          handleIncomeRowChange(row.id, "creditAccount", selected?.value ? String(selected.value) : "");
+                                        }}
+                                        placeholder="Select"
+                                      />
+                                    </td>
+                                  </tr>
+                                </React.Fragment>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot>
+                            <tr style={{ backgroundColor: '#f0f6ff' }}>
+                              <td colSpan={3} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>Total Income</td>
+                              <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
+                                ₹ {incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0).toFixed(2)}
+                              </td>
+                              <td colSpan={2} style={{ border: '1px solid #e0e0e0' }}></td>
+                            </tr>
+                          </tfoot>
+                        </table>
+
+                        {/* Rupees in words */}
+                        <div style={{ marginTop: "10px", padding: "10px 14px", borderRadius: "10px", backgroundColor: "#f0f6ff", border: "1px solid #cfe2ff", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", fontSize: "0.9rem", color: "#0b3d75", textAlign: "center", width: "100%" }}>
+                          <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
+                          <span style={{ fontWeight: 600 }}>
+                            {numberToIndianWords(incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)).replace(/\b\w/g, l => l.toUpperCase()).replace(/[^\s][A-Z]/g, l => l.toLowerCase())}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -3203,61 +3221,61 @@ else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
               alignItems: 'center',
             }}
           >
-          <button
-            onClick={() => setShowPreview(!showPreview)}
-            style={{
-              backgroundColor: '#0069ab',
-              color: '#fff',
-              border: 'none',
-              padding: '10px 20px',
-              borderRadius: '12px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
-            disabled={isLoading}
-          >
-            {showPreview ? 'Hide Preview' : 'Show Preview'}
-          </button>
+            <button
+              onClick={() => setShowPreview(!showPreview)}
+              style={{
+                backgroundColor: '#0069ab',
+                color: '#fff',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '12px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
+              disabled={isLoading}
+            >
+              {showPreview ? 'Hide Preview' : 'Show Preview'}
+            </button>
 
-          <button
-            onClick={generatePDF}
-            style={{
-              backgroundColor: '#0069ab',
-              color: '#fff',
-              border: 'none',
-              padding: '10px 20px',
-              borderRadius: '12px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
-            disabled={isLoading || !showPreview}
-          >
-            {isLoading ? 'Generating...' : 'Download PDF'}
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/financecard')}
-            style={{
-              backgroundColor: '#edf4fb',
-              color: '#0f172a',
-              border: '1px solid #cbd5e1',
-              padding: '10px 20px',
-              borderRadius: '12px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#e2ebf5')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#edf4fb')}
-          >
-            Back to Dashboard
-          </button>
+            <button
+              onClick={generatePDF}
+              style={{
+                backgroundColor: '#0069ab',
+                color: '#fff',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '12px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
+              disabled={isLoading || !showPreview}
+            >
+              {isLoading ? 'Generating...' : 'Download PDF'}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/financecard')}
+              style={{
+                backgroundColor: '#edf4fb',
+                color: '#0f172a',
+                border: '1px solid #cbd5e1',
+                padding: '10px 20px',
+                borderRadius: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#e2ebf5')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#edf4fb')}
+            >
+              Back to Dashboard
+            </button>
           </div>
           {isApprovalMode ? (
             <div className="finance-workflow-actions">
@@ -3329,283 +3347,289 @@ else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
         </div>
       </div>
 
-     {showPreview && (
-  <div ref={componentRef} style={{
-    position: 'relative',
-    backgroundColor: '#fff',
-    padding: '22px 18px',
-    width: '210mm',
-    boxSizing: 'border-box',
-    margin: '0 auto',
-  }}>
-    <table style={{
-      marginBottom: "14px",
-      tableLayout: "fixed",
-      width: '94%',
-      margin: '0 auto 14px auto',
-      borderCollapse: 'collapse'
-    }}>
-      <tr>
-        <td style={{
-          width: "16%",
-          border: "1px solid #000",
-          textAlign: "center",
-          verticalAlign: "middle",
-          padding: "10px 6px",
-        }}>
-          <img src={KSRCTLogo} alt="Logo" style={{ width: "75px", height: "75px", objectFit: "contain" }} />
-        </td>
-        <td style={{
-          width: "68%",
-          border: "1px solid #000",
-          textAlign: "center",
-          verticalAlign: "middle",
-          padding: "8px 10px",
-        }}>
-          <div style={{ fontSize: "19px", fontWeight: "bold", color: "#000", lineHeight: "1.05", marginBottom: "4px" }}>
-            K.S.RANGASAMY COLLEGE OF TECHNOLOGY
-          </div>
-          <div style={{ fontSize: "14px", color: "#000", marginBottom: "4px" }}>
-            (Autonomous)
-          </div>
-          <div style={{ fontSize: "16px", color: "#000", lineHeight: "1.2" }}>
-            Tiruchengode – 637 215, Namakkal Dt. Tamil Nadu
-          </div>
-        </td>
-        <td style={{
-          width: "16%",
-          border: "1px solid #000",
-          textAlign: "center",
-          verticalAlign: "middle",
-          padding: "10px 6px",
-        }}>
-          <div style={{ fontSize: "16px", fontWeight: "bold", color: "#000" }}>
-            FINANCE
-          </div>
-        </td>
-      </tr>
-    </table>
+      {showPreview && (() => {
+        const getApprovalDetailUi = (stageKeys: string[]) => {
+          let lastResetIdx = -1;
+          for (let i = statusUpdates.length - 1; i >= 0; i--) {
+            const dec = String(statusUpdates[i].decision).toLowerCase();
+            const stat = String(statusUpdates[i].status).toLowerCase();
+            if (dec === 'returned' || dec === 'rejected' || stat === 'returned' || stat === 'rejected' || dec === 'resubmitted' || dec.includes('resubmit')) {
+              lastResetIdx = i;
+              break;
+            }
+          }
+          const currentFlowUpdates = statusUpdates.slice(lastResetIdx + 1);
 
-    <h2 style={{
-      textAlign: 'center',
-      margin: '0 0 18px 0',
-      fontSize: '18px',
-      fontWeight: 'bold',
-      textTransform: 'uppercase',
-      letterSpacing: '0.4px',
-      color: '#000000'
-    }}>
-      APPLICATION FOR FINANCIAL APPROVAL
-    </h2>
+          const approved = currentFlowUpdates.filter(u =>
+            stageKeys.includes(String(u.stage).toLowerCase()) &&
+            (String(u.status).toLowerCase() === 'approved' || String(u.decision).toLowerCase() === 'approved' || String(u.status).toLowerCase().includes('approved'))
+          );
+          if (approved.length === 0) return { name: '', date: '' };
 
-    <table style={{
-      marginBottom: "14px",
-      tableLayout: "fixed",
-      width: '98%',
-      borderCollapse: 'collapse',
-      marginLeft: '24px'
-    }}>
-      <tr>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '20%', fontSize: '14px' }}><strong>Name</strong></td>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '35%', fontSize: '14px' }}>{applicantName || '\u00A0'}</td>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '15%', fontSize: '14px' }}><strong>Date</strong></td>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '25%', fontSize: '14px' }}>{date ? formatDMY(date) : '\u00A0'}</td>
-      </tr>
-      <tr>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Department</strong></td>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{department || '\u00A0'}</td>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Designation</strong></td>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{designation || '\u00A0'}</td>
-      </tr>
-      <tr>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Email</strong></td>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{email || '\u00A0'}</td>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Mobile</strong></td>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{mobile || '\u00A0'}</td>
-      </tr>
-      <tr>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Beneficiary</strong></td>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={3}>
-          {beneficiaryType || '\u00A0'}
-          {hasSubcategories && beneficiaryValue && ` - ${beneficiaryValue}`}
-        </td>
-      </tr>
-      <tr>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Description</strong></td>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px', wordWrap: 'break-word', overflowWrap: 'break-word', wordBreak: 'break-word' }} colSpan={3}>
-          {description || '\u00A0'}
-        </td>
-      </tr>
-      <tr>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Head of Accounts</strong></td>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={3}>
-          {primaryHead || '\u00A0'}
-          {extraDropdownVisible && eventSubHead && ` - ${eventSubHead}`}
-        </td>
-      </tr>
-      <tr>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Proposed in Budget</strong></td>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={3}>
-          {isBudgetProposed === 'Yes' ? `Yes | Amount: ₹ ${amountProposed || '0.00'} | Balance: ₹ ${balanceAmount || '0.00'}` : 'Not Proposed'}
-        </td>
-      </tr>
-      <tr>
-        <td colSpan={4} style={{ padding: '8px 6px', border: '1px solid #000', verticalAlign: 'top' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', marginTop: '4px' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#f8f8f8' }}>
-                <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>S.No</th>
-                <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Budget Head</th>
-                <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Sub Head</th>
-                <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Amount</th>
+          approved.sort((a, b) => {
+            const tA = new Date(a.decided_at || a.created_at || 0).getTime();
+            const tB = new Date(b.decided_at || b.created_at || 0).getTime();
+            return tB - tA; // latest first
+          });
+          const latest = approved[0];
+          const dateStr = latest.decided_at || latest.created_at;
+          const formattedDate = dateStr ? new Date(dateStr).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true }) : '';
+          return { name: latest.user_name || latest.actor_name || '', date: formattedDate };
+        };
+
+        const level1ApprovalUi = getApprovalDetailUi(['level1', 'hod', 'coordinator', 'ithead']);
+        const dofApprovalUi = getApprovalDetailUi(['dof']);
+        const principalApprovalUi = getApprovalDetailUi(['principal']);
+        const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
+
+        return (
+          <div ref={componentRef} style={{
+            position: 'relative',
+            backgroundColor: '#fff',
+            padding: '22px 18px',
+            width: '210mm',
+            boxSizing: 'border-box',
+            margin: '0 auto',
+          }}>
+            <table style={{
+              marginBottom: "14px",
+              tableLayout: "fixed",
+              width: '94%',
+              margin: '0 auto 14px auto',
+              borderCollapse: 'collapse'
+            }}>
+              <tr>
+                <td style={{
+                  width: "16%",
+                  border: "1px solid #000",
+                  textAlign: "center",
+                  verticalAlign: "middle",
+                  padding: "10px 6px",
+                }}>
+                  <img src={KSRCTLogo} alt="Logo" style={{ width: "75px", height: "75px", objectFit: "contain" }} />
+                </td>
+                <td style={{
+                  width: "68%",
+                  border: "1px solid #000",
+                  textAlign: "center",
+                  verticalAlign: "middle",
+                  padding: "8px 10px",
+                }}>
+                  <div style={{ fontSize: "19px", fontWeight: "bold", color: "#000", lineHeight: "1.05", marginBottom: "4px" }}>
+                    K.S.RANGASAMY COLLEGE OF TECHNOLOGY
+                  </div>
+                  <div style={{ fontSize: "14px", color: "#000", marginBottom: "4px" }}>
+                    (Autonomous)
+                  </div>
+                  <div style={{ fontSize: "16px", color: "#000", lineHeight: "1.2" }}>
+                    Tiruchengode – 637 215, Namakkal Dt. Tamil Nadu
+                  </div>
+                </td>
+                <td style={{
+                  width: "16%",
+                  border: "1px solid #000",
+                  textAlign: "center",
+                  verticalAlign: "middle",
+                  padding: "10px 6px",
+                }}>
+                  <div style={{ fontSize: "16px", fontWeight: "bold", color: "#000" }}>
+                    FINANCE
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {budgetRows.map((row, index) => (
-                <tr key={index}>
-                  <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
-                  <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.category || '\u00A0'}</td>
-                  <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.head || '\u00A0'}</td>
-                  <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {Number(row.amount || 0).toFixed(2)}</td>
-                </tr>
-              ))}
-              <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
-                <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right', fontWeight: 'bold' }}>Total Budget:</td>
-                <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {totalBudget.toFixed(2)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </td>
-      </tr>
-      <tr>
-        <td colSpan={4} style={{ padding: '6px 16px', border: '1px solid #000', textAlign: 'center', fontSize: '15px', backgroundColor: '#f8f9fa' }}>
-          Rupees in Words: {numberToIndianWords(totalBudget).replace(/\b\w/g, l => l.toUpperCase()).replace(/([A-Z])(?=[A-Z][a-z])/, '$1 ').replace(/[A-Z]{2,}/g, m => m.charAt(0) + m.slice(1).toLowerCase())}
-        </td>
-      </tr>
-      <tr>
-        <td colSpan={4} style={{ padding: '6px 8px', border: '1px solid #000' }}>
-          {showIncomeSection ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f8f8f8' }}>
-                  <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>S.No</th>
-                  <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Income Source</th>
-                  <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Contribution</th>
-                  <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Amount</th>
-                  <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {incomeRows.map((row, index) => (
-                  <React.Fragment key={row.id}>
-                    <tr>
-                      <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
-                      <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.incomeSource || ''}</td>
-                      <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{row.contribution || ''}</td>
-                      <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>{row.amount ? `Rs. ${row.amount}` : ''}</td>
-                      <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{row.status || ''}</td>
-                    </tr>
-                    <tr>
-                      <td colSpan={2} style={{ padding: '2.5px 4px', border: '1px solid #000', fontWeight: 'bold', backgroundColor: '#f8f8f8' }}>Credit Account</td>
-                      <td colSpan={3} style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.creditAccount || ''}</td>
-                    </tr>
-                  </React.Fragment>
-                ))}
-              </tbody>
             </table>
-          ) : (
-            <div style={{ textAlign: 'center', fontSize: '14px' }}>Income: Not Applicable</div>
-          )}
-        </td>
-      </tr>
-      <tr>
-        <td colSpan={4} style={{ padding: '6px 8px', border: '1px solid #000', textAlign: 'center', fontSize: '14px', fontWeight: 'bold', backgroundColor: "#f8f9fa" }}>
-          For Office use of Director- Finance and Purchase
-        </td>
-      </tr>
-      <tr>
-        <td rowSpan={3} style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '25%', fontSize: '14px' }}>
-          <strong>Comments</strong>
-        </td>
-        <td rowSpan={3} colSpan={3} style={{ padding: '12px 16px', border: '1px solid #000', fontSize: '14px', verticalAlign: 'top' }}>
-          {directorComments || '\u00A0'}
-        </td>
-      </tr>
-      <tr><td style={{ padding: '0', border: 'none', height: '30px' }}></td></tr>
-      <tr><td style={{ padding: '0', border: 'none', height: '10px' }}></td></tr>
-      <tr>
-        <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px', verticalAlign: 'middle', fontWeight: 'bold' }}>
-          Status
-        </td>
-        <td colSpan={1} style={{ padding: '4.5px 5.5px', border: '1px solid #000', height: '32px' }}>
-          <span style={{ fontSize: '14px' }}>Recommended / Not Recommended</span>
-        </td>
-        <td colSpan={2} style={{ padding: '4.5px 5.5px', border: '1px solid #000', height: '32px' }}></td>
-      </tr>
-      <tr>
-        <td colSpan={4} style={{ padding: "6px 8px", border: "1px solid #000", textAlign: "center", fontSize: "14px", fontWeight: "bold", backgroundColor: "#f8f9fa" }}>
-          Principal's Approval
-        </td>
-      </tr>
-      <tr>
-        <td rowSpan={3} style={{ padding: "4.5px 5.5px", border: "1px solid #000", width: "25%", fontSize: "14px" }}>
-          <strong>Comments</strong>
-        </td>
-        <td rowSpan={3} colSpan={3} style={{ padding: "12px 16px", border: "1px solid #000", fontSize: "14px", verticalAlign: "top" }}>
-          {principalComments || "\u00A0"}
-        </td>
-      </tr>
-      <tr><td style={{ padding: "0", border: "none", height: "30px" }} /></tr>
-      <tr><td style={{ padding: "0", border: "none", height: "10px" }} /></tr>
-      <tr>
-        <td style={{ padding: "4.5px 5.5px", border: "1px solid #000", fontSize: "14px", verticalAlign: "middle", fontWeight: "bold" }}>
-          Status
-        </td>
-        <td colSpan={2} style={{ padding: "4.5px 5.5px", border: "1px solid #000", height: "32px" }}>
-          <span style={{ fontSize: "14px" }}>{totalBudget > 10000 ? "Recommended / Not Recommended" : "Approved / Not Approved"}</span>
-        </td>
-        <td colSpan={1} style={{ padding: '4.5px 5.5px', border: '1px solid #000', height: '32px' }}></td>
-      </tr>
-      {totalBudget > 10000 && (
-        <>
-          <tr>
-            <td style={{ padding: "4.5px 5.5px", border: "1px solid #000", fontSize: "14px", verticalAlign: "middle", fontWeight: "bold" }}>
-              Priority
-            </td>
-            <td colSpan={2} style={{ padding: "4.5px 5.5px", border: "1px solid #000", height: "32px" }}>
-              <span style={{ fontSize: "14px", whiteSpace: "pre" }}>☐ Routine     ☐ Urgent     ☐ Most Urgent</span>
-            </td>
-            <td colSpan={1} style={{ padding: "4.5px 5.5px", border: "1px solid #000", height: "32px" }}></td>
-          </tr>
-          <tr>
-            <td colSpan={4} style={{ padding: "6px 8px", border: "1px solid #000", textAlign: "center", fontSize: "14px", fontWeight: "bold" }}>
-              Chairman's Approval
-            </td>
-          </tr>
-          <tr>
-            <td rowSpan={3} style={{ padding: "4.5px 5.5px", border: "1px solid #000", width: "25%", fontSize: "14px" }}>
-              <strong>Comments</strong>
-            </td>
-            <td rowSpan={3} colSpan={3} style={{ padding: "12px 16px", border: "1px solid #000", fontSize: "14px", verticalAlign: "top" }}>
-              {chairmanComments || "\u00A0"}
-            </td>
-          </tr>
-          <tr><td style={{ padding: "0", border: "none", height: "30px" }} /></tr>
-          <tr><td style={{ padding: "0", border: "none", height: "10px" }} /></tr>
-          <tr>
-            <td style={{ padding: "4.5px 5.5px", border: "1px solid #000", fontSize: "14px", verticalAlign: "middle", fontWeight: "bold" }}>
-              Status
-            </td>
-            <td colSpan={2} style={{ padding: "4.5px 5.5px", border: "1px solid #000", height: "32px" }}>
-              <span style={{ fontSize: "14px" }}>Approved / Not Approved</span>
-            </td>
-            <td colSpan={1} style={{ padding: '4.5px 5.5px', border: '1px solid #000', height: '32px' }}></td>
-          </tr>
-        </>
-      )}
-    </table>
-  </div>
-)}
+
+            <h2 style={{
+              textAlign: 'center',
+              margin: '0 0 18px 0',
+              fontSize: '18px',
+              fontWeight: 'bold',
+              textTransform: 'uppercase',
+              letterSpacing: '0.4px',
+              color: '#000000'
+            }}>
+              APPLICATION FOR FINANCIAL APPROVAL
+            </h2>
+
+            <table style={{
+              marginBottom: "14px",
+              tableLayout: "fixed",
+              width: '98%',
+              borderCollapse: 'collapse',
+              marginLeft: '24px'
+            }}>
+              <tr>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '20%', fontSize: '14px' }}><strong>Name</strong></td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '35%', fontSize: '14px' }}>{applicantName || '\u00A0'}</td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '15%', fontSize: '14px' }}><strong>Date</strong></td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '25%', fontSize: '14px' }}>{date ? formatDMY(date) : '\u00A0'}</td>
+              </tr>
+              <tr>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Department</strong></td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{department || '\u00A0'}</td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Designation</strong></td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{designation || '\u00A0'}</td>
+              </tr>
+              <tr>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Email</strong></td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{email || '\u00A0'}</td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Mobile</strong></td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{mobile || '\u00A0'}</td>
+              </tr>
+              <tr>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Beneficiary</strong></td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={3}>
+                  {beneficiaryType || '\u00A0'}
+                  {hasSubcategories && beneficiaryValue && ` - ${beneficiaryValue}`}
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Description</strong></td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px', wordWrap: 'break-word', overflowWrap: 'break-word', wordBreak: 'break-word' }} colSpan={3}>
+                  {description || '\u00A0'}
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Head of Accounts</strong></td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={3}>
+                  {primaryHead || '\u00A0'}
+                  {extraDropdownVisible && eventSubHead && ` - ${eventSubHead}`}
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Proposed in Budget</strong></td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={3}>
+                  {isBudgetProposed === 'Yes' ? `Yes | Amount: ₹ ${amountProposed || '0.00'} | Balance: ₹ ${balanceAmount || '0.00'}` : 'Not Proposed'}
+                </td>
+              </tr>
+              <tr>
+                <td colSpan={4} style={{ padding: '8px 6px', border: '1px solid #000', verticalAlign: 'top' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', marginTop: '4px' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f8f8f8' }}>
+                        <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>S.No</th>
+                        <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Budget Head</th>
+                        <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Sub Head</th>
+                        <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {budgetRows.map((row, index) => (
+                        <tr key={index}>
+                          <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
+                          <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.category || '\u00A0'}</td>
+                          <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.head || '\u00A0'}</td>
+                          <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {Number(row.amount || 0).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                      <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
+                        <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right', fontWeight: 'bold' }}>Total Budget:</td>
+                        <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {totalBudget.toFixed(2)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+              <tr>
+                <td colSpan={4} style={{ padding: '6px 16px', border: '1px solid #000', textAlign: 'center', fontSize: '15px', backgroundColor: '#f8f9fa' }}>
+                  Rupees in Words: {numberToIndianWords(totalBudget).replace(/\b\w/g, l => l.toUpperCase()).replace(/([A-Z])(?=[A-Z][a-z])/, '$1 ').replace(/[A-Z]{2,}/g, m => m.charAt(0) + m.slice(1).toLowerCase())}
+                </td>
+              </tr>
+              <tr>
+                <td colSpan={4} style={{ padding: '6px 8px', border: '1px solid #000' }}>
+                  {showIncomeSection ? (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f8f8f8' }}>
+                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>S.No</th>
+                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Income Source</th>
+                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Contribution</th>
+                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Amount</th>
+                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {incomeRows.map((row, index) => (
+                          <React.Fragment key={row.id}>
+                            <tr>
+                              <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
+                              <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.incomeSource || ''}</td>
+                              <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{row.contribution || ''}</td>
+                              <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>{row.amount ? `Rs. ${row.amount}` : ''}</td>
+                              <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{row.status || ''}</td>
+                            </tr>
+                            <tr>
+                              <td colSpan={2} style={{ padding: '2.5px 4px', border: '1px solid #000', fontWeight: 'bold', backgroundColor: '#f8f8f8' }}>Credit Account</td>
+                              <td colSpan={3} style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.creditAccount || ''}</td>
+                            </tr>
+                          </React.Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div style={{ textAlign: 'center', fontSize: '14px' }}>Income: Not Applicable</div>
+                  )}
+                </td>
+              </tr>
+              <tr>
+                <td colSpan={4} style={{ padding: '6px 8px', border: '1px solid #000', textAlign: 'left', fontSize: '14px', fontWeight: 'bold', backgroundColor: "#f8f9fa" }}>
+                  Digitally Signed By:
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px', fontWeight: 'bold' }}>
+                  Head of Dept. / Coordinator
+                </td>
+                <td colSpan={2} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px' }}>
+                  {level1ApprovalUi.name ? `Name: ${level1ApprovalUi.name}` : 'Name:'}
+                </td>
+                <td colSpan={1} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px' }}>
+                  {level1ApprovalUi.date ? `Date & Time: ${level1ApprovalUi.date}` : 'Date & Time:'}
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px', fontWeight: 'bold' }}>
+                  Director of Finance
+                </td>
+                <td colSpan={2} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px' }}>
+                  {dofApprovalUi.name ? `Name: ${dofApprovalUi.name}` : 'Name:'}
+                </td>
+                <td colSpan={1} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px' }}>
+                  {dofApprovalUi.date ? `Date & Time: ${dofApprovalUi.date}` : 'Date & Time:'}
+                </td>
+              </tr>
+              {totalBudget <= 10000 ? (
+                <tr>
+                  <td style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px', fontWeight: 'bold' }}>
+                    Principal
+                  </td>
+                  <td colSpan={2} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px' }}>
+                    {principalApprovalUi.name ? `Name: ${principalApprovalUi.name}` : 'Name:'}
+                  </td>
+                  <td colSpan={1} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px' }}>
+                    {principalApprovalUi.date ? `Date & Time: ${principalApprovalUi.date}` : 'Date & Time:'}
+                  </td>
+                </tr>
+              ) : (
+                <tr>
+                  <td colSpan={2} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px', fontWeight: 'bold', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
+                    {principalApprovalUi.name
+                      ? `Principal\nName: ${principalApprovalUi.name}\nDate & Time: ${principalApprovalUi.date}`
+                      : 'Principal'
+                    }
+                  </td>
+                  <td colSpan={2} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px', fontWeight: 'bold', textAlign: 'right', whiteSpace: 'pre-wrap' }}>
+                    {chairmanApprovalUi.name
+                      ? `Chairman\nName: ${chairmanApprovalUi.name}\nDate & Time: ${chairmanApprovalUi.date}`
+                      : 'Chairman'
+                    }
+                  </td>
+                </tr>
+              )}
+            </table>
+          </div>
+        );
+      })()}
 
       <AlertModal
         show={alertConfig.show}
