@@ -227,7 +227,7 @@ const FinanceCard: React.FC = () => {
     const normalizedStatus = getNormalizedStatus(item);
     const rawAmount = normalizedStatus === 'approved'
       ? (item.approved_total_amount ?? item.total_budget ?? item.proposed_amount ?? 0)
-      : (item.workflow_state?.submittedTotalBudget ?? item.proposed_amount ?? item.total_budget ?? item.amount ?? 0);
+      : (item.proposed_amount ?? item.total_budget ?? item.amount ?? item.workflow_state?.submittedTotalBudget ?? 0);
     const parsedAmount = Number(rawAmount);
     return Number.isFinite(parsedAmount) ? parsedAmount : 0;
   };
