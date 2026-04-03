@@ -76,12 +76,33 @@ const canAccessFinanceRecord = (req, financeRecord) => {
   return hasAnyFinanceWorkflowPermission(req);
 };
 
+const isHandledFinanceDomainError = (error) => {
+  const message = normalizeText(error?.message).toLowerCase();
+  if (!message) return false;
+
+  return [
+    'insufficient budget balance',
+    'requested amount',
+    'budget line not found/approved',
+    'budget line mapping is missing',
+    'no approved budget allocation found',
+  ].some((token) => message.includes(token));
+};
+
 const handleWorkflowError = (res, error, fallbackMessage) => {
   if (error instanceof WorkflowError) {
     return res.status(error.statusCode || 400).json({
       status: 'error',
       message: error.message,
       code: error.code,
+    });
+  }
+
+  if (isHandledFinanceDomainError(error)) {
+    return res.status(409).json({
+      status: 'error',
+      message: error.message || 'Finance request cannot be processed due to budget validation',
+      code: 'FINANCE_BUDGET_VALIDATION_FAILED',
     });
   }
 
@@ -546,6 +567,9 @@ try {
       const budgetHead = normalizeText(req.query?.budget_head || req.query?.head);
       const subHead = normalizeText(req.query?.sub_head || req.query?.subHead);
       const preferredBudgetLineId = toPositiveInt(req.query?.budget_line_id);
+      const headOnlyMatch = ['1', 'true', 'yes', 'on'].includes(
+        normalizeText(req.query?.head_only_match).toLowerCase()
+      );
 
       if (!userId) {
         return res.status(401).json({
@@ -567,6 +591,7 @@ try {
         budgetHead,
         subHead,
         preferredBudgetLineId,
+        headOnlyMatch,
       });
 
       return res.status(200).json({

@@ -548,6 +548,7 @@ export async function listQueue({ moduleKey, stage, actor, filters = {} }) {
       conn,
       actor: normalizedActor,
       stagePolicy,
+      filters,
     });
 
     return moduleConfig.adapter.listRecordsForQueue(
