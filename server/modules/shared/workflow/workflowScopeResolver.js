@@ -17,6 +17,39 @@ const normalizeRoleCodes = (roleCodes = []) =>
 const getActorUserId = (actor = {}) =>
   toPositiveInt(actor?.userId || actor?.id || actor?.actorUserId);
 
+const resolveEffectiveScopeType = ({ stagePolicy, recordContext, filters = {} }) => {
+  const baseScopeType = normalizeText(stagePolicy?.scopeType || stagePolicy?.scope_type).toLowerCase();
+  const moduleKey = normalizeText(stagePolicy?.moduleKey || stagePolicy?.module_key).toLowerCase();
+  const stageKey = normalizeText(stagePolicy?.stageKey || stagePolicy?.stage_key).toLowerCase();
+  const level1Role = normalizeText(filters?.level1Role).toLowerCase();
+
+  if (moduleKey !== 'finance' || stageKey !== 'level1') {
+    return baseScopeType;
+  }
+
+  if (recordContext) {
+    const beneficiaryType = normalizeText(recordContext?.beneficiaryType).toLowerCase();
+    const beneficiaryEntityId = toPositiveInt(recordContext?.beneficiaryEntityId);
+    if (beneficiaryType === 'department') {
+      return 'department';
+    }
+    if (beneficiaryEntityId) {
+      return 'entity';
+    }
+    return 'department';
+  }
+
+  if (level1Role === 'coordinator') {
+    return 'entity';
+  }
+
+  if (level1Role === 'hod') {
+    return 'department';
+  }
+
+  return baseScopeType;
+};
+
 async function loadAssignmentBuckets(conn, userId, roleCodes = []) {
   const departmentIds = new Set();
   const entityIds = new Set();
@@ -86,8 +119,12 @@ async function loadPrimaryEmployeeContext(conn, userId) {
   };
 }
 
-async function resolveScopedActorIds(conn, actor, stagePolicy) {
-  const scopeType = normalizeText(stagePolicy?.scopeType || stagePolicy?.scope_type).toLowerCase();
+async function resolveScopedActorIds(conn, actor, stagePolicy, options = {}) {
+  const scopeType = resolveEffectiveScopeType({
+    stagePolicy,
+    recordContext: options?.recordContext || null,
+    filters: options?.filters || {},
+  });
   const normalizedMeta = validateStagePolicyMeta({
     scopeType,
     meta: stagePolicy?.meta,
@@ -149,8 +186,9 @@ export async function resolveQueueScopeFilters({
   conn = db,
   actor,
   stagePolicy,
+  filters = {},
 }) {
-  return resolveScopedActorIds(conn, actor, stagePolicy);
+  return resolveScopedActorIds(conn, actor, stagePolicy, { filters });
 }
 
 export async function assertRecordScopeAccess({
@@ -159,7 +197,9 @@ export async function assertRecordScopeAccess({
   stagePolicy,
   recordContext,
 }) {
-  const resolvedScope = await resolveScopedActorIds(conn, actor, stagePolicy);
+  const resolvedScope = await resolveScopedActorIds(conn, actor, stagePolicy, {
+    recordContext,
+  });
 
   if (resolvedScope.forceAll) {
     return true;
