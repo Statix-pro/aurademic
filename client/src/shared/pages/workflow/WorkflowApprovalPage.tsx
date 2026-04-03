@@ -66,6 +66,11 @@ const formatStageLabel = (stage: string, labels: Record<string, string> = {}) =>
     .join(' ');
 };
 
+const FINANCE_LEVEL1_PENDING_LABELS = {
+  coordinator: 'Pending Coordinator',
+  hod: 'Pending HOD',
+} as const;
+
 
 const defaultQueueMapper = (response: any): WorkflowQueueResult => ({
   items: Array.isArray(response?.data) ? response.data : [],
@@ -706,9 +711,23 @@ showAlert(
       return 'Approved';
     }
     
+    const activeTab = stageTabs.find((tab) => tab.key === activeStageTabKey) || null;
+    if (config.moduleKey === 'finance' && activeStage === 'level1' && activeTab?.level1Role) {
+      return FINANCE_LEVEL1_PENDING_LABELS[activeTab.level1Role];
+    }
+
     const stage = formatStageLabel(String(record.workflow_stage || ''), config.stageLabels);
     return `Pending ${stage}`;
-  }, [getRecordStageDecision, getRecordWorkflowDecision, resolveStatusCategory, config.stageLabels]);
+  }, [
+    getRecordStageDecision,
+    getRecordWorkflowDecision,
+    resolveStatusCategory,
+    config.moduleKey,
+    config.stageLabels,
+    activeStage,
+    activeStageTabKey,
+    stageTabs,
+  ]);
 
   const resolveFinanceLevel1Role = useCallback((record: Record<string, any>): 'hod' | 'coordinator' => {
     const routeType = String(record.level1_route_type || record.level1RouteType || '').trim().toLowerCase();
