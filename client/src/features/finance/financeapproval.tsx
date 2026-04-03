@@ -1250,6 +1250,7 @@ const FinanceApproval: React.FC = () => {
         params: {
           budget_head: normalizedHead,
           sub_head: normalizedSubHead,
+          head_only_match: getHoacGroupForHead(normalizedHead) ? '1' : '0',
         },
       }) as {
         status: string;
@@ -1470,6 +1471,7 @@ const FinanceApproval: React.FC = () => {
         budget_rows: budgetRows.map((row, index) => ({
           budget_head: row.category,
           sub_head: row.head,
+          head_only_match: Boolean(getHoacGroupForHead(row.category)),
           amount: Number(row.amount || 0),
           budget_line_id: budgetLineMetaByRow[index]?.budgetLineId || null,
           budget_proposal_id: budgetLineMetaByRow[index]?.budgetProposalId || null,

@@ -186,6 +186,7 @@ const normalizeBudgetRows = (rows = []) => {
     normalizedRows.push({
       budget_head: budgetHead,
       sub_head: subHead,
+      head_only_match: Boolean(row?.head_only_match),
       amount: toMoney(parsedAmount),
       budget_line_id: toPositiveInt(row?.budget_line_id),
       budget_proposal_id: toPositiveInt(row?.budget_proposal_id),
@@ -265,6 +266,27 @@ const isLooseTextMatch = (leftValue, rightValue) => {
   const similarity = unionSize > 0 ? commonCount / unionSize : 0;
 
   return commonCount >= 1 && similarity >= 0.5;
+};
+
+// Fallback only: preferred behavior is to pass head_only_match from frontend
+// using getHoacGroupForHead so future heads under these groups work automatically.
+const HEAD_ONLY_AVAILABILITY_GROUP_HEADS = new Set([
+  'events and competitions',
+  'meetings and audits',
+]);
+
+const normalizeHeadLabelForMatch = (value) =>
+  normalizeText(value)
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const shouldUseHeadOnlyAvailabilityMatch = (budgetHead) => {
+  const normalized = normalizeHeadLabelForMatch(budgetHead);
+  if (!normalized) return false;
+  return HEAD_ONLY_AVAILABILITY_GROUP_HEADS.has(normalized);
 };
 
 const WORKFLOW_STATUS_SQL_EXPR = `
@@ -553,14 +575,20 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   budgetHead,
   subHead,
   preferredBudgetLineId = null,
+  headOnlyMatch = false,
 } = {}) => {
   const normalizedUserId = toPositiveInt(userId);
   const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
   const normalizedBudgetHead = normalizeText(budgetHead);
   const normalizedSubHead = normalizeText(subHead);
   const normalizedPreferredBudgetLineId = toPositiveInt(preferredBudgetLineId);
+  const applyHeadOnlyMatch = Boolean(headOnlyMatch) || shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead);
 
-  if ((!normalizedUserId && !normalizedUserEmail) || !normalizedBudgetHead || !normalizedSubHead) {
+  if (
+    (!normalizedUserId && !normalizedUserEmail) ||
+    !normalizedBudgetHead ||
+    (!applyHeadOnlyMatch && !normalizedSubHead)
+  ) {
     return {
       selected: null,
       totalAvailable: 0,
@@ -628,10 +656,17 @@ const resolveBudgetAvailabilityForUser = async (conn, {
       consumedAmount: toMoney(row.consumed_amount),
       availableAmount: Math.max(0, toMoney(row.available_amount)),
     }))
-    .filter((row) =>
-      isLooseTextMatch(row.budgetHead, normalizedBudgetHead) &&
-      isLooseTextMatch(row.subHead, normalizedSubHead)
-    );
+    .filter((row) => {
+      if (!isLooseTextMatch(row.budgetHead, normalizedBudgetHead)) {
+        return false;
+      }
+
+      if (applyHeadOnlyMatch) {
+        return true;
+      }
+
+      return isLooseTextMatch(row.subHead, normalizedSubHead);
+    });
 
   const totalAvailable = matches.reduce((sum, row) => sum + row.availableAmount, 0);
 
@@ -660,6 +695,7 @@ const enrichBudgetRowsWithBudgetRefs = async (conn, userId, userEmail, budgetRow
       budgetHead: row.budget_head,
       subHead: row.sub_head,
       preferredBudgetLineId: row.budget_line_id,
+      headOnlyMatch: Boolean(row.head_only_match),
     });
 
     const selected = availability.selected;
@@ -1596,7 +1632,14 @@ const financeModel = {
     return orgUnitQueries.getAllOrgUnits();
   },
 
-  async getBudgetAvailabilityForUser({ userId, userEmail = null, budgetHead, subHead, preferredBudgetLineId = null }) {
+  async getBudgetAvailabilityForUser({
+    userId,
+    userEmail = null,
+    budgetHead,
+    subHead,
+    preferredBudgetLineId = null,
+    headOnlyMatch = false,
+  }) {
     const conn = await db.getConnection();
     try {
       const availability = await resolveBudgetAvailabilityForUser(conn, {
@@ -1605,6 +1648,7 @@ const financeModel = {
         budgetHead,
         subHead,
         preferredBudgetLineId,
+        headOnlyMatch,
       });
       return availability;
     } finally {
