@@ -7,6 +7,7 @@ export interface WorkflowMeta {
   stages: string[];
   permittedStages: string[];
   isSuperAdmin: boolean;
+  availableBeneficiaryTypes?: string[];
 }
 
 export interface WorkflowTimelineItem {

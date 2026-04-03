@@ -1807,6 +1807,117 @@ const financeModel = {
     return result.affectedRows > 0;
   },
 
+  async forceWorkflowTransition(recordId, {
+    decision,
+    feedback = null,
+    actor = {},
+    stageHint = null,
+  } = {}, { tx = db } = {}) {
+    const normalizedRecordId = toPositiveInt(recordId);
+    const normalizedDecision = normalizeText(decision).toLowerCase();
+
+    if (!normalizedRecordId) {
+      throw new Error('Invalid finance request ID');
+    }
+
+    if (!['returned', 'archived'].includes(normalizedDecision)) {
+      throw new Error(`Unsupported forced workflow transition: ${normalizedDecision}`);
+    }
+
+    const [rows] = await tx.query(
+      `SELECT workflow_state
+       FROM finance_requests
+       WHERE id = ?
+       FOR UPDATE`,
+      [normalizedRecordId]
+    );
+
+    if (!rows.length) {
+      throw new Error('Finance request not found');
+    }
+
+    const previousState = normalizeWorkflowState(rows[0].workflow_state);
+    if (!previousState) {
+      throw new Error('Workflow state not found');
+    }
+
+    const flow = Array.isArray(previousState.flow) && previousState.flow.length
+      ? previousState.flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
+      : ['level1', 'dof', 'principal'];
+    const fallbackStage =
+      normalizeText(stageHint).toLowerCase() ||
+      normalizeText(previousState.currentStage).toLowerCase() ||
+      flow[flow.length - 1] ||
+      'level1';
+
+    const nowIso = new Date().toISOString();
+    const normalizedFeedback = normalizeText(feedback) || null;
+    const nextState = {
+      ...previousState,
+      flow,
+      status: normalizedDecision,
+      currentStage: normalizedDecision === 'returned' ? fallbackStage : null,
+      isEditableByApplicant: normalizedDecision === 'returned',
+      resolvedAt: normalizedDecision === 'archived' ? nowIso : null,
+      lastDecision: normalizedDecision,
+      lastFeedback: normalizedFeedback,
+      updatedAt: nowIso,
+    };
+
+    const actorUserId = toPositiveInt(actor?.userId || actor?.id);
+    const actorEmail = normalizeText(actor?.email).toLowerCase() || null;
+    const actorRole = normalizeText(actor?.role).toLowerCase() || null;
+
+    await tx.query(
+      `INSERT INTO workflow_actions (
+          module_key,
+          record_id,
+          stage,
+          decision,
+          feedback,
+          actor_user_id,
+          actor_email,
+          actor_role,
+          snapshot_before,
+          meta
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'finance',
+        normalizedRecordId,
+        fallbackStage,
+        normalizedDecision,
+        normalizedFeedback,
+        actorUserId,
+        actorEmail,
+        actorRole,
+        JSON.stringify(previousState),
+        JSON.stringify({
+          origin: 'api',
+          requestId: null,
+          moduleMetaVersion: 1,
+          moduleMeta: {
+            trigger: 'super_admin_forced_transition',
+            route: normalizedDecision === 'archived'
+              ? 'PATCH /api/finance-requests/:id/archive-toggle'
+              : 'PATCH /api/finance-requests/:id/approval',
+          },
+        }),
+      ]
+    );
+
+    const updated = await this.updateFinanceWorkflowSnapshot(normalizedRecordId, nextState, { tx });
+    if (!updated) {
+      throw new Error('Failed to update workflow snapshot');
+    }
+
+    return {
+      previousState,
+      currentState: nextState,
+      decision: normalizedDecision,
+      stage: fallbackStage,
+    };
+  },
+
   async restoreWorkflowSnapshotFromLatestArchive(recordId, { tx = db } = {}) {
     const normalizedRecordId = toPositiveInt(recordId);
 
@@ -1976,6 +2087,26 @@ const financeModel = {
       page,
       limit,
     };
+  },
+
+  async listAvailableBeneficiaryTypes({ tx = db } = {}) {
+    const [rows] = await tx.query(
+      `SELECT DISTINCT TRIM(beneficiary_type) AS beneficiary_type
+         FROM finance_requests
+        WHERE beneficiary_type IS NOT NULL
+          AND TRIM(beneficiary_type) <> ''
+        ORDER BY TRIM(beneficiary_type) ASC`
+    );
+
+    const dedup = new Map();
+    for (const row of rows || []) {
+      const normalized = normalizeBeneficiaryType(row?.beneficiary_type);
+      const key = normalizeText(normalized).toLowerCase();
+      if (!key || dedup.has(key)) continue;
+      dedup.set(key, normalized);
+    }
+
+    return Array.from(dedup.values());
   },
 
   async getFinanceOwner(recordId) {
