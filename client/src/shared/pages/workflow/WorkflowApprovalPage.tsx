@@ -16,7 +16,7 @@ import CustomModal from "../../../shared/components/ui/CustomModal";
 
 const DEFAULT_DECISIONS: WorkflowDecision[] = ['approved', 'returned', 'rejected'];
 const DEFAULT_FEEDBACK_REQUIRED: WorkflowDecision[] = ['returned', 'rejected'];
-const BENEFICIARY_OPTIONS = [
+const FALLBACK_BENEFICIARY_OPTIONS = [
   "All Beneficiary",
   "Faculty",
   "Staff",
@@ -26,7 +26,6 @@ const BENEFICIARY_OPTIONS = [
   "Club",
   "Professional Body",
   "Institution",
-  "Association",
 ];
 
 // Map beneficiary type to tag
@@ -71,6 +70,72 @@ const FINANCE_LEVEL1_PENDING_LABELS = {
   hod: 'Pending HOD',
 } as const;
 
+const FINANCE_HOD_BENEFICIARY_OPTIONS = ['All Beneficiary', 'Faculty', 'Staff', 'Department'];
+const FINANCE_COORDINATOR_BENEFICIARY_OPTIONS = [
+  'All Beneficiary',
+  'Centre',
+  'Cell',
+  'Club',
+  'Professional Body',
+  'Institution',
+];
+
+const getSecondaryFilterValue = (record: Record<string, any>, beneficiaryType: string) => {
+  const normalizedType = String(beneficiaryType || '').trim().toLowerCase();
+
+  if (
+    !normalizedType ||
+    normalizedType === 'all beneficiary' ||
+    normalizedType === 'faculty' ||
+    normalizedType === 'staff' ||
+    normalizedType === 'department'
+  ) {
+    return String(record.department || '').trim();
+  }
+
+  return String(record.beneficiary_value || '').trim();
+};
+
+const getSecondaryFilterLabel = (beneficiaryType: string) => {
+  const normalizedType = String(beneficiaryType || '').trim().toLowerCase();
+
+  if (
+    !normalizedType ||
+    normalizedType === 'all beneficiary' ||
+    normalizedType === 'faculty' ||
+    normalizedType === 'staff' ||
+    normalizedType === 'department'
+  ) {
+    return 'Department';
+  }
+
+  if (normalizedType === 'professional body') {
+    return 'Professional Body';
+  }
+
+  return beneficiaryType || 'Department';
+};
+
+const getSecondaryFilterAllLabel = (beneficiaryType: string) => {
+  const normalizedType = String(beneficiaryType || '').trim().toLowerCase();
+
+  if (
+    !normalizedType ||
+    normalizedType === 'all beneficiary' ||
+    normalizedType === 'faculty' ||
+    normalizedType === 'staff' ||
+    normalizedType === 'department'
+  ) {
+    return 'All Departments';
+  }
+
+  if (normalizedType === 'professional body') {
+    return 'All Professional Bodies';
+  }
+
+  return `All ${beneficiaryType}s`;
+};
+
 
 const defaultQueueMapper = (response: any): WorkflowQueueResult => ({
   items: Array.isArray(response?.data) ? response.data : [],
@@ -101,6 +166,7 @@ interface WorkflowStageTab {
   stage: string;
   label: string;
   level1Role?: 'hod' | 'coordinator';
+  showAllProposals?: boolean;
 }
 
 const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) => {
@@ -143,8 +209,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [actionId, setActionId] = useState<number | string | null>(null);
   const [actionRef, setActionRef] = useState<string>("");
   const [actionComment, setActionComment] = useState<string>("");
-  const [actionStage, setActionStage] = useState<string>("");
   const [actionSubmitting, setActionSubmitting] = useState<boolean>(false);
+  const [deletePopupOpen, setDeletePopupOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | string | null>(null);
+  const [deleteRef, setDeleteRef] = useState<string>('');
+  const [deleteCountdown, setDeleteCountdown] = useState<number>(10);
 
   const closeAlert = useCallback(() => {
     setAlertConfig((prev) => ({
@@ -183,60 +252,76 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     [closeAlert]
   );
 
-  const handleDeleteRecord = async (record: Record<string, any>) => {
-  const recordId = getRecordId(record);
+  const openDeletePopup = (recordId: number | string, ref: string) => {
+    setDeleteId(recordId);
+    setDeleteRef(ref);
+    setDeleteCountdown(10);
+    setDeletePopupOpen(true);
+  };
 
-  if (recordId === undefined || recordId === null) {
-    setError('Unable to delete this row because record id is missing.');
-    return;
-  }
+  const closeDeletePopup = () => {
+    setDeletePopupOpen(false);
+    setDeleteId(null);
+    setDeleteRef('');
+    setDeleteCountdown(10);
+  };
 
-  showAlert(
-    'Are you sure you want to delete this finance request? This action cannot be undone.',
-    'warning',
-    'Confirm Delete',
-    async () => {
-      setActingRecordId(recordId);
-      setError('');
+  const handleDeleteRecord = (record: Record<string, any>) => {
+    const recordId = getRecordId(record);
 
-      try {
-        const response: any = await authenticityUtility.delete(`${config.apiBasePath}/${recordId}`);
+    if (recordId === undefined || recordId === null) {
+      setError('Unable to delete this row because record id is missing.');
+      return;
+    }
 
-        if (
-          response?.status === 'success' ||
-          response?.success === true ||
-          response?.data?.success
-        ) {
-          showAlert('Deleted successfully.', 'success');
-          await loadQueue(activeStage, 1);
-          return;
-        }
+    const proposalRef = record.proposal_ref || formatProposalRef(record);
+    openDeletePopup(recordId, proposalRef);
+  };
 
-        showAlert(
-          response?.message || response?.data?.message || 'Failed to delete item.',
-          'error'
-        );
-      } catch (deleteError: any) {
-        showAlert(
-          deleteError?.response?.data?.message || deleteError?.message || 'Failed to delete item.',
-          'error'
-        );
-      } finally {
-        setActingRecordId(null);
+  const confirmDelete = async () => {
+    if (deleteId === null || deleteId === undefined || deleteCountdown > 0) {
+      return;
+    }
+
+    setActingRecordId(deleteId);
+    setError('');
+
+    try {
+      const response: any = await authenticityUtility.delete(`${config.apiBasePath}/${deleteId}`);
+
+      if (
+        response?.status === 'success' ||
+        response?.success === true ||
+        response?.data?.success
+      ) {
+        closeDeletePopup();
+        showAlert('Deleted successfully.', 'success');
+        await loadQueue(activeStage, 1);
+        return;
       }
-    },
-    true,
-    'Delete',
-    'Cancel'
-  );
-};
-const isSuperAdminView = Boolean(meta?.isSuperAdmin);
+
+      showAlert(
+        response?.message || response?.data?.message || 'Failed to delete item.',
+        'error'
+      );
+    } catch (deleteError: any) {
+      showAlert(
+        deleteError?.response?.data?.message || deleteError?.message || 'Failed to delete item.',
+        'error'
+      );
+    } finally {
+      setActingRecordId(null);
+    }
+  };
+
+  const isSuperAdminView = Boolean(meta?.isSuperAdmin);
   // Filter states
   const [fiscalYear, setFiscalYear] = useState<number>(() => {
     const d = new Date();
     return d.getMonth() < 1 ? d.getFullYear() - 1 : d.getFullYear();
   });
   const [beneficiaryFilter, setBeneficiaryFilter] = useState<string>("All Beneficiary");
+  const [secondaryFilter, setSecondaryFilter] = useState<string>('');
   const [activeStageTabKey, setActiveStageTabKey] = useState<string>('');
 
   const permittedStages = useMemo(() => meta?.permittedStages || [], [meta]);
@@ -244,8 +329,7 @@ const isSuperAdminView = Boolean(meta?.isSuperAdmin);
   const stageTabs = useMemo<WorkflowStageTab[]>(() => {
     const roleTokens = Array.isArray(user?.roles) ? user.roles : [];
     const normalizedRoles = roleTokens.map((role) => String(role || '').trim().toLowerCase());
-
-    return permittedStages.flatMap((stage) => {
+    const tabs: WorkflowStageTab[] = permittedStages.flatMap<WorkflowStageTab>((stage) => {
       const normalizedStage = String(stage || '').trim().toLowerCase();
       if (config.moduleKey === 'finance' && normalizedStage === 'level1') {
         if (meta?.isSuperAdmin) {
@@ -282,7 +366,62 @@ const isSuperAdminView = Boolean(meta?.isSuperAdmin);
         },
       ];
     });
+
+    if (config.moduleKey === 'finance' && meta?.isSuperAdmin && permittedStages.length > 0) {
+      tabs.push({
+        key: 'finance-all-proposals',
+        stage: tabs[0]?.stage || String(permittedStages[0] || '').trim().toLowerCase() || 'level1',
+        label: 'All Proposals',
+        showAllProposals: true,
+      });
+    }
+
+    return tabs;
   }, [config.moduleKey, config.stageLabels, meta?.isSuperAdmin, permittedStages, user?.roles]);
+
+  const activeWorkflowTab = useMemo(
+    () => stageTabs.find((tab) => tab.key === activeStageTabKey) || null,
+    [activeStageTabKey, stageTabs]
+  );
+
+  const beneficiaryOptionsFromMeta = useMemo(() => {
+    const source = Array.isArray(meta?.availableBeneficiaryTypes) ? meta.availableBeneficiaryTypes : [];
+    const dedup = new Map<string, string>();
+
+    for (const item of source) {
+      const label = String(item || '').trim();
+      if (!label) continue;
+      const key = label.toLowerCase();
+      if (!dedup.has(key)) {
+        dedup.set(key, label);
+      }
+    }
+
+    const dynamic = Array.from(dedup.values());
+    if (!dynamic.length) {
+      return FALLBACK_BENEFICIARY_OPTIONS;
+    }
+
+    return ['All Beneficiary', ...dynamic];
+  }, [meta?.availableBeneficiaryTypes]);
+
+  const filteredBeneficiaryOptions = useMemo(() => {
+    if (config.moduleKey !== 'finance') {
+      return beneficiaryOptionsFromMeta;
+    }
+
+    if (activeStage === 'level1' && activeWorkflowTab?.level1Role === 'hod') {
+      const allowed = new Set(FINANCE_HOD_BENEFICIARY_OPTIONS.map((option) => option.toLowerCase()));
+      return beneficiaryOptionsFromMeta.filter((option) => allowed.has(option.toLowerCase()));
+    }
+
+    if (activeStage === 'level1' && activeWorkflowTab?.level1Role === 'coordinator') {
+      const allowed = new Set(FINANCE_COORDINATOR_BENEFICIARY_OPTIONS.map((option) => option.toLowerCase()));
+      return beneficiaryOptionsFromMeta.filter((option) => allowed.has(option.toLowerCase()));
+    }
+
+    return beneficiaryOptionsFromMeta;
+  }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryOptionsFromMeta, config.moduleKey]);
 
   const getRecordId = useCallback(
     (record: Record<string, any>) => {
@@ -450,6 +589,7 @@ const isSuperAdminView = Boolean(meta?.isSuperAdmin);
       try {
         const endpoint = getQueueEndpoint(stage);
         const activeTab = stageTabs.find((tab) => tab.key === activeStageTabKey) || null;
+        const isAllProposalsTab = Boolean(activeTab?.showAllProposals);
         const normalizedStage = String(stage || '').toLowerCase();
         const level1RoleFilter =
           config.moduleKey === 'finance' &&
@@ -473,13 +613,8 @@ const isSuperAdminView = Boolean(meta?.isSuperAdmin);
         const mapped = mapQueueResponse(response);
 
         let items = Array.isArray(mapped.items) ? mapped.items : [];
-        items = items.filter((item) => isVisibleInWorkflowList(item, stage));
-
-        if (beneficiaryFilter !== 'All Beneficiary') {
-          items = items.filter(item => {
-            const itemBeneficiaryType = (item.beneficiary_type || item.beneficiaryType || '').toLowerCase();
-            return itemBeneficiaryType === beneficiaryFilter.toLowerCase();
-          });
+        if (!isAllProposalsTab) {
+          items = items.filter((item) => isVisibleInWorkflowList(item, stage));
         }
 
         setRows(items);
@@ -571,6 +706,18 @@ const isSuperAdminView = Boolean(meta?.isSuperAdmin);
   }, [activeStage, loadQueue, page, fiscalYear, beneficiaryFilter, searchTerm]);
 
   useEffect(() => {
+    if (!deletePopupOpen || deleteCountdown <= 0) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setDeleteCountdown((prev) => Math.max(prev - 1, 0));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [deletePopupOpen, deleteCountdown]);
+
+  useEffect(() => {
     if (!stageTabs.length) {
       if (activeStageTabKey) {
         setActiveStageTabKey('');
@@ -594,10 +741,21 @@ const isSuperAdminView = Boolean(meta?.isSuperAdmin);
   }, [activeStage, activeStageTabKey, stageTabs]);
 
   useEffect(() => {
-    setPage(1);
-  }, [activeStage, fiscalYear, beneficiaryFilter, searchTerm]);
+    if (!filteredBeneficiaryOptions.includes(beneficiaryFilter)) {
+      setBeneficiaryFilter('All Beneficiary');
+      setSecondaryFilter('');
+    }
+  }, [beneficiaryFilter, filteredBeneficiaryOptions]);
 
-  const onApprove = async (recordId?: number | string, stage?: string) => {
+  useEffect(() => {
+    setSecondaryFilter('');
+  }, [beneficiaryFilter, activeStageTabKey]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeStage, fiscalYear, beneficiaryFilter, searchTerm, secondaryFilter]);
+
+  const onApprove = async (recordId?: number | string) => {
   if (!recordId) {
   showAlert('Missing record id.', 'warning');
   return;
@@ -636,12 +794,11 @@ showAlert(
 );
 };
 
-  const openActionPopup = (type: "return" | "reject", id: number | string, ref: string, stage: string) => {
+  const openActionPopup = (type: "return" | "reject", id: number | string, ref: string) => {
     setActionType(type);
     setActionId(id);
     setActionRef(ref);
     setActionComment("");
-    setActionStage(stage);
     setActionPopupOpen(true);
   };
 
@@ -651,7 +808,6 @@ showAlert(
     setActionId(null);
     setActionRef("");
     setActionComment("");
-    setActionStage("");
     setActionSubmitting(false);
   };
 
@@ -738,28 +894,76 @@ showAlert(
   }, []);
 
   const stageScopedRows = useMemo(() => {
-    const activeTab = stageTabs.find((tab) => tab.key === activeStageTabKey) || null;
-    const activeLevel1Role = activeTab?.level1Role || null;
+    const activeLevel1Role = activeWorkflowTab?.level1Role || null;
 
     let filtered = rows;
     if (config.moduleKey === 'finance' && activeStage === 'level1' && activeLevel1Role) {
       filtered = filtered.filter((record) => resolveFinanceLevel1Role(record) === activeLevel1Role);
     }
 
+    if (config.moduleKey === 'finance' && beneficiaryFilter !== 'All Beneficiary') {
+      const normalizedBeneficiaryFilter = beneficiaryFilter.toLowerCase();
+      filtered = filtered.filter((record) => {
+        const itemBeneficiaryType = String(record.beneficiary_type || record.beneficiaryType || '').toLowerCase();
+        return itemBeneficiaryType === normalizedBeneficiaryFilter;
+      });
+    }
+
     return filtered;
-  }, [activeStage, activeStageTabKey, config.moduleKey, resolveFinanceLevel1Role, rows, stageTabs]);
+  }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryFilter, config.moduleKey, resolveFinanceLevel1Role, rows]);
+
+  const secondaryFilterOptions = useMemo(() => {
+    if (config.moduleKey !== 'finance') {
+      return [];
+    }
+
+    const values = new Set<string>();
+    for (const row of stageScopedRows) {
+      const value = getSecondaryFilterValue(row, beneficiaryFilter);
+      if (value) {
+        values.add(value);
+      }
+    }
+    return Array.from(values).sort((a, b) => a.localeCompare(b, 'en-IN'));
+  }, [beneficiaryFilter, config.moduleKey, stageScopedRows]);
+
+  const secondaryFilterLabel = useMemo(
+    () => getSecondaryFilterLabel(beneficiaryFilter),
+    [beneficiaryFilter]
+  );
+  const secondaryFilterAllLabel = useMemo(
+    () => getSecondaryFilterAllLabel(beneficiaryFilter),
+    [beneficiaryFilter]
+  );
+
+  const secondaryScopedRows = useMemo(() => {
+    if (config.moduleKey !== 'finance' || !secondaryFilter) {
+      return stageScopedRows;
+    }
+
+    const expected = secondaryFilter.toLowerCase();
+    return stageScopedRows.filter((record) => {
+      return getSecondaryFilterValue(record, beneficiaryFilter).toLowerCase() === expected;
+    });
+  }, [beneficiaryFilter, config.moduleKey, secondaryFilter, stageScopedRows]);
+
+  useEffect(() => {
+    if (secondaryFilter && !secondaryFilterOptions.includes(secondaryFilter)) {
+      setSecondaryFilter('');
+    }
+  }, [secondaryFilter, secondaryFilterOptions]);
 
   const statusStats = useMemo(() => {
-    const stats = { total: stageScopedRows.length, pending: 0, approved: 0, returned: 0, rejected: 0, archived: 0 };
-    for (const row of stageScopedRows) {
+    const stats = { total: secondaryScopedRows.length, pending: 0, approved: 0, returned: 0, rejected: 0, archived: 0 };
+    for (const row of secondaryScopedRows) {
       const category = resolveStatusCategory(row);
       stats[category] += 1;
     }
     return stats;
-  }, [resolveStatusCategory, stageScopedRows]);
+  }, [resolveStatusCategory, secondaryScopedRows]);
 
   const filteredRows = useMemo(() => {
-    let filtered = stageScopedRows;
+    let filtered = secondaryScopedRows;
 
     if (statusFilter !== 'total') {
       filtered = filtered.filter(record => resolveStatusCategory(record) === statusFilter);
@@ -784,11 +988,7 @@ showAlert(
     }
     
     return filtered;
-  }, [searchTerm, stageScopedRows, statusFilter, resolveStatusCategory]);
-
-  const paginatedRows = useMemo(() => {
-    return filteredRows;
-  }, [filteredRows]);
+  }, [searchTerm, secondaryScopedRows, statusFilter, resolveStatusCategory]);
 
   const totalPages = Math.max(1, Math.ceil((totalRows || 0) / (limit || 20)));
 
@@ -935,15 +1135,34 @@ showAlert(
               <select
                 className="fw-control"
                 value={beneficiaryFilter}
-                onChange={(e) => setBeneficiaryFilter(e.target.value)}
+                onChange={(e) => {
+                  setBeneficiaryFilter(e.target.value);
+                  setSecondaryFilter('');
+                }}
                 title="Beneficiary"
               >
-                {BENEFICIARY_OPTIONS.map((opt) => (
+                {filteredBeneficiaryOptions.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
                 ))}
               </select>
+
+              {config.moduleKey === 'finance' && (
+                <select
+                  className="fw-control"
+                  value={secondaryFilter}
+                  onChange={(e) => setSecondaryFilter(e.target.value)}
+                  title={secondaryFilterLabel}
+                >
+                  <option value="">{secondaryFilterAllLabel}</option>
+                  {secondaryFilterOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              )}
 
               <input
                 className="fw-control"
@@ -1028,7 +1247,7 @@ showAlert(
             ) : (
               <>
                 <div className="fw-cards-container">
-                  {paginatedRows.map((record, rowIndex) => {
+                  {filteredRows.map((record, rowIndex) => {
                     const recordId = getRecordId(record) ?? `row-${rowIndex}`;
                     const timelineKey = String(recordId);
                     const statusCategory = resolveStatusCategory(record);
@@ -1151,77 +1370,77 @@ showAlert(
                                 </span>
                               </div>
                               <div className="fw-actions-row">
-                                {!isArchived && !isApproved && (
-                                  <>
-                                    {isSuperAdminView ? (
-                                      <>
-                                        <button
-                                          className="fw-action-btn fw-action-btn--returned"
-                                          title="Return"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            openActionPopup("return", recordId, proposalRef, record.workflow_stage || record.workflowstage);
-                                          }}
-                                          disabled={actingRecordId === recordId || !isPending}
-                                        >
-                                          <RotateCcw size={18} />
-                                        </button>
+                                {isSuperAdminView ? (
+                                  !isArchived && (
+                                    <>
+                                      <button
+                                        className="fw-action-btn fw-action-btn--returned"
+                                        title="Return"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openActionPopup("return", recordId, proposalRef);
+                                        }}
+                                        disabled={actingRecordId === recordId || !isPending}
+                                      >
+                                        <RotateCcw size={18} />
+                                      </button>
 
-                                        <button
-                                          className="fw-action-btn fw-action-btn--rejected"
-                                          title="Delete"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDeleteRecord(record);
-                                          }}
-                                          disabled={actingRecordId === recordId}
-                                        >
-                                          <Trash2 size={18} />
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <button
-                                          className="fw-action-btn fw-action-btn--approved"
-                                          title="Approve"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            onApprove(recordId, record.workflow_stage || record.workflowstage);
-                                          }}
-                                          disabled={actingRecordId === recordId || !isPending}
-                                        >
-                                          <CheckCircle2 size={18} />
-                                        </button>
+                                      <button
+                                        className="fw-action-btn fw-action-btn--rejected"
+                                        title="Delete"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteRecord(record);
+                                        }}
+                                        disabled={actingRecordId === recordId}
+                                      >
+                                        <Trash2 size={18} />
+                                      </button>
+                                    </>
+                                  )
+                                ) : (
+                                  !isArchived && !isApproved && (
+                                    <>
+                                      <button
+                                        className="fw-action-btn fw-action-btn--approved"
+                                        title="Approve"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onApprove(recordId);
+                                        }}
+                                        disabled={actingRecordId === recordId || !isPending}
+                                      >
+                                        <CheckCircle2 size={18} />
+                                      </button>
 
-                                        <button
-                                          className="fw-action-btn fw-action-btn--returned"
-                                          title="Return"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            openActionPopup("return", recordId, proposalRef, record.workflow_stage || record.workflowstage);
-                                          }}
-                                          disabled={actingRecordId === recordId || !isPending}
-                                        >
-                                          <RotateCcw size={18} />
-                                        </button>
+                                      <button
+                                        className="fw-action-btn fw-action-btn--returned"
+                                        title="Return"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openActionPopup("return", recordId, proposalRef);
+                                        }}
+                                        disabled={actingRecordId === recordId || !isPending}
+                                      >
+                                        <RotateCcw size={18} />
+                                      </button>
 
-                                        <button
-                                          className="fw-action-btn fw-action-btn--rejected"
-                                          title="Reject"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            openActionPopup("reject", recordId, proposalRef, record.workflow_stage || record.workflowstage);
-                                          }}
-                                          disabled={actingRecordId === recordId || !isPending}
-                                        >
-                                          <XCircle size={18} />
-                                        </button>
-                                      </>
-                                    )}
-                                  </>
+                                      <button
+                                        className="fw-action-btn fw-action-btn--rejected"
+                                        title="Reject"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openActionPopup("reject", recordId, proposalRef);
+                                        }}
+                                        disabled={actingRecordId === recordId || !isPending}
+                                      >
+                                        <XCircle size={18} />
+                                      </button>
+                                    </>
+                                  )
                                 )}
 
-                                {!isApproved && (
+                                {(isSuperAdminView || !isApproved) && (
                                   <button
                                     className="fw-action-btn fw-action-btn--archive"
                                     title={isArchived ? 'Unarchive' : 'Archive'}
@@ -1229,7 +1448,10 @@ showAlert(
                                       e.stopPropagation();
                                       handleArchiveToggle(record);
                                     }}
-                                    disabled={archivingIds.has(recordId)}
+                                    disabled={
+                                      archivingIds.has(recordId) ||
+                                      (isSuperAdminView && !isPending)
+                                    }
                                   >
                                     <Archive size={18} />
                                   </button>
@@ -1268,9 +1490,9 @@ showAlert(
                     </div>
 
                     <span className="fw-pagecount">
-                      {paginatedRows.length === 0
+                      {filteredRows.length === 0
                         ? '0-0 of 0'
-                        : `${(page - 1) * limit + 1}-${Math.min(((page - 1) * limit) + paginatedRows.length, totalRows)} of ${totalRows}`}
+                        : `${(page - 1) * limit + 1}-${Math.min(((page - 1) * limit) + filteredRows.length, totalRows)} of ${totalRows}`}
                     </span>
                   </div>
 
@@ -1303,6 +1525,91 @@ showAlert(
           </div>
         </div>
       </div>
+      {deletePopupOpen && (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Close delete confirmation dialog"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 999999,
+            padding: 16,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closeDeletePopup();
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              closeDeletePopup();
+            }
+          }}
+        >
+          <div
+            style={{
+              width: "min(400px, 95vw)",
+              background: "#fff",
+              borderRadius: 12,
+              padding: 24,
+              boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ color: "#dc3545", marginBottom: 16 }}>
+              <Trash2 size={48} />
+            </div>
+            <h4 style={{ margin: "0 0 8px 0", color: "#333" }}>Confirm Deletion</h4>
+            <p style={{ margin: "0 0 16px 0", color: "#666", fontSize: "14px" }}>
+              Are you sure you want to permanently delete finance request <strong>{deleteRef}</strong>? This
+              action cannot be undone.
+            </p>
+
+            <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}>
+              <button
+                type="button"
+                onClick={closeDeletePopup}
+                style={{
+                  border: "1px solid #ddd",
+                  background: "#fff",
+                  borderRadius: 8,
+                  padding: "8px 24px",
+                  cursor: "pointer",
+                  fontWeight: 500,
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleteCountdown > 0}
+                style={{
+                  border: "none",
+                  background: deleteCountdown > 0 ? "#e9ecef" : "#dc3545",
+                  color: deleteCountdown > 0 ? "#6c757d" : "#fff",
+                  borderRadius: 8,
+                  padding: "8px 24px",
+                  cursor: deleteCountdown > 0 ? "not-allowed" : "pointer",
+                  fontWeight: 500,
+                  minWidth: "120px",
+                  transition: "all 0.2s",
+                }}
+              >
+                {deleteCountdown > 0 ? `Delete (${deleteCountdown}s)` : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
          <AlertModal
   show={alertConfig.show}
   onHide={closeAlert}
