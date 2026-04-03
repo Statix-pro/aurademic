@@ -607,6 +607,8 @@ try {
     try {
       const financeId = toPositiveInt(req.params.id);
       const { decision, feedback } = req.body || {};
+      const normalizedDecision = normalizeText(decision).toLowerCase();
+      const actor = normalizeActor(req);
 
       if (!financeId) {
         return res.status(400).json({
@@ -615,21 +617,47 @@ try {
         });
       }
 
-      const result = await workflowService.actOnWorkflow({
-        moduleKey: 'finance',
-        recordId: financeId,
-        decision,
-        feedback,
-        actor: normalizeActor(req),
-        metadata: {
-          origin: 'api',
-          requestId: null,
-          moduleMetaVersion: 1,
-          moduleMeta: {
-            route: 'PATCH /api/finance-requests/:id/approval',
+      let result;
+      const finance = await financeModel.getFinanceRequestById(financeId);
+      if (!finance) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Finance request not found',
+        });
+      }
+
+      const workflowStatus = normalizeText(
+        finance.workflow_state?.status || finance.workflow_status || finance.overall_status
+      ).toLowerCase();
+      const isTerminalWorkflow = ['completed', 'rejected', 'archived'].includes(workflowStatus);
+
+      if (actor.isSuperAdmin && normalizedDecision === 'returned' && isTerminalWorkflow) {
+        result = await financeModel.forceWorkflowTransition(
+          financeId,
+          {
+            decision: 'returned',
+            feedback,
+            actor,
+            stageHint: normalizeText(finance.workflow_stage).toLowerCase() || 'principal',
+          }
+        );
+      } else {
+        result = await workflowService.actOnWorkflow({
+          moduleKey: 'finance',
+          recordId: financeId,
+          decision,
+          feedback,
+          actor,
+          metadata: {
+            origin: 'api',
+            requestId: null,
+            moduleMetaVersion: 1,
+            moduleMeta: {
+              route: 'PATCH /api/finance-requests/:id/approval',
+            },
           },
-        },
-      });
+        });
+      }
 
       return res.status(200).json({
         status: 'success',
@@ -674,6 +702,7 @@ try {
         finance.workflow_state?.status || finance.workflow_status || finance.overall_status
       ).toLowerCase();
       const isArchived = workflowStatus === 'archived' || workflowStatus === 'archive';
+      const actor = normalizeActor(req);
 
       if (isArchived) {
         const latestArchive = await financeModel.getLatestArchiveAction(financeId);
@@ -705,12 +734,34 @@ try {
         });
       }
 
+      const isTerminalWorkflow = ['completed', 'rejected'].includes(workflowStatus);
+      if (actor.isSuperAdmin && isTerminalWorkflow) {
+        const forcedArchiveResult = await financeModel.forceWorkflowTransition(
+          financeId,
+          {
+            decision: 'archived',
+            feedback: normalizeText(req.body?.feedback) || null,
+            actor,
+            stageHint: normalizeText(finance.workflow_stage).toLowerCase() || 'principal',
+          }
+        );
+
+        return res.status(200).json({
+          status: 'success',
+          message: 'Finance request archived successfully',
+          data: {
+            previousState: forcedArchiveResult.previousState,
+            currentState: forcedArchiveResult.currentState,
+          },
+        });
+      }
+
       const archiveResult = await workflowService.actOnWorkflow({
         moduleKey: 'finance',
         recordId: financeId,
         decision: 'archived',
         feedback: normalizeText(req.body?.feedback) || undefined,
-        actor: normalizeActor(req),
+        actor,
         metadata: {
           origin: 'api',
           requestId: null,
@@ -813,14 +864,20 @@ try {
 
   async getWorkflowMeta(req, res) {
     try {
-      const metadata = await workflowService.getWorkflowMetadata({
-        moduleKey: 'finance',
-        actor: normalizeActor(req),
-      });
+      const [metadata, availableBeneficiaryTypes] = await Promise.all([
+        workflowService.getWorkflowMetadata({
+          moduleKey: 'finance',
+          actor: normalizeActor(req),
+        }),
+        financeModel.listAvailableBeneficiaryTypes(),
+      ]);
 
       return res.status(200).json({
         status: 'success',
-        data: metadata,
+        data: {
+          ...metadata,
+          availableBeneficiaryTypes,
+        },
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in getWorkflowMeta');
