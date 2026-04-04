@@ -16,6 +16,7 @@ export interface WorkflowTimelineItem {
   decision: string;
   feedback?: string | null;
   actorEmail?: string | null;
+  actorRole?: string | null;
   decidedAt?: string | null;
 }
 

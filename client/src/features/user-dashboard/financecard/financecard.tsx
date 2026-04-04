@@ -12,6 +12,8 @@ interface FinanceCardItem {
   proposal_ref?: string | null;
   applicant_name: string;
   beneficiary_type: string;
+  beneficiary_entity_id?: number | null;
+  level1_route_type?: string | null;
   primary_head: string;
   budget_tag?: string;
   amount?: number;
@@ -240,6 +242,51 @@ const FinanceCard: React.FC = () => {
       .replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
+  const getStageBadgeLabel = (item: FinanceCardItem, stage?: string | null, actorRole?: string | null) => {
+    const stageToken = String(stage || '').trim().toLowerCase();
+    const actorRoleToken = String(actorRole || '').trim().toLowerCase();
+    const level1RouteType = String(item?.level1_route_type || '').trim().toLowerCase();
+    const beneficiaryTypeToken = String(item?.beneficiary_type || '').trim().toLowerCase();
+    const beneficiaryEntityId = Number(item?.beneficiary_entity_id || 0);
+
+    if (stageToken === 'level1') {
+      if (actorRoleToken === 'coordinator' || actorRoleToken === 'entity_approver') {
+        return 'Coordinator';
+      }
+      if (actorRoleToken === 'hod') {
+        return 'HOD';
+      }
+      if (level1RouteType === 'entity_contact') {
+        return 'Coordinator';
+      }
+      if (
+        ['centre', 'cell', 'club', 'professional body', 'professional bodies'].includes(beneficiaryTypeToken) ||
+        (['faculty', 'staff'].includes(beneficiaryTypeToken) && beneficiaryEntityId > 0)
+      ) {
+        return 'Coordinator';
+      }
+      return 'HOD';
+    }
+
+    if (stageToken === 'dof') return 'DoF';
+    if (stageToken === 'ithead') return 'IT Head';
+    if (stageToken === 'principal') return 'Principal';
+    if (stageToken === 'archived') return 'Archive';
+    return formatLabel(stage);
+  };
+
+  const getUpdateTimestamp = (update: FinanceStatusUpdate) =>
+    String(update.createdAt || update.decidedAt || '').trim();
+
+  const getUpdateSortPriority = (update: FinanceStatusUpdate) => {
+    const decisionToken = String(update.decision || update.status || '').trim().toLowerCase();
+    if (decisionToken.includes('returned')) return 10;
+    if (decisionToken === 'updated') return 20;
+    if (decisionToken.includes('approved') || decisionToken.includes('completed')) return 30;
+    if (decisionToken.includes('rejected')) return 40;
+    return 50;
+  };
+
   const formatDateTime = (value?: string | null) => {
     if (!value) return '-';
     const date = new Date(value);
@@ -285,9 +332,26 @@ const FinanceCard: React.FC = () => {
       decision: 'submitted',
     }];
 
-    updates.forEach((update, index) => {
+    const sortedUpdates = [...updates].sort((left, right) => {
+      const leftMs = Date.parse(getUpdateTimestamp(left) || '') || 0;
+      const rightMs = Date.parse(getUpdateTimestamp(right) || '') || 0;
+
+      if (leftMs !== rightMs) {
+        return leftMs - rightMs;
+      }
+
+      const leftPriority = getUpdateSortPriority(left);
+      const rightPriority = getUpdateSortPriority(right);
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority;
+      }
+
+      return Number(left.id || 0) - Number(right.id || 0);
+    });
+
+    sortedUpdates.forEach((update, index) => {
       const decision = String(update.decision || update.status || '').toLowerCase();
-      const stage = formatLabel(update.stage || update.role);
+      const stage = getStageBadgeLabel(item, update.stage || update.role, update.actorRole);
       const actorName = update.userName;
       const actorEmail = update.actorEmail;
       const actorRole = update.actorRole;

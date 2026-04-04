@@ -10,6 +10,81 @@ const toPositiveInt = (value) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
+const parseDateMs = (value) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return null;
+  const ms = Date.parse(normalized);
+  return Number.isFinite(ms) ? ms : null;
+};
+
+const resolveCurrentCycleStartMs = (financeRecord, entries = []) => {
+  const workflowState = financeRecord?.workflow_state || {};
+  const resubmittedAtMs = parseDateMs(workflowState.resubmittedAt);
+
+  if (resubmittedAtMs) {
+    // Include the latest return action that led to resubmission so edit/resubmit logs are visible.
+    let latestReturnMs = null;
+    for (const entry of entries) {
+      const decisionToken = normalizeText(entry?.decision || entry?.status).toLowerCase();
+      if (decisionToken !== 'returned' && decisionToken !== 'return') {
+        continue;
+      }
+
+      const actionMs =
+        parseDateMs(entry?.decidedAt) ||
+        parseDateMs(entry?.decided_at) ||
+        parseDateMs(entry?.createdAt) ||
+        parseDateMs(entry?.created_at);
+
+      if (!actionMs) {
+        continue;
+      }
+
+      if (actionMs <= resubmittedAtMs && (!latestReturnMs || actionMs > latestReturnMs)) {
+        latestReturnMs = actionMs;
+      }
+    }
+
+    if (latestReturnMs) {
+      return latestReturnMs;
+    }
+
+    return resubmittedAtMs;
+  }
+
+  return (
+    parseDateMs(workflowState.startedAt) ||
+    parseDateMs(financeRecord?.created_at) ||
+    null
+  );
+};
+
+const filterEntriesForCurrentCycle = (entries, financeRecord) => {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return [];
+  }
+
+  const cycleStartMs = resolveCurrentCycleStartMs(financeRecord, entries);
+  if (!cycleStartMs) {
+    return entries;
+  }
+
+  return entries.filter((entry) => {
+    const actionMs =
+      parseDateMs(entry?.decidedAt) ||
+      parseDateMs(entry?.decided_at) ||
+      parseDateMs(entry?.createdAt) ||
+      parseDateMs(entry?.created_at);
+
+    // Keep rows that don't have a timestamp rather than dropping potentially valid logs.
+    if (!actionMs) {
+      return true;
+    }
+
+    return actionMs >= cycleStartMs;
+  });
+};
+
 const normalizeActor = (req) => ({
   id: req.user?.id,
   userId: req.user?.id,
@@ -408,12 +483,13 @@ const financeController = {
       const budget = await financeModel.getBudgetBreakup(financeId);
 const incomeRows = await financeModel.getIncomeRows(financeId);
 
-let statusUpdates = [];
-try {
-  statusUpdates = await financeModel.getStatusUpdates(financeId);
-} catch (statusError) {
-  console.error('Failed to fetch finance status updates:', statusError);
-}
+      let statusUpdates = [];
+      try {
+        const rawStatusUpdates = await financeModel.getStatusUpdates(financeId);
+        statusUpdates = filterEntriesForCurrentCycle(rawStatusUpdates, finance);
+      } catch (statusError) {
+        console.error('Failed to fetch finance status updates:', statusError);
+      }
       return res.status(200).json({
         status: 'success',
         data: {
@@ -848,10 +924,11 @@ try {
         });
       }
 
-      const timeline = await workflowService.getTimeline({
+      const rawTimeline = await workflowService.getTimeline({
         moduleKey: 'finance',
         recordId: financeId,
       });
+      const timeline = filterEntriesForCurrentCycle(rawTimeline, finance);
 
       return res.status(200).json({
         status: 'success',
@@ -910,7 +987,8 @@ try {
       }
 
       const updates = await financeModel.getStatusUpdates(financeId);
-      const timelineCompatible = updates.map((row) => ({
+      const cycleScopedUpdates = filterEntriesForCurrentCycle(updates, finance);
+      const timelineCompatible = cycleScopedUpdates.map((row) => ({
         id: row.id,
         moduleKey: 'finance',
         recordId: row.finance_id,
