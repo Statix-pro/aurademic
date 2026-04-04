@@ -337,7 +337,7 @@ const buildFinanceSelectSql = ({ budgetTagSelectSql = 'NULL AS budget_tag' } = {
     COALESCE(e.mobile, fr.mobile) AS mobile,
     e.erp_id,
     CASE WHEN fr.employee_id IS NULL THEN 1 ELSE 0 END AS is_external,
-    fr.request_date,
+    DATE_FORMAT(fr.request_date, '%Y-%m-%d') AS request_date,
     fr.description,
     fr.beneficiary_type,
     fr.beneficiary_value,
@@ -423,8 +423,35 @@ const collectChangedFields = (previousRecord, nextRecord, fieldMap = []) => {
   const changes = [];
 
   for (const field of fieldMap) {
-    const previousValue = normalizeText(previousRecord?.[field.storageKey]);
-    const nextValue = normalizeText(nextRecord?.[field.storageKey]);
+    const isDateField = field.valueType === 'date';
+    const normalizeDateOnly = (value) => {
+      if (value === undefined || value === null || value === '') return '';
+      if (value instanceof Date) {
+        const yyyy = value.getFullYear();
+        const mm = String(value.getMonth() + 1).padStart(2, '0');
+        const dd = String(value.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+      const raw = normalizeText(value);
+      if (!raw) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+      const parsed = new Date(raw);
+      if (!Number.isNaN(parsed.getTime())) {
+        const yyyy = parsed.getFullYear();
+        const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+        const dd = String(parsed.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+      const ymdPrefixMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+      return ymdPrefixMatch ? ymdPrefixMatch[1] : raw;
+    };
+
+    const previousValue = isDateField
+      ? normalizeDateOnly(previousRecord?.[field.storageKey])
+      : normalizeText(previousRecord?.[field.storageKey]);
+    const nextValue = isDateField
+      ? normalizeDateOnly(nextRecord?.[field.storageKey])
+      : normalizeText(nextRecord?.[field.storageKey]);
 
     if (previousValue === nextValue) {
       continue;
@@ -470,7 +497,7 @@ const buildFinanceUpdateAudit = ({
   };
 
   const fieldChanges = collectChangedFields(previousRecord, nextRecord, [
-    { storageKey: 'request_date', label: 'Request date' },
+    { storageKey: 'request_date', label: 'Request date', valueType: 'date' },
     { storageKey: 'description', label: 'Description' },
     { storageKey: 'beneficiary_type', label: 'Beneficiary type' },
     { storageKey: 'beneficiary_value', label: 'Beneficiary value' },
