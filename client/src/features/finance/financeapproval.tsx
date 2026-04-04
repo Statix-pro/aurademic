@@ -219,6 +219,36 @@ const CREDIT_ACCOUNT_OPTIONS = [
   'KSRCT RPS AICTE Project | 0075133800000643',
 ];
 
+const formatDateForInput = (value: unknown): string => {
+  if (value === null || value === undefined || value === '') return '';
+
+  const raw = String(value).trim();
+  if (!raw) return '';
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw;
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    const yyyy = parsed.getFullYear();
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  const ymdPrefixMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return ymdPrefixMatch ? ymdPrefixMatch[1] : '';
+};
+
+const getLocalTodayYmd = (): string => {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 const CATEGORY_TYPE_OPTIONS = [
   'Faculty',
   'Staff',
@@ -669,7 +699,7 @@ const normalizeText = (value: string | null | undefined): string =>
 
 const FinanceApproval: React.FC = () => {
   const [applicantName, setApplicantName] = useState<string>('');
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(getLocalTodayYmd());
   const [designation, setDesignation] = useState<string>('');
   const [mobile, setMobile] = useState<string>('');
   const [department, setDepartment] = useState<string>('');
@@ -1723,7 +1753,7 @@ const hideWorkflowActionsForFinalStatus =
         const resolvedApplicantName = String(record.applicant_name || '').trim();
         setApplicantName(resolvedApplicantName);
         setApplicantSearchQuery(resolvedApplicantName);
-        setDate(record.request_date ? String(record.request_date).slice(0, 10) : '');
+        setDate(formatDateForInput(record.request_date));
         setDesignation(record.designation || '');
         setDepartment(record.department || '');
         setEmail(record.email || '');
