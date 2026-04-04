@@ -287,6 +287,66 @@ const FinanceCard: React.FC = () => {
     return 50;
   };
 
+  const formatAuditValue = (label: string, rawValue: any) => {
+    const value = String(rawValue ?? '').trim();
+    if (!value || value === '-') return '-';
+
+    const normalizedLabel = String(label || '').toLowerCase();
+    const isAmountField = ['amount', 'budget', 'balance', 'partial'].some((token) => normalizedLabel.includes(token));
+    if (isAmountField) {
+      const num = Number(value);
+      if (Number.isFinite(num)) {
+        return `₹ ${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
+    }
+
+    const parsedMs = Date.parse(value);
+    if (
+      Number.isFinite(parsedMs) &&
+      (
+        normalizedLabel.includes('date') ||
+        /^\d{4}-\d{2}-\d{2}$/.test(value) ||
+        value.includes('GMT')
+      )
+    ) {
+      return new Date(parsedMs).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    }
+
+    return value;
+  };
+
+  const trimUpdatedSummary = (summary: string) => {
+    if (!summary) return '';
+    const parts = summary
+      .split('|')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .filter((part) => !/^\d+\s+field\(s\)\s+updated$/i.test(part));
+
+    return parts.join(' | ');
+  };
+
+  const buildRowUpdateSummary = (details: any) => {
+    const parts: string[] = [];
+    const budgetRowsCount = Number(details?.budgetRowsCount || 0);
+    const incomeRowsCount = Number(details?.incomeRowsCount || 0);
+    const budgetRowsChanged = Boolean(details?.budgetRowsChanged);
+    const incomeRowsChanged = Boolean(details?.incomeRowsChanged);
+
+    if (budgetRowsCount > 0) {
+      parts.push(`Budget rows ${budgetRowsChanged ? 'updated' : 'reviewed'} (${budgetRowsCount} row(s))`);
+    }
+    if (incomeRowsCount > 0) {
+      parts.push(`Income rows ${incomeRowsChanged ? 'updated' : 'reviewed'} (${incomeRowsCount} row(s))`);
+    }
+
+    return parts.join(' | ');
+  };
+
   const formatDateTime = (value?: string | null) => {
     if (!value) return '-';
     const date = new Date(value);
@@ -390,12 +450,22 @@ const FinanceCard: React.FC = () => {
         title = 'Proposal updated';
         const details = update.details && typeof update.details === 'object' ? update.details : null;
         const changedFields = Array.isArray(details?.changedFields) ? details.changedFields : [];
+        const fieldCountSummary = changedFields.length > 0 ? `${changedFields.length} field(s) updated` : '';
+        const rowSummary = buildRowUpdateSummary(details);
         const fieldSummary = changedFields.length
           ? changedFields
-              .map((field: any) => `${field.label}: ${field.before} -> ${field.after}`)
-              .join(' | ')
+              .map((field: any) => {
+                const label = String(field?.label || '').trim() || 'Field';
+                const before = formatAuditValue(label, field?.before);
+                const after = formatAuditValue(label, field?.after);
+                return `${label}: ${before} -> ${after}`;
+              })
+          .join(' | ')
           : '';
-        subtitle = [String(eventSummary || '').trim(), fieldSummary].filter(Boolean).join(' | ') || 'Proposal updated';
+        const fallbackSummary = trimUpdatedSummary(String(eventSummary || '').trim());
+        subtitle = [fieldCountSummary, rowSummary || fallbackSummary, fieldSummary]
+          .filter(Boolean)
+          .join(' | ') || 'Proposal updated';
         if (isAdmin) {
           actorBadgeLabel = 'SUPERADMIN';
         }
