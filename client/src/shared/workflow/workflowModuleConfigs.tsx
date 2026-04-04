@@ -24,6 +24,7 @@ export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfi
       dof: 'DoF',
       principal: 'Principal',
     },
+    getTimelineEndpoint: (id) => `/finance-requests/${id}/status-updates`,
     columns: [
       { key: 'id', label: 'ID' },
       { key: 'applicant_name', label: 'Applicant' },

@@ -200,6 +200,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [logPopupOpen, setLogPopupOpen] = useState(false);
   const [logEntries, setLogEntries] = useState<WorkflowTimelineItem[]>([]);
   const [logRef, setLogRef] = useState<string>('');
+  const [logLevel1Role, setLogLevel1Role] = useState<'hod' | 'coordinator' | null>(null);
   const [logLoading, setLogLoading] = useState(false);
   const [archivingIds, setArchivingIds] = useState<Set<number | string>>(new Set());
   
@@ -674,10 +675,16 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     [activeStageTabKey, loadQueue, permittedStages, stageTabs]
   );
 
-  const fetchFullTimeline = useCallback(async (id: number | string, ref: string) => {
+  const fetchFullTimeline = useCallback(async (record: Record<string, any>, id: number | string, ref: string) => {
     setLogLoading(true);
     setLogRef(ref);
     setLogPopupOpen(true);
+    if (config.moduleKey === 'finance') {
+      const routeType = String(record?.level1_route_type || record?.level1RouteType || '').trim().toLowerCase();
+      setLogLevel1Role(routeType === 'entity_contact' ? 'coordinator' : 'hod');
+    } else {
+      setLogLevel1Role(null);
+    }
     try {
       const response = await authenticityUtility.get(getTimelineEndpoint(id));
       const mapped = mapTimelineResponse(response);
@@ -688,7 +695,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     } finally {
       setLogLoading(false);
     }
-  }, [getTimelineEndpoint, mapTimelineResponse]);
+  }, [config.moduleKey, getTimelineEndpoint, mapTimelineResponse]);
 
   useEffect(() => {
     loadMeta().catch((metaError: any) => {
@@ -1008,10 +1015,33 @@ showAlert(
     }
   };
 
+  const getTimelineStageLabel = useCallback((entry: WorkflowTimelineItem) => {
+    const stageToken = String(entry?.stage || '').trim().toLowerCase();
+
+    if (config.moduleKey === 'finance' && stageToken === 'level1') {
+      const actorRoleToken = String(entry?.actorRole || '').trim().toLowerCase();
+      if (actorRoleToken === 'coordinator' || actorRoleToken === 'entity_approver') {
+        return 'Coordinator';
+      }
+      if (actorRoleToken === 'hod') {
+        return 'HOD';
+      }
+      if (logLevel1Role === 'coordinator') {
+        return 'Coordinator';
+      }
+      if (logLevel1Role === 'hod') {
+        return 'HOD';
+      }
+    }
+
+    return formatStageLabel(entry.stage, config.stageLabels);
+  }, [config.moduleKey, config.stageLabels, logLevel1Role]);
+
   const closeLogPopup = () => {
     setLogPopupOpen(false);
     setLogEntries([]);
     setLogRef('');
+    setLogLevel1Role(null);
   };
 
   const handleArchiveToggle = async (record: Record<string, any>) => {
@@ -1316,11 +1346,11 @@ showAlert(
                                 title="Logs"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  fetchFullTimeline(recordId, proposalRef);
+                                  fetchFullTimeline(record, recordId, proposalRef);
                                 }}
                               >
-                                <Info size={16} />
-                              </button>
+                                  <Info size={16} />
+                                </button>
 
                               <button
                                 className="fw-icon-btn"
@@ -1695,27 +1725,49 @@ showAlert(
 
           {!logLoading && logEntries.length > 0 && (
             <div className="fw-log-approvals">
-              {logEntries.map((entry, idx) => (
-                <div key={entry.id || idx} className="fw-log-approval-item">
-                  <div className="fw-log-approval-meta">
-                    <span className={`fw-log-decision fw-log-decision--${entry.decision?.toLowerCase() || 'approved'}`}>
-                      {entry.decision?.toUpperCase() || 'UPDATE'}
-                    </span>
-                    <span className="fw-log-role">
-                      {formatStageLabel(entry.stage, config.stageLabels)}
-                    </span>
-                    {entry.feedback && (
-                      <span className="fw-log-feedback">Note: {entry.feedback}</span>
-                    )}
-                    <span className="fw-log-actor-line">
-                      By: {entry.actorEmail || 'Unknown'}
-                    </span>
-                    <span className="fw-log-date">
-                      {entry.decidedAt ? new Date(entry.decidedAt).toLocaleString() : '-'}
-                    </span>
+              {logEntries.map((entry, idx) => {
+                const decisionToken = String(entry.decision || '').trim().toLowerCase();
+                const actorRoleToken = String(entry.actorRole || '').trim().toLowerCase();
+                const stageLabel = getTimelineStageLabel(entry);
+                const isWorkflowUpdater = [
+                  'hod',
+                  'coordinator',
+                  'entity_approver',
+                  'ithead',
+                  'dof',
+                  'principal',
+                  'admin',
+                  'super_admin',
+                  'superadmin',
+                ].includes(actorRoleToken);
+                const shouldShowStage =
+                  Boolean(stageLabel && stageLabel !== '-') &&
+                  (decisionToken !== 'updated' || isWorkflowUpdater);
+
+                return (
+                  <div key={entry.id || idx} className="fw-log-approval-item">
+                    <div className="fw-log-approval-meta">
+                      <span className={`fw-log-decision fw-log-decision--${entry.decision?.toLowerCase() || 'approved'}`}>
+                        {entry.decision?.toUpperCase() || 'UPDATE'}
+                      </span>
+                      {shouldShowStage && (
+                        <span className="fw-log-role">
+                          {stageLabel}
+                        </span>
+                      )}
+                      {entry.feedback && (
+                        <span className="fw-log-feedback">Note: {entry.feedback}</span>
+                      )}
+                      <span className="fw-log-actor-line">
+                        By: {entry.actorEmail || 'Unknown'}
+                      </span>
+                      <span className="fw-log-date">
+                        {entry.decidedAt ? new Date(entry.decidedAt).toLocaleString() : '-'}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
