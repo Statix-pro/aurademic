@@ -254,7 +254,7 @@ const financeController = {
         });
       } catch (workflowError) {
         try {
-          await financeModel.deleteFinanceRequest(financeId);
+          await financeModel.hardDeleteFinanceRequest(financeId);
         } catch (cleanupError) {
           console.error('Failed to clean up finance request after workflow start failure', cleanupError);
         }
@@ -468,7 +468,7 @@ const financeController = {
         });
       }
 
-      await financeModel.deleteFinanceRequest(financeId);
+      await financeModel.deleteFinanceRequest(financeId, normalizeActor(req));
 
       return res.status(200).json({
         status: 'success',
