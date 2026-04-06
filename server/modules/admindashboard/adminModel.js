@@ -763,25 +763,25 @@ async getAllBudgets(page, perPage, filters = {}) {
   const offset = (page - 1) * perPage;
   const { fiscalYear, status, beneficiaryType } = filters;
   
-  let whereClause = '';
+  const whereParts = [`LOWER(TRIM(bp.status)) <> 'deleted'`];
   const params = [];
   
   if (fiscalYear) {
-    whereClause += ' WHERE bp.fiscal_year = ?';
+    whereParts.push('bp.fiscal_year = ?');
     params.push(fiscalYear);
   }
   
   if (status) {
-    whereClause += whereClause ? ' AND' : ' WHERE';
-    whereClause += ' bp.status = ?';
+    whereParts.push('bp.status = ?');
     params.push(status);
   }
   
   if (beneficiaryType) {
-    whereClause += whereClause ? ' AND' : ' WHERE';
-    whereClause += ' bp.beneficiary_type = ?';
+    whereParts.push('bp.beneficiary_type = ?');
     params.push(beneficiaryType);
   }
+
+  const whereClause = `WHERE ${whereParts.join(' AND ')}`;
   
   const [rows] = await db.query(`
     SELECT 
@@ -814,25 +814,28 @@ async getAllBudgets(page, perPage, filters = {}) {
 },
 
   async getBudgetStats(fiscalYear = null) {
-    const fyClause = fiscalYear ? 'AND fiscal_year = ?' : '';
+    const fyClause = fiscalYear ? ' AND fiscal_year = ?' : '';
     const params = fiscalYear ? [fiscalYear] : [];
     
     const [approved] = await db.query(`
       SELECT COUNT(*) as approved 
       FROM budget_proposals 
-      WHERE status IN ('principal_approved', 'completed') ${fyClause}
+      WHERE LOWER(TRIM(status)) <> 'deleted'
+        AND status IN ('principal_approved', 'completed')${fyClause}
     `, params);
     
     const [pending] = await db.query(`
       SELECT COUNT(*) as pending 
       FROM budget_proposals 
-      WHERE status IN ('submitted', 'hod_approved', 'dof_approved') ${fyClause}
+      WHERE LOWER(TRIM(status)) <> 'deleted'
+        AND status IN ('submitted', 'hod_approved', 'dof_approved')${fyClause}
     `, params);
     
     const [rejected] = await db.query(`
       SELECT COUNT(*) as rejected 
       FROM budget_proposals 
-      WHERE status IN ('hod_rejected', 'dof_rejected', 'principal_rejected') ${fyClause}
+      WHERE LOWER(TRIM(status)) <> 'deleted'
+        AND status IN ('hod_rejected', 'dof_rejected', 'principal_rejected')${fyClause}
     `, params);
     
     return { 

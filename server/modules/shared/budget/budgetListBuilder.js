@@ -116,7 +116,7 @@ export async function buildBudgetList(options) {
     LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
   `;
 
-    const where = ['bp.fiscal_year = ?'];
+    const where = ['bp.fiscal_year = ?', "LOWER(TRIM(bp.status)) <> 'deleted'"];
     const params = [Number(currentFY)];
     const isQueueSuperAdminView = Boolean(superAdminQueueView) && ['hod', 'coordinator', 'ithead', 'dof', 'principal'].includes(safeRole);
 
@@ -421,7 +421,7 @@ export async function buildBudgetKpiStats(options) {
     const safeRole = normalizeBudgetRole(role);
     const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
 
-    const where = ['bp.fiscal_year = ?'];
+    const where = ['bp.fiscal_year = ?', "LOWER(TRIM(bp.status)) <> 'deleted'"];
     const params = [Number(currentFY)];
     const isQueueSuperAdminView = Boolean(superAdminQueueView) && ['hod', 'coordinator', 'ithead', 'dof', 'principal'].includes(safeRole);
 
