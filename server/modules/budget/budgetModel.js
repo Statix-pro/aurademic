@@ -1718,7 +1718,16 @@ export async function getBudgetById(proposalId) {
     [proposalId]
   );
 
-  return rows[0] || null;
+  const proposal = rows[0] || null;
+  if (!proposal) {
+    return null;
+  }
+
+  if (normalizeBeneficiaryType(proposal.beneficiary_type) === 'Department') {
+    proposal.beneficiary_value = normalizeText(proposal.department) || proposal.beneficiary_value;
+  }
+
+  return proposal;
 }
 
 export async function isFacultyBeneficiaryForUser(proposal = {}, userId) {
