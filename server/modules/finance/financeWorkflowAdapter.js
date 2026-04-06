@@ -2,7 +2,7 @@ import financeModel from './financeModel.js';
 import { registerWorkflowModule } from '../shared/workflow/workflowModuleRegistry.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
-const ALLOWED_META_KEYS = new Set(['trigger', 'route', 'amountBand']);
+const ALLOWED_META_KEYS = new Set(['trigger', 'route', 'amountBand', 'financeMeta']);
 const ALLOWED_AMOUNT_BANDS = new Set(['lte_10k', 'gt_10k']);
 
 const financeWorkflowAdapter = {
@@ -40,6 +40,27 @@ const financeWorkflowAdapter = {
           400,
           'INVALID_WORKFLOW_META'
         );
+      }
+
+      if (key === 'financeMeta') {
+        if (value !== null && value !== undefined && (typeof value !== 'object' || Array.isArray(value))) {
+          throw new WorkflowError(
+            'finance workflow moduleMeta.financeMeta must be an object or null',
+            400,
+            'INVALID_WORKFLOW_META'
+          );
+        }
+
+        sanitized[key] = value
+          ? {
+              unplannedBudgetEnabled: Boolean(value.unplannedBudgetEnabled),
+              unplannedBudgetAmount:
+                value.unplannedBudgetAmount !== undefined && value.unplannedBudgetAmount !== null
+                  ? Number(value.unplannedBudgetAmount)
+                  : null,
+            }
+          : null;
+        continue;
       }
 
       if (value !== null && value !== undefined && typeof value !== 'string') {
