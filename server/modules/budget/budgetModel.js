@@ -1265,23 +1265,49 @@ export async function update(
 }
 
 
-async function deleteBudgetProposal(proposalId) {
+async function deleteBudgetProposal(proposalId, actor = {}) {
   return withTransaction(async (conn) => {
-    await conn.execute(
-      `DELETE m
-         FROM budget_line_month_allocations m
-         JOIN budget_proposal_lines l ON m.budget_line_id = l.id
-         WHERE l.budget_proposal_id = ? `,
+    const [rows] = await conn.execute(
+      `SELECT status
+         FROM budget_proposals
+        WHERE id = ?
+        LIMIT 1
+        FOR UPDATE`,
       [proposalId]
     );
 
-    // Preserve historical reference numbers so deleted refs are never reused.
-    await conn.execute('DELETE FROM budget_proposal_refs WHERE proposal_id = ?', [proposalId]);
+    if (!rows.length) {
+      return false;
+    }
 
-    await conn.execute('DELETE FROM budget_proposal_lines WHERE budget_proposal_id = ?', [proposalId]);
-    await conn.execute('DELETE FROM budget_proposal_approvals WHERE budget_proposal_id = ?', [proposalId]);
+    if (normalizeText(rows[0]?.status).toLowerCase() === 'deleted') {
+      return false;
+    }
 
-    const [result] = await conn.execute('DELETE FROM budget_proposals WHERE id = ?', [proposalId]);
+    const [result] = await conn.execute(
+      `UPDATE budget_proposals
+          SET status = 'deleted',
+              current_stage = 'deleted',
+              updated_at = NOW()
+        WHERE id = ?`,
+      [proposalId]
+    );
+
+    const actorRole = normalizeText(actor?.role).toLowerCase() || 'user';
+    const actorUserId = Number.isInteger(Number(actor?.userId || actor?.id))
+      ? Number(actor.userId || actor.id)
+      : 0;
+    const actorEmail = normalizeText(actor?.email) || '';
+    const feedback = normalizeText(actor?.feedback) || 'Deleted by user';
+
+    await conn.execute(
+      `INSERT INTO budget_proposal_approvals(
+          budget_proposal_id, role, approver_user_id, approver_email,
+          decision, feedback, allows_edit
+        ) VALUES(?, ?, ?, ?, 'deleted', ?, 0)`,
+      [proposalId, actorRole, actorUserId, actorEmail, feedback]
+    );
+
     return result.affectedRows > 0;
   });
 }
@@ -1687,7 +1713,8 @@ export async function getBudgetById(proposalId) {
           LEFT JOIN master_departments creator_emp_dept ON creator_emp.department_id = creator_emp_dept.id
           LEFT JOIN master_departments creator_parent_dept ON creator_emp.parent_department_id = creator_parent_dept.id
           LEFT JOIN master_departments creator_parent_dept_fallback ON creator_emp_dept.parent_id = creator_parent_dept_fallback.id
-          WHERE bp.id = ? `,
+      WHERE bp.id = ?
+        AND LOWER(TRIM(bp.status)) <> 'deleted' `,
     [proposalId]
   );
 
