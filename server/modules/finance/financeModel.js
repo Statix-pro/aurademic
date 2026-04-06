@@ -332,7 +332,7 @@ const buildFinanceSelectSql = ({ budgetTagSelectSql = 'NULL AS budget_tag' } = {
       fr.applicant_name
     ) AS applicant_name,
     COALESCE(e.designation, fr.designation) AS designation,
-    COALESCE(d.name, fr.department) AS department,
+    COALESCE(dept.name, emp_dept.name, fr.department) AS department,
     COALESCE(e.email, fr.email) AS email,
     COALESCE(e.mobile, fr.mobile) AS mobile,
     e.erp_id,
@@ -340,7 +340,11 @@ const buildFinanceSelectSql = ({ budgetTagSelectSql = 'NULL AS budget_tag' } = {
     DATE_FORMAT(fr.request_date, '%Y-%m-%d') AS request_date,
     fr.description,
     fr.beneficiary_type,
-    fr.beneficiary_value,
+    CASE
+      WHEN LOWER(TRIM(COALESCE(fr.beneficiary_type, ''))) = 'department'
+        THEN COALESCE(NULLIF(TRIM(dept.name), ''), NULLIF(TRIM(emp_dept.name), ''), fr.beneficiary_value)
+      ELSE fr.beneficiary_value
+    END AS beneficiary_value,
     ${budgetTagSelectSql},
     fr.department_id,
     fr.beneficiary_entity_id,
@@ -384,7 +388,8 @@ const buildFinanceSelectSql = ({ budgetTagSelectSql = 'NULL AS budget_tag' } = {
   FROM finance_requests fr
   LEFT JOIN finance_request_refs frr ON frr.finance_request_id = fr.id
   LEFT JOIN master_employees e ON fr.employee_id = e.id
-  LEFT JOIN master_departments d ON e.department_id = d.id
+  LEFT JOIN master_departments dept ON fr.department_id = dept.id
+  LEFT JOIN master_departments emp_dept ON e.department_id = emp_dept.id
 `;
 
 const getFinanceSelectSql = async ({ tx = db } = {}) => {
