@@ -1,7 +1,7 @@
 // client/src/features/user-dashboard/financecard/financecard.tsx
 import React, { useEffect, useState } from 'react';
 import './financecard.css';
-import { Eye, Edit2, Briefcase, Clock, RotateCcw, XCircle, CheckCircle, Archive, Search, Info, Trash2 } from 'lucide-react';
+import { Eye, Edit2, Briefcase, Clock, RotateCcw, XCircle, CheckCircle, Archive, Search, Info, Trash2, FileDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
@@ -723,6 +723,18 @@ const FinanceCard: React.FC = () => {
       cursor: 'pointer',
     }),
   } as const;
+  const handlePdfPreviewClick = (requestId: number) => {
+    const item = data.find((entry) => entry.id === requestId);
+    const normalizedStatus = String(item?.workflow_state?.status || item?.workflow_status || item?.overall_status || '').toLowerCase();
+    const isApproved = ['approved', 'completed'].includes(normalizedStatus);
+
+    navigate(`/finance/${requestId}`, {
+      state: {
+        openPreview: true,
+        autoDownloadPdf: isApproved,
+      },
+    });
+  };
 
   return (
     <>
@@ -883,6 +895,15 @@ const FinanceCard: React.FC = () => {
                             <span className="beneficiary-value">{item.beneficiary_name || item.beneficiary_value || item.applicant_name}</span>
                           </div>
                           <div className="card-footer-right">
+                            <button
+                              type="button"
+                              className="icon-btn-subtle financecard-download-btn"
+                              title="Open PDF Preview"
+                              onClick={() => handlePdfPreviewClick(item.id)}
+                            >
+                              <FileDown size={18} />
+                            </button>
+
                             <button
                               type="button"
                               className={`status-pill-solid status-${status} finance-status-pill ${isStatusExpanded ? 'finance-status-pill--active' : ''}`}

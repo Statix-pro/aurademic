@@ -86,6 +86,27 @@ const toMoney = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const normalizeUnplannedBudgetPayload = (payload = {}) => {
+  const enabled = Boolean(payload?.unplanned_budget_enabled);
+  const parsedAmount = Number(payload?.unplanned_budget_amount);
+  const amount = enabled && Number.isFinite(parsedAmount) && parsedAmount > 0
+    ? toMoney(parsedAmount)
+    : 0;
+
+  return {
+    enabled,
+    amount,
+  };
+};
+
+const calculateFinanceTotalBudget = (budgetRows = [], unplannedPayload = {}) => {
+  const plannedTotal = Array.isArray(budgetRows)
+    ? budgetRows.reduce((sum, row) => sum + toMoney(row?.amount), 0)
+    : 0;
+  const unplanned = normalizeUnplannedBudgetPayload(unplannedPayload);
+  return toMoney(plannedTotal + unplanned.amount);
+};
+
 const normalizeBeneficiaryType = (beneficiaryType) => {
   const normalized = normalizeText(beneficiaryType);
 
@@ -98,6 +119,18 @@ const normalizeBeneficiaryType = (beneficiaryType) => {
   }
 
   return normalized || 'Institution';
+};
+
+const normalizeBeneficiaryTypeToken = (beneficiaryType) =>
+  normalizeText(beneficiaryType)
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const isIndividualBeneficiaryType = (beneficiaryType) => {
+  const token = normalizeBeneficiaryTypeToken(beneficiaryType);
+  return token === 'faculty' || token === 'staff';
 };
 
 const LEVEL1_COORDINATOR_BENEFICIARY_TYPES = Object.freeze([
@@ -216,6 +249,44 @@ const normalizeIncomeRows = (rows = []) =>
     sort_order: index,
   }));
 
+const normalizeFinanceAnnexures = (rows = []) =>
+  (Array.isArray(rows) ? rows : [])
+    .map((row, index) => ({
+      annexure_type: normalizeText(row?.annexure_type || row?.annexureType),
+      original_name: normalizeText(row?.original_name || row?.originalName || row?.annexure_file_name),
+      stored_name: normalizeText(row?.stored_name || row?.storedName || row?.annexure_storage_name),
+      file_path: normalizeText(row?.file_path || row?.filePath || row?.annexure_file_path),
+      mime_type: normalizeText(row?.mime_type || row?.mimeType || row?.annexure_mime_type),
+      file_size: Number.isFinite(Number(row?.file_size ?? row?.fileSize ?? row?.annexure_file_size))
+        ? Number(row?.file_size ?? row?.fileSize ?? row?.annexure_file_size)
+        : null,
+      sort_order: index,
+    }))
+    .filter((row) => row.file_path && row.stored_name);
+
+const getLegacyAnnexureFromRecord = (record = {}) => {
+  const filePath = normalizeText(record?.annexure_file_path);
+  const storedName = normalizeText(record?.annexure_storage_name);
+  const originalName = normalizeText(record?.annexure_file_name);
+  if (!filePath || !storedName) {
+    return [];
+  }
+  return [{
+    id: null,
+    finance_id: toPositiveInt(record?.id),
+    annexure_type: normalizeText(record?.annexure_type),
+    original_name: originalName || storedName,
+    stored_name: storedName,
+    file_path: filePath,
+    mime_type: normalizeText(record?.annexure_mime_type),
+    file_size: Number.isFinite(Number(record?.annexure_file_size))
+      ? Number(record?.annexure_file_size)
+      : null,
+    sort_order: 0,
+    created_at: null,
+  }];
+};
+
 const normalizeWorkflowStatus = (state) =>
   normalizeText(state?.status).toLowerCase();
 
@@ -322,7 +393,17 @@ const LEVEL1_COORDINATOR_ROUTE_SQL_EXPR = `
   )
 `;
 
-const buildFinanceSelectSql = ({ budgetTagSelectSql = 'NULL AS budget_tag' } = {}) => `
+const buildFinanceSelectSql = ({
+  budgetTagSelectSql = 'NULL AS budget_tag',
+  unplannedBudgetEnabledSelectSql = 'NULL AS unplanned_budget_enabled',
+  unplannedBudgetAmountSelectSql = 'NULL AS unplanned_budget_amount',
+  annexureTypeSelectSql = 'NULL AS annexure_type',
+  annexureFileNameSelectSql = 'NULL AS annexure_file_name',
+  annexureStorageNameSelectSql = 'NULL AS annexure_storage_name',
+  annexureFilePathSelectSql = 'NULL AS annexure_file_path',
+  annexureMimeTypeSelectSql = 'NULL AS annexure_mime_type',
+  annexureFileSizeSelectSql = 'NULL AS annexure_file_size',
+} = {}) => `
   SELECT
     fr.id,
     fr.employee_id,
@@ -349,6 +430,8 @@ const buildFinanceSelectSql = ({ budgetTagSelectSql = 'NULL AS budget_tag' } = {
     fr.is_budget_proposed,
     fr.proposed_amount,
     fr.balance_amount,
+    ${unplannedBudgetEnabledSelectSql},
+    ${unplannedBudgetAmountSelectSql},
     fr.total_budget,
     fr.approved_total_amount,
     fr.income_type,
@@ -358,6 +441,12 @@ const buildFinanceSelectSql = ({ budgetTagSelectSql = 'NULL AS budget_tag' } = {
     fr.debit_status,
     fr.partial_amount,
     fr.enclosures,
+    ${annexureTypeSelectSql},
+    ${annexureFileNameSelectSql},
+    ${annexureStorageNameSelectSql},
+    ${annexureFilePathSelectSql},
+    ${annexureMimeTypeSelectSql},
+    ${annexureFileSizeSelectSql},
     fr.director_status,
     fr.director_comment,
     fr.principal_status,
@@ -389,8 +478,24 @@ const buildFinanceSelectSql = ({ budgetTagSelectSql = 'NULL AS budget_tag' } = {
 
 const getFinanceSelectSql = async ({ tx = db } = {}) => {
   const hasBudgetTag = await hasFinanceRequestColumn('budget_tag', { tx });
+  const hasUnplannedBudgetEnabled = await hasFinanceRequestColumn('unplanned_budget_enabled', { tx });
+  const hasUnplannedBudgetAmount = await hasFinanceRequestColumn('unplanned_budget_amount', { tx });
+  const hasAnnexureType = await hasFinanceRequestColumn('annexure_type', { tx });
+  const hasAnnexureFileName = await hasFinanceRequestColumn('annexure_file_name', { tx });
+  const hasAnnexureStorageName = await hasFinanceRequestColumn('annexure_storage_name', { tx });
+  const hasAnnexureFilePath = await hasFinanceRequestColumn('annexure_file_path', { tx });
+  const hasAnnexureMimeType = await hasFinanceRequestColumn('annexure_mime_type', { tx });
+  const hasAnnexureFileSize = await hasFinanceRequestColumn('annexure_file_size', { tx });
   return buildFinanceSelectSql({
     budgetTagSelectSql: hasBudgetTag ? 'fr.budget_tag' : 'NULL AS budget_tag',
+    unplannedBudgetEnabledSelectSql: hasUnplannedBudgetEnabled ? 'fr.unplanned_budget_enabled' : 'NULL AS unplanned_budget_enabled',
+    unplannedBudgetAmountSelectSql: hasUnplannedBudgetAmount ? 'fr.unplanned_budget_amount' : 'NULL AS unplanned_budget_amount',
+    annexureTypeSelectSql: hasAnnexureType ? 'fr.annexure_type' : 'NULL AS annexure_type',
+    annexureFileNameSelectSql: hasAnnexureFileName ? 'fr.annexure_file_name' : 'NULL AS annexure_file_name',
+    annexureStorageNameSelectSql: hasAnnexureStorageName ? 'fr.annexure_storage_name' : 'NULL AS annexure_storage_name',
+    annexureFilePathSelectSql: hasAnnexureFilePath ? 'fr.annexure_file_path' : 'NULL AS annexure_file_path',
+    annexureMimeTypeSelectSql: hasAnnexureMimeType ? 'fr.annexure_mime_type' : 'NULL AS annexure_mime_type',
+    annexureFileSizeSelectSql: hasAnnexureFileSize ? 'fr.annexure_file_size' : 'NULL AS annexure_file_size',
   });
 };
 
@@ -487,6 +592,14 @@ const buildFinanceUpdateAudit = ({
     event_sub_head: updateData.event_sub_head ?? previousRecord.event_sub_head,
     proposed_amount: updateData.proposed_amount ?? previousRecord.proposed_amount,
     balance_amount: updateData.balance_amount ?? previousRecord.balance_amount,
+    unplanned_budget_enabled: updateData.unplanned_budget_enabled ?? previousRecord.unplanned_budget_enabled,
+    unplanned_budget_amount: updateData.unplanned_budget_amount ?? previousRecord.unplanned_budget_amount,
+    annexure_type: updateData.annexure_type ?? previousRecord.annexure_type,
+    annexure_file_name: updateData.annexure_file_name ?? previousRecord.annexure_file_name,
+    annexure_storage_name: updateData.annexure_storage_name ?? previousRecord.annexure_storage_name,
+    annexure_file_path: updateData.annexure_file_path ?? previousRecord.annexure_file_path,
+    annexure_mime_type: updateData.annexure_mime_type ?? previousRecord.annexure_mime_type,
+    annexure_file_size: updateData.annexure_file_size ?? previousRecord.annexure_file_size,
     total_budget: updateData.total_budget ?? previousRecord.total_budget,
     income_type: updateData.income_type ?? previousRecord.income_type,
     income_status: updateData.income_status ?? previousRecord.income_status,
@@ -506,6 +619,14 @@ const buildFinanceUpdateAudit = ({
     { storageKey: 'event_sub_head', label: 'Event sub head' },
     { storageKey: 'proposed_amount', label: 'Proposed amount' },
     { storageKey: 'balance_amount', label: 'Balance amount' },
+    { storageKey: 'unplanned_budget_enabled', label: 'Unplanned budget enabled' },
+    { storageKey: 'unplanned_budget_amount', label: 'Unplanned budget amount' },
+    { storageKey: 'annexure_type', label: 'Annexure type' },
+    { storageKey: 'annexure_file_name', label: 'Annexure file name' },
+    { storageKey: 'annexure_storage_name', label: 'Annexure storage name' },
+    { storageKey: 'annexure_file_path', label: 'Annexure file path' },
+    { storageKey: 'annexure_mime_type', label: 'Annexure mime type' },
+    { storageKey: 'annexure_file_size', label: 'Annexure file size' },
     { storageKey: 'total_budget', label: 'Total budget' },
     { storageKey: 'income_type', label: 'Income type' },
     { storageKey: 'income_status', label: 'Income status' },
@@ -559,6 +680,105 @@ const resolveEntityTypeCodeFromBeneficiaryType = (beneficiaryType) => {
   return map[normalizedType] || null;
 };
 
+const resolveBudgetAvailabilityScope = async (conn, scope = {}) => {
+  const beneficiaryType = normalizeBeneficiaryType(scope?.beneficiaryType || scope?.beneficiary_type);
+  const beneficiaryValue = normalizeText(scope?.beneficiaryValue || scope?.beneficiary_value);
+  const beneficiaryTypeToken = normalizeBeneficiaryTypeToken(beneficiaryType);
+  const providedDepartmentId = toPositiveInt(scope?.departmentId || scope?.department_id);
+  const providedEntityId = toPositiveInt(scope?.beneficiaryEntityId || scope?.beneficiary_entity_id);
+
+  if (!beneficiaryTypeToken || isIndividualBeneficiaryType(beneficiaryTypeToken)) {
+    return {
+      mode: 'user',
+      beneficiaryType,
+      departmentId: null,
+      entityId: null,
+    };
+  }
+
+  if (beneficiaryTypeToken === 'department') {
+    if (providedDepartmentId) {
+      return {
+        mode: 'department',
+        beneficiaryType,
+        departmentId: providedDepartmentId,
+        entityId: null,
+      };
+    }
+
+    if (beneficiaryValue) {
+      const [rows] = await conn.query(
+        `SELECT id
+         FROM master_departments
+         WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
+         LIMIT 1`,
+        [beneficiaryValue]
+      );
+
+      const departmentId = toPositiveInt(rows?.[0]?.id);
+      if (departmentId) {
+        return {
+          mode: 'department',
+          beneficiaryType,
+          departmentId,
+          entityId: null,
+        };
+      }
+    }
+  }
+
+  if (beneficiaryTypeToken === 'institution') {
+    return {
+      mode: 'institution',
+      beneficiaryType,
+      departmentId: null,
+      entityId: null,
+    };
+  }
+
+  const entityTypeCode = resolveEntityTypeCodeFromBeneficiaryType(beneficiaryType);
+  if (providedEntityId) {
+    return {
+      mode: 'entity',
+      beneficiaryType,
+      departmentId: null,
+      entityId: providedEntityId,
+      entityTypeCode,
+    };
+  }
+
+  if (entityTypeCode && beneficiaryValue) {
+    const [rows] = await conn.query(
+      `SELECT me.id
+       FROM master_entities me
+       JOIN master_entity_types met ON met.id = me.entity_type_id
+       WHERE me.is_active = 1
+         AND UPPER(TRIM(met.code)) = ?
+         AND LOWER(TRIM(me.name)) = LOWER(TRIM(?))
+       LIMIT 1`,
+      [entityTypeCode, beneficiaryValue]
+    );
+
+    const entityId = toPositiveInt(rows?.[0]?.id);
+    if (entityId) {
+      return {
+        mode: 'entity',
+        beneficiaryType,
+        departmentId: null,
+        entityId,
+        entityTypeCode,
+      };
+    }
+  }
+
+  return {
+    mode: 'user',
+    beneficiaryType,
+    departmentId: null,
+    entityId: null,
+  };
+};
+
 const getBudgetLineAvailabilityById = async (conn, budgetLineId) => {
   const [rows] = await conn.query(
     `SELECT
@@ -603,16 +823,69 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   subHead,
   preferredBudgetLineId = null,
   headOnlyMatch = false,
+  excludeFinanceId = null,
+  beneficiaryType = null,
+  beneficiaryValue = null,
+  departmentId = null,
+  beneficiaryEntityId = null,
 } = {}) => {
   const normalizedUserId = toPositiveInt(userId);
   const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
   const normalizedBudgetHead = normalizeText(budgetHead);
   const normalizedSubHead = normalizeText(subHead);
   const normalizedPreferredBudgetLineId = toPositiveInt(preferredBudgetLineId);
+  const normalizedExcludeFinanceId = toPositiveInt(excludeFinanceId);
   const applyHeadOnlyMatch = Boolean(headOnlyMatch) || shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead);
+  const scope = await resolveBudgetAvailabilityScope(conn, {
+    beneficiaryType,
+    beneficiaryValue,
+    departmentId,
+    beneficiaryEntityId,
+  });
+
+  let ownerScopeSql = `
+      (
+        (? IS NOT NULL AND bp.user_id = ?)
+        OR (? <> '' AND LOWER(TRIM(bp.user_email)) = ?)
+        OR EXISTS (
+          SELECT 1
+          FROM master_employees me
+          WHERE me.id = bp.employee_id
+            AND me.status = 'Active'
+            AND (
+              (? IS NOT NULL AND me.user_id = ?)
+              OR (? <> '' AND LOWER(TRIM(me.email)) = ?)
+            )
+        )
+      )`;
+  let ownerScopeParams = [
+    normalizedUserId,
+    normalizedUserId,
+    normalizedUserEmail,
+    normalizedUserEmail,
+    normalizedUserId,
+    normalizedUserId,
+    normalizedUserEmail,
+    normalizedUserEmail,
+  ];
+
+  if (scope.mode === 'department') {
+    ownerScopeSql = `bp.department_id = ? AND LOWER(TRIM(bp.beneficiary_type)) = 'department'`;
+    ownerScopeParams = [scope.departmentId];
+  } else if (scope.mode === 'entity') {
+    ownerScopeSql = `
+      bp.beneficiary_entity_id = ?
+      AND LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')`;
+    ownerScopeParams = [scope.entityId];
+  } else if (scope.mode === 'institution') {
+    ownerScopeSql = `LOWER(TRIM(bp.beneficiary_type)) = 'institution'`;
+    ownerScopeParams = [];
+  }
 
   if (
-    (!normalizedUserId && !normalizedUserEmail) ||
+    ((scope.mode === 'user' && !normalizedUserId && !normalizedUserEmail) ||
+      (scope.mode === 'department' && !scope.departmentId) ||
+      (scope.mode === 'entity' && !scope.entityId)) ||
     !normalizedBudgetHead ||
     (!applyHeadOnlyMatch && !normalizedSubHead)
   ) {
@@ -633,41 +906,50 @@ const resolveBudgetAvailabilityForUser = async (conn, {
        bp.fiscal_year,
        COALESCE(bpl.approved_line_total, bpl.line_total, 0) AS budget_line_amount,
        COALESCE(fblu.consumed_amount, 0) AS consumed_amount,
-       (COALESCE(bpl.approved_line_total, bpl.line_total, 0) - COALESCE(fblu.consumed_amount, 0)) AS available_amount
+       COALESCE(frbr.reserved_amount, 0) AS reserved_amount,
+       (
+         COALESCE(bpl.approved_line_total, bpl.line_total, 0)
+         - COALESCE(fblu.consumed_amount, 0)
+         - COALESCE(frbr.reserved_amount, 0)
+       ) AS available_amount
      FROM budget_proposal_lines bpl
      JOIN budget_proposals bp ON bp.id = bpl.budget_proposal_id
      LEFT JOIN finance_budget_line_usage fblu ON fblu.budget_line_id = bpl.id
-     WHERE (
-         (? IS NOT NULL AND bp.user_id = ?)
-         OR (? <> '' AND LOWER(TRIM(bp.user_email)) = ?)
-         OR EXISTS (
-           SELECT 1
-           FROM master_employees me
-           WHERE me.id = bp.employee_id
-             AND me.status = 'Active'
-             AND (
-               (? IS NOT NULL AND me.user_id = ?)
-               OR (? <> '' AND LOWER(TRIM(me.email)) = ?)
-             )
+     LEFT JOIN (
+       SELECT
+         fbb.budget_line_id,
+         SUM(COALESCE(fbb.amount, 0)) AS reserved_amount
+       FROM finance_budget_breakup fbb
+       JOIN finance_requests fr2 ON fr2.id = fbb.finance_id
+       WHERE fbb.budget_line_id IS NOT NULL
+         AND (
+           COALESCE(
+             NULLIF(LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(fr2.workflow_state, '$.status')))), ''),
+             NULLIF(LOWER(TRIM(fr2.workflow_status)), ''),
+             'in_progress'
+           ) IN ('in_progress', 'submitted', 'returned')
          )
-       )
+         AND LOWER(TRIM(COALESCE(fr2.overall_status, 'pending'))) NOT IN ('approved', 'rejected', 'archived')
+         AND (? IS NULL OR fr2.id <> ?)
+       GROUP BY fbb.budget_line_id
+     ) frbr ON frbr.budget_line_id = bpl.id
+     WHERE (${ownerScopeSql})
        AND (
          LOWER(TRIM(bp.status)) IN ('completed', 'approved', 'principal_approved')
          OR LOWER(TRIM(bp.current_stage)) = 'completed'
        )
      ORDER BY
-       (COALESCE(bpl.approved_line_total, bpl.line_total, 0) - COALESCE(fblu.consumed_amount, 0)) DESC,
+       (
+         COALESCE(bpl.approved_line_total, bpl.line_total, 0)
+         - COALESCE(fblu.consumed_amount, 0)
+         - COALESCE(frbr.reserved_amount, 0)
+       ) DESC,
        bp.updated_at DESC,
        bpl.id DESC`,
     [
-      normalizedUserId,
-      normalizedUserId,
-      normalizedUserEmail,
-      normalizedUserEmail,
-      normalizedUserId,
-      normalizedUserId,
-      normalizedUserEmail,
-      normalizedUserEmail,
+      normalizedExcludeFinanceId,
+      normalizedExcludeFinanceId,
+      ...ownerScopeParams,
     ]
   );
 
@@ -681,6 +963,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
       subHead: normalizeText(row.sub_head),
       budgetLineAmount: toMoney(row.budget_line_amount),
       consumedAmount: toMoney(row.consumed_amount),
+      reservedAmount: toMoney(row.reserved_amount),
       availableAmount: Math.max(0, toMoney(row.available_amount)),
     }))
     .filter((row) => {
@@ -712,8 +995,21 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   };
 };
 
-const enrichBudgetRowsWithBudgetRefs = async (conn, userId, userEmail, budgetRows = []) => {
+const enrichBudgetRowsWithBudgetRefs = async (
+  conn,
+  userId,
+  userEmail,
+  budgetRows = [],
+  {
+    excludeFinanceId = null,
+    beneficiaryType = null,
+    beneficiaryValue = null,
+    departmentId = null,
+    beneficiaryEntityId = null,
+  } = {}
+) => {
   const enrichedRows = [];
+  const requestedByBudgetLine = new Map();
 
   for (const row of budgetRows) {
     const availability = await resolveBudgetAvailabilityForUser(conn, {
@@ -723,12 +1019,17 @@ const enrichBudgetRowsWithBudgetRefs = async (conn, userId, userEmail, budgetRow
       subHead: row.sub_head,
       preferredBudgetLineId: row.budget_line_id,
       headOnlyMatch: Boolean(row.head_only_match),
+      excludeFinanceId,
+      beneficiaryType,
+      beneficiaryValue,
+      departmentId,
+      beneficiaryEntityId,
     });
 
     const selected = availability.selected;
     if (!selected) {
       throw new Error(
-        `No approved budget allocation found for "${row.budget_head}" / "${row.sub_head}" in your budget proposals`
+        `No approved budget allocation found for "${row.budget_head}" / "${row.sub_head}" in the selected beneficiary scope`
       );
     }
 
@@ -738,11 +1039,20 @@ const enrichBudgetRowsWithBudgetRefs = async (conn, userId, userEmail, budgetRow
       );
     }
 
+    const alreadyRequested = toMoney(requestedByBudgetLine.get(selected.budgetLineId) || 0);
+    const remainingAfterLocalReservations = Math.max(0, selected.availableAmount - alreadyRequested);
+    if (row.amount > remainingAfterLocalReservations) {
+      throw new Error(
+        `Requested amount ${row.amount.toFixed(2)} exceeds remaining available amount ${remainingAfterLocalReservations.toFixed(2)} for "${row.budget_head}" / "${row.sub_head}" after other rows in this request`
+      );
+    }
+    requestedByBudgetLine.set(selected.budgetLineId, alreadyRequested + row.amount);
+
     enrichedRows.push({
       ...row,
       budget_line_id: selected.budgetLineId,
       budget_proposal_id: selected.budgetProposalId,
-      available_amount_snapshot: selected.availableAmount,
+      available_amount_snapshot: remainingAfterLocalReservations,
     });
   }
 
@@ -814,6 +1124,78 @@ const replaceIncomeRows = async (conn, financeId, incomeRows = []) => {
         row.sort_order,
       ]
     );
+  }
+};
+
+const replaceFinanceAnnexures = async (conn, financeId, annexures = []) => {
+  try {
+    await conn.query('DELETE FROM finance_request_annexures WHERE finance_id = ?', [financeId]);
+  } catch (error) {
+    if (error?.code === 'ER_NO_SUCH_TABLE') {
+      return;
+    }
+    throw error;
+  }
+
+  if (!annexures.length) {
+    return;
+  }
+
+  for (const row of annexures) {
+    await conn.query(
+      `INSERT INTO finance_request_annexures
+       (finance_id, annexure_type, original_name, stored_name, file_path, mime_type, file_size, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        financeId,
+        row.annexure_type || null,
+        row.original_name,
+        row.stored_name,
+        row.file_path,
+        row.mime_type || null,
+        row.file_size,
+        row.sort_order,
+      ]
+    );
+  }
+};
+
+const getFinanceAnnexures = async (financeId, { tx = db } = {}) => {
+  try {
+    const [rows] = await tx.query(
+      `SELECT
+         id,
+         finance_id,
+         annexure_type,
+         original_name,
+         stored_name,
+         file_path,
+         mime_type,
+         file_size,
+         sort_order,
+         created_at
+       FROM finance_request_annexures
+       WHERE finance_id = ?
+       ORDER BY sort_order ASC, id ASC`,
+      [financeId]
+    );
+    return rows.map((row) => ({
+      id: toPositiveInt(row.id),
+      finance_id: toPositiveInt(row.finance_id),
+      annexure_type: normalizeText(row.annexure_type),
+      original_name: normalizeText(row.original_name),
+      stored_name: normalizeText(row.stored_name),
+      file_path: normalizeText(row.file_path),
+      mime_type: normalizeText(row.mime_type),
+      file_size: Number.isFinite(Number(row.file_size)) ? Number(row.file_size) : null,
+      sort_order: Number.isFinite(Number(row.sort_order)) ? Number(row.sort_order) : 0,
+      created_at: row.created_at || null,
+    }));
+  } catch (error) {
+    if (error?.code === 'ER_NO_SUCH_TABLE') {
+      return [];
+    }
+    throw error;
   }
 };
 
@@ -1068,6 +1450,16 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
   );
 };
 
+const getFinanceBreakupTotal = async (conn, financeId) => {
+  const [rows] = await conn.query(
+    `SELECT COALESCE(SUM(amount), 0) AS total
+     FROM finance_budget_breakup
+     WHERE finance_id = ?`,
+    [financeId]
+  );
+  return toMoney(rows?.[0]?.total);
+};
+
 const financeModel = {
   async createFinanceRequest(financeData, userId, userEmail = null) {
     const connection = await db.getConnection();
@@ -1075,14 +1467,28 @@ const financeModel = {
     try {
       await connection.beginTransaction();
       const hasBudgetTagColumn = await hasFinanceRequestColumn('budget_tag', { tx: connection });
+      const hasUnplannedBudgetEnabledColumn = await hasFinanceRequestColumn('unplanned_budget_enabled', { tx: connection });
+      const hasUnplannedBudgetAmountColumn = await hasFinanceRequestColumn('unplanned_budget_amount', { tx: connection });
+      const hasAnnexureTypeColumn = await hasFinanceRequestColumn('annexure_type', { tx: connection });
+      const hasAnnexureFileNameColumn = await hasFinanceRequestColumn('annexure_file_name', { tx: connection });
+      const hasAnnexureStorageNameColumn = await hasFinanceRequestColumn('annexure_storage_name', { tx: connection });
+      const hasAnnexureFilePathColumn = await hasFinanceRequestColumn('annexure_file_path', { tx: connection });
+      const hasAnnexureMimeTypeColumn = await hasFinanceRequestColumn('annexure_mime_type', { tx: connection });
+      const hasAnnexureFileSizeColumn = await hasFinanceRequestColumn('annexure_file_size', { tx: connection });
 
       const workflowContext = await resolveFinanceWorkflowContext(connection, financeData);
       const normalizedBudgetRows = normalizeBudgetRows(Array.isArray(financeData.budget_rows) ? financeData.budget_rows : []);
-      const budgetRows = await enrichBudgetRowsWithBudgetRefs(connection, userId, userEmail, normalizedBudgetRows);
+      const budgetRows = await enrichBudgetRowsWithBudgetRefs(connection, userId, userEmail, normalizedBudgetRows, {
+        beneficiaryType: financeData.beneficiary_type,
+        beneficiaryValue: financeData.beneficiary_value,
+        departmentId: workflowContext.departmentId,
+        beneficiaryEntityId: workflowContext.beneficiaryEntityId,
+      });
       const incomeRows = normalizeIncomeRows(Array.isArray(financeData.income_rows) ? financeData.income_rows : []);
-      const totalBudget = budgetRows.length
-        ? budgetRows.reduce((sum, row) => sum + row.amount, 0)
-        : toMoney(financeData.total_budget);
+      const normalizedAnnexures = normalizeFinanceAnnexures(financeData.annexures);
+      const primaryAnnexure = normalizedAnnexures[0] || null;
+      const totalBudget = calculateFinanceTotalBudget(budgetRows, financeData);
+      const normalizedUnplanned = normalizeUnplannedBudgetPayload(financeData);
 
       const financeEntry = {
         employee_id: financeData.employee_id || null,
@@ -1122,11 +1528,49 @@ const financeModel = {
       if (hasBudgetTagColumn) {
         financeEntry.budget_tag = normalizeText(financeData.budget_tag) || null;
       }
+      if (hasUnplannedBudgetEnabledColumn) {
+        financeEntry.unplanned_budget_enabled = financeData.unplanned_budget_enabled ? 1 : 0;
+      }
+      if (hasUnplannedBudgetAmountColumn) {
+        financeEntry.unplanned_budget_amount = normalizedUnplanned.enabled
+          ? normalizedUnplanned.amount
+          : null;
+      }
+      if (hasAnnexureTypeColumn) {
+        financeEntry.annexure_type = primaryAnnexure
+          ? primaryAnnexure.annexure_type || null
+          : (normalizeText(financeData.annexure_type) || null);
+      }
+      if (hasAnnexureFileNameColumn) {
+        financeEntry.annexure_file_name = primaryAnnexure
+          ? (primaryAnnexure.original_name || primaryAnnexure.stored_name || null)
+          : (normalizeText(financeData.annexure_file_name) || null);
+      }
+      if (hasAnnexureStorageNameColumn) {
+        financeEntry.annexure_storage_name = primaryAnnexure
+          ? primaryAnnexure.stored_name || null
+          : (normalizeText(financeData.annexure_storage_name) || null);
+      }
+      if (hasAnnexureFilePathColumn) {
+        financeEntry.annexure_file_path = primaryAnnexure
+          ? primaryAnnexure.file_path || null
+          : (normalizeText(financeData.annexure_file_path) || null);
+      }
+      if (hasAnnexureMimeTypeColumn) {
+        financeEntry.annexure_mime_type = primaryAnnexure
+          ? primaryAnnexure.mime_type || null
+          : (normalizeText(financeData.annexure_mime_type) || null);
+      }
+      if (hasAnnexureFileSizeColumn) {
+        const parsedAnnexureSize = primaryAnnexure ? Number(primaryAnnexure.file_size) : Number(financeData.annexure_file_size);
+        financeEntry.annexure_file_size = Number.isFinite(parsedAnnexureSize) ? parsedAnnexureSize : null;
+      }
 
       const [result] = await connection.query('INSERT INTO finance_requests SET ?', [financeEntry]);
       await insertFinanceRequestReference(connection, result.insertId, financeData.request_date);
       await replaceBudgetRows(connection, result.insertId, budgetRows);
       await replaceIncomeRows(connection, result.insertId, incomeRows);
+      await replaceFinanceAnnexures(connection, result.insertId, normalizedAnnexures);
 
       await connection.commit();
       return result.insertId;
@@ -1144,7 +1588,39 @@ const financeModel = {
     try {
       await connection.beginTransaction();
       const hasBudgetTagColumn = await hasFinanceRequestColumn('budget_tag', { tx: connection });
+      const hasUnplannedBudgetEnabledColumn = await hasFinanceRequestColumn('unplanned_budget_enabled', { tx: connection });
+      const hasUnplannedBudgetAmountColumn = await hasFinanceRequestColumn('unplanned_budget_amount', { tx: connection });
+      const hasAnnexureTypeColumn = await hasFinanceRequestColumn('annexure_type', { tx: connection });
+      const hasAnnexureFileNameColumn = await hasFinanceRequestColumn('annexure_file_name', { tx: connection });
+      const hasAnnexureStorageNameColumn = await hasFinanceRequestColumn('annexure_storage_name', { tx: connection });
+      const hasAnnexureFilePathColumn = await hasFinanceRequestColumn('annexure_file_path', { tx: connection });
+      const hasAnnexureMimeTypeColumn = await hasFinanceRequestColumn('annexure_mime_type', { tx: connection });
+      const hasAnnexureFileSizeColumn = await hasFinanceRequestColumn('annexure_file_size', { tx: connection });
       const budgetTagSelectSql = hasBudgetTagColumn ? 'fr.budget_tag' : 'NULL AS budget_tag';
+      const unplannedBudgetEnabledSelectSql = hasUnplannedBudgetEnabledColumn
+        ? 'fr.unplanned_budget_enabled'
+        : 'NULL AS unplanned_budget_enabled';
+      const unplannedBudgetAmountSelectSql = hasUnplannedBudgetAmountColumn
+        ? 'fr.unplanned_budget_amount'
+        : 'NULL AS unplanned_budget_amount';
+      const annexureTypeSelectSql = hasAnnexureTypeColumn
+        ? 'fr.annexure_type'
+        : 'NULL AS annexure_type';
+      const annexureFileNameSelectSql = hasAnnexureFileNameColumn
+        ? 'fr.annexure_file_name'
+        : 'NULL AS annexure_file_name';
+      const annexureStorageNameSelectSql = hasAnnexureStorageNameColumn
+        ? 'fr.annexure_storage_name'
+        : 'NULL AS annexure_storage_name';
+      const annexureFilePathSelectSql = hasAnnexureFilePathColumn
+        ? 'fr.annexure_file_path'
+        : 'NULL AS annexure_file_path';
+      const annexureMimeTypeSelectSql = hasAnnexureMimeTypeColumn
+        ? 'fr.annexure_mime_type'
+        : 'NULL AS annexure_mime_type';
+      const annexureFileSizeSelectSql = hasAnnexureFileSizeColumn
+        ? 'fr.annexure_file_size'
+        : 'NULL AS annexure_file_size';
 
       const [existingRows] = await connection.query(
         `SELECT
@@ -1160,6 +1636,14 @@ const financeModel = {
            fr.event_sub_head,
            fr.proposed_amount,
            fr.balance_amount,
+           ${unplannedBudgetEnabledSelectSql},
+           ${unplannedBudgetAmountSelectSql},
+           ${annexureTypeSelectSql},
+           ${annexureFileNameSelectSql},
+           ${annexureStorageNameSelectSql},
+           ${annexureFilePathSelectSql},
+           ${annexureMimeTypeSelectSql},
+           ${annexureFileSizeSelectSql},
            fr.total_budget,
            fr.income_type,
            fr.income_status,
@@ -1181,8 +1665,15 @@ const financeModel = {
       }
 
       const existingRecord = existingRows[0];
+      const mergedRecordForContext = {
+        employee_id: financeData.employee_id ?? existingRecord.employee_id,
+        beneficiary_type: financeData.beneficiary_type ?? existingRecord.beneficiary_type,
+        beneficiary_value: financeData.beneficiary_value ?? existingRecord.beneficiary_value,
+      };
+      const workflowContext = await resolveFinanceWorkflowContext(connection, mergedRecordForContext);
       const hasBudgetRowsInput = Object.prototype.hasOwnProperty.call(financeData, 'budget_rows');
       const hasIncomeRowsInput = Object.prototype.hasOwnProperty.call(financeData, 'income_rows');
+      const hasAnnexuresInput = Object.prototype.hasOwnProperty.call(financeData, 'annexures');
       const normalizedBudgetRows = hasBudgetRowsInput
         ? normalizeBudgetRows(Array.isArray(financeData.budget_rows) ? financeData.budget_rows : [])
         : [];
@@ -1191,11 +1682,21 @@ const financeModel = {
           connection,
           toPositiveInt(existingRecord.created_by),
           normalizeText(existingRecord.created_by_email) || null,
-          normalizedBudgetRows
+          normalizedBudgetRows,
+          {
+            excludeFinanceId: id,
+            beneficiaryType: mergedRecordForContext.beneficiary_type,
+            beneficiaryValue: mergedRecordForContext.beneficiary_value,
+            departmentId: workflowContext.departmentId,
+            beneficiaryEntityId: workflowContext.beneficiaryEntityId,
+          }
         )
         : [];
       const incomeRows = hasIncomeRowsInput
         ? normalizeIncomeRows(Array.isArray(financeData.income_rows) ? financeData.income_rows : [])
+        : [];
+      const annexures = hasAnnexuresInput
+        ? normalizeFinanceAnnexures(Array.isArray(financeData.annexures) ? financeData.annexures : [])
         : [];
       const [previousBudgetRows] = hasBudgetRowsInput
         ? await connection.query(
@@ -1217,11 +1718,12 @@ const financeModel = {
         : [[]];
       const updateData = Object.fromEntries(
         Object.entries(financeData)
-          .filter(([_, value]) => value !== undefined && value !== null)
+          .filter(([_, value]) => value !== undefined)
           .map(([key, value]) => [key, value === '' ? null : value])
       );
       delete updateData.budget_rows;
       delete updateData.income_rows;
+      delete updateData.annexures;
       if (updateData.enclosures) {
         updateData.enclosures = JSON.stringify(updateData.enclosures);
       }
@@ -1238,28 +1740,149 @@ const financeModel = {
           delete updateData.budget_tag;
         }
       }
+      if (Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled')) {
+        if (hasUnplannedBudgetEnabledColumn) {
+          updateData.unplanned_budget_enabled = updateData.unplanned_budget_enabled ? 1 : 0;
+        } else {
+          delete updateData.unplanned_budget_enabled;
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount')) {
+        if (hasUnplannedBudgetAmountColumn) {
+          const normalizedUnplanned = normalizeUnplannedBudgetPayload({
+            unplanned_budget_enabled:
+              Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled')
+                ? updateData.unplanned_budget_enabled
+                : existingRecord.unplanned_budget_enabled,
+            unplanned_budget_amount: updateData.unplanned_budget_amount,
+          });
+          updateData.unplanned_budget_amount = normalizedUnplanned.enabled ? normalizedUnplanned.amount : null;
+        } else {
+          delete updateData.unplanned_budget_amount;
+        }
+      }
+      if (
+        hasUnplannedBudgetAmountColumn &&
+        Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled') &&
+        !updateData.unplanned_budget_enabled
+      ) {
+        updateData.unplanned_budget_amount = null;
+      }
+      if (Object.prototype.hasOwnProperty.call(updateData, 'annexure_type')) {
+        if (hasAnnexureTypeColumn) {
+          updateData.annexure_type = normalizeText(updateData.annexure_type) || null;
+        } else {
+          delete updateData.annexure_type;
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(updateData, 'annexure_file_name')) {
+        if (hasAnnexureFileNameColumn) {
+          updateData.annexure_file_name = normalizeText(updateData.annexure_file_name) || null;
+        } else {
+          delete updateData.annexure_file_name;
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(updateData, 'annexure_storage_name')) {
+        if (hasAnnexureStorageNameColumn) {
+          updateData.annexure_storage_name = normalizeText(updateData.annexure_storage_name) || null;
+        } else {
+          delete updateData.annexure_storage_name;
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(updateData, 'annexure_file_path')) {
+        if (hasAnnexureFilePathColumn) {
+          updateData.annexure_file_path = normalizeText(updateData.annexure_file_path) || null;
+        } else {
+          delete updateData.annexure_file_path;
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(updateData, 'annexure_mime_type')) {
+        if (hasAnnexureMimeTypeColumn) {
+          updateData.annexure_mime_type = normalizeText(updateData.annexure_mime_type) || null;
+        } else {
+          delete updateData.annexure_mime_type;
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(updateData, 'annexure_file_size')) {
+        if (hasAnnexureFileSizeColumn) {
+          const parsedAnnexureSize = Number(updateData.annexure_file_size);
+          updateData.annexure_file_size = Number.isFinite(parsedAnnexureSize) ? parsedAnnexureSize : null;
+        } else {
+          delete updateData.annexure_file_size;
+        }
+      }
 
-      const mergedRecordForContext = {
-        employee_id: updateData.employee_id ?? existingRecord.employee_id,
-        beneficiary_type: updateData.beneficiary_type ?? existingRecord.beneficiary_type,
-        beneficiary_value: updateData.beneficiary_value ?? existingRecord.beneficiary_value,
-      };
+      if (hasAnnexuresInput) {
+        const firstAnnexure = annexures[0] || null;
+        if (hasAnnexureTypeColumn) {
+          updateData.annexure_type = firstAnnexure ? firstAnnexure.annexure_type || null : null;
+        }
+        if (hasAnnexureFileNameColumn) {
+          updateData.annexure_file_name = firstAnnexure
+            ? (firstAnnexure.original_name || firstAnnexure.stored_name || null)
+            : null;
+        }
+        if (hasAnnexureStorageNameColumn) {
+          updateData.annexure_storage_name = firstAnnexure ? firstAnnexure.stored_name || null : null;
+        }
+        if (hasAnnexureFilePathColumn) {
+          updateData.annexure_file_path = firstAnnexure ? firstAnnexure.file_path || null : null;
+        }
+        if (hasAnnexureMimeTypeColumn) {
+          updateData.annexure_mime_type = firstAnnexure ? firstAnnexure.mime_type || null : null;
+        }
+        if (hasAnnexureFileSizeColumn) {
+          const firstSize = firstAnnexure ? Number(firstAnnexure.file_size) : NaN;
+          updateData.annexure_file_size = Number.isFinite(firstSize) ? firstSize : null;
+        }
+      }
 
       if (Object.prototype.hasOwnProperty.call(updateData, 'beneficiary_type')) {
         updateData.beneficiary_type = normalizeBeneficiaryTypeForStorage(updateData.beneficiary_type);
       }
 
-      const workflowContext = await resolveFinanceWorkflowContext(connection, mergedRecordForContext);
       updateData.department_id = workflowContext.departmentId;
       updateData.beneficiary_entity_id = workflowContext.beneficiaryEntityId;
 
       if (hasBudgetRowsInput) {
         await replaceBudgetRows(connection, id, budgetRows);
-        updateData.total_budget = budgetRows.reduce((sum, row) => sum + row.amount, 0);
+        const totalBudget = calculateFinanceTotalBudget(budgetRows, {
+          unplanned_budget_enabled:
+            Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled')
+              ? updateData.unplanned_budget_enabled
+              : existingRecord.unplanned_budget_enabled,
+          unplanned_budget_amount:
+            Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount')
+              ? updateData.unplanned_budget_amount
+              : existingRecord.unplanned_budget_amount,
+        });
+        updateData.total_budget = totalBudget;
+      } else if (
+        Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled') ||
+        Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount')
+      ) {
+        const plannedTotal = await getFinanceBreakupTotal(connection, id);
+        const totalBudget = calculateFinanceTotalBudget(
+          [{ amount: plannedTotal }],
+          {
+            unplanned_budget_enabled:
+              Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled')
+                ? updateData.unplanned_budget_enabled
+                : existingRecord.unplanned_budget_enabled,
+            unplanned_budget_amount:
+              Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount')
+                ? updateData.unplanned_budget_amount
+                : existingRecord.unplanned_budget_amount,
+          }
+        );
+        updateData.total_budget = totalBudget;
       }
 
       if (hasIncomeRowsInput) {
         await replaceIncomeRows(connection, id, incomeRows);
+      }
+      if (hasAnnexuresInput) {
+        await replaceFinanceAnnexures(connection, id, annexures);
       }
 
       const [result] = await connection.query('UPDATE finance_requests SET ? WHERE id = ?', [updateData, id]);
@@ -1341,6 +1964,8 @@ const financeModel = {
       finance.enclosures = safeParseJSON(finance.enclosures, []);
       finance.workflow_state = normalizeWorkflowState(finance.workflow_state);
       finance.level1_route_type = resolveFinanceLevel1RouteType(finance);
+      const annexures = await getFinanceAnnexures(id);
+      finance.annexures = annexures.length ? annexures : getLegacyAnnexureFromRecord(finance);
 
       return finance;
     } catch (error) {
@@ -1373,6 +1998,7 @@ const financeModel = {
         enclosures: safeParseJSON(row.enclosures, []),
         workflow_state: normalizeWorkflowState(row.workflow_state),
         level1_route_type: resolveFinanceLevel1RouteType(row),
+        annexures: getLegacyAnnexureFromRecord(row),
       }));
     } catch (error) {
       throw new Error(`Error listing finance requests: ${error.message}`);
@@ -1386,7 +2012,13 @@ const financeModel = {
       await connection.beginTransaction();
 
       const [ownerRows] = await connection.query(
-        `SELECT fr.created_by, u.email AS created_by_email
+        `SELECT
+           fr.created_by,
+           u.email AS created_by_email,
+           fr.beneficiary_type,
+           fr.beneficiary_value,
+           fr.department_id,
+           fr.beneficiary_entity_id
          FROM finance_requests fr
          LEFT JOIN users u ON u.id = fr.created_by
          WHERE fr.id = ?
@@ -1398,21 +2030,35 @@ const financeModel = {
         throw new Error('Finance request not found');
       }
 
-      let total = 0;
       const normalizedRows = normalizeBudgetRows(Array.isArray(budgetRows) ? budgetRows : []);
       const enrichedRows = await enrichBudgetRowsWithBudgetRefs(
         connection,
         toPositiveInt(ownerRows[0].created_by),
         normalizeText(ownerRows[0].created_by_email) || null,
-        normalizedRows
+        normalizedRows,
+        {
+          excludeFinanceId: financeId,
+          beneficiaryType: ownerRows[0].beneficiary_type,
+          beneficiaryValue: ownerRows[0].beneficiary_value,
+          departmentId: toPositiveInt(ownerRows[0].department_id),
+          beneficiaryEntityId: toPositiveInt(ownerRows[0].beneficiary_entity_id),
+        }
       );
       await replaceBudgetRows(connection, financeId, enrichedRows);
+      const [financeRows] = await connection.query(
+        `SELECT unplanned_budget_enabled, unplanned_budget_amount
+         FROM finance_requests
+         WHERE id = ?
+         LIMIT 1`,
+        [financeId]
+      );
+      const financeRow = financeRows[0] || {};
+      const totalBudget = calculateFinanceTotalBudget(enrichedRows, {
+        unplanned_budget_enabled: financeRow.unplanned_budget_enabled,
+        unplanned_budget_amount: financeRow.unplanned_budget_amount,
+      });
 
-      for (const row of enrichedRows) {
-        total += row.amount;
-      }
-
-      await connection.query('UPDATE finance_requests SET total_budget = ? WHERE id = ?', [total, financeId]);
+      await connection.query('UPDATE finance_requests SET total_budget = ? WHERE id = ?', [totalBudget, financeId]);
 
       await connection.commit();
       return true;
@@ -1666,6 +2312,11 @@ const financeModel = {
     subHead,
     preferredBudgetLineId = null,
     headOnlyMatch = false,
+    excludeFinanceId = null,
+    beneficiaryType = null,
+    beneficiaryValue = null,
+    departmentId = null,
+    beneficiaryEntityId = null,
   }) {
     const conn = await db.getConnection();
     try {
@@ -1676,6 +2327,11 @@ const financeModel = {
         subHead,
         preferredBudgetLineId,
         headOnlyMatch,
+        excludeFinanceId,
+        beneficiaryType,
+        beneficiaryValue,
+        departmentId,
+        beneficiaryEntityId,
       });
       return availability;
     } finally {

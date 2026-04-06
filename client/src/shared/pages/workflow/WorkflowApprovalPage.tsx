@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Briefcase, CheckCircle2, Clock, RotateCcw, XCircle, Eye, Info, Edit2, Archive, Trash2 } from 'lucide-react';
+import { Briefcase, CheckCircle2, Clock, RotateCcw, XCircle, Eye, Info, Edit2, Archive, Trash2, FileDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import authenticityUtility from '../../utils/authenticityUtility';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -1102,7 +1102,19 @@ showAlert(
     isArchived ? 'Unarchive' : 'Archive',
     'Cancel'
   );
-};
+  };
+
+  const handlePdfPreviewClick = useCallback(
+    (recordId: number | string, isApproved: boolean) => {
+      navigate(getFinanceRoute(recordId, 'view'), {
+        state: {
+          openPreview: true,
+          autoDownloadPdf: isApproved,
+        },
+      });
+    },
+    [getFinanceRoute, navigate]
+  );
 
   const filteredColumns = useMemo(() => {
     return config.columns.filter(column => 
@@ -1394,6 +1406,20 @@ showAlert(
                             </div>
 
                             <div className="fw-right">
+                              {config.moduleKey === 'finance' && (
+                                <button
+                                  type="button"
+                                  className="fw-action-btn fw-action-btn--download"
+                                  title="Open PDF Preview"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePdfPreviewClick(recordId, isApproved);
+                                  }}
+                                >
+                                  <FileDown size={18} />
+                                </button>
+                              )}
+
                               <div className="fw-status-wrap">
                                 <span className={getStatusClass(statusCategory)}>
                                   {getDisplayStatus(record)}
@@ -1404,6 +1430,18 @@ showAlert(
                                   !isArchived && (
                                     <>
                                       <button
+                                        className="fw-action-btn fw-action-btn--approved"
+                                        title="Approve"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onApprove(recordId);
+                                        }}
+                                        disabled={actingRecordId === recordId || !isPending}
+                                      >
+                                        <CheckCircle2 size={18} />
+                                      </button>
+
+                                      <button
                                         className="fw-action-btn fw-action-btn--returned"
                                         title="Return"
                                         onClick={(e) => {
@@ -1411,21 +1449,23 @@ showAlert(
                                           openActionPopup("return", recordId, proposalRef);
                                         }}
                                         disabled={actingRecordId === recordId || !isPending}
-                                      >
-                                        <RotateCcw size={18} />
+                                        >
+                                          <RotateCcw size={18} />
                                       </button>
 
                                       <button
                                         className="fw-action-btn fw-action-btn--rejected"
-                                        title="Delete"
+                                        title="Reject"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleDeleteRecord(record);
+                                          openActionPopup("reject", recordId, proposalRef);
                                         }}
-                                        disabled={actingRecordId === recordId}
+                                        disabled={actingRecordId === recordId || !isPending}
                                       >
-                                        <Trash2 size={18} />
+                                        <XCircle size={18} />
                                       </button>
+
+                                      
                                     </>
                                   )
                                 ) : (
