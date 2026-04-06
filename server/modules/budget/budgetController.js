@@ -516,7 +516,12 @@ export async function deleteProposal(req, res) {
       });
     }
 
-    const deleted = await BudgetModel.delete(proposalId);
+    const deleted = await BudgetModel.delete(proposalId, {
+      userId,
+      email: normalizeText(req.user?.email),
+      role: isSuperAdmin ? 'super_admin' : resolveAccessRoleFromPermissions(req),
+      feedback: 'Deleted by user',
+    });
 
     if (!deleted) {
       throw new Error('Database delete failed');

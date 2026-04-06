@@ -462,6 +462,7 @@ export async function getProposalForArchiveToggle(proposalId, conn = db) {
     `SELECT id, status, current_stage, approval_flow
        FROM budget_proposals
        WHERE id = ?
+         AND LOWER(TRIM(status)) <> 'deleted'
        LIMIT 1`,
     [parsedProposalId]
   );
@@ -1519,7 +1520,7 @@ export function resolveStageLabel(stageKey, proposal = {}) {
 export async function dashboardAggregates({ department, departmentId, role, fiscalYear }) {
   const currentFY = Number.parseInt(fiscalYear, 10) || getCurrentFinancialYear();
   const params = [currentFY];
-  const where = ['bp.fiscal_year = ?'];
+  const where = ['bp.fiscal_year = ?', "LOWER(TRIM(bp.status)) <> 'deleted'"];
 
   if (normalizeBudgetRole(role) === 'hod') {
     if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
@@ -1588,7 +1589,7 @@ export async function getConsolidatedData({
   const safeRole = normalizeBudgetRole(role);
   const safeUserId = Number(userId) > 0 ? Number(userId) : -1;
 
-  const where = ['bp.fiscal_year = ?'];
+  const where = ['bp.fiscal_year = ?', "LOWER(TRIM(bp.status)) <> 'deleted'"];
   const params = [Number(currentFY)];
 
   // 1. Role-based scoping (mirrored from buildBudgetList)
@@ -1924,7 +1925,7 @@ export async function listBudgetAnnualSummaryEntries({
 
   // Include pre-approval proposed data so summary shows proposals even before approval.
   // This is primarily consumed by DOF/Super Admin summary views.
-  const pendingWhere = ['bp.fiscal_year = ?'];
+  const pendingWhere = ['bp.fiscal_year = ?', "LOWER(TRIM(bp.status)) <> 'deleted'"];
   const pendingParams = [Number(currentFY)];
 
   switch (safeRole) {
@@ -2116,7 +2117,8 @@ export async function getAllDepartments(beneficiaryType) {
       `SELECT DISTINCT me.name 
        FROM budget_proposals bp
        JOIN master_entities me ON bp.beneficiary_entity_id = me.id
-       WHERE LOWER(TRIM(bp.beneficiary_type)) = ? 
+       WHERE LOWER(TRIM(bp.status)) <> 'deleted'
+         AND LOWER(TRIM(bp.beneficiary_type)) = ? 
        ORDER BY name ASC`,
       [typeLower]
     );
@@ -2127,9 +2129,9 @@ export async function getAllDepartments(beneficiaryType) {
     // Return Departments OR Entities associated with these proposals
     const [rows] = await db.execute(
       `SELECT DISTINCT name FROM (
-         SELECT md.name AS name FROM budget_proposals bp JOIN master_departments md ON bp.department_id = md.id WHERE LOWER(TRIM(bp.beneficiary_type)) = ?
+         SELECT md.name AS name FROM budget_proposals bp JOIN master_departments md ON bp.department_id = md.id WHERE LOWER(TRIM(bp.status)) <> 'deleted' AND LOWER(TRIM(bp.beneficiary_type)) = ?
          UNION
-         SELECT me.name AS name FROM budget_proposals bp JOIN master_entities me ON bp.beneficiary_entity_id = me.id WHERE LOWER(TRIM(bp.beneficiary_type)) = ?
+         SELECT me.name AS name FROM budget_proposals bp JOIN master_entities me ON bp.beneficiary_entity_id = me.id WHERE LOWER(TRIM(bp.status)) <> 'deleted' AND LOWER(TRIM(bp.beneficiary_type)) = ?
        ) AS sub ORDER BY name ASC`,
       [typeLower, typeLower]
     );
@@ -2139,9 +2141,9 @@ export async function getAllDepartments(beneficiaryType) {
   // Default: Return any department or entity that has any proposals
   const [rows] = await db.execute(
     `SELECT DISTINCT name FROM (
-       SELECT md.name AS name FROM budget_proposals bp JOIN master_departments md ON bp.department_id = md.id
+       SELECT md.name AS name FROM budget_proposals bp JOIN master_departments md ON bp.department_id = md.id WHERE LOWER(TRIM(bp.status)) <> 'deleted'
        UNION
-       SELECT me.name AS name FROM budget_proposals bp JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+       SELECT me.name AS name FROM budget_proposals bp JOIN master_entities me ON bp.beneficiary_entity_id = me.id WHERE LOWER(TRIM(bp.status)) <> 'deleted'
      ) AS available WHERE name IS NOT NULL AND name != '' ORDER BY name ASC`
   );
   return rows;
@@ -2415,23 +2417,51 @@ async function insertMonthAllocation(lineId, month, amount, conn) {
   );
 }
 
-async function deleteBudgetProposal(proposalId) {
+async function deleteBudgetProposal(proposalId, actor = {}) {
   return withTransaction(async (conn) => {
-    await conn.execute(
-      `DELETE m
-         FROM budget_line_month_allocations m
-         JOIN budget_proposal_lines l ON m.budget_line_id = l.id
-         WHERE l.budget_proposal_id = ? `,
+    const [rows] = await conn.execute(
+      `SELECT status
+         FROM budget_proposals
+        WHERE id = ?
+        LIMIT 1
+        FOR UPDATE`,
       [proposalId]
     );
 
-    await conn.execute('DELETE FROM budget_proposal_refs WHERE proposal_id = ?', [proposalId]);
+    if (!rows.length) {
+      return false;
+    }
 
-    await conn.execute('DELETE FROM budget_proposal_lines WHERE budget_proposal_id = ?', [proposalId]);
-    await conn.execute('DELETE FROM budget_proposal_approvals WHERE budget_proposal_id = ?', [proposalId]);
+    if (normalizeText(rows[0]?.status).toLowerCase() === 'deleted') {
+      return false;
+    }
+
+    const [result] = await conn.execute(
+      `UPDATE budget_proposals
+          SET status = 'deleted',
+              current_stage = 'deleted',
+              updated_at = NOW()
+        WHERE id = ?`,
+      [proposalId]
+    );
+
     await applyBudgetAnnualDeltaByProposalId(proposalId, conn, 'subtract');
 
-    const [result] = await conn.execute('DELETE FROM budget_proposals WHERE id = ?', [proposalId]);
+    const actorRole = normalizeText(actor?.role).toLowerCase() || 'admin';
+    const actorUserId = Number.isInteger(Number(actor?.userId || actor?.id))
+      ? Number(actor.userId || actor.id)
+      : 0;
+    const actorEmail = normalizeText(actor?.email) || '';
+    const feedback = normalizeText(actor?.feedback) || 'Deleted by user';
+
+    await conn.execute(
+      `INSERT INTO budget_proposal_approvals(
+          budget_proposal_id, role, approver_user_id, approver_email,
+          decision, feedback, allows_edit
+        ) VALUES(?, ?, ?, ?, 'deleted', ?, 0)`,
+      [proposalId, actorRole, actorUserId, actorEmail, feedback]
+    );
+
     return result.affectedRows > 0;
   });
 }
@@ -2659,11 +2689,21 @@ export async function getBudgetById(proposalId) {
       LEFT JOIN master_departments emp_dept ON emp.department_id = emp_dept.id
       LEFT JOIN master_departments emp_parent_dept ON emp.parent_department_id = emp_parent_dept.id
       LEFT JOIN master_departments emp_parent_dept_fallback ON emp_dept.parent_id = emp_parent_dept_fallback.id
-      WHERE bp.id = ?`,
+      WHERE bp.id = ?
+        AND LOWER(TRIM(bp.status)) <> 'deleted'`,
     [proposalId]
   );
 
-  return rows[0] || null;
+  const proposal = rows[0] || null;
+  if (!proposal) {
+    return null;
+  }
+
+  if (normalizeBeneficiaryType(proposal.beneficiary_type) === 'Department') {
+    proposal.beneficiary_value = normalizeText(proposal.department) || proposal.beneficiary_value;
+  }
+
+  return proposal;
 }
 
 export async function getFull(proposalId) {
@@ -2764,7 +2804,7 @@ export async function getManyFull(proposalIds) {
 
   // 1. Fetch masters
   const [masters] = await db.query(
-    'SELECT * FROM budget_proposals WHERE id IN (?)',
+    "SELECT * FROM budget_proposals WHERE id IN (?) AND LOWER(TRIM(status)) <> 'deleted'",
     [proposalIds]
   );
 
@@ -2965,7 +3005,7 @@ export async function getBudgetStatsByFY(fiscalYear, options = {}) {
   const fy = Number.parseInt(fiscalYear, 10) || getCurrentFinancialYear();
   const { role } = options;
 
-  let where = 'bp.fiscal_year = ?';
+  let where = "bp.fiscal_year = ? AND LOWER(TRIM(bp.status)) <> 'deleted'";
   const params = [fy];
 
   if (role && role !== 'admin' && role !== 'super_admin') {
@@ -3000,7 +3040,9 @@ export async function getBudgetStatsByFY(fiscalYear, options = {}) {
          SUM(bp.total_amount) AS total_amount
        FROM budget_proposals bp
        LEFT JOIN master_departments md ON bp.department_id = md.id
-       WHERE bp.fiscal_year = ? AND bp.department_id IS NOT NULL
+       WHERE bp.fiscal_year = ?
+         AND LOWER(TRIM(bp.status)) <> 'deleted'
+         AND bp.department_id IS NOT NULL
        GROUP BY md.name
        ORDER BY total_amount DESC`,
     [fy]
@@ -3013,6 +3055,7 @@ export async function getBudgetStatsByFY(fiscalYear, options = {}) {
          SUM(bp.total_amount) AS total_amount
        FROM budget_proposals bp
        WHERE bp.fiscal_year = ?
+         AND LOWER(TRIM(bp.status)) <> 'deleted'
        GROUP BY bp.beneficiary_type
        ORDER BY proposal_count DESC`,
     [fy]

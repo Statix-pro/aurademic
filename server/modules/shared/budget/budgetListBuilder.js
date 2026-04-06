@@ -83,7 +83,11 @@ export async function buildBudgetList(options) {
       MAX(applicant_user.name) AS user_name,
       DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
       bp.beneficiary_type,
-      bp.beneficiary_value,
+      CASE
+        WHEN LOWER(TRIM(bp.beneficiary_type)) = 'department'
+          THEN COALESCE(NULLIF(TRIM(md.name), ''), bp.beneficiary_value)
+        ELSE bp.beneficiary_value
+      END AS beneficiary_value,
       bp.department_id,
       md.name AS department,
       md.code AS department_code,
@@ -116,7 +120,7 @@ export async function buildBudgetList(options) {
     LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
   `;
 
-    const where = ['bp.fiscal_year = ?'];
+    const where = ['bp.fiscal_year = ?', "LOWER(TRIM(bp.status)) <> 'deleted'"];
     const params = [Number(currentFY)];
     const isQueueSuperAdminView = Boolean(superAdminQueueView) && ['hod', 'coordinator', 'ithead', 'dof', 'principal'].includes(safeRole);
 
@@ -421,7 +425,7 @@ export async function buildBudgetKpiStats(options) {
     const safeRole = normalizeBudgetRole(role);
     const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
 
-    const where = ['bp.fiscal_year = ?'];
+    const where = ['bp.fiscal_year = ?', "LOWER(TRIM(bp.status)) <> 'deleted'"];
     const params = [Number(currentFY)];
     const isQueueSuperAdminView = Boolean(superAdminQueueView) && ['hod', 'coordinator', 'ithead', 'dof', 'principal'].includes(safeRole);
 

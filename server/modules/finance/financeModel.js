@@ -413,7 +413,7 @@ const buildFinanceSelectSql = ({
       fr.applicant_name
     ) AS applicant_name,
     COALESCE(e.designation, fr.designation) AS designation,
-    COALESCE(d.name, fr.department) AS department,
+    COALESCE(dept.name, emp_dept.name, fr.department) AS department,
     COALESCE(e.email, fr.email) AS email,
     COALESCE(e.mobile, fr.mobile) AS mobile,
     e.erp_id,
@@ -421,7 +421,11 @@ const buildFinanceSelectSql = ({
     DATE_FORMAT(fr.request_date, '%Y-%m-%d') AS request_date,
     fr.description,
     fr.beneficiary_type,
-    fr.beneficiary_value,
+    CASE
+      WHEN LOWER(TRIM(COALESCE(fr.beneficiary_type, ''))) = 'department'
+        THEN COALESCE(NULLIF(TRIM(dept.name), ''), NULLIF(TRIM(emp_dept.name), ''), fr.beneficiary_value)
+      ELSE fr.beneficiary_value
+    END AS beneficiary_value,
     ${budgetTagSelectSql},
     fr.department_id,
     fr.beneficiary_entity_id,
@@ -473,7 +477,8 @@ const buildFinanceSelectSql = ({
   FROM finance_requests fr
   LEFT JOIN finance_request_refs frr ON frr.finance_request_id = fr.id
   LEFT JOIN master_employees e ON fr.employee_id = e.id
-  LEFT JOIN master_departments d ON e.department_id = d.id
+  LEFT JOIN master_departments dept ON fr.department_id = dept.id
+  LEFT JOIN master_departments emp_dept ON e.department_id = emp_dept.id
 `;
 
 const getFinanceSelectSql = async ({ tx = db } = {}) => {
@@ -505,6 +510,7 @@ const mapWorkflowStatusToOverallStatus = (workflowState) => {
   if (status === 'completed') return 'approved';
   if (status === 'rejected') return 'rejected';
   if (status === 'archived') return 'archived';
+  if (status === 'deleted') return 'deleted';
   return 'pending';
 };
 
@@ -1956,7 +1962,13 @@ const financeModel = {
   async getFinanceRequestById(id) {
     try {
       const financeSelectSql = await getFinanceSelectSql();
-      const [rows] = await db.query(`${financeSelectSql} WHERE fr.id = ? LIMIT 1`, ['', id]);
+      const [rows] = await db.query(
+        `${financeSelectSql}
+         WHERE fr.id = ?
+           AND LOWER(TRIM(COALESCE(fr.overall_status, ''))) <> 'deleted'
+         LIMIT 1`,
+        ['', id]
+      );
 
       if (!rows.length) return null;
 
@@ -1978,6 +1990,8 @@ const financeModel = {
       const financeSelectSql = await getFinanceSelectSql();
       let query = `${financeSelectSql} WHERE 1 = 1`;
       const params = [''];
+
+      query += ` AND LOWER(TRIM(COALESCE(fr.overall_status, ''))) <> 'deleted'`;
 
       if (mine) {
         query += ' AND fr.created_by = ?';
@@ -2231,17 +2245,132 @@ const financeModel = {
 },
 
   async doesFinanceExist(id) {
-    const [rows] = await db.query('SELECT 1 FROM finance_requests WHERE id = ? LIMIT 1', [id]);
+    const [rows] = await db.query(
+      `SELECT 1
+         FROM finance_requests fr
+        WHERE fr.id = ?
+          AND LOWER(TRIM(COALESCE(fr.overall_status, ''))) <> 'deleted'
+        LIMIT 1`,
+      [id]
+    );
     return rows.length > 0;
   },
 
-  async deleteFinanceRequest(id) {
+  async hardDeleteFinanceRequest(id) {
     const connection = await db.getConnection();
 
     try {
       await connection.beginTransaction();
 
       await connection.query('DELETE FROM finance_requests WHERE id = ?', [id]);
+
+      await connection.commit();
+      return true;
+    } catch (error) {
+      await connection.rollback();
+      throw new Error(`Error deleting finance request: ${error.message}`);
+    } finally {
+      connection.release();
+    }
+  },
+
+  async deleteFinanceRequest(id, actor = null) {
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const [rows] = await connection.query(
+        `SELECT workflow_state
+           FROM finance_requests
+          WHERE id = ?
+          FOR UPDATE`,
+        [id]
+      );
+
+      if (!rows.length) {
+        await connection.rollback();
+        return false;
+      }
+
+      const previousState = normalizeWorkflowState(rows[0].workflow_state) || {
+        flow: ['level1', 'dof', 'principal'],
+        status: 'in_progress',
+        currentStage: 'level1',
+        isEditableByApplicant: false,
+      };
+
+      if (normalizeText(previousState.status).toLowerCase() === 'deleted') {
+        await connection.rollback();
+        return false;
+      }
+
+      const nowIso = new Date().toISOString();
+      const actorUserId = toPositiveInt(actor?.id || actor?.userId) || null;
+      const actorEmail = normalizeText(actor?.email).toLowerCase() || null;
+      const actorRole = normalizeText(actor?.role).toLowerCase() || null;
+      const fallbackStage = normalizeText(previousState.currentStage).toLowerCase() || 'level1';
+
+      const nextState = {
+        ...previousState,
+        flow: Array.isArray(previousState.flow) && previousState.flow.length
+          ? previousState.flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
+          : ['level1', 'dof', 'principal'],
+        status: 'deleted',
+        currentStage: 'deleted',
+        isEditableByApplicant: false,
+        resolvedAt: nowIso,
+        lastDecision: 'deleted',
+        lastFeedback: 'Deleted by user',
+        deletedAt: nowIso,
+        deletedByUserId: actorUserId,
+        deletedByEmail: actorEmail,
+        updatedAt: nowIso,
+      };
+
+      await connection.query(
+        `UPDATE finance_requests
+            SET workflow_state = ?,
+                overall_status = 'deleted',
+                updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?`,
+        [JSON.stringify(nextState), id]
+      );
+
+      await connection.query(
+        `INSERT INTO workflow_actions (
+            module_key,
+            record_id,
+            stage,
+            decision,
+            feedback,
+            actor_user_id,
+            actor_email,
+            actor_role,
+            snapshot_before,
+            meta
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          'finance',
+          id,
+          fallbackStage,
+          'archived',
+          'Deleted by user',
+          actorUserId,
+          actorEmail,
+          actorRole,
+          JSON.stringify(previousState),
+          JSON.stringify({
+            origin: 'api',
+            requestId: null,
+            moduleMetaVersion: 1,
+            moduleMeta: {
+              trigger: 'soft_delete',
+              route: 'DELETE /api/finance-requests/:id',
+            },
+          }),
+        ]
+      );
 
       await connection.commit();
       return true;
@@ -2685,6 +2814,8 @@ const financeModel = {
     const whereParts = [];
     const whereParams = [];
 
+    whereParts.push(`LOWER(TRIM(COALESCE(fr.overall_status, ''))) <> 'deleted'`);
+
     if (workflowStatus === 'all') {
       if (isSuperAdmin) {
         whereParts.push('1 = 1');
@@ -2775,8 +2906,9 @@ const financeModel = {
   async listAvailableBeneficiaryTypes({ tx = db } = {}) {
     const [rows] = await tx.query(
       `SELECT DISTINCT TRIM(beneficiary_type) AS beneficiary_type
-         FROM finance_requests
-        WHERE beneficiary_type IS NOT NULL
+         FROM finance_requests fr
+        WHERE LOWER(TRIM(COALESCE(fr.overall_status, ''))) <> 'deleted'
+          AND beneficiary_type IS NOT NULL
           AND TRIM(beneficiary_type) <> ''
         ORDER BY TRIM(beneficiary_type) ASC`
     );
