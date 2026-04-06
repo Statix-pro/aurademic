@@ -1,9 +1,10 @@
 import React, { useState, useRef, CSSProperties, useEffect, ChangeEvent, MouseEvent } from 'react';
-import { Info, Library, CheckCircle2, RotateCcw, XCircle, Archive } from 'lucide-react';
+import { Info, Library, CheckCircle2, RotateCcw, XCircle, Archive, Upload, Eye, Trash2 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { PDFDocument } from 'pdf-lib';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './financeapproval.css';
 import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
@@ -50,6 +51,18 @@ interface BudgetHeadSearchOption extends OptionType {
   budgetHead: string;
   subHead: string;
   optionType: 'budget-head' | 'head-sub-head';
+}
+
+interface AnnexureFileRow {
+  id: string;
+  annexureType: string;
+  file: File | null;
+  previewUrl: string;
+  originalName: string;
+  storedName: string;
+  filePath: string;
+  mimeType: string;
+  size: number | null;
 }
 
 // Beneficiary Type to Entity API Type Mapping
@@ -219,6 +232,14 @@ const CREDIT_ACCOUNT_OPTIONS = [
   'KSRCT RPS AICTE Project | 0075133800000643',
 ];
 
+const ANNEXURE_TYPE_OPTIONS = [
+  'Proforma Invoice',
+  'Invoice',
+  'Quotation',
+  'Bills',
+  'Pamphlet',
+  'Email',
+];
 const formatDateForInput = (value: unknown): string => {
   if (value === null || value === undefined || value === '') return '';
 
@@ -697,6 +718,158 @@ const createIncomeRow = (): IncomeRow => ({
 const normalizeText = (value: string | null | undefined): string =>
   String(value || '').trim();
 
+const getWorkflowField = (update: any, keys: string[]) => {
+  for (const key of keys) {
+    const value = update?.[key];
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      return value;
+    }
+  }
+  return '';
+};
+
+const formatWorkflowTimestamp = (value: any): string => {
+  if (!value) return '';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }).formatToParts(date);
+
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const day = lookup.day || '00';
+  const month = lookup.month || '00';
+  const year = lookup.year || '0000';
+  const hour = lookup.hour || '00';
+  const minute = lookup.minute || '00';
+  const second = lookup.second || '00';
+  const suffix = String(lookup.dayPeriod || '').toLowerCase();
+
+  return `${day}.${month}.${year}, ${hour}:${minute}:${second} ${suffix}`.trim();
+};
+
+const getCurrentWorkflowTimestamp = (): string => formatWorkflowTimestamp(new Date());
+
+const getWorkflowDecisionLabel = (update: any): string => {
+  const decision = String(getWorkflowField(update, ['decision', 'status'])).toLowerCase();
+
+  if (decision.includes('submit')) return 'Submitted';
+  if (decision.includes('approv') || decision === 'completed') return 'Approved';
+  if (decision.includes('return')) return 'Returned';
+  if (decision.includes('reject')) return 'Rejected';
+  if (decision.includes('resubmit')) return 'Resubmitted';
+  if (decision.includes('update')) return 'Updated';
+  return 'Updated';
+};
+
+const getWorkflowActorLabel = (update: any, fallback = '-'): string => {
+  const name = String(getWorkflowField(update, ['userName', 'user_name', 'actorName', 'actor_name'])).trim();
+  const email = String(getWorkflowField(update, ['actorEmail', 'actor_email', 'email', 'userEmail', 'user_email'])).trim();
+
+  if (name) return name;
+if (email) return email;
+return fallback;
+};
+
+const getWorkflowTimeline = (
+  updates: any[],
+  fallback?: { name: string; email: string; date: string }
+): Array<{ label: string; actor: string; email: string; timestamp: string; stage: string }> => {
+  if (!Array.isArray(updates) || updates.length === 0) {
+    return fallback
+      ? [{
+          label: 'Submitted',
+          actor: fallback.name || fallback.email || '-',
+          email: fallback.email || '',
+          timestamp: fallback.date || '',
+          stage: '',
+        }]
+      : [];
+  }
+
+  let lastResetIdx = -1;
+  for (let i = updates.length - 1; i >= 0; i -= 1) {
+    const decision = String(getWorkflowField(updates[i], ['decision', 'status'])).toLowerCase();
+    if (
+      decision === 'returned' ||
+      decision === 'rejected' ||
+      decision === 'resubmitted' ||
+      decision.includes('resubmit')
+    ) {
+      lastResetIdx = i;
+      break;
+    }
+  }
+
+  const currentFlowUpdates = updates.slice(lastResetIdx + 1);
+  const timeline = currentFlowUpdates
+    .map((update) => {
+      const label = getWorkflowDecisionLabel(update);
+      if (label === 'Updated') return null;
+
+      return {
+        label,
+        actor: getWorkflowActorLabel(update),
+        email: String(getWorkflowField(update, ['actorEmail', 'actor_email', 'email', 'userEmail', 'user_email'])).trim(),
+        timestamp: formatWorkflowTimestamp(
+          getWorkflowField(update, ['decidedAt', 'decided_at', 'createdAt', 'created_at'])
+        ),
+        stage: String(getWorkflowField(update, ['stage', 'role'])).toLowerCase(),
+      };
+    })
+    .filter((item): item is { label: string; actor: string; email: string; timestamp: string; stage: string } => Boolean(item));
+
+  if (timeline.length === 0 && fallback) {
+    return [{
+      label: 'Submitted',
+      actor: fallback.name || fallback.email || '-',
+      email: fallback.email || '',
+      timestamp: fallback.date || '',
+      stage: '',
+    }];
+  }
+
+  return timeline;
+};
+
+const formatWorkflowPersonText = (name?: string, mail?: string, timestamp?: string): string => {
+  const trimmedName = String(name || '').trim();
+  const trimmedMail = String(mail || '').trim();
+  const trimmedTime = String(timestamp || '').trim();
+  const actorAlreadyHasMail =
+    trimmedMail.length > 0 &&
+    trimmedName.toLowerCase().includes(trimmedMail.toLowerCase());
+
+  const displayName = trimmedName || '-';
+  const displayMail = trimmedMail && !actorAlreadyHasMail ? ` (${trimmedMail})` : '';
+  const displayTime = trimmedTime ? ` on ${trimmedTime}` : '';
+
+  return `${displayName}${displayMail}${displayTime}`;
+};
+
+const getSubmittedTimestamp = (
+  timeline: Array<{ label: string; actor: string; email: string; timestamp: string; stage: string }>,
+  fallbackDate?: string,
+  fallbackToCurrent = false
+): string => {
+  const explicitFallback = String(fallbackDate || '').trim();
+  if (explicitFallback) return explicitFallback;
+
+  const submittedEntry = timeline.find((entry) => entry.label === 'Submitted' && String(entry.timestamp || '').trim());
+  if (submittedEntry) return submittedEntry.timestamp;
+
+  return fallbackToCurrent ? getCurrentWorkflowTimestamp() : '';
+};
+
 const FinanceApproval: React.FC = () => {
   const [applicantName, setApplicantName] = useState<string>('');
   const [date, setDate] = useState<string>(getLocalTodayYmd());
@@ -713,6 +886,8 @@ const FinanceApproval: React.FC = () => {
   const [chairmanComments, setChairmanComments] = useState<string>('');
   const [chairmanStatus, setChairmanStatus] = useState<string>('');
   const [showPreview, setShowPreview] = useState<boolean>(false);
+  const [autoDownloadPdf, setAutoDownloadPdf] = useState<boolean>(false);
+  const [submittedAt, setSubmittedAt] = useState<string>('');
   const [isBudgetProposed, setIsBudgetProposed] = useState<string>('');
   const [balanceAmount, setBalanceAmount] = useState<string>('');
   const [debitStatus, setDebitStatus] = useState<'credited' | 'reimbursement' | ''>('');
@@ -731,9 +906,14 @@ const FinanceApproval: React.FC = () => {
   const [applicantSearchResults, setApplicantSearchResults] = useState<Array<{ employee_id: number; name: string; designation: string; department: string; email: string; mobile: string; employee_type: string }>>([]);
   const [showApplicantDropdown, setShowApplicantDropdown] = useState<boolean>(false);
   const componentRef = useRef<HTMLDivElement>(null);
-
+  const autoDownloadTriggeredRef = useRef<boolean>(false);
+  const [showUnplannedBudget, setShowUnplannedBudget] = useState<boolean>(false);
+  const [unplannedBudgetAmount, setUnplannedBudgetAmount] = useState<string>('');
   // State for dynamic subcategory options (Department, Centre, Cell, Club, Professional Body)
   const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
+  const [annexureType, setAnnexureType] = useState<string>('');
+  const [annexureFiles, setAnnexureFiles] = useState<AnnexureFileRow[]>([]);
+  const annexureFileInputRef = useRef<HTMLInputElement>(null);
 
   // State for tag options
   const [tagOptions, setTagOptions] = useState<SelectOption[]>(FALLBACK_TAG_OPTIONS);
@@ -912,6 +1092,102 @@ const FinanceApproval: React.FC = () => {
     documentTitle: "Finance_Approval_Request",
   });
 
+  const triggerPdfDownload = (bytes: ArrayBuffer | Uint8Array) => {
+    const normalizedBytes = bytes instanceof Uint8Array
+      ? new Uint8Array(bytes)
+      : new Uint8Array(bytes);
+    const blob = new Blob([normalizedBytes], { type: 'application/pdf' });
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = 'FinanceApprovalRequest.pdf';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(blobUrl);
+  };
+
+  const mergeAndDownloadPdfWithAnnexures = async (mainPdfBuffer: ArrayBuffer) => {
+    const annexures = annexureFiles.filter((row) => String(row.filePath || '').trim());
+    if (!annexures.length) {
+      triggerPdfDownload(mainPdfBuffer);
+      return;
+    }
+
+    const mergedPdf = await PDFDocument.create();
+    const primaryPdf = await PDFDocument.load(mainPdfBuffer);
+    const primaryPages = await mergedPdf.copyPages(primaryPdf, primaryPdf.getPageIndices());
+    primaryPages.forEach((page) => mergedPdf.addPage(page));
+
+    const skippedFiles: string[] = [];
+    const token = localStorage.getItem('token');
+
+    for (const annexure of annexures) {
+      const fileLabel = String(annexure.originalName || annexure.storedName || annexure.filePath || 'Annexure').trim();
+      const annexureUrl = getAnnexureOpenUrl(annexure);
+      if (!annexureUrl) {
+        skippedFiles.push(fileLabel);
+        continue;
+      }
+
+      try {
+        const response = await fetch(annexureUrl, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (!response.ok) {
+          skippedFiles.push(fileLabel);
+          continue;
+        }
+
+        const annexureBytes = await response.arrayBuffer();
+        const lowerName = fileLabel.toLowerCase();
+        const mimeType = String(annexure.mimeType || '').toLowerCase();
+        const isPdf = mimeType.includes('pdf') || lowerName.endsWith('.pdf');
+        const isPng = mimeType.includes('png') || lowerName.endsWith('.png');
+        const isJpg = mimeType.includes('jpeg') || mimeType.includes('jpg') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg');
+
+        if (isPdf) {
+          const annexurePdf = await PDFDocument.load(annexureBytes);
+          const annexurePages = await mergedPdf.copyPages(annexurePdf, annexurePdf.getPageIndices());
+          annexurePages.forEach((page) => mergedPdf.addPage(page));
+          continue;
+        }
+
+        if (isPng || isJpg) {
+          const imageBytes = new Uint8Array(annexureBytes);
+          const image = isPng
+            ? await mergedPdf.embedPng(imageBytes)
+            : await mergedPdf.embedJpg(imageBytes);
+          const page = mergedPdf.addPage([595.28, 841.89]);
+          const width = page.getWidth();
+          const height = page.getHeight();
+          const fit = image.scaleToFit(width - 40, height - 40);
+          page.drawImage(image, {
+            x: (width - fit.width) / 2,
+            y: (height - fit.height) / 2,
+            width: fit.width,
+            height: fit.height,
+          });
+          continue;
+        }
+
+        skippedFiles.push(fileLabel);
+      } catch {
+        skippedFiles.push(fileLabel);
+      }
+    }
+
+    const mergedBytes = await mergedPdf.save();
+    triggerPdfDownload(mergedBytes);
+
+    if (skippedFiles.length) {
+      showAlert(
+        `Downloaded combined PDF. Skipped unsupported annexure files: ${skippedFiles.join(', ')}`,
+        'warning'
+      );
+    }
+  };
+
   const generatePDF = async (): Promise<void> => {
     try {
       setIsLoading(true);
@@ -978,7 +1254,7 @@ const FinanceApproval: React.FC = () => {
             const cellCenterX = data.cell.x + data.cell.width / 2;
             const cellCenterY = data.cell.y + data.cell.height / 2;
 
-            pdf.setFontSize(11);
+            pdf.setFontSize(16);
             pdf.setFont('helvetica', 'bold');
             pdf.text('K.S.RANGASAMY COLLEGE OF TECHNOLOGY', cellCenterX, cellCenterY - 4, { align: 'center' });
 
@@ -998,7 +1274,7 @@ const FinanceApproval: React.FC = () => {
       yPos += 6;
 
       const formattedDate = date ? formatDMY(date) : '';
-      const beneficiaryText = beneficiaryType + (hasSubcategories && beneficiaryValue ? ' - ' + beneficiaryValue : '');
+      const beneficiaryText = getBeneficiaryDisplayText();
       const headOfAccountsText = primaryHead + (extraDropdownVisible && eventSubHead ? ' - ' + eventSubHead : '');
       const budgetProposedText = isBudgetProposed === 'Yes'
         ? 'Yes | Amount: Rs. ' + (amountProposed || '0.00') + ' | Balance: Rs. ' + (balanceAmount || '0.00')
@@ -1011,7 +1287,7 @@ const FinanceApproval: React.FC = () => {
         [{ content: 'Beneficiary', styles: { fontStyle: 'bold' } }, { content: beneficiaryText, colSpan: 3 }],
         [{ content: 'Description', styles: { fontStyle: 'bold' } }, { content: description || '', colSpan: 3 }],
         [{ content: 'Head of Accounts', styles: { fontStyle: 'bold' } }, { content: headOfAccountsText, colSpan: 3 }],
-        [{ content: 'Proposed in Budget', styles: { fontStyle: 'bold' } }, { content: budgetProposedText, colSpan: 3 }],
+       
       ];
 
       autoTable(pdf, {
@@ -1037,6 +1313,13 @@ const FinanceApproval: React.FC = () => {
         row.head || '',
         'Rs. ' + Number(row.amount || 0).toFixed(2)
       ]);
+      if (showUnplannedBudget) {
+        budgetTableBody.push([
+          { content: 'Unplanned Budget:', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' as const } } as any,
+          { content: 'Rs. ' + Number(unplannedBudgetAmount || 0).toFixed(2), styles: { fontStyle: 'bold' } }
+        ]);
+      }
+      
       budgetTableBody.push([
         { content: 'Total Budget:', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' as const } } as any,
         { content: 'Rs. ' + totalBudget.toFixed(2), styles: { fontStyle: 'bold' } }
@@ -1050,9 +1333,9 @@ const FinanceApproval: React.FC = () => {
         styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
         columnStyles: {
           0: { cellWidth: 12, halign: 'center' },
-          1: { cellWidth: 45 },
+          1: { cellWidth:65 },
           2: { cellWidth: 65 },
-          3: { cellWidth: tableWidth - 12 - 45 - 65, halign: 'right' }
+          3: { cellWidth: tableWidth - 12 - 65 - 65, halign: 'right' }
         },
         body: [
           [{ content: 'S.No', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
@@ -1112,10 +1395,10 @@ const FinanceApproval: React.FC = () => {
           headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
           columnStyles: {
             0: { cellWidth: 12, halign: 'center' },
-            1: { cellWidth: 55 },
-            2: { cellWidth: 30, halign: 'center' },
-            3: { cellWidth: 30, halign: 'right' },
-            4: { cellWidth: tableWidth - 12 - 55 - 30 - 30 },
+            1: { cellWidth: 82 },
+            2: { cellWidth: 34, halign: 'center' },
+            3: { cellWidth: 24, halign: 'right' },
+            4: { cellWidth: 34, halign: 'center' },
           },
           body: incomeTableBody as any,
         });
@@ -1123,70 +1406,49 @@ const FinanceApproval: React.FC = () => {
         yPos = (pdf as any).lastAutoTable.finalY;
       }
 
-      const getApprovalDetail = (stageKeys: string[]) => {
-        let lastResetIdx = -1;
-        for (let i = statusUpdates.length - 1; i >= 0; i--) {
-          const dec = String(statusUpdates[i].decision).toLowerCase();
-          const stat = String(statusUpdates[i].status).toLowerCase();
-          if (dec === 'returned' || dec === 'rejected' || stat === 'returned' || stat === 'rejected' || dec === 'resubmitted' || dec.includes('resubmit')) {
-            lastResetIdx = i;
-            break;
-          }
-        }
-        const currentFlowUpdates = statusUpdates.slice(lastResetIdx + 1);
-
-        const approved = currentFlowUpdates.filter(u =>
-          stageKeys.includes(String(u.stage).toLowerCase()) &&
-          (String(u.status).toLowerCase() === 'approved' || String(u.decision).toLowerCase() === 'approved' || String(u.status).toLowerCase().includes('approved'))
-        );
-        if (approved.length === 0) return { name: '', date: '' };
-
-        approved.sort((a, b) => {
-          const tA = new Date(a.decided_at || a.created_at || 0).getTime();
-          const tB = new Date(b.decided_at || b.created_at || 0).getTime();
-          return tB - tA; // latest first
-        });
-        const latest = approved[0];
-        const dateStr = latest.decided_at || latest.created_at;
-        const formattedDate = dateStr ? new Date(dateStr).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true }) : '';
-        return { name: latest.user_name || latest.actor_name || '', date: formattedDate };
+      const approvalHistory = getWorkflowTimeline(statusUpdates, {
+        name: applicantName || '',
+        email: email || '',
+        date: submittedAt ? formatWorkflowTimestamp(submittedAt) : getCurrentWorkflowTimestamp(),
+      });
+      const approvalSteps = approvalHistory.filter((entry) => entry.label !== 'Submitted');
+      const submittedByUi = approvalHistory.find((entry) => entry.label === 'Submitted') || {
+        actor: applicantName || '',
+        email: email || '',
+        timestamp: getSubmittedTimestamp(
+          approvalHistory,
+          submittedAt ? formatWorkflowTimestamp(submittedAt) : '',
+          !id
+        ),
       };
 
-      const level1Approval = getApprovalDetail(['level1', 'hod', 'coordinator', 'ithead']);
-      const dofApproval = getApprovalDetail(['dof']);
-      const principalApproval = getApprovalDetail(['principal']);
-      const chairmanApproval = getApprovalDetail(['chairman']);
+      const annexureSummary = getAnnexureSummary();
+      autoTable(pdf, {
+        startY: yPos,
+        margin: { left: margin, right: margin },
+        theme: 'grid',
+        tableWidth: tableWidth,
+        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
+        columnStyles: {
+          0: { cellWidth: 38, fontStyle: 'bold' },
+          1: { cellWidth: tableWidth - 38 },
+        },
+        body: [[
+          { content: 'Annexure', styles: { fontStyle: 'bold' } },
+          { content: annexureSummary },
+        ]],
+      });
 
-      const digitalSignBody: any[] = [
-        [{ content: 'Digitally Signed By:', colSpan: 3, styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }],
-        [
-          { content: 'Head of Dept. / Coordinator', styles: { fontStyle: 'bold' } },
-          { content: level1Approval.name ? `Name: ${level1Approval.name}` : 'Name:' },
-          { content: level1Approval.date ? `Date & Time: ${level1Approval.date}` : 'Date & Time:' }
-        ],
-        [
-          { content: 'Director of Finance', styles: { fontStyle: 'bold' } },
-          { content: dofApproval.name ? `Name: ${dofApproval.name}` : 'Name:' },
-          { content: dofApproval.date ? `Date & Time: ${dofApproval.date}` : 'Date & Time:' }
-        ]
+      const digitalSignRows: any[] = [
+        [{ content: 'Approved By:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }],
+        [{ content: `Submitted by ${formatWorkflowPersonText(submittedByUi.actor, submittedByUi.email, submittedByUi.timestamp)}` }],
+        ...approvalSteps.map((entry) => ([
+          { content: `${entry.label} by ${formatWorkflowPersonText(entry.actor, entry.email, entry.timestamp)}` },
+        ])),
+        ...(approvalHistory.length === 0
+          ? [[{ content: 'No approval history available' }]]
+          : []),
       ];
-
-      if (totalBudget <= 10000) {
-        digitalSignBody.push([
-          { content: 'Principal', styles: { fontStyle: 'bold' } },
-          { content: principalApproval.name ? `Name: ${principalApproval.name}` : 'Name:' },
-          { content: principalApproval.date ? `Date & Time: ${principalApproval.date}` : 'Date & Time:' }
-        ]);
-      } else {
-        const principalText = principalApproval.name ? `Principal\nName: ${principalApproval.name}\nDate & Time: ${principalApproval.date}` : 'Principal';
-        const chairmanText = chairmanApproval.name ? `Chairman\nName: ${chairmanApproval.name}\nDate & Time: ${chairmanApproval.date}` : 'Chairman';
-
-        digitalSignBody.push([
-          { content: principalText, styles: { fontStyle: 'bold', halign: 'left' } },
-          { content: '' },
-          { content: chairmanText, styles: { fontStyle: 'bold', halign: 'right' } }
-        ]);
-      }
 
       autoTable(pdf, {
         startY: yPos + 5,
@@ -1194,12 +1456,8 @@ const FinanceApproval: React.FC = () => {
         theme: 'grid',
         tableWidth: tableWidth,
         styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 56 },
-          1: { cellWidth: (tableWidth - 56) / 2 },
-          2: { cellWidth: (tableWidth - 56) / 2 }
-        },
-        body: digitalSignBody,
+        head: [],
+        body: digitalSignRows,
       });
 
       const totalPages = pdf.getNumberOfPages();
@@ -1210,13 +1468,32 @@ const FinanceApproval: React.FC = () => {
         pdf.text('Page ' + i, pageWidth - margin, pdf.internal.pageSize.getHeight() - 6, { align: 'right' });
       }
 
-      pdf.save('FinanceApprovalRequest.pdf');
+      const primaryPdfBuffer = pdf.output('arraybuffer');
+      await mergeAndDownloadPdfWithAnnexures(primaryPdfBuffer);
     } catch (error) {
       console.error('Error generating PDF:', error);
       showAlert('Error generating PDF. Please try again.', 'error');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDownloadPdfClick = async () => {
+    if (!canDownloadPdf) {
+      showAlert('You can download the PDF once the proposal is approved.', 'warning');
+      return;
+    }
+
+    await generatePDF();
+  };
+
+  const handlePreviewToggleClick = () => {
+    if (isViewMode) {
+      navigate('/financecard');
+      return;
+    }
+
+    setShowPreview((prev) => !prev);
   };
 
   const handleAddRow = () => {
@@ -1259,6 +1536,29 @@ const FinanceApproval: React.FC = () => {
     });
   };
 
+  const getBudgetRowKey = (rowIndex: number): string => {
+    const row = budgetRows[rowIndex];
+    const budgetLineId = budgetLineMetaByRow[rowIndex]?.budgetLineId ?? null;
+    if (budgetLineId) {
+      return `line:${budgetLineId}`;
+    }
+    return `head:${normalizeText(row?.category)}|sub:${normalizeText(row?.head)}`;
+  };
+
+  const getRemainingAvailableForRow = (rowIndex: number): number => {
+    const baseAvailable = Number(budgetLineMetaByRow[rowIndex]?.availableAmount ?? 0);
+    const rowKey = getBudgetRowKey(rowIndex);
+    const reservedByPreviousRows = budgetRows
+      .slice(0, rowIndex)
+      .reduce((sum, _prevRow, prevIndex) => {
+        if (getBudgetRowKey(prevIndex) !== rowKey) {
+          return sum;
+        }
+        return sum + Number(budgetRows[prevIndex]?.amount || 0);
+      }, 0);
+
+    return Math.max(0, baseAvailable - reservedByPreviousRows);
+  };
   const fetchBudgetAvailability = async (rowIndex: number, budgetHead: string, subHead: string) => {
     const normalizedHead = normalizeText(budgetHead);
     const normalizedSubHead = normalizeText(subHead);
@@ -1281,6 +1581,9 @@ const FinanceApproval: React.FC = () => {
           budget_head: normalizedHead,
           sub_head: normalizedSubHead,
           head_only_match: getHoacGroupForHead(normalizedHead) ? '1' : '0',
+          finance_id: isEditMode && id ? id : undefined,
+          beneficiary_type: beneficiaryType || undefined,
+          beneficiary_value: beneficiaryValue || undefined,
         },
       }) as {
         status: string;
@@ -1333,13 +1636,13 @@ const FinanceApproval: React.FC = () => {
     } else if (field === 'amount') {
       let num = Number(value) || 0;
       if (num > MAX_AMOUNT) num = MAX_AMOUNT;
-      const availableAmount = Number(budgetLineMetaByRow[index]?.availableAmount ?? 0);
-      if (availableAmount > 0 && num > availableAmount) {
+      const remainingAmount = getRemainingAvailableForRow(index);
+      if (num > remainingAmount) {
         showAlert(
-          `Row ${index + 1}: Requested amount cannot exceed available balance ₹ ${availableAmount.toFixed(2)}.`,
+          `Row ${index + 1}: Requested amount cannot exceed available balance Rs. ${remainingAmount.toFixed(2)}.`,
           'warning'
         );
-        num = availableAmount;
+        num = remainingAmount;
       }
       updated[index][field] = num.toString();
     } else {
@@ -1390,13 +1693,92 @@ const FinanceApproval: React.FC = () => {
     setIncomeRows((prev) => (prev.length === 1 ? prev : prev.filter((row) => row.id !== id)));
   };
 
-  const handleIncomeRowChange = (id: string, field: keyof IncomeRow, value: string) => {
-    setIncomeRows((prev) =>
-      prev.map((row) => (row.id === id ? { ...row, [field]: value } : row))
-    );
+  const handleIncomeRowChange = (id: string, field: keyof IncomeRow, value: string) =>
+  setIncomeRows((prev) =>
+    prev.map((row) =>
+      row.id === id
+        ? {
+            ...row,
+            [field]: field === "amount" ? value.replace(/\D/g, "") : value,
+          }
+        : row
+    )
+  );
+  const createAnnexureRowId = () => `annexure-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+
+  const handleAnnexureFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    if (!String(annexureType || '').trim()) {
+      showAlert('Please select annexure type before uploading files.', 'warning');
+      if (annexureFileInputRef.current) {
+        annexureFileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    const nextRows = files.map((file) => ({
+      id: createAnnexureRowId(),
+      annexureType: annexureType,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      originalName: file.name,
+      storedName: '',
+      filePath: '',
+      mimeType: file.type || '',
+      size: Number.isFinite(Number(file.size)) ? Number(file.size) : null,
+    }));
+
+    setAnnexureFiles((prev) => [...prev, ...nextRows]);
+    if (annexureFileInputRef.current) {
+      annexureFileInputRef.current.value = '';
+    }
   };
 
-  const totalBudget = budgetRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const getAnnexureOpenUrl = (row: AnnexureFileRow): string => {
+    const sourceUrl = String(row.previewUrl || row.filePath || '').trim();
+    if (!sourceUrl) return '';
+    if (sourceUrl.startsWith('http') || sourceUrl.startsWith('blob:')) {
+      return sourceUrl;
+    }
+    return `${authenticityUtility.getBaseURL()}${sourceUrl}`;
+  };
+
+  const openAnnexureFile = (row: AnnexureFileRow) => {
+    const openUrl = getAnnexureOpenUrl(row);
+    if (!openUrl) return;
+    window.open(openUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const deleteAnnexureFile = (rowId: string) => {
+    setAnnexureFiles((prev) => {
+      const target = prev.find((row) => row.id === rowId);
+      if (target?.previewUrl) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return prev.filter((row) => row.id !== rowId);
+    });
+  };
+
+  const getAnnexureSummary = () => {
+    if (!annexureFiles.length) {
+      return 'Not Added';
+    }
+    return annexureFiles
+      .map((row) => {
+        const type = String(row.annexureType || '').trim();
+        const name = String(row.originalName || row.storedName || row.file?.name || '').trim();
+        if (type && name) return `${type} - ${name}`;
+        if (type) return type;
+        return name || 'Unnamed File';
+      })
+      .join(', ');
+  };
+
+  const unplannedBudgetTotal = showUnplannedBudget ? Number(unplannedBudgetAmount || 0) : 0;
+  const hasUnplannedBudgetPreview = showUnplannedBudget || Number(unplannedBudgetAmount || 0) > 0;
+  const totalBudget = budgetRows.reduce((sum, row) => sum + Number(row.amount || 0), 0) + unplannedBudgetTotal;
   const actionCell: CSSProperties = {
     display: 'flex',
     justifyContent: 'center',
@@ -1421,7 +1803,31 @@ const FinanceApproval: React.FC = () => {
   const deleteIconBtn: CSSProperties = {
     ...iconBtn,
     background: '#ffe6e6',
-    alignItems: 'center'
+    alignItems: 'center',
+    color:'#dc3545'
+  };
+  const annexureUploadButtonStyle: CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    border: '1px solid #cfd8e3',
+    borderRadius: '12px',
+    padding: '12px 16px',
+    background: '#0069ab',
+    color: 'white',
+    fontWeight: 300,
+    cursor: 'pointer',
+    boxShadow: '0 6px 14px rgba(15, 23, 42, 0.06)',
+  };
+  const annexureFileRowStyle: CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    flexWrap: 'wrap',
+    color: '#1f2937',
+    fontSize: '0.92rem',
+    fontWeight: 500,
   };
 
   const incomeCellStyle: CSSProperties = {
@@ -1448,7 +1854,7 @@ const FinanceApproval: React.FC = () => {
       for (let index = 0; index < budgetRows.length; index += 1) {
         const row = budgetRows[index];
         const requestedAmount = Number(row.amount || 0);
-        const availableAmount = Number(budgetLineMetaByRow[index]?.availableAmount ?? 0);
+        const remainingAmount = getRemainingAvailableForRow(index);
 
         if (!row.category || !row.head) {
           showAlert(`Please select Budget Head and Sub Head for row ${index + 1}.`, 'warning');
@@ -1460,14 +1866,67 @@ const FinanceApproval: React.FC = () => {
           return;
         }
 
-        if (requestedAmount > availableAmount) {
+        if (requestedAmount > remainingAmount) {
           showAlert(
-            `Row ${index + 1}: Requested amount (₹ ${requestedAmount.toFixed(2)}) exceeds available balance (₹ ${availableAmount.toFixed(2)}).`,
+            `Row ${index + 1}: Requested amount (Rs. ${requestedAmount.toFixed(2)}) exceeds available balance (Rs. ${remainingAmount.toFixed(2)}).`,
             'warning'
           );
           return;
         }
       }
+
+      const annexuresPayload: Array<{
+        annexure_type: string | null;
+        original_name: string | null;
+        stored_name: string | null;
+        file_path: string | null;
+        mime_type: string | null;
+        file_size: number | null;
+      }> = [];
+
+      for (const row of annexureFiles) {
+        if (row.file) {
+          const formData = new FormData();
+          formData.append('file', row.file);
+          const uploadResponse = await authenticityUtility.postFile('/finance-requests/annexure/upload', formData) as {
+            status?: string;
+            data?: {
+              originalName?: string;
+              storedName?: string;
+              filePath?: string;
+              mimeType?: string;
+              size?: number;
+            };
+            message?: string;
+          };
+
+          if (uploadResponse?.status !== 'success' || !uploadResponse?.data) {
+            showAlert(uploadResponse?.message || 'Failed to upload annexure file', 'error');
+            return;
+          }
+
+          annexuresPayload.push({
+            annexure_type: row.annexureType || null,
+            original_name: uploadResponse.data.originalName || row.originalName || row.file.name || null,
+            stored_name: uploadResponse.data.storedName || null,
+            file_path: uploadResponse.data.filePath || null,
+            mime_type: uploadResponse.data.mimeType || row.mimeType || null,
+            file_size: Number.isFinite(Number(uploadResponse.data.size))
+              ? Number(uploadResponse.data.size)
+              : (row.size ?? null),
+          });
+        } else if (row.storedName && row.filePath) {
+          annexuresPayload.push({
+            annexure_type: row.annexureType || null,
+            original_name: row.originalName || row.storedName || null,
+            stored_name: row.storedName || null,
+            file_path: row.filePath || null,
+            mime_type: row.mimeType || null,
+            file_size: row.size ?? null,
+          });
+        }
+      }
+      const primaryAnnexure = annexuresPayload[0] || null;
 
       const primaryIncomeRow = showIncomeSection ? incomeRows[0] : undefined;
       const payload = {
@@ -1491,10 +1950,19 @@ const FinanceApproval: React.FC = () => {
         is_budget_proposed: isBudgetProposed,
         proposed_amount: amountProposed || null,
         balance_amount: balanceAmount || null,
+        unplanned_budget_enabled: showUnplannedBudget,
+        unplanned_budget_amount: showUnplannedBudget ? Number(unplannedBudgetAmount || 0) : null,
 
         income_type: primaryIncomeRow?.incomeSource || '',
         income_status: primaryIncomeRow?.creditAccount || '',
         income_amount_type: primaryIncomeRow?.contribution || '',
+        annexure_type: primaryAnnexure?.annexure_type || null,
+        annexure_file_name: primaryAnnexure?.original_name || null,
+        annexure_storage_name: primaryAnnexure?.stored_name || null,
+        annexure_file_path: primaryAnnexure?.file_path || null,
+        annexure_mime_type: primaryAnnexure?.mime_type || null,
+        annexure_file_size: primaryAnnexure?.file_size ?? null,
+        annexures: annexuresPayload,
         credit_status: primaryIncomeRow?.status || '',
         debit_status: debitStatus || null,
         partial_amount: primaryIncomeRow?.amount || null,
@@ -1593,7 +2061,7 @@ const FinanceApproval: React.FC = () => {
     }
   };
 
-  const handleReset = (force = false): void => {
+ const handleReset = (force = false): void => {
     const performReset = () => {
       setApplicantName('');
       setDate('');
@@ -1615,11 +2083,23 @@ const FinanceApproval: React.FC = () => {
       setDebitStatus('');
       setBalanceAmount('');
       setIsBudgetProposed('');
+      setShowUnplannedBudget(false);
+      setUnplannedBudgetAmount('');
       setBudgetRows([{ category: '', head: '', amount: '' }]);
       setBudgetLineMetaByRow({});
       setAmountProposed("");
       setShowIncomeSection(false);
       setIncomeRows([createIncomeRow()]);
+      setAnnexureType('');
+      annexureFiles.forEach((row) => {
+        if (row.previewUrl) {
+          URL.revokeObjectURL(row.previewUrl);
+        }
+      });
+      setAnnexureFiles([]);
+      if (annexureFileInputRef.current) {
+        annexureFileInputRef.current.value = '';
+      }
       setSelectedTag('');
     };
 
@@ -1656,6 +2136,17 @@ const FinanceApproval: React.FC = () => {
   const subcategoryList = subcategoryOptions.map(option => option.value);
   const hasSubcategories = subcategoryList.length > 0;
 
+  const getBeneficiaryDisplayText = () => {
+    const type = String(beneficiaryType || '').trim();
+    const value = String(beneficiaryValue || '').trim();
+
+    if (!type) return '\u00A0';
+    if (!value) return type;
+    if (type === 'Institution') return value;
+
+    return `${type} - ${value}`;
+  };
+
 
   const isMultipleSelect = (type: string) =>
     type === "Faculty" || type === "Staff";
@@ -1691,6 +2182,7 @@ const isApprovalMode = isViewMode && isAdminWorkflowContext;
 const normalizedWorkflowStatus = String(
   loadedWorkflowStatus || ''
 ).toLowerCase();
+const canDownloadPdf = ['approved', 'completed'].includes(normalizedWorkflowStatus);
 
 const hideWorkflowActionsForFinalStatus =
   ['approved', 'completed', 'rejected', 'archived'].includes(normalizedWorkflowStatus);
@@ -1761,6 +2253,37 @@ const hideWorkflowActionsForFinalStatus =
         setDescription(record.description || '');
         setEmployeeId(record.employee_id ? Number(record.employee_id) : null);
         setIsExternalApplicant(!record.employee_id);
+        setSubmittedAt(
+          String(
+            record.workflow_state?.submittedAt ||
+            record.workflow_state?.submitted_at ||
+            record.workflow_state?.startedAt ||
+            record.workflow_state?.started_at ||
+            record.created_at ||
+            record.submitted_at ||
+            ''
+          ).trim()
+        );
+        const workflowFinanceMeta = record.workflow_state?.financeMeta || {};
+        const recordUnplannedBudgetEnabled =
+          record.unplanned_budget_enabled ??
+          workflowFinanceMeta.unplannedBudgetEnabled ??
+          false;
+        const recordUnplannedBudgetAmount =
+          record.unplanned_budget_amount ??
+          workflowFinanceMeta.unplannedBudgetAmount ??
+          '';
+        const hasUnplannedBudgetAmount =
+          recordUnplannedBudgetAmount !== null &&
+          recordUnplannedBudgetAmount !== undefined &&
+          String(recordUnplannedBudgetAmount).trim() !== '' &&
+          Number(recordUnplannedBudgetAmount) > 0;
+        setShowUnplannedBudget(Boolean(recordUnplannedBudgetEnabled || hasUnplannedBudgetAmount));
+        setUnplannedBudgetAmount(
+          recordUnplannedBudgetAmount !== null && recordUnplannedBudgetAmount !== undefined
+            ? String(recordUnplannedBudgetAmount)
+            : ''
+        );
         setBeneficiaryType(record.beneficiary_type || '');
         setBeneficiaryValue(record.beneficiary_value || '');
         setPrimaryHead(record.primary_head || '');
@@ -1770,6 +2293,42 @@ const hideWorkflowActionsForFinalStatus =
         setBalanceAmount(record.balance_amount !== null && record.balance_amount !== undefined ? String(record.balance_amount) : '');
         setDebitStatus(record.debit_status || '');
         setSelectedTag(record.budget_tag || '');
+        const annexuresFromApi = Array.isArray(record.annexures)
+          ? record.annexures
+          : [];
+        const fallbackLegacyAnnexure = (record.annexure_file_path && record.annexure_storage_name)
+          ? [{
+            annexure_type: record.annexure_type || '',
+            original_name: record.annexure_file_name || record.annexure_storage_name || '',
+            stored_name: record.annexure_storage_name || '',
+            file_path: record.annexure_file_path || '',
+            mime_type: record.annexure_mime_type || '',
+            file_size: record.annexure_file_size,
+          }]
+          : [];
+        const effectiveAnnexures = annexuresFromApi.length ? annexuresFromApi : fallbackLegacyAnnexure;
+        setAnnexureFiles((prev) => {
+          prev.forEach((row) => {
+            if (row.previewUrl) {
+              URL.revokeObjectURL(row.previewUrl);
+            }
+          });
+          return effectiveAnnexures.map((row: any, index: number) => ({
+            id: `annexure-existing-${index}-${Date.now()}`,
+            annexureType: String(row?.annexure_type || ''),
+            file: null,
+            previewUrl: '',
+            originalName: String(row?.original_name || row?.annexure_file_name || row?.stored_name || row?.annexure_storage_name || ''),
+            storedName: String(row?.stored_name || row?.annexure_storage_name || ''),
+            filePath: String(row?.file_path || row?.annexure_file_path || ''),
+            mimeType: String(row?.mime_type || row?.annexure_mime_type || ''),
+            size: row?.file_size !== null && row?.file_size !== undefined ? Number(row.file_size) : null,
+          }));
+        });
+        setAnnexureType(String((effectiveAnnexures[0] as any)?.annexure_type || ''));
+        if (annexureFileInputRef.current) {
+          annexureFileInputRef.current.value = '';
+        }
         setLoadedWorkflowStatus(String(record.workflow_state?.status || record.workflow_status || record.overall_status || '').toLowerCase());
         setCategorySelections(
           String(record.beneficiary_value || '')
@@ -1985,6 +2544,38 @@ const hideWorkflowActionsForFinalStatus =
       setTotalPages(Math.ceil(contentHeight / pageHeight));
     }
   }, [showPreview, applicantName, department, totalBudget]);
+
+  useEffect(() => {
+    const routeState = location.state as { openPreview?: boolean; autoDownloadPdf?: boolean } | null;
+    if (!routeState) {
+      setShowPreview(false);
+      setAutoDownloadPdf(false);
+      return;
+    }
+
+    if (routeState.openPreview) {
+      setShowPreview(true);
+    }
+
+    setAutoDownloadPdf(Boolean(routeState.autoDownloadPdf));
+  }, [location.state]);
+
+  useEffect(() => {
+    autoDownloadTriggeredRef.current = false;
+  }, [id]);
+
+  useEffect(() => {
+    if (!autoDownloadPdf || autoDownloadTriggeredRef.current) {
+      return;
+    }
+
+    if (isLoading || !showPreview || !canDownloadPdf) {
+      return;
+    }
+
+    autoDownloadTriggeredRef.current = true;
+    void generatePDF();
+  }, [autoDownloadPdf, canDownloadPdf, generatePDF, isLoading, showPreview]);
 
   const activeHoacGroup = getHoacGroupForHead(primaryHead);
   const extraDropdownVisible = Boolean(activeHoacGroup);
@@ -2777,7 +3368,7 @@ const hideWorkflowActionsForFinalStatus =
                           flexWrap: 'wrap',
                         }}
                       >
-                        <div style={{ flex: 1, minWidth: '220px' }}>
+                        <div style={{ flex: '1 1 180px', minWidth: '180px' }}>
                           <CustomDropdown
                             name="primaryHead"
                             options={PRIMARY_HEAD_OPTIONS}
@@ -2791,7 +3382,7 @@ const hideWorkflowActionsForFinalStatus =
                           />
                         </div>
 
-                        <div style={{ flex: 1, minWidth: '220px' }}>
+                        <div style={{ flex: '1 1 180px', minWidth: '180px' }}>
                           <CustomDropdown
                             name="eventSubHead"
                             options={hoacSubheadDropdownOptions}
@@ -2801,6 +3392,16 @@ const hideWorkflowActionsForFinalStatus =
                               setEventSubHead(selected?.value ? String(selected.value) : '');
                             }}
                             placeholder="Select Sub Head"
+                          />
+                        </div>
+
+                        <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>Unplanned Budget</span>
+                          <CustomToggle
+                            name="unplannedBudgetToggle"
+                            label=""
+                            checked={showUnplannedBudget}
+                            onChange={(checked) => setShowUnplannedBudget(checked)}
                           />
                         </div>
                       </div>
@@ -2813,7 +3414,7 @@ const hideWorkflowActionsForFinalStatus =
                           flexWrap: 'wrap',
                         }}
                       >
-                        <div style={{ flex: 1, minWidth: '250px' }}>
+                        <div style={{ flex: '1 1 180px', minWidth: '180px' }}>
                           <CustomDropdown
                             name="primaryHead"
                             options={PRIMARY_HEAD_OPTIONS}
@@ -2824,6 +3425,15 @@ const hideWorkflowActionsForFinalStatus =
                               setEventSubHead('');
                             }}
                             placeholder="Select Primary Head"
+                          />
+                        </div>
+                        <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>Unplanned Budget</span>
+                          <CustomToggle
+                            name="unplannedBudgetToggle"
+                            label=""
+                            checked={showUnplannedBudget}
+                            onChange={(checked) => setShowUnplannedBudget(checked)}
                           />
                         </div>
                       </div>
@@ -2847,7 +3457,7 @@ const hideWorkflowActionsForFinalStatus =
                       <th style={{ width: '30%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget Head</th>
                       <th style={{ width: '30%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Sub Head</th>
                       <th style={{ width: '15%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Amount</th>
-                      <th style={{ width: '8%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Actions</th>
+                      <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2909,7 +3519,7 @@ const hideWorkflowActionsForFinalStatus =
                             value={row.amount}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => handleBudgetChange(index, 'amount', e.target.value)}
                             disabled={!primaryHead}
-                            placeholder={`₹ ${(budgetLineMetaByRow[index]?.availableAmount ?? 0).toFixed(2)}`}
+                            placeholder={`₹ ${getRemainingAvailableForRow(index).toFixed(2)}`}
                             style={{
                               border: '1px solid #e0e0e0',
                               borderRadius: '8px',
@@ -2959,7 +3569,8 @@ const hideWorkflowActionsForFinalStatus =
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   fontSize: '18px',
-                                  transition: 'all 0.15s ease'
+                                  transition: 'all 0.15s ease',
+                                  color:'#dc3545'
                                 }}
                                 title="Delete Row"
                                 onMouseEnter={(e) => {
@@ -2991,7 +3602,8 @@ const hideWorkflowActionsForFinalStatus =
                                   justifyContent: 'center',
                                   fontSize: '18px',
                                   transition: 'all 0.15s ease',
-                                  opacity: primaryHead ? 1 : 0.5
+                                  opacity: primaryHead ? 1 : 0.5,
+                                  color:'#0069ab'
                                 }}
                                 title="Add Row"
                                 onMouseEnter={(e) => {
@@ -3010,6 +3622,47 @@ const hideWorkflowActionsForFinalStatus =
                         </td>
                       </tr>
                     ))}
+                    {hasUnplannedBudgetPreview && (
+                      <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
+                        <td colSpan={3} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab', backgroundColor: '#fafcff' }}>
+                          Unplanned Budget
+                        </td>
+                        <td style={{ padding: '12px', border: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
+                          <input
+                            type="text"
+                            value={unplannedBudgetAmount}
+                             onChange={(e: ChangeEvent<HTMLInputElement>) =>
+    setUnplannedBudgetAmount(e.target.value.replace(/\D/g, ""))
+  }
+                            placeholder="₹ 0.00"
+                            style={{
+                              border: '1px solid #e0e0e0',
+                              borderRadius: '8px',
+                              padding: '8px 12px',
+                              fontSize: '0.9rem',
+                              width: '120px',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              color: '#000',
+                              cursor: 'pointer',
+                              outline: 'none',
+                              textAlign: 'left',
+                              margin: '0 auto',
+                              display: 'block',
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                          />
+                        </td>
+                        <td style={{ border: '1px solid #e0e0e0', backgroundColor: '#fafcff' }} />
+                      </tr>
+                    )}
                   </tbody>
                   <tfoot>
                     <tr style={{ backgroundColor: '#f0f6ff' }}>
@@ -3061,7 +3714,7 @@ const hideWorkflowActionsForFinalStatus =
                 marginBottom: '20px',
                 boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
               }}
-            >
+             >
               <div className="row mt-3">
                 <div className="col-md-12">
                   <div className="form-group">
@@ -3101,7 +3754,7 @@ const hideWorkflowActionsForFinalStatus =
                               <th style={{ width: '25%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Contribution</th>
                               <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Amount</th>
                               <th style={{ width: '20%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Status</th>
-                              <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Action</th>
+                              <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Actions</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -3142,8 +3795,8 @@ const hideWorkflowActionsForFinalStatus =
                                         type="text"
                                         value={row.amount}
                                         onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                                          handleIncomeRowChange(row.id, "amount", e.target.value)
-                                        }
+                                                  handleIncomeRowChange(row.id, "amount", e.target.value.replace(/\D/g, ""))
+                                                }
                                         placeholder="₹ 0"
                                         min="0"
                                         step="0"
@@ -3188,8 +3841,8 @@ const hideWorkflowActionsForFinalStatus =
                                       border: '1px solid #e0e0e0',
                                       textAlign: 'center',
                                       verticalAlign: 'middle',
-                                      backgroundColor: '#fff'
-                                    }}>
+                                      backgroundColor: '#fff',
+                                      }}>
                                       <div style={actionCell}>
                                         {(index > 0 || (index === 0 && incomeRows.length > 1)) && (
                                           <button
@@ -3229,6 +3882,7 @@ const hideWorkflowActionsForFinalStatus =
                                               justifyContent: 'center',
                                               fontSize: '18px',
                                               transition: 'all 0.15s ease',
+                                              color:'#0069ab'
                                             }}
                                             title="Add Row"
                                             className="btn-sm"
@@ -3309,180 +3963,358 @@ const hideWorkflowActionsForFinalStatus =
                 </div>
               </div>
             </div>
+
+          </div>
+          <div
+            style={{
+              backgroundColor: '#fff',
+              padding: '24px',
+              borderRadius: '20px',
+              marginBottom: '20px',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+              border: '1px solid #e0e0e0',
+            }}
+           >
+            <div className="row mt-3">
+              <div className="col-md-12">
+                <div className="form-group">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px' }}>
+                    <span style={{ fontSize: '16px', color: '#495057', fontWeight: 600 }}>
+                      Annexure
+                    </span>
+                  </div>
+
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <div className="form-group mb-0">
+                        
+                        <CustomDropdown
+                          name="annexureType"
+                          options={toOptions(ANNEXURE_TYPE_OPTIONS)}
+                          value={getSelectedOption(annexureType, toOptions(ANNEXURE_TYPE_OPTIONS))}
+                          onChange={(option) => {
+                            const selected = option as OptionType | null;
+                            setAnnexureType(selected?.value ? String(selected.value) : '');
+                          }}
+                          placeholder="Select"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="col-md-6">
+                      <div className="form-group mb-0">
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                          <input
+                            ref={annexureFileInputRef}
+                            id="annexure-file-input"
+                            type="file"
+                            multiple
+                            style={{ display: 'none' }}
+                            onChange={handleAnnexureFileChange}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => annexureFileInputRef.current?.click()}
+                            style={annexureUploadButtonStyle}
+                          >
+                            <Upload size={18} />
+                            Choose File
+                          </button>
+
+                          {annexureFiles.length ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {annexureFiles.map((fileRow) => (
+                                <div key={fileRow.id} style={annexureFileRowStyle}>
+                                  <span
+                                    style={{
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      maxWidth: '240px',
+                                    }}
+                                    title={fileRow.originalName || fileRow.storedName}
+                                  >
+                                    {fileRow.originalName || fileRow.storedName}
+                                  </span>
+                                  {fileRow.annexureType ? (
+                                    <span style={{ fontSize: '0.82rem', color: '#6b7280' }}>
+                                      ({fileRow.annexureType})
+                                    </span>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    onClick={() => openAnnexureFile(fileRow)}
+                                    style={{
+                                      border: 'none',
+                                      background: 'transparent',
+                                      color: '#0069ab',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      cursor: 'pointer',
+                                      padding: '2px',
+                                    }}
+                                    title="View uploaded document"
+                                  >
+                                    <Eye size={18} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteAnnexureFile(fileRow.id)}
+                                    style={{
+                                      border: 'none',
+                                      background: 'transparent',
+                                      color: '#dc3545',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      cursor: 'pointer',
+                                      padding: '2px',
+                                    }}
+                                    title="Delete annexure"
+                                  >
+                                    <Trash2 size={18} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: '0.9rem', color: '#6c757d' }}>
+                              No file selected
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
     <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0' }}>
-  <div
-    style={{
-      maxWidth: '100%',
-      margin: '0 auto',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '18px',
-    }}
-  >
-    <div
-      className="finance-top-actions"
-      style={{
-        display: 'flex',
-        gap: '10px',
-        flexWrap: 'nowrap',
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}
-    >
-      <button
-        onClick={() => setShowPreview(!showPreview)}
+      <div
         style={{
-          backgroundColor: '#0069ab',
-          color: '#fff',
-          border: 'none',
-          padding: '10px 20px',
-          borderRadius: '12px',
-          fontWeight: '500',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease',
-          whiteSpace: 'nowrap',
+          maxWidth: '100%',
+          margin: '0 auto',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '18px',
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
-        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
-        disabled={isLoading}
       >
-        {showPreview ? 'Hide Preview' : 'Show Preview'}
-      </button>
+        {!showPreview && !isViewMode && (
+          <button
+            type="button"
+            onClick={handleSubmit}
+            style={{
+              backgroundColor: '#0069ab',
+              color: '#fff',
+              border: 'none',
+              padding: '12px 24px',
+              borderRadius: '12px',
+              fontSize: '0.95rem',
+              fontWeight: '500',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.3s ease',
+              minWidth: '140px',
+              opacity: isLoading ? 0.7 : 1,
+              whiteSpace: 'nowrap',
+            }}
+            disabled={isLoading}
+            onMouseEnter={(e) => {
+              if (!isLoading) e.currentTarget.style.backgroundColor = '#005492';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#0069ab';
+            }}
+          >
+            {isLoading ? 'Submitting...' : isEditMode ? 'Update Form' : 'Submit Form'}
+          </button>
+        )}
 
-      <button
-        onClick={generatePDF}
-        style={{
-          backgroundColor: '#0069ab',
-          color: '#fff',
-          border: 'none',
-          padding: '10px 20px',
-          borderRadius: '12px',
-          fontWeight: '500',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease',
-          whiteSpace: 'nowrap',
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
-        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
-        disabled={isLoading || !showPreview}
-      >
-        {isLoading ? 'Generating...' : 'Download PDF'}
-      </button>
-
-      {!isApprovalMode && !isViewMode && (
-        <button
-          type="button"
-          onClick={handleSubmit}
-          style={{
-            backgroundColor: '#0069ab',
-            color: '#fff',
-            border: 'none',
-            padding: '12px 24px',
-            borderRadius: '12px',
-            fontSize: '0.95rem',
-            fontWeight: '500',
-            cursor: isLoading ? 'not-allowed' : 'pointer',
-            transition: 'all 0.3s ease',
-            minWidth: '140px',
-            opacity: isLoading ? 0.7 : 1,
-            whiteSpace: 'nowrap',
-          }}
-          disabled={isLoading}
-          onMouseEnter={(e) => {
-            if (!isLoading) e.currentTarget.style.backgroundColor = '#005492';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#0069ab';
-          }}
-        >
-          {isLoading ? 'Submitting...' : isEditMode ? 'Update Form' : 'Submit Form'}
-        </button>
-      )}
-    </div>
-
-    {isApprovalMode && !hideWorkflowActionsForFinalStatus ? (
-      <div className="finance-workflow-actions">
-        <button
-          type="button"
-          className="finance-workflow-btn finance-workflow-btn--approve"
-          onClick={() => handleWorkflowAction('approved')}
-          disabled={isLoading}
-        >
-          <CheckCircle2 size={18} />
-          Approve
-        </button>
-        <button
-          type="button"
-          className="finance-workflow-btn finance-workflow-btn--return"
-          onClick={() => handleWorkflowAction('returned')}
-          disabled={isLoading}
-        >
-          <RotateCcw size={18} />
-          Return
-        </button>
-        <button
-          type="button"
-          className="finance-workflow-btn finance-workflow-btn--reject"
-          onClick={() => handleWorkflowAction('rejected')}
-          disabled={isLoading}
-        >
-          <XCircle size={18} />
-          Reject
-        </button>
-        <button
-          type="button"
-          className="finance-workflow-btn finance-workflow-btn--archive"
-          onClick={() => handleWorkflowAction('archived')}
-          disabled={isLoading}
-        >
-          <Archive size={18} />
-          Archive
-        </button>
+        {isApprovalMode && !hideWorkflowActionsForFinalStatus ? (
+          <div className="finance-workflow-actions">
+            <button
+              type="button"
+              className="finance-workflow-btn finance-workflow-btn--approve"
+              onClick={() => handleWorkflowAction('approved')}
+              disabled={isLoading}
+            >
+              <CheckCircle2 size={18} />
+              Approve
+            </button>
+            <button
+              type="button"
+              className="finance-workflow-btn finance-workflow-btn--return"
+              onClick={() => handleWorkflowAction('returned')}
+              disabled={isLoading}
+            >
+              <RotateCcw size={18} />
+              Return
+            </button>
+            <button
+              type="button"
+              className="finance-workflow-btn finance-workflow-btn--reject"
+              onClick={() => handleWorkflowAction('rejected')}
+              disabled={isLoading}
+            >
+              <XCircle size={18} />
+              Reject
+            </button>
+            <button
+              type="button"
+              className="finance-workflow-btn finance-workflow-btn--archive"
+              onClick={() => handleWorkflowAction('archived')}
+              disabled={isLoading}
+            >
+              <Archive size={18} />
+              Archive
+            </button>
+          </div>
+        ) : null}
       </div>
-    ) : null}
-  </div>
-</div>
+    </div>
 
       {showPreview && (() => {
         const getApprovalDetailUi = (stageKeys: string[]) => {
-          let lastResetIdx = -1;
-          for (let i = statusUpdates.length - 1; i >= 0; i--) {
-            const dec = String(statusUpdates[i].decision).toLowerCase();
-            const stat = String(statusUpdates[i].status).toLowerCase();
-            if (dec === 'returned' || dec === 'rejected' || stat === 'returned' || stat === 'rejected' || dec === 'resubmitted' || dec.includes('resubmit')) {
-              lastResetIdx = i;
-              break;
-            }
-          }
-          const currentFlowUpdates = statusUpdates.slice(lastResetIdx + 1);
+  let lastResetIdx = -1;
 
-          const approved = currentFlowUpdates.filter(u =>
-            stageKeys.includes(String(u.stage).toLowerCase()) &&
-            (String(u.status).toLowerCase() === 'approved' || String(u.decision).toLowerCase() === 'approved' || String(u.status).toLowerCase().includes('approved'))
-          );
-          if (approved.length === 0) return { name: '', date: '' };
+  for (let i = statusUpdates.length - 1; i >= 0; i--) {
+    const dec = String(statusUpdates[i]?.decision || '').toLowerCase();
+    const stat = String(statusUpdates[i]?.status || '').toLowerCase();
 
-          approved.sort((a, b) => {
-            const tA = new Date(a.decided_at || a.created_at || 0).getTime();
-            const tB = new Date(b.decided_at || b.created_at || 0).getTime();
-            return tB - tA; // latest first
-          });
-          const latest = approved[0];
-          const dateStr = latest.decided_at || latest.created_at;
-          const formattedDate = dateStr ? new Date(dateStr).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true }) : '';
-          return { name: latest.user_name || latest.actor_name || '', date: formattedDate };
-        };
+    if (
+      dec === 'returned' ||
+      dec === 'rejected' ||
+      stat === 'returned' ||
+      stat === 'rejected' ||
+      dec === 'resubmitted' ||
+      dec.includes('resubmit')
+    ) {
+      lastResetIdx = i;
+      break;
+    }
+  }
 
-        const level1ApprovalUi = getApprovalDetailUi(['level1', 'hod', 'coordinator', 'ithead']);
-        const dofApprovalUi = getApprovalDetailUi(['dof']);
-        const principalApprovalUi = getApprovalDetailUi(['principal']);
-        const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
+  const currentFlowUpdates = statusUpdates.slice(lastResetIdx + 1);
 
+  const approved = currentFlowUpdates.filter((u: any) => {
+    const stage = String(u?.stage || '').toLowerCase();
+    const decision = String(u?.decision || '').toLowerCase();
+    const status = String(u?.status || '').toLowerCase();
+
+    return (
+      stageKeys.includes(stage) &&
+      (decision === 'approved' || status === 'approved' || status.includes('approved'))
+    );
+  });
+
+  if (approved.length === 0) {
+    return { name: '', email: '', date: '' };
+  }
+
+  approved.sort((a: any, b: any) => {
+    const tA = new Date(a?.decidedat || a?.createdat || 0).getTime();
+    const tB = new Date(b?.decidedat || b?.createdat || 0).getTime();
+    return tB - tA;
+  });
+
+  const latest = approved[0];
+  const dateStr = latest?.decidedat || latest?.createdat;
+
+  const formattedDate = dateStr
+    ? new Date(dateStr).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour12: true,
+      })
+    : '';
+
+ return {
+  name: latest?.username || latest?.actorname || '',
+  email: latest?.email || latest?.actoremail || latest?.useremail || '',
+  date: formattedDate,
+};
+};
+const getSubmittedDetailUi = () => {
+  const approvalHistory = getWorkflowTimeline(statusUpdates, {
+    name: applicantName || '',
+    email: email || '',
+    date: submittedAt ? formatWorkflowTimestamp(submittedAt) : getCurrentWorkflowTimestamp(),
+  });
+  const submittedTimestamp = getSubmittedTimestamp(
+    approvalHistory,
+    submittedAt ? formatWorkflowTimestamp(submittedAt) : '',
+    !id
+  );
+  const submitted = approvalHistory.find((entry) => entry.label === 'Submitted');
+
+  if (!submitted) {
+    return { name: applicantName || '', email: email || '', date: submittedTimestamp };
+  }
+
+  return {
+    name: submitted.actor || applicantName || '',
+    email: submitted.email || email || '',
+    date: submittedTimestamp || submitted.timestamp || '',
+  };
+};
+
+        const submittedByUi = getSubmittedDetailUi();
+const level1ApprovalUi = getApprovalDetailUi(['level1', 'hod', 'coordinator', 'ithead']);
+const dofApprovalUi = getApprovalDetailUi(['dof']);
+const principalApprovalUi = getApprovalDetailUi(['principal']);
+const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
+        const approvalHistory = getWorkflowTimeline(statusUpdates, {
+          name: applicantName || '',
+          email: email || '',
+          date: submittedAt ? formatWorkflowTimestamp(submittedAt) : getCurrentWorkflowTimestamp(),
+        });
+        const approvalSteps = approvalHistory.filter((entry) => entry.label !== 'Submitted');
+
+  const renderPersonLine = (name?: string, mail?: string, timestamp?: string) => {
+  const trimmedName = String(name || '').trim();
+  const trimmedMail = String(mail || '').trim();
+  const trimmedTime = String(timestamp || '').trim();
+
+  const actorAlreadyHasMail =
+    trimmedMail.length > 0 &&
+    trimmedName.toLowerCase().includes(trimmedMail.toLowerCase());
+
+  const displayName = trimmedName || '-';
+  const displayMail = trimmedMail && !actorAlreadyHasMail ? ` (${trimmedMail})` : '';
+  const displayTime = trimmedTime ? ` on ${trimmedTime}` : '';
+
+  return (
+    <span>
+      {displayName}
+      {displayMail}
+      {displayTime}
+    </span>
+  );
+};
+  const previewTimelineRowStyle: CSSProperties = {
+    padding: '8px 10px',
+    fontSize: '14px',
+    lineHeight: '1.45',
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '4px',
+    alignItems: 'baseline',
+  };
+
+  const previewTimelineLabelStyle: CSSProperties = {
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+  };
+
+  const previewTimelineValueStyle: CSSProperties = {
+    flex: '1 1 auto',
+    minWidth: 0,
+  };
         return (
           <div ref={componentRef} style={{
             position: 'relative',
@@ -3555,15 +4387,15 @@ const hideWorkflowActionsForFinalStatus =
             <table style={{
               marginBottom: "14px",
               tableLayout: "fixed",
-              width: '98%',
+              width: '94%',
               borderCollapse: 'collapse',
-              marginLeft: '24px'
+              margin: '0 auto 14px auto'
             }}>
               <tr>
                 <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '20%', fontSize: '14px' }}><strong>Name</strong></td>
                 <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '35%', fontSize: '14px' }}>{applicantName || '\u00A0'}</td>
                 <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '15%', fontSize: '14px' }}><strong>Date</strong></td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '25%', fontSize: '14px' }}>{date ? formatDMY(date) : '\u00A0'}</td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '30%', fontSize: '14px' }}>{date ? formatDMY(date) : '\u00A0'}</td>
               </tr>
               <tr>
                 <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Department</strong></td>
@@ -3580,8 +4412,7 @@ const hideWorkflowActionsForFinalStatus =
               <tr>
                 <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Beneficiary</strong></td>
                 <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={3}>
-                  {beneficiaryType || '\u00A0'}
-                  {hasSubcategories && beneficiaryValue && ` - ${beneficiaryValue}`}
+                  {getBeneficiaryDisplayText()}
                 </td>
               </tr>
               <tr>
@@ -3592,17 +4423,18 @@ const hideWorkflowActionsForFinalStatus =
               </tr>
               <tr>
                 <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Head of Accounts</strong></td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={3}>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}>
                   {primaryHead || '\u00A0'}
                   {extraDropdownVisible && eventSubHead && ` - ${eventSubHead}`}
                 </td>
-              </tr>
-              <tr>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Proposed in Budget</strong></td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={3}>
-                  {isBudgetProposed === 'Yes' ? `Yes | Amount: ₹ ${amountProposed || '0.00'} | Balance: ₹ ${balanceAmount || '0.00'}` : 'Not Proposed'}
+                
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Annexure</strong></td>
+                <td  style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>
+                  {getAnnexureSummary()}
                 </td>
+              
               </tr>
+              
               <tr>
                 <td colSpan={4} style={{ padding: '8px 6px', border: '1px solid #000', verticalAlign: 'top' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', marginTop: '4px' }}>
@@ -3623,6 +4455,12 @@ const hideWorkflowActionsForFinalStatus =
                           <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {Number(row.amount || 0).toFixed(2)}</td>
                         </tr>
                       ))}
+                      {hasUnplannedBudgetPreview && (
+                        <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
+                          <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right', fontWeight: 'bold' }}>Unplanned Budget:</td>
+                          <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {Number(unplannedBudgetAmount || 0).toFixed(2)}</td>
+                        </tr>
+                      )}
                       <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
                         <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right', fontWeight: 'bold' }}>Total Budget:</td>
                         <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {totalBudget.toFixed(2)}</td>
@@ -3673,61 +4511,97 @@ const hideWorkflowActionsForFinalStatus =
                 </td>
               </tr>
               <tr>
-                <td colSpan={4} style={{ padding: '6px 8px', border: '1px solid #000', textAlign: 'left', fontSize: '14px', fontWeight: 'bold', backgroundColor: "#f8f9fa" }}>
-                  Digitally Signed By:
-                </td>
-              </tr>
-              <tr>
-                <td style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px', fontWeight: 'bold' }}>
-                  Head of Dept. / Coordinator
-                </td>
-                <td colSpan={2} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px' }}>
-                  {level1ApprovalUi.name ? `Name: ${level1ApprovalUi.name}` : 'Name:'}
-                </td>
-                <td colSpan={1} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px' }}>
-                  {level1ApprovalUi.date ? `Date & Time: ${level1ApprovalUi.date}` : 'Date & Time:'}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px', fontWeight: 'bold' }}>
-                  Director of Finance
-                </td>
-                <td colSpan={2} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px' }}>
-                  {dofApprovalUi.name ? `Name: ${dofApprovalUi.name}` : 'Name:'}
-                </td>
-                <td colSpan={1} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px' }}>
-                  {dofApprovalUi.date ? `Date & Time: ${dofApprovalUi.date}` : 'Date & Time:'}
-                </td>
-              </tr>
-              {totalBudget <= 10000 ? (
-                <tr>
-                  <td style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px', fontWeight: 'bold' }}>
-                    Principal
-                  </td>
-                  <td colSpan={2} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px' }}>
-                    {principalApprovalUi.name ? `Name: ${principalApprovalUi.name}` : 'Name:'}
-                  </td>
-                  <td colSpan={1} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px' }}>
-                    {principalApprovalUi.date ? `Date & Time: ${principalApprovalUi.date}` : 'Date & Time:'}
-                  </td>
-                </tr>
-              ) : (
-                <tr>
-                  <td colSpan={2} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px', fontWeight: 'bold', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
-                    {principalApprovalUi.name
-                      ? `Principal\nName: ${principalApprovalUi.name}\nDate & Time: ${principalApprovalUi.date}`
-                      : 'Principal'
-                    }
-                  </td>
-                  <td colSpan={2} style={{ padding: '6px 8px', border: '1px solid #000', fontSize: '14px', fontWeight: 'bold', textAlign: 'right', whiteSpace: 'pre-wrap' }}>
-                    {chairmanApprovalUi.name
-                      ? `Chairman\nName: ${chairmanApprovalUi.name}\nDate & Time: ${chairmanApprovalUi.date}`
-                      : 'Chairman'
-                    }
-                  </td>
-                </tr>
-              )}
+  <td colSpan={4} style={{ padding: '0', border: '1px solid #000' }}>
+    {approvalHistory.length === 0 ? (
+      <div style={previewTimelineRowStyle}>
+        No approval history available
+      </div>
+    ) : (
+      <>
+        <div
+          style={{
+            ...previewTimelineRowStyle,
+            borderBottom: approvalSteps.length > 0 ? '1px solid #000' : 'none',
+          }}
+        >
+          <span style={previewTimelineLabelStyle}>Submitted by</span>
+          <span style={previewTimelineValueStyle}>
+            {renderPersonLine(submittedByUi.name, submittedByUi.email, submittedByUi.date)}
+          </span>
+        </div>
+
+        {approvalSteps.map((entry, index) => (
+          <div
+            key={`${entry.label}-${index}`}
+            style={{
+              ...previewTimelineRowStyle,
+              borderBottom: index === approvalSteps.length - 1 ? 'none' : '1px solid #000',
+            }}
+          >
+            <span style={previewTimelineLabelStyle}>{entry.label} by</span>
+            <span style={previewTimelineValueStyle}>
+              {renderPersonLine(entry.actor, entry.email, entry.timestamp)}
+            </span>
+          </div>
+        ))}
+      </>
+    )}
+  </td>
+</tr>
             </table>
+
+            <div
+              style={{
+                marginTop: '18px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => navigate('/financecard')}
+                style={{
+                  backgroundColor: '#0069ab',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '12px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
+                disabled={isLoading}
+              >
+                Back to Dashboard
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadPdfClick}
+                style={{
+                  backgroundColor: '#0069ab',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '12px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Generating...' : 'Download PDF'}
+              </button>
+            </div>
           </div>
         );
       })()}
@@ -3747,3 +4621,5 @@ const hideWorkflowActionsForFinalStatus =
 };
 
 export default FinanceApproval;
+
+
