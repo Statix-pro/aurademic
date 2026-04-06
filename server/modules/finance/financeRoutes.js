@@ -2,6 +2,7 @@ import express from 'express';
 import financeController from './financeController.js';
 import financeModel from './financeModel.js';
 import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
+import upload from '../../middleware/uploadMiddleware.js';
 
 const router = express.Router();
 
@@ -61,6 +62,7 @@ router.get('/org-units/:type', financeController.getOrgUnits);
 router.get('/budget-availability', financeController.getBudgetAvailability);
 router.get('/search-applicant', financeController.searchApplicant);
 router.get('/me', financeController.getCurrentEmployeeInfo);
+router.post('/annexure/upload', upload.single('file'), financeController.uploadAnnexureFile);
 
 // Workflow metadata + queues
 router.get('/workflow/meta', canAccessFinanceWorkflow, financeController.getWorkflowMeta);
