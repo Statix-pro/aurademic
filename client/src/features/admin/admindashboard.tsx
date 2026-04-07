@@ -147,45 +147,73 @@ const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
   onViewStatusUpdates
 }) => {
   const getBadgeDetails = () => {
+    const normalizeStatusToken = (value: unknown) =>
+      String(value || "")
+        .trim()
+        .toLowerCase();
+
     let variant = 'secondary';
-    const statusVal = item.status || '';
-    const pubStatusVal = (item.publication_status as string) || '';
+    const statusVal = String(item.status || '');
+    const pubStatusVal = String((item.publication_status as string) || '');
     let label = statusVal || pubStatusVal || 'Unknown';
     let subText: React.ReactNode = null;
     let dateText: string = '';
     let pendingActions: string[] = [];
+    const adminApprovalStatus = normalizeStatusToken(item.admin_approval_status);
+    const editRequestStatus = normalizeStatusToken(item.edit_request_status);
 
     const dateVal = (item.created_at as string) || (item.submission_date as string);
     const dateFormatted = dateVal ? new Date(dateVal).toLocaleDateString() : '';
 
-    if (item.admin_approval_status === "pending") pendingActions.push('submission');
-    if (item.edit_request_status === "pending") pendingActions.push('edit');
+    const isSubmissionPending = !adminApprovalStatus || adminApprovalStatus === "pending";
+    const isSubmissionRejected = adminApprovalStatus === "rejected";
+    const isSubmissionApproved = adminApprovalStatus === "approved";
+    const rejectedAtRaw = String((item.admin_rejected_at as string) || '').trim();
+    const updatedAtRaw = String((item.updated_at as string) || '').trim();
+    const rejectedAtMs = rejectedAtRaw ? new Date(rejectedAtRaw).getTime() : 0;
+    const updatedAtMs = updatedAtRaw ? new Date(updatedAtRaw).getTime() : 0;
+    const isResubmittedAfterRejection = Boolean(
+      rejectedAtMs &&
+      updatedAtMs &&
+      !Number.isNaN(rejectedAtMs) &&
+      !Number.isNaN(updatedAtMs) &&
+      updatedAtMs > rejectedAtMs
+    );
+    const effectivePendingState = isSubmissionPending || (isSubmissionRejected && isResubmittedAfterRejection);
+
+    if (effectivePendingState) pendingActions.push('submission');
+    if (editRequestStatus === "pending") pendingActions.push('edit');
 
     // 1. Rejected state takes precedence
-    if (item.admin_approval_status === "rejected") {
+    if (isSubmissionRejected && !isResubmittedAfterRejection) {
       variant = "danger";
       label = "Rejected";
-      subText = <span className="text-danger" style={{ fontSize: '0.75rem', maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block' }}>REASON: {item.admin_approval_comment || "Not specified"}</span>;
+      const reason = String(item.admin_approval_comment || '').trim();
+      subText = reason
+        ? <span className="text-danger" style={{ fontSize: '0.75rem', maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block' }}>REASON: {reason}</span>
+        : null;
     }
     // 2. Pending Actions take precedence over approved/published statuses
-    else if (item.admin_approval_status === "pending") {
+    else if (effectivePendingState) {
       variant = "warning";
       label = "Pending Approval";
       if (pendingActions.length > 1) {
         subText = <span className="text-danger fw-bold" style={{ fontSize: '0.75rem' }}>MULTIPLE ACTIONS REQ.</span>;
+      } else if (isResubmittedAfterRejection) {
+        subText = <span className="workflow-subtext-resubmitted">Resubmitted</span>;
       } else {
         subText = <span className="text-danger fw-bold" style={{ fontSize: '0.75rem' }}>REQ. APPROVAL</span>;
       }
     }
-    else if (item.edit_request_status === "pending") {
+    else if (editRequestStatus === "pending") {
       variant = "warning";
       label = "Edit Requested";
       subText = <span className="text-danger fw-bold" style={{ fontSize: '0.75rem' }}>REQ. REVIEW</span>;
     }
     // 3. Approved state, check publication lifecycle pipeline
-    else if (item.admin_approval_status === "approved") {
+    else if (isSubmissionApproved) {
       // The API returns 'status' from journals (j.status), but to be safe we check 'publication_status' too
-      const pubStatus = (statusVal || pubStatusVal).toLowerCase();
+      const pubStatus = normalizeStatusToken(pubStatusVal || statusVal);
 
       if (pubStatus === 'published' || pubStatus === 'accepted') {
         variant = "success";
@@ -209,7 +237,7 @@ const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
       } else if (pubStatus === 'waiting' || pubStatus === '') {
         // Submission was approved by Admin, but hasn't entered 'Published/Peer Review' yet 
         variant = "info";
-        label = "Submission Approved";
+        label = "Approved";
         subText = <span className="text-muted" style={{ fontSize: '0.75rem' }}>Awaiting Publication</span>;
         dateText = dateFormatted;
       } else {
@@ -224,42 +252,81 @@ const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
       dateText = dateFormatted;
     }
 
-    return { variant, label, subText, dateText, pendingActions };
+    return { variant, label, subText, dateText, pendingActions, isResubmittedAfterRejection };
   };
 
-  const { variant, label, subText, dateText, pendingActions } = getBadgeDetails();
+  const { variant, label, subText, dateText, pendingActions, isResubmittedAfterRejection } = getBadgeDetails();
+  const hasSubmissionAction = pendingActions.includes('submission');
+  const showStatusSummary = !hasSubmissionAction;
 
   return (
     <div className="workflow-cell d-flex justify-content-between align-items-center w-100" style={{ minWidth: '220px' }}>
       <div className="workflow-status-block d-flex flex-column align-items-start h-100 justify-content-center" style={{ minWidth: '150px' }}>
-        <span className={`workflow-badge fw-medium px-2 py-1 rounded-pill d-inline-flex align-items-center workflow-badge-${variant}`}>
-          <span className={`workflow-badge-dot rounded-circle me-1 bg-${variant}`} style={{ width: '8px', height: '8px' }}></span>
-          <span style={{ fontSize: '0.8rem' }}>{label}</span>
-        </span>
-        {subText && <div className="workflow-subtext mt-1 lh-1">{subText}</div>}
+        {showStatusSummary && (
+          <>
+            <span className={`workflow-badge fw-medium px-2 py-1 rounded-pill d-inline-flex align-items-center workflow-badge-${variant}`}>
+              <span className={`workflow-badge-dot rounded-circle me-1 bg-${variant}`} style={{ width: '8px', height: '8px' }}></span>
+              <span style={{ fontSize: '0.8rem' }}>{label}</span>
+            </span>
+            {subText && <div className="workflow-subtext mt-1 lh-1">{subText}</div>}
+          </>
+        )}
+        {(pendingActions.includes('submission') || pendingActions.includes('edit')) && (
+          <div className="workflow-inline-actions mt-2">
+            {pendingActions.includes('submission') && (
+              <div className="workflow-action-card workflow-action-card--submission">
+                <span className="workflow-action-title">
+                  {isResubmittedAfterRejection ? 'Resubmitted' : 'Submitted'}
+                </span>
+                <div className="workflow-action-buttons">
+                  <button
+                    type="button"
+                    className="workflow-action-btn workflow-action-btn--approve"
+                    onClick={() => onSubmissionApproval(item.id, "approved")}
+                    title="Approve Submission"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="workflow-action-btn workflow-action-btn--reject"
+                    onClick={() => onSubmissionApproval(item.id, "rejected")}
+                    title="Reject Submission"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+            {pendingActions.includes('edit') && (
+              <div className="workflow-action-card workflow-action-card--edit">
+                <span className="workflow-action-title">Edit Req</span>
+                <div className="workflow-action-buttons">
+                  <button
+                    type="button"
+                    className="workflow-action-btn workflow-action-btn--approve"
+                    onClick={() => onEditRequestStatus(item.id, "approved")}
+                    title="Approve Edit Request"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="workflow-action-btn workflow-action-btn--reject"
+                    onClick={() => onEditRequestStatus(item.id, "rejected")}
+                    title="Reject Edit Request"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="workflow-right-side d-flex flex-column align-items-end gap-1">
         <div className="workflow-actions d-flex align-items-center gap-1">
-        {pendingActions.includes('submission') && (
-          <div className="d-flex flex-column align-items-center p-1 bg-white rounded border border-warning shadow-sm" style={{ minWidth: '70px', borderStyle: 'dashed' }}>
-            <span className="text-muted mb-1 text-uppercase" style={{ fontSize: '0.65rem', lineHeight: 1, fontWeight: 700 }}>Submission</span>
-            <div className="btn-group align-items-center rounded">
-              <button type="button" className="btn btn-sm btn-success p-1 lh-1" onClick={() => onSubmissionApproval(item.id, "approved")} title="Approve Submission"><Check size={14} /></button>
-              <button type="button" className="btn btn-sm btn-danger p-1 lh-1" onClick={() => onSubmissionApproval(item.id, "rejected")} title="Reject Submission"><X size={14} /></button>
-            </div>
-          </div>
-        )}
-        {pendingActions.includes('edit') && (
-          <div className="d-flex flex-column align-items-center p-1 bg-white rounded border border-warning shadow-sm" style={{ minWidth: '70px', borderStyle: 'dashed' }}>
-            <span className="text-muted mb-1 text-uppercase" style={{ fontSize: '0.65rem', lineHeight: 1, fontWeight: 700 }}>Edit Req</span>
-            <div className="btn-group align-items-center rounded">
-              <button type="button" className="btn btn-sm btn-success p-1 lh-1" onClick={() => onEditRequestStatus(item.id, "approved")} title="Approve Edit Request"><Check size={14} /></button>
-              <button type="button" className="btn btn-sm btn-danger p-1 lh-1" onClick={() => onEditRequestStatus(item.id, "rejected")} title="Reject Edit Request"><X size={14} /></button>
-            </div>
-          </div>
-        )}
-
         <div className="d-flex align-items-center ml-auto">
           <button type="button" className="btn btn-sm btn-light border-0 text-secondary bg-transparent p-1" onClick={() => onViewDetails(item.id)} title="View Publication Details">
             <Eye size={16} />
@@ -276,7 +343,7 @@ const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
         </div>
         </div>
         {dateText && (
-          <div className="workflow-date mt-n1 text-end" style={{ width: '100%', fontSize: '0.65rem', color: '#888', fontWeight: 500 }}>
+          <div className="workflow-date mt-n1 text-end">
              Submitted: {dateText}
           </div>
         )}
@@ -1427,7 +1494,8 @@ const Dashboard: React.FC = () => {
             <div className="col-md-6">
               <p><strong>Impact Factor:</strong> {(journal.impact_factor as string) || "N/A"}</p>
               <p><strong>Indexes:</strong> {journal.index_names ? journal.index_names.join(", ") : "N/A"}</p>
-              <p><strong>Print:</strong> {(journal.print_issn as string) || "N/A"} <strong> Online: </strong> {(journal.online_issn as string) || "N/A"}</p>
+              <p><strong>Print:</strong> {(journal.print_issn as string) || "N/A"}</p>
+              <p><strong>Online:</strong> {(journal.online_issn as string) || "N/A"}</p>
             </div>
           </div>
         </div>
@@ -1486,6 +1554,11 @@ const Dashboard: React.FC = () => {
             {(journal.file_path as string) && (
               <div className="col-md-4 mb-2">
                 <a href={getFileUrl(journal.file_path as string)} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm w-100">View Document</a>
+              </div>
+            )}
+            {!(journal.file_path as string) && (
+              <div className="col-12">
+                <p className="text-muted mb-0">No documents attached.</p>
               </div>
             )}
           </div>

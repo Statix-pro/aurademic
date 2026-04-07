@@ -155,6 +155,22 @@ const debounce = <T extends (...args: any[]) => any>(func: T, wait: number = 300
   }) as T;
 };
 
+const dedupeTagsCaseInsensitive = (values: string[] = []): string[] => {
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+
+  for (const raw of values) {
+    const normalized = String(raw || '').trim();
+    if (!normalized) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(normalized);
+  }
+
+  return deduped;
+};
+
 const JournalForm: React.FC = () => {
   const { journalId: urlJournalId } = useParams<{ journalId?: string }>();
   const navigate = useNavigate();
@@ -211,6 +227,7 @@ const JournalForm: React.FC = () => {
   const [journalId, setJournalId] = useState<string | undefined>(urlJournalId);
   const justAddedAuthorRef = useRef<boolean>(false); // Track if author was just added
   const isLoadingJournalDataRef = useRef<boolean>(false); // Track if journal data is being loaded programmatically
+  const suppressAuthorAutoSearchRef = useRef<boolean>(false); // Prevent suggestion popup from programmatic prefill
   const [isInternational, setIsInternational] = useState<boolean>(false);
   const [editMode, setEditMode] = useState<boolean>(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -421,16 +438,15 @@ const JournalForm: React.FC = () => {
   // Auto-select Type on create (no journalId)
   useEffect(() => {
     if (!journalId && categoryParam) {
-      const typeSelect = document.getElementById('typeSelect') as HTMLSelectElement;
-      if (typeSelect) {
-        if (categoryParam === 'Conference') {
-          typeSelect.value = 'Conference paper';
-        } else if (categoryParam === 'Book Chapter') {
-          typeSelect.value = 'Book Chapter';
-        } else if (categoryParam === 'Book') {
-          typeSelect.value = 'Book';
-        }
+      if (categoryParam === 'Conference') {
+        setCurrentType('Conference paper');
+      } else if (categoryParam === 'Book Chapter') {
+        setCurrentType('Book Chapter');
+      } else if (categoryParam === 'Book') {
+        setCurrentType('Book');
+      } else {
         // Don't auto-select for Journal as requested
+        setCurrentType('');
       }
     }
   }, [journalId, categoryParam]);
@@ -474,6 +490,10 @@ const JournalForm: React.FC = () => {
   }, [editMode, journalId]);
 
   useEffect(() => {
+    if (suppressAuthorAutoSearchRef.current) {
+      return;
+    }
+
     const delayDebounceFn = searchQueries.map((query, index) => {
       const authorJustSelected = authors[index]?.author_id === query;
       if (query.length > 0 && !isViewMode && !authorJustSelected) {
@@ -582,22 +602,6 @@ const JournalForm: React.FC = () => {
       setUploadedFileName('');
     }
   }, [metrics.dateOfSubmission]);
-
-  useEffect(() => {
-    if (journalId) {
-      fetchJournalDetails();
-    }
-  }, [journalId]);
-
-  useEffect(() => {
-    if (journalId) {
-      fetchJournalDetails().then((success) => {
-        if (!success) {
-          console.error('Failed to load journal details');
-        }
-      });
-    }
-  }, [journalId]);
 
   // Fetch status updates when switching to status tab
   useEffect(() => {
@@ -1049,7 +1053,7 @@ const JournalForm: React.FC = () => {
 
         // Set indexes
         if (Array.isArray(journalData.indexes)) {
-          setSelectedIndexes(journalData.indexes);
+          setSelectedIndexes(dedupeTagsCaseInsensitive(journalData.indexes));
         } else {
           setSelectedIndexes([]);
         }
@@ -1274,6 +1278,7 @@ const JournalForm: React.FC = () => {
         });
 
         // Update search queries for authors
+        suppressAuthorAutoSearchRef.current = true;
         setSearchQueries((prevQueries) => {
           const prevArray = Array.isArray(prevQueries)
             ? prevQueries
@@ -1298,6 +1303,9 @@ const JournalForm: React.FC = () => {
           });
           return newDesignations.slice(0, fetchedAuthors.length);
         });
+        setTimeout(() => {
+          suppressAuthorAutoSearchRef.current = false;
+        }, 250);
       }
 
       // Append external.external_details JSON
@@ -1958,6 +1966,12 @@ const JournalForm: React.FC = () => {
               onFocus={() => {
                 // Skip if author was just added to prevent auto-dropdown
                 if (justAddedAuthorRef.current) return;
+                const selectedAuthor = authors[index];
+                const hasSelectedAuthor = Boolean(
+                  selectedAuthor?.name &&
+                  (selectedAuthor?.author_id || selectedAuthor?.register_no)
+                );
+                if (hasSelectedAuthor) return;
                 // Trigger search on focus to show dropdown when clicking
                 if (!isViewMode && editMode) {
                   searchAuthor(searchQueries[index] || '', index);
@@ -2379,6 +2393,10 @@ const JournalForm: React.FC = () => {
 
     // Helper to safely get form values
     const getFormValue = (name: string, defaultValue: string | null = null): string | null => {
+      if (name === 'type') {
+        const normalizedType = String(currentType || '').trim();
+        if (normalizedType) return normalizedType;
+      }
       const element = (event.currentTarget as HTMLFormElement).elements.namedItem(name) as HTMLInputElement;
       if (!element) return defaultValue;
       if (element.type === 'radio') {
@@ -3060,6 +3078,8 @@ const JournalForm: React.FC = () => {
                           id="typeSelect"
                           name="type"
                           className="form-select"
+                          value={currentType}
+                          onChange={(e) => setCurrentType(e.target.value)}
                           required
                           disabled={(!editMode && isViewMode) || effectiveIsConference || effectiveIsBookChapter || effectiveIsBook}
                         >
@@ -3114,7 +3134,7 @@ const JournalForm: React.FC = () => {
                       <CustomTagInput
                         name="index"
                         value={selectedIndexes}
-                        onChange={setSelectedIndexes}
+                        onChange={(values) => setSelectedIndexes(dedupeTagsCaseInsensitive(values))}
                         suggestions={(() => {
                           const availableIndexes = ['SCIE', 'Scopus', 'PubMed', 'Google Scholar'];
                           return availableIndexes.filter(index =>
