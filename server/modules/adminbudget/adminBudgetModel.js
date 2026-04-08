@@ -126,6 +126,7 @@ async function applyBudgetAnnualDeltaByProposalId(proposalId, conn, direction = 
     `SELECT id,
             fiscal_year,
             beneficiary_type,
+            beneficiary_value,
             beneficiary_entity_id,
             department_id,
             ${budgetWindowSelect}
@@ -172,10 +173,59 @@ async function applyBudgetAnnualDeltaByProposalId(proposalId, conn, direction = 
     Number.isInteger(Number(proposal.department_id)) && Number(proposal.department_id) > 0
       ? Number(proposal.department_id)
       : null;
-  const beneficiaryEntityId =
+  let beneficiaryEntityId =
     Number.isInteger(Number(proposal.beneficiary_entity_id)) && Number(proposal.beneficiary_entity_id) > 0
       ? Number(proposal.beneficiary_entity_id)
       : null;
+
+  const beneficiaryTypeForEntity = normalizeBeneficiaryType(proposal.beneficiary_type);
+  const entityTypeCode = beneficiaryTypeToEntityTypeCode(beneficiaryTypeForEntity);
+
+  if (!beneficiaryEntityId && isEntityBeneficiaryType(beneficiaryTypeForEntity) && entityTypeCode) {
+    const normalizedBeneficiaryValue = normalizeText(proposal.beneficiary_value);
+
+    if (normalizedBeneficiaryValue) {
+      const [entityRows] = await conn.execute(
+        `SELECT me.id
+           FROM master_entities me
+           JOIN master_entity_types met ON me.entity_type_id = met.id
+          WHERE me.is_active = 1
+            AND met.code = ?
+            AND LOWER(TRIM(me.name)) = LOWER(TRIM(?))
+          LIMIT 1`,
+        [entityTypeCode, normalizedBeneficiaryValue]
+      );
+      if (entityRows.length) {
+        beneficiaryEntityId = Number(entityRows[0].id);
+      }
+    }
+
+    if (!beneficiaryEntityId && entityTypeCode === 'INSTITUTION') {
+      const [entityRows] = await conn.execute(
+        `SELECT me.id
+           FROM master_entities me
+           JOIN master_entity_types met ON me.entity_type_id = met.id
+          WHERE me.is_active = 1
+            AND met.code = ?
+          ORDER BY me.id ASC
+          LIMIT 2`,
+        [entityTypeCode]
+      );
+      if (entityRows.length === 1) {
+        beneficiaryEntityId = Number(entityRows[0].id);
+      }
+    }
+
+    if (beneficiaryEntityId) {
+      await conn.execute(
+        `UPDATE budget_proposals
+            SET beneficiary_entity_id = ?
+          WHERE id = ?
+            AND (beneficiary_entity_id IS NULL OR beneficiary_entity_id <= 0)`,
+        [beneficiaryEntityId, proposalIdentifier]
+      );
+    }
+  }
 
   const [updated] = await conn.execute(
     `UPDATE Budget_annual
@@ -1904,7 +1954,7 @@ export async function listBudgetAnnualSummaryEntries({
       ba.department_id,
       COALESCE(ba.entity_id, ba.beneficiary_entity_id) AS beneficiary_entity_id,
       md.name AS department,
-      COALESCE(md.name, me.name, CONCAT(ba.beneficiary_type, ' #', ba.id)) AS beneficiary_label,
+      COALESCE(md.name, me.name, NULLIF(TRIM(ba.beneficiary_type), ''), CONCAT('Unknown #', ba.id)) AS beneficiary_label,
       ba.created_at AS created_at,
       ba.proposed_total_amount,
       ba.approved_total_amount,

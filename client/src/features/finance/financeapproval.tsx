@@ -1,10 +1,7 @@
-import React, { useState, useRef, CSSProperties, useEffect, ChangeEvent, MouseEvent } from 'react';
+import React, { useState, useRef, CSSProperties, useEffect, useMemo, ChangeEvent, MouseEvent } from 'react';
 import { Info, Library, CheckCircle2, RotateCcw, XCircle, Archive, Upload, Eye, Trash2 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { PDFDocument } from 'pdf-lib';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './financeapproval.css';
 import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
@@ -15,6 +12,17 @@ import CustomInput from '../../shared/components/ui/CustomInput';
 import CustomDropdown, { OptionType } from '../../shared/components/ui/CustomDropdown';
 import CustomToggle from '../../shared/components/ui/CustomToggle';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
+import {
+  formatDMY,
+  numberToIndianWords,
+  formatWorkflowTimestamp,
+  getCurrentWorkflowTimestamp,
+  getWorkflowTimeline,
+  formatWorkflowPersonText,
+  getSubmittedTimestamp,
+  getAnnexureOpenUrl,
+  generateAndDownloadFinancePdf,
+} from './financeApprovalPdf';
 
 interface SelectOption {
   value: string;
@@ -718,156 +726,262 @@ const createIncomeRow = (): IncomeRow => ({
 const normalizeText = (value: string | null | undefined): string =>
   String(value || '').trim();
 
-const getWorkflowField = (update: any, keys: string[]) => {
-  for (const key of keys) {
-    const value = update?.[key];
-    if (value !== undefined && value !== null && String(value).trim() !== '') {
-      return value;
+interface SearchBudgetModalProps {
+  show: boolean;
+  searchTerm: string;
+  expandedHead: string;
+  activeSubHead: string;
+  onClose: () => void;
+  onSearchTermChange: (value: string) => void;
+  onExpandedHeadChange: (value: string) => void;
+  onActiveSubHeadChange: (value: string) => void;
+  onSelectHead: (head: string) => void;
+  onSelectSubHead: (head: string, subhead: string) => void;
+}
+
+const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
+  show,
+  searchTerm,
+  expandedHead,
+  activeSubHead,
+  onClose,
+  onSearchTermChange,
+  onExpandedHeadChange,
+  onActiveSubHeadChange,
+  onSelectHead,
+  onSelectSubHead,
+}) => {
+  const allData = useMemo(
+    () =>
+      BUDGET_HEAD_GROUPS.flatMap((group) =>
+        group.options.map((head) => ({
+          head,
+          subheads: SUB_HEAD_BY_BUDGET_HEAD[head] || [],
+        }))
+      ),
+    []
+  );
+
+  const query = searchTerm.trim().toLowerCase();
+
+  const filteredData = useMemo(
+    () =>
+      allData
+        .filter(({ head, subheads }) => {
+          if (!query) return true;
+          return (
+            head.toLowerCase().includes(query) ||
+            subheads.some((sub) => sub.toLowerCase().includes(query))
+          );
+        })
+        .sort((a, b) => {
+          if (!query) return 0;
+          const aScore = a.head.toLowerCase().includes(query) ? 0 : 1;
+          const bScore = b.head.toLowerCase().includes(query) ? 0 : 1;
+          return aScore - bScore;
+        }),
+    [allData, query]
+  );
+
+  useEffect(() => {
+    if (!show || !expandedHead) return;
+
+    const headBlock = document.querySelector(`[data-head="${expandedHead}"]`);
+    if (!headBlock) return;
+
+    let targetSub = activeSubHead;
+    if (!targetSub && query) {
+      const item = filteredData.find((x) => x.head === expandedHead);
+      const match = item?.subheads.find((subhead) => subhead.toLowerCase().includes(query));
+      if (match) targetSub = match;
     }
-  }
-  return '';
-};
 
-const formatWorkflowTimestamp = (value: any): string => {
-  if (!value) return '';
+    if (!targetSub) return;
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
+    setTimeout(() => {
+      const el = headBlock.querySelector(`[data-subhead="${targetSub}"]`);
+      if (el) {
+        (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 0);
+  }, [activeSubHead, expandedHead, filteredData, query, show]);
 
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Kolkata',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true,
-  }).formatToParts(date);
+  if (!show) return null;
 
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  const day = lookup.day || '00';
-  const month = lookup.month || '00';
-  const year = lookup.year || '0000';
-  const hour = lookup.hour || '00';
-  const minute = lookup.minute || '00';
-  const second = lookup.second || '00';
-  const suffix = String(lookup.dayPeriod || '').toLowerCase();
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10000,
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: '#fff',
+          borderRadius: '16px',
+          padding: '30px',
+          maxWidth: '700px',
+          maxHeight: '80vh',
+          overflowY: 'auto',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          border: '2px solid #0069ab',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '20px',
+          }}
+        >
+          <h2
+            style={{
+              margin: 0,
+              color: '#0069ab',
+              fontSize: '20px',
+              fontWeight: 'bold',
+            }}
+          >
+            Search Budget Heads & Subheads
+          </h2>
 
-  return `${day}.${month}.${year}, ${hour}:${minute}:${second} ${suffix}`.trim();
-};
+          <button
+            onClick={onClose}
+            style={{
+              fontSize: '24px',
+              cursor: 'pointer',
+              background: 'none',
+              border: 'none',
+            }}
+          >
+            ×
+          </button>
+        </div>
 
-const getCurrentWorkflowTimestamp = (): string => formatWorkflowTimestamp(new Date());
+        <CustomInput
+          name="searchTerm"
+          type="text"
+          value={searchTerm}
+          onChange={(value) => {
+            onSearchTermChange(value);
+            onActiveSubHeadChange('');
+          }}
+          autoFocus={true}
+          onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
+          placeholder="Type head or subhead"
+          onFocus={(e) => (e.currentTarget.style.borderColor = '#0069ab')}
+          onBlur={(e) => (e.currentTarget.style.borderColor = '#e0e0e0')}
+        />
 
-const getWorkflowDecisionLabel = (update: any): string => {
-  const decision = String(getWorkflowField(update, ['decision', 'status'])).toLowerCase();
+        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+          {filteredData.length > 0 ? (
+            filteredData.map(({ head, subheads }) => {
+              const isExpanded = expandedHead === head;
 
-  if (decision.includes('submit')) return 'Submitted';
-  if (decision.includes('approv') || decision === 'completed') return 'Approved';
-  if (decision.includes('return')) return 'Returned';
-  if (decision.includes('reject')) return 'Rejected';
-  if (decision.includes('resubmit')) return 'Resubmitted';
-  if (decision.includes('update')) return 'Updated';
-  return 'Updated';
-};
+              return (
+                <div
+                  key={head}
+                  data-head={head}
+                  style={{
+                    padding: '16px',
+                    marginBottom: '12px',
+                    borderRadius: '12px',
+                    backgroundColor: '#f8f9fa',
+                    borderLeft: '4px solid #0069ab',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '12px',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    <div
+                      style={{ cursor: 'pointer', fontWeight: 'bold', fontSize: '16px' }}
+                      title="Click to use this Head"
+                      onClick={() => onSelectHead(head)}
+                    >
+                      {head}
+                    </div>
 
-const getWorkflowActorLabel = (update: any, fallback = '-'): string => {
-  const name = String(getWorkflowField(update, ['userName', 'user_name', 'actorName', 'actor_name'])).trim();
-  const email = String(getWorkflowField(update, ['actorEmail', 'actor_email', 'email', 'userEmail', 'user_email'])).trim();
+                    <div
+                      style={{ cursor: 'pointer', fontSize: '14px', color: '#666' }}
+                      title="Expand / collapse subheads"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onExpandedHeadChange(isExpanded ? '' : head);
+                        onActiveSubHeadChange('');
+                      }}
+                    >
+                      {subheads.length} subheads {isExpanded ? '▼' : '▶'}
+                    </div>
+                  </div>
 
-  if (name) return name;
-if (email) return email;
-return fallback;
-};
+                  <div style={{ fontSize: '14px', color: '#666' }}>
+                    {subheads.slice(0, 3).join(', ')}
+                    {subheads.length > 3 && !isExpanded && '...'}
+                  </div>
 
-const getWorkflowTimeline = (
-  updates: any[],
-  fallback?: { name: string; email: string; date: string }
-): Array<{ label: string; actor: string; email: string; timestamp: string; stage: string }> => {
-  if (!Array.isArray(updates) || updates.length === 0) {
-    return fallback
-      ? [{
-          label: 'Submitted',
-          actor: fallback.name || fallback.email || '-',
-          email: fallback.email || '',
-          timestamp: fallback.date || '',
-          stage: '',
-        }]
-      : [];
-  }
-
-  let lastResetIdx = -1;
-  for (let i = updates.length - 1; i >= 0; i -= 1) {
-    const decision = String(getWorkflowField(updates[i], ['decision', 'status'])).toLowerCase();
-    if (
-      decision === 'returned' ||
-      decision === 'rejected' ||
-      decision === 'resubmitted' ||
-      decision.includes('resubmit')
-    ) {
-      lastResetIdx = i;
-      break;
-    }
-  }
-
-  const currentFlowUpdates = updates.slice(lastResetIdx + 1);
-  const timeline = currentFlowUpdates
-    .map((update) => {
-      const label = getWorkflowDecisionLabel(update);
-      if (label === 'Updated') return null;
-
-      return {
-        label,
-        actor: getWorkflowActorLabel(update),
-        email: String(getWorkflowField(update, ['actorEmail', 'actor_email', 'email', 'userEmail', 'user_email'])).trim(),
-        timestamp: formatWorkflowTimestamp(
-          getWorkflowField(update, ['decidedAt', 'decided_at', 'createdAt', 'created_at'])
-        ),
-        stage: String(getWorkflowField(update, ['stage', 'role'])).toLowerCase(),
-      };
-    })
-    .filter((item): item is { label: string; actor: string; email: string; timestamp: string; stage: string } => Boolean(item));
-
-  if (timeline.length === 0 && fallback) {
-    return [{
-      label: 'Submitted',
-      actor: fallback.name || fallback.email || '-',
-      email: fallback.email || '',
-      timestamp: fallback.date || '',
-      stage: '',
-    }];
-  }
-
-  return timeline;
-};
-
-const formatWorkflowPersonText = (name?: string, mail?: string, timestamp?: string): string => {
-  const trimmedName = String(name || '').trim();
-  const trimmedMail = String(mail || '').trim();
-  const trimmedTime = String(timestamp || '').trim();
-  const actorAlreadyHasMail =
-    trimmedMail.length > 0 &&
-    trimmedName.toLowerCase().includes(trimmedMail.toLowerCase());
-
-  const displayName = trimmedName || '-';
-  const displayMail = trimmedMail && !actorAlreadyHasMail ? ` (${trimmedMail})` : '';
-  const displayTime = trimmedTime ? ` on ${trimmedTime}` : '';
-
-  return `${displayName}${displayMail}${displayTime}`;
-};
-
-const getSubmittedTimestamp = (
-  timeline: Array<{ label: string; actor: string; email: string; timestamp: string; stage: string }>,
-  fallbackDate?: string,
-  fallbackToCurrent = false
-): string => {
-  const explicitFallback = String(fallbackDate || '').trim();
-  if (explicitFallback) return explicitFallback;
-
-  const submittedEntry = timeline.find((entry) => entry.label === 'Submitted' && String(entry.timestamp || '').trim());
-  if (submittedEntry) return submittedEntry.timestamp;
-
-  return fallbackToCurrent ? getCurrentWorkflowTimestamp() : '';
+                  {isExpanded && (
+                    <div
+                      style={{
+                        marginTop: '12px',
+                        maxHeight: '170px',
+                        overflowY: 'auto',
+                        borderTop: '1px solid #e0e0e0',
+                        paddingTop: '12px',
+                      }}
+                    >
+                      {subheads.map((subhead) => (
+                        <div
+                          key={`${head}-${subhead}`}
+                          data-subhead={subhead}
+                          style={{
+                            padding: '8px 10px',
+                            marginBottom: '6px',
+                            backgroundColor: 'white',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            borderLeft: '3px solid #28a745',
+                            cursor: 'pointer',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectSubHead(head, subhead);
+                          }}
+                        >
+                          {subhead}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          ) : (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+              No matches for "{searchTerm}"
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const FinanceApproval: React.FC = () => {
@@ -914,6 +1028,7 @@ const FinanceApproval: React.FC = () => {
   const [annexureType, setAnnexureType] = useState<string>('');
   const [annexureFiles, setAnnexureFiles] = useState<AnnexureFileRow[]>([]);
   const annexureFileInputRef = useRef<HTMLInputElement>(null);
+  const annexureFilesRef = useRef<AnnexureFileRow[]>([]);
 
   // State for tag options
   const [tagOptions, setTagOptions] = useState<SelectOption[]>(FALLBACK_TAG_OPTIONS);
@@ -937,6 +1052,20 @@ const FinanceApproval: React.FC = () => {
   };
 
   const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+
+  useEffect(() => {
+    annexureFilesRef.current = annexureFiles;
+  }, [annexureFiles]);
+
+  useEffect(() => {
+    return () => {
+      annexureFilesRef.current.forEach((row) => {
+        if (row.previewUrl && row.previewUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(row.previewUrl);
+        }
+      });
+    };
+  }, []);
 
   // Load all beneficiary options (Department, Centre, Cell, Club, Professional Body) - SAME AS BUDGET.TSX
   useEffect(() => {
@@ -1092,327 +1221,16 @@ const FinanceApproval: React.FC = () => {
     documentTitle: "Finance_Approval_Request",
   });
 
-  const triggerPdfDownload = (bytes: ArrayBuffer | Uint8Array) => {
-    const normalizedBytes = bytes instanceof Uint8Array
-      ? new Uint8Array(bytes)
-      : new Uint8Array(bytes);
-    const blob = new Blob([normalizedBytes], { type: 'application/pdf' });
-    const blobUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.download = 'FinanceApprovalRequest.pdf';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(blobUrl);
-  };
-
-  const mergeAndDownloadPdfWithAnnexures = async (mainPdfBuffer: ArrayBuffer) => {
-    const annexures = annexureFiles.filter((row) => String(row.filePath || '').trim());
-    if (!annexures.length) {
-      triggerPdfDownload(mainPdfBuffer);
-      return;
-    }
-
-    const mergedPdf = await PDFDocument.create();
-    const primaryPdf = await PDFDocument.load(mainPdfBuffer);
-    const primaryPages = await mergedPdf.copyPages(primaryPdf, primaryPdf.getPageIndices());
-    primaryPages.forEach((page) => mergedPdf.addPage(page));
-
-    const skippedFiles: string[] = [];
-    const token = localStorage.getItem('token');
-
-    for (const annexure of annexures) {
-      const fileLabel = String(annexure.originalName || annexure.storedName || annexure.filePath || 'Annexure').trim();
-      const annexureUrl = getAnnexureOpenUrl(annexure);
-      if (!annexureUrl) {
-        skippedFiles.push(fileLabel);
-        continue;
-      }
-
-      try {
-        const response = await fetch(annexureUrl, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        });
-        if (!response.ok) {
-          skippedFiles.push(fileLabel);
-          continue;
-        }
-
-        const annexureBytes = await response.arrayBuffer();
-        const lowerName = fileLabel.toLowerCase();
-        const mimeType = String(annexure.mimeType || '').toLowerCase();
-        const isPdf = mimeType.includes('pdf') || lowerName.endsWith('.pdf');
-        const isPng = mimeType.includes('png') || lowerName.endsWith('.png');
-        const isJpg = mimeType.includes('jpeg') || mimeType.includes('jpg') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg');
-
-        if (isPdf) {
-          const annexurePdf = await PDFDocument.load(annexureBytes);
-          const annexurePages = await mergedPdf.copyPages(annexurePdf, annexurePdf.getPageIndices());
-          annexurePages.forEach((page) => mergedPdf.addPage(page));
-          continue;
-        }
-
-        if (isPng || isJpg) {
-          const imageBytes = new Uint8Array(annexureBytes);
-          const image = isPng
-            ? await mergedPdf.embedPng(imageBytes)
-            : await mergedPdf.embedJpg(imageBytes);
-          const page = mergedPdf.addPage([595.28, 841.89]);
-          const width = page.getWidth();
-          const height = page.getHeight();
-          const fit = image.scaleToFit(width - 40, height - 40);
-          page.drawImage(image, {
-            x: (width - fit.width) / 2,
-            y: (height - fit.height) / 2,
-            width: fit.width,
-            height: fit.height,
-          });
-          continue;
-        }
-
-        skippedFiles.push(fileLabel);
-      } catch {
-        skippedFiles.push(fileLabel);
-      }
-    }
-
-    const mergedBytes = await mergedPdf.save();
-    triggerPdfDownload(mergedBytes);
-
-    if (skippedFiles.length) {
-      showAlert(
-        `Downloaded combined PDF. Skipped unsupported annexure files: ${skippedFiles.join(', ')}`,
-        'warning'
-      );
-    }
-  };
-
   const generatePDF = async (): Promise<void> => {
     try {
       setIsLoading(true);
-
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const margin = 12;
-      let yPos = 10;
-
-      const tableWidth = pageWidth - margin * 2;
-
-      // ======= HEADER TABLE (3 cells: Logo | College Name | FINANCE) =======
-      let compressedLogo: string | null = null;
-      try {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = KSRCTLogo;
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-          setTimeout(resolve, 2000);
-        });
-
-        const logoCanvas = document.createElement('canvas');
-        const targetSize = 100;
-        logoCanvas.width = targetSize;
-        logoCanvas.height = targetSize;
-        const ctx = logoCanvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, targetSize, targetSize);
-          ctx.drawImage(img, 0, 0, targetSize, targetSize);
-          compressedLogo = logoCanvas.toDataURL('image/jpeg', 0.7);
-        }
-      } catch {
-        // If logo fails, skip it
-      }
-
-      // Create header table with borders
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.3, valign: 'middle' },
-        columnStyles: {
-          0: { cellWidth: 22, halign: 'center' },
-          1: { cellWidth: tableWidth - 22 - 22, halign: 'center' },
-          2: { cellWidth: 22, halign: 'center' }
-        },
-        body: [[
-          { content: '', styles: { minCellHeight: 22 } },
-          { content: '', styles: { minCellHeight: 22 } },
-          { content: 'FINANCE', styles: { fontStyle: 'bold', fontSize: 10 } }
-        ]],
-        didDrawCell: (data: any) => {
-          if (data.column.index === 0 && data.row.index === 0 && compressedLogo) {
-            const logoSize = 15;
-            const x = data.cell.x + (data.cell.width - logoSize) / 2;
-            const y = data.cell.y + (data.cell.height - logoSize) / 2;
-            pdf.addImage(compressedLogo, 'JPEG', x, y, logoSize, logoSize);
-          }
-          if (data.column.index === 1 && data.row.index === 0) {
-            const cellCenterX = data.cell.x + data.cell.width / 2;
-            const cellCenterY = data.cell.y + data.cell.height / 2;
-
-            pdf.setFontSize(16);
-            pdf.setFont('helvetica', 'bold');
-            pdf.text('K.S.RANGASAMY COLLEGE OF TECHNOLOGY', cellCenterX, cellCenterY - 4, { align: 'center' });
-
-            pdf.setFontSize(9);
-            pdf.setFont('helvetica', 'normal');
-            pdf.text('(Autonomous)', cellCenterX, cellCenterY + 1, { align: 'center' });
-            pdf.text('Tiruchengode - 637 215, Namakkal Dt. Tamil Nadu', cellCenterX, cellCenterY + 6, { align: 'center' });
-          }
-        }
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY + 6;
-
-      pdf.setFontSize(13);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('APPLICATION FOR FINANCIAL APPROVAL', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 6;
-
-      const formattedDate = date ? formatDMY(date) : '';
-      const beneficiaryText = getBeneficiaryDisplayText();
-      const headOfAccountsText = primaryHead + (extraDropdownVisible && eventSubHead ? ' - ' + eventSubHead : '');
-      const budgetProposedText = isBudgetProposed === 'Yes'
-        ? 'Yes | Amount: Rs. ' + (amountProposed || '0.00') + ' | Balance: Rs. ' + (balanceAmount || '0.00')
-        : 'Not Proposed';
-
-      const mainTableBody: any[] = [
-        ['Name', applicantName || '', 'Date', formattedDate],
-        ['Department', department || '', 'Designation', designation || ''],
-        ['Email', email || '', 'Mobile', mobile || ''],
-        [{ content: 'Beneficiary', styles: { fontStyle: 'bold' } }, { content: beneficiaryText, colSpan: 3 }],
-        [{ content: 'Description', styles: { fontStyle: 'bold' } }, { content: description || '', colSpan: 3 }],
-        [{ content: 'Head of Accounts', styles: { fontStyle: 'bold' } }, { content: headOfAccountsText, colSpan: 3 }],
-       
-      ];
-
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 38, fontStyle: 'bold' },
-          1: { cellWidth: 75 },
-          2: { cellWidth: 22, fontStyle: 'bold' },
-          3: { cellWidth: tableWidth - 38 - 75 - 22 }
-        },
-        body: mainTableBody,
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY;
-
-      const budgetTableBody = budgetRows.map((row, index) => [
-        (index + 1).toString(),
-        row.category || '',
-        row.head || '',
-        'Rs. ' + Number(row.amount || 0).toFixed(2)
-      ]);
-      if (showUnplannedBudget) {
-        budgetTableBody.push([
-          { content: 'Unplanned Budget:', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' as const } } as any,
-          { content: 'Rs. ' + Number(unplannedBudgetAmount || 0).toFixed(2), styles: { fontStyle: 'bold' } }
-        ]);
-      }
-      
-      budgetTableBody.push([
-        { content: 'Total Budget:', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' as const } } as any,
-        { content: 'Rs. ' + totalBudget.toFixed(2), styles: { fontStyle: 'bold' } }
-      ]);
-
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 12, halign: 'center' },
-          1: { cellWidth:65 },
-          2: { cellWidth: 65 },
-          3: { cellWidth: tableWidth - 12 - 65 - 65, halign: 'right' }
-        },
-        body: [
-          [{ content: 'S.No', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-          { content: 'Budget Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-          { content: 'Sub Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-          { content: 'Amount', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } }],
-          ...budgetTableBody
-        ],
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY;
-
-      const amountInWords = numberToIndianWords(totalBudget)
-        .replace(/\b\w/g, l => l.toUpperCase())
-        .replace(/([A-Z])(?=[A-Z][a-z])/, '$1 ')
-        .replace(/[A-Z]{2,}/g, m => m.charAt(0) + m.slice(1).toLowerCase());
-
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, halign: 'center' },
-        body: [['Rupees in Words: ' + amountInWords]],
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY;
-
-      if (showIncomeSection) {
-        const incomeTableBody = incomeRows.flatMap((row, index) => ([
-          [
-            { content: String(index + 1), styles: { halign: 'center' } },
-            { content: row.incomeSource || '' },
-            { content: row.contribution || '' },
-            { content: row.amount ? `Rs. ${row.amount}` : '' },
-            { content: row.status || '' },
-          ],
-          [
-            { content: 'Credit Account', colSpan: 2, styles: { fontStyle: '', fillColor: [245, 245, 245] } },
-            { content: row.creditAccount || '', colSpan: 3 },
-          ],
-        ]));
-
-        autoTable(pdf, {
-          startY: yPos,
-          margin: { left: margin, right: margin },
-          theme: 'grid',
-          tableWidth: tableWidth,
-          styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-          head: [[
-            'S.No',
-            'Income Source',
-            'Contribution',
-            'Amount',
-            'Status',
-          ]],
-          headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
-          columnStyles: {
-            0: { cellWidth: 12, halign: 'center' },
-            1: { cellWidth: 82 },
-            2: { cellWidth: 34, halign: 'center' },
-            3: { cellWidth: 24, halign: 'right' },
-            4: { cellWidth: 34, halign: 'center' },
-          },
-          body: incomeTableBody as any,
-        });
-
-        yPos = (pdf as any).lastAutoTable.finalY;
-      }
-
       const approvalHistory = getWorkflowTimeline(statusUpdates, {
         name: applicantName || '',
         email: email || '',
         date: submittedAt ? formatWorkflowTimestamp(submittedAt) : getCurrentWorkflowTimestamp(),
       });
-      const approvalSteps = approvalHistory.filter((entry) => entry.label !== 'Submitted');
-      const submittedByUi = approvalHistory.find((entry) => entry.label === 'Submitted') || {
+
+      const submittedBy = approvalHistory.find((entry) => entry.label === 'Submitted') || {
         actor: applicantName || '',
         email: email || '',
         timestamp: getSubmittedTimestamp(
@@ -1422,54 +1240,57 @@ const FinanceApproval: React.FC = () => {
         ),
       };
 
-      const annexureSummary = getAnnexureSummary();
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 38, fontStyle: 'bold' },
-          1: { cellWidth: tableWidth - 38 },
-        },
-        body: [[
-          { content: 'Annexure', styles: { fontStyle: 'bold' } },
-          { content: annexureSummary },
-        ]],
+      const beneficiaryText = (() => {
+        const type = String(beneficiaryType || '').trim();
+        const value = String(beneficiaryValue || '').trim();
+        if (!type) return '\u00A0';
+        if (!value) return type;
+        if (type === 'Institution') return value;
+        return `${type} - ${value}`;
+      })();
+
+      const annexureSummary = annexureFiles.length
+        ? annexureFiles
+            .map((row) => {
+              const type = String(row.annexureType || '').trim();
+              const name = String(row.originalName || row.storedName || row.file?.name || '').trim();
+              if (type && name) return `${type} - ${name}`;
+              if (type) return type;
+              return name || 'Unnamed File';
+            })
+            .join(', ')
+        : 'Not Added';
+
+      const skippedFiles = await generateAndDownloadFinancePdf({
+        applicantName,
+        requestDate: date,
+        department,
+        designation,
+        email,
+        mobile,
+        beneficiaryText,
+        description,
+        headOfAccountsText: primaryHead + (extraDropdownVisible && eventSubHead ? ` - ${eventSubHead}` : ''),
+        budgetRows,
+        showUnplannedBudget,
+        unplannedBudgetAmount,
+        totalBudget,
+        showIncomeSection,
+        incomeRows,
+        annexureSummary,
+        approvalHistory,
+        submittedBy,
+        annexureFiles,
+        baseUrl: authenticityUtility.getBaseURL(),
+        authToken: localStorage.getItem('token'),
       });
 
-      const digitalSignRows: any[] = [
-        [{ content: 'Approved By:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }],
-        [{ content: `Submitted by ${formatWorkflowPersonText(submittedByUi.actor, submittedByUi.email, submittedByUi.timestamp)}` }],
-        ...approvalSteps.map((entry) => ([
-          { content: `${entry.label} by ${formatWorkflowPersonText(entry.actor, entry.email, entry.timestamp)}` },
-        ])),
-        ...(approvalHistory.length === 0
-          ? [[{ content: 'No approval history available' }]]
-          : []),
-      ];
-
-      autoTable(pdf, {
-        startY: yPos + 5,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        head: [],
-        body: digitalSignRows,
-      });
-
-      const totalPages = pdf.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        pdf.setPage(i);
-        pdf.setFontSize(9);
-        pdf.setFont('helvetica', 'normal');
-        pdf.text('Page ' + i, pageWidth - margin, pdf.internal.pageSize.getHeight() - 6, { align: 'right' });
+      if (skippedFiles.length) {
+        showAlert(
+          `Downloaded combined PDF. Skipped unsupported annexure files: ${skippedFiles.join(', ')}`,
+          'warning'
+        );
       }
-
-      const primaryPdfBuffer = pdf.output('arraybuffer');
-      await mergeAndDownloadPdfWithAnnexures(primaryPdfBuffer);
     } catch (error) {
       console.error('Error generating PDF:', error);
       showAlert('Error generating PDF. Please try again.', 'error');
@@ -1736,17 +1557,8 @@ const FinanceApproval: React.FC = () => {
     }
   };
 
-  const getAnnexureOpenUrl = (row: AnnexureFileRow): string => {
-    const sourceUrl = String(row.previewUrl || row.filePath || '').trim();
-    if (!sourceUrl) return '';
-    if (sourceUrl.startsWith('http') || sourceUrl.startsWith('blob:')) {
-      return sourceUrl;
-    }
-    return `${authenticityUtility.getBaseURL()}${sourceUrl}`;
-  };
-
   const openAnnexureFile = (row: AnnexureFileRow) => {
-    const openUrl = getAnnexureOpenUrl(row);
+    const openUrl = getAnnexureOpenUrl(row, authenticityUtility.getBaseURL());
     if (!openUrl) return;
     window.open(openUrl, '_blank', 'noopener,noreferrer');
   };
@@ -2465,78 +2277,6 @@ const hideWorkflowActionsForFinalStatus =
     setShowBeneficiaryDropdown(false);
   };
 
-  const numberToIndianWords = (num: number): string => {
-    if (num === 0) return "Zero rupees only";
-
-    const a = [
-      "", "One", "Two", "Three", "Four", "Five", "Six",
-      "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve",
-      "Thirteen", "Fourteen", "Fifteen", "Sixteen",
-      "Seventeen", "Eighteen", "Nineteen",
-    ];
-    const b = [
-      "", "", "Twenty", "Thirty", "Forty", "Fifty",
-      "Sixty", "Seventy", "Eighty", "Ninety",
-    ];
-
-    const inWordsBelowThousand = (n: number): string => {
-      let str = "";
-      if (n > 99) {
-        str += a[Math.floor(n / 100)] + " hundred ";
-        n = n % 100;
-      }
-      if (n > 19) {
-        str += b[Math.floor(n / 10)]!.toLowerCase() + " ";
-        n = n % 10;
-      }
-      if (n > 0) {
-        str += a[n]!.toLowerCase().replace(/^./, c => c.toUpperCase()) + " ";
-      }
-      return str.trim();
-    };
-
-    let n = Math.floor(num);
-    let result = "";
-
-    const crore = Math.floor(n / 10000000);
-    if (crore) {
-      result += inWordsBelowThousand(crore) + " crore ";
-      n %= 10000000;
-    }
-
-    const lakh = Math.floor(n / 100000);
-    if (lakh) {
-      result += inWordsBelowThousand(lakh) + " lakh ";
-      n %= 100000;
-    }
-
-    const thousand = Math.floor(n / 1000);
-    if (thousand) {
-      result += inWordsBelowThousand(thousand) + " thousand ";
-      n %= 1000;
-    }
-
-    if (n > 0) {
-      result += inWordsBelowThousand(n);
-    }
-
-    const titleCased = result.trim()
-      .replace(/\b\w/g, l => l.toUpperCase())
-      .replace(/[A-Z]{2,}/g, m => m.charAt(0) + m.slice(1).toLowerCase());
-
-    return titleCased + " Rupees only";
-  };
-
-  const formatDMY = (value: string | Date | null | undefined) => {
-    if (!value) return "";
-    const d = new Date(value);
-    if (isNaN(d.getTime())) return "";
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    return `${day}.${month}.${year}`;
-  };
-
   useEffect(() => {
     if (showPreview && componentRef.current) {
       const contentHeight = componentRef.current.scrollHeight;
@@ -2575,7 +2315,9 @@ const hideWorkflowActionsForFinalStatus =
 
     autoDownloadTriggeredRef.current = true;
     void generatePDF();
-  }, [autoDownloadPdf, canDownloadPdf, generatePDF, isLoading, showPreview]);
+    // Intentionally excluding generatePDF from deps to avoid re-running this effect
+    // on every render due function identity churn; guards above keep it safe.
+  }, [autoDownloadPdf, canDownloadPdf, isLoading, showPreview]);
 
   const activeHoacGroup = getHoacGroupForHead(primaryHead);
   const extraDropdownVisible = Boolean(activeHoacGroup);
@@ -2596,232 +2338,6 @@ const hideWorkflowActionsForFinalStatus =
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [expandedHead, setExpandedHead] = useState<string>('');
   const [activeSubHead, setActiveSubHead] = useState<string>('');
-
-  const SearchBudgetModal = () => {
-    if (!showSearchModal) return null;
-    const query = searchTerm.trim().toLowerCase();
-    const allData = BUDGET_HEAD_GROUPS.flatMap((g) =>
-      g.options.map((head) => ({
-        head,
-        subheads: SUB_HEAD_BY_BUDGET_HEAD[head] || [],
-      }))
-    );
-
-    const filteredData = allData
-      .filter(({ head, subheads }) => {
-        if (!query) return true;
-        return (
-          head.toLowerCase().includes(query) ||
-          subheads.some((sub) => sub.toLowerCase().includes(query))
-        );
-      })
-      .sort((a, b) => {
-        if (!query) return 0;
-        const aScore = a.head.toLowerCase().includes(query) ? 0 : 1;
-        const bScore = b.head.toLowerCase().includes(query) ? 0 : 1;
-        return aScore - bScore;
-      });
-
-    useEffect(() => {
-      if (!expandedHead) return;
-
-      const headBlock = document.querySelector(`[data-head="${expandedHead}"]`);
-      if (!headBlock) return;
-      let targetSub = activeSubHead;
-      if (!targetSub && query) {
-        const item = filteredData.find((x) => x.head === expandedHead);
-        const match = item?.subheads.find((s) => s.toLowerCase().includes(query));
-        if (match) targetSub = match;
-      }
-
-      if (!targetSub) return;
-      setTimeout(() => {
-        const el = headBlock.querySelector(`[data-subhead="${targetSub}"]`);
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 0);
-    }, [expandedHead, activeSubHead, query]);
-
-    return (
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "rgba(0,0,0,0.5)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 10000,
-        }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) setShowSearchModal(false);
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: "16px",
-            padding: "30px",
-            maxWidth: "700px",
-            maxHeight: "80vh",
-            overflowY: "auto",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-            border: "2px solid #0069ab",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "20px",
-            }}
-          >
-            <h2
-              style={{
-                margin: 0,
-                color: "#0069ab",
-                fontSize: "20px",
-                fontWeight: "bold",
-              }}
-            >
-              Search Budget Heads & Subheads
-            </h2>
-
-            <button
-              onClick={() => setShowSearchModal(false)}
-              style={{
-                fontSize: "24px",
-                cursor: "pointer",
-                background: "none",
-                border: "none",
-
-              }}
-            >
-              ×
-            </button>
-          </div>
-
-          <CustomInput
-            name="searchTerm"
-            type="text"
-            value={searchTerm}
-            onChange={(value) => {
-              setSearchTerm(value);
-              setActiveSubHead("");
-            }}
-            autoFocus={true}
-            onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
-            placeholder="Type head or subhead"
-            onFocus={(e) => (e.currentTarget.style.borderColor = "#0069ab")}
-            onBlur={(e) => (e.currentTarget.style.borderColor = "#e0e0e0")}
-          />
-
-          <div style={{ maxHeight: "400px", overflowY: "auto" }}>
-            {filteredData.length > 0 ? (
-              filteredData.map(({ head, subheads }) => {
-                const isExpanded = expandedHead === head;
-
-                return (
-                  <div
-                    key={head}
-                    data-head={head}
-                    style={{
-                      padding: "16px",
-                      marginBottom: "12px",
-                      borderRadius: "12px",
-                      backgroundColor: "#f8f9fa",
-                      borderLeft: "4px solid #0069ab",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: "12px",
-                        marginBottom: "8px",
-                      }}
-                    >
-                      <div
-                        style={{ cursor: "pointer", fontWeight: "bold", fontSize: "16px" }}
-                        title="Click to use this Head"
-                        onClick={() => {
-                          setPrimaryHead(head);
-                          setShowSearchModal(false);
-                        }}
-                      >
-                        {head}
-                      </div>
-
-                      <div
-                        style={{ cursor: "pointer", fontSize: "14px", color: "#666" }}
-                        title="Expand / collapse subheads"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setExpandedHead(isExpanded ? "" : head);
-                          setActiveSubHead("");
-                        }}
-                      >
-                        {subheads.length} subheads {isExpanded ? "▼" : "▶"}
-                      </div>
-                    </div>
-
-                    <div style={{ fontSize: "14px", color: "#666" }}>
-                      {subheads.slice(0, 3).join(", ")}
-                      {subheads.length > 3 && !isExpanded && "..."}
-                    </div>
-
-                    {isExpanded && (
-                      <div
-                        style={{
-                          marginTop: "12px",
-                          maxHeight: "170px",
-                          overflowY: "auto",
-                          borderTop: "1px solid #e0e0e0",
-                          paddingTop: "12px",
-                        }}
-                      >
-                        {subheads.map((subhead, idx) => (
-                          <div
-                            key={idx}
-                            data-subhead={subhead}
-                            style={{
-                              padding: "8px 10px",
-                              marginBottom: "6px",
-                              backgroundColor: "white",
-                              borderRadius: "6px",
-                              fontSize: "13px",
-                              borderLeft: "3px solid #28a745",
-                              cursor: "pointer",
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPrimaryHead(head);
-                              setEventSubHead(subhead);
-                              setShowSearchModal(false);
-                            }}
-                          >
-                            {subhead}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            ) : (
-              <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
-                No matches for "{searchTerm}"
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="finance-approval-body" style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}>
@@ -3439,7 +2955,25 @@ const hideWorkflowActionsForFinalStatus =
                       </div>
                     )}
 
-                    <SearchBudgetModal />
+                    <SearchBudgetModal
+                      show={showSearchModal}
+                      searchTerm={searchTerm}
+                      expandedHead={expandedHead}
+                      activeSubHead={activeSubHead}
+                      onClose={() => setShowSearchModal(false)}
+                      onSearchTermChange={setSearchTerm}
+                      onExpandedHeadChange={setExpandedHead}
+                      onActiveSubHeadChange={setActiveSubHead}
+                      onSelectHead={(head) => {
+                        setPrimaryHead(head);
+                        setShowSearchModal(false);
+                      }}
+                      onSelectSubHead={(head, subhead) => {
+                        setPrimaryHead(head);
+                        setEventSubHead(subhead);
+                        setShowSearchModal(false);
+                      }}
+                    />
                   </div>
                 </div>
               </div>
@@ -4621,5 +4155,3 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
 };
 
 export default FinanceApproval;
-
-
