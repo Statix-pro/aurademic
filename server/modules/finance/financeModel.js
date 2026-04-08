@@ -19,6 +19,12 @@ const FINANCE_ANNEXURE_PUBLIC_PREFIX = '/uploads/finance-annexures/';
 const FINANCE_ANNEXURE_STORED_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 const FINANCE_REQUEST_COLUMN_EXISTS_CACHE = new Map();
 const FINANCE_BUDGET_BREAKUP_COLUMN_EXISTS_CACHE = new Map();
+const FINANCE_INCOME_ROWS_COLUMN_EXISTS_CACHE = new Map();
+const FINANCE_OVERALL_STATUS_DELETED_SUPPORT_CACHE = { value: null };
+const FINANCE_NOT_DELETED_CONDITION_SQL = `
+  LOWER(TRIM(COALESCE(fr.overall_status, ''))) <> 'deleted'
+  AND LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.status')), ''))) <> 'deleted'
+`;
 
 const hasFinanceRequestColumn = async (columnName, { tx = db } = {}) => {
   const normalizedColumn = normalizeText(columnName);
@@ -62,6 +68,47 @@ const hasFinanceBudgetBreakupColumn = async (columnName, { tx = db } = {}) => {
   const exists = Number(rows?.[0]?.count || 0) > 0;
   FINANCE_BUDGET_BREAKUP_COLUMN_EXISTS_CACHE.set(normalizedColumn, exists);
   return exists;
+};
+
+const hasFinanceIncomeRowsColumn = async (columnName, { tx = db } = {}) => {
+  const normalizedColumn = normalizeText(columnName);
+  if (!normalizedColumn) return false;
+
+  if (FINANCE_INCOME_ROWS_COLUMN_EXISTS_CACHE.has(normalizedColumn)) {
+    return FINANCE_INCOME_ROWS_COLUMN_EXISTS_CACHE.get(normalizedColumn) === true;
+  }
+
+  const [rows] = await tx.query(
+    `SELECT COUNT(*) AS count
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'finance_income_rows'
+         AND COLUMN_NAME = ?`,
+    [normalizedColumn]
+  );
+
+  const exists = Number(rows?.[0]?.count || 0) > 0;
+  FINANCE_INCOME_ROWS_COLUMN_EXISTS_CACHE.set(normalizedColumn, exists);
+  return exists;
+};
+
+const supportsFinanceOverallStatusDeletedValue = async ({ tx = db } = {}) => {
+  if (FINANCE_OVERALL_STATUS_DELETED_SUPPORT_CACHE.value !== null) {
+    return FINANCE_OVERALL_STATUS_DELETED_SUPPORT_CACHE.value === true;
+  }
+
+  const [rows] = await tx.query(
+    `SELECT COLUMN_TYPE
+       FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'finance_requests'
+        AND COLUMN_NAME = 'overall_status'
+      LIMIT 1`
+  );
+  const columnType = normalizeText(rows?.[0]?.COLUMN_TYPE || rows?.[0]?.column_type).toLowerCase();
+  const supportsDeleted = columnType.includes("'deleted'");
+  FINANCE_OVERALL_STATUS_DELETED_SUPPORT_CACHE.value = supportsDeleted;
+  return supportsDeleted;
 };
 
 const normalizeBeneficiaryTypeForStorage = (beneficiaryType) => {
@@ -244,172 +291,62 @@ const normalizeBudgetRows = (rows = []) => {
   return normalizedRows;
 };
 
+const applyBudgetLookupOverrides = (rows = [], financeData = {}) => {
+  const primaryHead = normalizeText(financeData?.primary_head);
+  const eventSubHead = normalizeText(financeData?.event_sub_head);
+
+  return rows.map((row) => ({
+    ...row,
+    budget_head: primaryHead || row.budget_head,
+    sub_head: eventSubHead || row.sub_head,
+    head_only_match: false,
+  }));
+};
+
 const normalizeIncomeRows = (rows = []) =>
   rows.map((row, index) => ({
     income_source: normalizeText(row?.incomeSource || row?.income_source),
     contribution: normalizeText(row?.contribution),
     amount: toMoney(row?.amount),
     status: normalizeText(row?.status),
+    remarks: normalizeText(row?.remarks || row?.remark),
     credit_account: normalizeText(row?.creditAccount || row?.credit_account),
     sort_order: index,
   }));
 
-const normalizeAnnexurePublicPath = (filePath) => {
-  const normalized = normalizeText(filePath);
-  if (!normalized) return '';
-
-  const withoutQuery = normalized.split('?')[0].split('#')[0];
-  if (!withoutQuery.startsWith(FINANCE_ANNEXURE_PUBLIC_PREFIX)) {
-    return '';
-  }
-
-  const fileName = path.posix.basename(withoutQuery);
-  return `${FINANCE_ANNEXURE_PUBLIC_PREFIX}${fileName}`;
-};
-
-const resolveAnnexureDiskPath = (storedName) => {
-  const normalized = normalizeText(storedName);
-  if (!normalized || !FINANCE_ANNEXURE_STORED_NAME_PATTERN.test(normalized)) {
-    return null;
-  }
-
-  const diskPath = path.resolve(FINANCE_ANNEXURE_UPLOAD_DIR, normalized);
-  const safeBase = `${FINANCE_ANNEXURE_UPLOAD_DIR}${path.sep}`;
-  if (!diskPath.startsWith(safeBase)) {
-    return null;
-  }
-
-  return diskPath;
-};
-
-const countAnnexureRowReferences = async (storedName, { tx = db } = {}) => {
-  try {
-    const [rows] = await tx.query(
-      `SELECT COUNT(*) AS count
-         FROM finance_request_annexures
-        WHERE stored_name = ?`,
-      [storedName]
-    );
-    return Number(rows?.[0]?.count || 0);
-  } catch (error) {
-    if (error?.code === 'ER_NO_SUCH_TABLE') {
-      return 0;
-    }
-    throw error;
-  }
-};
-
-const countLegacyAnnexureReferences = async (storedName, { tx = db } = {}) => {
-  const hasLegacyColumn = await hasFinanceRequestColumn('annexure_storage_name', { tx });
-  if (!hasLegacyColumn) {
-    return 0;
-  }
-
-  const [rows] = await tx.query(
-    `SELECT COUNT(*) AS count
-       FROM finance_requests
-      WHERE annexure_storage_name = ?`,
-    [storedName]
-  );
-  return Number(rows?.[0]?.count || 0);
-};
-
-const cleanupOrphanFinanceAnnexureFiles = async (storedNames = []) => {
-  const uniqueNames = Array.from(new Set((Array.isArray(storedNames) ? storedNames : [])
-    .map((value) => normalizeText(value))
-    .filter(Boolean)));
-
-  for (const storedName of uniqueNames) {
-    try {
-      const tableRefs = await countAnnexureRowReferences(storedName);
-      if (tableRefs > 0) {
-        continue;
-      }
-
-      const legacyRefs = await countLegacyAnnexureReferences(storedName);
-      if (legacyRefs > 0) {
-        continue;
-      }
-
-      const diskPath = resolveAnnexureDiskPath(storedName);
-      if (!diskPath) {
-        continue;
-      }
-
-      await fs.promises.unlink(diskPath).catch((error) => {
-        if (error?.code !== 'ENOENT') {
-          throw error;
-        }
-      });
-    } catch {
-      // Best-effort cleanup only; do not block main request flow.
-    }
-  }
-};
-
-const normalizeFinanceAnnexures = async (rows = []) => {
-  const sourceRows = Array.isArray(rows) ? rows : [];
-  const normalizedRows = [];
-
-  for (let index = 0; index < sourceRows.length; index += 1) {
-    const row = sourceRows[index];
-    const storedName = normalizeText(row?.stored_name || row?.storedName || row?.annexure_storage_name);
-    const rawFilePath = normalizeText(row?.file_path || row?.filePath || row?.annexure_file_path);
-
-    if (!storedName || !rawFilePath) {
-      continue;
-    }
-
-    const normalizedFilePath = normalizeAnnexurePublicPath(rawFilePath);
-    if (!normalizedFilePath) {
-      throw new Error(`Invalid annexure path at row ${index + 1}`);
-    }
-
-    const fileNameFromPath = path.posix.basename(normalizedFilePath);
-    if (fileNameFromPath !== storedName) {
-      throw new Error(`Annexure path mismatch at row ${index + 1}`);
-    }
-
-    const diskPath = resolveAnnexureDiskPath(storedName);
-    if (!diskPath) {
-      throw new Error(`Invalid annexure storage name at row ${index + 1}`);
-    }
-
-    try {
-      await fs.promises.access(diskPath, fs.constants.F_OK);
-    } catch {
-      throw new Error(`Annexure file not found on server at row ${index + 1}`);
-    }
-
-    normalizedRows.push({
-      annexure_type: normalizeText(row?.annexure_type || row?.annexureType),
-      original_name: normalizeText(row?.original_name || row?.originalName || row?.annexure_file_name),
-      stored_name: storedName,
-      file_path: normalizedFilePath,
-      mime_type: normalizeText(row?.mime_type || row?.mimeType || row?.annexure_mime_type),
-      file_size: Number.isFinite(Number(row?.file_size ?? row?.fileSize ?? row?.annexure_file_size))
-        ? Number(row?.file_size ?? row?.fileSize ?? row?.annexure_file_size)
-        : null,
-      sort_order: index,
-    });
-  }
-
-  return normalizedRows;
-};
+const normalizeFinanceAnnexures = (rows = []) =>
+  (Array.isArray(rows) ? rows : [])
+    .map((row, index) => {
+      const originalName = normalizeText(row?.original_name || row?.originalName || row?.annexure_file_name);
+      const storedName = normalizeText(row?.stored_name || row?.storedName || row?.annexure_storage_name) || originalName;
+      return {
+        annexure_type: normalizeText(row?.annexure_type || row?.annexureType),
+        original_name: originalName,
+        stored_name: storedName,
+        file_path: normalizeText(row?.file_path || row?.filePath || row?.annexure_file_path),
+        mime_type: normalizeText(row?.mime_type || row?.mimeType || row?.annexure_mime_type),
+        file_size: Number.isFinite(Number(row?.file_size ?? row?.fileSize ?? row?.annexure_file_size))
+          ? Number(row?.file_size ?? row?.fileSize ?? row?.annexure_file_size)
+          : null,
+        sort_order: index,
+      };
+    })
+    .filter((row) => row.file_path && (row.stored_name || row.original_name));
 
 const getLegacyAnnexureFromRecord = (record = {}) => {
   const filePath = normalizeText(record?.annexure_file_path);
   const storedName = normalizeText(record?.annexure_storage_name);
   const originalName = normalizeText(record?.annexure_file_name);
-  if (!filePath || !storedName) {
+  const fallbackStoredName = storedName || originalName;
+  if (!filePath || !fallbackStoredName) {
     return [];
   }
   return [{
     id: null,
     finance_id: toPositiveInt(record?.id),
     annexure_type: normalizeText(record?.annexure_type),
-    original_name: originalName || storedName,
-    stored_name: storedName,
+    original_name: originalName || fallbackStoredName,
+    stored_name: fallbackStoredName,
     file_path: filePath,
     mime_type: normalizeText(record?.annexure_mime_type),
     file_size: Number.isFinite(Number(record?.annexure_file_size))
@@ -530,6 +467,7 @@ const buildFinanceSelectSql = ({
   budgetTagSelectSql = 'NULL AS budget_tag',
   unplannedBudgetEnabledSelectSql = 'NULL AS unplanned_budget_enabled',
   unplannedBudgetAmountSelectSql = 'NULL AS unplanned_budget_amount',
+  unplannedBudgetDescriptionSelectSql = 'NULL AS unplanned_budget_description',
   annexureTypeSelectSql = 'NULL AS annexure_type',
   annexureFileNameSelectSql = 'NULL AS annexure_file_name',
   annexureStorageNameSelectSql = 'NULL AS annexure_storage_name',
@@ -569,6 +507,7 @@ const buildFinanceSelectSql = ({
     fr.balance_amount,
     ${unplannedBudgetEnabledSelectSql},
     ${unplannedBudgetAmountSelectSql},
+    ${unplannedBudgetDescriptionSelectSql},
     fr.total_budget,
     fr.approved_total_amount,
     fr.income_type,
@@ -618,6 +557,7 @@ const getFinanceSelectSql = async ({ tx = db } = {}) => {
   const hasBudgetTag = await hasFinanceRequestColumn('budget_tag', { tx });
   const hasUnplannedBudgetEnabled = await hasFinanceRequestColumn('unplanned_budget_enabled', { tx });
   const hasUnplannedBudgetAmount = await hasFinanceRequestColumn('unplanned_budget_amount', { tx });
+  const hasUnplannedBudgetDescription = await hasFinanceRequestColumn('unplanned_budget_description', { tx });
   const hasAnnexureType = await hasFinanceRequestColumn('annexure_type', { tx });
   const hasAnnexureFileName = await hasFinanceRequestColumn('annexure_file_name', { tx });
   const hasAnnexureStorageName = await hasFinanceRequestColumn('annexure_storage_name', { tx });
@@ -628,6 +568,7 @@ const getFinanceSelectSql = async ({ tx = db } = {}) => {
     budgetTagSelectSql: hasBudgetTag ? 'fr.budget_tag' : 'NULL AS budget_tag',
     unplannedBudgetEnabledSelectSql: hasUnplannedBudgetEnabled ? 'fr.unplanned_budget_enabled' : 'NULL AS unplanned_budget_enabled',
     unplannedBudgetAmountSelectSql: hasUnplannedBudgetAmount ? 'fr.unplanned_budget_amount' : 'NULL AS unplanned_budget_amount',
+    unplannedBudgetDescriptionSelectSql: hasUnplannedBudgetDescription ? 'fr.unplanned_budget_description' : 'NULL AS unplanned_budget_description',
     annexureTypeSelectSql: hasAnnexureType ? 'fr.annexure_type' : 'NULL AS annexure_type',
     annexureFileNameSelectSql: hasAnnexureFileName ? 'fr.annexure_file_name' : 'NULL AS annexure_file_name',
     annexureStorageNameSelectSql: hasAnnexureStorageName ? 'fr.annexure_storage_name' : 'NULL AS annexure_storage_name',
@@ -733,6 +674,7 @@ const buildFinanceUpdateAudit = ({
     balance_amount: updateData.balance_amount ?? previousRecord.balance_amount,
     unplanned_budget_enabled: updateData.unplanned_budget_enabled ?? previousRecord.unplanned_budget_enabled,
     unplanned_budget_amount: updateData.unplanned_budget_amount ?? previousRecord.unplanned_budget_amount,
+    unplanned_budget_description: updateData.unplanned_budget_description ?? previousRecord.unplanned_budget_description,
     annexure_type: updateData.annexure_type ?? previousRecord.annexure_type,
     annexure_file_name: updateData.annexure_file_name ?? previousRecord.annexure_file_name,
     annexure_storage_name: updateData.annexure_storage_name ?? previousRecord.annexure_storage_name,
@@ -760,6 +702,7 @@ const buildFinanceUpdateAudit = ({
     { storageKey: 'balance_amount', label: 'Balance amount' },
     { storageKey: 'unplanned_budget_enabled', label: 'Unplanned budget enabled' },
     { storageKey: 'unplanned_budget_amount', label: 'Unplanned budget amount' },
+    { storageKey: 'unplanned_budget_description', label: 'Unplanned budget description' },
     { storageKey: 'annexure_type', label: 'Annexure type' },
     { storageKey: 'annexure_file_name', label: 'Annexure file name' },
     { storageKey: 'annexure_storage_name', label: 'Annexure storage name' },
@@ -1273,32 +1216,55 @@ const replaceIncomeRows = async (conn, financeId, incomeRows = []) => {
     return;
   }
 
+  const hasRemarksColumn = await hasFinanceIncomeRowsColumn('remarks', { tx: conn });
+
   for (const row of incomeRows) {
+    const columns = [
+      'finance_id',
+      'income_source',
+      'contribution',
+      'amount',
+      'status',
+      'credit_account',
+      'sort_order',
+    ];
+    const values = [
+      financeId,
+      row.income_source || null,
+      row.contribution || null,
+      row.amount,
+      row.status || null,
+      row.credit_account || null,
+      row.sort_order,
+    ];
+
+    if (hasRemarksColumn) {
+      columns.splice(5, 0, 'remarks');
+      values.splice(5, 0, row.remarks || null);
+    }
+
     await conn.query(
       `INSERT INTO finance_income_rows
-       (finance_id, income_source, contribution, amount, status, credit_account, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        financeId,
-        row.income_source || null,
-        row.contribution || null,
-        row.amount,
-        row.status || null,
-        row.credit_account || null,
-        row.sort_order,
-      ]
+       (${columns.join(', ')})
+       VALUES (${columns.map(() => '?').join(', ')})`,
+      values
     );
   }
 };
 
 const replaceFinanceAnnexures = async (conn, financeId, annexures = []) => {
+  let financeFkColumn = 'finance_id';
   try {
     await conn.query('DELETE FROM finance_request_annexures WHERE finance_id = ?', [financeId]);
   } catch (error) {
-    if (error?.code === 'ER_NO_SUCH_TABLE') {
+    if (error?.code === 'ER_BAD_FIELD_ERROR') {
+      financeFkColumn = 'finance_request_id';
+      await conn.query('DELETE FROM finance_request_annexures WHERE finance_request_id = ?', [financeId]);
+    } else if (error?.code === 'ER_NO_SUCH_TABLE') {
       return;
+    } else {
+      throw error;
     }
-    throw error;
   }
 
   if (!annexures.length) {
@@ -1306,15 +1272,16 @@ const replaceFinanceAnnexures = async (conn, financeId, annexures = []) => {
   }
 
   for (const row of annexures) {
+    const safeStoredName = normalizeText(row.stored_name) || normalizeText(row.original_name);
     await conn.query(
       `INSERT INTO finance_request_annexures
-       (finance_id, annexure_type, original_name, stored_name, file_path, mime_type, file_size, sort_order)
+       (${financeFkColumn}, annexure_type, original_name, stored_name, file_path, mime_type, file_size, sort_order)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         financeId,
         row.annexure_type || null,
-        row.original_name,
-        row.stored_name,
+        row.original_name || safeStoredName || null,
+        safeStoredName || null,
         row.file_path,
         row.mime_type || null,
         row.file_size,
@@ -1325,9 +1292,7 @@ const replaceFinanceAnnexures = async (conn, financeId, annexures = []) => {
 };
 
 const getFinanceAnnexures = async (financeId, { tx = db } = {}) => {
-  try {
-    const [rows] = await tx.query(
-      `SELECT
+  let selectSql = `SELECT
          id,
          finance_id,
          annexure_type,
@@ -1340,9 +1305,31 @@ const getFinanceAnnexures = async (financeId, { tx = db } = {}) => {
          created_at
        FROM finance_request_annexures
        WHERE finance_id = ?
-       ORDER BY sort_order ASC, id ASC`,
-      [financeId]
-    );
+       ORDER BY sort_order ASC, id ASC`;
+  try {
+    let rows;
+    try {
+      [rows] = await tx.query(selectSql, [financeId]);
+    } catch (error) {
+      if (error?.code !== 'ER_BAD_FIELD_ERROR') {
+        throw error;
+      }
+      selectSql = `SELECT
+           id,
+           finance_request_id AS finance_id,
+           annexure_type,
+           original_name,
+           stored_name,
+           file_path,
+           mime_type,
+           file_size,
+           sort_order,
+           created_at
+         FROM finance_request_annexures
+         WHERE finance_request_id = ?
+         ORDER BY sort_order ASC, id ASC`;
+      [rows] = await tx.query(selectSql, [financeId]);
+    }
     return rows.map((row) => ({
       id: toPositiveInt(row.id),
       finance_id: toPositiveInt(row.finance_id),
@@ -1633,6 +1620,7 @@ const financeModel = {
       const hasBudgetTagColumn = await hasFinanceRequestColumn('budget_tag', { tx: connection });
       const hasUnplannedBudgetEnabledColumn = await hasFinanceRequestColumn('unplanned_budget_enabled', { tx: connection });
       const hasUnplannedBudgetAmountColumn = await hasFinanceRequestColumn('unplanned_budget_amount', { tx: connection });
+      const hasUnplannedBudgetDescriptionColumn = await hasFinanceRequestColumn('unplanned_budget_description', { tx: connection });
       const hasAnnexureTypeColumn = await hasFinanceRequestColumn('annexure_type', { tx: connection });
       const hasAnnexureFileNameColumn = await hasFinanceRequestColumn('annexure_file_name', { tx: connection });
       const hasAnnexureStorageNameColumn = await hasFinanceRequestColumn('annexure_storage_name', { tx: connection });
@@ -1642,7 +1630,8 @@ const financeModel = {
 
       const workflowContext = await resolveFinanceWorkflowContext(connection, financeData);
       const normalizedBudgetRows = normalizeBudgetRows(Array.isArray(financeData.budget_rows) ? financeData.budget_rows : []);
-      const budgetRows = await enrichBudgetRowsWithBudgetRefs(connection, userId, userEmail, normalizedBudgetRows, {
+      const budgetLookupRows = applyBudgetLookupOverrides(normalizedBudgetRows, financeData);
+      const budgetRows = await enrichBudgetRowsWithBudgetRefs(connection, userId, userEmail, budgetLookupRows, {
         beneficiaryType: financeData.beneficiary_type,
         beneficiaryValue: financeData.beneficiary_value,
         departmentId: workflowContext.departmentId,
@@ -1700,6 +1689,11 @@ const financeModel = {
           ? normalizedUnplanned.amount
           : null;
       }
+      if (hasUnplannedBudgetDescriptionColumn) {
+        financeEntry.unplanned_budget_description = normalizedUnplanned.enabled
+          ? (normalizeText(financeData.unplanned_budget_description) || null)
+          : null;
+      }
       if (hasAnnexureTypeColumn) {
         financeEntry.annexure_type = primaryAnnexure
           ? primaryAnnexure.annexure_type || null
@@ -1754,6 +1748,7 @@ const financeModel = {
       const hasBudgetTagColumn = await hasFinanceRequestColumn('budget_tag', { tx: connection });
       const hasUnplannedBudgetEnabledColumn = await hasFinanceRequestColumn('unplanned_budget_enabled', { tx: connection });
       const hasUnplannedBudgetAmountColumn = await hasFinanceRequestColumn('unplanned_budget_amount', { tx: connection });
+      const hasUnplannedBudgetDescriptionColumn = await hasFinanceRequestColumn('unplanned_budget_description', { tx: connection });
       const hasAnnexureTypeColumn = await hasFinanceRequestColumn('annexure_type', { tx: connection });
       const hasAnnexureFileNameColumn = await hasFinanceRequestColumn('annexure_file_name', { tx: connection });
       const hasAnnexureStorageNameColumn = await hasFinanceRequestColumn('annexure_storage_name', { tx: connection });
@@ -1767,6 +1762,9 @@ const financeModel = {
       const unplannedBudgetAmountSelectSql = hasUnplannedBudgetAmountColumn
         ? 'fr.unplanned_budget_amount'
         : 'NULL AS unplanned_budget_amount';
+      const unplannedBudgetDescriptionSelectSql = hasUnplannedBudgetDescriptionColumn
+        ? 'fr.unplanned_budget_description'
+        : 'NULL AS unplanned_budget_description';
       const annexureTypeSelectSql = hasAnnexureTypeColumn
         ? 'fr.annexure_type'
         : 'NULL AS annexure_type';
@@ -1802,6 +1800,7 @@ const financeModel = {
            fr.balance_amount,
            ${unplannedBudgetEnabledSelectSql},
            ${unplannedBudgetAmountSelectSql},
+           ${unplannedBudgetDescriptionSelectSql},
            ${annexureTypeSelectSql},
            ${annexureFileNameSelectSql},
            ${annexureStorageNameSelectSql},
@@ -1841,12 +1840,18 @@ const financeModel = {
       const normalizedBudgetRows = hasBudgetRowsInput
         ? normalizeBudgetRows(Array.isArray(financeData.budget_rows) ? financeData.budget_rows : [])
         : [];
+      const budgetLookupRows = hasBudgetRowsInput
+        ? applyBudgetLookupOverrides(normalizedBudgetRows, {
+          ...existingRecord,
+          ...financeData,
+        })
+        : [];
       const budgetRows = hasBudgetRowsInput
         ? await enrichBudgetRowsWithBudgetRefs(
           connection,
           toPositiveInt(existingRecord.created_by),
           normalizeText(existingRecord.created_by_email) || null,
-          normalizedBudgetRows,
+          budgetLookupRows,
           {
             excludeFinanceId: id,
             beneficiaryType: mergedRecordForContext.beneficiary_type,
@@ -1876,7 +1881,7 @@ const financeModel = {
         : [[]];
       const [previousIncomeRows] = hasIncomeRowsInput
         ? await connection.query(
-          `SELECT income_source, contribution, amount, status, credit_account
+          `SELECT income_source, contribution, amount, status, remarks, credit_account
                FROM finance_income_rows
                WHERE finance_id = ?
                ORDER BY sort_order ASC, id ASC`,
@@ -1928,12 +1933,22 @@ const financeModel = {
           delete updateData.unplanned_budget_amount;
         }
       }
+      if (Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_description')) {
+        if (hasUnplannedBudgetDescriptionColumn) {
+          updateData.unplanned_budget_description = normalizeText(updateData.unplanned_budget_description) || null;
+        } else {
+          delete updateData.unplanned_budget_description;
+        }
+      }
       if (
         hasUnplannedBudgetAmountColumn &&
         Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled') &&
         !updateData.unplanned_budget_enabled
       ) {
         updateData.unplanned_budget_amount = null;
+        if (hasUnplannedBudgetDescriptionColumn) {
+          updateData.unplanned_budget_description = null;
+        }
       }
       if (Object.prototype.hasOwnProperty.call(updateData, 'annexure_type')) {
         if (hasAnnexureTypeColumn) {
@@ -2070,6 +2085,7 @@ const financeModel = {
           contribution: normalizeText(row.contribution),
           amount: toMoney(row.amount),
           status: normalizeText(row.status),
+          remarks: normalizeText(row.remarks),
           credit_account: normalizeText(row.credit_account),
         }));
         const nextIncomeSnapshot = incomeRows.map((row) => ({
@@ -2077,6 +2093,7 @@ const financeModel = {
           contribution: normalizeText(row.contribution),
           amount: toMoney(row.amount),
           status: normalizeText(row.status),
+          remarks: normalizeText(row.remarks),
           credit_account: normalizeText(row.credit_account),
         }));
 
@@ -2145,7 +2162,7 @@ const financeModel = {
       const [rows] = await db.query(
         `${financeSelectSql}
          WHERE fr.id = ?
-           AND LOWER(TRIM(COALESCE(fr.overall_status, ''))) <> 'deleted'
+           AND ${FINANCE_NOT_DELETED_CONDITION_SQL}
          LIMIT 1`,
         ['', id]
       );
@@ -2171,7 +2188,7 @@ const financeModel = {
       let query = `${financeSelectSql} WHERE 1 = 1`;
       const params = [''];
 
-      query += ` AND LOWER(TRIM(COALESCE(fr.overall_status, ''))) <> 'deleted'`;
+      query += ` AND ${FINANCE_NOT_DELETED_CONDITION_SQL}`;
 
       if (mine) {
         query += ' AND fr.created_by = ?';
@@ -2298,6 +2315,8 @@ const financeModel = {
 
   async getIncomeRows(financeId) {
     try {
+      const hasRemarksColumn = await hasFinanceIncomeRowsColumn('remarks');
+      const remarksSelectSql = hasRemarksColumn ? 'remarks' : 'NULL AS remarks';
       const [rows] = await db.query(
         `SELECT
            id,
@@ -2306,6 +2325,7 @@ const financeModel = {
            contribution,
            amount,
            status,
+           ${remarksSelectSql},
            credit_account,
            sort_order,
            created_at
@@ -2429,7 +2449,7 @@ const financeModel = {
       `SELECT 1
          FROM finance_requests fr
         WHERE fr.id = ?
-          AND LOWER(TRIM(COALESCE(fr.overall_status, ''))) <> 'deleted'
+          AND ${FINANCE_NOT_DELETED_CONDITION_SQL}
         LIMIT 1`,
       [id]
     );
@@ -2508,13 +2528,16 @@ const financeModel = {
         updatedAt: nowIso,
       };
 
+      const canUseDeletedOverallStatus = await supportsFinanceOverallStatusDeletedValue({ tx: connection });
+      const nextOverallStatus = canUseDeletedOverallStatus ? 'deleted' : 'archived';
+
       await connection.query(
         `UPDATE finance_requests
             SET workflow_state = ?,
-                overall_status = 'deleted',
+                overall_status = ?,
                 updated_at = CURRENT_TIMESTAMP
           WHERE id = ?`,
-        [JSON.stringify(nextState), id]
+        [JSON.stringify(nextState), nextOverallStatus, id]
       );
 
       await connection.query(
@@ -2994,7 +3017,7 @@ const financeModel = {
     const whereParts = [];
     const whereParams = [];
 
-    whereParts.push(`LOWER(TRIM(COALESCE(fr.overall_status, ''))) <> 'deleted'`);
+    whereParts.push(FINANCE_NOT_DELETED_CONDITION_SQL);
 
     if (workflowStatus === 'all') {
       if (isSuperAdmin) {
@@ -3087,7 +3110,7 @@ const financeModel = {
     const [rows] = await tx.query(
       `SELECT DISTINCT TRIM(beneficiary_type) AS beneficiary_type
          FROM finance_requests fr
-        WHERE LOWER(TRIM(COALESCE(fr.overall_status, ''))) <> 'deleted'
+        WHERE ${FINANCE_NOT_DELETED_CONDITION_SQL}
           AND beneficiary_type IS NOT NULL
           AND TRIM(beneficiary_type) <> ''
         ORDER BY TRIM(beneficiary_type) ASC`
