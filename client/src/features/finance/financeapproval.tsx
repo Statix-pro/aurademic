@@ -47,6 +47,7 @@ interface IncomeRow {
   contribution: string;
   amount: string;
   status: string;
+  remarks: string;
   creditAccount: string;
 }
 
@@ -354,6 +355,14 @@ const getHoacGroupForHead = (head: string): string | undefined => {
   const mapped = HEAD_TO_GROUP[head];
   if (mapped && HOAC_GROUPS.has(mapped)) return mapped;
   return undefined;
+};
+
+const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {
+  FDP: ['AICTE Sponsored', 'Naan Mudhalvan', 'Industry', 'International'],
+  Workshop: ['Hands-on', 'Skill Development'],
+  Seminar: ['National', 'International'],
+  Conference: ['National', 'International'],
+  'Guest Lecture': ['Industry', 'Academic'],
 };
 
 const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
@@ -689,6 +698,36 @@ const getSubHeadOptionsForHeadSearch = (budgetHead: string): string[] => {
   return SUB_HEAD_BY_BUDGET_HEAD[budgetHead] ?? [];
 };
 
+const normalizeSubHeadForDb = (subHeadValue: string): string => {
+  const raw = String(subHeadValue || '').trim();
+  if (!raw) return '';
+  return raw.includes('::') ? raw.split('::')[0].trim() : raw;
+};
+
+const getSubHeadDisplayText = (subHeadValue: string): string => {
+  const raw = String(subHeadValue || '').trim();
+  if (!raw) return '';
+  if (!raw.includes('::')) return raw;
+  const [parent, child] = raw.split('::');
+  return child ? `${parent} - ${child}` : parent;
+};
+
+const getSubHeadDropdownOptions = (budgetHead: string): OptionType[] => {
+  const base = SUB_HEAD_BY_BUDGET_HEAD[budgetHead] ?? [];
+  const options: OptionType[] = [];
+  base.forEach((item) => {
+    options.push({ value: item, label: item });
+    const childOptions = SUB_HEAD_CHILD_OPTIONS[item] || [];
+    childOptions.forEach((child) => {
+      options.push({
+        value: `${item}::${child}`,
+        label: `${item} - ${child}`,
+      });
+    });
+  });
+  return options;
+};
+
 const BUDGET_HEAD_SEARCH_OPTIONS: Array<{ label: string; options: BudgetHeadSearchOption[] }> =
   BUDGET_HEAD_GROUPS.map((group) => ({
     label: group.label,
@@ -720,6 +759,7 @@ const createIncomeRow = (): IncomeRow => ({
   contribution: '',
   amount: '',
   status: '',
+  remarks: '',
   creditAccount: '',
 });
 
@@ -1023,6 +1063,7 @@ const FinanceApproval: React.FC = () => {
   const autoDownloadTriggeredRef = useRef<boolean>(false);
   const [showUnplannedBudget, setShowUnplannedBudget] = useState<boolean>(false);
   const [unplannedBudgetAmount, setUnplannedBudgetAmount] = useState<string>('');
+  const [unplannedBudgetDescription, setUnplannedBudgetDescription] = useState<string>('');
   // State for dynamic subcategory options (Department, Centre, Cell, Club, Professional Body)
   const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
   const [annexureType, setAnnexureType] = useState<string>('');
@@ -1274,6 +1315,7 @@ const FinanceApproval: React.FC = () => {
         budgetRows,
         showUnplannedBudget,
         unplannedBudgetAmount,
+        unplannedBudgetDescription,
         totalBudget,
         showIncomeSection,
         incomeRows,
@@ -1363,7 +1405,10 @@ const FinanceApproval: React.FC = () => {
     if (budgetLineId) {
       return `line:${budgetLineId}`;
     }
-    return `head:${normalizeText(row?.category)}|sub:${normalizeText(row?.head)}`;
+    const effectiveHead = normalizeText(primaryHead) || normalizeText(row?.category);
+    const effectiveSubHead =
+      (extraDropdownVisible ? normalizeText(eventSubHead) : '') || normalizeText(row?.head);
+    return `head:${effectiveHead}|sub:${effectiveSubHead}`;
   };
 
   const getRemainingAvailableForRow = (rowIndex: number): number => {
@@ -1381,8 +1426,9 @@ const FinanceApproval: React.FC = () => {
     return Math.max(0, baseAvailable - reservedByPreviousRows);
   };
   const fetchBudgetAvailability = async (rowIndex: number, budgetHead: string, subHead: string) => {
-    const normalizedHead = normalizeText(budgetHead);
-    const normalizedSubHead = normalizeText(subHead);
+    const normalizedHead = normalizeText(primaryHead) || normalizeText(budgetHead);
+    const normalizedSubHead =
+      (extraDropdownVisible ? normalizeText(eventSubHead) : '') || normalizeText(subHead);
 
     if (!normalizedHead || !normalizedSubHead) {
       setBudgetLineMetaByRow((prev) => ({
@@ -1400,8 +1446,8 @@ const FinanceApproval: React.FC = () => {
       const response = await authenticityUtility.get('/finance-requests/budget-availability', {
         params: {
           budget_head: normalizedHead,
-          sub_head: normalizedSubHead,
-          head_only_match: getHoacGroupForHead(normalizedHead) ? '1' : '0',
+          sub_head: normalizeSubHeadForDb(normalizedSubHead),
+          head_only_match: '0',
           finance_id: isEditMode && id ? id : undefined,
           beneficiary_type: beneficiaryType || undefined,
           beneficiary_value: beneficiaryValue || undefined,
@@ -1470,7 +1516,7 @@ const FinanceApproval: React.FC = () => {
       updated[index][field] = value;
       if (field === 'head') {
         const selectedHead = updated[index].category;
-        fetchBudgetAvailability(index, selectedHead, value);
+        fetchBudgetAvailability(index, selectedHead, normalizeSubHeadForDb(value));
       }
     }
     setBudgetRows(updated);
@@ -1493,7 +1539,7 @@ const FinanceApproval: React.FC = () => {
     });
 
     if (selectedHead && selectedSubHead) {
-      fetchBudgetAvailability(index, selectedHead, selectedSubHead);
+      fetchBudgetAvailability(index, selectedHead, normalizeSubHeadForDb(selectedSubHead));
     } else {
       setBudgetLineMetaByRow((prev) => ({
         ...prev,
@@ -1667,8 +1713,11 @@ const FinanceApproval: React.FC = () => {
         const row = budgetRows[index];
         const requestedAmount = Number(row.amount || 0);
         const remainingAmount = getRemainingAvailableForRow(index);
+        const effectiveBudgetHead = normalizeText(primaryHead) || normalizeText(row.category);
+        const effectiveSubHead =
+          (extraDropdownVisible ? normalizeText(eventSubHead) : '') || normalizeText(row.head);
 
-        if (!row.category || !row.head) {
+        if (!effectiveBudgetHead || !effectiveSubHead) {
           showAlert(`Please select Budget Head and Sub Head for row ${index + 1}.`, 'warning');
           return;
         }
@@ -1764,6 +1813,7 @@ const FinanceApproval: React.FC = () => {
         balance_amount: balanceAmount || null,
         unplanned_budget_enabled: showUnplannedBudget,
         unplanned_budget_amount: showUnplannedBudget ? Number(unplannedBudgetAmount || 0) : null,
+        unplanned_budget_description: showUnplannedBudget ? (normalizeText(unplannedBudgetDescription) || null) : null,
 
         income_type: primaryIncomeRow?.incomeSource || '',
         income_status: primaryIncomeRow?.creditAccount || '',
@@ -1779,9 +1829,9 @@ const FinanceApproval: React.FC = () => {
         debit_status: debitStatus || null,
         partial_amount: primaryIncomeRow?.amount || null,
         budget_rows: budgetRows.map((row, index) => ({
-          budget_head: row.category,
-          sub_head: row.head,
-          head_only_match: Boolean(getHoacGroupForHead(row.category)),
+          budget_head: normalizeText(primaryHead) || row.category,
+          sub_head: (extraDropdownVisible ? normalizeText(eventSubHead) : '') || row.head,
+          head_only_match: false,
           amount: Number(row.amount || 0),
           budget_line_id: budgetLineMetaByRow[index]?.budgetLineId || null,
           budget_proposal_id: budgetLineMetaByRow[index]?.budgetProposalId || null,
@@ -1897,6 +1947,7 @@ const FinanceApproval: React.FC = () => {
       setIsBudgetProposed('');
       setShowUnplannedBudget(false);
       setUnplannedBudgetAmount('');
+      setUnplannedBudgetDescription('');
       setBudgetRows([{ category: '', head: '', amount: '' }]);
       setBudgetLineMetaByRow({});
       setAmountProposed("");
@@ -2090,12 +2141,17 @@ const hideWorkflowActionsForFinalStatus =
           recordUnplannedBudgetAmount !== undefined &&
           String(recordUnplannedBudgetAmount).trim() !== '' &&
           Number(recordUnplannedBudgetAmount) > 0;
+        const recordUnplannedBudgetDescription =
+          record.unplanned_budget_description ??
+          workflowFinanceMeta.unplannedBudgetDescription ??
+          '';
         setShowUnplannedBudget(Boolean(recordUnplannedBudgetEnabled || hasUnplannedBudgetAmount));
         setUnplannedBudgetAmount(
           recordUnplannedBudgetAmount !== null && recordUnplannedBudgetAmount !== undefined
             ? String(recordUnplannedBudgetAmount)
             : ''
         );
+        setUnplannedBudgetDescription(String(recordUnplannedBudgetDescription || ''));
         setBeneficiaryType(record.beneficiary_type || '');
         setBeneficiaryValue(record.beneficiary_value || '');
         setPrimaryHead(record.primary_head || '');
@@ -2176,6 +2232,7 @@ const hideWorkflowActionsForFinalStatus =
               contribution: String(row?.contribution || ''),
               amount: String(row?.amount ?? ''),
               status: String(row?.status || ''),
+              remarks: String(row?.remarks || ''),
               creditAccount: String(row?.credit_account || ''),
             }))
             : [createIncomeRow()]
@@ -3037,8 +3094,8 @@ const hideWorkflowActionsForFinalStatus =
                         <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
                           <CustomDropdown
                             name={`subHead-${index}`}
-                            options={toOptions(getSubHeadOptions(row.category))}
-                            value={getSelectedOption(row.head, toOptions(getSubHeadOptions(row.category)))}
+                            options={getSubHeadDropdownOptions(row.category)}
+                            value={getSelectedOption(row.head, getSubHeadDropdownOptions(row.category))}
                             onChange={(option) => {
                               const selected = option as OptionType | null;
                               handleBudgetChange(index, 'head', selected?.value ? String(selected.value) : '');
@@ -3158,17 +3215,44 @@ const hideWorkflowActionsForFinalStatus =
                     ))}
                     {hasUnplannedBudgetPreview && (
                       <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
-                        <td colSpan={3} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab', backgroundColor: '#fafcff' }}>
+                        <td style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', fontWeight: '600', color: '#0069ab', backgroundColor: '#fafcff' }}>
                           Unplanned Budget
+                        </td>
+                        <td colSpan={2} style={{ padding: '12px', border: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
+                          <input
+                            type="text"
+                            value={unplannedBudgetDescription}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => setUnplannedBudgetDescription(e.target.value)}
+                            placeholder="Enter unplanned budget description"
+                            style={{
+                              border: '1px solid #e0e0e0',
+                              borderRadius: '8px',
+                              padding: '8px 12px',
+                              fontSize: '0.9rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              color: '#000',
+                              outline: 'none',
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                          />
                         </td>
                         <td style={{ padding: '12px', border: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
                           <input
                             type="text"
                             value={unplannedBudgetAmount}
-                             onChange={(e: ChangeEvent<HTMLInputElement>) =>
-    setUnplannedBudgetAmount(e.target.value.replace(/\D/g, ""))
-  }
-                            placeholder="₹ 0.00"
+                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                              setUnplannedBudgetAmount(e.target.value.replace(/\D/g, ""))
+                            }
+                            placeholder="Rs. 0.00"
                             style={{
                               border: '1px solid #e0e0e0',
                               borderRadius: '8px',
@@ -3288,6 +3372,7 @@ const hideWorkflowActionsForFinalStatus =
                               <th style={{ width: '25%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Contribution</th>
                               <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Amount</th>
                               <th style={{ width: '20%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Status</th>
+                              <th style={{ width: '14%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Remarks</th>
                               <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Actions</th>
                             </tr>
                           </thead>
@@ -3369,6 +3454,37 @@ const hideWorkflowActionsForFinalStatus =
                                         placeholder="Select"
                                       />
                                     </td>
+                                    <td style={incomeCellStyle}>
+                                      <input
+                                        type="text"
+                                        value={row.remarks}
+                                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                                          handleIncomeRowChange(row.id, "remarks", e.target.value)
+                                        }
+                                        placeholder="Enter remarks"
+                                        style={{
+                                          border: '1px solid #e0e0e0',
+                                          borderRadius: '8px',
+                                          padding: '6px 8px',
+                                          fontSize: '0.9rem',
+                                          width: '100%',
+                                          fontFamily: 'inherit',
+                                          backgroundColor: '#fcfdff',
+                                          color: '#000',
+                                          cursor: 'text',
+                                          outline: 'none',
+                                          marginTop: '2px'
+                                        }}
+                                        onFocus={(e) => {
+                                          e.currentTarget.style.borderColor = '#0069ab';
+                                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                                        }}
+                                        onBlur={(e) => {
+                                          e.currentTarget.style.borderColor = '#e0e0e0';
+                                          e.currentTarget.style.boxShadow = 'none';
+                                        }}
+                                      />
+                                    </td>
                                     {/* Action cell with vertical centering spanning both rows */}
                                     <td rowSpan={2} style={{
                                       padding: '8px',
@@ -3436,7 +3552,7 @@ const hideWorkflowActionsForFinalStatus =
                                   {/* Second Row - Credit Account (Reduced width) */}
                                   <tr>
                                     <td
-                                      colSpan={2}
+                                      colSpan={3}
                                       style={{
                                         padding: '5px',
                                         border: '1px solid #e0e0e0',
@@ -3475,7 +3591,7 @@ const hideWorkflowActionsForFinalStatus =
                           </tbody>
                           <tfoot>
                             <tr style={{ backgroundColor: '#f0f6ff' }}>
-                              <td colSpan={3} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>Total Income</td>
+                              <td colSpan={4} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>Total Income</td>
                               <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
                                 ₹ {incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0).toFixed(2)}
                               </td>
@@ -3985,13 +4101,14 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                         <tr key={index}>
                           <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
                           <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.category || '\u00A0'}</td>
-                          <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.head || '\u00A0'}</td>
+                          <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{getSubHeadDisplayText(row.head) || '\u00A0'}</td>
                           <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {Number(row.amount || 0).toFixed(2)}</td>
                         </tr>
                       ))}
                       {hasUnplannedBudgetPreview && (
                         <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
-                          <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right', fontWeight: 'bold' }}>Unplanned Budget:</td>
+                          <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'left', fontWeight: 'bold' }}>Unplanned Budget</td>
+                          <td colSpan={2} style={{ padding: '3px 4px', border: '1px solid #000' }}>{unplannedBudgetDescription || '\u00A0'}</td>
                           <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {Number(unplannedBudgetAmount || 0).toFixed(2)}</td>
                         </tr>
                       )}
@@ -4019,6 +4136,7 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Contribution</th>
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Amount</th>
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Status</th>
+                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Remarks</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4030,10 +4148,11 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                               <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{row.contribution || ''}</td>
                               <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>{row.amount ? `Rs. ${row.amount}` : ''}</td>
                               <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{row.status || ''}</td>
+                              <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.remarks || ''}</td>
                             </tr>
                             <tr>
                               <td colSpan={2} style={{ padding: '2.5px 4px', border: '1px solid #000', fontWeight: 'bold', backgroundColor: '#f8f8f8' }}>Credit Account</td>
-                              <td colSpan={3} style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.creditAccount || ''}</td>
+                              <td colSpan={4} style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.creditAccount || ''}</td>
                             </tr>
                           </React.Fragment>
                         ))}
@@ -4155,3 +4274,4 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
 };
 
 export default FinanceApproval;
+
