@@ -12,6 +12,39 @@ const toPositiveInt = (value) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
+const SAFE_ANNEXURE_EXTENSIONS = new Set([
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.csv',
+  '.jpg',
+  '.jpeg',
+  '.png',
+]);
+
+const sanitizeAnnexureExtension = (originalName) => {
+  const rawExt = String(path.extname(String(originalName || '')) || '').toLowerCase();
+  const normalizedExt = rawExt.replace(/[^a-z0-9.]/g, '');
+  return SAFE_ANNEXURE_EXTENSIONS.has(normalizedExt) ? normalizedExt : '';
+};
+
+const TEMP_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'temp');
+
+const resolveSafeTempUploadPath = (unsafePath) => {
+  const normalized = normalizeText(unsafePath);
+  if (!normalized) return null;
+
+  const resolved = path.resolve(normalized);
+  const safeBase = `${TEMP_UPLOAD_DIR}${path.sep}`;
+  if (!resolved.startsWith(safeBase)) {
+    return null;
+  }
+
+  return resolved;
+};
+
 const parseDateMs = (value) => {
   const normalized = normalizeText(value);
   if (!normalized) return null;
@@ -505,7 +538,7 @@ const financeController = {
       }
 
       const budget = await financeModel.getBudgetBreakup(financeId);
-const incomeRows = await financeModel.getIncomeRows(financeId);
+      const incomeRows = await financeModel.getIncomeRows(financeId);
 
       let statusUpdates = [];
       try {
@@ -904,8 +937,8 @@ const incomeRows = await financeModel.getIncomeRows(financeId);
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
       const effectiveLevel1Role = stage === 'level1'
         ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
-            ? normalizedLevel1Role
-            : resolveFinanceLevel1QueueRole(req))
+          ? normalizedLevel1Role
+          : resolveFinanceLevel1QueueRole(req))
         : null;
 
       const queue = await workflowService.listQueue({
@@ -1099,16 +1132,29 @@ const incomeRows = await financeModel.getIncomeRows(financeId);
         });
       }
 
-      const annexureDir = path.join(process.cwd(), 'uploads', 'finance-annexures');
-      if (!fs.existsSync(annexureDir)) {
-        fs.mkdirSync(annexureDir, { recursive: true });
+      const annexureDir = path.resolve(process.cwd(), 'uploads', 'finance-annexures');
+      await fs.promises.mkdir(annexureDir, { recursive: true });
+
+      const extension = sanitizeAnnexureExtension(file.originalname);
+      const storedName = `finance-annexure-${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
+      const finalPath = path.resolve(annexureDir, storedName);
+      const safeBase = `${annexureDir}${path.sep}`;
+      if (!finalPath.startsWith(safeBase)) {
+        throw new Error('Invalid annexure path');
       }
 
-      const extension = path.extname(file.originalname || '');
-      const storedName = `finance-annexure-${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
-      const finalPath = path.join(annexureDir, storedName);
+      const sourcePath = resolveSafeTempUploadPath(file.path);
+      if (!sourcePath) {
+        throw new Error('Invalid upload source path');
+      }
 
-      fs.renameSync(file.path, finalPath);
+      try {
+        await fs.promises.access(sourcePath, fs.constants.F_OK);
+      } catch {
+        throw new Error('Invalid upload source path');
+      }
+
+      await fs.promises.rename(sourcePath, finalPath);
 
       return res.status(200).json({
         status: 'success',
@@ -1123,8 +1169,13 @@ const incomeRows = await financeModel.getIncomeRows(financeId);
       });
     } catch (error) {
       try {
-        if (req.file?.path && fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path);
+        const cleanupPath = resolveSafeTempUploadPath(req.file?.path);
+        if (cleanupPath) {
+          await fs.promises.unlink(cleanupPath).catch((cleanupError) => {
+            if (cleanupError?.code !== 'ENOENT') {
+              throw cleanupError;
+            }
+          });
         }
       } catch {
         // Ignore cleanup errors

@@ -1293,7 +1293,14 @@ showAlert(
                     const recordId = getRecordId(record) ?? `row-${rowIndex}`;
                     const timelineKey = String(recordId);
                     const statusCategory = resolveStatusCategory(record);
-                    const isPending = statusCategory === 'pending' && getRecordCurrentStage(record) === activeStage.toLowerCase();
+                    const recordCurrentStage = getRecordCurrentStage(record);
+                    const isPending = statusCategory === 'pending' && recordCurrentStage === activeStage.toLowerCase();
+                    const isActionablePending =
+                      isPending ||
+                      (isSuperAdminView &&
+                        Boolean(activeWorkflowTab?.showAllProposals) &&
+                        statusCategory === 'pending' &&
+                        Boolean(recordCurrentStage));
                     const isArchived = statusCategory === 'archived';
                     const isApproved = statusCategory === 'approved';
                     const proposedAmount = record.total_amount || record.total_budget || record.amount || 0;
@@ -1436,7 +1443,7 @@ showAlert(
                                           e.stopPropagation();
                                           onApprove(recordId);
                                         }}
-                                        disabled={actingRecordId === recordId || !isPending}
+                                        disabled={actingRecordId === recordId || !isActionablePending}
                                       >
                                         <CheckCircle2 size={18} />
                                       </button>
@@ -1448,7 +1455,7 @@ showAlert(
                                           e.stopPropagation();
                                           openActionPopup("return", recordId, proposalRef);
                                         }}
-                                        disabled={actingRecordId === recordId || !isPending}
+                                        disabled={actingRecordId === recordId || !isActionablePending}
                                         >
                                           <RotateCcw size={18} />
                                       </button>
@@ -1460,7 +1467,7 @@ showAlert(
                                           e.stopPropagation();
                                           openActionPopup("reject", recordId, proposalRef);
                                         }}
-                                        disabled={actingRecordId === recordId || !isPending}
+                                        disabled={actingRecordId === recordId || !isActionablePending}
                                       >
                                         <XCircle size={18} />
                                       </button>
@@ -1478,7 +1485,7 @@ showAlert(
                                           e.stopPropagation();
                                           onApprove(recordId);
                                         }}
-                                        disabled={actingRecordId === recordId || !isPending}
+                                        disabled={actingRecordId === recordId || !isActionablePending}
                                       >
                                         <CheckCircle2 size={18} />
                                       </button>
@@ -1490,7 +1497,7 @@ showAlert(
                                           e.stopPropagation();
                                           openActionPopup("return", recordId, proposalRef);
                                         }}
-                                        disabled={actingRecordId === recordId || !isPending}
+                                        disabled={actingRecordId === recordId || !isActionablePending}
                                       >
                                         <RotateCcw size={18} />
                                       </button>
@@ -1502,7 +1509,7 @@ showAlert(
                                           e.stopPropagation();
                                           openActionPopup("reject", recordId, proposalRef);
                                         }}
-                                        disabled={actingRecordId === recordId || !isPending}
+                                        disabled={actingRecordId === recordId || !isActionablePending}
                                       >
                                         <XCircle size={18} />
                                       </button>
@@ -1520,7 +1527,7 @@ showAlert(
                                     }}
                                     disabled={
                                       archivingIds.has(recordId) ||
-                                      (isSuperAdminView && !isPending)
+                                      (isSuperAdminView && !isActionablePending)
                                     }
                                   >
                                     <Archive size={18} />
