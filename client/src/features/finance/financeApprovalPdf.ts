@@ -23,6 +23,7 @@ export interface FinancePdfIncomeRow {
   contribution: string;
   amount: string;
   status: string;
+  remarks: string;
   creditAccount: string;
 }
 
@@ -390,6 +391,7 @@ interface GenerateFinancePdfInput {
   budgetRows: FinancePdfBudgetRow[];
   showUnplannedBudget: boolean;
   unplannedBudgetAmount: string;
+  unplannedBudgetDescription: string;
   totalBudget: number;
   showIncomeSection: boolean;
   incomeRows: FinancePdfIncomeRow[];
@@ -416,6 +418,7 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     budgetRows,
     showUnplannedBudget,
     unplannedBudgetAmount,
+    unplannedBudgetDescription,
     totalBudget,
     showIncomeSection,
     incomeRows,
@@ -542,8 +545,10 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
 
   if (showUnplannedBudget) {
     budgetTableBody.push([
-      { content: 'Unplanned Budget:', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' as const } } as any,
-      { content: 'Rs. ' + Number(unplannedBudgetAmount || 0).toFixed(2), styles: { fontStyle: 'bold' } },
+      'Unplanned Budget',
+      unplannedBudgetDescription || '',
+      '',
+      'Rs. ' + Number(unplannedBudgetAmount || 0).toFixed(2),
     ]);
   }
 
@@ -601,10 +606,11 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
         { content: row.contribution || '' },
         { content: row.amount ? `Rs. ${row.amount}` : '' },
         { content: row.status || '' },
+        { content: row.remarks || '' },
       ],
       [
         { content: 'Credit Account', colSpan: 2, styles: { fontStyle: '', fillColor: [245, 245, 245] } },
-        { content: row.creditAccount || '', colSpan: 3 },
+        { content: row.creditAccount || '', colSpan: 4 },
       ],
     ]));
 
@@ -620,6 +626,7 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
         'Contribution',
         'Amount',
         'Status',
+        'Remarks',
       ]],
       headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
       columnStyles: {
@@ -627,7 +634,8 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
         1: { cellWidth: 82 },
         2: { cellWidth: 34, halign: 'center' },
         3: { cellWidth: 24, halign: 'right' },
-        4: { cellWidth: 34, halign: 'center' },
+        4: { cellWidth: 22, halign: 'center' },
+        5: { cellWidth: 12, halign: 'left' },
       },
       body: incomeTableBody as any,
     });

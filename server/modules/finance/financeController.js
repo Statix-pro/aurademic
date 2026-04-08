@@ -268,6 +268,7 @@ const financeController = {
           data.unplanned_budget_amount !== undefined && data.unplanned_budget_amount !== null
             ? Number(data.unplanned_budget_amount)
             : null,
+        unplannedBudgetDescription: normalizeText(data.unplanned_budget_description) || null,
       };
 
       try {
@@ -416,6 +417,7 @@ const financeController = {
           finance.unplanned_budget_amount !== undefined && finance.unplanned_budget_amount !== null
             ? Number(finance.unplanned_budget_amount)
             : null,
+        unplannedBudgetDescription: normalizeText(finance.unplanned_budget_description) || null,
       };
 
       const restartResult = await workflowService.startWorkflow({
