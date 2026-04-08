@@ -1,5 +1,7 @@
 import db from '../../config/connection.js';
 import * as orgUnitQueries from '../shared/budget/orgUnitQueries.js';
+import fs from 'fs';
+import path from 'path';
 
 const safeParseJSON = (value, fallback = null) => {
   if (value === undefined || value === null || value === '') return fallback;
@@ -12,6 +14,9 @@ const safeParseJSON = (value, fallback = null) => {
 };
 
 const normalizeText = (value) => String(value || '').trim();
+const FINANCE_ANNEXURE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'finance-annexures');
+const FINANCE_ANNEXURE_PUBLIC_PREFIX = '/uploads/finance-annexures/';
+const FINANCE_ANNEXURE_STORED_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 const FINANCE_REQUEST_COLUMN_EXISTS_CACHE = new Map();
 const FINANCE_BUDGET_BREAKUP_COLUMN_EXISTS_CACHE = new Map();
 
@@ -249,20 +254,148 @@ const normalizeIncomeRows = (rows = []) =>
     sort_order: index,
   }));
 
-const normalizeFinanceAnnexures = (rows = []) =>
-  (Array.isArray(rows) ? rows : [])
-    .map((row, index) => ({
+const normalizeAnnexurePublicPath = (filePath) => {
+  const normalized = normalizeText(filePath);
+  if (!normalized) return '';
+
+  const withoutQuery = normalized.split('?')[0].split('#')[0];
+  if (!withoutQuery.startsWith(FINANCE_ANNEXURE_PUBLIC_PREFIX)) {
+    return '';
+  }
+
+  const fileName = path.posix.basename(withoutQuery);
+  return `${FINANCE_ANNEXURE_PUBLIC_PREFIX}${fileName}`;
+};
+
+const resolveAnnexureDiskPath = (storedName) => {
+  const normalized = normalizeText(storedName);
+  if (!normalized || !FINANCE_ANNEXURE_STORED_NAME_PATTERN.test(normalized)) {
+    return null;
+  }
+
+  const diskPath = path.resolve(FINANCE_ANNEXURE_UPLOAD_DIR, normalized);
+  const safeBase = `${FINANCE_ANNEXURE_UPLOAD_DIR}${path.sep}`;
+  if (!diskPath.startsWith(safeBase)) {
+    return null;
+  }
+
+  return diskPath;
+};
+
+const countAnnexureRowReferences = async (storedName, { tx = db } = {}) => {
+  try {
+    const [rows] = await tx.query(
+      `SELECT COUNT(*) AS count
+         FROM finance_request_annexures
+        WHERE stored_name = ?`,
+      [storedName]
+    );
+    return Number(rows?.[0]?.count || 0);
+  } catch (error) {
+    if (error?.code === 'ER_NO_SUCH_TABLE') {
+      return 0;
+    }
+    throw error;
+  }
+};
+
+const countLegacyAnnexureReferences = async (storedName, { tx = db } = {}) => {
+  const hasLegacyColumn = await hasFinanceRequestColumn('annexure_storage_name', { tx });
+  if (!hasLegacyColumn) {
+    return 0;
+  }
+
+  const [rows] = await tx.query(
+    `SELECT COUNT(*) AS count
+       FROM finance_requests
+      WHERE annexure_storage_name = ?`,
+    [storedName]
+  );
+  return Number(rows?.[0]?.count || 0);
+};
+
+const cleanupOrphanFinanceAnnexureFiles = async (storedNames = []) => {
+  const uniqueNames = Array.from(new Set((Array.isArray(storedNames) ? storedNames : [])
+    .map((value) => normalizeText(value))
+    .filter(Boolean)));
+
+  for (const storedName of uniqueNames) {
+    try {
+      const tableRefs = await countAnnexureRowReferences(storedName);
+      if (tableRefs > 0) {
+        continue;
+      }
+
+      const legacyRefs = await countLegacyAnnexureReferences(storedName);
+      if (legacyRefs > 0) {
+        continue;
+      }
+
+      const diskPath = resolveAnnexureDiskPath(storedName);
+      if (!diskPath) {
+        continue;
+      }
+
+      await fs.promises.unlink(diskPath).catch((error) => {
+        if (error?.code !== 'ENOENT') {
+          throw error;
+        }
+      });
+    } catch {
+      // Best-effort cleanup only; do not block main request flow.
+    }
+  }
+};
+
+const normalizeFinanceAnnexures = async (rows = []) => {
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  const normalizedRows = [];
+
+  for (let index = 0; index < sourceRows.length; index += 1) {
+    const row = sourceRows[index];
+    const storedName = normalizeText(row?.stored_name || row?.storedName || row?.annexure_storage_name);
+    const rawFilePath = normalizeText(row?.file_path || row?.filePath || row?.annexure_file_path);
+
+    if (!storedName || !rawFilePath) {
+      continue;
+    }
+
+    const normalizedFilePath = normalizeAnnexurePublicPath(rawFilePath);
+    if (!normalizedFilePath) {
+      throw new Error(`Invalid annexure path at row ${index + 1}`);
+    }
+
+    const fileNameFromPath = path.posix.basename(normalizedFilePath);
+    if (fileNameFromPath !== storedName) {
+      throw new Error(`Annexure path mismatch at row ${index + 1}`);
+    }
+
+    const diskPath = resolveAnnexureDiskPath(storedName);
+    if (!diskPath) {
+      throw new Error(`Invalid annexure storage name at row ${index + 1}`);
+    }
+
+    try {
+      await fs.promises.access(diskPath, fs.constants.F_OK);
+    } catch {
+      throw new Error(`Annexure file not found on server at row ${index + 1}`);
+    }
+
+    normalizedRows.push({
       annexure_type: normalizeText(row?.annexure_type || row?.annexureType),
       original_name: normalizeText(row?.original_name || row?.originalName || row?.annexure_file_name),
-      stored_name: normalizeText(row?.stored_name || row?.storedName || row?.annexure_storage_name),
-      file_path: normalizeText(row?.file_path || row?.filePath || row?.annexure_file_path),
+      stored_name: storedName,
+      file_path: normalizedFilePath,
       mime_type: normalizeText(row?.mime_type || row?.mimeType || row?.annexure_mime_type),
       file_size: Number.isFinite(Number(row?.file_size ?? row?.fileSize ?? row?.annexure_file_size))
         ? Number(row?.file_size ?? row?.fileSize ?? row?.annexure_file_size)
         : null,
       sort_order: index,
-    }))
-    .filter((row) => row.file_path && row.stored_name);
+    });
+  }
+
+  return normalizedRows;
+};
 
 const getLegacyAnnexureFromRecord = (record = {}) => {
   const filePath = normalizeText(record?.annexure_file_path);
@@ -731,6 +864,13 @@ const resolveBudgetAvailabilityScope = async (conn, scope = {}) => {
         };
       }
     }
+
+    return {
+      mode: 'department',
+      beneficiaryType,
+      departmentId: null,
+      entityId: null,
+    };
   }
 
   if (beneficiaryTypeToken === 'institution') {
@@ -775,6 +915,24 @@ const resolveBudgetAvailabilityScope = async (conn, scope = {}) => {
         entityTypeCode,
       };
     }
+
+    return {
+      mode: 'entity',
+      beneficiaryType,
+      departmentId: null,
+      entityId: null,
+      entityTypeCode,
+    };
+  }
+
+  if (entityTypeCode) {
+    return {
+      mode: 'entity',
+      beneficiaryType,
+      departmentId: null,
+      entityId: null,
+      entityTypeCode,
+    };
   }
 
   return {
@@ -1491,7 +1649,7 @@ const financeModel = {
         beneficiaryEntityId: workflowContext.beneficiaryEntityId,
       });
       const incomeRows = normalizeIncomeRows(Array.isArray(financeData.income_rows) ? financeData.income_rows : []);
-      const normalizedAnnexures = normalizeFinanceAnnexures(financeData.annexures);
+      const normalizedAnnexures = await normalizeFinanceAnnexures(financeData.annexures);
       const primaryAnnexure = normalizedAnnexures[0] || null;
       const totalBudget = calculateFinanceTotalBudget(budgetRows, financeData);
       const normalizedUnplanned = normalizeUnplannedBudgetPayload(financeData);
@@ -1702,7 +1860,10 @@ const financeModel = {
         ? normalizeIncomeRows(Array.isArray(financeData.income_rows) ? financeData.income_rows : [])
         : [];
       const annexures = hasAnnexuresInput
-        ? normalizeFinanceAnnexures(Array.isArray(financeData.annexures) ? financeData.annexures : [])
+        ? await normalizeFinanceAnnexures(Array.isArray(financeData.annexures) ? financeData.annexures : [])
+        : [];
+      const previousAnnexures = hasAnnexuresInput
+        ? await getFinanceAnnexures(id, { tx: connection })
         : [];
       const [previousBudgetRows] = hasBudgetRowsInput
         ? await connection.query(
@@ -1950,6 +2111,25 @@ const financeModel = {
       }
 
       await connection.commit();
+
+      if (hasAnnexuresInput) {
+        const previousStoredNames = new Set(
+          [
+            ...previousAnnexures.map((row) => normalizeText(row?.stored_name)),
+            normalizeText(existingRecord?.annexure_storage_name),
+          ].filter(Boolean)
+        );
+        const nextStoredNames = new Set(
+          annexures.map((row) => normalizeText(row?.stored_name)).filter(Boolean)
+        );
+
+        const removedStoredNames = Array.from(previousStoredNames).filter(
+          (storedName) => !nextStoredNames.has(storedName)
+        );
+
+        await cleanupOrphanFinanceAnnexureFiles(removedStoredNames);
+      }
+
       return result;
     } catch (error) {
       await connection.rollback();
