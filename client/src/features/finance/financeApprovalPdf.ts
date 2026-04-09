@@ -516,7 +516,12 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     ['Email', email || '', 'Mobile', mobile || ''],
     [{ content: 'Beneficiary', styles: { fontStyle: 'bold' } }, { content: beneficiaryText, colSpan: 3 }],
     [{ content: 'Description', styles: { fontStyle: 'bold' } }, { content: description || '', colSpan: 3 }],
-    [{ content: 'Head of Accounts', styles: { fontStyle: 'bold' } }, { content: headOfAccountsText, colSpan: 3 }],
+    [
+      { content: 'Head of Accounts', styles: { fontStyle: 'bold' } },
+      { content: headOfAccountsText },
+      { content: 'Annexure', styles: { fontStyle: 'bold' } },
+      { content: annexureSummary },
+    ],
   ];
 
   autoTable(pdf, {
@@ -524,7 +529,7 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     margin: { left: margin, right: margin },
     theme: 'grid',
     tableWidth,
-    styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
+    styles: { fontSize: 8.5, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, valign: 'middle' },
     columnStyles: {
       0: { cellWidth: 38, fontStyle: 'bold' },
       1: { cellWidth: 75 },
@@ -545,9 +550,8 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
 
   if (showUnplannedBudget) {
     budgetTableBody.push([
-      'Unplanned Budget',
-      unplannedBudgetDescription || '',
       '',
+      { content: `Unplanned Budget:${unplannedBudgetDescription || ''}`, colSpan: 2, styles: { fontStyle: 'bold', overflow: 'linebreak' } } as any,
       'Rs. ' + Number(unplannedBudgetAmount || 0).toFixed(2),
     ]);
   }
@@ -562,12 +566,12 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     margin: { left: margin, right: margin },
     theme: 'grid',
     tableWidth,
-    styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
+    styles: { fontSize: 8.5, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, valign: 'middle' },
     columnStyles: {
-      0: { cellWidth: 12, halign: 'center' },
-      1: { cellWidth: 65 },
-      2: { cellWidth: 65 },
-      3: { cellWidth: tableWidth - 12 - 65 - 65, halign: 'right' },
+      0: { cellWidth: 16, halign: 'center' },
+      1: { cellWidth: 68 },
+      2: { cellWidth: 68 },
+      3: { cellWidth: tableWidth - 16 - 68 - 68, halign: 'right' },
     },
     body: [
       [
@@ -603,14 +607,14 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
       [
         { content: String(index + 1), styles: { halign: 'center' } },
         { content: row.incomeSource || '' },
-        { content: row.contribution || '' },
         { content: row.amount ? `Rs. ${row.amount}` : '' },
         { content: row.status || '' },
         { content: row.remarks || '' },
       ],
       [
-        { content: 'Credit Account', colSpan: 2, styles: { fontStyle: '', fillColor: [245, 245, 245] } },
-        { content: row.creditAccount || '', colSpan: 4 },
+        { content: '', styles: { fillColor: [245, 245, 245] } },
+        { content: `Contribution${row.contribution ? ` - ${row.contribution}` : ''}`, styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } },
+        { content: `Credit Account: ${row.creditAccount || ''}`, colSpan: 3, styles: { overflow: 'linebreak' } },
       ],
     ]));
 
@@ -619,23 +623,21 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
       margin: { left: margin, right: margin },
       theme: 'grid',
       tableWidth,
-      styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
+      styles: { fontSize: 8.5, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, valign: 'middle' },
       head: [[
         'S.No',
         'Income Source',
-        'Contribution',
         'Amount',
         'Status',
         'Remarks',
       ]],
       headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
       columnStyles: {
-        0: { cellWidth: 12, halign: 'center' },
-        1: { cellWidth: 82 },
-        2: { cellWidth: 34, halign: 'center' },
-        3: { cellWidth: 24, halign: 'right' },
-        4: { cellWidth: 22, halign: 'center' },
-        5: { cellWidth: 12, halign: 'left' },
+        0: { cellWidth: 16, halign: 'center' },
+        1: { cellWidth: 46 },
+        2: { cellWidth: 30, halign: 'right' },
+        3: { cellWidth: 24, halign: 'center' },
+        4: { cellWidth: tableWidth - 16 - 46 - 30 - 24, halign: 'left' },
       },
       body: incomeTableBody as any,
     });
@@ -646,21 +648,7 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
   const approvalSteps = approvalHistory.filter((entry) => entry.label !== 'Submitted');
   const submittedByUi = approvalHistory.find((entry) => entry.label === 'Submitted') || submittedBy;
 
-  autoTable(pdf, {
-    startY: yPos,
-    margin: { left: margin, right: margin },
-    theme: 'grid',
-    tableWidth,
-    styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-    columnStyles: {
-      0: { cellWidth: 38, fontStyle: 'bold' },
-      1: { cellWidth: tableWidth - 38 },
-    },
-    body: [[
-      { content: 'Annexure', styles: { fontStyle: 'bold' } },
-      { content: annexureSummary },
-    ]],
-  });
+  
 
   const digitalSignRows: any[] = [
     [{ content: 'Approved By:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }],
