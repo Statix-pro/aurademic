@@ -333,6 +333,34 @@ const normalizeFinanceAnnexures = (rows = []) =>
     })
     .filter((row) => row.file_path && (row.stored_name || row.original_name));
 
+const cleanupOrphanFinanceAnnexureFiles = async (storedNames = []) => {
+  if (!Array.isArray(storedNames) || storedNames.length === 0) {
+    return;
+  }
+
+  const safeBase = `${FINANCE_ANNEXURE_UPLOAD_DIR}${path.sep}`;
+  const uniqueNames = new Set(
+    storedNames
+      .map((name) => normalizeText(name))
+      .filter((name) => name && FINANCE_ANNEXURE_STORED_NAME_PATTERN.test(name))
+  );
+
+  for (const storedName of uniqueNames) {
+    const resolvedPath = path.resolve(FINANCE_ANNEXURE_UPLOAD_DIR, storedName);
+    if (!resolvedPath.startsWith(safeBase)) {
+      continue;
+    }
+
+    try {
+      await fs.promises.unlink(resolvedPath);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+};
+
 const getLegacyAnnexureFromRecord = (record = {}) => {
   const filePath = normalizeText(record?.annexure_file_path);
   const storedName = normalizeText(record?.annexure_storage_name);
