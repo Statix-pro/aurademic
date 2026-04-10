@@ -1204,25 +1204,6 @@ const AdminBudget: React.FC = () => {
       });
     }
 
-    if (
-      updatedAtMs &&
-      createdAtMs &&
-      updatedAtMs > createdAtMs &&
-      editLogs.length === 0 &&
-      approvalLogs.length === 0 &&
-      !hasApprovalUpdate
-    ) {
-      events.push({
-        key: "updated-at-fallback",
-        title: "Updated",
-        subtitle: "Proposal edited",
-        actorLine: `Updated By: ${submitterEmail || "-"}`,
-        timestamp: updatedAtMs,
-        dateLabel: formatDateTimeForLog(updatedAt),
-        decision: "updated",
-      });
-    }
-
     approvalLogs.forEach((app: any, idx: number) => {
       const feedback = normalizeTextForLog(app.feedback);
       if (feedback === "__archive_meta__:") return;
