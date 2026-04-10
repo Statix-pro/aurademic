@@ -20,6 +20,7 @@ import authenticityUtility from "../../../../shared/utils/authenticityUtility";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { hasPermission, isSuperAdmin } from "../../../../shared/utils/permissionUtils";
 import AlertModal, { type AlertType } from "../../../../shared/components/ui/AlertModal";
+import { formatRowRanges, summarizeLineChanges } from "../../../../shared/utils/logDiffUtils";
 
 type ActionType = "return" | "reject" | null;
 type QueueTabKey = "hod" | "coordinator" | "ithead" | "dof" | "principal" | "admin";
@@ -1017,71 +1018,6 @@ const AdminBudget: React.FC = () => {
     return map[normalized] || (role ? role.toUpperCase() : "Approver");
   };
 
-  const formatRowRangesForLog = (rows: number[]) => {
-    if (!rows.length) return "";
-    const ranges: string[] = [];
-    let start = rows[0];
-    let prev = rows[0];
-    for (let i = 1; i < rows.length; i += 1) {
-      const current = rows[i];
-      if (current === prev + 1) {
-        prev = current;
-        continue;
-      }
-      ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
-      start = current;
-      prev = current;
-    }
-    ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
-    return ranges.join(", ");
-  };
-
-  const summarizeLineChangesForLog = (lines: any[]) => {
-    const normalizedLines = Array.isArray(lines) ? lines : [];
-    let added = 0;
-    let removed = 0;
-    let updated = 0;
-    const detailLinesPreview: string[] = [];
-    const detailLinesFull: string[] = [];
-
-    normalizedLines.forEach((line: any, lineIdx: number) => {
-      const lineNo = Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no) || (lineIdx + 1);
-      const rawChanges = line?.changes;
-      const changeList = Array.isArray(rawChanges)
-        ? rawChanges.map((change: any) => normalizeTextForLog(change)).filter(Boolean)
-        : normalizeTextForLog(rawChanges)
-          ? [normalizeTextForLog(rawChanges)]
-          : [];
-
-      const lowered = changeList.map((change: string) => change.toLowerCase());
-      const isOnlyAdded = changeList.length === 1 && lowered[0] === "line added";
-      const isOnlyRemoved = changeList.length === 1 && lowered[0] === "line removed";
-      const lineDetails = `Line ${lineNo}: ${changeList.join("; ") || "Updated"}`;
-      detailLinesFull.push(lineDetails);
-
-      if (isOnlyAdded) added += 1;
-      else if (isOnlyRemoved) removed += 1;
-      else updated += 1;
-
-      if (detailLinesPreview.length < 4 && !isOnlyAdded && !isOnlyRemoved) {
-        detailLinesPreview.push(lineDetails);
-      }
-    });
-
-    const summaryParts: string[] = [];
-    if (added > 0) summaryParts.push(`${added} line(s) added`);
-    if (removed > 0) summaryParts.push(`${removed} line(s) removed`);
-    if (updated > 0) summaryParts.push(`${updated} line(s) updated`);
-
-    const summary = summaryParts.join(", ");
-    const compactDetails = detailLinesPreview.join(" | ");
-    const fullDetails = detailLinesFull.join(" | ");
-    return {
-      compact: [summary, compactDetails].filter(Boolean).join(" | "),
-      full: [summary, fullDetails].filter(Boolean).join(" | "),
-    };
-  };
-
   const buildAdminLogEvents = useMemo<AdminLogEvent[]>(() => {
     const events: AdminLogEvent[] = [];
     const createdAt =
@@ -1165,10 +1101,10 @@ const AdminBudget: React.FC = () => {
               const rowNumbers = Array.from(new Set<number>(numericRows)).sort((a, b) => a - b);
 
               if (rowNumbers.length > 0) {
-                rowSummary = `Row No. ${formatRowRangesForLog(rowNumbers)}`;
+                rowSummary = `Row No. ${formatRowRanges(rowNumbers)}`;
               }
 
-              const lineSummaries = summarizeLineChangesForLog(lines);
+              const lineSummaries = summarizeLineChanges(lines);
               detailSummary = lineSummaries.compact;
               fullDetailSummary = lineSummaries.full;
             }

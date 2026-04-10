@@ -2583,7 +2583,7 @@ const financeModel = {
           'finance',
           id,
           fallbackStage,
-          'archived',
+          'deleted',
           'Deleted by user',
           actorUserId,
           actorEmail,
