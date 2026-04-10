@@ -509,10 +509,16 @@ const BudgetDashboard: React.FC = () => {
   };
 
   const formatDateTime = (value?: string) => {
-    if (!value) return "-";
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return "-";
+    const parsed = parseDateSafe(value);
+    if (!parsed) return "-";
     return parsed.toLocaleString("en-IN");
+  };
+
+  const parseDateMs = (value?: string | null) => {
+    const parsed = parseDateSafe(value || undefined);
+    if (!parsed) return 0;
+    const ms = parsed.getTime();
+    return Number.isNaN(ms) ? 0 : ms;
   };
 
   const getRoleLabel = (role: string, proposal: ProposalGroup) => {
@@ -533,10 +539,68 @@ const BudgetDashboard: React.FC = () => {
     return map[normalized] || (role ? role.toUpperCase() : "Approver");
   };
 
+  const formatRowRanges = (rows: number[]) => {
+    if (!rows.length) return "";
+    const ranges: string[] = [];
+    let start = rows[0];
+    let prev = rows[0];
+    for (let i = 1; i < rows.length; i += 1) {
+      const current = rows[i];
+      if (current === prev + 1) {
+        prev = current;
+        continue;
+      }
+      ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+      start = current;
+      prev = current;
+    }
+    ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+    return ranges.join(", ");
+  };
+
+  const summarizeLineChanges = (lines: any[]) => {
+    const normalizedLines = Array.isArray(lines) ? lines : [];
+    let added = 0;
+    let removed = 0;
+    let updated = 0;
+    const detailLines: string[] = [];
+
+    normalizedLines.forEach((line: any, lineIdx: number) => {
+      const lineNo = Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no) || (lineIdx + 1);
+      const rawChanges = line?.changes;
+      const changeList = Array.isArray(rawChanges)
+        ? rawChanges.map((change: any) => normalizeText(change)).filter(Boolean)
+        : normalizeText(rawChanges)
+          ? [normalizeText(rawChanges)]
+          : [];
+
+      const lowered = changeList.map((change: string) => change.toLowerCase());
+      const isOnlyAdded = changeList.length === 1 && lowered[0] === "line added";
+      const isOnlyRemoved = changeList.length === 1 && lowered[0] === "line removed";
+
+      if (isOnlyAdded) added += 1;
+      else if (isOnlyRemoved) removed += 1;
+      else updated += 1;
+
+      if (detailLines.length < 4 && !isOnlyAdded && !isOnlyRemoved) {
+        detailLines.push(`Line ${lineNo}: ${changeList.join("; ") || "Updated"}`);
+      }
+    });
+
+    const summaryParts: string[] = [];
+    if (added > 0) summaryParts.push(`${added} line(s) added`);
+    if (removed > 0) summaryParts.push(`${removed} line(s) removed`);
+    if (updated > 0) summaryParts.push(`${updated} line(s) updated`);
+
+    const summary = summaryParts.join(", ");
+    const details = detailLines.join(" | ");
+    return [summary, details].filter(Boolean).join(" | ");
+  };
+
   const buildLogEvents = (proposal: ProposalGroup): LogEvent[] => {
     const events: LogEvent[] = [];
-    const createdAtMs = proposal.createdAt ? new Date(proposal.createdAt).getTime() : 0;
-    const updatedAtMs = proposal.updatedAt ? new Date(proposal.updatedAt).getTime() : 0;
+    const createdAtMs = parseDateMs(proposal.createdAt);
+    const updatedAtMs = parseDateMs(proposal.updatedAt);
     const submitterEmail = normalizeEmail(proposal.userEmail);
     const approvalLogs = Array.isArray(proposal.approvals) ? proposal.approvals : [];
     const hasApprovalUpdate = approvalLogs.some(
@@ -559,7 +623,7 @@ const BudgetDashboard: React.FC = () => {
     if (editLogs.length > 0) {
       editLogs.forEach((edit: any, idx: number) => {
         const createdAt = edit.created_at || edit.createdAt || edit.created_at_formatted;
-        const createdMs = createdAt ? new Date(createdAt).getTime() : createdAtMs;
+        const createdMs = parseDateMs(createdAt) || createdAtMs;
         const summary = normalizeText(edit.summary);
         let parsedDetails: any = null;
         if (edit.details) {
@@ -611,20 +675,10 @@ const BudgetDashboard: React.FC = () => {
               );
 
               if (rowNumbers.length > 0) {
-                rowSummary = `Row No. ${rowNumbers.join(', ')}`;
+                rowSummary = `Row No. ${formatRowRanges(rowNumbers)}`;
               }
 
-              const details = lines.map((line: any, lineIdx: number) => {
-                const lineNo = Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no) || (lineIdx + 1);
-                const rawChanges = line?.changes;
-                const changeList = Array.isArray(rawChanges)
-                  ? rawChanges
-                  : normalizeText(rawChanges)
-                    ? [normalizeText(rawChanges)]
-                    : [];
-                return `Line ${lineNo}: ${changeList.join('; ') || 'Updated'}`;
-              });
-              detailSummary = details.join(' | ');
+              detailSummary = summarizeLineChanges(lines);
             }
             if (proposalChanges.length > 0) {
               const proposalSummary = proposalChanges
@@ -685,7 +739,7 @@ const BudgetDashboard: React.FC = () => {
         "email",
       ]);
       const decidedAt = app.decided_at || app.decidedAt || app.decided_at_formatted;
-      const decidedAtMs = decidedAt ? new Date(decidedAt).getTime() : 0;
+      const decidedAtMs = parseDateMs(decidedAt);
       const feedbackNote = feedback && !feedback.startsWith("__archive_meta__:")
         ? `Note: ${feedback}`
         : "";
@@ -715,11 +769,23 @@ const BudgetDashboard: React.FC = () => {
       });
     });
 
-    const submitted = events.filter((e) => e.decision === "submitted");
-    const updates = events.filter((e) => e.decision === "updated").sort((a, b) => a.timestamp - b.timestamp);
-    const approvals = events.filter((e) => e.decision !== "submitted" && e.decision !== "updated")
-      .sort((a, b) => a.timestamp - b.timestamp);
-    return [...submitted, ...updates, ...approvals];
+    const decisionOrder = (decision?: string) => {
+      if (decision === "submitted") return 0;
+      if (decision === "updated") return 1;
+      return 2;
+    };
+
+    return [...events].sort((a, b) => {
+      const leftTime = a.timestamp > 0 ? a.timestamp : Number.MAX_SAFE_INTEGER;
+      const rightTime = b.timestamp > 0 ? b.timestamp : Number.MAX_SAFE_INTEGER;
+      if (leftTime !== rightTime) return leftTime - rightTime;
+
+      const leftDecision = decisionOrder(a.decision);
+      const rightDecision = decisionOrder(b.decision);
+      if (leftDecision !== rightDecision) return leftDecision - rightDecision;
+
+      return String(a.key).localeCompare(String(b.key));
+    });
   };
 
   const canAddForCurrentFY = () => {
@@ -1049,8 +1115,8 @@ const BudgetDashboard: React.FC = () => {
                               >
                                 <div className="budgetdashboard-log-header">Submission Logs</div>
                                 <div className="budgetdashboard-log-body">
-                                  {new Date(proposal.updatedAt).getTime() >
-                                    new Date(proposal.createdAt).getTime() && (
+                                  {parseDateMs(proposal.updatedAt) >
+                                    parseDateMs(proposal.createdAt) && (
                                       <div className="budgetdashboard-log-item">
                                         <span className="log-label">Last Edited:</span>
                                         <span className="log-value">
