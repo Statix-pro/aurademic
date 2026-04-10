@@ -2811,7 +2811,7 @@ export async function getFull(proposalId) {
     `SELECT *, DATE_FORMAT(decided_at, '%Y-%m-%d %H:%i') AS decided_at_formatted
        FROM budget_proposal_approvals
        WHERE budget_proposal_id = ?
-       ORDER BY decided_at`,
+       ORDER BY decided_at ASC, id ASC`,
     [proposalId]
   );
 
@@ -2829,7 +2829,7 @@ export async function getFull(proposalId) {
            DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') AS created_at_formatted
          FROM budget_proposal_edits
          WHERE budget_proposal_id = ?
-         ORDER BY created_at`,
+         ORDER BY created_at ASC, id ASC`,
       [proposalId]
     );
     edits = editRows;
@@ -3142,13 +3142,14 @@ export async function getProposalDataForExport(proposalId) {
 
   const [approvals] = await db.execute(
     `SELECT role,
+              id,
               decision,
               feedback,
               approver_email,
               DATE_FORMAT(decided_at, '%Y-%m-%d %H:%i:%s') AS decided_at
        FROM budget_proposal_approvals
        WHERE budget_proposal_id = ?
-       ORDER BY decided_at`,
+       ORDER BY decided_at ASC, id ASC`,
     [proposalId]
   );
 

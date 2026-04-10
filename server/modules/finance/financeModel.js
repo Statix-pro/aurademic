@@ -299,7 +299,6 @@ const applyBudgetLookupOverrides = (rows = [], financeData = {}) => {
     ...row,
     budget_head: primaryHead || row.budget_head,
     sub_head: eventSubHead || row.sub_head,
-    head_only_match: false,
   }));
 };
 
@@ -353,10 +352,9 @@ const cleanupOrphanFinanceAnnexureFiles = async (storedNames = []) => {
 
     try {
       await fs.promises.unlink(resolvedPath);
-    } catch (error) {
-      if (error?.code !== 'ENOENT') {
-        throw error;
-      }
+    } catch (_error) {
+      // Best-effort cleanup only; request update is already committed.
+      // Ignore unlink failures to avoid reporting false negatives to API clients.
     }
   }
 };

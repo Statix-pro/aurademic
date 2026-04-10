@@ -724,14 +724,10 @@ const FinanceCard: React.FC = () => {
     }),
   } as const;
   const handlePdfPreviewClick = (requestId: number) => {
-    const item = data.find((entry) => entry.id === requestId);
-    const normalizedStatus = String(item?.workflow_state?.status || item?.workflow_status || item?.overall_status || '').toLowerCase();
-    const isApproved = ['approved', 'completed'].includes(normalizedStatus);
-
     navigate(`/finance/${requestId}`, {
       state: {
         openPreview: true,
-        autoDownloadPdf: isApproved,
+        autoDownloadPdf: false,
       },
     });
   };

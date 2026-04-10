@@ -1053,6 +1053,7 @@ const FinanceApproval: React.FC = () => {
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([createIncomeRow()]);
   const [budgetLineMetaByRow, setBudgetLineMetaByRow] = useState<Record<number, BudgetLineMeta>>({});
   const [statusUpdates, setStatusUpdates] = useState<any[]>([]);
+  const [expandedTimelineDetails, setExpandedTimelineDetails] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [isExternalApplicant, setIsExternalApplicant] = useState<boolean>(false);
@@ -1093,6 +1094,10 @@ const FinanceApproval: React.FC = () => {
   };
 
   const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+
+  useEffect(() => {
+    setExpandedTimelineDetails({});
+  }, [statusUpdates]);
 
   useEffect(() => {
     annexureFilesRef.current = annexureFiles;
@@ -4459,20 +4464,67 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
           </span>
         </div>
 
-        {approvalSteps.map((entry, index) => (
-          <div
-            key={`${entry.label}-${index}`}
-            style={{
-              ...previewTimelineRowStyle,
-              borderBottom: index === approvalSteps.length - 1 ? 'none' : '1px solid #000',
-            }}
-          >
-            <span style={previewTimelineLabelStyle}>{entry.label} by</span>
-            <span style={previewTimelineValueStyle}>
-              {renderPersonLine(entry.actor, entry.email, entry.timestamp)}
-            </span>
-          </div>
-        ))}
+        {approvalSteps.map((entry, index) => {
+          const entryKey = String(entry.key || `${entry.label}-${index}`);
+          const hasExpandedDetails =
+            Boolean(entry.fullSubtitle) &&
+            entry.fullSubtitle !== entry.subtitle;
+          const detailText = hasExpandedDetails && expandedTimelineDetails[entryKey]
+            ? entry.fullSubtitle
+            : entry.subtitle;
+
+          return (
+            <div
+              key={entryKey}
+              style={{
+                ...previewTimelineRowStyle,
+                borderBottom: index === approvalSteps.length - 1 ? 'none' : '1px solid #000',
+              }}
+            >
+              <span style={previewTimelineLabelStyle}>{entry.label} by</span>
+              <span
+                style={{
+                  ...previewTimelineValueStyle,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: '4px',
+                }}
+              >
+                <span>
+                  {renderPersonLine(entry.actor, entry.email, entry.timestamp)}
+                </span>
+                {detailText ? (
+                  <span style={{ fontSize: '12px', color: '#495057', lineHeight: 1.4 }}>
+                    {detailText}
+                  </span>
+                ) : null}
+                {hasExpandedDetails ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExpandedTimelineDetails((prev) => ({
+                        ...prev,
+                        [entryKey]: !prev[entryKey],
+                      }));
+                    }}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#0d6efd',
+                      padding: 0,
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {expandedTimelineDetails[entryKey] ? 'Show less' : 'Show full changes'}
+                  </button>
+                ) : null}
+              </span>
+            </div>
+          );
+        })}
       </>
     )}
   </td>
@@ -4534,7 +4586,7 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
             >
               <button
                 type="button"
-                onClick={() => navigate('/financecard')}
+                onClick={() => navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard')}
                 style={{
                   backgroundColor: '#0069ab',
                   color: '#fff',
@@ -4593,4 +4645,3 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
 };
 
 export default FinanceApproval;
-
