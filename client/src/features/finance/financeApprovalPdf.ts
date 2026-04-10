@@ -3,13 +3,18 @@ import autoTable from 'jspdf-autotable';
 import { PDFDocument } from 'pdf-lib';
 
 import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
+import authenticityUtility from '../../shared/utils/authenticityUtility';
 
 export interface WorkflowTimelineEntry {
+  key?: string;
   label: string;
   actor: string;
   email: string;
   timestamp: string;
   stage: string;
+  subtitle?: string;
+  fullSubtitle?: string;
+  decision?: string;
 }
 
 export interface FinancePdfBudgetRow {
@@ -40,7 +45,22 @@ export interface FinancePdfAnnexureRow {
 
 export const formatDMY = (value: string | Date | null | undefined): string => {
   if (!value) return '';
-  const d = new Date(value);
+
+  let d: Date;
+  if (typeof value === 'string') {
+    const dateOnlyMatch = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnlyMatch) {
+      const year = Number(dateOnlyMatch[1]);
+      const month = Number(dateOnlyMatch[2]) - 1;
+      const day = Number(dateOnlyMatch[3]);
+      d = new Date(year, month, day);
+    } else {
+      d = new Date(value);
+    }
+  } else {
+    d = new Date(value);
+  }
+
   if (Number.isNaN(d.getTime())) return '';
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -120,6 +140,14 @@ const getWorkflowField = (update: any, keys: string[]) => {
   return '';
 };
 
+const normalizeWorkflowText = (value: any): string => String(value ?? '').trim();
+
+const parseWorkflowDateMs = (value: any): number => {
+  const parsed = new Date(value);
+  const ms = parsed.getTime();
+  return Number.isNaN(ms) ? 0 : ms;
+};
+
 export const formatWorkflowTimestamp = (value: any): string => {
   if (!value) return '';
 
@@ -153,14 +181,16 @@ export const getCurrentWorkflowTimestamp = (): string => formatWorkflowTimestamp
 
 const getWorkflowDecisionLabel = (update: any): string => {
   const decision = String(getWorkflowField(update, ['decision', 'status'])).toLowerCase();
+  if (!decision) return '';
 
+  if (decision.includes('resubmit')) return 'Resubmitted';
   if (decision.includes('submit')) return 'Submitted';
   if (decision.includes('approv') || decision === 'completed') return 'Approved';
   if (decision.includes('return')) return 'Returned';
   if (decision.includes('reject')) return 'Rejected';
-  if (decision.includes('resubmit')) return 'Resubmitted';
+  if (decision.includes('archiv')) return 'Archived';
   if (decision.includes('update')) return 'Updated';
-  return 'Updated';
+  return '';
 };
 
 const getWorkflowActorLabel = (update: any, fallback = '-'): string => {
@@ -170,6 +200,138 @@ const getWorkflowActorLabel = (update: any, fallback = '-'): string => {
   if (name) return name;
   if (email) return email;
   return fallback;
+};
+
+const parseWorkflowDetails = (rawDetails: any): any => {
+  if (!rawDetails) return null;
+  if (typeof rawDetails === 'object') return rawDetails;
+  if (typeof rawDetails === 'string') {
+    try {
+      return JSON.parse(rawDetails);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
+const formatRowRangesForWorkflow = (rows: number[]): string => {
+  if (!rows.length) return '';
+  const ranges: string[] = [];
+  let start = rows[0];
+  let prev = rows[0];
+
+  for (let i = 1; i < rows.length; i += 1) {
+    const current = rows[i];
+    if (current === prev + 1) {
+      prev = current;
+      continue;
+    }
+    ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+    start = current;
+    prev = current;
+  }
+
+  ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+  return ranges.join(', ');
+};
+
+const summarizeWorkflowLineChanges = (lines: any[]) => {
+  const normalizedLines = Array.isArray(lines) ? lines : [];
+  let added = 0;
+  let removed = 0;
+  let updated = 0;
+  const detailPreview: string[] = [];
+  const detailFull: string[] = [];
+
+  normalizedLines.forEach((line: any, lineIdx: number) => {
+    const lineNo = Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no) || (lineIdx + 1);
+    const rawChanges = line?.changes;
+    const changeList = Array.isArray(rawChanges)
+      ? rawChanges.map((change: any) => normalizeWorkflowText(change)).filter(Boolean)
+      : normalizeWorkflowText(rawChanges)
+        ? [normalizeWorkflowText(rawChanges)]
+        : [];
+
+    const lowered = changeList.map((change: string) => change.toLowerCase());
+    const isOnlyAdded = changeList.length === 1 && lowered[0] === 'line added';
+    const isOnlyRemoved = changeList.length === 1 && lowered[0] === 'line removed';
+    const lineDetails = `Line ${lineNo}: ${changeList.join('; ') || 'Updated'}`;
+    detailFull.push(lineDetails);
+
+    if (isOnlyAdded) added += 1;
+    else if (isOnlyRemoved) removed += 1;
+    else updated += 1;
+
+    if (detailPreview.length < 4 && !isOnlyAdded && !isOnlyRemoved) {
+      detailPreview.push(lineDetails);
+    }
+  });
+
+  const summaryParts: string[] = [];
+  if (added > 0) summaryParts.push(`${added} line(s) added`);
+  if (removed > 0) summaryParts.push(`${removed} line(s) removed`);
+  if (updated > 0) summaryParts.push(`${updated} line(s) updated`);
+
+  const summary = summaryParts.join(', ');
+  return {
+    compact: [summary, detailPreview.join(' | ')].filter(Boolean).join(' | '),
+    full: [summary, detailFull.join(' | ')].filter(Boolean).join(' | '),
+  };
+};
+
+const getWorkflowUpdateSummary = (update: any) => {
+  const summary = normalizeWorkflowText(getWorkflowField(update, ['summary', 'comment', 'feedback']));
+  const details = parseWorkflowDetails(update?.details);
+  if (!details) {
+    return {
+      compact: summary || 'Request updated',
+      full: summary || 'Request updated',
+    };
+  }
+
+  const lines = Array.isArray(details?.lines)
+    ? details.lines
+    : Array.isArray(details)
+      ? details
+      : Array.isArray(details?.lineChanges)
+        ? details.lineChanges
+        : [];
+  const proposalChanges = Array.isArray(details?.proposalChanges)
+    ? details.proposalChanges.map((change: any) => normalizeWorkflowText(change)).filter(Boolean)
+    : [];
+
+  let rowSummary = '';
+  let compact = '';
+  let full = '';
+
+  if (lines.length > 0) {
+    const numericRows = lines
+      .map((line: any) => Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no))
+      .filter((lineNo: number) => Number.isInteger(lineNo) && lineNo > 0);
+    const rowNumbers = Array.from(new Set<number>(numericRows)).sort((a, b) => a - b);
+    if (rowNumbers.length > 0) {
+      rowSummary = `Row No. ${formatRowRangesForWorkflow(rowNumbers)}`;
+    }
+
+    const lineSummary = summarizeWorkflowLineChanges(lines);
+    compact = lineSummary.compact;
+    full = lineSummary.full;
+  }
+
+  if (proposalChanges.length > 0) {
+    const proposalSummary = proposalChanges.join('; ');
+    compact = [compact, proposalSummary].filter(Boolean).join(' | ');
+    full = [full, proposalSummary].filter(Boolean).join(' | ');
+  }
+
+  const compactSubtitle = [rowSummary || summary, compact].filter(Boolean).join(' | ');
+  const fullSubtitle = [rowSummary || summary, full || compact].filter(Boolean).join(' | ');
+
+  return {
+    compact: compactSubtitle || summary || 'Request updated',
+    full: fullSubtitle || compactSubtitle || summary || 'Request updated',
+  };
 };
 
 export const getWorkflowTimeline = (
@@ -188,27 +350,26 @@ export const getWorkflowTimeline = (
       : [];
   }
 
-  let lastResetIdx = -1;
-  for (let i = updates.length - 1; i >= 0; i -= 1) {
-    const decision = String(getWorkflowField(updates[i], ['decision', 'status'])).toLowerCase();
-    if (
-      decision === 'returned' ||
-      decision === 'rejected' ||
-      decision === 'resubmitted' ||
-      decision.includes('resubmit')
-    ) {
-      lastResetIdx = i;
-      break;
-    }
-  }
+  const currentFlowUpdates = updates
+    .slice()
+    .sort((left, right) => {
+      const leftTime = parseWorkflowDateMs(
+        getWorkflowField(left, ['decidedAt', 'decided_at', 'createdAt', 'created_at'])
+      );
+      const rightTime = parseWorkflowDateMs(
+        getWorkflowField(right, ['decidedAt', 'decided_at', 'createdAt', 'created_at'])
+      );
+      if (leftTime !== rightTime) return leftTime - rightTime;
+      return (Number(left?.id) || 0) - (Number(right?.id) || 0);
+    });
 
-  const currentFlowUpdates = updates.slice(lastResetIdx + 1);
   const timeline = currentFlowUpdates
-    .map((update) => {
+    .map((update, idx) => {
       const label = getWorkflowDecisionLabel(update);
-      if (label === 'Updated') return null;
-
-      return {
+      if (!label) return null;
+      const decision = String(getWorkflowField(update, ['decision', 'status'])).toLowerCase();
+      const entry: WorkflowTimelineEntry = {
+        key: `${label.toLowerCase()}-${update?.id || idx}`,
         label,
         actor: getWorkflowActorLabel(update),
         email: String(getWorkflowField(update, ['actorEmail', 'actor_email', 'email', 'userEmail', 'user_email'])).trim(),
@@ -216,7 +377,16 @@ export const getWorkflowTimeline = (
           getWorkflowField(update, ['decidedAt', 'decided_at', 'createdAt', 'created_at'])
         ),
         stage: String(getWorkflowField(update, ['stage', 'role'])).toLowerCase(),
+        decision,
       };
+
+      if (label === 'Updated') {
+        const updateSummary = getWorkflowUpdateSummary(update);
+        entry.subtitle = updateSummary.compact;
+        entry.fullSubtitle = updateSummary.full;
+      }
+
+      return entry;
     })
     .filter((item): item is WorkflowTimelineEntry => Boolean(item));
 
@@ -327,15 +497,10 @@ const mergeAndDownloadPdfWithAnnexures = async (
     }
 
     try {
-      const response = await fetch(annexureUrl, {
+      const annexureBytes = await authenticityUtility.get<ArrayBuffer, ArrayBuffer>(annexureUrl, {
+        responseType: 'arraybuffer',
         headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
       });
-      if (!response.ok) {
-        skippedFiles.push(fileLabel);
-        continue;
-      }
-
-      const annexureBytes = await response.arrayBuffer();
       const lowerName = fileLabel.toLowerCase();
       const mimeType = String(annexure.mimeType || '').toLowerCase();
       const isPdf = mimeType.includes('pdf') || lowerName.endsWith('.pdf');

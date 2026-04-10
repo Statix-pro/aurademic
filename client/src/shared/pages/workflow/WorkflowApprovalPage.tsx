@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Briefcase, CheckCircle2, Clock, RotateCcw, XCircle, Eye, Info, Edit2, Archive, Trash2, FileDown } from 'lucide-react';
+import { Briefcase, CheckCircle2, Clock, RotateCcw, XCircle, Eye, Info, Edit2, Archive, Trash2, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import authenticityUtility from '../../utils/authenticityUtility';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -147,6 +147,136 @@ const defaultQueueMapper = (response: any): WorkflowQueueResult => ({
 const defaultTimelineMapper = (response: any): WorkflowTimelineItem[] =>
   Array.isArray(response?.data) ? response.data : [];
 
+const normalizeLogText = (value: any): string => String(value ?? '').trim();
+
+const formatRowRangesForLog = (rows: number[]) => {
+  if (!rows.length) return '';
+  const ranges: string[] = [];
+  let start = rows[0];
+  let prev = rows[0];
+  for (let i = 1; i < rows.length; i += 1) {
+    const current = rows[i];
+    if (current === prev + 1) {
+      prev = current;
+      continue;
+    }
+    ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+    start = current;
+    prev = current;
+  }
+  ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+  return ranges.join(', ');
+};
+
+const summarizeLineChangesForLog = (lines: any[]) => {
+  const normalizedLines = Array.isArray(lines) ? lines : [];
+  let added = 0;
+  let removed = 0;
+  let updated = 0;
+  const detailPreview: string[] = [];
+  const detailFull: string[] = [];
+
+  normalizedLines.forEach((line: any, lineIdx: number) => {
+    const lineNo = Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no) || (lineIdx + 1);
+    const rawChanges = line?.changes;
+    const changeList = Array.isArray(rawChanges)
+      ? rawChanges.map((change: any) => normalizeLogText(change)).filter(Boolean)
+      : normalizeLogText(rawChanges)
+        ? [normalizeLogText(rawChanges)]
+        : [];
+
+    const lowered = changeList.map((change: string) => change.toLowerCase());
+    const isOnlyAdded = changeList.length === 1 && lowered[0] === 'line added';
+    const isOnlyRemoved = changeList.length === 1 && lowered[0] === 'line removed';
+    const lineDetails = `Line ${lineNo}: ${changeList.join('; ') || 'Updated'}`;
+    detailFull.push(lineDetails);
+
+    if (isOnlyAdded) added += 1;
+    else if (isOnlyRemoved) removed += 1;
+    else updated += 1;
+
+    if (detailPreview.length < 4 && !isOnlyAdded && !isOnlyRemoved) {
+      detailPreview.push(lineDetails);
+    }
+  });
+
+  const summaryParts: string[] = [];
+  if (added > 0) summaryParts.push(`${added} line(s) added`);
+  if (removed > 0) summaryParts.push(`${removed} line(s) removed`);
+  if (updated > 0) summaryParts.push(`${updated} line(s) updated`);
+
+  const summary = summaryParts.join(', ');
+  return {
+    compact: [summary, detailPreview.join(' | ')].filter(Boolean).join(' | '),
+    full: [summary, detailFull.join(' | ')].filter(Boolean).join(' | '),
+  };
+};
+
+const parseEntryDetails = (details: any) => {
+  if (!details) return null;
+  if (typeof details === 'object') return details;
+  if (typeof details === 'string') {
+    try {
+      return JSON.parse(details);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
+const buildUpdatedLogSubtitles = (entry: WorkflowTimelineItem) => {
+  const summary = normalizeLogText(entry.summary || entry.comment || entry.feedback);
+  const parsedDetails = parseEntryDetails(entry.details);
+  if (!parsedDetails) {
+    return {
+      compact: summary || 'Request updated',
+      full: summary || 'Request updated',
+    };
+  }
+
+  const lines = Array.isArray(parsedDetails?.lines)
+    ? parsedDetails.lines
+    : Array.isArray(parsedDetails)
+      ? parsedDetails
+      : Array.isArray(parsedDetails?.lineChanges)
+        ? parsedDetails.lineChanges
+        : [];
+  const proposalChanges = Array.isArray(parsedDetails?.proposalChanges)
+    ? parsedDetails.proposalChanges.map((change: any) => normalizeLogText(change)).filter(Boolean)
+    : [];
+
+  let rowSummary = '';
+  let compact = '';
+  let full = '';
+
+  if (lines.length > 0) {
+    const numericRows = lines
+      .map((line: any) => Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no))
+      .filter((lineNo: number) => Number.isInteger(lineNo) && lineNo > 0);
+    const rowNumbers = Array.from(new Set<number>(numericRows)).sort((a, b) => a - b);
+    if (rowNumbers.length > 0) {
+      rowSummary = `Row No. ${formatRowRangesForLog(rowNumbers)}`;
+    }
+    const lineSummary = summarizeLineChangesForLog(lines);
+    compact = lineSummary.compact;
+    full = lineSummary.full;
+  }
+
+  if (proposalChanges.length > 0) {
+    const proposalSummary = proposalChanges.join('; ');
+    compact = [compact, proposalSummary].filter(Boolean).join(' | ');
+    full = [full, proposalSummary].filter(Boolean).join(' | ');
+  }
+
+  const compactSubtitle = [rowSummary || summary, compact].filter(Boolean).join(' | ');
+  const fullSubtitle = [rowSummary || summary, full || compact].filter(Boolean).join(' | ');
+  return {
+    compact: compactSubtitle || summary || 'Request updated',
+    full: fullSubtitle || compactSubtitle || summary || 'Request updated',
+  };
+};
+
 const formatProposalRef = (record: Record<string, any>) => {
   const createdAt = record?.created_at ? new Date(record.created_at) : null;
   const year = createdAt && !Number.isNaN(createdAt.getTime())
@@ -199,6 +329,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [actingRecordId, setActingRecordId] = useState<number | string | null>(null);
   const [logPopupOpen, setLogPopupOpen] = useState(false);
   const [logEntries, setLogEntries] = useState<WorkflowTimelineItem[]>([]);
+  const [expandedLogDetails, setExpandedLogDetails] = useState<Record<string, boolean>>({});
   const [logRef, setLogRef] = useState<string>('');
   const [logLevel1Role, setLogLevel1Role] = useState<'hod' | 'coordinator' | null>(null);
   const [logLoading, setLogLoading] = useState(false);
@@ -873,32 +1004,43 @@ showAlert(
       if (status === 'approved') return 'Approved';
       return 'Approved';
     }
-    
+
     const activeTab = stageTabs.find((tab) => tab.key === activeStageTabKey) || null;
-    if (config.moduleKey === 'finance' && activeStage === 'level1' && activeTab?.level1Role) {
-      return FINANCE_LEVEL1_PENDING_LABELS[activeTab.level1Role];
+    if (config.moduleKey === 'finance') {
+      const currentStageToken = String(getRecordCurrentStage(record) || '').toLowerCase();
+      if (currentStageToken === 'level1') {
+        if (activeStage === 'level1' && activeTab?.level1Role) {
+          return FINANCE_LEVEL1_PENDING_LABELS[activeTab.level1Role];
+        }
+        const level1Role = resolveFinanceLevel1Role(record);
+        return FINANCE_LEVEL1_PENDING_LABELS[level1Role];
+      }
+      if (currentStageToken) {
+        return `Pending ${formatStageLabel(currentStageToken, config.stageLabels)}`;
+      }
     }
 
     const stage = formatStageLabel(String(record.workflow_stage || ''), config.stageLabels);
     return `Pending ${stage}`;
   }, [
+    activeStage,
+    activeStageTabKey,
+    config.moduleKey,
+    config.stageLabels,
+    getRecordCurrentStage,
     getRecordStageDecision,
     getRecordWorkflowDecision,
     resolveStatusCategory,
-    config.moduleKey,
-    config.stageLabels,
-    activeStage,
-    activeStageTabKey,
     stageTabs,
   ]);
 
-  const resolveFinanceLevel1Role = useCallback((record: Record<string, any>): 'hod' | 'coordinator' => {
+  function resolveFinanceLevel1Role(record: Record<string, any>): 'hod' | 'coordinator' {
     const routeType = String(record.level1_route_type || record.level1RouteType || '').trim().toLowerCase();
     if (routeType === 'entity_contact') {
       return 'coordinator';
     }
     return 'hod';
-  }, []);
+  }
 
   const stageScopedRows = useMemo(() => {
     const activeLevel1Role = activeWorkflowTab?.level1Role || null;
@@ -917,7 +1059,7 @@ showAlert(
     }
 
     return filtered;
-  }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryFilter, config.moduleKey, resolveFinanceLevel1Role, rows]);
+  }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryFilter, config.moduleKey, rows]);
 
   const secondaryFilterOptions = useMemo(() => {
     if (config.moduleKey !== 'finance') {
@@ -1040,6 +1182,7 @@ showAlert(
   const closeLogPopup = () => {
     setLogPopupOpen(false);
     setLogEntries([]);
+    setExpandedLogDetails({});
     setLogRef('');
     setLogLevel1Role(null);
   };
@@ -1105,11 +1248,11 @@ showAlert(
   };
 
   const handlePdfPreviewClick = useCallback(
-    (recordId: number | string, isApproved: boolean) => {
+    (recordId: number | string) => {
       navigate(getFinanceRoute(recordId, 'view'), {
         state: {
           openPreview: true,
-          autoDownloadPdf: isApproved,
+          autoDownloadPdf: false,
         },
       });
     },
@@ -1294,6 +1437,10 @@ showAlert(
                     const timelineKey = String(recordId);
                     const statusCategory = resolveStatusCategory(record);
                     const recordCurrentStage = getRecordCurrentStage(record);
+                    const isFinanceAllProposalsSuperAdmin =
+                      config.moduleKey === 'finance' &&
+                      isSuperAdminView &&
+                      Boolean(activeWorkflowTab?.showAllProposals);
                     const isPending = statusCategory === 'pending' && recordCurrentStage === activeStage.toLowerCase();
                     const isActionablePending =
                       isPending ||
@@ -1420,10 +1567,10 @@ showAlert(
                                   title="Open PDF Preview"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handlePdfPreviewClick(recordId, isApproved);
+                                    handlePdfPreviewClick(recordId);
                                   }}
                                 >
-                                  <FileDown size={18} />
+                                  <FileText size={18} />
                                 </button>
                               )}
 
@@ -1436,43 +1583,58 @@ showAlert(
                                 {isSuperAdminView ? (
                                   !isArchived && (
                                     <>
-                                      <button
-                                        className="fw-action-btn fw-action-btn--approved"
-                                        title="Approve"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onApprove(recordId);
-                                        }}
-                                        disabled={actingRecordId === recordId || !isActionablePending}
-                                      >
-                                        <CheckCircle2 size={18} />
-                                      </button>
+                                      {isFinanceAllProposalsSuperAdmin ? (
+                                        <>
+                                          <button
+                                            className="fw-action-btn fw-action-btn--returned"
+                                            title="Return"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openActionPopup("return", recordId, proposalRef);
+                                            }}
+                                            disabled={actingRecordId === recordId || !isActionablePending}
+                                          >
+                                            <RotateCcw size={18} />
+                                          </button>
+                                          <button
+                                            className="fw-action-btn fw-action-btn--rejected"
+                                            title="Delete"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDeleteRecord(record);
+                                            }}
+                                            disabled={actingRecordId === recordId}
+                                          >
+                                            <Trash2 size={18} />
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <button
+                                            className="fw-action-btn fw-action-btn--approved"
+                                            title="Approve"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onApprove(recordId);
+                                            }}
+                                            disabled={actingRecordId === recordId || !isActionablePending}
+                                          >
+                                            <CheckCircle2 size={18} />
+                                          </button>
 
-                                      <button
-                                        className="fw-action-btn fw-action-btn--returned"
-                                        title="Return"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openActionPopup("return", recordId, proposalRef);
-                                        }}
-                                        disabled={actingRecordId === recordId || !isActionablePending}
-                                        >
-                                          <RotateCcw size={18} />
-                                      </button>
-
-                                      <button
-                                        className="fw-action-btn fw-action-btn--rejected"
-                                        title="Reject"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openActionPopup("reject", recordId, proposalRef);
-                                        }}
-                                        disabled={actingRecordId === recordId || !isActionablePending}
-                                      >
-                                        <XCircle size={18} />
-                                      </button>
-
-                                      
+                                          <button
+                                            className="fw-action-btn fw-action-btn--returned"
+                                            title="Return"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openActionPopup("return", recordId, proposalRef);
+                                            }}
+                                            disabled={actingRecordId === recordId || !isActionablePending}
+                                          >
+                                            <RotateCcw size={18} />
+                                          </button>
+                                        </>
+                                      )}
                                     </>
                                   )
                                 ) : (
@@ -1790,9 +1952,31 @@ showAlert(
                 const shouldShowStage =
                   Boolean(stageLabel && stageLabel !== '-') &&
                   (decisionToken !== 'updated' || isWorkflowUpdater);
+                const entryKey = String(entry.id || idx);
+                const updatedSubtitle = decisionToken === 'updated'
+                  ? buildUpdatedLogSubtitles(entry)
+                  : null;
+                const subtitleText =
+                  updatedSubtitle
+                    ? (
+                        expandedLogDetails[entryKey] && updatedSubtitle.full
+                          ? updatedSubtitle.full
+                          : updatedSubtitle.compact
+                      )
+                    : normalizeLogText(entry.feedback || entry.comment || entry.summary);
+                const hasExpandedSubtitle = Boolean(
+                  updatedSubtitle &&
+                  updatedSubtitle.full &&
+                  updatedSubtitle.compact &&
+                  updatedSubtitle.full !== updatedSubtitle.compact
+                );
+                const actorLine = normalizeLogText(entry.userName)
+                  ? `${normalizeLogText(entry.userName)} (${entry.actorEmail || 'Unknown'})`
+                  : (entry.actorEmail || 'Unknown');
+                const entryDate = entry.decidedAt || entry.createdAt || null;
 
                 return (
-                  <div key={entry.id || idx} className="fw-log-approval-item">
+                  <div key={entryKey} className="fw-log-approval-item">
                     <div className="fw-log-approval-meta">
                       <span className={`fw-log-decision fw-log-decision--${entry.decision?.toLowerCase() || 'approved'}`}>
                         {entry.decision?.toUpperCase() || 'UPDATE'}
@@ -1802,14 +1986,38 @@ showAlert(
                           {stageLabel}
                         </span>
                       )}
-                      {entry.feedback && (
-                        <span className="fw-log-feedback">Note: {entry.feedback}</span>
+                      {subtitleText && (
+                        <span className="fw-log-feedback">Note: {subtitleText}</span>
+                      )}
+                      {hasExpandedSubtitle && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpandedLogDetails((prev) => ({
+                              ...prev,
+                              [entryKey]: !prev[entryKey],
+                            }));
+                          }}
+                          style={{
+                            marginTop: '4px',
+                            alignSelf: 'flex-start',
+                            border: 'none',
+                            background: 'transparent',
+                            color: '#0d6efd',
+                            cursor: 'pointer',
+                            padding: 0,
+                            fontSize: '12px',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {expandedLogDetails[entryKey] ? 'Show less' : 'Show full changes'}
+                        </button>
                       )}
                       <span className="fw-log-actor-line">
-                        By: {entry.actorEmail || 'Unknown'}
+                        By: {actorLine}
                       </span>
                       <span className="fw-log-date">
-                        {entry.decidedAt ? new Date(entry.decidedAt).toLocaleString() : '-'}
+                        {entryDate ? new Date(entryDate).toLocaleString() : '-'}
                       </span>
                     </div>
                   </div>
