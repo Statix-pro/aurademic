@@ -1093,7 +1093,7 @@ const AdminBudget: React.FC = () => {
     const submitterEmail = normalizeEmailForLog(logProposal?.user_email || logProposal?.userEmail);
     const approvalLogs = Array.isArray(logEntries) ? logEntries : [];
     const hasApprovalUpdate = approvalLogs.some(
-      (app: any) => String(app?.decision || "").toLowerCase() === "updated"
+      (app: any) => String(app?.decision || app?.status || "").toLowerCase() === "updated"
     );
 
     if (createdAtMs) {
@@ -1204,7 +1204,14 @@ const AdminBudget: React.FC = () => {
       });
     }
 
-    if (updatedAtMs && createdAtMs && updatedAtMs > createdAtMs && editLogs.length === 0 && !hasApprovalUpdate) {
+    if (
+      updatedAtMs &&
+      createdAtMs &&
+      updatedAtMs > createdAtMs &&
+      editLogs.length === 0 &&
+      approvalLogs.length === 0 &&
+      !hasApprovalUpdate
+    ) {
       events.push({
         key: "updated-at-fallback",
         title: "Updated",
@@ -1221,7 +1228,7 @@ const AdminBudget: React.FC = () => {
       if (feedback === "__archive_meta__:") return;
       if (feedback === "Auto-approved after DoF clearance") return;
 
-      const decision = String(app.decision || "updated").toLowerCase();
+      const decision = String(app.decision || app.status || "updated").toLowerCase();
       if (decision === "updated") {
         if (editLogs.length > 0) return;
         if (!feedback || feedback.toLowerCase().includes("reviewed (no line change)")) return;

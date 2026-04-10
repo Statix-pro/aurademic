@@ -604,7 +604,7 @@ const BudgetDashboard: React.FC = () => {
     const submitterEmail = normalizeEmail(proposal.userEmail);
     const approvalLogs = Array.isArray(proposal.approvals) ? proposal.approvals : [];
     const hasApprovalUpdate = approvalLogs.some(
-      (app: any) => String(app?.decision || '').toLowerCase() === 'updated'
+      (app: any) => String(app?.decision || app?.status || '').toLowerCase() === 'updated'
     );
 
     if (createdAtMs) {
@@ -709,7 +709,14 @@ const BudgetDashboard: React.FC = () => {
       });
     }
 
-    if (updatedAtMs && createdAtMs && updatedAtMs > createdAtMs && editLogs.length === 0 && !hasApprovalUpdate) {
+    if (
+      updatedAtMs &&
+      createdAtMs &&
+      updatedAtMs > createdAtMs &&
+      editLogs.length === 0 &&
+      approvalLogs.length === 0 &&
+      !hasApprovalUpdate
+    ) {
       events.push({
         key: "updated-at-fallback",
         title: "Updated",
@@ -726,7 +733,7 @@ const BudgetDashboard: React.FC = () => {
       if (feedback === "Auto-approved after DoF clearance") {
         return;
       }
-      const decision = String(app.decision || "updated").toLowerCase();
+      const decision = String(app.decision || app.status || "updated").toLowerCase();
       if (decision === "updated") {
         if (editLogs.length > 0) return;
         if (!feedback || feedback.toLowerCase().includes("reviewed (no line change)")) return;
