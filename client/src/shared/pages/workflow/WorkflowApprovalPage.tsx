@@ -1990,22 +1990,12 @@ showAlert(
                       {hasExpandedSubtitle && (
                         <button
                           type="button"
+                          className="fw-log-toggle-btn"
                           onClick={() => {
                             setExpandedLogDetails((prev) => ({
                               ...prev,
                               [entryKey]: !prev[entryKey],
                             }));
-                          }}
-                          style={{
-                            marginTop: '4px',
-                            alignSelf: 'flex-start',
-                            border: 'none',
-                            background: 'transparent',
-                            color: '#0d6efd',
-                            cursor: 'pointer',
-                            padding: 0,
-                            fontSize: '12px',
-                            fontWeight: 600,
                           }}
                         >
                           {expandedLogDetails[entryKey] ? 'Show less' : 'Show full changes'}
