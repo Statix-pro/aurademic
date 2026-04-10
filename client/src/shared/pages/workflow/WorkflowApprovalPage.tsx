@@ -1437,10 +1437,8 @@ showAlert(
                     const timelineKey = String(recordId);
                     const statusCategory = resolveStatusCategory(record);
                     const recordCurrentStage = getRecordCurrentStage(record);
-                    const isFinanceAllProposalsSuperAdmin =
-                      config.moduleKey === 'finance' &&
-                      isSuperAdminView &&
-                      Boolean(activeWorkflowTab?.showAllProposals);
+                    const isFinanceSuperAdminDeleteMode =
+                      config.moduleKey === 'finance' && isSuperAdminView;
                     const isPending = statusCategory === 'pending' && recordCurrentStage === activeStage.toLowerCase();
                     const isActionablePending =
                       isPending ||
@@ -1583,7 +1581,7 @@ showAlert(
                                 {isSuperAdminView ? (
                                   !isArchived && (
                                     <>
-                                      {isFinanceAllProposalsSuperAdmin ? (
+                                      {isFinanceSuperAdminDeleteMode ? (
                                         <>
                                           <button
                                             className="fw-action-btn fw-action-btn--returned"
