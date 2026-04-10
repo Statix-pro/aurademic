@@ -729,7 +729,7 @@ export async function getFull(proposalId) {
     `SELECT *, DATE_FORMAT(decided_at, '%Y-%m-%d %H:%i') AS decided_at_formatted
        FROM budget_proposal_approvals
        WHERE budget_proposal_id = ?
-        ORDER BY decided_at`,
+        ORDER BY decided_at ASC, id ASC`,
     [proposalId]
   );
 
@@ -747,7 +747,7 @@ export async function getFull(proposalId) {
            DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') AS created_at_formatted
          FROM budget_proposal_edits
          WHERE budget_proposal_id = ?
-         ORDER BY created_at`,
+         ORDER BY created_at ASC, id ASC`,
       [proposalId]
     );
     edits = editRows;
@@ -860,7 +860,7 @@ export async function getProposalDetailsByIds(proposalIds = []) {
        DATE_FORMAT(decided_at, '%Y-%m-%d %H:%i') AS decided_at_formatted
      FROM budget_proposal_approvals
      WHERE budget_proposal_id IN (?)
-     ORDER BY budget_proposal_id, decided_at`,
+     ORDER BY budget_proposal_id ASC, decided_at ASC, id ASC`,
     [normalizedIds]
   );
 
@@ -888,7 +888,7 @@ export async function getProposalDetailsByIds(proposalIds = []) {
          DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') AS created_at_formatted
        FROM budget_proposal_edits
        WHERE budget_proposal_id IN (?)
-       ORDER BY budget_proposal_id, created_at`,
+       ORDER BY budget_proposal_id ASC, created_at ASC, id ASC`,
       [normalizedIds]
     );
 
