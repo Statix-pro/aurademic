@@ -1715,12 +1715,12 @@ export async function getConsolidatedData({
     }
     case 'coordinator': {
       where.push(`(
-        LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')
+        LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body', 'section')
         OR (LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff') AND bp.beneficiary_entity_id IS NOT NULL)
       )`);
       const filterConditions = [];
       if (safeUserId > 0) {
-        filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'))`);
+        filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'))`);
         params.push(safeUserId);
       }
       if (userEmail) {
@@ -1948,10 +1948,10 @@ export async function listBudgetAnnualSummaryEntries({
       break;
     }
     case 'coordinator': {
-      where.push(`LOWER(TRIM(ba.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')`);
+      where.push(`LOWER(TRIM(ba.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body', 'section')`);
       const filterConditions = [];
       if (safeUserId > 0) {
-        filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'))`);
+        filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'))`);
         params.push(safeUserId);
       }
       if (safeEmail) {
@@ -2046,7 +2046,7 @@ export async function listBudgetAnnualSummaryEntries({
     SELECT
       CASE
         WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN 'Department'
-        WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club') THEN CONCAT(UPPER(LEFT(TRIM(bp.beneficiary_type), 1)), LOWER(SUBSTRING(TRIM(bp.beneficiary_type), 2)))
+        WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'section') THEN CONCAT(UPPER(LEFT(TRIM(bp.beneficiary_type), 1)), LOWER(SUBSTRING(TRIM(bp.beneficiary_type), 2)))
         WHEN LOWER(TRIM(bp.beneficiary_type)) = 'professional body' THEN 'Professional Body'
         ELSE TRIM(bp.beneficiary_type)
       END AS beneficiary_type,
@@ -2197,7 +2197,7 @@ export async function getAllDepartments(beneficiaryType) {
   const normalizedType = sharedNormalizeBeneficiaryType(beneficiaryType);
   const typeLower = normalizedType.toLowerCase();
   
-  if (['centre', 'cell', 'club', 'professional body'].includes(typeLower)) {
+  if (['centre', 'cell', 'club', 'professional body', 'section'].includes(typeLower)) {
     // Only return entities that have at least one proposal
     const [rows] = await db.execute(
       `SELECT DISTINCT me.name 
@@ -2284,7 +2284,7 @@ async function assertEntityInType(conn, typeCode, entityId) {
 export async function createEntity(typeCode, payload) {
   const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
 
-  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
+  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(normalizedTypeCode)) {
     throw new Error('Invalid entity type code');
   }
 
@@ -2321,7 +2321,7 @@ export async function createEntity(typeCode, payload) {
 export async function updateEntity(typeCode, entityId, payload) {
   const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
 
-  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
+  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(normalizedTypeCode)) {
     throw new Error('Invalid entity type code');
   }
 
@@ -2367,7 +2367,7 @@ export async function updateEntity(typeCode, entityId, payload) {
 export async function deleteEntity(typeCode, entityId) {
   const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
 
-  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
+  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(normalizedTypeCode)) {
     throw new Error('Invalid entity type code');
   }
 
@@ -2387,7 +2387,7 @@ export async function deleteEntity(typeCode, entityId) {
 export async function getEntityContacts(typeCode, entityId) {
   const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
 
-  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
+  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(normalizedTypeCode)) {
     throw new Error('Invalid entity type code');
   }
 
@@ -2413,7 +2413,7 @@ export async function getEntityContacts(typeCode, entityId) {
 export async function updateEntityContacts(typeCode, entityId, contacts = []) {
   const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
 
-  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
+  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(normalizedTypeCode)) {
     throw new Error('Invalid entity type code');
   }
 

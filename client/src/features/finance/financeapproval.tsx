@@ -80,6 +80,7 @@ const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
   Centre: 'CENTRE',
   Cell: 'CELL',
   Club: 'CLUB',
+  Section: 'SECTION',
   'Professional Body': 'PROFESSIONAL_BODY',
 };
 
@@ -286,6 +287,7 @@ const CATEGORY_TYPE_OPTIONS = [
   'Centre',
   'Cell',
   'Club',
+  'Section',
   'Professional Body',
   'Institution',
 ];
@@ -2263,7 +2265,7 @@ const hideWorkflowActionsForFinalStatus =
         return '';
       }
       if (beneficiaryType === 'Centre' || beneficiaryType === 'Cell' ||
-        beneficiaryType === 'Club' || beneficiaryType === 'Institution' || beneficiaryType === 'Professional Body') {
+        beneficiaryType === 'Club' || beneficiaryType === 'Section' || beneficiaryType === 'Institution' || beneficiaryType === 'Professional Body') {
         return 'Essentials';
       }
       return '';
@@ -2942,6 +2944,7 @@ const hideWorkflowActionsForFinalStatus =
                               { value: 'Centre', label: 'Centre' },
                               { value: 'Cell', label: 'Cell' },
                               { value: 'Club', label: 'Club' },
+                              { value: 'Section', label: 'Section' },
                               { value: 'Professional Body', label: 'Professional Body' },
                               { value: 'Institution', label: 'Institution' }
                             ]}

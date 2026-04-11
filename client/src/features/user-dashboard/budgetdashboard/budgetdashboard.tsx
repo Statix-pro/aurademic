@@ -528,7 +528,7 @@ const BudgetDashboard: React.FC = () => {
   const getRoleLabel = (role: string, proposal: ProposalGroup) => {
     const normalized = String(role || "").toLowerCase();
     if (normalized === 'level1') {
-      const isEntity = ['club', 'cell', 'center', 'professional body'].includes(
+      const isEntity = ['club', 'cell', 'center', 'section', 'professional body'].includes(
         String(proposal.beneficiaryType || "").toLowerCase().trim()
       );
       return isEntity ? "Coordinator" : "HoD";

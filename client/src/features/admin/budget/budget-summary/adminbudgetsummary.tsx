@@ -39,12 +39,13 @@ type BeneficiarySummaryRow = {
   balance: number;
 };
 
-const BENEFICIARY_TYPES = ['Department', 'Centre', 'Cell', 'Club', 'Professional Body'];
+const BENEFICIARY_TYPES = ['Department', 'Centre', 'Cell', 'Club', 'Section', 'Professional Body'];
 const ENTITY_TYPE_TO_LABEL: Record<string, string> = {
   DEPARTMENT: 'Department',
   CENTRE: 'Centre',
   CELL: 'Cell',
   CLUB: 'Club',
+  SECTION: 'Section',
   PROFESSIONAL_BODY: 'Professional Body',
   PROF_BODY: 'Professional Body',
 };
