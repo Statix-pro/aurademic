@@ -195,11 +195,11 @@ export async function getOrgUnits(req, res) {
   try {
     const mappedType = normalizeEntityTypeParam(req.params.type);
 
-    if (!['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(mappedType)) {
+    if (!['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(mappedType)) {
       return res.status(400).json({
         success: false,
         message:
-          'Invalid type. Must be: DEPARTMENT, CENTRE, CELL, CLUB, PROFESSIONAL_BODY (or PROF_BODY)',
+          'Invalid type. Must be: DEPARTMENT, CENTRE, CELL, CLUB, SECTION, PROFESSIONAL_BODY (or PROF_BODY)',
       });
     }
 
@@ -829,7 +829,7 @@ export async function createEntity(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Only CENTRE, CELL, CLUB, and PROFESSIONAL_BODY are mutable via this API',
+        message: 'Only CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY are mutable via this API',
       });
     }
 
@@ -856,7 +856,7 @@ export async function updateEntity(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Only CENTRE, CELL, CLUB, and PROFESSIONAL_BODY are mutable via this API',
+        message: 'Only CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY are mutable via this API',
       });
     }
 
@@ -890,7 +890,7 @@ export async function deleteEntity(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Only CENTRE, CELL, CLUB, and PROFESSIONAL_BODY are mutable via this API',
+        message: 'Only CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY are mutable via this API',
       });
     }
 
@@ -931,7 +931,7 @@ export async function getEntityContacts(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Contacts are available only for CENTRE, CELL, CLUB, and PROFESSIONAL_BODY',
+        message: 'Contacts are available only for CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY',
       });
     }
 
@@ -966,7 +966,7 @@ export async function updateEntityContacts(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Contacts are editable only for CENTRE, CELL, CLUB, and PROFESSIONAL_BODY',
+        message: 'Contacts are editable only for CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY',
       });
     }
 

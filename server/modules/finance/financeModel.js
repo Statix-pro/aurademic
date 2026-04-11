@@ -189,6 +189,7 @@ const LEVEL1_COORDINATOR_BENEFICIARY_TYPES = Object.freeze([
   'centre',
   'cell',
   'club',
+  'section',
   'professional body',
   'professional bodies',
 ]);
@@ -218,6 +219,7 @@ const normalizeEntityTypeCode = (typeCode) => {
   if (['CENTRE', 'CENTER'].includes(normalized)) return 'CENTRE';
   if (normalized === 'CELL') return 'CELL';
   if (normalized === 'CLUB') return 'CLUB';
+  if (normalized === 'SECTION') return 'SECTION';
   if (['PROF_BODY', 'PROFESSIONAL_BODY', 'PROFESSIONAL_BODIES'].includes(normalized)) {
     return 'PROFESSIONAL_BODY';
   }
@@ -780,6 +782,7 @@ const resolveEntityTypeCodeFromBeneficiaryType = (beneficiaryType) => {
     Centre: 'CENTRE',
     Cell: 'CELL',
     Club: 'CLUB',
+    Section: 'SECTION',
     'Professional Body': 'PROFESSIONAL_BODY',
     ProfessionalBodies: 'PROFESSIONAL_BODY',
     'Professional Bodies': 'PROFESSIONAL_BODY',
@@ -1008,7 +1011,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   } else if (scope.mode === 'entity') {
     ownerScopeSql = `
       bp.beneficiary_entity_id = ?
-      AND LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')`;
+      AND LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body', 'section')`;
     ownerScopeParams = [scope.entityId];
   } else if (scope.mode === 'institution') {
     ownerScopeSql = `LOWER(TRIM(bp.beneficiary_type)) = 'institution'`;
