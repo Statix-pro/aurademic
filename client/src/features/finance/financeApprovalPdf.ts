@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf';
+﻿import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { PDFDocument } from 'pdf-lib';
 
@@ -587,7 +587,7 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     body: [[
       { content: '', styles: { minCellHeight: 22 } },
       { content: '', styles: { minCellHeight: 22 } },
-      { content: 'FINANCE', styles: { fontStyle: 'bold', fontSize: 10 } },
+      { content: 'FINANCE', styles: { fontStyle: 'bold', fontSize: 11 } },
     ]],
     didDrawCell: (data: any) => {
       if (data.column.index === 0 && data.row.index === 0 && compressedLogo) {
@@ -639,60 +639,76 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     margin: { left: margin, right: margin },
     theme: 'grid',
     tableWidth,
-    styles: { fontSize: 8.5, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, valign: 'middle' },
+    styles: { fontSize: 10, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, valign: 'middle' },
     columnStyles: {
-      0: { cellWidth: 38, fontStyle: 'bold' },
-      1: { cellWidth: 75 },
-      2: { cellWidth: 22, fontStyle: 'bold' },
-      3: { cellWidth: tableWidth - 38 - 75 - 22 },
+      0: { cellWidth: 34, fontStyle: 'bold' },
+      1: { cellWidth: 79 },
+      2: { cellWidth: 26, fontStyle: 'bold' },
+      3: { cellWidth: tableWidth - 34 - 79 - 26 },
     },
     body: mainTableBody,
   });
 
   yPos = (pdf as any).lastAutoTable.finalY;
 
-  const budgetTableBody = budgetRows.map((row, index) => [
-    (index + 1).toString(),
-    row.category || '',
-    row.head || '',
-    'Rs. ' + Number(row.amount || 0).toFixed(2),
-  ]);
+  const budgetTableBody = budgetRows.flatMap((row, index) => {
+  const isLastRow = index === budgetRows.length - 1;
 
-  if (showUnplannedBudget) {
-    budgetTableBody.push([
-      '',
-      { content: `Unplanned Budget:${unplannedBudgetDescription || ''}`, colSpan: 2, styles: { fontStyle: 'bold', overflow: 'linebreak' } } as any,
-      'Rs. ' + Number(unplannedBudgetAmount || 0).toFixed(2),
-    ]);
+  if (showUnplannedBudget && isLastRow) {
+    return [
+      [
+        { content: String(index + 1), rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
+        row.category || '',
+        row.head || '',
+        'Rs. ' + Number(row.amount || 0),
+      ],
+      [
+        { content: `Unplanned Budget: ${unplannedBudgetDescription || ''}`, colSpan: 2, styles: { fontStyle: 'bold', overflow: 'linebreak' } },
+        'Rs. ' + Number(unplannedBudgetAmount || 0),
+      ]
+    ];
   }
 
-  budgetTableBody.push([
-    { content: 'Total Budget:', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' as const } } as any,
-    { content: 'Rs. ' + totalBudget.toFixed(2), styles: { fontStyle: 'bold' } },
-  ]);
+  return [[
+    String(index + 1),
+    row.category || '',
+    row.head || '',
+    'Rs. ' + Number(row.amount || 0),
+  ]];
+});
 
-  autoTable(pdf, {
-    startY: yPos,
-    margin: { left: margin, right: margin },
-    theme: 'grid',
-    tableWidth,
-    styles: { fontSize: 8.5, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, valign: 'middle' },
-    columnStyles: {
-      0: { cellWidth: 16, halign: 'center' },
-      1: { cellWidth: 68 },
-      2: { cellWidth: 68 },
-      3: { cellWidth: tableWidth - 16 - 68 - 68, halign: 'right' },
-    },
-    body: [
-      [
-        { content: 'S.No', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-        { content: 'Budget Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-        { content: 'Sub Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-        { content: 'Amount', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-      ],
-      ...budgetTableBody,
-    ],
-  });
+  budgetTableBody.push([
+  { content: 'Total Budget:', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' as const } } as any,
+  { content: 'Rs. ' + totalBudget, styles: { fontStyle: 'bold' } },
+]);
+
+ autoTable(pdf, {
+  startY: yPos,
+  margin: { left: margin, right: margin },
+  theme: 'grid',
+  tableWidth,
+  styles: {
+    fontSize: 10,
+    cellPadding: 2,
+    textColor: [0, 0, 0],
+    lineColor: [0, 0, 0],
+    lineWidth: 0.25,
+    valign: 'middle'
+  },
+  head: [[
+    { content: 'S.No', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
+    { content: 'Budget Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
+    { content: 'Sub Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
+    { content: 'Amount', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
+  ]],
+  body: budgetTableBody as any,
+  columnStyles: {
+    0: { cellWidth: 16, halign: 'center' },
+    1: { cellWidth: 68 },
+    2: { cellWidth: 68 },
+    3: { cellWidth: tableWidth - 16 - 68 - 68, halign: 'right' },
+  },
+});
 
   yPos = (pdf as any).lastAutoTable.finalY;
 
@@ -706,69 +722,87 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     margin: { left: margin, right: margin },
     theme: 'grid',
     tableWidth,
-    styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, halign: 'center' },
+    styles: { fontSize: 10, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, halign: 'center' },
     body: [['Rupees in Words: ' + amountInWords]],
   });
 
   yPos = (pdf as any).lastAutoTable.finalY;
 
   if (showIncomeSection) {
-    const incomeTableBody = incomeRows.flatMap((row, index) => ([
-      [
-        { content: String(index + 1), styles: { halign: 'center' } },
-        { content: row.incomeSource || '' },
-        { content: row.amount ? `Rs. ${row.amount}` : '' },
-        { content: row.status || '' },
-        { content: row.remarks || '' },
-      ],
-      [
-        { content: '', styles: { fillColor: [245, 245, 245] } },
-        { content: `Contribution${row.contribution ? ` - ${row.contribution}` : ''}`, styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } },
-        { content: `Credit Account: ${row.creditAccount || ''}`, colSpan: 3, styles: { overflow: 'linebreak' } },
-      ],
-    ]));
+  const incomeTableBody = incomeRows.flatMap((row, index) => ([
+    [
+      { content: String(index + 1), rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
+      { content: row.incomeSource || '' },
+      { content: row.status || '', styles: { halign: 'center' } },
+      { content: 'Rs. ' + Number(row.amount || 0) },
+      { content: row.remarks || '' },
+    ],
+    [
+      { content: `Contribution${row.contribution ? ` - ${row.contribution}` : ''}`, colSpan: 1, styles: { fontStyle: 'bold' } },
+      { content: `Credit Account: ${row.creditAccount || ''}`, colSpan: 3, styles: { overflow: 'linebreak' } },
+    ],
+  ]));
 
-    autoTable(pdf, {
-      startY: yPos,
-      margin: { left: margin, right: margin },
-      theme: 'grid',
-      tableWidth,
-      styles: { fontSize: 8.5, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, valign: 'middle' },
-      head: [[
-        'S.No',
-        'Income Source',
-        'Amount',
-        'Status',
-        'Remarks',
-      ]],
-      headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
-      columnStyles: {
-        0: { cellWidth: 16, halign: 'center' },
-        1: { cellWidth: 46 },
-        2: { cellWidth: 30, halign: 'right' },
-        3: { cellWidth: 24, halign: 'center' },
-        4: { cellWidth: tableWidth - 16 - 46 - 30 - 24, halign: 'left' },
-      },
-      body: incomeTableBody as any,
-    });
+  autoTable(pdf, {
+    startY: yPos,
+    margin: { left: margin, right: margin },
+    theme: 'grid',
+    tableWidth,
+    styles: { fontSize: 10, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, valign: 'middle' },
+    head: [[
+      'S.No',
+      'Income Source',
+      'Status',
+      'Amount',
+      'Remarks',
+    ]],
+    headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+    columnStyles: {
+      0: { cellWidth: 16, halign: 'center' },
+      1: { cellWidth: 40, halign: 'center' },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 30, halign: 'right' },
+      4: { cellWidth: tableWidth - 16 - 40 - 30 - 30, halign: 'left' },
+    },
+    body: incomeTableBody as any,
+  });
 
-    yPos = (pdf as any).lastAutoTable.finalY;
-  }
+  yPos = (pdf as any).lastAutoTable.finalY;
+}
 
-  const approvalSteps = approvalHistory.filter((entry) => entry.label !== 'Submitted');
+  const approvalSteps = approvalHistory.filter((entry) =>
+    entry.label === 'Approved' &&
+    !(totalBudget > 10000 && (String(entry.stage).includes('principal') || String(entry.stage).includes('chairman')))
+  );
   const submittedByUi = approvalHistory.find((entry) => entry.label === 'Submitted') || submittedBy;
-
-  
-
+  const showSeniorApprovalRow = totalBudget > 10000;
+  const seniorApprovalRows = showSeniorApprovalRow
+    ? [[
+      {
+          content: 'Principal',
+          styles: { halign: 'left', fontStyle: 'bold', fillColor: [245, 245, 245], minCellHeight: 15 , },
+        },
+        {
+          content: 'Chairman',
+          styles: { halign: 'left', fontStyle: 'bold', fillColor: [245, 245, 245]  , minCellHeight: 15 ,},
+        },
+        
+      ],
+      ]
+    : [];
   const digitalSignRows: any[] = [
-    [{ content: 'Approved By:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }],
-    [{ content: `Submitted by ${formatWorkflowPersonText(submittedByUi.actor, submittedByUi.email, submittedByUi.timestamp)}` }],
+    [{ content: 'Approved By:', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }],
+    [{ content: `Submitted by ${formatWorkflowPersonText(submittedByUi.actor, submittedByUi.email, submittedByUi.timestamp)}`, colSpan: 2 }],
     ...approvalSteps.map((entry) => ([
-      { content: `${entry.label} by ${formatWorkflowPersonText(entry.actor, entry.email, entry.timestamp)}` },
+      {
+        content: `${entry.label} by ${formatWorkflowPersonText(entry.actor, entry.email, entry.timestamp)}`,
+        colSpan: 2,
+      },
     ])),
     ...(approvalHistory.length === 0
-      ? [[{ content: 'No approval history available' }]]
+      ? [[{ content: 'No approval history available', colSpan: 2 }]]
       : []),
+    ...seniorApprovalRows,
   ];
 
   autoTable(pdf, {
@@ -778,6 +812,10 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     tableWidth,
     styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
     head: [],
+    columnStyles: {
+      0: { cellWidth: tableWidth / 2, halign: 'left' },
+      1: { cellWidth: tableWidth / 2, halign: 'left' },
+    },
     body: digitalSignRows,
   });
 
@@ -792,3 +830,8 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
   const primaryPdfBuffer = pdf.output('arraybuffer');
   return mergeAndDownloadPdfWithAnnexures(primaryPdfBuffer, annexureFiles, baseUrl, authToken, fileName);
 };
+
+
+
+
+
