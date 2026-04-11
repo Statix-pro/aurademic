@@ -23,12 +23,13 @@ const userDashboardModel = {
 
     // derived from getUserJournals count logic
     // Use v_authors view to get email from master_employees for faculty
+    // Only count PUBLISHED journals for the dashboard stats
     const journalQuery = `
         SELECT COUNT(DISTINCT j.id) as count
         FROM journals j
         INNER JOIN author_journal aj ON j.id = aj.journal_id
         INNER JOIN v_authors va ON aj.author_id = va.author_id
-        WHERE va.email = ?
+        WHERE va.email = ? AND j.status = 'published'
     `;
 
     // Check if research_collaborations exists or use placeholder
@@ -144,7 +145,7 @@ const userDashboardModel = {
     }
   },
 
-  async getUserJournals(userId, page = 1, perPage = 10) {
+  async getUserJournals(userId, page = 1, perPage = 10, status = null, sortBy = 'updated_at') {
     const offset = (page - 1) * perPage;
     try {
       // First verify the user exists and get their email
@@ -156,17 +157,46 @@ const userDashboardModel = {
         return { journals: [], total: 0 };
       }
 
+      // Build status filter condition
+      const statusCondition = status ? 'AND j.status = ?' : '';
+      const queryParams = status
+        ? [userId, userId, user.email, status, perPage, offset]
+        : [userId, userId, user.email, perPage, offset];
+
+      // Validate and sanitize sortBy to prevent SQL injection
+      const allowedSortColumns = ['updated_at', 'date_of_submission', 'available_online_date', 'created_at'];
+      const orderByColumn = allowedSortColumns.includes(sortBy) ? `j.${sortBy}` : 'j.updated_at';
+
       // Modified query to ensure proper joins and data retrieval
+      // Use v_authors to get author names (handles internal employees correctly)
       const query = `
                 SELECT 
                     j.*,
                     jo.journal_name,
                     jo.publisher,
+                    COALESCE(j.admin_approval_status, 'pending') as admin_approval_status,
+                    j.admin_approval_comment,
+                    COALESCE(uer.status, 'none') as edit_request_status,
+                    CASE
+                        WHEN COALESCE(j.admin_approval_status, 'pending') IN ('pending', 'rejected') THEN 1
+                        WHEN COALESCE(j.admin_approval_status, 'pending') = 'approved'
+                             AND COALESCE(uer.status, 'none') = 'approved' THEN 1
+                        ELSE 0
+                    END as can_direct_edit,
+                    CASE
+                        WHEN COALESCE(j.admin_approval_status, 'pending') = 'approved'
+                             AND COALESCE(uer.status, 'none') IN ('none', 'rejected') THEN 1
+                        ELSE 0
+                    END as can_request_edit,
+                    CASE
+                        WHEN j.status = 'published' AND COALESCE(j.admin_approval_status, 'pending') = 'approved' THEN 0
+                        ELSE 1
+                    END as can_delete,
                     GROUP_CONCAT(
                         DISTINCT 
-                        CONCAT(a.name,
+                        CONCAT(va.author_name,
                             CASE 
-                                WHEN aj.is_first_author THEN ' (First Author)'
+                                WHEN aj.is_first_author THEN '*'
                                 WHEN aj.is_primary THEN ' (Primary Author)'
                                 ELSE ''
                             END
@@ -175,32 +205,55 @@ const userDashboardModel = {
                 FROM journals j
                 LEFT JOIN journal_options jo ON j.journal_options_id = jo.id
                 LEFT JOIN author_journal aj ON j.id = aj.journal_id
-                LEFT JOIN authors a ON aj.author_id = a.id
+                LEFT JOIN v_authors va ON aj.author_id = va.author_id
+                LEFT JOIN (
+                    SELECT er1.entity_id, er1.status
+                    FROM edit_requests er1
+                    INNER JOIN (
+                        SELECT entity_id, MAX(id) AS latest_id
+                        FROM edit_requests
+                        WHERE entity_type = 'journals'
+                          AND user_id = ?
+                        GROUP BY entity_id
+                    ) latest_er ON latest_er.latest_id = er1.id
+                    WHERE er1.entity_type = 'journals'
+                      AND er1.user_id = ?
+                ) uer ON uer.entity_id = j.id
                 WHERE EXISTS (
                     SELECT 1 FROM v_authors va2 
                     INNER JOIN author_journal aj2 ON va2.author_id = aj2.author_id 
                     WHERE aj2.journal_id = j.id AND va2.email = ?
-                )
-                GROUP BY j.id, jo.journal_name, jo.publisher
-                ORDER BY j.updated_at DESC
+                ) ${statusCondition}
+                GROUP BY j.id, jo.journal_name, jo.publisher, j.admin_approval_status, j.admin_approval_comment, uer.status
+                ORDER BY ${orderByColumn} DESC
                 LIMIT ? OFFSET ?
             `;
 
-      const [journals] = await db.query(query, [user.email, perPage, offset]);
+      const [journals] = await db.query(query, queryParams);
 
-      // Get total count
+      // Get total count with status filter
+      const countParams = status ? [user.email, status] : [user.email];
       const countQuery = `
                 SELECT COUNT(DISTINCT j.id) as total 
                 FROM journals j
                 INNER JOIN author_journal aj ON j.id = aj.journal_id
                 INNER JOIN v_authors va ON aj.author_id = va.author_id
-                WHERE va.email = ?
+                WHERE va.email = ? ${statusCondition}
             `;
 
-      const [[countResult]] = await db.query(countQuery, [user.email]);
+      const [[countResult]] = await db.query(countQuery, countParams);
+
+      const normalizedJournals = journals.map((journal) => ({
+        ...journal,
+        admin_approval_status: journal.admin_approval_status || 'pending',
+        edit_request_status: journal.edit_request_status || 'none',
+        can_direct_edit: Boolean(journal.can_direct_edit),
+        can_request_edit: Boolean(journal.can_request_edit),
+        can_delete: Boolean(journal.can_delete),
+      }));
 
       return {
-        journals: journals,
+        journals: normalizedJournals,
         total: countResult.total || 0,
       };
     } catch (error) {
@@ -366,13 +419,164 @@ const userDashboardModel = {
   },
 
   async getJournalDetails(userId, journalId) {
-    const query = `
-            SELECT *
-            FROM publications
-            WHERE id = ? AND user_id = ?
-        `;
-    const [result] = await db.query(query, [journalId, userId]);
-    return result[0];
+    try {
+      const userQuery = 'SELECT email FROM users WHERE id = ?';
+      const [[user]] = await db.query(userQuery, [userId]);
+
+      if (!user?.email) {
+        return null;
+      }
+
+      const [rows] = await db.query(
+        `
+          SELECT
+            j.*,
+            jo.journal_name,
+            jo.publisher,
+            jo.website,
+            jo.print_issn,
+            jo.online_issn,
+            COALESCE(j.admin_approval_status, 'pending') as admin_approval_status,
+            j.admin_approval_comment,
+            COALESCE(uer.status, 'none') as edit_request_status,
+            CASE
+              WHEN COALESCE(j.admin_approval_status, 'pending') IN ('pending', 'rejected') THEN 1
+              WHEN COALESCE(j.admin_approval_status, 'pending') = 'approved'
+                   AND COALESCE(uer.status, 'none') = 'approved' THEN 1
+              ELSE 0
+            END as can_direct_edit,
+            CASE
+              WHEN COALESCE(j.admin_approval_status, 'pending') = 'approved'
+                   AND COALESCE(uer.status, 'none') IN ('none', 'rejected') THEN 1
+              ELSE 0
+            END as can_request_edit,
+            CASE
+              WHEN j.status = 'published' AND COALESCE(j.admin_approval_status, 'pending') = 'approved' THEN 0
+              ELSE 1
+            END as can_delete,
+            GROUP_CONCAT(
+              DISTINCT CONCAT(
+                va.author_name,
+                CASE
+                  WHEN aj.is_first_author THEN '*'
+                  WHEN aj.is_primary THEN ' (Primary Author)'
+                  ELSE ''
+                END
+              ) ORDER BY aj.is_first_author DESC, aj.is_primary DESC SEPARATOR ', '
+            ) as authors
+          FROM journals j
+          LEFT JOIN journal_options jo ON j.journal_options_id = jo.id
+          LEFT JOIN author_journal aj ON j.id = aj.journal_id
+          LEFT JOIN v_authors va ON aj.author_id = va.author_id
+          LEFT JOIN (
+            SELECT er1.entity_id, er1.status
+            FROM edit_requests er1
+            INNER JOIN (
+              SELECT entity_id, MAX(id) AS latest_id
+              FROM edit_requests
+              WHERE entity_type = 'journals'
+                AND user_id = ?
+              GROUP BY entity_id
+            ) latest_er ON latest_er.latest_id = er1.id
+            WHERE er1.entity_type = 'journals'
+              AND er1.user_id = ?
+          ) uer ON uer.entity_id = j.id
+          WHERE j.id = ?
+            AND EXISTS (
+              SELECT 1
+              FROM v_authors va2
+              INNER JOIN author_journal aj2 ON va2.author_id = aj2.author_id
+              WHERE aj2.journal_id = j.id
+                AND va2.email = ?
+            )
+          GROUP BY j.id, jo.journal_name, jo.publisher, jo.website, jo.print_issn, jo.online_issn, j.admin_approval_status, j.admin_approval_comment, uer.status
+        `,
+        [userId, userId, journalId, user.email]
+      );
+
+      if (!rows[0]) {
+        return null;
+      }
+
+      return {
+        ...rows[0],
+        admin_approval_status: rows[0].admin_approval_status || 'pending',
+        edit_request_status: rows[0].edit_request_status || 'none',
+        can_direct_edit: Boolean(rows[0].can_direct_edit),
+        can_request_edit: Boolean(rows[0].can_request_edit),
+        can_delete: Boolean(rows[0].can_delete),
+      };
+    } catch (error) {
+      console.error('Database error in getJournalDetails:', error);
+      throw error;
+    }
+  },
+
+  async deleteJournal(userId, journalId) {
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const userQuery = 'SELECT email FROM users WHERE id = ?';
+      const [[user]] = await connection.query(userQuery, [userId]);
+
+      if (!user?.email) {
+        await connection.rollback();
+        return false;
+      }
+
+      const [journalRows] = await connection.query(
+        `
+          SELECT
+            j.id,
+            j.status,
+            COALESCE(j.admin_approval_status, 'pending') AS admin_approval_status
+          FROM journals j
+          WHERE j.id = ?
+            AND EXISTS (
+              SELECT 1
+              FROM v_authors va2
+              INNER JOIN author_journal aj2 ON va2.author_id = aj2.author_id
+              WHERE aj2.journal_id = j.id
+                AND va2.email = ?
+            )
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [journalId, user.email]
+      );
+
+      if (!journalRows.length) {
+        await connection.rollback();
+        return false;
+      }
+
+      const journal = journalRows[0];
+
+      if (
+        journal.status === 'published' &&
+        journal.admin_approval_status === 'approved'
+      ) {
+        const lockedError = new Error(
+          'Delete is disabled once publication is approved and published.'
+        );
+        lockedError.statusCode = 403;
+        throw lockedError;
+      }
+
+      const [deleteResult] = await connection.query(
+        'DELETE FROM journals WHERE id = ?',
+        [journalId]
+      );
+
+      await connection.commit();
+      return deleteResult.affectedRows > 0;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   },
 };
 

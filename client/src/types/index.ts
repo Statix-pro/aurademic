@@ -1,11 +1,14 @@
 import { ReactNode } from 'react';
 
 export interface User {
-  id: string;
+  id: string | number;
   email: string;
   name?: string;
   picture?: string;
   is_admin: boolean;
+  is_super_admin?: boolean;
+  roles?: string[];
+  permissions?: string[];
   // Employee fields from master_employees
   employee_id?: number;
   erp_id?: string;

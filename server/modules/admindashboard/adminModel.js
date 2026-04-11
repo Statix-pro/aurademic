@@ -270,26 +270,37 @@ const adminModel = {
                     jo.online_issn,
                     jo.website,
                     er.status as edit_request_status,
+                    er.created_at as edit_request_date,
+                    er.user_id as edit_request_user_id,
                     GROUP_CONCAT(DISTINCT 
                         CONCAT(
                             va.author_name,
+                            CASE WHEN aj.is_first_author THEN '*' ELSE '' END,
                             CASE WHEN va.erp_id IS NOT NULL 
                                  THEN CONCAT(' [', va.erp_id, ']') 
                                  ELSE '' 
                             END
-                        ) ORDER BY va.author_id
+                        ) ORDER BY aj.is_first_author DESC, va.author_id
                     ) as author_names,
                     GROUP_CONCAT(DISTINCT ji.index_name ORDER BY ji.id) as index_names
                 FROM journals j
                 LEFT JOIN journal_options jo ON j.journal_options_id = jo.id
                 LEFT JOIN author_journal aj ON j.id = aj.journal_id
                 LEFT JOIN v_authors va ON aj.author_id = va.author_id
-                LEFT JOIN edit_requests er ON 
-                    er.entity_id = j.id AND 
-                    er.entity_type = 'journals'
+                LEFT JOIN (
+                    SELECT er1.entity_id, er1.user_id, er1.status, er1.created_at
+                    FROM edit_requests er1
+                    INNER JOIN (
+                        SELECT entity_id, MAX(id) AS latest_id
+                        FROM edit_requests
+                        WHERE entity_type = 'journals'
+                        GROUP BY entity_id
+                    ) latest_er ON latest_er.latest_id = er1.id
+                    WHERE er1.entity_type = 'journals'
+                ) er ON er.entity_id = j.id
                 LEFT JOIN journal_indexes ji ON j.id = ji.journal_id
                 GROUP BY j.id, jo.journal_name, jo.publisher, jo.print_issn, 
-                         jo.online_issn, jo.website, j.status, er.status
+                         jo.online_issn, jo.website, j.status, er.status, er.created_at, er.user_id
                 ORDER BY j.id DESC
                 LIMIT ? OFFSET ?
             `,
@@ -324,11 +335,12 @@ const adminModel = {
                     GROUP_CONCAT(DISTINCT 
                         CONCAT(
                             va.author_name,
+                            CASE WHEN aj.is_first_author THEN '*' ELSE '' END,
                             CASE WHEN va.erp_id IS NOT NULL 
                                  THEN CONCAT(' [', va.erp_id, ']') 
                                  ELSE '' 
                             END
-                        ) ORDER BY va.author_id
+                        ) ORDER BY aj.is_first_author DESC, va.author_id
                     ) as author_names,
                     GROUP_CONCAT(DISTINCT ji.index_name ORDER BY ji.id) as index_names,
                     er.status as edit_request_status,
@@ -338,7 +350,17 @@ const adminModel = {
                 LEFT JOIN author_journal aj ON j.id = aj.journal_id
                 LEFT JOIN v_authors va ON aj.author_id = va.author_id
                 LEFT JOIN journal_indexes ji ON j.id = ji.journal_id
-                 LEFT JOIN edit_requests er ON j.id = er.entity_id AND er.entity_type = 'journals'
+                LEFT JOIN (
+                    SELECT er1.entity_id, er1.status, er1.created_at
+                    FROM edit_requests er1
+                    INNER JOIN (
+                        SELECT entity_id, MAX(id) AS latest_id
+                        FROM edit_requests
+                        WHERE entity_type = 'journals'
+                        GROUP BY entity_id
+                    ) latest_er ON latest_er.latest_id = er1.id
+                    WHERE er1.entity_type = 'journals'
+                ) er ON j.id = er.entity_id
                 WHERE j.id = ?
                 GROUP BY j.id, jo.journal_name, jo.publisher, jo.print_issn, 
                          jo.online_issn, jo.website, j.status, er.status, er.created_at
@@ -572,6 +594,80 @@ const adminModel = {
     }
   },
 
+  async updateJournalSubmissionApproval(
+    journalId,
+    status,
+    adminComment,
+    adminUserId
+  ) {
+    try {
+      const commentValue = adminComment?.trim() || null;
+
+      let updateQuery = '';
+      let params = [];
+
+      if (status === 'approved') {
+        updateQuery = `
+          UPDATE journals
+          SET
+            admin_approval_status = 'approved',
+            admin_approval_comment = ?,
+            admin_approved_by = ?,
+            admin_approved_at = CURRENT_TIMESTAMP,
+            admin_rejected_by = NULL,
+            admin_rejected_at = NULL,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `;
+        params = [commentValue, adminUserId, journalId];
+      } else {
+        updateQuery = `
+          UPDATE journals
+          SET
+            admin_approval_status = 'rejected',
+            admin_approval_comment = ?,
+            admin_rejected_by = ?,
+            admin_rejected_at = CURRENT_TIMESTAMP,
+            admin_approved_by = NULL,
+            admin_approved_at = NULL,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `;
+        params = [commentValue, adminUserId, journalId];
+      }
+
+      const [updateResult] = await db.query(updateQuery, params);
+
+      if (updateResult.affectedRows === 0) {
+        return null;
+      }
+
+      const [rows] = await db.query(
+        `
+          SELECT
+            id,
+            title,
+            status,
+            admin_approval_status,
+            admin_approval_comment,
+            admin_approved_by,
+            admin_approved_at,
+            admin_rejected_by,
+            admin_rejected_at
+          FROM journals
+          WHERE id = ?
+        `,
+        [journalId]
+      );
+
+      return rows[0] || null;
+    } catch (error) {
+      throw new Error(
+        `Error updating journal submission approval: ${error.message}`
+      );
+    }
+  },
+
   // Journal Status Update Management methods
   async getAllJournalStatusUpdates(page, perPage, statusFilter) {
     try {
@@ -661,6 +757,93 @@ const adminModel = {
       throw new Error(`Error updating admin reply: ${error.message}`);
     }
   },
+
+async getAllBudgets(page, perPage, filters = {}) {
+  const offset = (page - 1) * perPage;
+  const { fiscalYear, status, beneficiaryType } = filters;
+  
+  const whereParts = [`LOWER(TRIM(bp.status)) <> 'deleted'`];
+  const params = [];
+  
+  if (fiscalYear) {
+    whereParts.push('bp.fiscal_year = ?');
+    params.push(fiscalYear);
+  }
+  
+  if (status) {
+    whereParts.push('bp.status = ?');
+    params.push(status);
+  }
+  
+  if (beneficiaryType) {
+    whereParts.push('bp.beneficiary_type = ?');
+    params.push(beneficiaryType);
+  }
+
+  const whereClause = `WHERE ${whereParts.join(' AND ')}`;
+  
+  const [rows] = await db.query(`
+    SELECT 
+      bp.*,
+      md.name as department,
+      md.code as department_code,
+      me.name as org_unit_name,
+      met.name as org_unit_type,
+      met.code as org_unit_type_code,
+      COUNT(DISTINCT bpl.id) as line_count,
+      COALESCE(SUM(bpl.line_total), bp.total_amount) as total_amount
+    FROM budget_proposals bp
+    LEFT JOIN master_departments md ON bp.department_id = md.id
+    LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+    LEFT JOIN master_entity_types met ON me.entity_type_id = met.id
+    LEFT JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
+    ${whereClause}
+    GROUP BY bp.id, md.name, md.code, me.name, met.name, met.code
+    ORDER BY bp.created_at DESC
+    LIMIT ? OFFSET ?
+  `, [...params, perPage, offset]);
+  
+  const [count] = await db.query(`
+    SELECT COUNT(DISTINCT bp.id) as total 
+    FROM budget_proposals bp
+    ${whereClause}
+  `, params);
+  
+  return { budgets: rows, total: count[0].total };
+},
+
+  async getBudgetStats(fiscalYear = null) {
+    const fyClause = fiscalYear ? ' AND fiscal_year = ?' : '';
+    const params = fiscalYear ? [fiscalYear] : [];
+    
+    const [approved] = await db.query(`
+      SELECT COUNT(*) as approved 
+      FROM budget_proposals 
+      WHERE LOWER(TRIM(status)) <> 'deleted'
+        AND status IN ('principal_approved', 'completed')${fyClause}
+    `, params);
+    
+    const [pending] = await db.query(`
+      SELECT COUNT(*) as pending 
+      FROM budget_proposals 
+      WHERE LOWER(TRIM(status)) <> 'deleted'
+        AND status IN ('submitted', 'hod_approved', 'dof_approved')${fyClause}
+    `, params);
+    
+    const [rejected] = await db.query(`
+      SELECT COUNT(*) as rejected 
+      FROM budget_proposals 
+      WHERE LOWER(TRIM(status)) <> 'deleted'
+        AND status IN ('hod_rejected', 'dof_rejected', 'principal_rejected')${fyClause}
+    `, params);
+    
+    return { 
+      approved: approved[0].approved, 
+      pending: pending[0].pending,
+      rejected: rejected[0].rejected
+    };
+  },
+  
 };
 
 export default adminModel;

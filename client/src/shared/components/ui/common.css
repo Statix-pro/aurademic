@@ -115,17 +115,71 @@
 .custom-modal .modal-header {
   background-color: var(--bg-light);
   border-bottom: 1px solid var(--border-color);
-  padding: 1rem 1.5rem;
+  padding: 1.05rem 1.5rem 0.8rem;
+  align-items: flex-start;
 }
 
 .custom-modal .modal-title {
   color: var(--primary-color);
   font-weight: 600;
+  line-height: 1.2;
+  margin-top: -2px;
+}
+
+.custom-modal .modal-header .btn-close {
+  margin-top: -2px;
 }
 
 .custom-modal .modal-footer {
   border-top: none;
-  padding: 1rem 1.5rem;
+  padding: 0.5rem 1rem;
+}
+
+/* Shared compact alert modal */
+.compact-alert-modal .modal-content {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.compact-alert-modal .modal-header {
+  border-bottom: none;
+  padding: 18px 20px 8px;
+  align-items: center;
+}
+
+.compact-alert-modal .modal-title {
+  font-weight: 600;
+  color: #333;
+  font-size: 1.05rem;
+  margin-top: -2px;
+  line-height: 1.2;
+}
+
+.compact-alert-modal .modal-header .btn-close {
+  margin-top: -2px;
+}
+
+.compact-alert-modal .modal-body {
+  padding: 16px 20px;
+}
+
+.compact-alert-modal .modal-footer {
+  border-top: 1px solid #f0f2f5;
+  padding: 6px 16px;
+  background-color: #f9f9fa;
+}
+
+.compact-alert-modal .btn {
+  border-radius: 6px;
+  padding: 4px 14px;
+  font-weight: 500;
+}
+
+.compact-alert-modal .modal-body p {
+  white-space: pre-wrap;
+  line-height: 1.5;
 }
 
 /* Custom Table Styles */

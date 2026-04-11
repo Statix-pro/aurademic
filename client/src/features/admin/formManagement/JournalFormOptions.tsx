@@ -2,6 +2,7 @@ import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { Table, Button, Form, Modal, Alert } from "react-bootstrap";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import "./FormManagementStyles.css";
+import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
 
 interface JournalOption {
   id: number;
@@ -31,6 +32,26 @@ const JournalManagement: React.FC = () => {
     category: "National",
   });
   const [isEditing, setIsEditing] = useState(false);
+
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+    onConfirm?: () => void;
+    showCancel?: boolean;
+    confirmText?: string;
+  }>({
+    show: false,
+    message: "",
+    type: "info"
+  });
+
+  const showAlert = (message: React.ReactNode, type: AlertType = "info", title?: string, showCancel = false, confirmText = "OK", onConfirm?: () => void) => {
+    setAlertConfig({ show: true, message, type, title, onConfirm, showCancel, confirmText });
+  };
+
+  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
 
   useEffect(() => {
     fetchJournals();
@@ -77,20 +98,28 @@ const JournalManagement: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (window.confirm("Are you sure you want to delete this journal?")) {
-      try {
-        setLoading(true);
-        setError("");
-        await authenticityUtility.delete(`/form-options/journals/${id}`);
-        fetchJournals();
-      } catch (err: unknown) {
-        console.error("Error deleting journal:", err);
-        const error = err as { response?: { data?: { message?: string } } };
-        setError("Failed to delete journal. " + (error.response?.data?.message || "Please try again later."));
-      } finally {
-        setLoading(false);
+    showAlert(
+      "Are you sure you want to delete this journal?",
+      "warning",
+      "Confirm Deletion",
+      true,
+      "Delete",
+      async () => {
+        closeAlert();
+        try {
+          setLoading(true);
+          setError("");
+          await authenticityUtility.delete(`/form-options/journals/${id}`);
+          fetchJournals();
+        } catch (err: unknown) {
+          console.error("Error deleting journal:", err);
+          const error = err as { response?: { data?: { message?: string } } };
+          setError("Failed to delete journal. " + (error.response?.data?.message || "Please try again later."));
+        } finally {
+          setLoading(false);
+        }
       }
-    }
+    );
   };
 
   const handleEdit = (journal: JournalOption) => {
@@ -132,18 +161,18 @@ const JournalManagement: React.FC = () => {
         </Button>
       </div>
 
-      <Table striped bordered hover>
+      <Table striped bordered hover responsive>
         <thead>
           <tr>
             <th>Journal Name</th>
-            <th>Category</th>
+            <th className="text-center">Category</th>
             <th>Publisher</th>
-            <th>Print ISSN</th>
-            <th>Online ISSN</th>
+            <th className="text-center">Print ISSN</th>
+            <th className="text-center">Online ISSN</th>
             <th>Impact Factor</th>
             <th>Cite Score</th>
             <th>Website</th>
-            <th>Actions</th>
+            <th className="text-center">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -274,6 +303,17 @@ const JournalManagement: React.FC = () => {
           </Form>
         </Modal.Body>
       </Modal>
+
+      <AlertModal
+        show={alertConfig.show}
+        onHide={closeAlert}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        showCancel={alertConfig.showCancel}
+        confirmText={alertConfig.confirmText}
+        onConfirm={alertConfig.onConfirm}
+      />
     </div>
   );
 };

@@ -5,7 +5,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { Trash2, Plus, ChevronDown } from 'lucide-react';
 import CustomFileUploader from '../../shared/components/ui/CustomFileUploader';
-import Navbar from '../../shared/components/layout/navbar/navbar';
+
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import debounce from 'lodash.debounce';
 import { useAuth } from '../../contexts/AuthContext';
@@ -2025,7 +2025,7 @@ const ResearchProjectForm: React.FC = () => {
 
   return (
     <div className="journal-form-body">
-      <Navbar /> {/* Assuming Navbar is a separate component */}
+
       <div className="container-fluid p-4 journal-form-container">
         {' '}
         {/* Use a fluid container for more space */}
@@ -2823,6 +2823,7 @@ const ResearchProjectForm: React.FC = () => {
                       <option value="revisionSubmitted">
                         Revision Submitted
                       </option>
+                      <option value="accepted">Accepted</option>
                       <option value="published">Published</option>
                     </select>
                   </div>
