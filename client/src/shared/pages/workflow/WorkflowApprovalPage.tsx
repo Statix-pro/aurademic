@@ -662,9 +662,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     const activeStageKey = String(activeStage || '').toLowerCase();
 
     if (token.includes('archived') || token.includes('archive')) return 'archived';
-    if (token.includes('rejected')) return 'rejected';
-    if (token.includes('returned') || token.includes('return')) return 'returned';
-    if (token.includes('completed') || token.includes('approved')) return 'approved';
+    if (token.includes('rejected') || workflowDecision === 'rejected' || stageDecision.includes('rejected')) return 'rejected';
+    if (token.includes('returned') || token.includes('return') || workflowDecision === 'returned' || stageDecision.includes('returned')) return 'returned';
+    if (token.includes('completed') || token.includes('approved') || stageDecision.includes('approved')) return 'approved';
     if (workflowDecision === 'resubmitted') return 'pending';
 
     // For the active queue stage, treat current in-progress rows as pending.
