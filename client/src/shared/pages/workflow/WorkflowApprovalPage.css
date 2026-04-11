@@ -528,6 +528,17 @@
   transform: translateY(-1px);
 }
 
+
+
+.fw-action-btn--download {
+  background: #0069ab;
+  color: #ffffff;
+}
+
+.fw-action-btn--download:hover:not(:disabled) {
+  background: #00568c;
+}
+
 /* Stage Pill */
 .fw-stage-pill {
   background: #e9f2ff;
@@ -719,6 +730,18 @@
   background: #fff3cd;
   padding: 2px 6px;
   border-radius: 4px;
+}
+
+.fw-log-toggle-btn {
+  margin-top: 4px;
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: #0d6efd;
+  cursor: pointer;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .fw-log-actor-line {

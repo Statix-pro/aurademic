@@ -479,6 +479,30 @@
   box-shadow: none;
 }
 
+.financecard-download-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(10, 122, 194, 0.2);
+  background: linear-gradient(135deg, #0a7ac2 0%, #005c9c 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(0, 105, 171, 0.18);
+}
+
+.financecard-download-btn:hover {
+  background: linear-gradient(135deg, #0c86d1 0%, #0a69a9 100%);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 24px rgba(0, 105, 171, 0.24);
+  transform: translateY(-1px);
+}
+
+.financecard-download-btn:disabled {
+  opacity: 0.6;
+  transform: none;
+  box-shadow: none;
+}
+
 .financecard-log-overlay {
   position: fixed;
   inset: 0;

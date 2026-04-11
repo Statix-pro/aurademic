@@ -2,12 +2,47 @@ import financeModel from './financeModel.js';
 import './financeWorkflowAdapter.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
+import fs from 'fs';
+import path from 'path';
 
 const normalizeText = (value) => String(value || '').trim();
 
 const toPositiveInt = (value) => {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const SAFE_ANNEXURE_EXTENSIONS = new Set([
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.csv',
+  '.jpg',
+  '.jpeg',
+  '.png',
+]);
+
+const sanitizeAnnexureExtension = (originalName) => {
+  const rawExt = String(path.extname(String(originalName || '')) || '').toLowerCase();
+  const normalizedExt = rawExt.replace(/[^a-z0-9.]/g, '');
+  return SAFE_ANNEXURE_EXTENSIONS.has(normalizedExt) ? normalizedExt : '';
+};
+
+const TEMP_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'temp');
+
+const resolveSafeTempUploadPath = (unsafePath) => {
+  const normalized = normalizeText(unsafePath);
+  if (!normalized) return null;
+
+  const resolved = path.resolve(normalized);
+  const safeBase = `${TEMP_UPLOAD_DIR}${path.sep}`;
+  if (!resolved.startsWith(safeBase)) {
+    return null;
+  }
+
+  return resolved;
 };
 
 const parseDateMs = (value) => {
@@ -218,10 +253,23 @@ const financeController = {
 
       const financeId = await financeModel.createFinanceRequest(data, userId, normalizeText(req.user?.email) || null);
       const budgetRows = Array.isArray(data.budget_rows) ? data.budget_rows : [];
-      const totalBudgetAmount = budgetRows.length
+      const plannedBudgetAmount = budgetRows.length
         ? budgetRows.reduce((sum, row) => sum + Number(row?.amount || 0), 0)
         : Number(data.total_budget || 0);
+      const unplannedBudgetEnabled = Boolean(data.unplanned_budget_enabled);
+      const unplannedBudgetAmount = unplannedBudgetEnabled
+        ? Math.max(0, Number(data.unplanned_budget_amount || 0))
+        : 0;
+      const totalBudgetAmount = plannedBudgetAmount + (Number.isFinite(unplannedBudgetAmount) ? unplannedBudgetAmount : 0);
       const amountBand = Number(totalBudgetAmount) > 10000 ? 'gt_10k' : 'lte_10k';
+      const financeMeta = {
+        unplannedBudgetEnabled,
+        unplannedBudgetAmount:
+          data.unplanned_budget_amount !== undefined && data.unplanned_budget_amount !== null
+            ? Number(data.unplanned_budget_amount)
+            : null,
+        unplannedBudgetDescription: normalizeText(data.unplanned_budget_description) || null,
+      };
 
       try {
         await workflowService.startWorkflow({
@@ -234,6 +282,7 @@ const financeController = {
             moduleMeta: {
               trigger: 'create_finance_request',
               amountBand,
+              financeMeta,
             },
           },
         });
@@ -362,6 +411,15 @@ const financeController = {
         });
       }
 
+      const financeMeta = {
+        unplannedBudgetEnabled: Boolean(finance.unplanned_budget_enabled),
+        unplannedBudgetAmount:
+          finance.unplanned_budget_amount !== undefined && finance.unplanned_budget_amount !== null
+            ? Number(finance.unplanned_budget_amount)
+            : null,
+        unplannedBudgetDescription: normalizeText(finance.unplanned_budget_description) || null,
+      };
+
       const restartResult = await workflowService.startWorkflow({
         moduleKey: 'finance',
         recordId: financeId,
@@ -372,6 +430,7 @@ const financeController = {
           moduleMeta: {
             trigger: 'applicant_resubmit',
             amountBand: Number(finance.total_budget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+            financeMeta,
           },
         },
       });
@@ -481,7 +540,7 @@ const financeController = {
       }
 
       const budget = await financeModel.getBudgetBreakup(financeId);
-const incomeRows = await financeModel.getIncomeRows(financeId);
+      const incomeRows = await financeModel.getIncomeRows(financeId);
 
       let statusUpdates = [];
       try {
@@ -643,6 +702,13 @@ const incomeRows = await financeModel.getIncomeRows(financeId);
       const budgetHead = normalizeText(req.query?.budget_head || req.query?.head);
       const subHead = normalizeText(req.query?.sub_head || req.query?.subHead);
       const preferredBudgetLineId = toPositiveInt(req.query?.budget_line_id);
+      const excludeFinanceId = toPositiveInt(req.query?.finance_id);
+      const beneficiaryType = normalizeText(req.query?.beneficiary_type || req.query?.beneficiaryType) || null;
+      const beneficiaryValue = normalizeText(req.query?.beneficiary_value || req.query?.beneficiaryValue) || null;
+      const departmentId = toPositiveInt(req.query?.department_id || req.query?.departmentId);
+      const beneficiaryEntityId = toPositiveInt(
+        req.query?.beneficiary_entity_id || req.query?.beneficiaryEntityId
+      );
       const headOnlyMatch = ['1', 'true', 'yes', 'on'].includes(
         normalizeText(req.query?.head_only_match).toLowerCase()
       );
@@ -668,6 +734,11 @@ const incomeRows = await financeModel.getIncomeRows(financeId);
         subHead,
         preferredBudgetLineId,
         headOnlyMatch,
+        excludeFinanceId,
+        beneficiaryType,
+        beneficiaryValue,
+        departmentId,
+        beneficiaryEntityId,
       });
 
       return res.status(200).json({
@@ -868,8 +939,8 @@ const incomeRows = await financeModel.getIncomeRows(financeId);
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
       const effectiveLevel1Role = stage === 'level1'
         ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
-            ? normalizedLevel1Role
-            : resolveFinanceLevel1QueueRole(req))
+          ? normalizedLevel1Role
+          : resolveFinanceLevel1QueueRole(req))
         : null;
 
       const queue = await workflowService.listQueue({
@@ -1050,6 +1121,68 @@ const incomeRows = await financeModel.getIncomeRows(financeId);
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in getCurrentEmployeeInfo');
+    }
+  },
+
+  async uploadAnnexureFile(req, res) {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'No file uploaded',
+        });
+      }
+
+      const annexureDir = path.resolve(process.cwd(), 'uploads', 'finance-annexures');
+      await fs.promises.mkdir(annexureDir, { recursive: true });
+
+      const extension = sanitizeAnnexureExtension(file.originalname);
+      const storedName = `finance-annexure-${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
+      const finalPath = path.resolve(annexureDir, storedName);
+      const safeBase = `${annexureDir}${path.sep}`;
+      if (!finalPath.startsWith(safeBase)) {
+        throw new Error('Invalid annexure path');
+      }
+
+      const sourcePath = resolveSafeTempUploadPath(file.path);
+      if (!sourcePath) {
+        throw new Error('Invalid upload source path');
+      }
+
+      try {
+        await fs.promises.access(sourcePath, fs.constants.F_OK);
+      } catch {
+        throw new Error('Invalid upload source path');
+      }
+
+      await fs.promises.rename(sourcePath, finalPath);
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Annexure uploaded successfully',
+        data: {
+          originalName: file.originalname,
+          storedName,
+          filePath: `/uploads/finance-annexures/${storedName}`,
+          mimeType: file.mimetype,
+          size: file.size,
+        },
+      });
+    } catch (error) {
+      try {
+        const cleanupPath = resolveSafeTempUploadPath(req.file?.path);
+        if (cleanupPath) {
+          await fs.promises.unlink(cleanupPath).catch((cleanupError) => {
+            if (cleanupError?.code !== 'ENOENT') {
+              throw cleanupError;
+            }
+          });
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+      return handleWorkflowError(res, error, 'Error in uploadAnnexureFile');
     }
   },
 

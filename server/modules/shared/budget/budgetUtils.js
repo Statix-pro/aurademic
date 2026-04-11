@@ -29,13 +29,14 @@ export const ENTITY_TYPE_BY_BENEFICIARY = Object.freeze({
     Centre: 'CENTRE',
     Cell: 'CELL',
     Club: 'CLUB',
+    Section: 'SECTION',
     'Professional Body': 'PROFESSIONAL_BODY',
     ProfessionalBodies: 'PROFESSIONAL_BODY',
     'Professional Bodies': 'PROFESSIONAL_BODY',
 });
 
 export const ENTITY_BENEFICIARY_TYPES = Object.freeze([
-    'Centre', 'Cell', 'Club', 'Professional Body',
+    'Centre', 'Cell', 'Club', 'Professional Body', 'Section',
 ]);
 
 export const LEVEL1_ROUTE_TYPE = Object.freeze({
@@ -56,7 +57,7 @@ export const VALID_BENEFICIARY_TYPES = Object.freeze([
     'Institution', 'Professional Body', 'Professional Bodies', 'ProfessionalBodies',
 ]);
 
-export const MUTABLE_ENTITY_TYPES = Object.freeze(new Set(['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY']));
+export const MUTABLE_ENTITY_TYPES = Object.freeze(new Set(['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION']));
 
 // =====================================================
 // NORMALIZERS

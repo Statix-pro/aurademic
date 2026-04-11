@@ -2,7 +2,7 @@ import db from '../../../config/connection.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
-const ENTITY_BENEFICIARY_TYPES = Object.freeze(['Centre', 'Cell', 'Club', 'Professional Body']);
+const ENTITY_BENEFICIARY_TYPES = Object.freeze(['Centre', 'Cell', 'Club', 'Section', 'Professional Body']);
 
 /**
  * Shared budget approval engine.

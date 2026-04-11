@@ -126,6 +126,7 @@ async function applyBudgetAnnualDeltaByProposalId(proposalId, conn, direction = 
     `SELECT id,
             fiscal_year,
             beneficiary_type,
+            beneficiary_value,
             beneficiary_entity_id,
             department_id,
             ${budgetWindowSelect}
@@ -172,10 +173,59 @@ async function applyBudgetAnnualDeltaByProposalId(proposalId, conn, direction = 
     Number.isInteger(Number(proposal.department_id)) && Number(proposal.department_id) > 0
       ? Number(proposal.department_id)
       : null;
-  const beneficiaryEntityId =
+  let beneficiaryEntityId =
     Number.isInteger(Number(proposal.beneficiary_entity_id)) && Number(proposal.beneficiary_entity_id) > 0
       ? Number(proposal.beneficiary_entity_id)
       : null;
+
+  const beneficiaryTypeForEntity = normalizeBeneficiaryType(proposal.beneficiary_type);
+  const entityTypeCode = beneficiaryTypeToEntityTypeCode(beneficiaryTypeForEntity);
+
+  if (!beneficiaryEntityId && isEntityBeneficiaryType(beneficiaryTypeForEntity) && entityTypeCode) {
+    const normalizedBeneficiaryValue = normalizeText(proposal.beneficiary_value);
+
+    if (normalizedBeneficiaryValue) {
+      const [entityRows] = await conn.execute(
+        `SELECT me.id
+           FROM master_entities me
+           JOIN master_entity_types met ON me.entity_type_id = met.id
+          WHERE me.is_active = 1
+            AND met.code = ?
+            AND LOWER(TRIM(me.name)) = LOWER(TRIM(?))
+          LIMIT 1`,
+        [entityTypeCode, normalizedBeneficiaryValue]
+      );
+      if (entityRows.length) {
+        beneficiaryEntityId = Number(entityRows[0].id);
+      }
+    }
+
+    if (!beneficiaryEntityId && entityTypeCode === 'INSTITUTION') {
+      const [entityRows] = await conn.execute(
+        `SELECT me.id
+           FROM master_entities me
+           JOIN master_entity_types met ON me.entity_type_id = met.id
+          WHERE me.is_active = 1
+            AND met.code = ?
+          ORDER BY me.id ASC
+          LIMIT 2`,
+        [entityTypeCode]
+      );
+      if (entityRows.length === 1) {
+        beneficiaryEntityId = Number(entityRows[0].id);
+      }
+    }
+
+    if (beneficiaryEntityId) {
+      await conn.execute(
+        `UPDATE budget_proposals
+            SET beneficiary_entity_id = ?
+          WHERE id = ?
+            AND (beneficiary_entity_id IS NULL OR beneficiary_entity_id <= 0)`,
+        [beneficiaryEntityId, proposalIdentifier]
+      );
+    }
+  }
 
   const [updated] = await conn.execute(
     `UPDATE Budget_annual
@@ -587,7 +637,7 @@ export async function updateApprovedAmounts(
     || normalizedCurrentStatus.includes('rejected')
     || normalizedCurrentStatus.includes('returned');
 
-  if (isTerminalStatus && normalizedDecision !== 'archived') {
+  if (isTerminalStatus) {
     throw new Error(`Proposal cannot be processed from status: ${proposal.status}`);
   }
 
@@ -822,106 +872,142 @@ export async function updateApprovedAmounts(
       );
     }
 
-    for (let idx = 0; idx < upto; idx += 1) {
+    const incomingLineIds = new Set(incomingLines.map(l => Number(l.line_id)).filter(id => Number.isInteger(id) && id > 0));
+
+    // Handle line deletions
+    for (let idx = 0; idx < existingLines.length; idx += 1) {
       const prevLine = existingLines[idx];
-      const incoming = incomingByLineId.get(Number(prevLine.id)) || incomingLines[idx] || {};
       const lineNo = idx + 1;
-      const oldBudgetHead = normalizeText(prevLine.budget_head);
-      const oldSubHead = normalizeText(prevLine.sub_head);
-      const oldDescription = normalizeText(prevLine.line_description);
-      const nextBudgetHead = hasOwn(incoming, 'budget_head')
-        ? normalizeText(incoming?.budget_head)
-        : oldBudgetHead;
-      const nextSubHead = hasOwn(incoming, 'sub_head')
-        ? normalizeText(incoming?.sub_head)
-        : oldSubHead;
-      const nextDescription = hasOwn(incoming, 'line_description')
-        ? normalizeText(incoming?.line_description)
-        : oldDescription;
-      const previousApprovedUnit = Number(prevLine.approved_unit_amount ?? prevLine.unit_amount) || 0;
-      const previousApprovedLineTotal = Number(prevLine.approved_line_total ?? prevLine.line_total) || 0;
-      const inferredApprovedQuantity =
-        previousApprovedUnit > 0
-          ? (previousApprovedLineTotal / previousApprovedUnit)
-          : Number(prevLine.quantity || 1);
-      const baseQuantity = Number.isFinite(inferredApprovedQuantity) && inferredApprovedQuantity > 0
-        ? inferredApprovedQuantity
-        : (Number(prevLine.quantity) || 1);
-      const effectiveQuantity = Number.isFinite(Number(incoming.quantity)) && Number(incoming.quantity) > 0
-        ? Number(incoming.quantity)
-        : baseQuantity;
-      const nextApprovedUnit = Number.isFinite(Number(incoming.unit_amount))
-        ? Number(incoming.unit_amount)
-        : previousApprovedUnit;
-      const nextApprovedLineTotal = Number((nextApprovedUnit * effectiveQuantity).toFixed(2));
-      const changes = [];
-
-      const baseMonthMap = normalizeMonthMap(
-        parseApprovedMonthJson(prevLine.approved_month_allocations_json)
-        || proposedMonthByLineId.get(Number(prevLine.id))
-        || {}
-      );
-      const nextMonthMap = normalizeMonthMap(incoming.month_allocations || baseMonthMap);
-      const monthDiffs = [];
-      for (const month of VALID_MONTHS) {
-        const from = Number(baseMonthMap[month] || 0);
-        const to = Number(nextMonthMap[month] || 0);
-        if (Math.abs(from - to) > 0.01) {
-          monthDiffs.push(`${month}: ${toDiffLabel(from)} -> ${toDiffLabel(to)}`);
-        }
-      }
-
-      if (Number(nextApprovedUnit.toFixed(2)) !== Number(previousApprovedUnit.toFixed(2))) {
-        changes.push(`Approved Unit Amount changed from ${previousApprovedUnit} to ${nextApprovedUnit}`);
-      }
-
-      if (Math.abs(Number(effectiveQuantity) - Number(baseQuantity)) > 0.0001) {
-        changes.push(`Quantity changed from ${toDiffLabel(baseQuantity)} to ${toDiffLabel(effectiveQuantity)}`);
-      }
-
-      if (Number(nextApprovedLineTotal.toFixed(2)) !== Number(previousApprovedLineTotal.toFixed(2))) {
-        changes.push(`Approved Line Total changed from ${previousApprovedLineTotal} to ${nextApprovedLineTotal}`);
-      }
-
-      if (monthDiffs.length > 0) {
-        changes.push(`Month allocations changed (${monthDiffs.join(', ')})`);
-      }
-
-      if (oldBudgetHead !== nextBudgetHead) {
-        changes.push(`Budget Head changed from "${oldBudgetHead || '-'}" to "${nextBudgetHead || '-'}"`);
-      }
-
-      if (oldSubHead !== nextSubHead) {
-        changes.push(`Sub Head changed from "${oldSubHead || '-'}" to "${nextSubHead || '-'}"`);
-      }
-
-      if (oldDescription !== nextDescription) {
-        changes.push('Description updated');
-      }
-
-      if (changes.length > 0) {
-        await conn.execute(
-          `UPDATE budget_proposal_lines
-             SET budget_head = ?,
-                 sub_head = ?,
-                 line_description = ?,
-                 approved_unit_amount = ?,
-                 approved_line_total = ?,
-                 approved_month_allocations_json = ?
-             WHERE id = ?`,
-          [
-            nextBudgetHead || null,
-            nextSubHead || null,
-            nextDescription || null,
-            nextApprovedUnit,
-            nextApprovedLineTotal,
-            JSON.stringify(nextMonthMap),
-            prevLine.id,
-          ]
-        );
-
+      
+      if (!incomingLineIds.has(Number(prevLine.id))) {
+        await conn.execute('DELETE FROM budget_line_month_allocations WHERE budget_line_id = ?', [prevLine.id]);
+        await conn.execute('DELETE FROM budget_proposal_lines WHERE id = ?', [prevLine.id]);
         changedRows.push(lineNo);
-        lineChangeDetails.push({ lineNo, changes });
+        lineChangeDetails.push({ lineNo, changes: ['Line removed'] });
+      }
+    }
+
+    // Handle updates and additions
+    for (let idx = 0; idx < incomingLines.length; idx += 1) {
+      const incoming = incomingLines[idx];
+      const lineId = Number(incoming.line_id);
+      const prevLine = Number.isInteger(lineId) && lineId > 0 ? existingLines.find((l) => Number(l.id) === lineId) : null;
+      const isExistingLine = Boolean(prevLine);
+      const lineNo = idx + 1;
+
+      if (isExistingLine) {
+        const oldBudgetHead = normalizeText(prevLine.budget_head);
+        const oldSubHead = normalizeText(prevLine.sub_head);
+        const oldDescription = normalizeText(prevLine.line_description);
+        const nextBudgetHead = hasOwn(incoming, 'budget_head')
+          ? normalizeText(incoming?.budget_head)
+          : oldBudgetHead;
+        const nextSubHead = hasOwn(incoming, 'sub_head')
+          ? normalizeText(incoming?.sub_head)
+          : oldSubHead;
+        const nextDescription = hasOwn(incoming, 'line_description')
+          ? normalizeText(incoming?.line_description)
+          : oldDescription;
+        const previousApprovedUnit = Number(prevLine.approved_unit_amount ?? prevLine.unit_amount) || 0;
+        const previousApprovedLineTotal = Number(prevLine.approved_line_total ?? prevLine.line_total) || 0;
+        const inferredApprovedQuantity =
+          previousApprovedUnit > 0
+            ? (previousApprovedLineTotal / previousApprovedUnit)
+            : Number(prevLine.quantity || 1);
+        const baseQuantity = Number.isFinite(inferredApprovedQuantity) && inferredApprovedQuantity > 0
+          ? inferredApprovedQuantity
+          : (Number(prevLine.quantity) || 1);
+        const effectiveQuantity = Number.isFinite(Number(incoming.quantity)) && Number(incoming.quantity) > 0
+          ? Number(incoming.quantity)
+          : baseQuantity;
+        const nextApprovedUnit = Number.isFinite(Number(incoming.unit_amount))
+          ? Number(incoming.unit_amount)
+          : previousApprovedUnit;
+        const nextApprovedLineTotal = Number((nextApprovedUnit * effectiveQuantity).toFixed(2));
+        const changes = [];
+
+        const baseMonthMap = normalizeMonthMap(
+          parseApprovedMonthJson(prevLine.approved_month_allocations_json)
+          || proposedMonthByLineId.get(Number(prevLine.id))
+          || {}
+        );
+        const nextMonthMap = normalizeMonthMap(incoming.month_allocations || baseMonthMap);
+        const monthDiffs = [];
+        for (const month of VALID_MONTHS) {
+          const from = Number(baseMonthMap[month] || 0);
+          const to = Number(nextMonthMap[month] || 0);
+          if (Math.abs(from - to) > 0.01) {
+            monthDiffs.push(`${month}: ${toDiffLabel(from)} -> ${toDiffLabel(to)}`);
+          }
+        }
+
+        if (Number(nextApprovedUnit.toFixed(2)) !== Number(previousApprovedUnit.toFixed(2))) {
+          changes.push(`Approved Unit Amount changed from ${previousApprovedUnit} to ${nextApprovedUnit}`);
+        }
+
+        if (Math.abs(Number(effectiveQuantity) - Number(baseQuantity)) > 0.0001) {
+          changes.push(`Quantity changed from ${toDiffLabel(baseQuantity)} to ${toDiffLabel(effectiveQuantity)}`);
+        }
+
+        if (Number(nextApprovedLineTotal.toFixed(2)) !== Number(previousApprovedLineTotal.toFixed(2))) {
+          changes.push(`Approved Line Total changed from ${previousApprovedLineTotal} to ${nextApprovedLineTotal}`);
+        }
+
+        if (monthDiffs.length > 0) {
+          changes.push(`Month allocations changed (${monthDiffs.join(', ')})`);
+        }
+
+        if (oldBudgetHead !== nextBudgetHead) {
+          changes.push(`Budget Head changed from "${oldBudgetHead || '-'}" to "${nextBudgetHead || '-'}"`);
+        }
+
+        if (oldSubHead !== nextSubHead) {
+          changes.push(`Sub Head changed from "${oldSubHead || '-'}" to "${nextSubHead || '-'}"`);
+        }
+
+        if (oldDescription !== nextDescription) {
+          changes.push('Description updated');
+        }
+
+        if (changes.length > 0) {
+          await conn.execute(
+            `UPDATE budget_proposal_lines
+               SET budget_head = ?,
+                   sub_head = ?,
+                   line_description = ?,
+                   approved_unit_amount = ?,
+                   approved_line_total = ?,
+                   approved_month_allocations_json = ?
+               WHERE id = ?`,
+            [
+              nextBudgetHead || null,
+              nextSubHead || null,
+              nextDescription || null,
+              nextApprovedUnit,
+              nextApprovedLineTotal,
+              JSON.stringify(nextMonthMap),
+              prevLine.id,
+            ]
+          );
+
+          if (!changedRows.includes(lineNo)) changedRows.push(lineNo);
+          lineChangeDetails.push({ lineNo, changes });
+        }
+      } else {
+        // Line added
+        const newLineId = await insertBudgetLine(proposalId, incoming, conn);
+        const nextMonthMap = normalizeMonthMap(incoming.month_allocations || {});
+        for (const month of VALID_MONTHS) {
+          if (nextMonthMap[month]) {
+             await insertMonthAllocation(newLineId, month, nextMonthMap[month], conn);
+          }
+        }
+        await conn.execute(
+          `UPDATE budget_proposal_lines SET approved_month_allocations_json = ? WHERE id = ?`, 
+          [JSON.stringify(nextMonthMap), newLineId]
+        );
+        if (!changedRows.includes(lineNo)) changedRows.push(lineNo);
+        lineChangeDetails.push({ lineNo, changes: ['Line added'] });
       }
     }
 
@@ -1629,12 +1715,12 @@ export async function getConsolidatedData({
     }
     case 'coordinator': {
       where.push(`(
-        LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')
+        LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body', 'section')
         OR (LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff') AND bp.beneficiary_entity_id IS NOT NULL)
       )`);
       const filterConditions = [];
       if (safeUserId > 0) {
-        filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'))`);
+        filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'))`);
         params.push(safeUserId);
       }
       if (userEmail) {
@@ -1732,10 +1818,10 @@ export async function getConsolidatedData({
   const sql = `
     SELECT
       bpl.budget_head AS budgetHead,
-      SUM(bpl.line_total) AS proposed,
+      SUM(COALESCE(bpl.approved_line_total, bpl.line_total, 0)) AS proposed,
       SUM(CASE WHEN ${approvedCondition} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END) AS approved,
-      SUM(CASE WHEN ${windowTypeExpr} = 'initial' THEN COALESCE(bpl.line_total, 0) ELSE 0 END) AS initial,
-      SUM(CASE WHEN ${windowTypeExpr} = 'additional' THEN COALESCE(bpl.line_total, 0) ELSE 0 END) AS additional,
+      SUM(CASE WHEN ${windowTypeExpr} = 'initial' THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END) AS initial,
+      SUM(CASE WHEN ${windowTypeExpr} = 'additional' THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END) AS additional,
       0 AS expenditure
     FROM budget_proposals bp
     LEFT JOIN master_departments md ON bp.department_id = md.id
@@ -1762,10 +1848,10 @@ export async function getConsolidatedData({
       bpl.sub_head,
       bp.id AS proposalId,
       ${applicantNameExpr} AS applicantName,
-      bpl.line_total AS proposedAmount,
+      COALESCE(bpl.approved_line_total, bpl.line_total, 0) AS proposedAmount,
       CASE WHEN ${approvedCondition} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END AS approvedAmount,
-      CASE WHEN ${windowTypeExpr} = 'initial' THEN COALESCE(bpl.line_total, 0) ELSE 0 END AS initialAmount,
-      CASE WHEN ${windowTypeExpr} = 'additional' THEN COALESCE(bpl.line_total, 0) ELSE 0 END AS additionalAmount
+      CASE WHEN ${windowTypeExpr} = 'initial' THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END AS initialAmount,
+      CASE WHEN ${windowTypeExpr} = 'additional' THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END AS additionalAmount
     FROM budget_proposals bp
     LEFT JOIN master_departments md ON bp.department_id = md.id
     LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
@@ -1862,10 +1948,10 @@ export async function listBudgetAnnualSummaryEntries({
       break;
     }
     case 'coordinator': {
-      where.push(`LOWER(TRIM(ba.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')`);
+      where.push(`LOWER(TRIM(ba.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body', 'section')`);
       const filterConditions = [];
       if (safeUserId > 0) {
-        filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'))`);
+        filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'))`);
         params.push(safeUserId);
       }
       if (safeEmail) {
@@ -1904,7 +1990,7 @@ export async function listBudgetAnnualSummaryEntries({
       ba.department_id,
       COALESCE(ba.entity_id, ba.beneficiary_entity_id) AS beneficiary_entity_id,
       md.name AS department,
-      COALESCE(md.name, me.name, CONCAT(ba.beneficiary_type, ' #', ba.id)) AS beneficiary_label,
+      COALESCE(md.name, me.name, NULLIF(TRIM(ba.beneficiary_type), ''), CONCAT('Unknown #', ba.id)) AS beneficiary_label,
       ba.created_at AS created_at,
       ba.proposed_total_amount,
       ba.approved_total_amount,
@@ -1960,7 +2046,7 @@ export async function listBudgetAnnualSummaryEntries({
     SELECT
       CASE
         WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN 'Department'
-        WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club') THEN CONCAT(UPPER(LEFT(TRIM(bp.beneficiary_type), 1)), LOWER(SUBSTRING(TRIM(bp.beneficiary_type), 2)))
+        WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'section') THEN CONCAT(UPPER(LEFT(TRIM(bp.beneficiary_type), 1)), LOWER(SUBSTRING(TRIM(bp.beneficiary_type), 2)))
         WHEN LOWER(TRIM(bp.beneficiary_type)) = 'professional body' THEN 'Professional Body'
         ELSE TRIM(bp.beneficiary_type)
       END AS beneficiary_type,
@@ -2111,7 +2197,7 @@ export async function getAllDepartments(beneficiaryType) {
   const normalizedType = sharedNormalizeBeneficiaryType(beneficiaryType);
   const typeLower = normalizedType.toLowerCase();
   
-  if (['centre', 'cell', 'club', 'professional body'].includes(typeLower)) {
+  if (['centre', 'cell', 'club', 'professional body', 'section'].includes(typeLower)) {
     // Only return entities that have at least one proposal
     const [rows] = await db.execute(
       `SELECT DISTINCT me.name 
@@ -2198,7 +2284,7 @@ async function assertEntityInType(conn, typeCode, entityId) {
 export async function createEntity(typeCode, payload) {
   const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
 
-  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
+  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(normalizedTypeCode)) {
     throw new Error('Invalid entity type code');
   }
 
@@ -2235,7 +2321,7 @@ export async function createEntity(typeCode, payload) {
 export async function updateEntity(typeCode, entityId, payload) {
   const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
 
-  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
+  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(normalizedTypeCode)) {
     throw new Error('Invalid entity type code');
   }
 
@@ -2281,7 +2367,7 @@ export async function updateEntity(typeCode, entityId, payload) {
 export async function deleteEntity(typeCode, entityId) {
   const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
 
-  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
+  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(normalizedTypeCode)) {
     throw new Error('Invalid entity type code');
   }
 
@@ -2301,7 +2387,7 @@ export async function deleteEntity(typeCode, entityId) {
 export async function getEntityContacts(typeCode, entityId) {
   const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
 
-  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
+  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(normalizedTypeCode)) {
     throw new Error('Invalid entity type code');
   }
 
@@ -2327,7 +2413,7 @@ export async function getEntityContacts(typeCode, entityId) {
 export async function updateEntityContacts(typeCode, entityId, contacts = []) {
   const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
 
-  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(normalizedTypeCode)) {
+  if (!['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(normalizedTypeCode)) {
     throw new Error('Invalid entity type code');
   }
 
@@ -2761,7 +2847,7 @@ export async function getFull(proposalId) {
     `SELECT *, DATE_FORMAT(decided_at, '%Y-%m-%d %H:%i') AS decided_at_formatted
        FROM budget_proposal_approvals
        WHERE budget_proposal_id = ?
-       ORDER BY decided_at`,
+       ORDER BY decided_at ASC, id ASC`,
     [proposalId]
   );
 
@@ -2779,7 +2865,7 @@ export async function getFull(proposalId) {
            DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') AS created_at_formatted
          FROM budget_proposal_edits
          WHERE budget_proposal_id = ?
-         ORDER BY created_at`,
+         ORDER BY created_at ASC, id ASC`,
       [proposalId]
     );
     edits = editRows;
@@ -3092,13 +3178,14 @@ export async function getProposalDataForExport(proposalId) {
 
   const [approvals] = await db.execute(
     `SELECT role,
+              id,
               decision,
               feedback,
               approver_email,
               DATE_FORMAT(decided_at, '%Y-%m-%d %H:%i:%s') AS decided_at
        FROM budget_proposal_approvals
        WHERE budget_proposal_id = ?
-       ORDER BY decided_at`,
+       ORDER BY decided_at ASC, id ASC`,
     [proposalId]
   );
 
