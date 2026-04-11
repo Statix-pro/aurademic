@@ -2,6 +2,7 @@ import React, { useState, useRef, CSSProperties, useEffect, useMemo, ChangeEvent
 import { Info, Library, CheckCircle2, RotateCcw, XCircle, Archive, Upload, Eye, Trash2 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './financeapproval.css';
 import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
@@ -12,6 +13,7 @@ import CustomInput from '../../shared/components/ui/CustomInput';
 import CustomDropdown, { OptionType } from '../../shared/components/ui/CustomDropdown';
 import CustomToggle from '../../shared/components/ui/CustomToggle';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
+import CustomModal from '../../shared/components/ui/CustomModal';
 import {
   formatDMY,
   numberToIndianWords,
@@ -1098,6 +1100,12 @@ const FinanceApproval: React.FC = () => {
 
   const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
 
+  // Action popup state (custom modal for return/reject comments)
+  const [wfActionPopupOpen, setWfActionPopupOpen] = useState(false);
+  const [wfActionType, setWfActionType] = useState<'returned' | 'rejected' | null>(null);
+  const [wfActionComment, setWfActionComment] = useState('');
+  const [wfActionSubmitting, setWfActionSubmitting] = useState(false);
+
   useEffect(() => {
     setExpandedTimelineDetails({});
   }, [statusUpdates]);
@@ -2064,17 +2072,22 @@ const FinanceApproval: React.FC = () => {
   const handleWorkflowAction = async (decision: 'approved' | 'returned' | 'rejected' | 'archived') => {
     if (!id) return;
 
+    // For return/reject, open the custom comment modal instead of window.prompt
+    if (decision === 'returned' || decision === 'rejected') {
+      setWfActionType(decision);
+      setWfActionComment('');
+      setWfActionPopupOpen(true);
+      return;
+    }
+
+    await executeWorkflowAction(decision);
+  };
+
+  const executeWorkflowAction = async (decision: 'approved' | 'returned' | 'rejected' | 'archived', feedback?: string) => {
+    if (!id) return;
+
     try {
       setIsLoading(true);
-
-      let feedback: string | undefined;
-      if (decision === 'returned' || decision === 'rejected') {
-        const entered = window.prompt(`Enter comments for ${decision}`);
-        if (entered === null) {
-          return;
-        }
-        feedback = entered.trim() || undefined;
-      }
 
       const response = (decision === 'archived'
         ? await authenticityUtility.patch(`/finance-requests/${id}/archive-toggle`, {})
@@ -2107,6 +2120,31 @@ const FinanceApproval: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const submitWfActionWithComment = async () => {
+    if (!wfActionType || wfActionSubmitting) return;
+    const comment = wfActionComment.trim();
+    if (!comment) {
+      showAlert('Please enter comments.', 'warning');
+      return;
+    }
+    setWfActionSubmitting(true);
+    try {
+      await executeWorkflowAction(wfActionType, comment);
+      setWfActionPopupOpen(false);
+      setWfActionType(null);
+      setWfActionComment('');
+    } finally {
+      setWfActionSubmitting(false);
+    }
+  };
+
+  const closeWfActionPopup = () => {
+    if (wfActionSubmitting) return;
+    setWfActionPopupOpen(false);
+    setWfActionType(null);
+    setWfActionComment('');
   };
 
  const handleReset = (force = false): void => {
@@ -2219,9 +2257,11 @@ const FinanceApproval: React.FC = () => {
   // Tag
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [loadedWorkflowStatus, setLoadedWorkflowStatus] = useState<string>('');
+  const [loadedCurrentStage, setLoadedCurrentStage] = useState<string>('');
 
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const { id } = useParams<{ id?: string }>();
   const isEditMode = Boolean(id && location.pathname.includes('edit'));
 const isViewMode = Boolean(id && !isEditMode);
@@ -2240,11 +2280,24 @@ const canDownloadPdf =
   ['approved', 'completed'].includes(normalizedWorkflowStatus) ||
   (isAdminWorkflowContext && totalBudget > 10000 && hasDofApproval);
 
+const routeStateIsActionablePending = (location.state as any)?.isActionablePending;
 const hideWorkflowActionsForFinalStatus =
+  routeStateIsActionablePending === false ||
   normalizedWorkflowStatus.includes('approved') ||
   normalizedWorkflowStatus.includes('completed') ||
   normalizedWorkflowStatus.includes('rejected') ||
   normalizedWorkflowStatus.includes('archived');
+
+// Only allow the respective stage head to act (not super admin)
+const canActOnCurrentStage = (() => {
+  if (!isApprovalMode || !loadedCurrentStage) return false;
+  // Super admin cannot approve/reject — only the respective head can
+  if (user?.is_super_admin) return false;
+  const userPermissions = (user?.permissions || []).map(p => String(p).toLowerCase());
+  return userPermissions.includes(`finance.workflow.${loadedCurrentStage}`);
+})();
+
+const isSuperAdminUser = Boolean(user?.is_super_admin);
 
   // Tag auto-selection based on beneficiary type
   useEffect(() => {
@@ -2395,6 +2448,7 @@ const hideWorkflowActionsForFinalStatus =
           annexureFileInputRef.current.value = '';
         }
         setLoadedWorkflowStatus(String(record.workflow_state?.status || record.workflow_status || record.overall_status || '').toLowerCase());
+        setLoadedCurrentStage(String(record.workflow_state?.currentStage || record.workflow_stage || '').toLowerCase());
         setCategorySelections(
           String(record.beneficiary_value || '')
             .split(',')
@@ -2540,7 +2594,7 @@ const hideWorkflowActionsForFinalStatus =
   }, [showPreview, applicantName, department, totalBudget]);
 
   useEffect(() => {
-    const routeState = location.state as { openPreview?: boolean; autoDownloadPdf?: boolean } | null;
+    const routeState = location.state as { openPreview?: boolean; autoDownloadPdf?: boolean; isActionablePending?: boolean } | null;
     if (!routeState) {
       setShowPreview(false);
       setAutoDownloadPdf(false);
@@ -4095,33 +4149,48 @@ const hideWorkflowActionsForFinalStatus =
 
         {isApprovalMode && !hideWorkflowActionsForFinalStatus && !showPreview ? (
           <div className="finance-workflow-actions">
-            <button
-              type="button"
-              className="finance-workflow-btn finance-workflow-btn--approve"
-              onClick={() => handleWorkflowAction('approved')}
-              disabled={isLoading}
-            >
-              <CheckCircle2 size={18} />
-              Approve
-            </button>
-            <button
-              type="button"
-              className="finance-workflow-btn finance-workflow-btn--return"
-              onClick={() => handleWorkflowAction('returned')}
-              disabled={isLoading}
-            >
-              <RotateCcw size={18} />
-              Return
-            </button>
-            <button
-              type="button"
-              className="finance-workflow-btn finance-workflow-btn--reject"
-              onClick={() => handleWorkflowAction('rejected')}
-              disabled={isLoading}
-            >
-              <XCircle size={18} />
-              Reject
-            </button>
+            {!isSuperAdminUser && canActOnCurrentStage && (
+              <>
+                <button
+                  type="button"
+                  className="finance-workflow-btn finance-workflow-btn--approve"
+                  onClick={() => handleWorkflowAction('approved')}
+                  disabled={isLoading}
+                >
+                  <CheckCircle2 size={18} />
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  className="finance-workflow-btn finance-workflow-btn--return"
+                  onClick={() => handleWorkflowAction('returned')}
+                  disabled={isLoading}
+                >
+                  <RotateCcw size={18} />
+                  Return
+                </button>
+                <button
+                  type="button"
+                  className="finance-workflow-btn finance-workflow-btn--reject"
+                  onClick={() => handleWorkflowAction('rejected')}
+                  disabled={isLoading}
+                >
+                  <XCircle size={18} />
+                  Reject
+                </button>
+              </>
+            )}
+            {isSuperAdminUser && (
+              <button
+                type="button"
+                className="finance-workflow-btn finance-workflow-btn--return"
+                onClick={() => handleWorkflowAction('returned')}
+                disabled={isLoading}
+              >
+                <RotateCcw size={18} />
+                Return
+              </button>
+            )}
             <button
               type="button"
               className="finance-workflow-btn finance-workflow-btn--archive"
@@ -4585,33 +4654,48 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
             {isApprovalMode && !hideWorkflowActionsForFinalStatus ? (
               <div style={{ marginTop: '18px', display: 'flex', justifyContent: 'center' }}>
                 <div className="finance-workflow-actions">
-                  <button
-                    type="button"
-                    className="finance-workflow-btn finance-workflow-btn--approve"
-                    onClick={() => handleWorkflowAction('approved')}
-                    disabled={isLoading}
-                  >
-                    <CheckCircle2 size={18} />
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    className="finance-workflow-btn finance-workflow-btn--return"
-                    onClick={() => handleWorkflowAction('returned')}
-                    disabled={isLoading}
-                  >
-                    <RotateCcw size={18} />
-                    Return
-                  </button>
-                  <button
-                    type="button"
-                    className="finance-workflow-btn finance-workflow-btn--reject"
-                    onClick={() => handleWorkflowAction('rejected')}
-                    disabled={isLoading}
-                  >
-                    <XCircle size={18} />
-                    Reject
-                  </button>
+                  {!isSuperAdminUser && canActOnCurrentStage && (
+                    <>
+                      <button
+                        type="button"
+                        className="finance-workflow-btn finance-workflow-btn--approve"
+                        onClick={() => handleWorkflowAction('approved')}
+                        disabled={isLoading}
+                      >
+                        <CheckCircle2 size={18} />
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        className="finance-workflow-btn finance-workflow-btn--return"
+                        onClick={() => handleWorkflowAction('returned')}
+                        disabled={isLoading}
+                      >
+                        <RotateCcw size={18} />
+                        Return
+                      </button>
+                      <button
+                        type="button"
+                        className="finance-workflow-btn finance-workflow-btn--reject"
+                        onClick={() => handleWorkflowAction('rejected')}
+                        disabled={isLoading}
+                      >
+                        <XCircle size={18} />
+                        Reject
+                      </button>
+                    </>
+                  )}
+                  {isSuperAdminUser && (
+                    <button
+                      type="button"
+                      className="finance-workflow-btn finance-workflow-btn--return"
+                      onClick={() => handleWorkflowAction('returned')}
+                      disabled={isLoading}
+                    >
+                      <RotateCcw size={18} />
+                      Return
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="finance-workflow-btn finance-workflow-btn--archive"
@@ -4680,6 +4764,51 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
           </div>
         );
       })()}
+
+      <CustomModal
+        show={wfActionPopupOpen}
+        onHide={wfActionSubmitting ? (() => {}) : closeWfActionPopup}
+        title={wfActionType === 'returned' ? 'Return Item - Comments' : 'Reject Item - Comments'}
+        size="sm"
+        centered
+        backdrop={wfActionSubmitting ? 'static' : true}
+        keyboard={!wfActionSubmitting}
+        hideCloseButton={wfActionSubmitting}
+        footer={
+          <div className="d-flex justify-content-end gap-2 w-100">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={closeWfActionPopup}
+              disabled={wfActionSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${wfActionType === 'rejected' ? 'btn-danger' : 'btn-warning text-dark'}`}
+              onClick={submitWfActionWithComment}
+              disabled={wfActionSubmitting}
+            >
+              {wfActionSubmitting ? 'Submitting...' : 'Submit'}
+            </button>
+          </div>
+        }
+      >
+        {proposalRef && (
+          <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
+            Reference: <b>{proposalRef}</b>
+          </div>
+        )}
+        <textarea
+          value={wfActionComment}
+          onChange={(e) => setWfActionComment(e.target.value)}
+          disabled={wfActionSubmitting}
+          rows={4}
+          placeholder="Enter comments (required)..."
+          className="form-control"
+        />
+      </CustomModal>
 
       <AlertModal
         show={alertConfig.show}
