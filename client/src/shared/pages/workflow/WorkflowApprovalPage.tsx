@@ -663,16 +663,25 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     const activeStageKey = String(activeStage || '').toLowerCase();
 
     if (token.includes('archived') || token.includes('archive')) return 'archived';
-    if (token.includes('rejected') || workflowDecision === 'rejected' || stageDecision.includes('rejected')) return 'rejected';
-    if (token.includes('returned') || token.includes('return') || workflowDecision === 'returned' || stageDecision.includes('returned')) return 'returned';
-    if (token.includes('completed') || token.includes('approved') || stageDecision.includes('approved')) return 'approved';
+    if (token.includes('rejected') || workflowDecision === 'rejected') return 'rejected';
+    if (token.includes('returned') || token.includes('return') || workflowDecision === 'returned') return 'returned';
+
+    // For requests actively in-progress, treat as pending to prevent stale
+    // historical stage decisions (e.g. old "approved"/"returned" from a previous
+    // cycle) from overriding fresh resubmission cycles.
+    // This MUST come before stageDecision checks.
+    // - currentStage === activeStageKey: request is currently at this stage, awaiting action
+    // - workflowDecision === 'resubmitted': request went back to an earlier stage,
+    //   so ALL later stages' stale decisions should be ignored
+    if (token === 'in_progress' && currentStage) {
+      if (currentStage === activeStageKey || workflowDecision === 'resubmitted') {
+        return 'pending';
+      }
+    }
+
     if (workflowDecision === 'resubmitted') return 'pending';
 
-    // For the active queue stage, treat current in-progress rows as pending.
-    // This prevents stale historical stage decisions (e.g. old returned) from overriding fresh cycles.
-    if (token === 'in_progress' && currentStage && currentStage === activeStageKey) {
-      return 'pending';
-    }
+    if (token.includes('completed') || token.includes('approved')) return 'approved';
 
     if (stageDecision.includes('rejected')) return 'rejected';
     if (stageDecision.includes('returned') || stageDecision.includes('return')) return 'returned';
@@ -1249,11 +1258,12 @@ showAlert(
   };
 
   const handlePdfPreviewClick = useCallback(
-    (recordId: number | string) => {
+    (recordId: number | string, isActionablePending?: boolean) => {
       navigate(getFinanceRoute(recordId, 'view'), {
         state: {
           openPreview: true,
           autoDownloadPdf: false,
+          isActionablePending,
         },
       });
     },
@@ -1464,11 +1474,11 @@ showAlert(
                           className={`fw-item fw-item--clickable ${archivingIds.has(recordId) ? 'fw-item--archiving' : ''}`}
                           role="button"
                           tabIndex={0}
-                          onClick={() => navigate(getFinanceRoute(recordId, 'view'))}
+                          onClick={() => navigate(getFinanceRoute(recordId, 'view'), { state: { isActionablePending } })}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault();
-                              navigate(getFinanceRoute(recordId, 'view'));
+                              navigate(getFinanceRoute(recordId, 'view'), { state: { isActionablePending } });
                             }
                           }}
                         >
@@ -1522,7 +1532,7 @@ showAlert(
                                 title="View"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(getFinanceRoute(recordId, 'view'));
+                                  navigate(getFinanceRoute(recordId, 'view'), { state: { isActionablePending } });
                                 }}
                               >
                                 <Eye size={16} />
@@ -1566,7 +1576,7 @@ showAlert(
                                   title="Open PDF Preview"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handlePdfPreviewClick(recordId);
+                                    handlePdfPreviewClick(recordId, isActionablePending);
                                   }}
                                 >
                                   <FileText size={18} />
@@ -1608,36 +1618,38 @@ showAlert(
                                           </button>
                                         </>
                                       ) : (
-                                        <>
-                                          <button
-                                            className="fw-action-btn fw-action-btn--approved"
-                                            title="Approve"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              onApprove(recordId);
-                                            }}
-                                            disabled={actingRecordId === recordId || !isActionablePending}
-                                          >
-                                            <CheckCircle2 size={18} />
-                                          </button>
+                                        statusCategory === 'pending' && (
+                                          <>
+                                            <button
+                                              className="fw-action-btn fw-action-btn--approved"
+                                              title="Approve"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onApprove(recordId);
+                                              }}
+                                              disabled={actingRecordId === recordId || !isActionablePending}
+                                            >
+                                              <CheckCircle2 size={18} />
+                                            </button>
 
-                                          <button
-                                            className="fw-action-btn fw-action-btn--returned"
-                                            title="Return"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              openActionPopup("return", recordId, proposalRef);
-                                            }}
-                                            disabled={actingRecordId === recordId || !isActionablePending}
-                                          >
-                                            <RotateCcw size={18} />
-                                          </button>
-                                        </>
+                                            <button
+                                              className="fw-action-btn fw-action-btn--returned"
+                                              title="Return"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                openActionPopup("return", recordId, proposalRef);
+                                              }}
+                                              disabled={actingRecordId === recordId || !isActionablePending}
+                                            >
+                                              <RotateCcw size={18} />
+                                            </button>
+                                          </>
+                                        )
                                       )}
                                     </>
                                   )
                                 ) : (
-                                  !isArchived && !isApproved && (
+                                  statusCategory === 'pending' && (
                                     <>
                                       <button
                                         className="fw-action-btn fw-action-btn--approved"
