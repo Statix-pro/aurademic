@@ -1480,8 +1480,8 @@ const Budget: React.FC = () => {
             lineId: Number(ln.id),
             budgetHead: (ln.budget_head || "").toString(),
             subHead: (ln.sub_head || "").toString(),
-            amount: String(parseInt((isAdminContextEdit ? (ln.approved_unit_amount ?? ln.unit_amount) : ln.unit_amount) || "0", 10)),
-            qty: String(isAdminContextEdit ? roundedApprovedQty : proposedQty),
+            amount: String(parseInt((ln.approved_unit_amount ?? ln.unit_amount) || "0", 10)),
+            qty: String(roundedApprovedQty > 0 ? roundedApprovedQty : proposedQty),
             monthAmounts: lineAllocations,
             description: (ln.line_description || "").toString(),
           };

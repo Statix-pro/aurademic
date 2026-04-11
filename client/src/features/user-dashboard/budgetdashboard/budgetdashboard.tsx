@@ -389,12 +389,15 @@ const BudgetDashboard: React.FC = () => {
             ? unitAmount * quantity
             : Number(line.line_total ?? 0);
 
+          const hasApprovedOverride = line.approved_unit_amount != null && (Number(line.approved_unit_amount) !== Number(line.unit_amount) || Number(line.approved_line_total) !== Number(line.line_total));
+          const effectiveProposedTotal = hasApprovedOverride ? Number(line.approved_line_total) : proposedTotal;
+
           return {
             id: line.id,
             proposalId: master.id,
             budgetHead: line.budget_head || "Unknown",
             subHead: line.sub_head || "-",
-            proposedAmount: Number.isFinite(proposedTotal) ? proposedTotal : 0,
+            proposedAmount: Number.isFinite(effectiveProposedTotal) ? effectiveProposedTotal : 0,
             // Show approved amount only after final approval, sourced from approved columns.
             approvedAmount: isFullyApproved
               ? parseFloat(line.approved_line_total ?? line.line_total ?? 0)
