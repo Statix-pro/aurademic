@@ -681,21 +681,14 @@ export async function updateApprovedAmounts(req, res) {
       });
     }
 
-    const currentStage = normalizeText(proposal.current_stage).toLowerCase();
-    const requiredPermission = WORKFLOW_STAGE_PERMISSION[currentStage];
     const isSuperAdmin = hasSuperAdminAccess(req);
+    const roleFromRequest = normalizeText(req.query?.role || payload?.role).toLowerCase();
+    const authorizedRole = getAuthorizedRole(req, roleFromRequest);
 
-    if (!requiredPermission && !isSuperAdmin) {
-      return res.status(400).json({
-        success: false,
-        message: `Proposal is not in an editable approval stage: ${proposal.current_stage}`,
-      });
-    }
-
-    if (!isSuperAdmin && !hasPermission(req, requiredPermission)) {
+    if (!isSuperAdmin && authorizedRole === 'user') {
       return res.status(403).json({
         success: false,
-        message: `Insufficient permission for ${currentStage.toUpperCase()} stage`,
+        message: 'Insufficient permission to edit workflow budgets',
       });
     }
 
@@ -708,7 +701,7 @@ export async function updateApprovedAmounts(req, res) {
       proposalId,
       userId,
       userEmail,
-      isSuperAdmin ? 'super_admin' : currentStage,
+      isSuperAdmin ? 'super_admin' : authorizedRole,
       userDepartment,
       userDepartmentId
     );
@@ -721,7 +714,7 @@ export async function updateApprovedAmounts(req, res) {
     }
 
     await AdminBudgetModel.updateApprovedAmounts(proposalId, payload, {
-      editorRole: currentStage,
+      editorRole: isSuperAdmin ? 'super_admin' : authorizedRole,
       editorUserId: userId,
       editorEmail: userEmail,
     });
