@@ -1486,12 +1486,12 @@ const AdminBudget: React.FC = () => {
                           const isReturnedStatus = normalizedStatus.includes("returned");
                           const isCompletedStatus = normalizedStatus.includes("completed");
                           const isActionLocked = isArchivedStatus || isRejectedStatus || isReturnedStatus || isCompletedStatus;
-                          const hasApprovedOverride = Number(item.has_approved_override ?? 0) > 0;
-                          const isApprovedForDisplay = hasApprovedOverride || getStatusCategory(item) === "approved";
-                          const displayAmountLabel = isApprovedForDisplay ? "Approved" : "Proposed";
-                          const displayAmountValue = isApprovedForDisplay
-                            ? Number(item.approved_total_amount ?? item.total_amount ?? 0)
+                          const effectiveAmount = item.approved_total_amount != null 
+                            ? Number(item.approved_total_amount) 
                             : Number(item.total_amount ?? 0);
+                          const isApprovedForDisplay = getStatusCategory(item) === "approved";
+                          const displayAmountLabel = isApprovedForDisplay ? "Approved" : "Proposed";
+                          const displayAmountValue = effectiveAmount;
 
                           return (
                             <div className="adminbudget-item-wrap" key={item.id}>
