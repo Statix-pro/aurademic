@@ -589,7 +589,7 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     body: [[
       { content: '', styles: { minCellHeight: 22 } },
       { content: '', styles: { minCellHeight: 22 } },
-      { content: 'FINANCE' + (proposalRef ? `\n${proposalRef}` : ''), styles: { fontStyle: 'bold', fontSize: 11 } },
+      { content: '', styles: { minCellHeight: 22 } },
     ]],
     didDrawCell: (data: any) => {
       if (data.column.index === 0 && data.row.index === 0 && compressedLogo) {
@@ -610,6 +610,19 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
         pdf.setFont('helvetica', 'normal');
         pdf.text('(Autonomous)', cellCenterX, cellCenterY + 1, { align: 'center' });
         pdf.text('Tiruchengode - 637 215, Namakkal Dt. Tamil Nadu', cellCenterX, cellCenterY + 6, { align: 'center' });
+      }
+      if (data.column.index === 2 && data.row.index === 0) {
+        const cellCenterX = data.cell.x + data.cell.width / 2;
+        const cellCenterY = data.cell.y + data.cell.height / 2;
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(10);
+        pdf.text('FINANCE', cellCenterX, cellCenterY - 2.5, { align: 'center' });
+
+        if (proposalRef) {
+          pdf.setFontSize(8);
+          pdf.text(proposalRef, cellCenterX, cellCenterY + 2.8, { align: 'center' });
+        }
       }
     },
   });
