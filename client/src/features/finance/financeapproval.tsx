@@ -1,4 +1,4 @@
-import React, { useState, useRef, CSSProperties, useEffect, useMemo, ChangeEvent, MouseEvent } from 'react';
+﻿import React, { useState, useRef, CSSProperties, useEffect, useMemo, ChangeEvent, MouseEvent } from 'react';
 import { Info, Library, CheckCircle2, RotateCcw, XCircle, Archive, Upload, Eye, Trash2 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -968,7 +968,7 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
                         onActiveSubHeadChange('');
                       }}
                     >
-                      {subheads.length} subheads {isExpanded ? '▼' : '▶'}
+                      {subheads.length} subheads {isExpanded ? '?' : '?'}
                     </div>
                   </div>
 
@@ -1299,10 +1299,7 @@ const FinanceApproval: React.FC = () => {
         ? annexureFiles
             .map((row) => {
               const type = String(row.annexureType || '').trim();
-              const name = String(row.originalName || row.storedName || row.file?.name || '').trim();
-              if (type && name) return `${type} - ${name}`;
-              if (type) return type;
-              return name || 'Unnamed File';
+              return type || 'Unnamed File';
             })
             .join(', ')
         : 'Not Added';
@@ -1348,7 +1345,12 @@ const FinanceApproval: React.FC = () => {
 
   const handleDownloadPdfClick = async () => {
     if (!canDownloadPdf) {
-      showAlert('You can download the PDF once the proposal is approved.', 'warning');
+      showAlert(
+        isAdminWorkflowContext && totalBudget > 10000
+          ? 'You can download the PDF once the DOF approval is completed.'
+          : 'You can download the PDF once the proposal is approved.',
+        'warning'
+      );
       return;
     }
 
@@ -1644,10 +1646,7 @@ const FinanceApproval: React.FC = () => {
     return annexureFiles
       .map((row) => {
         const type = String(row.annexureType || '').trim();
-        const name = String(row.originalName || row.storedName || row.file?.name || '').trim();
-        if (type && name) return `${type} - ${name}`;
-        if (type) return type;
-        return name || 'Unnamed File';
+        return type || 'Unnamed File';
       })
       .join(', ');
   };
@@ -2228,7 +2227,14 @@ const isApprovalMode = isViewMode && isAdminWorkflowContext;
 const normalizedWorkflowStatus = String(
   loadedWorkflowStatus || ''
 ).toLowerCase();
-const canDownloadPdf = ['approved', 'completed'].includes(normalizedWorkflowStatus);
+const hasDofApproval = statusUpdates.some((update: any) => {
+  const stage = String(update?.stage || update?.role || '').toLowerCase();
+  const decision = String(update?.decision || update?.status || '').toLowerCase();
+  return stage.includes('dof') && (decision === 'approved' || decision.includes('approved'));
+});
+const canDownloadPdf =
+  ['approved', 'completed'].includes(normalizedWorkflowStatus) ||
+  (isAdminWorkflowContext && totalBudget > 10000 && hasDofApproval);
 
 const hideWorkflowActionsForFinalStatus =
   ['approved', 'completed', 'rejected', 'archived'].includes(normalizedWorkflowStatus);
@@ -2566,14 +2572,43 @@ const hideWorkflowActionsForFinalStatus =
     HOAC_SUBHEAD_OPTIONS[activeHoacGroup || ''] ||
     []
   );
+  const firstBudgetRowAutoSyncRef = useRef<{ category: string; head: string }>({ category: '', head: '' });
   useEffect(() => {
-    if (!activeHoacGroup || !primaryHead) return;
-    setBudgetRows((rows) =>
-      rows.map((row, index) =>
-        index === 0 ? { ...row, category: primaryHead } : row
-      )
-    );
-  }, [activeHoacGroup, primaryHead, setBudgetRows]);
+    if (!primaryHead) return;
+
+    const nextCategory = normalizeText(primaryHead);
+    const nextHead = normalizeText(eventSubHead);
+
+    setBudgetRows((rows) => {
+      if (rows.length === 0) return rows;
+
+      const firstRow = rows[0];
+      const lastAutoSync = firstBudgetRowAutoSyncRef.current;
+      const firstRowMatchesLastSync =
+        normalizeText(firstRow.category) === normalizeText(lastAutoSync.category) &&
+        normalizeText(firstRow.head) === normalizeText(lastAutoSync.head);
+
+      const shouldAutoFill =
+        firstRowMatchesLastSync ||
+        !normalizeText(firstRow.category) ||
+        !normalizeText(firstRow.head);
+
+      if (!shouldAutoFill) return rows;
+
+      const syncedHead = nextHead || '';
+      firstBudgetRowAutoSyncRef.current = { category: nextCategory, head: syncedHead };
+
+      return rows.map((row, index) =>
+        index === 0
+          ? {
+              ...row,
+              category: nextCategory,
+              head: syncedHead,
+            }
+          : row
+      );
+    });
+  }, [primaryHead, eventSubHead]);
   const [showSearchModal, setShowSearchModal] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [expandedHead, setExpandedHead] = useState<string>('');
@@ -3293,7 +3328,7 @@ const hideWorkflowActionsForFinalStatus =
                             value={row.amount}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => handleBudgetChange(index, 'amount', e.target.value)}
                             disabled={!primaryHead}
-                            placeholder={`₹ ${getRemainingAvailableForRow(index)}`}
+                            placeholder={`₹  ${getRemainingAvailableForRow(index)}`}
                             style={{
                               border: '1px solid #e0e0e0',
                               borderRadius: '8px',
@@ -3436,7 +3471,7 @@ const hideWorkflowActionsForFinalStatus =
                             onChange={(e: ChangeEvent<HTMLInputElement>) =>
                               setUnplannedBudgetAmount(e.target.value.replace(/\D/g, ""))
                             }
-                            placeholder="₹ 0"
+                            placeholder="₹  0"
                             style={{
                               border: '1px solid #e0e0e0',
                               borderRadius: '8px',
@@ -3588,7 +3623,7 @@ const hideWorkflowActionsForFinalStatus =
                                         onChange={(e: ChangeEvent<HTMLInputElement>) =>
                                                   handleIncomeRowChange(row.id, "amount", e.target.value.replace(/\D/g, ""))
                                                 }
-                                        placeholder="₹ 0"
+                                        placeholder="₹  0"
                                         min="0"
                                         step="0"
                                         style={{
@@ -3832,7 +3867,7 @@ const hideWorkflowActionsForFinalStatus =
                             <tr style={{ backgroundColor: '#f0f6ff' }}>
                               <td colSpan={2} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>Total Income</td>
                               <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
-                                ₹ {incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0).toFixed(2)}
+                                ₹ {incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)}
                               </td>
                               <td colSpan={3} style={{ border: '1px solid #e0e0e0' }}></td>
                             </tr>
@@ -4179,14 +4214,17 @@ const getSubmittedDetailUi = () => {
         const submittedByUi = getSubmittedDetailUi();
 const level1ApprovalUi = getApprovalDetailUi(['level1', 'hod', 'coordinator', 'ithead']);
 const dofApprovalUi = getApprovalDetailUi(['dof']);
-const principalApprovalUi = getApprovalDetailUi(['principal']);
 const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
         const approvalHistory = getWorkflowTimeline(statusUpdates, {
           name: applicantName || '',
           email: email || '',
           date: submittedAt ? formatWorkflowTimestamp(submittedAt) : getCurrentWorkflowTimestamp(),
         });
-        const approvalSteps = approvalHistory.filter((entry) => entry.label !== 'Submitted');
+        const approvalSteps = approvalHistory.filter((entry) =>
+          entry.label === 'Approved' &&
+          !(totalBudget > 10000 && (String(entry.stage).includes('principal') || String(entry.stage).includes('chairman')))
+        );
+        const showSeniorApprovalRow = totalBudget > 10000;
 
   const renderPersonLine = (name?: string, mail?: string, timestamp?: string) => {
   const trimmedName = String(name || '').trim();
@@ -4305,15 +4343,15 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
               margin: '0 auto 14px auto'
             }}>
               <tr>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '20%', fontSize: '14px' }}><strong>Name</strong></td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '35%', fontSize: '14px' }}>{applicantName || '\u00A0'}</td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '15%', fontSize: '14px' }}><strong>Date</strong></td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '18%', fontSize: '14px' }}><strong>Name</strong></td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '32%', fontSize: '14px' }}>{applicantName || '\u00A0'}</td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '20%', fontSize: '14px' }}><strong>Date</strong></td>
                 <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '30%', fontSize: '14px' }}>{date ? formatDMY(date) : '\u00A0'}</td>
               </tr>
               <tr>
                 <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Department</strong></td>
                 <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{department || '\u00A0'}</td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Designation</strong></td>
+                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '15%', fontSize: '14px' }}><strong>Designation</strong></td>
                 <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{designation || '\u00A0'}</td>
               </tr>
               <tr>
@@ -4368,18 +4406,16 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                     <tbody>
                       {budgetRows.map((row, index) => (
                         <tr key={index}>
-                          <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
+                          <td  style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
                           <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.category || '\u00A0'}</td>
                           <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{getSubHeadDisplayText(row.head) || '\u00A0'}</td>
-                          <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {Number(row.amount || 0)}</td>
+                          <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>₹  {Number(row.amount || 0)}</td>
                         </tr>
                       ))}
                       {hasUnplannedBudgetPreview && (
                         <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
-                          <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>&nbsp;</td>
-                          <td colSpan={2} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'left', fontWeight: 'bold' }}>Unplanned Budget:{unplannedBudgetDescription || '\u00A0'}</td>
-                          
-                          <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {Number(unplannedBudgetAmount || 0)}</td>
+                         <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'left', fontWeight: 'bold' }}>Unplanned Budget:{unplannedBudgetDescription || '\u00A0'}</td>
+                         <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹  {Number(unplannedBudgetAmount || 0)}</td>
                         </tr>
                       )}
                       <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
@@ -4399,19 +4435,20 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                 <td colSpan={4} style={{ padding: '6px 8px', border: '1px solid #000' }}>
                   {showIncomeSection ? (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', tableLayout: 'fixed' }}>
-                      <colgroup>
-                        <col style={{ width: '8%' }} />
-                        <col style={{ width: '30%' }} />
-                        <col style={{ width: '15%' }} />
-                        <col style={{ width: '20%' }} />
-                        <col style={{ width: '27%' }} />
-                      </colgroup>
+                    <colgroup>
+                      <col style={{ width: '8%' }} />
+                      <col style={{ width: '25%' }} />
+                      <col style={{ width: '20%' }} />
+                      <col style={{ width: '15%' }} />
+                      <col style={{ width: '27%' }} />
+                    </colgroup>
                       <thead>
                         <tr style={{ backgroundColor: '#f8f8f8' }}>
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>S.No</th>
-                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Income Source</th>                          
-                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Amount</th>
+                          
+                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Income Source</th>
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Status</th>
+                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Amount</th>
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Remarks</th>
                         </tr>
                       </thead>
@@ -4419,14 +4456,15 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                         {incomeRows.map((row, index) => (
                           <React.Fragment key={row.id}>
                             <tr>
-                              <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
+                              <td rowSpan={2}style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
+                             
                               <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.incomeSource || ''}</td>
-                              <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}> ₹{row.amount ? ` ${row.amount}` : ''}</td>
-                              <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{row.status || ''}</td>
+                               <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{row.status || ''}</td>
+                              <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {row.amount ? ` ${row.amount}` : ''}</td>
                               <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.remarks || ''}</td>
                             </tr>
                             <tr>
-                              <td style={{ padding: '2.5px 4px', border: '1px solid #000', backgroundColor: '#f8f8f8' }}>&nbsp;</td>
+                              
                               <td colSpan={1} style={{ padding: '2.5px 4px', border: '1px solid #000', fontWeight: 'bold', backgroundColor: '#f8f8f8' }}>
                                 <strong>Contribution</strong>{row.contribution ? ` - ${row.contribution}` : ''}
                               </td>
@@ -4446,87 +4484,86 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
               </tr>
               <tr>
   <td colSpan={4} style={{ padding: '0', border: '1px solid #000' }}>
+    <div
+      style={{
+        ...previewTimelineRowStyle,
+        borderBottom: approvalSteps.length > 0 || showSeniorApprovalRow ? '1px solid #000' : 'none',
+      }}
+    >
+      <span style={previewTimelineLabelStyle}>Submitted by</span>
+      <span style={previewTimelineValueStyle}>
+        {renderPersonLine(submittedByUi.name, submittedByUi.email, submittedByUi.date)}
+      </span>
+    </div>
+
+    
+
+    {approvalSteps.map((entry, index) => {
+      const entryKey = String(entry.key || `${entry.label}-${index}`);
+      const hasExpandedDetails =
+        Boolean(entry.fullSubtitle) &&
+        entry.fullSubtitle !== entry.subtitle;
+      const detailText = hasExpandedDetails && expandedTimelineDetails[entryKey]
+        ? entry.fullSubtitle
+        : entry.subtitle;
+
+      return (
+        <div
+          key={entryKey}
+          style={{
+            ...previewTimelineRowStyle,
+            borderBottom: index === approvalSteps.length - 1 ? 'none' : '1px solid #000',
+          }}
+        >
+          <span style={previewTimelineLabelStyle}>{entry.label} by</span>
+          <span
+            style={{
+              ...previewTimelineValueStyle,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: '4px',
+            }}
+          >
+            <span>
+              {renderPersonLine(entry.actor, entry.email, entry.timestamp)}
+            </span>
+            {detailText ? (
+              <span style={{ fontSize: '12px', color: '#495057', lineHeight: 1.4 }}>
+                {detailText}
+              </span>
+            ) : null}
+            {hasExpandedDetails ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setExpandedTimelineDetails((prev) => ({
+                    ...prev,
+                    [entryKey]: !prev[entryKey],
+                  }));
+                }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#0d6efd',
+                  padding: 0,
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                }}
+              >
+                {expandedTimelineDetails[entryKey] ? 'Show less' : 'Show full changes'}
+              </button>
+            ) : null}
+          </span>
+        </div>
+      );
+    })}
     {approvalHistory.length === 0 ? (
       <div style={previewTimelineRowStyle}>
         No approval history available
       </div>
-    ) : (
-      <>
-        <div
-          style={{
-            ...previewTimelineRowStyle,
-            borderBottom: approvalSteps.length > 0 ? '1px solid #000' : 'none',
-          }}
-        >
-          <span style={previewTimelineLabelStyle}>Submitted by</span>
-          <span style={previewTimelineValueStyle}>
-            {renderPersonLine(submittedByUi.name, submittedByUi.email, submittedByUi.date)}
-          </span>
-        </div>
-
-        {approvalSteps.map((entry, index) => {
-          const entryKey = String(entry.key || `${entry.label}-${index}`);
-          const hasExpandedDetails =
-            Boolean(entry.fullSubtitle) &&
-            entry.fullSubtitle !== entry.subtitle;
-          const detailText = hasExpandedDetails && expandedTimelineDetails[entryKey]
-            ? entry.fullSubtitle
-            : entry.subtitle;
-
-          return (
-            <div
-              key={entryKey}
-              style={{
-                ...previewTimelineRowStyle,
-                borderBottom: index === approvalSteps.length - 1 ? 'none' : '1px solid #000',
-              }}
-            >
-              <span style={previewTimelineLabelStyle}>{entry.label} by</span>
-              <span
-                style={{
-                  ...previewTimelineValueStyle,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'flex-start',
-                  gap: '4px',
-                }}
-              >
-                <span>
-                  {renderPersonLine(entry.actor, entry.email, entry.timestamp)}
-                </span>
-                {detailText ? (
-                  <span style={{ fontSize: '12px', color: '#495057', lineHeight: 1.4 }}>
-                    {detailText}
-                  </span>
-                ) : null}
-                {hasExpandedDetails ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExpandedTimelineDetails((prev) => ({
-                        ...prev,
-                        [entryKey]: !prev[entryKey],
-                      }));
-                    }}
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      color: '#0d6efd',
-                      padding: 0,
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                    }}
-                  >
-                    {expandedTimelineDetails[entryKey] ? 'Show less' : 'Show full changes'}
-                  </button>
-                ) : null}
-              </span>
-            </div>
-          );
-        })}
-      </>
-    )}
+    ) : null}
   </td>
 </tr>
             </table>
@@ -4645,3 +4682,6 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
 };
 
 export default FinanceApproval;
+
+
+
