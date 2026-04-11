@@ -102,6 +102,49 @@ const adminController = {
     }
   },
 
+  async updateJournalSubmissionApproval(req, res) {
+    try {
+      const journalId = parseInt(req.params.id, 10);
+      const { status, admin_comment } = req.body;
+
+      if (!Number.isInteger(journalId) || journalId <= 0) {
+        return res.status(400).json({
+          message: 'Invalid journal ID',
+        });
+      }
+
+      if (!['approved', 'rejected'].includes(status)) {
+        return res.status(400).json({
+          message: "Status must be either 'approved' or 'rejected'",
+        });
+      }
+
+      const updatedJournal = await adminModel.updateJournalSubmissionApproval(
+        journalId,
+        status,
+        admin_comment,
+        req.user.id
+      );
+
+      if (!updatedJournal) {
+        return res.status(404).json({
+          message: 'Journal not found',
+        });
+      }
+
+      return res.status(200).json({
+        message: `Journal submission ${status} successfully`,
+        data: updatedJournal,
+      });
+    } catch (error) {
+      console.error('Error in updateJournalSubmissionApproval:', error);
+      return res.status(500).json({
+        message: 'Error updating journal submission approval',
+        error: error.message,
+      });
+    }
+  },
+
   // Journal Request Management methods
   async getAllJournalRequests(req, res) {
     try {
@@ -372,6 +415,102 @@ const adminController = {
       });
     }
   },
+
+  async getAllBudgets(req, res) {
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const perPage = parseInt(req.query.perpage) || 20;
+
+      // Validate fiscalYear
+      let fiscalYear = null;
+      if (req.query.fiscalYear) {
+        fiscalYear = parseInt(req.query.fiscalYear);
+        if (isNaN(fiscalYear)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid fiscalYear',
+          });
+        }
+      }
+
+      // Validate status - allow only alphanumeric characters and underscores
+      let status = null;
+      if (req.query.status) {
+        if (
+          typeof req.query.status !== 'string' ||
+          !/^[a-zA-Z0-9_]+$/.test(req.query.status)
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid status format',
+          });
+        }
+        status = req.query.status;
+      }
+
+      // Validate beneficiaryType - allow alphanumeric, underscores and spaces
+      let beneficiaryType = null;
+      if (req.query.beneficiaryType) {
+        if (
+          typeof req.query.beneficiaryType !== 'string' ||
+          !/^[a-zA-Z0-9_ ]+$/.test(req.query.beneficiaryType)
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid beneficiaryType format',
+          });
+        }
+        beneficiaryType = req.query.beneficiaryType;
+      }
+
+      const filters = {
+        fiscalYear,
+        status,
+        beneficiaryType,
+      };
+
+      const { budgets, total } = await adminModel.getAllBudgets(
+        page,
+        perPage,
+        filters
+      );
+
+      res.status(200).json({
+        success: true,
+        data: budgets,
+        total,
+        filters,
+      });
+    } catch (error) {
+      console.error('Error in getAllBudgets:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving budgets',
+        error: error.message,
+      });
+    }
+  },
+
+  async getBudgetStats(req, res) {
+    try {
+      const fiscalYear = req.query.fiscalYear ? parseInt(req.query.fiscalYear) : null;
+      const stats = await adminModel.getBudgetStats(fiscalYear);
+
+      res.status(200).json({
+        success: true,
+        data: stats,
+        fiscalYear: fiscalYear || 'All'
+      });
+    } catch (error) {
+      console.error('Error in getBudgetStats:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving budget stats',
+        error: error.message
+      });
+    }
+  },
+
 };
 
 export default adminController;

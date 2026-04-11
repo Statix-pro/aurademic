@@ -1,5 +1,6 @@
 // userDashboardController.js
 import userDashboardModel from './userDashboardModel.js';
+import * as BudgetModel from '../budget/budgetModel.js';
 
 const userDashboardController = {
   async getDashboardStats(req, res) {
@@ -74,7 +75,6 @@ const userDashboardController = {
   async getUserJournals(req, res) {
     try {
       const userId = req.user.id;
-      const userEmail = req.user.email;
 
       if (!userId) {
         return res.status(400).json({
@@ -85,11 +85,15 @@ const userDashboardController = {
 
       const page = parseInt(req.query.page) || 1;
       const perPage = parseInt(req.query.per_page) || 10;
+      const status = req.query.status || null; // null means all statuses
+      const sortBy = req.query.sort_by || 'updated_at'; // default sort by updated_at
 
       const { journals, total } = await userDashboardModel.getUserJournals(
         userId,
         page,
-        perPage
+        perPage,
+        status,
+        sortBy
       );
 
       // The journals array is directly what we want to send
@@ -188,6 +192,13 @@ const userDashboardController = {
         message: 'Journal deleted successfully',
       });
     } catch (error) {
+      if (error.statusCode === 403) {
+        return res.status(403).json({
+          status: 'error',
+          message: error.message,
+        });
+      }
+
       console.error('Error deleting journal:', error);
       res.status(500).json({
         status: 'error',
@@ -195,6 +206,37 @@ const userDashboardController = {
       });
     }
   },
+
+  async getUserBudgets(req, res) {
+    try {
+      const { page = 1, perpage = 10, status, fiscalYear } = req.query;
+
+      const budgets = await BudgetModel.listBudgets({
+        userId: req.user.id,
+        userEmail: req.user.email,
+        role: 'user',
+        page: parseInt(page),
+        limit: parseInt(perpage),
+        status: status || undefined,
+        fiscalYear: fiscalYear ? parseInt(fiscalYear) : undefined
+      });
+
+      res.json({
+        status: 'success',
+        data: budgets.budgets,
+        pagination: budgets.pagination,
+        currentFiscalYear: fiscalYear ? parseInt(fiscalYear) : BudgetModel.getCurrentFinancialYear()
+      });
+    } catch (error) {
+      console.error('Error fetching user budgets:', error);
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to fetch budgets',
+        error: error.message
+      });
+    }
+  },
+
 };
 
 export default userDashboardController;

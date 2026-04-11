@@ -1,0 +1,540 @@
+/* Projects Page Styles */
+.projects-page {
+  background-color: #f0f6ff;
+  /* Light blue background - matching journalform theme */
+  min-height: 100vh;
+  padding: 20px;
+  font-family: 'Roboto', sans-serif;
+  color: #4f4f6e;
+}
+
+.main-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Project Score Card Section */
+.article-score-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.score-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.score-card-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #0069ab;
+  /* Primary blue - matching journalform theme */
+  margin: 0;
+}
+
+.filter-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.filter-select {
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  background: #fcfdff;
+  /* Very light blue tint - matching journalform theme */
+  font-size: 14px;
+  color: #5d6b8a;
+  /* Blue-gray text - matching journalform theme */
+}
+
+.sort-btn {
+  background: #0069ab;
+  /* Primary blue - matching journalform theme */
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
+}
+
+.sort-btn:hover {
+  background: #005492;
+  /* Darker blue on hover - matching journalform theme */
+  transform: translateY(-1px);
+  box-shadow: 0 6px 15px rgba(0, 105, 171, 0.4);
+}
+
+/* KPI Cards */
+.kpi-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.kpi-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.kpi-icon {
+  width: 48px;
+  height: 48px;
+  background: #0069ab;
+  /* Primary blue - matching journalform theme */
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 20px;
+}
+
+.kpi-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kpi-label {
+  font-size: 14px;
+  color: #5d6b8a;
+  /* Blue-gray text - matching journalform theme */
+  font-weight: 500;
+}
+
+.kpi-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #4f4f6e;
+  /* Darker blue-gray - matching journalform theme */
+}
+
+/* Research Details Section */
+.research-details {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.research-details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.research-details-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #0069ab;
+  /* Primary blue - matching journalform theme */
+  margin: 0;
+}
+
+.add-btn {
+  background: #0069ab;
+  /* Primary blue - matching journalform theme */
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
+}
+
+.add-btn:hover {
+  background: #005492;
+  /* Darker blue on hover - matching journalform theme */
+  transform: translateY(-1px);
+  box-shadow: 0 6px 15px rgba(0, 105, 171, 0.4);
+}
+
+/* Research Grid */
+.research-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.research-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  position: relative;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.research-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  background: #f8f9fa;
+  border-color: #0069ab;
+}
+
+.research-card:focus-within {
+  outline: 2px solid #0069ab;
+  outline-offset: 2px;
+}
+
+.projects-page .research-id {
+  position: static;
+  background: #0069ab;
+  color: white;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: 'Roboto Mono', 'Courier New', monospace;
+  letter-spacing: 0.5px;
+}
+
+/* Compact Row Layout */
+.compact-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 50px;
+}
+
+.compact-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.research-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0;
+  line-height: 1.4;
+  flex: 1;
+  transition: color 0.2s ease;
+}
+
+.research-card:hover .research-title {
+  color: #0069ab;
+}
+
+.compact-details {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  padding-top: 4px;
+}
+
+.detail-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.detail-label {
+  color: #7c8ba1;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.detail-value {
+  color: #4a5568;
+  font-weight: 400;
+}
+
+.detail-separator {
+  color: #cbd5e0;
+  font-weight: 400;
+  user-select: none;
+}
+
+/* Color-coded status badges with better contrast */
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: capitalize;
+  display: inline-block;
+  transition: all 0.2s ease;
+}
+
+/* Green for completed/approved/active */
+.status-badge.status-approved,
+.status-badge.status-completed,
+.status-badge.status-active,
+.status-badge.status-finished,
+.status-badge.status-closed {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+/* Yellow/orange for pending/under review/draft */
+.status-badge.status-pending,
+.status-badge.status-waiting,
+.status-badge.status-draft,
+.status-badge.status-under-review,
+.status-badge.status-under_review {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeeba;
+}
+
+/* Blue for ongoing */
+.status-badge.status-ongoing {
+  background: #d1ecf1;
+  color: #0c5460;
+  border: 1px solid #bee5eb;
+}
+
+/* Red for rejected */
+.status-badge.status-rejected {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* Default fallback */
+.status-badge:not([class*="status-"]) {
+  background: #e1f0ff;
+  color: #0069ab;
+  border: 1px solid #b3d9ff;
+}
+
+.research-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  min-width: 40px;
+  min-height: 40px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.action-btn:focus {
+  outline: 2px solid #0069ab;
+  outline-offset: 2px;
+}
+
+.action-btn:active {
+  transform: scale(0.95);
+}
+
+.view-btn {
+  background: #e1f0ff;
+  color: #0069ab;
+}
+
+.view-btn:hover {
+  background: #b3d9ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 105, 171, 0.2);
+}
+
+.share-btn {
+  background: #f0f6ff;
+  color: #5d6b8a;
+}
+
+.share-btn:hover {
+  background: #e1f0ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(93, 107, 138, 0.2);
+}
+
+.edit-btn {
+  background: #f0f6ff;
+  color: #0069ab;
+}
+
+.edit-btn:hover {
+  background: #e1f0ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 105, 171, 0.2);
+}
+
+.delete-btn {
+  background: #ffe1e1;
+  color: #dc3545;
+}
+
+.delete-btn:hover {
+  background: #ffb3b3;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.2);
+}
+
+.no-data {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px;
+  color: #5d6b8a;
+  /* Blue-gray text - matching journalform theme */
+  font-size: 16px;
+}
+
+/* Pagination Controls */
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 0;
+  border-top: 1px solid #e0e0e0;
+}
+
+.pagination-controls select {
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  background: #fcfdff;
+  /* Very light blue tint - matching journalform theme */
+  font-size: 14px;
+  color: #5d6b8a;
+  /* Blue-gray text - matching journalform theme */
+}
+
+.pagination-controls button {
+  padding: 8px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  background: #fcfdff;
+  /* Very light blue tint - matching journalform theme */
+  color: #5d6b8a;
+  /* Blue-gray text - matching journalform theme */
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.pagination-controls button:hover:not(:disabled) {
+  background: #e1f0ff;
+  /* Light blue background - matching journalform theme */
+  border-color: #0069ab;
+  /* Primary blue border - matching journalform theme */
+  color: #0069ab;
+  /* Primary blue text - matching journalform theme */
+}
+
+.pagination-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-controls span {
+  color: #5d6b8a;
+  /* Blue-gray text - matching journalform theme */
+  font-size: 14px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .projects-page {
+    padding: 10px;
+  }
+
+  .score-card-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .filter-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .kpi-cards {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+  }
+
+  .research-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .research-details-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .pagination-controls {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .compact-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .research-actions {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-card {
+    padding: 16px;
+  }
+
+  .research-card {
+    padding: 12px;
+  }
+
+  .compact-content {
+    padding-right: 0;
+  }
+
+  .compact-details {
+    font-size: 11px;
+  }
+}

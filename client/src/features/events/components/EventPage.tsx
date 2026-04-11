@@ -6,7 +6,7 @@ import PreEvent from "./PreEvent";
 import FinanceSection from "./FinanceSection";
 import EventUpdates from "./EventUpdates";
 import DocumentsPage from "./Documents";
-import Navbar from "../../..//shared/components/layout/navbar/navbar";
+
 
 interface EventSummary {
   title: string;
@@ -66,7 +66,7 @@ const EventPage: React.FC = () => {
 
   return (
     <>
-      <Navbar />
+
       <div className="event-page">
         <header className="event-summary">
           {summary && (

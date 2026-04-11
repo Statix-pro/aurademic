@@ -8,7 +8,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { Trash2, Plus, GripVertical, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import Navbar from '../../shared/components/layout/navbar/navbar';
+
 import CustomTagInput from '../../shared/components/ui/CustomTagInput';
 
 // Type definitions
@@ -133,6 +133,15 @@ interface ExternalAuthorDetails {
 type PageOrArticleChoice = 'pages' | 'article';
 type ActiveTab = 'form' | 'status';
 type EditRequestStatus = 'pending' | 'approved' | 'rejected' | 'none' | null;
+type ApprovalWorkflowStatus = 'pending' | 'approved' | 'rejected';
+
+const normalizeApprovalStatus = (value: string | null | undefined): ApprovalWorkflowStatus => {
+  if (value === 'approved' || value === 'rejected') {
+    return value;
+  }
+
+  return 'pending';
+};
 
 const debounce = <T extends (...args: any[]) => any>(func: T, wait: number = 300): T => {
   let timeout: ReturnType<typeof setTimeout>;
@@ -178,7 +187,8 @@ const JournalForm: React.FC = () => {
     'International',
     'IITs',
     'NITs',
-    'National Research Labs'
+    'National Research Labs',
+    'Nil'
   ];
 
   // Available Acknowledgement options
@@ -200,9 +210,18 @@ const JournalForm: React.FC = () => {
 
   const [journalId, setJournalId] = useState<string | undefined>(urlJournalId);
   const justAddedAuthorRef = useRef<boolean>(false); // Track if author was just added
+  const isLoadingJournalDataRef = useRef<boolean>(false); // Track if journal data is being loaded programmatically
   const [isInternational, setIsInternational] = useState<boolean>(false);
-  const [editMode, setEditMode] = useState<boolean>(!urlJournalId);
+  const [editMode, setEditMode] = useState<boolean>(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const mode = searchParams.get('mode');
+    if (mode === 'edit') return true;
+    if (mode === 'view') return false;
+    return !urlJournalId;
+  });
   const [editRequestStatus, setEditRequestStatus] = useState<EditRequestStatus>(null);
+  const [adminApprovalStatus, setAdminApprovalStatus] =
+    useState<ApprovalWorkflowStatus>('pending');
   const [showRejectedAlert, setShowRejectedAlert] = useState<boolean>(false);
   const [canRequestEdit, setCanRequestEdit] = useState<boolean>(false);
   const [othersValue, setOthersValue] = useState<string>('');
@@ -466,6 +485,12 @@ const JournalForm: React.FC = () => {
   }, [searchQueries, authors, isViewMode]);
 
   useEffect(() => {
+    // Skip search if journal data is being loaded programmatically (not user input)
+    if (isLoadingJournalDataRef.current) {
+      isLoadingJournalDataRef.current = false;
+      return;
+    }
+
     if (journalSearchQuery.length > 2) {
       searchJournals();
     } else {
@@ -492,18 +517,40 @@ const JournalForm: React.FC = () => {
     } else {
       setIsExistingJournal(false);
       setEditRequestStatus(null);
+      setAdminApprovalStatus('pending');
+      setCanRequestEdit(false);
+      setEditMode(true);
     }
   }, [journalId]);
 
   useEffect(() => {
-    if (journalId) {
-      if (editRequestStatus === 'approved') {
-        setEditMode(true);
-      } else {
-        setEditMode(false);
-      }
+    if (!journalId) {
+      return;
     }
-  }, [editRequestStatus, journalId]);
+
+    const requiresEditRequest = adminApprovalStatus === 'approved';
+    const hasApprovedEditRequest = editRequestStatus === 'approved';
+
+    if (requiresEditRequest && hasApprovedEditRequest && isViewMode) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('mode', 'edit');
+      window.history.replaceState({}, '', url.toString());
+      setEditMode(true);
+      return;
+    }
+
+    if (requiresEditRequest && !hasApprovedEditRequest) {
+      if (!isViewMode) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('mode', 'view');
+        window.history.replaceState({}, '', url.toString());
+      }
+      setEditMode(false);
+      return;
+    }
+
+    setEditMode(!isViewMode);
+  }, [adminApprovalStatus, editRequestStatus, isViewMode, journalId]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -678,25 +725,19 @@ const JournalForm: React.FC = () => {
 
         if (status === 'pending') {
           setEditRequestStatus('pending');
-          setEditMode(false);
         } else if (status === 'rejected') {
           setEditRequestStatus('rejected');
-          setEditMode(false);
         } else if (status === 'none') {
           setEditRequestStatus(null);
-          setEditMode(false);
         } else if (status === 'approved') {
           setEditRequestStatus('approved');
-          setEditMode(true);
         }
       } else {
         setEditRequestStatus(null);
-        setEditMode(false);
       }
     } catch (error) {
       console.error('Error checking edit status:', error);
       setEditRequestStatus(null);
-      setEditMode(false);
     }
   };
 
@@ -820,8 +861,21 @@ const JournalForm: React.FC = () => {
     }));
   };
 
+  const openEditableMode = () => {
+    if (!journalId) {
+      return;
+    }
+
+    setEditMode(true);
+    const url = new URL(window.location.href);
+    url.searchParams.set('mode', 'edit');
+    window.history.replaceState({}, '', url.toString());
+  };
+
   const handleEditRequest = async () => {
-    if (!journalId) return;
+    if (!journalId || adminApprovalStatus !== 'approved' || !canRequestEdit) {
+      return;
+    }
 
     try {
       const response = await authenticityUtility.post(
@@ -1040,6 +1094,8 @@ const JournalForm: React.FC = () => {
           onlineISSN: journalData.online_issn || '',
           website: journalData.website || '',
         });
+        // Set ref before setting search query to prevent dropdown from showing
+        isLoadingJournalDataRef.current = true;
         setJournalSearchQuery(journalData.journal_name || '');
       } else {
         // For Conference, Book Chapter, Book - use publication_details or empty
@@ -1313,6 +1369,11 @@ const JournalForm: React.FC = () => {
           : []
       );
 
+      const normalizedApprovalStatus = normalizeApprovalStatus(
+        journalData.admin_approval_status
+      );
+      setAdminApprovalStatus(normalizedApprovalStatus);
+
       // Check if the current user is the primary or first author
       const currentUserEmail = user?.email;
       if (currentUserEmail && fetchedAuthors.length > 0) {
@@ -1321,7 +1382,7 @@ const JournalForm: React.FC = () => {
             (author.is_primary || author.is_first_author) &&
             author.email === currentUserEmail
         );
-        setCanRequestEdit(isEligible);
+        setCanRequestEdit(isEligible && normalizedApprovalStatus === 'approved');
       } else {
         setCanRequestEdit(false);
       }
@@ -2267,7 +2328,7 @@ const JournalForm: React.FC = () => {
     // Keywords validation (optional for all types)
     if (keywords) {
       const keywordList = keywords
-        .split(',')
+        .split(';')
         .map((k) => k.trim())
         .filter((k) => k);
       if (keywordList.length < 3) {
@@ -2569,14 +2630,6 @@ const JournalForm: React.FC = () => {
         ? annexureValue.trim()
         : null;
 
-      // Debug logging - can be removed after verification
-      console.log('Journal-specific fields being sent:', {
-        quartile: journalData.quartile,
-        impact_factor: journalData.impact_factor,
-        cite_score: journalData.cite_score,
-        anna_university_listed: journalData.anna_university_listed,
-        anna_university_annexure_no: journalData.anna_university_annexure_no
-      });
     }
 
     try {
@@ -2710,6 +2763,8 @@ const JournalForm: React.FC = () => {
 
       setEditMode(false);
       setEditRequestStatus(null);
+      setAdminApprovalStatus('pending');
+      setCanRequestEdit(false);
 
       // Update URL to view mode
       const url = new URL(window.location.href);
@@ -2742,25 +2797,39 @@ const JournalForm: React.FC = () => {
   try {
     return (
       <div className="journal-form-body">
-        <Navbar />
+
         <div className="container journal-form-container">
           {/* View Mode & Edit Request Alerts */}
-          {isViewMode && (
-            <div className="alert alert-info d-flex justify-content-between align-items-center">
-              <span>View Mode - Read Only Access</span>
-              <button
-                className="btn btn-warning"
-                onClick={handleEditRequest} // This should be your handleEditRequest or setEditMode(true) logic
-                disabled={
-                  !editMode && isViewMode && editRequestStatus === 'pending'
-                }
-              >
-                {editRequestStatus === 'pending'
-                  ? 'Request Pending'
-                  : 'Request Edit'}
-              </button>
-            </div>
-          )}
+          {isViewMode &&
+            (adminApprovalStatus === 'approved' ? (
+              <div className="alert alert-info d-flex justify-content-between align-items-center">
+                <span>
+                  View Mode - This publication is admin approved. Request edit to
+                  modify it.
+                </span>
+                <button
+                  className="btn btn-warning"
+                  onClick={handleEditRequest}
+                  disabled={!canRequestEdit || editRequestStatus === 'pending'}
+                >
+                  {editRequestStatus === 'pending'
+                    ? 'Request Pending'
+                    : canRequestEdit
+                      ? 'Request Edit'
+                      : 'Edit Not Available'}
+                </button>
+              </div>
+            ) : (
+              <div className="alert alert-info d-flex justify-content-between align-items-center">
+                <span>
+                  View Mode - This submission is unapproved. You can edit it
+                  directly.
+                </span>
+                <button className="btn btn-primary" onClick={openEditableMode}>
+                  Edit Now
+                </button>
+              </div>
+            ))}
           {editRequestStatus === 'rejected' && showRejectedAlert && (
             <div
               className="alert alert-danger alert-dismissible fade show"
@@ -3024,7 +3093,7 @@ const JournalForm: React.FC = () => {
                                 type="radio"
                                 id={q.toLowerCase()}
                                 name="quartile"
-                                value={q}
+                                value={q === 'Nil' ? 'NA' : q}
                                 disabled={!editMode && isViewMode}
                               />
                               <label htmlFor={q.toLowerCase()}>{q}</label>
@@ -4056,6 +4125,7 @@ const JournalForm: React.FC = () => {
                             <option value="revisionSubmitted">
                               Revision Submitted
                             </option>
+                            <option value="accepted">Accepted</option>
                             <option value="published">Published</option>
                           </select>
                           <ChevronDown
@@ -4106,7 +4176,7 @@ const JournalForm: React.FC = () => {
                       id="keywords"
                       name="keywords"
                       className="form-control"
-                      placeholder="Enter keywords separated by commas "
+                      placeholder="Enter keywords separated by semicolons "
                       value={keywords}
                       onChange={(e) => setKeywords(e.target.value)}
                       disabled={!editMode && isViewMode}
@@ -4356,69 +4426,34 @@ const JournalForm: React.FC = () => {
                       {/* Credit To Field */}
                       {(selectedIndexes.includes('SCIE') || selectedIndexes.includes('Scopus') || selectedIndexes.includes('PubMed') || selectedIndexes.includes('Google Scholar')) && authors.length > 0 && (
                         <div className="metric-item-vertical mb-3">
-                          <div className="d-flex justify-content-between align-items-center">
-                            <label className="form-label mb-0">Credit to</label>
-                            <div className="d-flex gap-2">
-                              <select
-                                className="form-control"
-                                value={selectedCreditTo[0] || ''}
-                                onChange={(e) => {
-                                  const newSelected = [...selectedCreditTo];
-                                  newSelected[0] = e.target.value;
-                                  setSelectedCreditTo(newSelected.filter(v => v));
-                                }}
-                                disabled={!editMode && isViewMode}
-                                style={{ minWidth: '150px' }}
-                              >
-                                <option value="">Select Author 1</option>
-                                {authors
-                                  .filter(
-                                    (author) => author.name && author.name.trim()
-                                  )
-                                  .map((author) => (
-                                    <option
-                                      key={author.id}
-                                      value={
-                                        author.author_id || author.register_no
-                                      }
-                                    >
-                                      {author.name} (
-                                      {author.author_id || author.register_no})
-                                    </option>
-                                  ))}
-                              </select>
-                              {selectedIndexes.includes('SCIE') && (
-                                <select
-                                  className="form-control"
-                                  value={selectedCreditTo[1] || ''}
-                                  onChange={(e) => {
-                                    const newSelected = [...selectedCreditTo];
-                                    newSelected[1] = e.target.value;
-                                    setSelectedCreditTo(newSelected.filter(v => v));
-                                  }}
-                                  disabled={!editMode && isViewMode}
-                                  style={{ minWidth: '150px' }}
+                          <label className="form-label mb-2">Credit to</label>
+                          <select
+                            className="form-control reference-number-input"
+                            value={selectedCreditTo[0] || ''}
+                            onChange={(e) => {
+                              const newSelected = [...selectedCreditTo];
+                              newSelected[0] = e.target.value;
+                              setSelectedCreditTo(newSelected.filter(v => v));
+                            }}
+                            disabled={!editMode && isViewMode}
+                          >
+                            <option value="">Select Author</option>
+                            {authors
+                              .filter(
+                                (author) => author.name && author.name.trim() && author.designation === 'faculty'
+                              )
+                              .map((author) => (
+                                <option
+                                  key={author.id}
+                                  value={
+                                    author.author_id || author.register_no
+                                  }
                                 >
-                                  <option value="">Select Author 2</option>
-                                  {authors
-                                    .filter(
-                                      (author) => author.name && author.name.trim()
-                                    )
-                                    .map((author) => (
-                                      <option
-                                        key={author.id}
-                                        value={
-                                          author.author_id || author.register_no
-                                        }
-                                      >
-                                        {author.name} (
-                                        {author.author_id || author.register_no})
-                                      </option>
-                                    ))}
-                                </select>
-                              )}
-                            </div>
-                          </div>
+                                  {author.name} (
+                                  {author.author_id || author.register_no})
+                                </option>
+                              ))}
+                          </select>
                         </div>
                       )}
 
@@ -4749,7 +4784,7 @@ const JournalForm: React.FC = () => {
     console.error('Error in JournalForm component:', error);
     return (
       <div className="journal-form-body">
-        <Navbar />
+
         <div className="container journal-form-container">
           <div className="alert alert-danger">
             <h4>Error Loading Form</h4>

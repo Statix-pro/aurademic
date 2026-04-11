@@ -1,5 +1,5 @@
 import React, { useState, ChangeEvent } from "react";
-import Navbar from "../../..//shared/components/layout/navbar/navbar";
+
 import { Plus, Trash2 } from "lucide-react";
 import "../styles/EventEntry.css";
 
@@ -55,7 +55,7 @@ const EventEntry: React.FC = () => {
 
   return (
     <div className="event-entry-container">
-      <Navbar />
+
       <div className="content">
         <h2 className="section-title">Project Investigators</h2>
 

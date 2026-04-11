@@ -598,6 +598,59 @@ const journalModel = {
     return rows.length > 0;
   },
 
+  async getJournalWorkflowAccess(journalId, userId, userEmail) {
+    try {
+      const [rows] = await db.query(
+        `
+          SELECT
+            j.id,
+            j.status,
+            COALESCE(j.admin_approval_status, 'pending') AS admin_approval_status,
+            j.admin_approval_comment,
+            COALESCE(uer.status, 'none') AS edit_request_status,
+            EXISTS (
+              SELECT 1
+              FROM author_journal aj2
+              INNER JOIN v_authors va2 ON va2.author_id = aj2.author_id
+              WHERE aj2.journal_id = j.id
+                AND va2.email = ?
+            ) AS is_author
+          FROM journals j
+          LEFT JOIN (
+            SELECT er1.entity_id, er1.status
+            FROM edit_requests er1
+            INNER JOIN (
+              SELECT entity_id, MAX(id) AS latest_id
+              FROM edit_requests
+              WHERE entity_type = 'journals'
+                AND user_id = ?
+              GROUP BY entity_id
+            ) latest_er ON latest_er.latest_id = er1.id
+            WHERE er1.entity_type = 'journals'
+              AND er1.user_id = ?
+          ) uer ON uer.entity_id = j.id
+          WHERE j.id = ?
+          LIMIT 1
+        `,
+        [userEmail, userId, userId, journalId]
+      );
+
+      if (!rows.length) {
+        return null;
+      }
+
+      const row = rows[0];
+      return {
+        ...row,
+        admin_approval_status: row.admin_approval_status || 'pending',
+        edit_request_status: row.edit_request_status || 'none',
+        is_author: Boolean(row.is_author),
+      };
+    } catch (error) {
+      throw new Error(`Error retrieving journal workflow access: ${error.message}`);
+    }
+  },
+
   async getCompleteJournalDetails(id) {
     try {
       const [journal] = await db.query(

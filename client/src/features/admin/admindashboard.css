@@ -137,13 +137,13 @@
 
 .project-details h3 {
   color: #2c3e50;
-  margin-bottom: 25px;
+  margin-bottom: 10px;
 }
 
 .detail-section {
-  margin-bottom: 30px;
+  margin-bottom: 15px;
   background: #fff;
-  padding: 20px;
+  padding: 15px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -195,22 +195,27 @@
 }
 
 /* Modal Styles */
+.details-modal .modal-header,
+.details-modal .modal-footer {
+  padding: 0.5rem 1rem;
+}
+
 .details-modal .modal-dialog {
-  max-width: 90%;
-  margin: 1.75rem auto;
+  max-width: 80%;
+  margin: 4rem auto;
 }
 
 .details-modal .modal-content {
-  max-height: 90vh;
+  max-height: calc(100vh - 10rem);
   display: flex;
   flex-direction: column;
 }
 
 .modal-body-scroll {
   overflow-y: auto;
-  max-height: calc(90vh - 120px);
-  /* Adjust for header and footer */
-  padding: 20px;
+  flex: 1;
+  min-height: 0;
+  padding: 15px;
 }
 
 .project-details .list-unstyled {
@@ -286,6 +291,33 @@
 .tab-button.active {
   border-bottom: 2px solid #333;
   color: #000;
+}
+
+.submission-approval-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.submission-approval-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.submission-approval-badge.pending {
+  background-color: #fff3cd;
+  color: #664d03;
+}
+
+.submission-approval-badge.approved {
+  background-color: #d1e7dd;
+  color: #0f5132;
+}
+
+.submission-approval-badge.rejected {
+  background-color: #f8d7da;
+  color: #842029;
 }
 
 .table-container {

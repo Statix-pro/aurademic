@@ -14,6 +14,10 @@ interface CustomInputProps {
   className?: string;
   as?: React.ElementType;
   rows?: number;
+  autoFocus?: boolean;
+  onClick?: (e: any) => void;
+  onFocus?: (e: any) => void;
+  onBlur?: (e: any) => void;
 }
 
 const CustomInput: React.FC<CustomInputProps> = ({

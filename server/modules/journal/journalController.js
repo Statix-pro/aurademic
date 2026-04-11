@@ -4,6 +4,20 @@ import fs from 'fs';
 import util from 'util';
 
 const rename = util.promisify(fs.rename);
+const isRequesterAdmin = (requestUser = {}) =>
+  Boolean(requestUser.isAdmin ?? requestUser.is_admin);
+
+const isRequesterSuperAdmin = (requestUser = {}) => {
+  if (Boolean(requestUser.isSuperAdmin ?? requestUser.is_super_admin)) {
+    return true;
+  }
+
+  const roleTokens = Array.isArray(requestUser.roles) ? requestUser.roles : [];
+  return roleTokens.some((role) => String(role || '').trim().toLowerCase() === 'super_admin');
+};
+
+const hasAdminOverride = (requestUser = {}) =>
+  isRequesterAdmin(requestUser) || isRequesterSuperAdmin(requestUser);
 
 const journalController = {
   async createJournal(req, res) {
@@ -121,6 +135,37 @@ const journalController = {
     try {
       const id = req.params.id;
       const journalData = req.body;
+      const requesterHasAdminOverride = hasAdminOverride(req.user);
+
+      const workflowAccess = await journalModel.getJournalWorkflowAccess(
+        id,
+        req.user.id,
+        req.user.email
+      );
+
+      if (!workflowAccess) {
+        return res.status(404).json({ message: 'Journal not found' });
+      }
+
+      if (!requesterHasAdminOverride && !workflowAccess.is_author) {
+        return res.status(403).json({
+          message: 'You are not authorized to edit this journal',
+        });
+      }
+
+      const approvalStatus = workflowAccess.admin_approval_status || 'pending';
+      const editRequestStatus = workflowAccess.edit_request_status || 'none';
+      const canDirectEdit =
+        approvalStatus === 'pending' ||
+        approvalStatus === 'rejected' ||
+        (approvalStatus === 'approved' && editRequestStatus === 'approved');
+
+      if (!requesterHasAdminOverride && !canDirectEdit) {
+        return res.status(403).json({
+          message:
+            'Direct edit is disabled for approved publications. Please request edit access.',
+        });
+      }
 
       // Validate publication type-specific requirements
       const isJournalType =
@@ -236,6 +281,21 @@ const journalController = {
         );
       }
 
+      if (
+        !requesterHasAdminOverride &&
+        (approvalStatus === 'rejected' ||
+          (approvalStatus === 'approved' && editRequestStatus === 'approved'))
+      ) {
+        Object.assign(journalUpdateData, {
+          admin_approval_status: 'pending',
+          admin_approval_comment: null,
+          admin_approved_by: null,
+          admin_approved_at: null,
+          admin_rejected_by: null,
+          admin_rejected_at: null,
+        });
+      }
+
       // Update both tables
       const result = await journalModel.updateJournalAndOptions(
         id,
@@ -294,6 +354,35 @@ const journalController = {
   async deleteJournal(req, res) {
     try {
       const id = req.params.id;
+      const requesterHasAdminOverride = hasAdminOverride(req.user);
+
+      const workflowAccess = await journalModel.getJournalWorkflowAccess(
+        id,
+        req.user.id,
+        req.user.email
+      );
+
+      if (!workflowAccess) {
+        return res.status(404).json({ message: 'Journal not found' });
+      }
+
+      if (!requesterHasAdminOverride && !workflowAccess.is_author) {
+        return res.status(403).json({
+          message: 'You are not authorized to delete this journal',
+        });
+      }
+
+      if (
+        !requesterHasAdminOverride &&
+        workflowAccess.status === 'published' &&
+        workflowAccess.admin_approval_status === 'approved'
+      ) {
+        return res.status(403).json({
+          message:
+            'Delete is disabled once publication is approved and published.',
+        });
+      }
+
       const result = await journalModel.delete(id);
       if (result.affectedRows > 0) {
         res.status(200).json({ message: 'Journal deleted successfully' });

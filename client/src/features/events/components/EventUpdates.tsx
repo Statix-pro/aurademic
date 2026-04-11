@@ -784,31 +784,31 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
         instagram_link: links.instagram,
         linkedin_link: links.linkedin,
       };
-      console.log("Sending publicityData:", publicityData);
+      // console.log("Sending publicityData:", publicityData);
       const res1 = await authenticityUtility.put(
         `/updates/events/${eventId}/publicity`,
         publicityData,
       );
-      console.log("Publicity response:", res1);
+      // console.log("Publicity response:", res1);
 
       for (const rp of rows) {
-        console.log("Sending resource person:", rp);
+        // console.log("Sending resource person:", rp);
         const resRp = await authenticityUtility.post(
           `/updates/events/${eventId}/resource_persons`,
           rp,
         );
-        console.log("Resource person response:", resRp);
+        // console.log("Resource person response:", resRp);
       }
 
       for (const [section, data] of Object.entries(formData)) {
-        console.log(`Sending letter data for ${section}:`, data);
+        // console.log(`Sending letter data for ${section}:`, data);
         await authenticityUtility.put(`/updates/events/${eventId}/letters`, {
           section_name: section,
           active: data.active,
           mode: data.mode,
           letter_date: data.date,
         });
-        console.log("Letter updated");
+        // console.log("Letter updated");
       }
 
       alert("✅ Event updates saved successfully!");
