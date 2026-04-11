@@ -2284,6 +2284,7 @@ const routeStateIsActionablePending = (location.state as any)?.isActionablePendi
 const hideWorkflowActionsForFinalStatus =
   routeStateIsActionablePending === false ||
   normalizedWorkflowStatus.includes('approved') ||
+  normalizedWorkflowStatus.includes('returned') ||
   normalizedWorkflowStatus.includes('completed') ||
   normalizedWorkflowStatus.includes('rejected') ||
   normalizedWorkflowStatus.includes('archived');
