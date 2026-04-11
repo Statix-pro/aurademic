@@ -195,11 +195,11 @@ export async function getOrgUnits(req, res) {
   try {
     const mappedType = normalizeEntityTypeParam(req.params.type);
 
-    if (!['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(mappedType)) {
+    if (!['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(mappedType)) {
       return res.status(400).json({
         success: false,
         message:
-          'Invalid type. Must be: DEPARTMENT, CENTRE, CELL, CLUB, PROFESSIONAL_BODY (or PROF_BODY)',
+          'Invalid type. Must be: DEPARTMENT, CENTRE, CELL, CLUB, SECTION, PROFESSIONAL_BODY (or PROF_BODY)',
       });
     }
 
@@ -681,21 +681,14 @@ export async function updateApprovedAmounts(req, res) {
       });
     }
 
-    const currentStage = normalizeText(proposal.current_stage).toLowerCase();
-    const requiredPermission = WORKFLOW_STAGE_PERMISSION[currentStage];
     const isSuperAdmin = hasSuperAdminAccess(req);
+    const roleFromRequest = normalizeText(req.query?.role || payload?.role).toLowerCase();
+    const authorizedRole = getAuthorizedRole(req, roleFromRequest);
 
-    if (!requiredPermission && !isSuperAdmin) {
-      return res.status(400).json({
-        success: false,
-        message: `Proposal is not in an editable approval stage: ${proposal.current_stage}`,
-      });
-    }
-
-    if (!isSuperAdmin && !hasPermission(req, requiredPermission)) {
+    if (!isSuperAdmin && authorizedRole === 'user') {
       return res.status(403).json({
         success: false,
-        message: `Insufficient permission for ${currentStage.toUpperCase()} stage`,
+        message: 'Insufficient permission to edit workflow budgets',
       });
     }
 
@@ -708,7 +701,7 @@ export async function updateApprovedAmounts(req, res) {
       proposalId,
       userId,
       userEmail,
-      isSuperAdmin ? 'super_admin' : currentStage,
+      isSuperAdmin ? 'super_admin' : authorizedRole,
       userDepartment,
       userDepartmentId
     );
@@ -721,7 +714,7 @@ export async function updateApprovedAmounts(req, res) {
     }
 
     await AdminBudgetModel.updateApprovedAmounts(proposalId, payload, {
-      editorRole: currentStage,
+      editorRole: isSuperAdmin ? 'super_admin' : authorizedRole,
       editorUserId: userId,
       editorEmail: userEmail,
     });
@@ -836,7 +829,7 @@ export async function createEntity(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Only CENTRE, CELL, CLUB, and PROFESSIONAL_BODY are mutable via this API',
+        message: 'Only CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY are mutable via this API',
       });
     }
 
@@ -863,7 +856,7 @@ export async function updateEntity(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Only CENTRE, CELL, CLUB, and PROFESSIONAL_BODY are mutable via this API',
+        message: 'Only CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY are mutable via this API',
       });
     }
 
@@ -897,7 +890,7 @@ export async function deleteEntity(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Only CENTRE, CELL, CLUB, and PROFESSIONAL_BODY are mutable via this API',
+        message: 'Only CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY are mutable via this API',
       });
     }
 
@@ -938,7 +931,7 @@ export async function getEntityContacts(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Contacts are available only for CENTRE, CELL, CLUB, and PROFESSIONAL_BODY',
+        message: 'Contacts are available only for CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY',
       });
     }
 
@@ -973,7 +966,7 @@ export async function updateEntityContacts(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Contacts are editable only for CENTRE, CELL, CLUB, and PROFESSIONAL_BODY',
+        message: 'Contacts are editable only for CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY',
       });
     }
 

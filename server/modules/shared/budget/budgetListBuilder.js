@@ -211,7 +211,7 @@ export async function buildBudgetList(options) {
         }
         case 'coordinator': {
             where.push(`(
-                LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')
+                LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body', 'section')
                 OR (
                     LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff')
                     AND bp.beneficiary_entity_id IS NOT NULL
@@ -225,7 +225,7 @@ export async function buildBudgetList(options) {
 
                 const filterConditions = [];
                 if (safeUserId > 0) {
-                    filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'))`);
+                    filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'))`);
                     params.push(safeUserId);
                 }
                 if (userEmail) {
@@ -471,14 +471,14 @@ export async function buildBudgetKpiStats(options) {
             break;
         }
         case 'coordinator': {
-            where.push(`(LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body') OR (LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff') AND bp.beneficiary_entity_id IS NOT NULL))`);
+            where.push(`(LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body', 'section') OR (LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff') AND bp.beneficiary_entity_id IS NOT NULL))`);
             if (!isQueueSuperAdminView) {
                 const actionQueueExpr = isAdminView
                     ? `(${level1ProgressionPredicate} OR ${level1ApprovedHistoryPredicate} OR ${archivedStatusPredicate})`
                     : `(${level1ProgressionPredicate} OR ${level1ApprovedHistoryPredicate})`;
                 where.push(actionQueueExpr);
                 const filterConditions = [];
-                if (safeUserId > 0) { filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'))`); params.push(safeUserId); }
+                if (safeUserId > 0) { filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'))`); params.push(safeUserId); }
                 if (userEmail) { filterConditions.push('LOWER(TRIM(mec.email)) = LOWER(TRIM(?))'); params.push(userEmail); }
                 where.push(filterConditions.length ? `(${filterConditions.join(' OR ')})` : '1 = 0');
             }

@@ -19,7 +19,7 @@
     "strictBindCallApply": false,
     "strictBuiltinIteratorReturn": false,
     "noImplicitThis": false,
-    "alwaysStrict": false,
+    "alwaysStrict": true,
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": true,
     "module": "ESNext",

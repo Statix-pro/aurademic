@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
+import { formatRowRanges, summarizeLineChanges } from "../../../shared/utils/logDiffUtils";
 
 // --- Interfaces ---
 
@@ -388,12 +389,15 @@ const BudgetDashboard: React.FC = () => {
             ? unitAmount * quantity
             : Number(line.line_total ?? 0);
 
+          const hasApprovedOverride = line.approved_unit_amount != null && (Number(line.approved_unit_amount) !== Number(line.unit_amount) || Number(line.approved_line_total) !== Number(line.line_total));
+          const effectiveProposedTotal = hasApprovedOverride ? Number(line.approved_line_total) : proposedTotal;
+
           return {
             id: line.id,
             proposalId: master.id,
             budgetHead: line.budget_head || "Unknown",
             subHead: line.sub_head || "-",
-            proposedAmount: Number.isFinite(proposedTotal) ? proposedTotal : 0,
+            proposedAmount: Number.isFinite(effectiveProposedTotal) ? effectiveProposedTotal : 0,
             // Show approved amount only after final approval, sourced from approved columns.
             approvedAmount: isFullyApproved
               ? parseFloat(line.approved_line_total ?? line.line_total ?? 0)
@@ -509,16 +513,22 @@ const BudgetDashboard: React.FC = () => {
   };
 
   const formatDateTime = (value?: string) => {
-    if (!value) return "-";
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return "-";
+    const parsed = parseDateSafe(value);
+    if (!parsed) return "-";
     return parsed.toLocaleString("en-IN");
+  };
+
+  const parseDateMs = (value?: string | null) => {
+    const parsed = parseDateSafe(value || undefined);
+    if (!parsed) return 0;
+    const ms = parsed.getTime();
+    return Number.isNaN(ms) ? 0 : ms;
   };
 
   const getRoleLabel = (role: string, proposal: ProposalGroup) => {
     const normalized = String(role || "").toLowerCase();
     if (normalized === 'level1') {
-      const isEntity = ['club', 'cell', 'center', 'professional body'].includes(
+      const isEntity = ['club', 'cell', 'center', 'section', 'professional body'].includes(
         String(proposal.beneficiaryType || "").toLowerCase().trim()
       );
       return isEntity ? "Coordinator" : "HoD";
@@ -535,12 +545,12 @@ const BudgetDashboard: React.FC = () => {
 
   const buildLogEvents = (proposal: ProposalGroup): LogEvent[] => {
     const events: LogEvent[] = [];
-    const createdAtMs = proposal.createdAt ? new Date(proposal.createdAt).getTime() : 0;
-    const updatedAtMs = proposal.updatedAt ? new Date(proposal.updatedAt).getTime() : 0;
+    const createdAtMs = parseDateMs(proposal.createdAt);
+    const updatedAtMs = parseDateMs(proposal.updatedAt);
     const submitterEmail = normalizeEmail(proposal.userEmail);
     const approvalLogs = Array.isArray(proposal.approvals) ? proposal.approvals : [];
     const hasApprovalUpdate = approvalLogs.some(
-      (app: any) => String(app?.decision || '').toLowerCase() === 'updated'
+      (app: any) => String(app?.decision || app?.status || '').toLowerCase() === 'updated'
     );
 
     if (createdAtMs) {
@@ -559,7 +569,7 @@ const BudgetDashboard: React.FC = () => {
     if (editLogs.length > 0) {
       editLogs.forEach((edit: any, idx: number) => {
         const createdAt = edit.created_at || edit.createdAt || edit.created_at_formatted;
-        const createdMs = createdAt ? new Date(createdAt).getTime() : createdAtMs;
+        const createdMs = parseDateMs(createdAt) || createdAtMs;
         const summary = normalizeText(edit.summary);
         let parsedDetails: any = null;
         if (edit.details) {
@@ -611,20 +621,10 @@ const BudgetDashboard: React.FC = () => {
               );
 
               if (rowNumbers.length > 0) {
-                rowSummary = `Row No. ${rowNumbers.join(', ')}`;
+                rowSummary = `Row No. ${formatRowRanges(rowNumbers)}`;
               }
 
-              const details = lines.map((line: any, lineIdx: number) => {
-                const lineNo = Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no) || (lineIdx + 1);
-                const rawChanges = line?.changes;
-                const changeList = Array.isArray(rawChanges)
-                  ? rawChanges
-                  : normalizeText(rawChanges)
-                    ? [normalizeText(rawChanges)]
-                    : [];
-                return `Line ${lineNo}: ${changeList.join('; ') || 'Updated'}`;
-              });
-              detailSummary = details.join(' | ');
+              detailSummary = summarizeLineChanges(lines).compact;
             }
             if (proposalChanges.length > 0) {
               const proposalSummary = proposalChanges
@@ -655,24 +655,12 @@ const BudgetDashboard: React.FC = () => {
       });
     }
 
-    if (updatedAtMs && createdAtMs && updatedAtMs > createdAtMs && editLogs.length === 0 && !hasApprovalUpdate) {
-      events.push({
-        key: "updated-at-fallback",
-        title: "Updated",
-        subtitle: "Proposal edited",
-        actorLine: `Updated By: ${submitterEmail || "-"}`,
-        timestamp: updatedAtMs,
-        dateLabel: formatDateTime(proposal.updatedAt),
-        decision: "updated",
-      });
-    }
-
     approvalLogs.forEach((app: any, idx: number) => {
       const feedback = normalizeText(app.feedback);
       if (feedback === "Auto-approved after DoF clearance") {
         return;
       }
-      const decision = String(app.decision || "updated").toLowerCase();
+      const decision = String(app.decision || app.status || "updated").toLowerCase();
       if (decision === "updated") {
         if (editLogs.length > 0) return;
         if (!feedback || feedback.toLowerCase().includes("reviewed (no line change)")) return;
@@ -685,7 +673,7 @@ const BudgetDashboard: React.FC = () => {
         "email",
       ]);
       const decidedAt = app.decided_at || app.decidedAt || app.decided_at_formatted;
-      const decidedAtMs = decidedAt ? new Date(decidedAt).getTime() : 0;
+      const decidedAtMs = parseDateMs(decidedAt);
       const feedbackNote = feedback && !feedback.startsWith("__archive_meta__:")
         ? `Note: ${feedback}`
         : "";
@@ -715,11 +703,23 @@ const BudgetDashboard: React.FC = () => {
       });
     });
 
-    const submitted = events.filter((e) => e.decision === "submitted");
-    const updates = events.filter((e) => e.decision === "updated").sort((a, b) => a.timestamp - b.timestamp);
-    const approvals = events.filter((e) => e.decision !== "submitted" && e.decision !== "updated")
-      .sort((a, b) => a.timestamp - b.timestamp);
-    return [...submitted, ...updates, ...approvals];
+    const decisionOrder = (decision?: string) => {
+      if (decision === "submitted") return 0;
+      if (decision === "updated") return 1;
+      return 2;
+    };
+
+    return [...events].sort((a, b) => {
+      const leftTime = a.timestamp > 0 ? a.timestamp : Number.MAX_SAFE_INTEGER;
+      const rightTime = b.timestamp > 0 ? b.timestamp : Number.MAX_SAFE_INTEGER;
+      if (leftTime !== rightTime) return leftTime - rightTime;
+
+      const leftDecision = decisionOrder(a.decision);
+      const rightDecision = decisionOrder(b.decision);
+      if (leftDecision !== rightDecision) return leftDecision - rightDecision;
+
+      return String(a.key).localeCompare(String(b.key));
+    });
   };
 
   const canAddForCurrentFY = () => {
@@ -1049,8 +1049,8 @@ const BudgetDashboard: React.FC = () => {
                               >
                                 <div className="budgetdashboard-log-header">Submission Logs</div>
                                 <div className="budgetdashboard-log-body">
-                                  {new Date(proposal.updatedAt).getTime() >
-                                    new Date(proposal.createdAt).getTime() && (
+                                  {parseDateMs(proposal.updatedAt) >
+                                    parseDateMs(proposal.createdAt) && (
                                       <div className="budgetdashboard-log-item">
                                         <span className="log-label">Last Edited:</span>
                                         <span className="log-value">

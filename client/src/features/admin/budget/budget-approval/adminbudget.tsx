@@ -20,6 +20,7 @@ import authenticityUtility from "../../../../shared/utils/authenticityUtility";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { hasPermission, isSuperAdmin } from "../../../../shared/utils/permissionUtils";
 import AlertModal, { type AlertType } from "../../../../shared/components/ui/AlertModal";
+import { formatRowRanges, summarizeLineChanges } from "../../../../shared/utils/logDiffUtils";
 
 type ActionType = "return" | "reject" | null;
 type QueueTabKey = "hod" | "coordinator" | "ithead" | "dof" | "principal" | "admin";
@@ -71,6 +72,7 @@ interface AdminLogEvent {
   key: string;
   title: string;
   subtitle: string;
+  fullSubtitle?: string;
   actorLine: string;
   dateLabel: string;
   decision: string;
@@ -261,6 +263,7 @@ const AdminBudget: React.FC = () => {
   const [logProposal, setLogProposal] = useState<any>(null);
   const [logEntries, setLogEntries] = useState<BudgetHistoryEntry[]>([]);
   const [logEdits, setLogEdits] = useState<any[]>([]);
+  const [expandedLogDetails, setExpandedLogDetails] = useState<Record<string, boolean>>({});
 
   // Archive animation/state
   const [archivingIds, setArchivingIds] = useState<Set<number>>(new Set<number>());
@@ -866,6 +869,7 @@ const AdminBudget: React.FC = () => {
     setLogProposal(null);
     setLogEntries([]);
     setLogEdits([]);
+    setExpandedLogDetails({});
 
     try {
       const response: any = await authenticityUtility.get(`/adminbudget/${item.id}`);
@@ -892,6 +896,7 @@ const AdminBudget: React.FC = () => {
     setLogProposal(null);
     setLogEntries([]);
     setLogEdits([]);
+    setExpandedLogDetails({});
     setLogRef("");
   };
 
@@ -921,29 +926,51 @@ const AdminBudget: React.FC = () => {
     const raw = normalizeTextForLog(value);
     if (!raw) return "";
 
-    // Safari-safe normalization for "YYYY-MM-DD HH:mm" / "YYYY-MM-DD HH:mm:ss"
-    // Convert to strict ISO with seconds + timezone when timezone is missing.
-    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(raw)) {
-      return `${raw.replace(" ", "T")}:00Z`;
-    }
-    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
-      return `${raw.replace(" ", "T")}Z`;
-    }
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) {
-      return `${raw}:00Z`;
-    }
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(raw)) {
-      return `${raw}Z`;
-    }
     return raw;
   };
 
   const parseDateMsForLog = (value?: string | null) => {
-    const normalized = normalizeDateTimeForLog(value);
-    if (!normalized) return 0;
-    const parsed = new Date(normalized);
-    const ms = parsed.getTime();
-    return Number.isNaN(ms) ? 0 : ms;
+    const raw = normalizeDateTimeForLog(value);
+    if (!raw) return 0;
+
+    const dmyMatch = raw.match(
+      /^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
+    );
+    if (dmyMatch) {
+      const day = Number(dmyMatch[1]);
+      const month = Number(dmyMatch[2]);
+      const yearRaw = Number(dmyMatch[3]);
+      const year = yearRaw < 100 ? (2000 + yearRaw) : yearRaw;
+      const hour = Number(dmyMatch[4] || 0);
+      const minute = Number(dmyMatch[5] || 0);
+      const second = Number(dmyMatch[6] || 0);
+      const parsedDmy = new Date(year, month - 1, day, hour, minute, second, 0);
+      const parsedDmyMs = parsedDmy.getTime();
+      return Number.isNaN(parsedDmyMs) ? 0 : parsedDmyMs;
+    }
+
+    const ymdNoTzMatch = raw.match(
+      /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/
+    );
+    if (ymdNoTzMatch && !/[zZ]|[+-]\d{2}:\d{2}$/.test(raw)) {
+      const year = Number(ymdNoTzMatch[1]);
+      const month = Number(ymdNoTzMatch[2]);
+      const day = Number(ymdNoTzMatch[3]);
+      const hour = Number(ymdNoTzMatch[4] || 0);
+      const minute = Number(ymdNoTzMatch[5] || 0);
+      const second = Number(ymdNoTzMatch[6] || 0);
+      const parsedLocal = new Date(year, month - 1, day, hour, minute, second, 0);
+      const parsedLocalMs = parsedLocal.getTime();
+      if (!Number.isNaN(parsedLocalMs)) return parsedLocalMs;
+    }
+
+    const direct = new Date(raw);
+    const directMs = direct.getTime();
+    if (!Number.isNaN(directMs)) return directMs;
+
+    const fallback = new Date(raw.replace(" ", "T"));
+    const fallbackMs = fallback.getTime();
+    return Number.isNaN(fallbackMs) ? 0 : fallbackMs;
   };
 
   const formatDateTimeForLog = (value?: string) => {
@@ -1002,7 +1029,7 @@ const AdminBudget: React.FC = () => {
     const submitterEmail = normalizeEmailForLog(logProposal?.user_email || logProposal?.userEmail);
     const approvalLogs = Array.isArray(logEntries) ? logEntries : [];
     const hasApprovalUpdate = approvalLogs.some(
-      (app: any) => String(app?.decision || "").toLowerCase() === "updated"
+      (app: any) => String(app?.decision || app?.status || "").toLowerCase() === "updated"
     );
 
     if (createdAtMs) {
@@ -1052,6 +1079,7 @@ const AdminBudget: React.FC = () => {
         const actorBadgeLabel = getWorkflowBadgeLabel(editorRole) || (actorIsAdmin ? "SUPERADMIN" : "");
         let rowSummary = "";
         let detailSummary = "";
+        let fullDetailSummary = "";
 
         if (edit.details) {
           try {
@@ -1073,20 +1101,12 @@ const AdminBudget: React.FC = () => {
               const rowNumbers = Array.from(new Set<number>(numericRows)).sort((a, b) => a - b);
 
               if (rowNumbers.length > 0) {
-                rowSummary = `Row No. ${rowNumbers.join(", ")}`;
+                rowSummary = `Row No. ${formatRowRanges(rowNumbers)}`;
               }
 
-              const details = lines.map((line: any, lineIdx: number) => {
-                const lineNo = Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no) || (lineIdx + 1);
-                const rawChanges = line?.changes;
-                const changeList = Array.isArray(rawChanges)
-                  ? rawChanges
-                  : normalizeTextForLog(rawChanges)
-                    ? [normalizeTextForLog(rawChanges)]
-                    : [];
-                return `Line ${lineNo}: ${changeList.join("; ") || "Updated"}`;
-              });
-              detailSummary = details.join(" | ");
+              const lineSummaries = summarizeLineChanges(lines);
+              detailSummary = lineSummaries.compact;
+              fullDetailSummary = lineSummaries.full;
             }
             if (proposalChanges.length > 0) {
               const proposalSummary = proposalChanges
@@ -1094,6 +1114,7 @@ const AdminBudget: React.FC = () => {
                 .filter(Boolean)
                 .join("; ");
               detailSummary = [detailSummary, proposalSummary].filter(Boolean).join(" | ");
+              fullDetailSummary = [fullDetailSummary, proposalSummary].filter(Boolean).join(" | ");
             }
           } catch {
             // Keep summary fallback if details parse fails.
@@ -1101,12 +1122,14 @@ const AdminBudget: React.FC = () => {
         }
 
         const subtitle = [rowSummary || summary, detailSummary].filter(Boolean).join(" | ");
+        const fullSubtitle = [rowSummary || summary, fullDetailSummary || detailSummary].filter(Boolean).join(" | ");
         if (!subtitle) return;
 
         events.push({
           key: `edit-${edit.id || idx}`,
           title: "Updated",
           subtitle,
+          fullSubtitle,
           actorLine: `Updated By: ${editorEmail || "-"}`,
           actorIsAdmin,
           actorBadgeLabel,
@@ -1117,24 +1140,12 @@ const AdminBudget: React.FC = () => {
       });
     }
 
-    if (updatedAtMs && createdAtMs && updatedAtMs > createdAtMs && editLogs.length === 0 && !hasApprovalUpdate) {
-      events.push({
-        key: "updated-at-fallback",
-        title: "Updated",
-        subtitle: "Proposal edited",
-        actorLine: `Updated By: ${submitterEmail || "-"}`,
-        timestamp: updatedAtMs,
-        dateLabel: formatDateTimeForLog(updatedAt),
-        decision: "updated",
-      });
-    }
-
     approvalLogs.forEach((app: any, idx: number) => {
       const feedback = normalizeTextForLog(app.feedback);
       if (feedback === "__archive_meta__:") return;
       if (feedback === "Auto-approved after DoF clearance") return;
 
-      const decision = String(app.decision || "updated").toLowerCase();
+      const decision = String(app.decision || app.status || "updated").toLowerCase();
       if (decision === "updated") {
         if (editLogs.length > 0) return;
         if (!feedback || feedback.toLowerCase().includes("reviewed (no line change)")) return;
@@ -1177,15 +1188,23 @@ const AdminBudget: React.FC = () => {
       });
     });
 
-    const submitted = events.filter((e) => e.decision === "submitted");
-    const updates = events
-      .filter((e) => e.decision === "updated")
-      .sort((a, b) => a.timestamp - b.timestamp);
-    const approvals = events
-      .filter((e) => e.decision !== "submitted" && e.decision !== "updated")
-      .sort((a, b) => a.timestamp - b.timestamp);
+    const decisionOrder = (decision?: string) => {
+      if (decision === "submitted") return 0;
+      if (decision === "updated") return 1;
+      return 2;
+    };
 
-    return [...submitted, ...updates, ...approvals];
+    return [...events].sort((a, b) => {
+      const leftTime = a.timestamp > 0 ? a.timestamp : Number.MAX_SAFE_INTEGER;
+      const rightTime = b.timestamp > 0 ? b.timestamp : Number.MAX_SAFE_INTEGER;
+      if (leftTime !== rightTime) return leftTime - rightTime;
+
+      const leftDecision = decisionOrder(a.decision);
+      const rightDecision = decisionOrder(b.decision);
+      if (leftDecision !== rightDecision) return leftDecision - rightDecision;
+
+      return String(a.key).localeCompare(String(b.key));
+    });
   }, [logEntries, logEdits, logProposal]);
 
   return (
@@ -1467,12 +1486,12 @@ const AdminBudget: React.FC = () => {
                           const isReturnedStatus = normalizedStatus.includes("returned");
                           const isCompletedStatus = normalizedStatus.includes("completed");
                           const isActionLocked = isArchivedStatus || isRejectedStatus || isReturnedStatus || isCompletedStatus;
-                          const hasApprovedOverride = Number(item.has_approved_override ?? 0) > 0;
-                          const isApprovedForDisplay = hasApprovedOverride || getStatusCategory(item) === "approved";
-                          const displayAmountLabel = isApprovedForDisplay ? "Approved" : "Proposed";
-                          const displayAmountValue = isApprovedForDisplay
-                            ? Number(item.approved_total_amount ?? item.total_amount ?? 0)
+                          const effectiveAmount = item.approved_total_amount != null 
+                            ? Number(item.approved_total_amount) 
                             : Number(item.total_amount ?? 0);
+                          const isApprovedForDisplay = getStatusCategory(item) === "approved";
+                          const displayAmountLabel = isApprovedForDisplay ? "Approved" : "Proposed";
+                          const displayAmountValue = effectiveAmount;
 
                           return (
                             <div className="adminbudget-item-wrap" key={item.id}>
@@ -1969,7 +1988,35 @@ const AdminBudget: React.FC = () => {
                         <span className={`log-decision log-decision--${event.decision || "approved"}`}>
                           {event.title.toUpperCase()}
                         </span>
-                        <span className="log-role">{event.subtitle || "Status update"}</span>
+                        <span className="log-role">
+                          {(expandedLogDetails[event.key] && event.fullSubtitle)
+                            ? event.fullSubtitle
+                            : (event.subtitle || "Status update")}
+                        </span>
+                        {event.fullSubtitle && event.fullSubtitle !== event.subtitle && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExpandedLogDetails((prev) => ({
+                                ...prev,
+                                [event.key]: !prev[event.key],
+                              }));
+                            }}
+                            style={{
+                              marginTop: "4px",
+                              alignSelf: "flex-start",
+                              border: "none",
+                              background: "transparent",
+                              color: "#0d6efd",
+                              cursor: "pointer",
+                              padding: 0,
+                              fontSize: "12px",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {expandedLogDetails[event.key] ? "Show less" : "Show full changes"}
+                          </button>
+                        )}
                         {event.actorLine && <span className="log-actor-line">{event.actorLine}</span>}
                         <span className="log-date">{event.dateLabel}</span>
                       </div>
