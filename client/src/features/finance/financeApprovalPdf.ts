@@ -1,4 +1,4 @@
-﻿import jsPDF from 'jspdf';
+import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { PDFDocument } from 'pdf-lib';
 
@@ -278,12 +278,12 @@ export const getWorkflowTimeline = (
   if (!Array.isArray(updates) || updates.length === 0) {
     return fallback
       ? [{
-          label: 'Submitted',
-          actor: fallback.name || fallback.email || '-',
-          email: fallback.email || '',
-          timestamp: fallback.date || '',
-          stage: '',
-        }]
+        label: 'Submitted',
+        actor: fallback.name || fallback.email || '-',
+        email: fallback.email || '',
+        timestamp: fallback.date || '',
+        stage: '',
+      }]
       : [];
   }
 
@@ -507,6 +507,7 @@ interface GenerateFinancePdfInput {
   incomeRows: FinancePdfIncomeRow[];
   annexureSummary: string;
   approvalHistory: WorkflowTimelineEntry[];
+  proposalRef?: string;
   submittedBy: { actor: string; email: string; timestamp: string };
   annexureFiles: FinancePdfAnnexureRow[];
   baseUrl: string;
@@ -534,6 +535,7 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     incomeRows,
     annexureSummary,
     approvalHistory,
+    proposalRef,
     submittedBy,
     annexureFiles,
     baseUrl,
@@ -587,7 +589,7 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     body: [[
       { content: '', styles: { minCellHeight: 22 } },
       { content: '', styles: { minCellHeight: 22 } },
-      { content: 'FINANCE', styles: { fontStyle: 'bold', fontSize: 11 } },
+      { content: 'FINANCE' + (proposalRef ? `\n${proposalRef}` : ''), styles: { fontStyle: 'bold', fontSize: 11 } },
     ]],
     didDrawCell: (data: any) => {
       if (data.column.index === 0 && data.row.index === 0 && compressedLogo) {
@@ -652,63 +654,63 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
   yPos = (pdf as any).lastAutoTable.finalY;
 
   const budgetTableBody = budgetRows.flatMap((row, index) => {
-  const isLastRow = index === budgetRows.length - 1;
+    const isLastRow = index === budgetRows.length - 1;
 
-  if (showUnplannedBudget && isLastRow) {
-    return [
-      [
-        { content: String(index + 1), rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
-        row.category || '',
-        row.head || '',
-        'Rs. ' + Number(row.amount || 0),
-      ],
-      [
-        { content: `Unplanned Budget: ${unplannedBudgetDescription || ''}`, colSpan: 2, styles: { fontStyle: 'bold', overflow: 'linebreak' } },
-        'Rs. ' + Number(unplannedBudgetAmount || 0),
-      ]
-    ];
-  }
+    if (showUnplannedBudget && isLastRow) {
+      return [
+        [
+          { content: String(index + 1), rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
+          row.category || '',
+          row.head || '',
+          'Rs. ' + Number(row.amount || 0),
+        ],
+        [
+          { content: `Unplanned Budget: ${unplannedBudgetDescription || ''}`, colSpan: 2, styles: { fontStyle: 'bold', overflow: 'linebreak' } },
+          'Rs. ' + Number(unplannedBudgetAmount || 0),
+        ]
+      ];
+    }
 
-  return [[
-    String(index + 1),
-    row.category || '',
-    row.head || '',
-    'Rs. ' + Number(row.amount || 0),
-  ]];
-});
+    return [[
+      String(index + 1),
+      row.category || '',
+      row.head || '',
+      'Rs. ' + Number(row.amount || 0),
+    ]];
+  });
 
   budgetTableBody.push([
-  { content: 'Total Budget:', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' as const } } as any,
-  { content: 'Rs. ' + totalBudget, styles: { fontStyle: 'bold' } },
-]);
+    { content: 'Total Budget:', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' as const } } as any,
+    { content: 'Rs. ' + totalBudget, styles: { fontStyle: 'bold' } },
+  ]);
 
- autoTable(pdf, {
-  startY: yPos,
-  margin: { left: margin, right: margin },
-  theme: 'grid',
-  tableWidth,
-  styles: {
-    fontSize: 10,
-    cellPadding: 2,
-    textColor: [0, 0, 0],
-    lineColor: [0, 0, 0],
-    lineWidth: 0.25,
-    valign: 'middle'
-  },
-  head: [[
-    { content: 'S.No', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-    { content: 'Budget Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-    { content: 'Sub Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-    { content: 'Amount', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-  ]],
-  body: budgetTableBody as any,
-  columnStyles: {
-    0: { cellWidth: 16, halign: 'center' },
-    1: { cellWidth: 68 },
-    2: { cellWidth: 68 },
-    3: { cellWidth: tableWidth - 16 - 68 - 68, halign: 'right' },
-  },
-});
+  autoTable(pdf, {
+    startY: yPos,
+    margin: { left: margin, right: margin },
+    theme: 'grid',
+    tableWidth,
+    styles: {
+      fontSize: 10,
+      cellPadding: 2,
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.25,
+      valign: 'middle'
+    },
+    head: [[
+      { content: 'S.No', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
+      { content: 'Budget Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
+      { content: 'Sub Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
+      { content: 'Amount', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
+    ]],
+    body: budgetTableBody as any,
+    columnStyles: {
+      0: { cellWidth: 16, halign: 'center' },
+      1: { cellWidth: 68 },
+      2: { cellWidth: 68 },
+      3: { cellWidth: tableWidth - 16 - 68 - 68, halign: 'right' },
+    },
+  });
 
   yPos = (pdf as any).lastAutoTable.finalY;
 
@@ -729,46 +731,46 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
   yPos = (pdf as any).lastAutoTable.finalY;
 
   if (showIncomeSection) {
-  const incomeTableBody = incomeRows.flatMap((row, index) => ([
-    [
-      { content: String(index + 1), rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
-      { content: row.incomeSource || '' },
-      { content: row.status || '', styles: { halign: 'center' } },
-      { content: 'Rs. ' + Number(row.amount || 0) },
-      { content: row.remarks || '' },
-    ],
-    [
-      { content: `Contribution${row.contribution ? ` - ${row.contribution}` : ''}`, colSpan: 1, styles: { fontStyle: 'bold' } },
-      { content: `Credit Account: ${row.creditAccount || ''}`, colSpan: 3, styles: { overflow: 'linebreak' } },
-    ],
-  ]));
+    const incomeTableBody = incomeRows.flatMap((row, index) => ([
+      [
+        { content: String(index + 1), rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
+        { content: row.incomeSource || '' },
+        { content: row.status || '', styles: { halign: 'center' } },
+        { content: 'Rs. ' + Number(row.amount || 0) },
+        { content: row.remarks || '' },
+      ],
+      [
+        { content: `Contribution${row.contribution ? ` - ${row.contribution}` : ''}`, colSpan: 1, styles: { fontStyle: 'bold' } },
+        { content: `Credit Account: ${row.creditAccount || ''}`, colSpan: 3, styles: { overflow: 'linebreak' } },
+      ],
+    ]));
 
-  autoTable(pdf, {
-    startY: yPos,
-    margin: { left: margin, right: margin },
-    theme: 'grid',
-    tableWidth,
-    styles: { fontSize: 10, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, valign: 'middle' },
-    head: [[
-      'S.No',
-      'Income Source',
-      'Status',
-      'Amount',
-      'Remarks',
-    ]],
-    headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
-    columnStyles: {
-      0: { cellWidth: 16, halign: 'center' },
-      1: { cellWidth: 40, halign: 'center' },
-      2: { cellWidth: 30 },
-      3: { cellWidth: 30, halign: 'right' },
-      4: { cellWidth: tableWidth - 16 - 40 - 30 - 30, halign: 'left' },
-    },
-    body: incomeTableBody as any,
-  });
+    autoTable(pdf, {
+      startY: yPos,
+      margin: { left: margin, right: margin },
+      theme: 'grid',
+      tableWidth,
+      styles: { fontSize: 10, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, valign: 'middle' },
+      head: [[
+        'S.No',
+        'Income Source',
+        'Status',
+        'Amount',
+        'Remarks',
+      ]],
+      headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+      columnStyles: {
+        0: { cellWidth: 16, halign: 'center' },
+        1: { cellWidth: 40, halign: 'center' },
+        2: { cellWidth: 30 },
+        3: { cellWidth: 30, halign: 'right' },
+        4: { cellWidth: tableWidth - 16 - 40 - 30 - 30, halign: 'left' },
+      },
+      body: incomeTableBody as any,
+    });
 
-  yPos = (pdf as any).lastAutoTable.finalY;
-}
+    yPos = (pdf as any).lastAutoTable.finalY;
+  }
 
   const approvalSteps = approvalHistory.filter((entry) =>
     entry.label === 'Approved' &&
@@ -779,19 +781,19 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
   const seniorApprovalRows = showSeniorApprovalRow
     ? [[
       {
-          content: 'Principal',
-          styles: { halign: 'left', fontStyle: 'bold', fillColor: [245, 245, 245], minCellHeight: 15 , },
-        },
-        {
-          content: 'Chairman',
-          styles: { halign: 'left', fontStyle: 'bold', fillColor: [245, 245, 245]  , minCellHeight: 15 ,},
-        },
-        
-      ],
-      ]
+        content: 'Principal',
+        styles: { halign: 'left', fontStyle: 'bold', minCellHeight: 15, },
+      },
+      {
+        content: 'Chairman',
+        styles: { halign: 'left', fontStyle: 'bold', minCellHeight: 15, },
+      },
+
+    ],
+    ]
     : [];
   const digitalSignRows: any[] = [
-    [{ content: 'Approved By:', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }],
+    [{ content: 'Submission and Approval Status', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'center' } }],
     [{ content: `Submitted by ${formatWorkflowPersonText(submittedByUi.actor, submittedByUi.email, submittedByUi.timestamp)}`, colSpan: 2 }],
     ...approvalSteps.map((entry) => ([
       {

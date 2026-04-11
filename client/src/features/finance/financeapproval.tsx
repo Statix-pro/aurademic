@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, CSSProperties, useEffect, useMemo, ChangeEvent, MouseEvent } from 'react';
+import React, { useState, useRef, CSSProperties, useEffect, useMemo, ChangeEvent, MouseEvent } from 'react';
 import { Info, Library, CheckCircle2, RotateCcw, XCircle, Archive, Upload, Eye, Trash2 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -1053,6 +1053,7 @@ const FinanceApproval: React.FC = () => {
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([createIncomeRow()]);
   const [budgetLineMetaByRow, setBudgetLineMetaByRow] = useState<Record<number, BudgetLineMeta>>({});
   const [statusUpdates, setStatusUpdates] = useState<any[]>([]);
+  const [proposalRef, setProposalRef] = useState<string>('');
   const [expandedTimelineDetails, setExpandedTimelineDetails] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
@@ -1323,6 +1324,7 @@ const FinanceApproval: React.FC = () => {
         incomeRows,
         annexureSummary,
         approvalHistory,
+        proposalRef,
         submittedBy,
         annexureFiles,
         baseUrl: authenticityUtility.getBaseURL(),
@@ -2237,7 +2239,10 @@ const canDownloadPdf =
   (isAdminWorkflowContext && totalBudget > 10000 && hasDofApproval);
 
 const hideWorkflowActionsForFinalStatus =
-  ['approved', 'completed', 'rejected', 'archived'].includes(normalizedWorkflowStatus);
+  normalizedWorkflowStatus.includes('approved') ||
+  normalizedWorkflowStatus.includes('completed') ||
+  normalizedWorkflowStatus.includes('rejected') ||
+  normalizedWorkflowStatus.includes('archived');
 
   // Tag auto-selection based on beneficiary type
   useEffect(() => {
@@ -2303,6 +2308,7 @@ const hideWorkflowActionsForFinalStatus =
         setEmail(record.email || '');
         setMobile(record.mobile || '');
         setDescription(record.description || '');
+        setProposalRef(record.proposal_ref || '');
         setEmployeeId(record.employee_id ? Number(record.employee_id) : null);
         setIsExternalApplicant(!record.employee_id);
         setSubmittedAt(
@@ -4319,6 +4325,11 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                   <div style={{ fontSize: "16px", fontWeight: "bold", color: "#000" }}>
                     FINANCE
                   </div>
+                  {proposalRef && (
+                    <div style={{ fontSize: "13px", fontWeight: "600", color: "#000", marginTop: "4px" }}>
+                      {proposalRef}
+                    </div>
+                  )}
                 </td>
               </tr>
             </table>
