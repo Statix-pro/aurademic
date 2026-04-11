@@ -473,6 +473,7 @@ const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
   Centre: 'CENTRE',
   Cell: 'CELL',
   Club: 'CLUB',
+  Section: 'SECTION',
   'Professional Body': 'PROFESSIONAL_BODY',
 };
 
@@ -1430,7 +1431,7 @@ const Budget: React.FC = () => {
         const normalizedBeneficiaryValue =
           normalizedBeneficiaryType === 'Department'
             ? (p.department || p.beneficiary_value || '')
-            : ['Centre', 'Cell', 'Club', 'Professional Body'].includes(normalizedBeneficiaryType)
+            : ['Centre', 'Cell', 'Club', 'Section', 'Professional Body'].includes(normalizedBeneficiaryType)
               ? (p.org_unit_name || p.beneficiary_value || '')
               : (p.beneficiary_value || '');
 
@@ -2073,6 +2074,7 @@ const Budget: React.FC = () => {
                         { value: 'Centre', label: 'Centre' },
                         { value: 'Cell', label: 'Cell' },
                         { value: 'Club', label: 'Club' },
+                        { value: 'Section', label: 'Section' },
                         { value: 'Professional Body', label: 'Professional Body' },
                         { value: 'Institution', label: 'Institution' }
                       ]}

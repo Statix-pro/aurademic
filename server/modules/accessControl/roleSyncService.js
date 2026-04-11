@@ -65,6 +65,7 @@ class RoleSyncService {
                 let entityTypeEnum = 'CELL'; // Default fallback
                 if (rawType.includes('CENTRE') || rawType.includes('CENTER')) entityTypeEnum = 'CENTRE';
                 if (rawType.includes('CLUB')) entityTypeEnum = 'CLUB';
+                if (rawType.includes('SECTION')) entityTypeEnum = 'SECTION';
                 if (rawType.includes('PROFESSIONAL_BODY') || rawType.includes('PROFESSIONALBODY')) entityTypeEnum = 'PROFESSIONAL_BODY';
 
                 const [userRows] = await db.execute(`
