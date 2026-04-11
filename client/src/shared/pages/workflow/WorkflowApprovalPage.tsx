@@ -43,7 +43,7 @@ const getTagFromBeneficiary = (beneficiaryType: string): string => {
   if (type === 'department') {
     return 'Association'; // Change this to whatever tag you want for Department
   }
-  if (type === 'centre' || type === 'cell' || type === 'club' || type === 'professional body' || type === 'institution') {
+  if (type === 'centre' || type === 'cell' || type === 'club' || type === 'section' || type === 'professional body' || type === 'institution') {
     return 'Essentials';
   }
   
@@ -76,6 +76,7 @@ const FINANCE_COORDINATOR_BENEFICIARY_OPTIONS = [
   'Centre',
   'Cell',
   'Club',
+  'Section',
   'Professional Body',
   'Institution',
 ];

@@ -260,7 +260,7 @@ const FinanceCard: React.FC = () => {
         return 'Coordinator';
       }
       if (
-        ['centre', 'cell', 'club', 'professional body', 'professional bodies'].includes(beneficiaryTypeToken) ||
+        ['centre', 'cell', 'club', 'section', 'professional body', 'professional bodies'].includes(beneficiaryTypeToken) ||
         (['faculty', 'staff'].includes(beneficiaryTypeToken) && beneficiaryEntityId > 0)
       ) {
         return 'Coordinator';
