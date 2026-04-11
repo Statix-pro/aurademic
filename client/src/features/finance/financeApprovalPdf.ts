@@ -782,11 +782,11 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     ? [[
       {
         content: 'Principal',
-        styles: { halign: 'left', fontStyle: 'bold', minCellHeight: 15, },
+        styles: { halign: 'left', fontStyle: 'bold', minCellHeight: 15, fontSize: 11 },
       },
       {
         content: 'Chairman',
-        styles: { halign: 'left', fontStyle: 'bold', minCellHeight: 15, },
+        styles: { halign: 'left', fontStyle: 'bold', minCellHeight: 15, fontSize: 11 },
       },
 
     ],
