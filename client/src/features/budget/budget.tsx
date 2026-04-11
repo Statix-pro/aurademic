@@ -655,7 +655,7 @@ const BudgetProposalGuidelines: React.FC<{ embedded?: boolean }> = ({ embedded =
                 <table className="budgetEntryTable">
                   <thead><tr><th>Category</th><th>Budget</th></tr></thead>
                   <tbody>
-                    <tr><td>IPR Filing</td><td className="centerTd">{guidelineCurrency(2400)}</td></tr>
+                    <tr><td>IPR Filing</td><td className="centerTd">{guidelineCurrency(2500)}</td></tr>
                     <tr><td>Seed Fund</td><td className="centerTd" rowSpan={2}>{guidelineCurrency(10000)}</td></tr>
                     <tr><td>Consumables</td></tr>
                   </tbody>

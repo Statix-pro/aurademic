@@ -1516,6 +1516,15 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
     return;
   }
 
+  const [financeRows] = await conn.query(
+    'SELECT unplanned_budget_enabled, unplanned_budget_amount FROM finance_requests WHERE id = ? FOR UPDATE',
+    [financeId]
+  );
+  
+  const financeRequest = financeRows[0] || {};
+  const unplannedBudgetEnabled = Boolean(financeRequest.unplanned_budget_enabled);
+  const unplannedBudgetAmount = toMoney(financeRequest.unplanned_budget_amount);
+
   const [rows] = await conn.query(
     `SELECT
        fbb.id,
@@ -1530,7 +1539,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
     [financeId]
   );
 
-  let approvedTotalAmount = 0;
+  let approvedTotalAmount = unplannedBudgetEnabled ? unplannedBudgetAmount : 0;
   let totalRemainingAmount = 0;
 
   for (const row of rows) {
@@ -2370,9 +2379,9 @@ const financeModel = {
   },
 
   async getStatusUpdates(financeId) {
-  try {
-    const [workflowRows] = await db.query(
-      `SELECT
+    try {
+      const [workflowRows] = await db.query(
+        `SELECT
           wa.id,
           wa.record_id AS finance_id,
           wa.actor_user_id AS user_id,
@@ -2403,13 +2412,13 @@ const financeModel = {
        WHERE wa.module_key = 'finance'
          AND wa.record_id = ?
        ORDER BY wa.decided_at ASC, wa.id ASC`,
-      [financeId]
-    );
+        [financeId]
+      );
 
-    let editRows = [];
-    try {
-      const [rows] = await db.query(
-        `SELECT
+      let editRows = [];
+      try {
+        const [rows] = await db.query(
+          `SELECT
             e.id,
             e.finance_request_id AS finance_id,
             e.edited_by_user_id AS user_id,
@@ -2439,36 +2448,36 @@ const financeModel = {
               e.edited_by_email COLLATE utf8mb4_unicode_ci
          WHERE e.finance_request_id = ?
          ORDER BY e.created_at ASC, e.id ASC`,
-        [financeId]
-      );
-      editRows = rows;
+          [financeId]
+        );
+        editRows = rows;
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE') {
+          throw error;
+        }
+      }
+
+      const merged = [...workflowRows, ...editRows].sort((left, right) => {
+        const leftTime = new Date(left.decided_at || left.created_at || 0).getTime();
+        const rightTime = new Date(right.decided_at || right.created_at || 0).getTime();
+
+        if (leftTime !== rightTime) {
+          return leftTime - rightTime;
+        }
+
+        return (Number(left.id) || 0) - (Number(right.id) || 0);
+      });
+
+      return merged.map((row) => ({
+        ...row,
+        snapshot_before: safeParseJSON(row.snapshot_before, null),
+        meta: safeParseJSON(row.meta, null),
+        details: safeParseJSON(row.details, null),
+      }));
     } catch (error) {
-      if (error?.code !== 'ER_NO_SUCH_TABLE') {
-        throw error;
-      }
+      throw new Error(`Error fetching status updates: ${error.message}`);
     }
-
-    const merged = [...workflowRows, ...editRows].sort((left, right) => {
-      const leftTime = new Date(left.decided_at || left.created_at || 0).getTime();
-      const rightTime = new Date(right.decided_at || right.created_at || 0).getTime();
-
-      if (leftTime !== rightTime) {
-        return leftTime - rightTime;
-      }
-
-      return (Number(left.id) || 0) - (Number(right.id) || 0);
-    });
-
-    return merged.map((row) => ({
-      ...row,
-      snapshot_before: safeParseJSON(row.snapshot_before, null),
-      meta: safeParseJSON(row.meta, null),
-      details: safeParseJSON(row.details, null),
-    }));
-  } catch (error) {
-    throw new Error(`Error fetching status updates: ${error.message}`);
-  }
-},
+  },
 
   async doesFinanceExist(id) {
     const [rows] = await db.query(
