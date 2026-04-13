@@ -589,17 +589,21 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     [config]
   );
 
-  const getFinanceRoute = useCallback(
+  const getRecordRoute = useCallback(
     (recordId: number | string, mode: 'view' | 'edit' = 'view') => {
-      if (config.moduleKey === 'finance') {
-        return mode === 'edit'
-          ? `/finance/${recordId}/edit?admin=true`
-          : `/finance/${recordId}?admin=true`;
+      if (mode === 'edit') {
+        if (config.getEditRoute) {
+          return config.getEditRoute(recordId);
+        }
+
+        return `/${config.moduleKey}/${recordId}/edit`;
       }
 
-      return mode === 'edit'
-        ? `${config.apiBasePath}/${recordId}/edit`
-        : `${config.apiBasePath}/${recordId}`;
+      if (config.getViewRoute) {
+        return config.getViewRoute(recordId);
+      }
+
+      return `/${config.moduleKey}/${recordId}`;
     },
     [config]
   );
@@ -1259,7 +1263,7 @@ showAlert(
 
   const handlePdfPreviewClick = useCallback(
     (recordId: number | string, isActionablePending?: boolean) => {
-      navigate(getFinanceRoute(recordId, 'view'), {
+      navigate(getRecordRoute(recordId, 'view'), {
         state: {
           openPreview: true,
           autoDownloadPdf: false,
@@ -1267,7 +1271,7 @@ showAlert(
         },
       });
     },
-    [getFinanceRoute, navigate]
+    [getRecordRoute, navigate]
   );
 
   const filteredColumns = useMemo(() => {
@@ -1448,8 +1452,8 @@ showAlert(
                     const timelineKey = String(recordId);
                     const statusCategory = resolveStatusCategory(record);
                     const recordCurrentStage = getRecordCurrentStage(record);
-                    const isFinanceSuperAdminDeleteMode =
-                      config.moduleKey === 'finance' && isSuperAdminView;
+                    const isSuperAdminDeleteMode =
+                      Boolean(config.enableSuperAdminDelete) && isSuperAdminView;
                     const isPending = statusCategory === 'pending' && recordCurrentStage === activeStage.toLowerCase();
                     const isActionablePending =
                       isPending ||
@@ -1474,11 +1478,11 @@ showAlert(
                           className={`fw-item fw-item--clickable ${archivingIds.has(recordId) ? 'fw-item--archiving' : ''}`}
                           role="button"
                           tabIndex={0}
-                          onClick={() => navigate(getFinanceRoute(recordId, 'view'), { state: { isActionablePending } })}
+                          onClick={() => navigate(getRecordRoute(recordId, 'view'), { state: { isActionablePending } })}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault();
-                              navigate(getFinanceRoute(recordId, 'view'), { state: { isActionablePending } });
+                              navigate(getRecordRoute(recordId, 'view'), { state: { isActionablePending } });
                             }
                           }}
                         >
@@ -1532,7 +1536,7 @@ showAlert(
                                 title="View"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(getFinanceRoute(recordId, 'view'), { state: { isActionablePending } });
+                                  navigate(getRecordRoute(recordId, 'view'), { state: { isActionablePending } });
                                 }}
                               >
                                 <Eye size={16} />
@@ -1544,7 +1548,7 @@ showAlert(
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (!isApproved) {
-                                    navigate(getFinanceRoute(recordId, 'edit'));
+                                    navigate(getRecordRoute(recordId, 'edit'));
                                   }
                                 }}
                                 disabled={isApproved}
@@ -1569,7 +1573,7 @@ showAlert(
                             </div>
 
                             <div className="fw-right">
-                              {config.moduleKey === 'finance' && (
+                              {Boolean(config.enablePdfPreview) && (
                                 <button
                                   type="button"
                                   className="fw-action-btn fw-action-btn--download"
@@ -1592,7 +1596,7 @@ showAlert(
                                 {isSuperAdminView ? (
                                   !isArchived && (
                                     <>
-                                      {isFinanceSuperAdminDeleteMode ? (
+                                      {isSuperAdminDeleteMode ? (
                                         <>
                                           <button
                                             className="fw-action-btn fw-action-btn--returned"
@@ -1818,7 +1822,7 @@ showAlert(
             </div>
             <h4 style={{ margin: "0 0 8px 0", color: "#333" }}>Confirm Deletion</h4>
             <p style={{ margin: "0 0 16px 0", color: "#666", fontSize: "14px" }}>
-              Are you sure you want to permanently delete finance request <strong>{deleteRef}</strong>? This
+              Are you sure you want to permanently delete {config.deleteEntityLabel || 'this request'} <strong>{deleteRef}</strong>? This
               action cannot be undone.
             </p>
 

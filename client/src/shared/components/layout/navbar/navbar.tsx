@@ -7,6 +7,7 @@ import { useAuth } from "../../../../contexts/AuthContext";
 import {
   canAccessAdminArea,
   canAccessBudgetApproval,
+  canAccessExpenditureWorkflow,
   canAccessFinanceWorkflow,
   canManageAccessControl,
   isSuperAdmin,
@@ -20,9 +21,16 @@ const Navbar: React.FC = () => {
   const showAdminDashboard = canAccessAdminArea(user);
   const showBudgetApproval = canAccessBudgetApproval(user);
   const showFinanceWorkflow = canAccessFinanceWorkflow(user);
+  const showExpenditureWorkflow = canAccessExpenditureWorkflow(user);
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
-  const showAdminMenu = showAdminDashboard || showBudgetApproval || showAccessControl || showMasterData;
+  const showAdminMenu =
+    showAdminDashboard ||
+    showBudgetApproval ||
+    showFinanceWorkflow ||
+    showExpenditureWorkflow ||
+    showAccessControl ||
+    showMasterData;
 
   const toggleDropdown = (menuName: string) => {
     setActiveMenu((prev) => (prev === menuName ? null : menuName));
@@ -196,7 +204,7 @@ const Navbar: React.FC = () => {
                 <li>Approval</li>
               </Link>
               <Link
-                to="/expenditure"
+                to="/expenditurecard"
                 className="dropdown-li"
                 onClick={() => {
                   setMobileMenuOpen(false);
@@ -401,6 +409,18 @@ const Navbar: React.FC = () => {
                     }}
                   >
                     <li>Finance Workflow</li>
+                  </Link>
+                )}
+                {showExpenditureWorkflow && (
+                  <Link
+                    to="/workflow/expenditure"
+                    className="dropdown-li"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      document.body.classList.remove('menu-open');
+                    }}
+                  >
+                    <li>Expenditure Workflow</li>
                   </Link>
                 )}
               </ul>
