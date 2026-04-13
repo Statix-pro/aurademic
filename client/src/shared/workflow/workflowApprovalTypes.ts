@@ -53,6 +53,11 @@ export interface WorkflowApprovalModuleConfig<TRecord extends Record<string, any
   getQueueEndpoint?: (stage: string) => string;
   getApprovalEndpoint?: (id: number | string) => string;
   getTimelineEndpoint?: (id: number | string) => string;
+  getViewRoute?: (id: number | string) => string;
+  getEditRoute?: (id: number | string) => string;
+  enablePdfPreview?: boolean;
+  enableSuperAdminDelete?: boolean;
+  deleteEntityLabel?: string;
   queueParams?: {
     page?: number;
     limit?: number;

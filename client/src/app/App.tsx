@@ -32,7 +32,8 @@ import Storybook from '../features/storybook/Storybook';
 import FinanceApproval from '../features/finance/financeapproval';
 
 import FinanceCard from '../features/user-dashboard/financecard/financecard';
-//import ExpenditureApproval from '../features/expenditure/expenditure';
+import ExpenditureApproval from '../features/expenditure/expenditureapproval';
+import ExpenditureDashboard from '../features/user-dashboard/expendituredashboard/expendituredashboard';
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
 import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
 import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
@@ -96,11 +97,12 @@ function App() {
                   <Route path="/budget/:id/edit" element={<ProtectedRoute><Budget /></ProtectedRoute>} />
 
                   {/* EXPENDITURE */}
-                  <Route path="/expenditure" element={<ProtectedRoute><UnderConstruction pageName="Expenditure" /></ProtectedRoute>} />
-                  {/*  <Route path="/expenditure/new" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
+                  {/* <Route path="/expenditure" element={<ProtectedRoute><UnderConstruction pageName="Expenditure" /></ProtectedRoute>} /> */}
+                  <Route path="/expenditurecard" element={<ProtectedRoute><ExpenditureDashboard /></ProtectedRoute>} />
+                   <Route path="/expenditure/new" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
                  <Route path="/expenditure/:id" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
                   <Route path="/expenditure/:id/edit" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
-                  <Route path="/expenditure/approval" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />*/}
+                  <Route path="/expenditure/approval" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
 
                   {/* ADMIN */}
                   <Route path="/admin-dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
