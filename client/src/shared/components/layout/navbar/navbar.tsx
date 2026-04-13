@@ -7,6 +7,7 @@ import { useAuth } from "../../../../contexts/AuthContext";
 import {
   canAccessAdminArea,
   canAccessBudgetApproval,
+  canAccessExpenditureWorkflow,
   canAccessFinanceWorkflow,
   canManageAccessControl,
   isSuperAdmin,
@@ -153,10 +154,18 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const showAdminDashboard = canAccessAdminArea(user);
   const showBudgetApproval = canAccessBudgetApproval(user);
   const showFinanceWorkflow = canAccessFinanceWorkflow(user);
+  const showExpenditureWorkflow = canAccessExpenditureWorkflow(user);
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
   const showAdminMenu = showAdminDashboard || showBudgetApproval || showFinanceWorkflow;
   const showSuperAdminMenu = isSuperAdmin(user);
+  const showAdminMenu =
+    showAdminDashboard ||
+    showBudgetApproval ||
+    showFinanceWorkflow ||
+    showExpenditureWorkflow ||
+    showAccessControl ||
+    showMasterData;
 
   const toggleDropdown = (menuName: string) => {
     // If we're fully collapsed and not hovering (e.g. mobile tap), expand permanently
@@ -243,6 +252,60 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
               <Link to="/admin/budgetdashboard" className={`sb-sublink ${isActive('/admin/budgetdashboard') ? 'active' : ''}`} onClick={handleLinkClick}>Budget Dashboard</Link>
               <Link to="/reports/finance" className={`sb-sublink ${isActive('/reports/finance') ? 'active' : ''}`} onClick={handleLinkClick}>Finance Dashboard</Link>
               <Link to="/reports/expenditure" className={`sb-sublink ${isActive('/reports/expenditure') ? 'active' : ''}`} onClick={handleLinkClick}>Expenditure Dashboard</Link>
+            <ul
+              className={`dropdown ${activeMenu === "Finance" ? "show" : ""}`}
+            >
+              <Link
+                to="/budgetcard"
+                className="dropdown-li"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  document.body.classList.remove('menu-open');
+                }}
+              >
+                <li>Budget</li>
+              </Link>
+              <Link
+                to="/financecard"
+                className="dropdown-li"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  document.body.classList.remove('menu-open');
+                }}
+              >
+                <li>Approval</li>
+              </Link>
+              <Link
+                to="/expenditurecard"
+                className="dropdown-li"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  document.body.classList.remove('menu-open');
+                }}
+              >
+                <li>Expenditure</li>
+              </Link>
+            </ul>
+          </li>
+
+
+
+
+          <li className="nav-item">
+            <div
+              className={`nav-item-wrapper ${activeMenu === "Bookings" ? "active" : ""
+                }`}
+              onClick={() => toggleDropdown("Bookings")}
+            >
+              Bookings
+              <svg
+                className="arrow-icon"
+                width="10"
+                height="10"
+                viewBox="0 0 451.847 451.847"
+              >
+                <path d="M225.923,323.861L0,97.938l35.355-35.355l190.568,190.568L416.492,62.583l35.355,35.355L225.923,323.861z" />
+              </svg>
             </div>
           )}
         </div>
@@ -324,6 +387,90 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
             </Link>
             <Link to="/kpi" className={`sb-sublink ${isActive('/kpi') ? 'active' : ''}`} onClick={handleLinkClick}>
               <IconKpi /> KPI
+                  <Link
+                    to="/admin/budgetdashboard"
+                    className="dropdown-li"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      document.body.classList.remove('menu-open');
+                    }}
+                  >
+                    <li>Budget-Dashboard</li>
+                  </Link>
+                )}
+                {showBudgetApproval && (
+                  <Link
+                    to="/admin/budget"
+                    className="dropdown-li"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      document.body.classList.remove('menu-open');
+                    }}
+                  >
+                    <li>Budget-Approval</li>
+                  </Link>
+                )}
+                {showAccessControl && (
+                  <Link
+                    to="/access-control"
+                    className="dropdown-li"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      document.body.classList.remove('menu-open');
+                    }}
+                  >
+                    <li>Access Control</li>
+                  </Link>
+                )}
+                {showMasterData && (
+                  <Link
+                    to="/admin/master-data"
+                    className="dropdown-li"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      document.body.classList.remove('menu-open');
+                    }}
+                  >
+                    <li>Master Data</li>
+                  </Link>
+                )}
+                {showFinanceWorkflow && (
+                  <Link
+                    to="/workflow/finance"
+                    className="dropdown-li"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      document.body.classList.remove('menu-open');
+                    }}
+                  >
+                    <li>Finance Workflow</li>
+                  </Link>
+                )}
+                {showExpenditureWorkflow && (
+                  <Link
+                    to="/workflow/expenditure"
+                    className="dropdown-li"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      document.body.classList.remove('menu-open');
+                    }}
+                  >
+                    <li>Expenditure Workflow</li>
+                  </Link>
+                )}
+              </ul>
+            </li>
+          )}
+          <li className="nav-item">
+            <Link
+              to="/task"
+              className="nav-item-wrapper"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                document.body.classList.remove('menu-open');
+              }}
+            >
+              Task
             </Link>
           </div>
         )}

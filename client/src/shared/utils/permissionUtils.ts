@@ -128,4 +128,7 @@ export const canAccessModuleWorkflow = (
 };
 
 export const canAccessFinanceWorkflow = (user?: User | null) =>
-  canAccessModuleWorkflow(user, 'finance')
+  canAccessModuleWorkflow(user, 'finance');
+
+export const canAccessExpenditureWorkflow = (user?: User | null) =>
+  canAccessModuleWorkflow(user, 'expenditure');
