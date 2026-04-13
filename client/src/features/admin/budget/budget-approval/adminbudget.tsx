@@ -1582,7 +1582,7 @@ const AdminBudget: React.FC = () => {
                                       <span className={statusClass(item)}>{getDisplayStatus(item)}</span>
                                     </div>
                                     <div className="adminbudget-actions-row">
-                                      {!isSuperAdmin(user) && (
+                                      {!isSuperAdmin(user) && !isApprovedForDisplay && (
                                         <>
                                           <button
                                             className="adminbudget-action-btn adminbudget-action-btn--approve"
@@ -1638,7 +1638,7 @@ const AdminBudget: React.FC = () => {
                                               e.stopPropagation();
                                               openActionPopup("return", item.id, item.proposal_ref, item.current_stage);
                                             }}
-                                            disabled={isActionLocked}
+                                            disabled={false}
                                           >
                                             <RotateCcw size={18} />
                                           </button>
@@ -1655,21 +1655,28 @@ const AdminBudget: React.FC = () => {
                                         </>
                                       )}
 
-                                      <button
-                                        className="adminbudget-action-btn adminbudget-action-btn--archive"
-                                        title={
-                                          isArchivedStatus
-                                            ? "Unarchive"
-                                            : "Archive"
-                                        }
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onArchiveToggle(item);
-                                        }}
-                                        disabled={archivingIds.has(item.id) || (!isArchivedStatus && (isCompletedStatus || isRejectedStatus || isReturnedStatus))}
-                                      >
-                                        <Archive size={18} />
-                                      </button>
+                                      {(isSuperAdmin(user) || !isApprovedForDisplay) && (
+                                        <button
+                                          className="adminbudget-action-btn adminbudget-action-btn--archive"
+                                          title={
+                                            isArchivedStatus
+                                              ? "Unarchive"
+                                              : "Archive"
+                                          }
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onArchiveToggle(item);
+                                          }}
+                                          disabled={
+                                            archivingIds.has(item.id) ||
+                                            (!isSuperAdmin(user) &&
+                                              !isArchivedStatus &&
+                                              (isCompletedStatus || isRejectedStatus || isReturnedStatus))
+                                          }
+                                        >
+                                          <Archive size={18} />
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 </div>

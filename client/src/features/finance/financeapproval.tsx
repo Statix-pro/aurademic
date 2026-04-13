@@ -2280,25 +2280,30 @@ const canDownloadPdf =
   ['approved', 'completed'].includes(normalizedWorkflowStatus) ||
   (isAdminWorkflowContext && totalBudget > 10000 && hasDofApproval);
 
+const isSuperAdminUser = Boolean(user?.is_super_admin) || (
+  Array.isArray(user?.roles) &&
+  user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
+);
+
 const routeStateIsActionablePending = (location.state as any)?.isActionablePending;
 const hideWorkflowActionsForFinalStatus =
-  routeStateIsActionablePending === false ||
-  normalizedWorkflowStatus.includes('approved') ||
-  normalizedWorkflowStatus.includes('returned') ||
-  normalizedWorkflowStatus.includes('completed') ||
-  normalizedWorkflowStatus.includes('rejected') ||
-  normalizedWorkflowStatus.includes('archived');
+  !isSuperAdminUser && (
+    routeStateIsActionablePending === false ||
+    normalizedWorkflowStatus.includes('approved') ||
+    normalizedWorkflowStatus.includes('returned') ||
+    normalizedWorkflowStatus.includes('completed') ||
+    normalizedWorkflowStatus.includes('rejected') ||
+    normalizedWorkflowStatus.includes('archived')
+  );
 
 // Only allow the respective stage head to act (not super admin)
 const canActOnCurrentStage = (() => {
   if (!isApprovalMode || !loadedCurrentStage) return false;
   // Super admin cannot approve/reject — only the respective head can
-  if (user?.is_super_admin) return false;
+  if (isSuperAdminUser) return false;
   const userPermissions = (user?.permissions || []).map(p => String(p).toLowerCase());
   return userPermissions.includes(`finance.workflow.${loadedCurrentStage}`);
 })();
-
-const isSuperAdminUser = Boolean(user?.is_super_admin);
 
   // Tag auto-selection based on beneficiary type
   useEffect(() => {
@@ -4826,6 +4831,5 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
 };
 
 export default FinanceApproval;
-
 
 
