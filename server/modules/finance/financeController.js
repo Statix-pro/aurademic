@@ -120,6 +120,15 @@ const filterEntriesForCurrentCycle = (entries, financeRecord) => {
   });
 };
 
+const isSuperAdminRequest = (req) => {
+  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)) {
+    return true;
+  }
+
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  return roles.some((role) => normalizeText(role).toLowerCase() === 'super_admin');
+};
+
 const normalizeActor = (req) => ({
   id: req.user?.id,
   userId: req.user?.id,
@@ -127,7 +136,7 @@ const normalizeActor = (req) => ({
   role: Array.isArray(req.user?.roles) ? req.user.roles[0] : null,
   roles: Array.isArray(req.user?.roles) ? req.user.roles : [],
   permissions: Array.isArray(req.user?.permissions) ? req.user.permissions : [],
-  isSuperAdmin: Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin),
+  isSuperAdmin: isSuperAdminRequest(req),
 });
 
 const resolveFinanceLevel1QueueRole = (req) => {
@@ -155,7 +164,7 @@ const hasFinanceStagePermission = (req, stage) => {
     return false;
   }
 
-  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)) {
+  if (isSuperAdminRequest(req)) {
     return true;
   }
 
@@ -166,7 +175,7 @@ const hasFinanceStagePermission = (req, stage) => {
 };
 
 const hasFinanceWorkflowEditorAccess = (req) =>
-  Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || hasAnyFinanceWorkflowPermission(req);
+  isSuperAdminRequest(req) || hasAnyFinanceWorkflowPermission(req);
 
 const canAccessFinanceRecord = (req, financeRecord) => {
   const actorUserId = toPositiveInt(req.user?.id);
@@ -175,7 +184,7 @@ const canAccessFinanceRecord = (req, financeRecord) => {
     return false;
   }
 
-  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)) {
+  if (isSuperAdminRequest(req)) {
     return true;
   }
 
@@ -351,7 +360,7 @@ const financeController = {
         });
       }
 
-      if (isWorkflowEditor && isTerminalWorkflow && !Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)) {
+      if (isWorkflowEditor && isTerminalWorkflow && !isSuperAdminRequest(req)) {
         return res.status(403).json({
           status: 'error',
           message: 'This request is not editable in current workflow state',
@@ -461,6 +470,7 @@ const financeController = {
     try {
       const financeId = toPositiveInt(req.params.id);
       const userId = toPositiveInt(req.user?.id);
+      const isSuperAdmin = isSuperAdminRequest(req);
 
       if (!financeId) {
         return res.status(400).json({
@@ -477,7 +487,7 @@ const financeController = {
         });
       }
 
-      if (!userId || toPositiveInt(finance.created_by) !== userId) {
+      if (!isSuperAdmin && (!userId || toPositiveInt(finance.created_by) !== userId)) {
         return res.status(403).json({
           status: 'error',
           message: 'Only applicant can delete this request',
@@ -489,14 +499,18 @@ const financeController = {
       const currentStage = normalizeText(workflowState?.currentStage).toLowerCase();
       const hasStartedApproval = Boolean(workflowState) && currentStage && currentStage !== 'level1';
 
-      if (workflowStatus && ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(workflowStatus)) {
+      if (
+        !isSuperAdmin &&
+        workflowStatus &&
+        ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(workflowStatus)
+      ) {
         return res.status(409).json({
           status: 'error',
           message: 'This request can no longer be deleted',
         });
       }
 
-      if (hasStartedApproval) {
+      if (!isSuperAdmin && hasStartedApproval) {
         return res.status(409).json({
           status: 'error',
           message: 'This request can only be deleted before Level-1 approval',

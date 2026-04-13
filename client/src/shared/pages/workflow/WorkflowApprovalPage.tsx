@@ -1459,6 +1459,9 @@ showAlert(
                         Boolean(recordCurrentStage));
                     const isArchived = statusCategory === 'archived';
                     const isApproved = statusCategory === 'approved';
+                    const isFinanceSuperAdminReturnAllowed =
+                      isFinanceSuperAdminDeleteMode &&
+                      ['pending', 'approved', 'rejected', 'archived'].includes(statusCategory);
                     const proposedAmount = record.total_amount || record.total_budget || record.amount || 0;
                     const approvedAmount = record.approved_total_amount || record.approved_amount || null;
                     const showApprovedAmount = approvedAmount !== null && approvedAmount !== undefined && approvedAmount !== 0;
@@ -1601,7 +1604,7 @@ showAlert(
                                               e.stopPropagation();
                                               openActionPopup("return", recordId, proposalRef);
                                             }}
-                                            disabled={actingRecordId === recordId || !isActionablePending}
+                                            disabled={actingRecordId === recordId || !isFinanceSuperAdminReturnAllowed}
                                           >
                                             <RotateCcw size={18} />
                                           </button>
@@ -1700,7 +1703,7 @@ showAlert(
                                     }}
                                     disabled={
                                       archivingIds.has(recordId) ||
-                                      (isSuperAdminView && !isActionablePending)
+                                      (isSuperAdminView && config.moduleKey !== 'finance' && !isActionablePending)
                                     }
                                   >
                                     <Archive size={18} />
