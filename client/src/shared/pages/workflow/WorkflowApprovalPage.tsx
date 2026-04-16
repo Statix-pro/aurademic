@@ -346,7 +346,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [deletePopupOpen, setDeletePopupOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | string | null>(null);
   const [deleteRef, setDeleteRef] = useState<string>('');
-  const [deleteCountdown, setDeleteCountdown] = useState<number>(10);
+  const [deleteCountdown, setDeleteCountdown] = useState<number>(5);
 
   const closeAlert = useCallback(() => {
     setAlertConfig((prev) => ({
@@ -388,7 +388,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const openDeletePopup = (recordId: number | string, ref: string) => {
     setDeleteId(recordId);
     setDeleteRef(ref);
-    setDeleteCountdown(10);
+    setDeleteCountdown(5);
     setDeletePopupOpen(true);
   };
 
@@ -396,7 +396,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     setDeletePopupOpen(false);
     setDeleteId(null);
     setDeleteRef('');
-    setDeleteCountdown(10);
+    setDeleteCountdown(5);
   };
 
   const handleDeleteRecord = (record: Record<string, any>) => {
