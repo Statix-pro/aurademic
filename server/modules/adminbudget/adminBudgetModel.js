@@ -2565,7 +2565,7 @@ async function deleteBudgetProposal(proposalId, actor = {}) {
 
 export { deleteBudgetProposal as delete };
 
-export async function processApproval(proposalId, { role, decision, feedback, approverUserId, approverEmail }) {
+export async function processApproval(proposalId, { role, decision, feedback, approverUserId, approverEmail, isCompletedReversal = false }) {
   const normalizedDecision = normalizeText(decision).toLowerCase();
 
   if (!['approved', 'rejected', 'returned', 'archived'].includes(normalizedDecision)) {
@@ -2608,7 +2608,7 @@ export async function processApproval(proposalId, { role, decision, feedback, ap
     throw new Error('Invalid role');
   }
 
-  if (proposal.current_stage !== role) {
+  if (proposal.current_stage !== role && !isCompletedReversal) {
     throw new Error(`Stage mismatch: expected ${role}, got ${proposal.current_stage} `);
   }
 
@@ -2643,6 +2643,10 @@ export async function processApproval(proposalId, { role, decision, feedback, ap
     : role;
 
   return withTransaction(async (conn) => {
+    if (isCompletedReversal && proposal.status === 'completed') {
+      await applyBudgetAnnualDeltaByProposalId(proposalId, conn, 'subtract');
+    }
+
     await conn.execute(
       `UPDATE budget_proposals
          SET status = ?, current_stage = ?, updated_at = NOW()
