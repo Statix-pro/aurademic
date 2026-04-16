@@ -256,7 +256,7 @@ const AdminBudget: React.FC = () => {
   const [deletePopupOpen, setDeletePopupOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteRef, setDeleteRef] = useState<string>("");
-  const [deleteCountdown, setDeleteCountdown] = useState(10);
+  const [deleteCountdown, setDeleteCountdown] = useState(5);
   const [logPopupOpen, setLogPopupOpen] = useState(false);
   const [logLoading, setLogLoading] = useState(false);
   const [logRef, setLogRef] = useState<string>("");
@@ -656,7 +656,7 @@ const AdminBudget: React.FC = () => {
   const openDeletePopup = (id: number, ref: string) => {
     setDeleteId(id);
     setDeleteRef(ref);
-    setDeleteCountdown(10);
+    setDeleteCountdown(5);
     setDeletePopupOpen(true);
   };
 
