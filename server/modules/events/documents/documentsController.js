@@ -1,6 +1,7 @@
 import eventDb from '../../../config/connection.js';
 import path from 'path';
 import fs from 'fs';
+import { safeResolvePath } from '../../../utils/pathSecurity.js';
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 
@@ -330,8 +331,8 @@ export const uploadDocumentFile = async (req, res) => {
     const maxSize = 10 * 1024 * 1024; // 10MB
     if (size > maxSize) {
       // Clean up uploaded file
-      const filepath = path.join(UPLOAD_DIR, filename);
-      if (fs.existsSync(filepath)) {
+      const filepath = safeResolvePath(UPLOAD_DIR, filename);
+      if (filepath && fs.existsSync(filepath)) {
         fs.unlinkSync(filepath);
       }
       return res.status(400).json({ error: 'File size exceeds 10MB limit' });
@@ -397,8 +398,8 @@ export const uploadDocumentFile = async (req, res) => {
 
     // Clean up uploaded file in case of error
     if (req.file && req.file.filename) {
-      const filepath = path.join(UPLOAD_DIR, req.file.filename);
-      if (fs.existsSync(filepath)) {
+      const filepath = safeResolvePath(UPLOAD_DIR, req.file.filename);
+      if (filepath && fs.existsSync(filepath)) {
         fs.unlinkSync(filepath);
       }
     }
@@ -799,8 +800,8 @@ export const deleteUpload = async (req, res) => {
     }
 
     // Remove physical file
-    const filepath = path.join(UPLOAD_DIR, uploadRecord.filename);
-    if (fs.existsSync(filepath)) {
+    const filepath = safeResolvePath(UPLOAD_DIR, uploadRecord.filename);
+    if (filepath && fs.existsSync(filepath)) {
       fs.unlinkSync(filepath);
     }
 

@@ -1668,6 +1668,7 @@ export async function getConsolidatedData({
   role,
   fiscalYear,
   beneficiaryType,
+  beneficiaryValue,
   q,
 }) {
   const hasBudgetWindowTypeColumn = await hasBudgetProposalColumn('budget_window_type');
@@ -1780,6 +1781,16 @@ export async function getConsolidatedData({
   if (normalizeText(beneficiaryType) && normalizeText(beneficiaryType).toLowerCase() !== 'all') {
     where.push('LOWER(TRIM(bp.beneficiary_type)) = LOWER(TRIM(?))');
     params.push(normalizeText(beneficiaryType));
+  }
+
+  if (normalizeText(beneficiaryValue)) {
+    const val = normalizeText(beneficiaryValue);
+    where.push(`(
+      LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(?))
+      OR LOWER(TRIM(md.name)) = LOWER(TRIM(?))
+      OR LOWER(TRIM(me.name)) = LOWER(TRIM(?))
+    )`);
+    params.push(val, val, val);
   }
 
   if (normalizeText(q)) {
