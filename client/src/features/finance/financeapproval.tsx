@@ -2298,7 +2298,7 @@ const hideWorkflowActionsForFinalStatus =
 
 // Only allow the respective stage head to act (not super admin)
 const canActOnCurrentStage = (() => {
-  if (!isApprovalMode || !loadedCurrentStage) return false;
+  if (!isViewMode || !loadedCurrentStage) return false;
   // Super admin cannot approve/reject — only the respective head can
   if (isSuperAdminUser) return false;
   const userPermissions = (user?.permissions || []).map(p => String(p).toLowerCase());
@@ -4153,7 +4153,7 @@ const canActOnCurrentStage = (() => {
           </button>
         )}
 
-        {isApprovalMode && !hideWorkflowActionsForFinalStatus && !showPreview ? (
+        {(isApprovalMode || canActOnCurrentStage) && !hideWorkflowActionsForFinalStatus && !showPreview ? (
           <div className="finance-workflow-actions">
             {!isSuperAdminUser && canActOnCurrentStage && (
               <>
@@ -4657,7 +4657,7 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
 </tr>
             </table>
 
-            {isApprovalMode && !hideWorkflowActionsForFinalStatus ? (
+            {(isApprovalMode || canActOnCurrentStage) && !hideWorkflowActionsForFinalStatus ? (
               <div style={{ marginTop: '18px', display: 'flex', justifyContent: 'center' }}>
                 <div className="finance-workflow-actions">
                   {!isSuperAdminUser && canActOnCurrentStage && (
