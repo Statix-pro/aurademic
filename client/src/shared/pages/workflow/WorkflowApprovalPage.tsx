@@ -1448,8 +1448,7 @@ showAlert(
                     const timelineKey = String(recordId);
                     const statusCategory = resolveStatusCategory(record);
                     const recordCurrentStage = getRecordCurrentStage(record);
-                    const isFinanceSuperAdminDeleteMode =
-                      config.moduleKey === 'finance' && isSuperAdminView;
+                    const isSuperAdminDeleteMode = isSuperAdminView;
                     const isPending = statusCategory === 'pending' && recordCurrentStage === activeStage.toLowerCase();
                     const isActionablePending =
                       isPending ||
@@ -1459,8 +1458,8 @@ showAlert(
                         Boolean(recordCurrentStage));
                     const isArchived = statusCategory === 'archived';
                     const isApproved = statusCategory === 'approved';
-                    const isFinanceSuperAdminReturnAllowed =
-                      isFinanceSuperAdminDeleteMode &&
+                    const isSuperAdminReturnAllowed =
+                      isSuperAdminDeleteMode &&
                       ['pending', 'approved', 'rejected', 'archived'].includes(statusCategory);
                     const proposedAmount = record.total_amount || record.total_budget || record.amount || 0;
                     const approvedAmount = record.approved_total_amount || record.approved_amount || null;
@@ -1595,7 +1594,7 @@ showAlert(
                                 {isSuperAdminView ? (
                                   !isArchived && (
                                     <>
-                                      {isFinanceSuperAdminDeleteMode ? (
+                                      {isSuperAdminDeleteMode ? (
                                         <>
                                           <button
                                             className="fw-action-btn fw-action-btn--returned"
@@ -1604,7 +1603,7 @@ showAlert(
                                               e.stopPropagation();
                                               openActionPopup("return", recordId, proposalRef);
                                             }}
-                                            disabled={actingRecordId === recordId || !isFinanceSuperAdminReturnAllowed}
+                                            disabled={actingRecordId === recordId || !isSuperAdminReturnAllowed}
                                           >
                                             <RotateCcw size={18} />
                                           </button>
