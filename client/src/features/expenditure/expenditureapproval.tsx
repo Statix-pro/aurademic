@@ -1,5 +1,5 @@
 import React, { useState, useRef, CSSProperties, useEffect, ChangeEvent, MouseEvent, Fragment } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Info, Plus, X, Upload, Eye, Trash2, Download, ChevronLeft } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
@@ -284,14 +284,77 @@ const CREDIT_ACCOUNT_OPTIONS = [
   'KSRCT RPS AICTE Project | 0075133800000643',
 ];
 const CATEGORY_TYPE_OPTIONS = [
-  'Individual Faculty',
-  'Faculty_Team',
-  'Student_Team',
+  'Faculty',
+  'Staff',
   'Department',
   'Centre',
   'Cell',
   'Club',
+  'Section',
+  'Professional Body',
   'Institution',
+];
+const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
+  Department: 'DEPARTMENT',
+  Centre: 'CENTRE',
+  Cell: 'CELL',
+  Club: 'CLUB',
+  Section: 'SECTION',
+  'Professional Body': 'PROFESSIONAL_BODY',
+};
+const FALLBACK_SUBCATEGORY_OPTIONS: Record<string, string[]> = {
+  Department: [
+    'Computer Science and Engineering',
+    'Electronics and Communication Engineering',
+    'Mechanical Engineering',
+    'Civil Engineering',
+    'Information Technology',
+  ],
+  Centre: [
+    'Centre for Research',
+    'Centre for Innovation',
+    'Centre for Industry Collaboration',
+  ],
+  Cell: [
+    'Placement Cell',
+    'Entrepreneurship Development Cell',
+    'Women Empowerment Cell',
+    'Alumni Cell',
+  ],
+  Club: [
+    'Coding Club',
+    'Robotics Club',
+    'Cultural Club',
+    'Sports Club',
+  ],
+  Section: [
+    'Section A',
+    'Section B',
+    'Section C',
+  ],
+  'Professional Body': [
+    'American Society of Mechanical Engineers (Student Chapter)',
+    'Computer Society of India',
+    'Erode Salaram Foundation',
+    'Local Library Authority, Erode & Namakkal',
+    'Society for the Advancement of Library and Information Science',
+    'The Indian Institute of Welding',
+    'The Indian Society of Heating, Refrigerating and Air Conditioning',
+  ],
+};
+const FALLBACK_TAG_OPTIONS: SelectOption[] = [
+  { value: 'Laboratory', label: 'Laboratory' },
+  { value: 'Association', label: 'Association' },
+  { value: 'Skilling', label: 'Skilling' },
+  { value: 'Research', label: 'Research' },
+  { value: 'Outreach', label: 'Outreach' },
+  { value: 'Office', label: 'Office' },
+  { value: 'Academics', label: 'Academics' },
+  { value: 'Essentials', label: 'Essentials' },
+  { value: 'Events', label: 'Events' },
+  { value: 'Innovation', label: 'Innovation' },
+  { value: 'Start-up', label: 'Start-up' },
+  { value: 'Entrepreneurship', label: 'Entrepreneurship' },
 ];
 const PAYMENT_MODE_OPTIONS = ['NEFT', 'RTGS', 'IMPS', 'Cheque', 'Cash', 'G-Pay', 'PhonePe', 'Internal Transfer'];
 const PAYMENT_STATUS_OPTIONS = ['Paid', 'Pending', 'Processing', 'Cancelled'];
@@ -421,6 +484,26 @@ const EVENT_SUBHEAD_GROUPS: Record<string, Array<{ label: string; options: Optio
 
 const flattenOptions = (options: Array<OptionType | { label: string; options: OptionType[] }>): OptionType[] =>
   options.flatMap((opt) => ('options' in opt ? opt.options : opt));
+
+const parsePositiveIntLike = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+
+  const direct = Number.parseInt(text, 10);
+  if (Number.isInteger(direct) && direct > 0) {
+    return direct;
+  }
+
+  const match = text.match(/(\d+)(?!.*\d)/);
+  if (!match) return null;
+
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
 
 const getSelectedOption = (
   value: string | number,
@@ -948,11 +1031,14 @@ const mapFinanceBeneficiaryTypeToExpenditureCategory = (value: string): string =
   const normalized = String(value || '').trim().toLowerCase();
 
   if (!normalized) return '';
-  if (normalized === 'faculty') return 'Individual Faculty';
+  if (normalized === 'faculty') return 'Faculty';
+  if (normalized === 'staff') return 'Staff';
   if (normalized === 'department') return 'Department';
   if (normalized === 'centre' || normalized === 'center') return 'Centre';
   if (normalized === 'cell') return 'Cell';
   if (normalized === 'club') return 'Club';
+  if (normalized === 'section') return 'Section';
+  if (normalized === 'professional body') return 'Professional Body';
   if (normalized === 'institution') return 'Institution';
 
   return '';
@@ -1477,28 +1563,42 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
 
 const ExpenditureApproval: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { id: routeId } = useParams<{ id?: string }>();
+  const dashboardRowIdFromState = (() => {
+    const state = location.state as {
+      dashboardRowId?: unknown;
+    } | null;
+
+    return String(state?.dashboardRowId || '').trim() || null;
+  })();
   const financeRequestIdFromState = (() => {
-    const rawValue = (location.state as { financeRequestId?: unknown; dashboardRowId?: unknown } | null)?.financeRequestId
-      ?? (location.state as { financeRequestId?: unknown; dashboardRowId?: unknown } | null)?.dashboardRowId;
-    const parsed = Number(rawValue);
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    const state = location.state as {
+      financeRequestId?: unknown;
+      financeProposal?: { proposalId?: unknown };
+    } | null;
+
+    const candidates = [
+      state?.financeRequestId,
+      state?.financeProposal?.proposalId,
+      routeId,
+    ];
+
+    for (const candidate of candidates) {
+      const parsed = parsePositiveIntLike(candidate);
+      if (parsed) return parsed;
+    }
+
+    return null;
   })();
   const [applicantName, setApplicantName] = useState<string>('');
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [designation, setDesignation] = useState<string>('');
   const [mobile, setMobile] = useState<string>('');
   const [department, setDepartment] = useState<string>('');
-  const [category, setCategory] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [amountProposed, setAmountProposed] = useState<string>('');
   const [directorComments, setDirectorComments] = useState<string>('');
-  const [directorStatus, setDirectorStatus] = useState<string>('');
-  const [principalComments, setPrincipalComments] = useState<string>('');
-  const [principalStatus, setPrincipalStatus] = useState<string>('');
-  const [principalPriority, setPrincipalPriority] = useState<string>('');
-  const [chairmanComments, setChairmanComments] = useState<string>('');
-  const [chairmanStatus, setChairmanStatus] = useState<string>('');
-  const [showPreview, setShowPreview] = useState<boolean>(false);
   const [isBudgetProposed, setIsBudgetProposed] = useState<string>('');
   const [balanceAmount, setBalanceAmount] = useState<string>('');
   const [debitStatus, setDebitStatus] = useState<'credited' | 'reimbursement' | ''>('');
@@ -1555,6 +1655,8 @@ const ExpenditureApproval: React.FC = () => {
   const [newPayee, setNewPayee] = useState<PayeeRow>(createPayeeRow());
   const [approvedBudgetOptions, setApprovedBudgetOptions] = useState<ApprovedBudgetOption[]>([]);
   const [isApprovedBudgetLoading, setIsApprovedBudgetLoading] = useState(false);
+  const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
+  const [tagOptions, setTagOptions] = useState<SelectOption[]>(FALLBACK_TAG_OPTIONS);
   const payeeLookupTimeoutRef = useRef<number | null>(null);
   const payeeLookupRequestRef = useRef(0);
 
@@ -1646,6 +1748,85 @@ const ExpenditureApproval: React.FC = () => {
     };
   }, [financeRequestIdFromState]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBeneficiaryOptions = async () => {
+      const toOptionList = (rows: any[]): SelectOption[] =>
+        rows
+          .map((row: any) => String(row?.name || '').trim())
+          .filter(Boolean)
+          .map((name: string) => ({ value: name, label: name }));
+
+      const nextOptions: Record<string, SelectOption[]> = {};
+
+      try {
+        const response = await authenticityUtility.get('budget/org-units') as any;
+        const grouped = response?.data?.grouped;
+
+        if (grouped && typeof grouped === 'object') {
+          Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).forEach(([beneficiaryKey, apiType]) => {
+            const rows = Array.isArray((grouped as Record<string, any[]>)[apiType])
+              ? (grouped as Record<string, any[]>)[apiType]
+              : [];
+            nextOptions[beneficiaryKey] = toOptionList(rows);
+          });
+        } else {
+          throw new Error('Grouped org-units payload unavailable');
+        }
+      } catch (error) {
+        console.error('Failed to fetch bulk org units, falling back to per-type calls:', error);
+
+        for (const [beneficiaryKey, apiType] of Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE)) {
+          try {
+            const response = await authenticityUtility.get(`/finance-requests/org-units/${apiType}`) as any;
+            const rows = Array.isArray(response?.data) ? response.data : [];
+            nextOptions[beneficiaryKey] = toOptionList(rows);
+          } catch (fallbackError) {
+            console.error(`Failed to fetch options for ${beneficiaryKey}:`, fallbackError);
+            nextOptions[beneficiaryKey] =
+              FALLBACK_SUBCATEGORY_OPTIONS[beneficiaryKey]?.map((opt) => ({ value: opt, label: opt })) || [];
+          }
+        }
+      }
+
+      if (!cancelled) {
+        setSubcategoryOptionsByType(nextOptions);
+      }
+    };
+
+    loadBeneficiaryOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadTagOptions = async () => {
+      try {
+        const response = await authenticityUtility.get('/finance-requests/tags') as any;
+        if (response?.success && Array.isArray(response?.data)) {
+          const options = response.data
+            .map((row: any) => ({
+              value: String(row?.tag_name || '').trim(),
+              label: String(row?.tag_name || '').trim(),
+            }))
+            .filter((opt: SelectOption) => opt.value.length > 0);
+
+          setTagOptions(options.length > 0 ? options : FALLBACK_TAG_OPTIONS);
+        } else {
+          setTagOptions(FALLBACK_TAG_OPTIONS);
+        }
+      } catch (error) {
+        console.error('Failed to load budget tags', error);
+        setTagOptions(FALLBACK_TAG_OPTIONS);
+      }
+    };
+
+    loadTagOptions();
+  }, []);
+
   const addAdvanceRow = () => setAdvanceRows([...advanceRows, createAdvanceRow()]);
   const removeAdvanceRow = (id: string) => setAdvanceRows(advanceRows.filter(r => r.id !== id));
 
@@ -1715,11 +1896,11 @@ const ExpenditureApproval: React.FC = () => {
      return category;
    };
  
-   const isMultipleSelect = (type: string) => type === "Faculty_Team" || type === "Student_Team";
- 
-   const subcategoryList = (SUBCATEGORY_OPTIONS as any)[categoryType] ?? [];
+  const isMultipleSelect = (type: string) => type === 'Faculty' || type === 'Staff';
+
+  const subcategoryOptions: OptionType[] = subcategoryOptionsByType[categoryType] || [];
+  const subcategoryList: string[] = subcategoryOptions.map((option) => String(option.value));
    const hasSubcategories = subcategoryList.length > 0;
-   const subcategoryOptions: OptionType[] = subcategoryList.map((s: string) => ({ value: s, label: s }));
  
    const extraDropdownVisible = primaryHead === 'Events & Competitions' || primaryHead === 'Meetings & Audits';
 
@@ -1733,6 +1914,40 @@ const ExpenditureApproval: React.FC = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!categoryType?.trim()) {
+      setSelectedTag('');
+      return;
+    }
+
+    setSelectedTag((prev) => {
+      if (prev && prev.trim() !== '') {
+        return prev;
+      }
+
+      if (categoryType === 'Staff' || categoryType === 'Faculty') {
+        return 'Skilling';
+      }
+
+      if (categoryType === 'Department') {
+        return '';
+      }
+
+      if (
+        categoryType === 'Centre'
+        || categoryType === 'Cell'
+        || categoryType === 'Club'
+        || categoryType === 'Section'
+        || categoryType === 'Institution'
+        || categoryType === 'Professional Body'
+      ) {
+        return 'Essentials';
+      }
+
+      return '';
+    });
+  }, [categoryType]);
 
   const updatePayeeRow = (rowId: string, updater: (row: PayeeRow) => PayeeRow) => {
     setPayeeRows((prev) => prev.map((row) => (row.id === rowId ? updater(row) : row)));
@@ -1954,31 +2169,34 @@ const ExpenditureApproval: React.FC = () => {
   };
 
   const getApprovedBudgetHeadsForAdvance = (): OptionType[] => {
-    const uniqueHeads = Array.from(
-      new Set(
-        approvedBudgetOptions
-          .map((budget) => budget.head)
-          .filter(Boolean)
-      )
-    );
+    const approvedHeads: string[] = approvedBudgetOptions
+      .map((budget) => String(budget.head || '').trim())
+      .filter(Boolean);
 
-    return uniqueHeads.map((head) => ({ value: head, label: head }));
+    if (approvedHeads.length > 0) {
+      return Array.from(new Set(approvedHeads))
+        .map((head) => ({ value: head, label: head }));
+    }
+
+    return PRIMARY_HEAD_OPTIONS.flatMap((group) => group.options)
+      .map((option) => ({ value: String(option.value), label: String(option.label) }));
   };
 
   const getApprovedSubHeadOptionsForAdvance = (budgetHead: string | number): OptionType[] => {
     const normalizedHead = String(budgetHead || '').trim().toLowerCase();
     if (!normalizedHead) return [];
+    const approvedSubHeads: string[] = approvedBudgetOptions
+      .filter((budget) => budget.head.trim().toLowerCase() === normalizedHead)
+      .map((budget) => String(budget.subHead || '').trim())
+      .filter(Boolean);
 
-    const uniqueSubHeads = Array.from(
-      new Set(
-        approvedBudgetOptions
-          .filter((budget) => budget.head.trim().toLowerCase() === normalizedHead)
-          .map((budget) => budget.subHead)
-          .filter(Boolean)
-      )
-    );
+    if (approvedSubHeads.length > 0) {
+      return Array.from(new Set(approvedSubHeads))
+        .map((subHead) => ({ value: subHead, label: subHead }));
+    }
 
-    return uniqueSubHeads.map((subHead) => ({ value: subHead, label: subHead }));
+    return (SUB_HEAD_BY_BUDGET_HEAD[String(budgetHead)] || [])
+      .map((subHead) => ({ value: String(subHead), label: String(subHead) }));
   };
 
   const findApprovedBudgetOption = (budgetHead: string | number, subHead: string | number) => {
@@ -2042,6 +2260,21 @@ const ExpenditureApproval: React.FC = () => {
       console.error('Failed to load pre-advance summary:', error);
     }
   };
+
+  const totalAdvanceAmount = advanceRows.reduce((sum, row) => {
+    const amount = Number(String(row.advance || '').replace(/,/g, '').trim());
+    return sum + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+
+  const totalSettlementAmount = settlementRows.reduce((sum, row) => {
+    const amount = Number(String(row.settlement || '').replace(/,/g, '').trim());
+    return sum + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+
+  const totalExpenditureAmount = expenditureSubRows.reduce((sum, row) => {
+    const amount = Number(String(row.autoSum || row.expenditure || '').replace(/,/g, '').trim());
+    return sum + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
 
   const handleAdvanceBudgetHeadChange = (rowId: string, budgetHeadValue: string) => {
     updateAdvanceRow(rowId, (row) => ({
@@ -2353,314 +2586,7 @@ const ExpenditureApproval: React.FC = () => {
     `,
     documentTitle: "Expenditure_Approval_Request",
   });
-  const generatePDF = async (): Promise<void> => {
-    try {
-      setIsLoading(true);
-
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const margin = 12;
-      let yPos = 10;
-
-      const tableWidth = pageWidth - margin * 2;
-
-      // ======= HEADER TABLE (3 cells: Logo | College Name | FINANCE) =======
-      let compressedLogo: string | null = null;
-      try {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = KSRCTLogo;
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-          setTimeout(resolve, 2000);
-        });
-
-        const logoCanvas = document.createElement('canvas');
-        const targetSize = 100;
-        logoCanvas.width = targetSize;
-        logoCanvas.height = targetSize;
-        const ctx = logoCanvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, targetSize, targetSize);
-          ctx.drawImage(img, 0, 0, targetSize, targetSize);
-          compressedLogo = logoCanvas.toDataURL('image/jpeg', 0.7);
-        }
-      } catch {
-        // If logo fails, skip it
-      }
-
-      // Create header table with borders
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.3, valign: 'middle' },
-        columnStyles: {
-          0: { cellWidth: 22, halign: 'center' },
-          1: { cellWidth: tableWidth - 22 - 22, halign: 'center' },
-          2: { cellWidth: 22, halign: 'center' }
-        },
-        body: [[
-          { content: '', styles: { minCellHeight: 22 } },
-          { content: '', styles: { minCellHeight: 22 } },
-          { content: 'EXPENDITURE', styles: { fontStyle: 'bold', fontSize: 10 } }
-        ]],
-        didDrawCell: (data: any) => {
-          // Draw logo in first cell
-          if (data.column.index === 0 && data.row.index === 0 && compressedLogo) {
-            const logoSize = 15;
-            const x = data.cell.x + (data.cell.width - logoSize) / 2;
-            const y = data.cell.y + (data.cell.height - logoSize) / 2;
-            pdf.addImage(compressedLogo, 'JPEG', x, y, logoSize, logoSize);
-          }
-          // Draw college name with mixed styling in middle cell
-          if (data.column.index === 1 && data.row.index === 0) {
-            const cellCenterX = data.cell.x + data.cell.width / 2;
-            const cellCenterY = data.cell.y + data.cell.height / 2;
-
-            // Bold college name
-            pdf.setFontSize(11);
-            pdf.setFont('helvetica', 'bold');
-            pdf.text('K.S.RANGASAMY COLLEGE OF TECHNOLOGY', cellCenterX, cellCenterY - 4, { align: 'center' });
-
-            // Normal font for Autonomous and address
-            pdf.setFontSize(9);
-            pdf.setFont('helvetica', 'normal');
-            pdf.text('(Autonomous)', cellCenterX, cellCenterY + 1, { align: 'center' });
-            pdf.text('Tiruchengode - 637 215, Namakkal Dt. Tamil Nadu', cellCenterX, cellCenterY + 6, { align: 'center' });
-          }
-        }
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY + 6;
-
-      // Title - centered and larger
-      pdf.setFontSize(13);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('APPLICATION FOR EXPENDITURE APPROVAL', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 6;
-
-      // ======= BUILD MAIN CONTENT AS ONE CONTINUOUS TABLE =======
-      const formattedDate = date ? formatDMY(date) : '';
-      const beneficiaryText = categoryType + (hasSubcategories && categoryItem ? ' - ' + categoryItem : '');
-      const headOfAccountsText = primaryHead + (extraDropdownVisible && eventSubHead ? ' - ' + eventSubHead : '');
-      const budgetProposedText = isBudgetProposed === 'Yes'
-        ? 'Yes | Amount: Rs. ' + (amountProposed || '0.00') + ' | Balance: Rs. ' + (balanceAmount || '0.00')
-        : 'Not Proposed';
-
-      // Build main body rows
-      const mainTableBody: any[] = [
-        // Applicant info
-        ['Name', applicantName || '', 'Date', formattedDate],
-        ['Department', department || '', 'Designation', designation || ''],
-        ['Email', email || '', 'Mobile', mobile || ''],
-        [{ content: 'Beneficiary', styles: { fontStyle: 'bold' } }, { content: beneficiaryText, colSpan: 3 }],
-        [{ content: 'Description', styles: { fontStyle: 'bold' } }, { content: description || '', colSpan: 3 }],
-        [{ content: 'Head of Accounts', styles: { fontStyle: 'bold' } }, { content: headOfAccountsText, colSpan: 3 }],
-        [{ content: 'Proposed in Budget', styles: { fontStyle: 'bold' } }, { content: budgetProposedText, colSpan: 3 }],
-      ];
-
-      // Main info table
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 38, fontStyle: 'bold' },
-          1: { cellWidth: 75 },
-          2: { cellWidth: 22, fontStyle: 'bold' },
-          3: { cellWidth: tableWidth - 38 - 75 - 22 }
-        },
-        body: mainTableBody,
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY; // NO gap
-
-      // ======= BUDGET TABLE =======
-      const budgetTableBody = budgetRows.map((row, index) => [
-        (index + 1).toString(),
-        row.category || '',
-        row.head || '',
-        'Rs. ' + Number(row.amount || 0).toFixed(2)
-      ]);
-      budgetTableBody.push([
-        { content: 'Total Budget:', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' as const } } as any,
-        { content: 'Rs. ' + totalBudget.toFixed(2), styles: { fontStyle: 'bold' } }
-      ]);
-
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 12, halign: 'center' },
-          1: { cellWidth: 45 },
-          2: { cellWidth: 65 },
-          3: { cellWidth: tableWidth - 12 - 45 - 65, halign: 'right' }
-        },
-        body: [
-          [{ content: 'S.No', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-          { content: 'Budget Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-          { content: 'Sub Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-          { content: 'Amount', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } }],
-          ...budgetTableBody
-        ],
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY; // NO gap
-
-      // Amount in words
-      const amountInWords = numberToIndianWords(totalBudget)
-        .replace(/\b\w/g, l => l.toUpperCase())
-        .replace(/([A-Z])(?=[A-Z][a-z])/, '$1 ')
-        .replace(/[A-Z]{2,}/g, m => m.charAt(0) + m.slice(1).toLowerCase());
-
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, halign: 'center' },
-        body: [['Rupees in Words: ' + amountInWords]],
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY; // NO gap
-
-      // ======= INCOME SECTION =======
-      if (showIncomeSection) {
-        const incomeTableBody = incomeRows.flatMap((row, index) => ([
-          [
-            { content: String(index + 1), styles: { halign: 'center' } },
-            { content: row.incomeSource || '' },
-            { content: row.contribution || '' },
-            { content: row.amount ? `Rs. ${row.amount}` : '' },
-            { content: row.status || '' },
-          ],
-          [
-            { content: 'Credit Account', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } },
-            { content: row.creditAccount || '', colSpan: 3 },
-          ],
-        ]));
-
-        autoTable(pdf, {
-          startY: yPos,
-          margin: { left: margin, right: margin },
-          theme: 'grid',
-          tableWidth: tableWidth,
-          styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-          head: [[
-            'S.No',
-            'Income Source',
-            'Contribution',
-            'Amount',
-            'Status',
-          ]],
-          headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
-          columnStyles: {
-            0: { cellWidth: 12, halign: 'center' },
-            1: { cellWidth: 55 },
-            2: { cellWidth: 30, halign: 'center' },
-            3: { cellWidth: 30, halign: 'right' },
-            4: { cellWidth: tableWidth - 12 - 55 - 30 - 30 },
-          },
-          body: incomeTableBody as any,
-        });
-
-        yPos = (pdf as any).lastAutoTable.finalY; // NO gap
-      }
-
-      // ======= DIRECTOR'S SECTION =======
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 38, fontStyle: 'bold' },
-          1: { cellWidth: 100 },
-          2: { cellWidth: tableWidth - 38 - 100 }
-        },
-        body: [
-          [{ content: 'For Office use of Director - Finance and Purchase', colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } }],
-          [{ content: 'Comments', styles: { fontStyle: 'bold', minCellHeight: 12 } }, { content: directorComments || '', colSpan: 2, styles: { minCellHeight: 12 } }],
-          [{ content: 'Status', styles: { fontStyle: 'bold' } }, 'Recommended / Not Recommended', ''],
-        ],
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY; // NO gap
-
-      // ======= PRINCIPAL'S SECTION =======
-      const principalStatusText = totalBudget > 10000 ? 'Recommended / Not Recommended' : 'Approved / Not Approved';
-
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 38, fontStyle: 'bold' },
-          1: { cellWidth: 100 },
-          2: { cellWidth: tableWidth - 38 - 100 }
-        },
-        body: [
-          [{ content: "Principal's Approval", colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } }],
-          [{ content: 'Comments', styles: { fontStyle: 'bold', minCellHeight: 12 } }, { content: principalComments || '', colSpan: 2, styles: { minCellHeight: 12 } }],
-          [{ content: 'Status', styles: { fontStyle: 'bold' } }, principalStatusText, ''],
-        ],
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY; // NO gap
-
-      // ======= PRIORITY & CHAIRMAN'S SECTION (only if totalBudget > 10000) =======
-      if (totalBudget > 10000) {
-        autoTable(pdf, {
-          startY: yPos,
-          margin: { left: margin, right: margin },
-          theme: 'grid',
-          tableWidth: tableWidth,
-          styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-          columnStyles: {
-            0: { cellWidth: 38, fontStyle: 'bold' },
-            1: { cellWidth: 100 },
-            2: { cellWidth: tableWidth - 38 - 100 }
-          },
-          body: [
-            [{ content: 'Priority', styles: { fontStyle: 'bold' } }, '[ ] Routine      [ ] Urgent      [ ] Most Urgent', ''],
-            [{ content: "Chairman's Approval", colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } }],
-            [{ content: 'Comments', styles: { fontStyle: 'bold', minCellHeight: 12 } }, { content: chairmanComments || '', colSpan: 2, styles: { minCellHeight: 12 } }],
-            [{ content: 'Status', styles: { fontStyle: 'bold' } }, 'Approved / Not Approved', ''],
-          ],
-        });
-      }
-
-      // Add page numbers
-      const totalPages = pdf.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        pdf.setPage(i);
-        pdf.setFontSize(9);
-        pdf.setFont('helvetica', 'normal');
-        pdf.text('Page ' + i, pageWidth - margin, pdf.internal.pageSize.getHeight() - 6, { align: 'right' });
-      }
-
-      pdf.save('ExpenditureApprovalRequest.pdf');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      showAlert('Error generating PDF. Please try again.', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const formatSelections = (selections: SelectOption[]): string => {
+   const formatSelections = (selections: SelectOption[]): string => {
     return selections.map(sel => sel.value).join(', ') || '';
   };
 
@@ -3176,10 +3102,28 @@ const ExpenditureApproval: React.FC = () => {
         return;
       }
 
-      showAlert('Expenditure request submitted successfully', 'success');
+      const submittedAmount =
+        activeTab === 'Advance'
+          ? totalAdvanceAmount
+          : activeTab === 'Settlement'
+            ? totalSettlementAmount
+            : activeTab === 'Expenditure'
+              ? totalExpenditureAmount
+              : 0;
 
-      // ✅ Reset AFTER successful submit
-      handleReset(true);
+      navigate('/expenditurecard', {
+        state: {
+          ...(dashboardRowIdFromState
+            ? {
+                dashboardRowId: dashboardRowIdFromState,
+                submittedModule: activeTab || undefined,
+                submittedAmount,
+              }
+            : {}),
+          financeProposal: (location.state as { financeProposal?: unknown } | null)?.financeProposal || null,
+        },
+      });
+      return;
     } catch (error) {
       console.error('Expenditure submit error:', error);
       const apiError = error as {
@@ -3210,14 +3154,8 @@ const ExpenditureApproval: React.FC = () => {
       setEmail('');
       setDepartment('');
       setDescription('');
-      setDirectorComments('');
-      setDirectorStatus('');
-      setPrincipalComments('');
-      setPrincipalStatus('');
-      setPrincipalPriority('');
-      setChairmanComments('');
-      setChairmanStatus('');
-      setCategoryType('');
+      
+       setCategoryType('');
       setCategoryItem('');
       setBeneficiaryEmployeeId(null);
       setBeneficiarySearchQuery('');
@@ -3277,8 +3215,8 @@ const handleBeneficiarySearch = async (query: string) => {
   setBeneficiarySearchQuery(query);
   try {
     let typeParam = '';
-    if (categoryType === 'Individual Faculty') typeParam = '&type=Teaching';
-    else if (categoryType === 'Individual Staff') typeParam = '&type=Non-Teaching';
+    if (categoryType === 'Faculty') typeParam = '&type=Teaching';
+    else if (categoryType === 'Staff') typeParam = '&type=Non-Teaching';
     const response = await (authenticityUtility as any).get(
       `/expenditure/search-applicant?q=${encodeURIComponent(query)}${typeParam}`
     ) as any;
@@ -3428,13 +3366,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
   };
 
 
-  useEffect(() => {
-    if (showPreview && componentRef.current) {
-      const contentHeight = componentRef.current.scrollHeight;
-      const pageHeight = 270;
-      setTotalPages(Math.ceil(contentHeight / pageHeight));
-    }
-  }, [showPreview, applicantName, department, totalBudget,]);
+  
   const [showSearchModal, setShowSearchModal] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [expandedHead, setExpandedHead] = useState<string>('');
@@ -3500,7 +3432,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         onClick={(e) => {
           if (e.target === e.currentTarget) setShowSearchModal(false);
         }}
-      >
+       >
         <div
           style={{
             backgroundColor: "#fff",
@@ -3759,7 +3691,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
     <div className="expenditure-approval-body" style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}>
 
 
-      {!showPreview && (
+       (
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
           <div className="ea-applicantCard">
 
@@ -4131,15 +4063,15 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                   </label>
 
                   {/* REPLACE the entire beneficiary row with this: */}
-<div className="row mb-3" style={{ alignItems: 'flex-start' }}>
+                        <div className="row mb-3" style={{ alignItems: 'flex-start' }}>
 
-  {/* Column 1: Beneficiary Type */}
-  <div className="col-md-3">
-    <div className="form-group">
-      <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
-        Beneficiary 
-      </label>
-      <CustomDropdown
+                       {/* Column 1: Beneficiary Type */}
+                          <div className="col-md-3">
+                              <div className="form-group">
+                                 <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
+                                      Beneficiary 
+                                      </label>
+                                  <CustomDropdown
         name="categoryType"
         options={toOptions(CATEGORY_TYPE_OPTIONS)}
         value={getSelectedOption(categoryType, toOptions(CATEGORY_TYPE_OPTIONS))}
@@ -4166,11 +4098,11 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
   {/* Column 2: Dynamic field based on type */}
   <div className="col-md-6">
 
-    {/* Faculty / Individual Staff — live search */}
-    {['Individual Faculty', 'Individual Staff'].includes(categoryType) && (
+    {/* Faculty / Staff — live search */}
+    {['Faculty', 'Staff'].includes(categoryType) && (
       <div className="form-group" style={{ position: 'relative' }}>
         <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
-          {categoryType === 'Individual Staff' ? 'Staff Name' : 'Faculty Name'}
+          {categoryType === 'Staff' ? 'Staff Name' : 'Faculty Name'}
         </label>
         <input
           type="text"
@@ -4191,7 +4123,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             e.currentTarget.style.boxShadow = 'none';
             setTimeout(() => setShowBeneficiaryDropdown(false), 200);
           }}
-          placeholder={categoryType === 'Individual Staff' ? 'Search staff by name or ERP ID' : 'Search faculty by name or ERP ID'}
+          placeholder={categoryType === 'Staff' ? 'Search staff by name or ERP ID' : 'Search faculty by name or ERP ID'}
           style={{ borderRadius: 12, border: '1px solid #e0e0e0', padding: '10px 15px', fontSize: '0.95rem', width: '100%', backgroundColor: '#fcfdff', outline: 'none' }}
         />
         {/* Search Results Dropdown */}
@@ -4239,8 +4171,8 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         ) : (
           <CustomDropdown
             name="categoryItem"
-            options={toOptions(subcategoryList)}
-            value={getSelectedOption(categoryItem, toOptions(subcategoryList))}
+            options={subcategoryOptions}
+            value={getSelectedOption(categoryItem, subcategoryOptions)}
             onChange={(option) => {
               const selected = option as OptionType | null;
               setCategoryItem(selected?.value ? String(selected.value) : '');
@@ -4255,16 +4187,13 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
   </div>
 
   {/* Column 3: Tag (same as budget page) */}
-  <div className="col-md-3">
+      <div className="col-md-3">
     {categoryType && (
       <div className="form-group">
         <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>Tag</label>
         <CustomDropdown
           name="selectedTag"
-          options={[
-            'Laboratory','Association','Skilling','Research','Outreach',
-            'Office','Academics','Essentials','Events','Innovation','Start-up','Entrepreneurship'
-          ].map(t => ({ value: t, label: t }))}
+          options={tagOptions}
           value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
           onChange={(option) => {
             const selected = option as OptionType | null;
@@ -4276,12 +4205,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
       </div>
     )}
   </div>
-
 </div>
-
-
-
-
                 </div>
               </div>
             </div>
@@ -4505,7 +4429,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                       Total Advance
                     </td>
                     <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
-                      ₹ 0.00
+                      &#8377; {totalAdvanceAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ border: '1px solid #e0e0e0' }}></td>
                   </tr>
@@ -4530,7 +4454,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                 }}
               >
                 <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                <span style={{ fontWeight: 600 }}>Zero Rupees Only</span>
+                <span style={{ fontWeight: 600 }}>{numberToIndianWords(totalAdvanceAmount)}</span>
               </div>
             </div>
           </div>
@@ -4619,9 +4543,14 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                           placeholder="₹ 0"
                           value={row.settlement}
                           onChange={(e) => {
-                            const updated = settlementRows.map(r => r.id === row.id ? { ...r, settlement: e.target.value } : r);
-                            setSettlementRows(updated);
-                          }}
+  const value = e.target.value;
+  if (!/^\d*\.?\d*$/.test(value)) return;
+
+  const updated = settlementRows.map((r) =>
+    r.id === row.id ? { ...r, settlement: value } : r
+  );
+  setSettlementRows(updated);
+}}
                           style={{
                             border: '1px solid #e0e0e0',
                             borderRadius: '12px',
@@ -4694,16 +4623,37 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr style={{ backgroundColor: '#f0f6ff' }}>
-                    <td colSpan={4} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>
-                      Total Settlement
-                    </td>
-                    <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
-                      ₹ 0.00
-                    </td>
-                    <td style={{ border: '1px solid #e0e0e0' }}></td>
-                  </tr>
-                </tfoot>
+  <tr style={{ backgroundColor: "#f0f6ff" }}>
+    <td
+      colSpan={4}
+      style={{
+        padding: "12px",
+        border: "1px solid #e0e0e0",
+        textAlign: "right",
+        paddingRight: "15px",
+        fontWeight: 600,
+        color: "#0069ab",
+      }}
+    >
+      Total Settlement
+    </td>
+    <td
+      style={{
+        padding: "12px",
+        border: "1px solid #e0e0e0",
+        fontWeight: 600,
+        color: "#0069ab",
+        textAlign: "center",
+      }}
+    >
+      ₹ {totalSettlementAmount.toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}
+    </td>
+    <td style={{ border: "1px solid #e0e0e0" }}></td>
+  </tr>
+</tfoot>
               </table>
 
               <div
@@ -4722,9 +4672,9 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                   textAlign: "center",
                   width: "100%",
                 }}
-              >
+               >
                 <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                <span style={{ fontWeight: 600 }}>Zero Rupees Only</span>
+                <span style={{ fontWeight: 600 }}>{numberToIndianWords(totalAdvanceAmount)}</span>
               </div>
             </div>
           </div>
@@ -5007,609 +4957,9 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             showAlert={showAlert}
           />
         </div>
-      )}
-      {showPreview && (
-        <div ref={componentRef} style={{
-          position: 'relative',
-          backgroundColor: '#fff',
-          padding: '22px 18px',
-          width: '210mm',
-          boxSizing: 'border-box',
-          margin: '0 auto',
-        }}>
-
-          <table
-            style={{
-
-              marginBottom: "14px",
-              tableLayout: "fixed",
-              width: '94%', margin: '0 auto 14px auto', borderCollapse: 'collapse'
-            }}
-          >
-            <tr>
-              {/* Logo box */}
-              <td
-                style={{
-                  width: "16%",
-                  border: "1px solid #000",
-                  textAlign: "center",
-                  verticalAlign: "middle",
-                  padding: "10px 6px",
-                }}
-              >
-                <img
-                  src={KSRCTLogo}
-                  alt="Logo"
-                  style={{ width: "75px", height: "75px", objectFit: "contain" }}
-                />
-              </td>
-
-              {/* College text box */}
-              <td
-                style={{
-                  width: "68%",
-                  border: "1px solid #000",
-                  textAlign: "center",
-                  verticalAlign: "middle",
-                  padding: "8px 10px",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "19px",
-                    fontWeight: "bold",
-                    color: "#000",
-                    lineHeight: "1.05",
-                    marginBottom: "4px",
-                  }}
-                >
-                  K.S.RANGASAMY COLLEGE OF TECHNOLOGY
-                </div>
-                <div style={{ fontSize: "14px", color: "#000", marginBottom: "4px" }}>
-                  (Autonomous)
-                </div>
-                <div style={{ fontSize: "16px", color: "#000", lineHeight: "1.2" }}>
-                  Tiruchengode – 637 215, Namakkal Dt. Tamil Nadu
-                </div>
-              </td>
-
-              {/* FINANCE box */}
-              <td
-                style={{
-                  width: "16%",
-                  border: "1px solid #000",
-                  textAlign: "center",
-                  verticalAlign: "middle",
-                  padding: "10px 6px",
-                }}
-              >
-                <div style={{ fontSize: "16px", fontWeight: "bold", color: "#000" }}>
-                  EXPENDITURE
-                </div>
-              </td>
-            </tr>
-          </table>
-          <h2
-            style={{
-              textAlign: 'center',
-              margin: '0 0 18px 0',
-              fontSize: '18px',
-              fontWeight: 'bold',
-              textTransform: 'uppercase',
-              letterSpacing: '0.4px',
-              color: '#000000'
-            }}
-          >
-            APPLICATION FOR EXPENDITURE APPROVAL
-          </h2>
-
-
-          <table style={{
-            marginBottom: "14px",
-            tableLayout: "fixed",
-            width: '98%',
-            borderCollapse: 'collapse',
-            marginLeft: '24px'
-          }}>
-
-            <tr>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', width: '20%', fontSize: '14px', color: '#000000ff' }}><strong>Name</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', width: '35%', fontSize: '14px', color: '#000000ff' }}>{applicantName || '\u00A0'}</td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', width: '15%', fontSize: '14px', color: '#000000ff' }}><strong>Date</strong></td>
-              <td
-                style={{
-                  padding: '4.5px 5.5px',
-                  border: '1px solid #000000ff',
-                  width: '25%',
-                  fontSize: '14px',
-                  color: '#000000ff',
-                }}
-              >
-                {date ? formatDMY(date) : '\u00A0'}
-              </td>
-
-            </tr>
-            <tr>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}><strong>Department</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}>{department || '\u00A0'}</td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}><strong>Designation</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff', width: '15%' }}>{designation || '\u00A0'}</td>
-
-            </tr>
-            <tr>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}><strong>Email</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}>{email || '\u00A0'}</td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}><strong>Mobile</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}>{mobile || '\u00A0'}</td>
-            </tr>
-
-            <tr>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', width: '25%', fontSize: '14px', color: '#000000ff' }} colSpan={1}><strong>Beneficiary</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }} colSpan={3}>
-                {categoryType || '\u00A0'}
-                {hasSubcategories && categoryItem && ` - ${categoryItem}`}
-              </td>
-            </tr>
-            <tr>
-              <td style={{
-                padding: '4.5px 5.5px',
-                border: '1px solid #000000ff',
-                width: '25%',
-                fontSize: '14px', color: '#000000ff'
-              }} colSpan={1}>
-                <strong>Description</strong>
-              </td>
-              <td style={{
-                padding: '4.5px 5.5px',
-                border: '1px solid #000000ff',
-                fontSize: '14px', color: '#000000ff',
-                wordWrap: 'break-word',
-                overflowWrap: 'break-word',
-                wordBreak: 'break-word',
-                hyphens: 'auto'
-              }} colSpan={3}>
-                {description || '\u00A0'}
-              </td>
-            </tr>
-
-            <tr>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', width: '30%', fontSize: '14px', color: '#000000ff' }} colSpan={1}><strong>Head of Accounts</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }} colSpan={3}>
-                {primaryHead || '\u00A0'}
-                {extraDropdownVisible && eventSubHead && ` - ${eventSubHead}`}
-              </td>
-
-            </tr>
-            <tr>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff', width: '1%' }} colSpan={1}><strong>Proposed in Budget</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }} colSpan={3}>
-                {isBudgetProposed === 'Yes' ? `Yes | Amount: ₹ ${amountProposed || '0.00'} | Balance: ₹ ${balanceAmount || '0.00'}` : 'Not Proposed'}
-              </td>
-            </tr>
-
-            <tr>
-              <td
-                colSpan={4}
-                style={{ padding: '8px 6px', border: '1px solid #000000ff', verticalAlign: 'top', color: '#000000ff' }}
-              >
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', marginTop: '4px' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f8f8f8' }}>
-                      <th style={{ padding: '3px 4px', border: '1px solid #000000ff', fontSize: '14px', fontWeight: 'bold', color: '#000000ff', textAlign: 'center' }}>S.No</th>
-                      <th style={{ padding: '3px 4px', border: '1px solid #000000ff', fontSize: '14px', fontWeight: 'bold', color: '#000000ff', textAlign: 'center' }}>Budget Head</th>
-                      <th style={{ padding: '3px 4px', border: '1px solid #000000ff', fontSize: '14px', fontWeight: 'bold', color: '#000000ff', textAlign: 'center' }}>Sub Head</th>
-                      <th style={{ padding: '3px 4px', border: '1px solid #000000ff', fontSize: '14px', fontWeight: 'bold', color: '#000000ff', textAlign: 'center' }}>Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {budgetRows.map((row, index) => (
-                      <tr key={index}>
-                        <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', fontSize: '14px', width: '5%', textAlign: 'center', color: '#000000ff' }}>{index + 1}</td>
-                        <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', fontSize: '14px', width: '35%', color: '#000000ff', textAlign: 'left' }}>{row.category || '\u00A0'}</td>
-                        <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff', textAlign: 'left' }}>{row.head || '\u00A0'}</td>
-                        <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', fontSize: '14px', width: '15%', textAlign: 'right', color: '#000000ff' }}>₹ {Number(row.amount || 0).toFixed(2)}</td>
-                      </tr>
-                    ))}
-                    <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
-                      <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000000ff', fontSize: '14px', textAlign: 'right', fontWeight: 'bold', color: '#000000ff' }}>Total Budget:</td>
-                      <td style={{ padding: '3px 4px', border: '1px solid #000000ff', fontSize: '14px', textAlign: 'right', color: '#000000ff' }}>₹ {totalBudget.toFixed(2)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </td>
-            </tr>
-            <tr>
-              <td
-                colSpan={4}
-                style={{
-                  padding: '6px 16px',
-                  border: '1px solid #000000ff',
-                  borderTop: '0',
-                  color: '#000000ff',
-                  textAlign: 'center',
-                  fontSize: '15px',
-                  letterSpacing: '0.5px',
-                  backgroundColor: '#f8f9fa'
-                }}
-              >
-                Rupees in Words:
-                {numberToIndianWords(totalBudget)
-                  .replace(/\b\w/g, l => l.toUpperCase())
-                  .replace(/([A-Z])(?=[A-Z][a-z])/, '$1 ')
-                  .replace(/[A-Z]{2,}/g, m => m.charAt(0) + m.slice(1).toLowerCase())
-                }
-
-              </td>
-            </tr>
-
-            <tr>
-              <td
-                colSpan={4}
-                style={{ padding: '6px 8px', border: '1px solid #000000ff', color: '#000000ff' }}
-              >
-                {showIncomeSection ? (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#f8f8f8' }}>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>S.No</th>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>Income Source</th>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>Contribution</th>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>Amount</th>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {incomeRows.map((row, index) => (
-                        <React.Fragment key={row.id}>
-                          <tr>
-                            <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>{index + 1}</td>
-                            <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff' }}>{row.incomeSource || ''}</td>
-                            <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>{row.contribution || ''}</td>
-                            <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', textAlign: 'right' }}>{row.amount ? `Rs. ${row.amount}` : ''}</td>
-                            <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>{row.status || ''}</td>
-                          </tr>
-                          <tr>
-                            <td colSpan={2} style={{ padding: '2.5px 4px', border: '1px solid #000000ff', fontWeight: 'bold', backgroundColor: '#f8f8f8' }}>
-                              Credit Account
-                            </td>
-                            <td colSpan={3} style={{ padding: '2.5px 4px', border: '1px solid #000000ff' }}>
-                              {row.creditAccount || ''}
-                            </td>
-                          </tr>
-                        </React.Fragment>
-                      ))}
-                    </tbody>
-
-                  </table>
-                ) : (
-                  <div style={{ textAlign: 'center', fontSize: '14px' }}>Income: Not Applicable</div>
-                )}
-              </td>
-            </tr>
-            <tr>
-              <td
-                colSpan={4}
-                style={{ padding: '6px 8px', border: '1px solid #000000ff', textAlign: 'center', fontSize: '14px', fontWeight: 'bold', color: "#333", backgroundColor: "#f8f9fa", }}
-              >
-                For Office use of Director- Finance and Purchase
-              </td>
-            </tr>
-            <tr>
-            </tr>
-            <tr>
-              <td
-                rowSpan={3}
-                style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', width: '25%', fontSize: '14px', color: '#000000ff' }}
-              >
-                <strong>Comments</strong>
-              </td>
-              <td
-                rowSpan={3}
-                colSpan={3}
-                style={{
-                  padding: '12px 16px',
-                  border: '1px solid #000000ff',
-                  fontSize: '14px',
-                  verticalAlign: 'top',
-                  color: '#000000ff',
-                  wordWrap: 'break-word',
-                  overflowWrap: 'break-word',
-                  wordBreak: 'break-word',
-                  hyphens: 'auto'
-                }}
-              >
-                {directorComments || '\u00A0'}
-              </td>
-            </tr>
-            <tr>
-              <td style={{ padding: '0', border: 'none', height: '30px' }}></td>
-            </tr>
-            <tr>
-              <td style={{ padding: '0', border: 'none', height: '10px' }}></td>
-            </tr>
-            <tr>
-              <td
-                style={{
-                  padding: '4.5px 5.5px',
-                  border: '1px solid #000000ff',
-                  width: '25%',
-                  fontSize: '14px',
-                  verticalAlign: 'middle',
-                  fontWeight: 'bold',
-                  color: '#000000ff'
-                }}
-              >
-                Status
-              </td>
-              <td
-                colSpan={1}
-                style={{
-                  padding: '4.5px 5.5px',
-                  border: '1px solid #333',
-                  height: '32px',
-                  backgroundColor: '#fff',
-                  position: 'relative', color: '#000000ff'
-                }}
-              >
-                <div style={{
-                  position: 'absolute',
-                  height: '1px',
-                  backgroundColor: '#333',
-
-                }}></div>
-                <span style={{
-                  backgroundColor: '#fff',
-                  fontSize: '14px'
-                  , color: '#000000ff'
-                }}>
-                  Recommended / Not Recommended
-                </span>
-              </td>
-              <td
-                colSpan={2}
-                style={{
-                  padding: '4.5px 5.5px',
-                  border: '1px solid',
-                  height: '32px',
-                  backgroundColor: '#fff',
-                  position: 'relative', color: '#000000ff'
-                }}
-              ></td>
-
-            </tr>
-            <tr>
-              <td
-                colSpan={4}
-                style={{
-                  padding: "6px 8px",
-                  border: "1px solid #000000ff",
-                  textAlign: "center",
-                  fontSize: "14px",
-                  fontWeight: "bold" as const,
-                  color: "#333",
-                  backgroundColor: "#f8f9fa",
-                }}
-              >
-                Principal's Approval
-              </td>
-            </tr>
-            <tr>
-              <td
-                rowSpan={3}
-                style={{
-                  padding: "4.5px 5.5px",
-                  border: "1px solid #000000ff",
-                  width: "25%",
-                  fontSize: "14px",
-                  color: "#000000ff",
-                  backgroundColor: "#f8f9fa",
-                }}
-              >
-                <strong>Comments</strong>
-              </td>
-              <td
-                rowSpan={3}
-                colSpan={3}
-                style={{
-                  padding: "12px 16px",
-                  border: "1px solid #000000ff",
-                  fontSize: "14px",
-                  verticalAlign: "top" as const,
-                  color: "#000000ff",
-                }}
-              >
-                {principalComments || "\u00A0"}
-              </td>
-            </tr>
-            <tr><td style={{ padding: "0", border: "none", height: "30px" }} /></tr>
-            <tr><td style={{ padding: "0", border: "none", height: "10px" }} /></tr>
-
-            <tr>
-              <td
-                style={{
-                  padding: "4.5px 5.5px",
-                  border: "1px solid #000000ff",
-                  width: "25%",
-                  fontSize: "14px",
-                  verticalAlign: "middle" as const,
-                  fontWeight: "bold" as const,
-                  color: "#000000ff",
-                }}
-              >
-                Status
-              </td>
-              <td
-                colSpan={2}
-                style={{
-                  padding: "4.5px 5.5px",
-                  border: "1px solid #333",
-                  height: "32px",
-                  backgroundColor: "#fff",
-                  position: "relative" as const,
-                  color: "#000000ff",
-                }}
-              >
-
-                <span
-                  style={{
-                    backgroundColor: "#fff",
-                    fontSize: "14px",
-                    color: "#000000ff",
-                    padding: "0 4px" as const,
-                  }}
-                >
-                  {totalBudget > 10000 ? "Recommended / Not Recommended" : "Approved / Not Approved"}
-                </span>
-              </td>
-              <td
-                colSpan={1}
-                style={{
-                  padding: '4.5px 5.5px',
-                  border: '1px solid',
-                  height: '32px',
-                  backgroundColor: '#fff',
-                  position: 'relative'
-                }}
-              ></td>
-
-            </tr>
-            {totalBudget > 10000 && (
-              <>
-                <tr>
-                  <td
-                    style={{
-                      padding: "4.5px 5.5px",
-                      border: "1px solid #000000ff",
-                      width: "25%",
-                      fontSize: "14px",
-                      verticalAlign: "middle" as const,
-                      fontWeight: "bold" as const,
-                      color: "#000000ff",
-                    }}
-                  >
-                    Priority
-                  </td>
-
-                  <td
-                    colSpan={2}
-                    style={{
-                      padding: "4.5px 5.5px",
-                      border: "1px solid #333",
-                      height: "32px",
-                      backgroundColor: "#fff",
-                      position: "relative" as const,
-                      color: "#000000ff",
-                    }}
-                  >
-                    <span style={{ backgroundColor: "#fff", fontSize: "14px", whiteSpace: "pre", color: "#000000ff" }}>
-                      ☐ Routine     ☐ Urgent     ☐ Most Urgent
-                    </span>
-                  </td>
-                  <td
-                    colSpan={1}
-                    style={{
-                      padding: "4.5px 5.5px",
-                      border: "1px solid",
-                      height: "32px",
-                      backgroundColor: "#fff",
-                      position: "relative" as const,
-                    }}
-                  ></td>
-                </tr>
-                <tr>
-                  <td
-                    colSpan={4}
-                    style={{
-                      padding: "6px 8px",
-                      border: "1px solid #000000ff",
-                      textAlign: "center",
-                      fontSize: "14px",
-                      fontWeight: "bold" as const,
-                      color: "#000000ff",
-                    }}
-                  >
-                    Chairman's Approval
-                  </td>
-                </tr>
-                <tr>
-                  <td
-                    rowSpan={3}
-                    style={{
-                      padding: "4.5px 5.5px",
-                      border: "1px solid #000000ff",
-                      width: "25%",
-                      fontSize: "14px",
-                      color: "#000000ff",
-                    }}
-                  >
-                    <strong>Comments</strong>
-                  </td>
-                  <td
-                    rowSpan={3}
-                    colSpan={3}
-                    style={{
-                      padding: "12px 16px",
-                      border: "1px solid #000000ff",
-                      fontSize: "14px",
-                      verticalAlign: "top" as const,
-                      color: "#000000ff",
-                    }}
-                  >
-                    {chairmanComments || "\u00A0"}
-                  </td>
-                </tr>
-                <tr><td style={{ padding: "0", border: "none", height: "30px" }} /></tr>
-                <tr><td style={{ padding: "0", border: "none", height: "10px" }} /></tr>
-                <tr>
-                  <td
-                    style={{
-                      padding: "4.5px 5.5px",
-                      border: "1px solid #000000ff",
-                      width: "25%",
-                      fontSize: "14px",
-                      verticalAlign: "middle" as const,
-                      fontWeight: "bold" as const,
-                      color: "#000000ff",
-                    }}
-                  >
-                    Status
-                  </td>
-                  <td
-                    colSpan={2}
-                    style={{
-                      padding: "4.5px 5.5px",
-                      border: "1px solid #333",
-                      height: "32px",
-                      backgroundColor: "#fff",
-                      position: "relative" as const,
-                      color: "#000000ff",
-                    }}
-                  >
-                    <span
-                      style={{
-                        backgroundColor: "#fff",
-                        fontSize: "14px",
-                        color: "#000000ff",
-                        padding: "0 4px" as const,
-                      }}
-                    >
-                      Approved / Not Approved
-                    </span>
-                  </td>
-                  <td
-                    colSpan={1}
-                    style={{
-                      padding: '4.5px 5.5px',
-                      border: '1px solid',
-                      height: '32px',
-                      backgroundColor: '#fff',
-                      position: 'relative'
-                    }}
-                  ></td>
-                </tr>
-              </>
-            )}
-          </table>
+        )
+     
+         
           <div style={{
             position: 'absolute',
             bottom: '2mm',
@@ -5626,21 +4976,13 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             zIndex: 100,
           }}>
           </div>
-        </div>
-      )}
+        
+    
 
-      <AlertModal
-        show={alertConfig.show}
-        onHide={closeAlert}
-        message={alertConfig.message}
-        type={alertConfig.type}
-        title={alertConfig.title}
-        showCancel={alertConfig.showCancel}
-        confirmText={alertConfig.confirmText}
-        onConfirm={alertConfig.onConfirm}
-      />
-    </div>
+     </div>
+    
   );
 };
 
 export default ExpenditureApproval;
+
