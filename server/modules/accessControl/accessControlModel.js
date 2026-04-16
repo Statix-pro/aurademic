@@ -297,7 +297,15 @@ const makeRbacError = (message, statusCode = 500) => {
 };
 
 const ensureSystemPermissionSeed = async (connection = db) => {
-  for (const permission of SYSTEM_PERMISSION_SEED) {
+  const values = SYSTEM_PERMISSION_SEED.map((permission) => [
+    permission.module_key,
+    permission.action_key,
+    permission.permission_key,
+    permission.description,
+    permission.is_system ? 1 : 0,
+  ]);
+
+  if (values.length > 0) {
     await connection.query(
       `
         INSERT INTO permissions (
@@ -307,20 +315,14 @@ const ensureSystemPermissionSeed = async (connection = db) => {
           description,
           is_system
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES ?
         ON DUPLICATE KEY UPDATE
           module_key = VALUES(module_key),
           action_key = VALUES(action_key),
           description = VALUES(description),
           is_system = VALUES(is_system)
       `,
-      [
-        permission.module_key,
-        permission.action_key,
-        permission.permission_key,
-        permission.description,
-        permission.is_system ? 1 : 0,
-      ]
+      [values]
     );
   }
 };
@@ -844,13 +846,15 @@ const accessControlModel = {
           );
         }
 
-        for (const permission of permissionRows) {
+        const rolePermissionValues = permissionRows.map((permission) => [
+          roleId,
+          permission.id,
+        ]);
+
+        if (rolePermissionValues.length > 0) {
           await connection.query(
-            `
-              INSERT INTO role_permissions (role_id, permission_id)
-              VALUES (?, ?)
-            `,
-            [roleId, permission.id]
+            'INSERT INTO role_permissions (role_id, permission_id) VALUES ?',
+            [rolePermissionValues]
           );
         }
       }
@@ -1038,13 +1042,15 @@ const accessControlModel = {
           );
         }
 
-        for (const permission of permissionRows) {
+        const rolePermissionValues = permissionRows.map((permission) => [
+          parsedRoleId,
+          permission.id,
+        ]);
+
+        if (rolePermissionValues.length > 0) {
           await connection.query(
-            `
-              INSERT INTO role_permissions (role_id, permission_id)
-              VALUES (?, ?)
-            `,
-            [parsedRoleId, permission.id]
+            'INSERT INTO role_permissions (role_id, permission_id) VALUES ?',
+            [rolePermissionValues]
           );
         }
       }
@@ -1254,38 +1260,56 @@ const accessControlModel = {
         parsedUserId,
       ]);
 
-      for (const role of roleRows) {
+      const userRoleValues = roleRows.map((role) => [
+        parsedUserId,
+        role.id,
+        assignedBy || null,
+      ]);
+
+      if (userRoleValues.length > 0) {
         await connection.query(
-          `
-            INSERT INTO user_roles (user_id, role_id, assigned_by)
-            VALUES (?, ?, ?)
-          `,
-          [parsedUserId, role.id, assignedBy || null]
+          'INSERT INTO user_roles (user_id, role_id, assigned_by) VALUES ?',
+          [userRoleValues]
         );
       }
 
       // Handle the Contextual Roles (user_entity_roles)
       if (Array.isArray(entityRolesPayload)) {
-        await connection.query('DELETE FROM user_entity_roles WHERE user_id = ?', [parsedUserId]);
+        await connection.query('DELETE FROM user_entity_roles WHERE user_id = ?', [
+          parsedUserId,
+        ]);
 
-        for (const entityRole of entityRolesPayload) {
-          const [targetRoleRows] = await connection.query(
-            'SELECT id FROM roles WHERE role_code = ? LIMIT 1',
-            [entityRole.role_code]
+        if (entityRolesPayload.length > 0) {
+          const uniqueRoleCodesForEntities = uniqueStringArray(
+            entityRolesPayload.map((er) => er.role_code)
           );
 
-          if (targetRoleRows.length > 0) {
+          const [targetRoleRows] = await connection.query(
+            'SELECT id, role_code FROM roles WHERE role_code IN (?)',
+            [uniqueRoleCodesForEntities]
+          );
+
+          const roleMap = new Map(targetRoleRows.map((r) => [r.role_code, r.id]));
+
+          const entityRoleValues = entityRolesPayload
+            .map((entityRole) => {
+              const roleId = roleMap.get(entityRole.role_code);
+              if (roleId) {
+                return [
+                  parsedUserId,
+                  entityRole.entity_id,
+                  entityRole.entity_type,
+                  roleId,
+                ];
+              }
+              return null;
+            })
+            .filter(Boolean);
+
+          if (entityRoleValues.length > 0) {
             await connection.query(
-              `
-                  INSERT INTO user_entity_roles (user_id, entity_id, entity_type, role_id)
-                  VALUES (?, ?, ?, ?)
-                `,
-              [
-                parsedUserId,
-                entityRole.entity_id,
-                entityRole.entity_type,
-                targetRoleRows[0].id
-              ]
+              'INSERT INTO user_entity_roles (user_id, entity_id, entity_type, role_id) VALUES ?',
+              [entityRoleValues]
             );
           }
         }
