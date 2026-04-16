@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Form } from 'react-bootstrap';
+import Select from 'react-select';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { hasPermission, isSuperAdmin } from '../../../../shared/utils/permissionUtils';
 import authenticityUtility from '../../../../shared/utils/authenticityUtility';
@@ -9,6 +10,8 @@ import './adminbudgetdashboard.css';
 type Option = {
   value: string;
   label: string;
+  category?: 'Type' | 'Entity';
+  id?: number | string;
 };
 
 type AdminBudgetLineItem = {
@@ -56,12 +59,80 @@ const AdminBudgetDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'budget-head' | 'beneficiary-summary'>('budget-head');
   const [financialYear, setFinancialYear] = useState<Option | null>(getCurrentFiscalYearOption());
 
+  // Shared styles for react-select components to ensure UI consistency
+  const selectStyles = {
+    control: (base: any, state: any) => ({
+      ...base,
+      minHeight: '42px',
+      borderRadius: '12px',
+      borderColor: state.isFocused ? '#0069ab' : 'rgba(15, 23, 42, 0.18)',
+      background: 'rgba(255, 255, 255, 0.92)',
+      boxShadow: state.isFocused 
+        ? '0 0 0 4px rgba(0, 105, 171, 0.15), 0 10px 22px rgba(2, 6, 23, 0.08)' 
+        : '0 6px 18px rgba(2, 6, 23, 0.06)',
+      borderWidth: '1px',
+      fontFamily: 'inherit',
+      fontSize: '0.95rem',
+      fontWeight: 500,
+      transition: 'all 0.2s ease',
+      cursor: 'pointer',
+      '&:hover': {
+        borderColor: state.isFocused ? '#0069ab' : 'rgba(15, 23, 42, 0.3)'
+      }
+    }),
+    placeholder: (base: any) => ({
+      ...base,
+      color: '#64748b'
+    }),
+    singleValue: (base: any) => ({
+      ...base,
+      color: '#0f172a'
+    }),
+    menu: (base: any) => ({
+      ...base,
+      borderRadius: '12px',
+      marginTop: '0px',
+      overflow: 'hidden',
+      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+      zIndex: 999,
+      border: '1px solid #eef2f6'
+    }),
+    option: (base: any, state: any) => ({
+      ...base,
+      backgroundColor: state.isSelected 
+        ? '#0069ab' 
+        : state.isFocused 
+          ? '#f1f5f9' 
+          : 'transparent',
+      color: state.isSelected ? '#ffffff' : '#1e293b',
+      padding: '10px 15px',
+      fontSize: '0.9rem',
+      cursor: 'pointer',
+      '&:active': {
+        backgroundColor: '#0069ab'
+      }
+    }),
+    groupHeading: (base: any) => ({
+      ...base,
+      fontSize: '0.72rem',
+      fontWeight: 800,
+      textTransform: 'uppercase',
+      color: '#475569',
+      backgroundColor: '#f1f5f9',
+      padding: '8px 12px',
+      margin: '0',
+      borderBottom: '1px solid #e2e8f0',
+      letterSpacing: '0.05em'
+    })
+  };
+
   const [beneficiary, setBeneficiary] = useState<Option | null>(ALL_BENEFICIARY_OPTION);
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [consolidatedRows, setConsolidatedRows] = useState<ConsolidatedRow[]>([]);
   const [detailsByHead, setDetailsByHead] = useState<Record<string, any[]>>({});
   const [availableBeneficiaryTypes, setAvailableBeneficiaryTypes] = useState<string[]>([]);
+  const [orgUnits, setOrgUnits] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [expandedHead, setExpandedHead] = useState<string | null>(null);
@@ -149,21 +220,81 @@ const AdminBudgetDashboard: React.FC = () => {
     }));
   }, []);
 
-  const beneficiaryOptions: Option[] = useMemo(() => {
-    if (!availableBeneficiaryTypes || availableBeneficiaryTypes.length === 0) {
-      return [ALL_BENEFICIARY_OPTION];
-    }
+  useEffect(() => {
+    const fetchOrgUnits = async () => {
+      try {
+        const response: any = await authenticityUtility.get('/adminbudget/org-units');
+        const units = response?.data?.data?.all || response?.data?.all || [];
+        setOrgUnits(units);
+      } catch (err) {
+        console.error('Failed to fetch org units', err);
+      }
+    };
+    fetchOrgUnits();
+  }, []);
 
-    const options = availableBeneficiaryTypes.map((type) => ({
+  const beneficiaryOptions: any[] = useMemo(() => {
+    // Basic types if needed
+    const typeOptions = availableBeneficiaryTypes.map((type) => ({
       value: type,
       label: type,
+      category: 'Type'
     }));
 
-    return [ALL_BENEFICIARY_OPTION, ...options];
-  }, [availableBeneficiaryTypes]);
+    // Specific entities
+    const entityGroups: Record<string, any[]> = {};
+    orgUnits.forEach(unit => {
+      const type = unit.type_name || 'Other';
+      if (!entityGroups[type]) entityGroups[type] = [];
+      entityGroups[type].push({
+        value: unit.name,
+        label: unit.name,
+        id: unit.id,
+        category: 'Entity'
+      });
+    });
+
+    // Role-based filtering
+    if (roleKey === 'hod') {
+      const userDepts = Array.isArray(user?.entity_roles) 
+        ? user.entity_roles.filter((er: any) => er.role_code === 'hod' && er.entity_type === 'DEPARTMENT').map((er: any) => er.entity_name)
+        : [];
+      
+      const filteredDepts = (entityGroups['Department'] || []).filter(opt => userDepts.includes(opt.value));
+      return [ALL_BENEFICIARY_OPTION, ...filteredDepts];
+    }
+
+    if (roleKey === 'coordinator') {
+      const userEntities = Array.isArray(user?.entity_roles) 
+        ? user.entity_roles.filter((er: any) => er.role_code === 'coordinator').map((er: any) => er.entity_name)
+        : [];
+      
+      const allEntities = Object.values(entityGroups).flat();
+      const filteredEntities = allEntities.filter(opt => userEntities.includes(opt.value));
+      return [ALL_BENEFICIARY_OPTION, ...filteredEntities];
+    }
+
+    // Super Admin / DoF / Principal / Admin - show everything grouped
+    const groupedOptions = Object.keys(entityGroups).sort().map(group => ({
+      label: group,
+      options: entityGroups[group].sort((a, b) => a.label.localeCompare(b.label))
+    }));
+
+    return [ALL_BENEFICIARY_OPTION, ...groupedOptions];
+  }, [availableBeneficiaryTypes, orgUnits, roleKey, user]);
 
   useEffect(() => {
-    const hasCurrent = beneficiaryOptions.some((option) => option.value === beneficiary?.value);
+    // Check if current beneficiary value exists in any of the options (flattens groups)
+    const allOptions: Option[] = [];
+    beneficiaryOptions.forEach(opt => {
+      if (opt.options) {
+        allOptions.push(...opt.options);
+      } else {
+        allOptions.push(opt);
+      }
+    });
+
+    const hasCurrent = allOptions.some((option) => option.value === beneficiary?.value);
     if (!hasCurrent) {
       setBeneficiary(ALL_BENEFICIARY_OPTION);
     }
@@ -185,12 +316,14 @@ const AdminBudgetDashboard: React.FC = () => {
         setError('');
 
         const fiscalYearNum = Number.parseInt(financialYear.value.split('-')[0], 10);
-        const beneficiaryType = beneficiary?.value === 'all' ? '' : beneficiary?.value || '';
+        const beneficiaryType = beneficiary?.category === 'Type' ? beneficiary.value : '';
+        const beneficiaryValue = beneficiary?.category === 'Entity' ? beneficiary.value : '';
 
         const response: any = await authenticityUtility.get('/adminbudget/consolidation', {
           params: {
             fiscalYear: fiscalYearNum,
             beneficiaryType,
+            beneficiaryValue,
             q: debouncedSearch,
             scope: roleKey
           },
@@ -314,37 +447,28 @@ const AdminBudgetDashboard: React.FC = () => {
               </div>
               <div className="adminbudgetdashboard-header-right">
                 <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--fy">
-                  <Form.Select
-                    value={financialYear?.value || ''}
-                    onChange={(e) => {
-                      const option = financialYearOptions.find(opt => opt.value === e.target.value);
-                      if (option) setFinancialYear(option);
-                    }}
-                    className="adminbudgetdashboard-select"
-                  >
-                    {financialYearOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </Form.Select>
+                  <Select
+                    options={financialYearOptions}
+                    value={financialYear}
+                    onChange={(option) => setFinancialYear(option as Option | null)}
+                    styles={selectStyles}
+                    isSearchable={false}
+                    placeholder="Financial Year"
+                    className="adminbudgetdashboard-react-select-container"
+                  />
                 </div>
 
-                <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--beneficiary">
-                  <Form.Select
-                    value={beneficiary?.value || 'all'}
-                    onChange={(e) => {
-                      const option = beneficiaryOptions.find(opt => opt.value === e.target.value);
-                      if (option) setBeneficiary(option);
-                    }}
-                    className="adminbudgetdashboard-select"
-                  >
-                    {beneficiaryOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </Form.Select>
+                <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--beneficiary" style={{ minWidth: '240px' }}>
+                  <Select
+                    options={beneficiaryOptions}
+                    value={beneficiary}
+                    onChange={(option) => setBeneficiary(option)}
+                    isSearchable
+                    placeholder="Search Beneficiary..."
+                    className="adminbudgetdashboard-react-select-container"
+                    classNamePrefix="react-select"
+                    styles={selectStyles}
+                  />
                 </div>
 
                 <div className="adminbudgetdashboard-filter adminbudgetdashboard-filter--search">
@@ -353,7 +477,7 @@ const AdminBudgetDashboard: React.FC = () => {
                     value={searchText}
                     onChange={(e) => setSearchText(e.target.value)}
                     placeholder="Search Budget ID or Applicant"
-                    className="adminbudgetdashboard-search-input"
+                    className="adminbudgetdashboard-search"
                   />
                 </div>
               </div>

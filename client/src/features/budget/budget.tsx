@@ -703,14 +703,34 @@ const Budget: React.FC = () => {
     type: AlertType;
     title?: string;
     onConfirm?: () => void;
+    showCancel?: boolean;
+    confirmText?: string;
+    cancelText?: string;
   }>({
     show: false,
     message: '',
     type: 'info'
   });
 
-  const showAlert = (message: React.ReactNode, type: AlertType = 'info', title?: string, onConfirm?: () => void) => {
-    setAlertConfig({ show: true, message, type, title, onConfirm });
+  const showAlert = (
+    message: React.ReactNode,
+    type: AlertType = 'info',
+    title?: string,
+    onConfirm?: () => void,
+    showCancel = false,
+    confirmText = 'OK',
+    cancelText = 'Cancel'
+  ) => {
+    setAlertConfig({
+      show: true,
+      message,
+      type,
+      title,
+      onConfirm,
+      showCancel,
+      confirmText,
+      cancelText
+    });
   };
 
   const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
@@ -1568,25 +1588,29 @@ const Budget: React.FC = () => {
       return;
     }
 
-    if (!window.confirm('Are you sure you want to approve this budget?')) return;
+    showAlert(
+      'Are you sure you want to approve this budget?',
+      'warning',
+      'Confirm Approval',
+      async () => {
+        try {
+          const response: any = await authenticityUtility.patch(`${budgetApiBase}/${id}/approval`, {
+            decision: 'approved',
+          });
 
-    try {
-      const response: any = await authenticityUtility.patch(`${budgetApiBase}/${id}/approval`, {
-        decision: 'approved',
-      });
+          if (response?.success || response?.data?.success) {
+            navigate(-1);
+            return;
+          }
 
-      if (response?.success || response?.data?.success) {
-        showAlert('Budget approved!', 'success', undefined, () => {
-          closeAlert();
-          navigate(-1);
-        });
-        return;
-      }
-
-      showAlert(response?.message || 'Failed to approve', 'error');
-    } catch (error: any) {
-      showAlert(error?.response?.data?.message || 'Failed to approve', 'error');
-    }
+          showAlert(response?.message || 'Failed to approve', 'error');
+        } catch (error: any) {
+          showAlert(error?.response?.data?.message || 'Failed to approve', 'error');
+        }
+      },
+      true,
+      'Approve'
+    );
   };
 
   const onArchive = async () => {
@@ -1595,25 +1619,29 @@ const Budget: React.FC = () => {
       return;
     }
 
-    if (!window.confirm('Are you sure you want to archive this budget?')) return;
+    showAlert(
+      'Are you sure you want to archive this budget?',
+      'warning',
+      'Confirm Archive',
+      async () => {
+        try {
+          const response: any = await authenticityUtility.patch(`${budgetApiBase}/${id}/approval`, {
+            decision: 'archived',
+          });
 
-    try {
-      const response: any = await authenticityUtility.patch(`${budgetApiBase}/${id}/approval`, {
-        decision: 'archived',
-      });
+          if (response?.success || response?.data?.success) {
+            navigate(-1);
+            return;
+          }
 
-      if (response?.success || response?.data?.success) {
-        showAlert('Budget archived!', 'success', undefined, () => {
-          closeAlert();
-          navigate(-1);
-        });
-        return;
-      }
-
-      showAlert(response?.message || 'Failed to archive', 'error');
-    } catch (error: any) {
-      showAlert(error?.response?.data?.message || 'Failed to archive', 'error');
-    }
+          showAlert(response?.message || 'Failed to archive', 'error');
+        } catch (error: any) {
+          showAlert(error?.response?.data?.message || 'Failed to archive', 'error');
+        }
+      },
+      true,
+      'Archive'
+    );
   };
 
   const openActionPopup = (type: 'return' | 'reject') => {
@@ -1653,16 +1681,8 @@ const Budget: React.FC = () => {
       });
 
       if (response?.success || response?.data?.success) {
-        showAlert(
-          actionType === 'return' ? 'Budget returned!' : 'Budget rejected!',
-          'success',
-          undefined,
-          () => {
-            closeAlert();
-            closeActionPopup();
-            navigate(-1);
-          }
-        );
+        closeActionPopup();
+        navigate(-1);
         return;
       }
       showAlert(response?.message || `Failed to ${actionType}`, 'error');
@@ -3155,6 +3175,9 @@ const Budget: React.FC = () => {
         type={alertConfig.type}
         title={alertConfig.title}
         onConfirm={alertConfig.onConfirm}
+        showCancel={alertConfig.showCancel}
+        confirmText={alertConfig.confirmText}
+        cancelText={alertConfig.cancelText}
       />
 
       {actionPopupOpen && (
