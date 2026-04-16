@@ -378,10 +378,10 @@
 
 .expenditure-demo-row__amount-chip {
   display: inline-flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 3px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 8px 14px;
   border-radius: 12px;
   background: #f8fbff;
   border: 1px solid #e2e8f0;
@@ -390,7 +390,7 @@
 }
 
 .expenditure-demo-row__amount-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
@@ -398,7 +398,7 @@
 }
 
 .expenditure-demo-row__amount-chip strong {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: #0a2540;
 }
