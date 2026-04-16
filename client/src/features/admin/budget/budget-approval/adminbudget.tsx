@@ -639,7 +639,6 @@ const AdminBudget: React.FC = () => {
       });
 
       if (response?.success || response?.data?.success) {
-        showAlert(`${actionType === "return" ? "Returned" : "Rejected"} successfully`, "success");
         closeActionPopup();
         await refreshBudgetData();
         return;
@@ -671,7 +670,6 @@ const AdminBudget: React.FC = () => {
     try {
       const response: any = await authenticityUtility.delete(`/adminbudget/${deleteId}`);
       if (response?.success || response?.data?.success) {
-        showAlert("Budget proposal deleted successfully", "success");
         closeDeletePopup();
         await refreshBudgetData();
         return;

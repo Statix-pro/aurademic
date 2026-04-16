@@ -1,5 +1,13 @@
 import { ReactNode } from 'react';
 
+export interface EntityRole {
+  entity_id: number;
+  entity_type: string;
+  entity_name: string;
+  role_code: string;
+  role_name: string;
+}
+
 export interface User {
   id: string | number;
   email: string;
@@ -18,6 +26,7 @@ export interface User {
   scopus_id?: string;
   google_scholar_id?: string;
   author_id?: string;
+  entity_roles?: EntityRole[];
 }
 
 export interface AuthContextType {

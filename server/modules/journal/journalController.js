@@ -81,10 +81,17 @@ const journalController = {
       // Handle file upload if present
       if (req.files && req.files.file) {
         const file = req.files.file;
-        const uploadPath = path.join(__dirname, '../../uploads/', file.name);
+        const sanitizedFileName = `${Date.now()}-${path.basename(file.name).replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const uploadDir = path.join(process.cwd(), 'uploads');
+
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        const uploadPath = path.join(uploadDir, sanitizedFileName);
 
         await file.mv(uploadPath);
-        const filePath = `/uploads/${file.name}`;
+        const filePath = `/uploads/${sanitizedFileName}`;
         await journalModel.update(journal.id, { file_path: filePath });
       }
 
@@ -306,9 +313,17 @@ const journalController = {
       // Handle file upload if present
       if (req.files && req.files.file) {
         const file = req.files.file;
-        const uploadPath = path.join(__dirname, '../uploads/', file.name);
+        const sanitizedFileName = `${Date.now()}-${path.basename(file.name).replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const uploadDir = path.join(process.cwd(), 'uploads');
+
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        const uploadPath = path.join(uploadDir, sanitizedFileName);
+
         await file.mv(uploadPath);
-        const filePath = `/uploads/${file.name}`;
+        const filePath = `/uploads/${sanitizedFileName}`;
         await journalModel.update(id, { file_path: filePath });
       }
 
@@ -546,9 +561,12 @@ const journalController = {
       );
 
       // Ensure the final upload directory exists
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
+      // Not tested
+      // if (!fs.existsSync(uploadDir)) {
+      //   fs.mkdirSync(uploadDir, { recursive: true });
+      // }
+
+      await fs.promises.mkdir(uploadDir, { recursive: true });
 
       // Create unique filename
       const uniqueFilename = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
