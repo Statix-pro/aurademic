@@ -2982,19 +2982,15 @@ const Budget: React.FC = () => {
         </div>
       </fieldset>
 
-      {/* ADMIN ACTION BUTTONS - Only for admin=true */}
-      {new URLSearchParams(location.search).get('admin') === 'true' && !isSuperAdmin(user) && isEditMode && (
+      {/* ADMIN ACTION BUTTONS */}
+      {(new URLSearchParams(location.search).get('admin') === 'true' || canProcessStage(proposalStage)) && !isSuperAdmin(user) && !isEditMode && (
         <div
           className="budget-admin-actions"
           style={{
-            padding: '24px 20px',
-            background: '#f8f9fa',
-            borderTop: '2px solid #dee2e6',
+            padding: '40px 20px',
             display: 'flex',
-            gap: '48px',
-            rowGap: '30px',
+            gap: '30px',
             justifyContent: 'center',
-            marginTop: '40px',
             flexWrap: 'wrap',
           }}
         >
