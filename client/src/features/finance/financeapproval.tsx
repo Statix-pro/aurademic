@@ -1088,14 +1088,32 @@ const FinanceApproval: React.FC = () => {
     onConfirm?: () => void;
     showCancel?: boolean;
     confirmText?: string;
+    cancelText?: string;
   }>({
     show: false,
     message: "",
     type: "info"
   });
 
-  const showAlert = (message: React.ReactNode, type: AlertType = "info", title?: string, showCancel = false, confirmText = "OK", onConfirm?: () => void) => {
-    setAlertConfig({ show: true, message, type, title, onConfirm, showCancel, confirmText });
+  const showAlert = (
+    message: React.ReactNode,
+    type: AlertType = "info",
+    title?: string,
+    showCancel = false,
+    confirmText = "OK",
+    onConfirm?: () => void,
+    cancelText = "Cancel"
+  ) => {
+    setAlertConfig({
+      show: true,
+      message,
+      type,
+      title,
+      onConfirm,
+      showCancel,
+      confirmText,
+      cancelText,
+    });
   };
 
   const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
@@ -2051,14 +2069,7 @@ const FinanceApproval: React.FC = () => {
         }
       }
 
-      showAlert(
-        isEditMode ? 'Finance request updated successfully' : 'Finance request submitted successfully',
-        'success',
-        undefined,
-        false,
-        'OK',
-        () => navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard')
-      );
+      navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard');
     } catch (error) {
       console.error('Finance submit error:', error);
       const apiMessage =
@@ -2077,6 +2088,24 @@ const FinanceApproval: React.FC = () => {
       setWfActionType(decision);
       setWfActionComment('');
       setWfActionPopupOpen(true);
+      return;
+    }
+
+    if (decision === 'approved' || decision === 'archived') {
+      const isArchivedAction = decision === 'archived';
+      showAlert(
+        isArchivedAction
+          ? 'Are you sure you want to archive this request?'
+          : 'Are you sure you want to approve this request?',
+        'warning',
+        isArchivedAction ? 'Confirm Archive' : 'Confirm Approval',
+        true,
+        isArchivedAction ? 'Archive' : 'Approve',
+        () => {
+          closeAlert();
+          executeWorkflowAction(decision);
+        }
+      );
       return;
     }
 
@@ -2101,20 +2130,7 @@ const FinanceApproval: React.FC = () => {
         return;
       }
 
-      showAlert(
-        decision === 'approved'
-          ? 'Finance request approved successfully'
-          : decision === 'returned'
-            ? 'Finance request returned successfully'
-            : decision === 'rejected'
-              ? 'Finance request rejected successfully'
-              : 'Finance request archived successfully',
-        'success',
-        undefined,
-        false,
-        'OK',
-        () => navigate('/workflow/finance')
-      );
+      navigate('/workflow/finance');
     } catch (error: any) {
       showAlert(error?.response?.data?.message || error?.message || `Failed to ${decision}`, 'error');
     } finally {
@@ -4822,9 +4838,10 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
         message={alertConfig.message}
         type={alertConfig.type}
         title={alertConfig.title}
+        onConfirm={alertConfig.onConfirm}
         showCancel={alertConfig.showCancel}
         confirmText={alertConfig.confirmText}
-        onConfirm={alertConfig.onConfirm}
+        cancelText={alertConfig.cancelText}
       />
     </div>
   );

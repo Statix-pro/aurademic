@@ -428,7 +428,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         response?.data?.success
       ) {
         closeDeletePopup();
-        showAlert('Deleted successfully.', 'success');
         await loadQueue(activeStage, 1);
         return;
       }
@@ -927,9 +926,7 @@ showAlert(
       });
 
       if (response?.status === 'success' || response?.success || response?.data?.success) {
-        showAlert('Approved successfully', 'success');
-
-        await loadQueue(activeStage, 1);
+        await loadQueue(activeStage, page);
         return;
       }
 
@@ -982,10 +979,9 @@ showAlert(
       });
 
       if (response?.status === 'success' || response?.success || response?.data?.success) {
-        showAlert(actionType === 'return' ? 'Returned successfully' : 'Rejected successfully', 'success');
         closeActionPopup();
-        setPage(1);
-        await loadQueue(activeStage, 1);
+        await loadQueue(activeStage, page);
+        return;
       } else {
        showAlert(response?.message || response?.data?.message || `Failed to ${actionType}`, 'error');
       }

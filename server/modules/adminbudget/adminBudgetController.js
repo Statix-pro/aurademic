@@ -1563,7 +1563,7 @@ export async function getConsolidation(req, res) {
     const departmentId = await resolveUserDepartmentId(req);
     const userEmail = normalizeText(req.user?.email);
     const userId = getUserId(req);
-    const { fiscalYear, scope: scopeParam, beneficiaryType, q } = req.query;
+    const { fiscalYear, scope: scopeParam, beneficiaryType, beneficiaryValue, q } = req.query;
     const role = getAuthorizedRole(req, scopeParam);
 
     const consolidatedData = await AdminBudgetModel.getConsolidatedData({
@@ -1574,6 +1574,7 @@ export async function getConsolidation(req, res) {
       role,
       fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
       beneficiaryType,
+      beneficiaryValue,
       q,
     });
 
