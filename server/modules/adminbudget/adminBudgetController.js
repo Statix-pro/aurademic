@@ -562,7 +562,12 @@ export async function approve(req, res) {
     const isSuperAdmin = hasSuperAdminAccess(req);
     const level1Route = AdminBudgetModel.resolveLevel1Route(proposal);
 
-    if (normalizedDecision !== 'archived' && !requiredPermission) {
+    const isCompletedReversal = currentStage === 'completed' && normalizedDecision === 'returned' && isSuperAdmin;
+    const flowStages = normalizeText(proposal.approval_flow).split('_').filter(Boolean);
+    const lastStage = flowStages.length > 0 ? flowStages[flowStages.length - 1] : 'dof';
+    const effectiveStage = isCompletedReversal ? lastStage : currentStage;
+
+    if (normalizedDecision !== 'archived' && !isCompletedReversal && !requiredPermission) {
       return res.status(400).json({
         success: false,
         message: `Proposal is not in an approvable stage: ${proposal.current_stage}`,
@@ -571,6 +576,7 @@ export async function approve(req, res) {
 
     if (
       normalizedDecision !== 'archived'
+      && !isCompletedReversal
       && !isSuperAdmin
       && !hasPermission(req, requiredPermission)
     ) {
@@ -582,7 +588,7 @@ export async function approve(req, res) {
 
     if (
       normalizedDecision !== 'archived'
-      && currentStage === 'level1'
+      && effectiveStage === 'level1'
       && level1Route.routeType === 'entity_contact'
     ) {
       const entityAssignee = await AdminBudgetModel.resolveEntityLevel1Assignee(level1Route.entityId);
@@ -604,7 +610,7 @@ export async function approve(req, res) {
       proposalId,
       userId,
       userEmail,
-      normalizedDecision === 'archived' ? 'admin' : isSuperAdmin ? 'super_admin' : currentStage,
+      normalizedDecision === 'archived' ? 'admin' : isSuperAdmin ? 'super_admin' : effectiveStage,
       userDepartment,
       userDepartmentId
     );
@@ -617,11 +623,12 @@ export async function approve(req, res) {
     }
 
     await AdminBudgetModel.processApproval(proposalId, {
-      role: currentStage,
+      role: effectiveStage,
       decision: normalizedDecision,
       feedback: ['rejected', 'returned', 'archived'].includes(normalizedDecision) ? feedback : undefined,
       approverUserId: userId,
       approverEmail: userEmail,
+      isCompletedReversal,
     });
 
     return res.json({
