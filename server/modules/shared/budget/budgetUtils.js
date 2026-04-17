@@ -17,7 +17,7 @@ export const APPROVAL_FLOW = Object.freeze({
     level1: { approve: 'level1_approved', reject: 'level1_rejected', returned: 'level1_returned', next: 'dof' },
     ithead: { approve: 'ithead_approved', reject: 'ithead_rejected', returned: 'ithead_returned', next: 'dof' },
     dof: { approve: 'dof_approved', reject: 'dof_rejected', returned: 'dof_returned', next: 'principal' },
-    principal: { approve: 'principal_approved', reject: 'principal_rejected', next: 'completed' },
+    principal: { approve: 'principal_approved', reject: 'principal_rejected', returned: 'principal_returned', next: 'completed' },
 });
 
 export const EDITABLE_STATES = Object.freeze([
@@ -29,13 +29,14 @@ export const ENTITY_TYPE_BY_BENEFICIARY = Object.freeze({
     Centre: 'CENTRE',
     Cell: 'CELL',
     Club: 'CLUB',
+    Section: 'SECTION',
     'Professional Body': 'PROFESSIONAL_BODY',
     ProfessionalBodies: 'PROFESSIONAL_BODY',
     'Professional Bodies': 'PROFESSIONAL_BODY',
 });
 
 export const ENTITY_BENEFICIARY_TYPES = Object.freeze([
-    'Centre', 'Cell', 'Club', 'Professional Body',
+    'Centre', 'Cell', 'Club', 'Professional Body', 'Section',
 ]);
 
 export const LEVEL1_ROUTE_TYPE = Object.freeze({
@@ -56,7 +57,7 @@ export const VALID_BENEFICIARY_TYPES = Object.freeze([
     'Institution', 'Professional Body', 'Professional Bodies', 'ProfessionalBodies',
 ]);
 
-export const MUTABLE_ENTITY_TYPES = Object.freeze(new Set(['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY']));
+export const MUTABLE_ENTITY_TYPES = Object.freeze(new Set(['CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION']));
 
 // =====================================================
 // NORMALIZERS

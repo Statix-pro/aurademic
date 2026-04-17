@@ -2,12 +2,131 @@ import financeModel from './financeModel.js';
 import './financeWorkflowAdapter.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
+import fs from 'fs';
+import path from 'path';
 
 const normalizeText = (value) => String(value || '').trim();
 
 const toPositiveInt = (value) => {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const SAFE_ANNEXURE_EXTENSIONS = new Set([
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.csv',
+  '.jpg',
+  '.jpeg',
+  '.png',
+]);
+
+const sanitizeAnnexureExtension = (originalName) => {
+  const rawExt = String(path.extname(String(originalName || '')) || '').toLowerCase();
+  const normalizedExt = rawExt.replace(/[^a-z0-9.]/g, '');
+  return SAFE_ANNEXURE_EXTENSIONS.has(normalizedExt) ? normalizedExt : '';
+};
+
+const TEMP_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'temp');
+
+const resolveSafeTempUploadPath = (unsafePath) => {
+  const normalized = normalizeText(unsafePath);
+  if (!normalized) return null;
+
+  const resolved = path.resolve(normalized);
+  const safeBase = `${TEMP_UPLOAD_DIR}${path.sep}`;
+  if (!resolved.startsWith(safeBase)) {
+    return null;
+  }
+
+  return resolved;
+};
+
+const parseDateMs = (value) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return null;
+  const ms = Date.parse(normalized);
+  return Number.isFinite(ms) ? ms : null;
+};
+
+const resolveCurrentCycleStartMs = (financeRecord, entries = []) => {
+  const workflowState = financeRecord?.workflow_state || {};
+  const resubmittedAtMs = parseDateMs(workflowState.resubmittedAt);
+
+  if (resubmittedAtMs) {
+    // Include the latest return action that led to resubmission so edit/resubmit logs are visible.
+    let latestReturnMs = null;
+    for (const entry of entries) {
+      const decisionToken = normalizeText(entry?.decision || entry?.status).toLowerCase();
+      if (decisionToken !== 'returned' && decisionToken !== 'return') {
+        continue;
+      }
+
+      const actionMs =
+        parseDateMs(entry?.decidedAt) ||
+        parseDateMs(entry?.decided_at) ||
+        parseDateMs(entry?.createdAt) ||
+        parseDateMs(entry?.created_at);
+
+      if (!actionMs) {
+        continue;
+      }
+
+      if (actionMs <= resubmittedAtMs && (!latestReturnMs || actionMs > latestReturnMs)) {
+        latestReturnMs = actionMs;
+      }
+    }
+
+    if (latestReturnMs) {
+      return latestReturnMs;
+    }
+
+    return resubmittedAtMs;
+  }
+
+  return (
+    parseDateMs(workflowState.startedAt) ||
+    parseDateMs(financeRecord?.created_at) ||
+    null
+  );
+};
+
+const filterEntriesForCurrentCycle = (entries, financeRecord) => {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return [];
+  }
+
+  const cycleStartMs = resolveCurrentCycleStartMs(financeRecord, entries);
+  if (!cycleStartMs) {
+    return entries;
+  }
+
+  return entries.filter((entry) => {
+    const actionMs =
+      parseDateMs(entry?.decidedAt) ||
+      parseDateMs(entry?.decided_at) ||
+      parseDateMs(entry?.createdAt) ||
+      parseDateMs(entry?.created_at);
+
+    // Keep rows that don't have a timestamp rather than dropping potentially valid logs.
+    if (!actionMs) {
+      return true;
+    }
+
+    return actionMs >= cycleStartMs;
+  });
+};
+
+const isSuperAdminRequest = (req) => {
+  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)) {
+    return true;
+  }
+
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  return roles.some((role) => normalizeText(role).toLowerCase() === 'super_admin');
 };
 
 const normalizeActor = (req) => ({
@@ -17,7 +136,7 @@ const normalizeActor = (req) => ({
   role: Array.isArray(req.user?.roles) ? req.user.roles[0] : null,
   roles: Array.isArray(req.user?.roles) ? req.user.roles : [],
   permissions: Array.isArray(req.user?.permissions) ? req.user.permissions : [],
-  isSuperAdmin: Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin),
+  isSuperAdmin: isSuperAdminRequest(req),
 });
 
 const resolveFinanceLevel1QueueRole = (req) => {
@@ -45,7 +164,7 @@ const hasFinanceStagePermission = (req, stage) => {
     return false;
   }
 
-  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)) {
+  if (isSuperAdminRequest(req)) {
     return true;
   }
 
@@ -56,7 +175,7 @@ const hasFinanceStagePermission = (req, stage) => {
 };
 
 const hasFinanceWorkflowEditorAccess = (req) =>
-  Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || hasAnyFinanceWorkflowPermission(req);
+  isSuperAdminRequest(req) || hasAnyFinanceWorkflowPermission(req);
 
 const canAccessFinanceRecord = (req, financeRecord) => {
   const actorUserId = toPositiveInt(req.user?.id);
@@ -65,7 +184,7 @@ const canAccessFinanceRecord = (req, financeRecord) => {
     return false;
   }
 
-  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)) {
+  if (isSuperAdminRequest(req)) {
     return true;
   }
 
@@ -76,12 +195,33 @@ const canAccessFinanceRecord = (req, financeRecord) => {
   return hasAnyFinanceWorkflowPermission(req);
 };
 
+const isHandledFinanceDomainError = (error) => {
+  const message = normalizeText(error?.message).toLowerCase();
+  if (!message) return false;
+
+  return [
+    'insufficient budget balance',
+    'requested amount',
+    'budget line not found/approved',
+    'budget line mapping is missing',
+    'no approved budget allocation found',
+  ].some((token) => message.includes(token));
+};
+
 const handleWorkflowError = (res, error, fallbackMessage) => {
   if (error instanceof WorkflowError) {
     return res.status(error.statusCode || 400).json({
       status: 'error',
       message: error.message,
       code: error.code,
+    });
+  }
+
+  if (isHandledFinanceDomainError(error)) {
+    return res.status(409).json({
+      status: 'error',
+      message: error.message || 'Finance request cannot be processed due to budget validation',
+      code: 'FINANCE_BUDGET_VALIDATION_FAILED',
     });
   }
 
@@ -122,10 +262,23 @@ const financeController = {
 
       const financeId = await financeModel.createFinanceRequest(data, userId, normalizeText(req.user?.email) || null);
       const budgetRows = Array.isArray(data.budget_rows) ? data.budget_rows : [];
-      const totalBudgetAmount = budgetRows.length
+      const plannedBudgetAmount = budgetRows.length
         ? budgetRows.reduce((sum, row) => sum + Number(row?.amount || 0), 0)
         : Number(data.total_budget || 0);
+      const unplannedBudgetEnabled = Boolean(data.unplanned_budget_enabled);
+      const unplannedBudgetAmount = unplannedBudgetEnabled
+        ? Math.max(0, Number(data.unplanned_budget_amount || 0))
+        : 0;
+      const totalBudgetAmount = plannedBudgetAmount + (Number.isFinite(unplannedBudgetAmount) ? unplannedBudgetAmount : 0);
       const amountBand = Number(totalBudgetAmount) > 10000 ? 'gt_10k' : 'lte_10k';
+      const financeMeta = {
+        unplannedBudgetEnabled,
+        unplannedBudgetAmount:
+          data.unplanned_budget_amount !== undefined && data.unplanned_budget_amount !== null
+            ? Number(data.unplanned_budget_amount)
+            : null,
+        unplannedBudgetDescription: normalizeText(data.unplanned_budget_description) || null,
+      };
 
       try {
         await workflowService.startWorkflow({
@@ -138,12 +291,13 @@ const financeController = {
             moduleMeta: {
               trigger: 'create_finance_request',
               amountBand,
+              financeMeta,
             },
           },
         });
       } catch (workflowError) {
         try {
-          await financeModel.deleteFinanceRequest(financeId);
+          await financeModel.hardDeleteFinanceRequest(financeId);
         } catch (cleanupError) {
           console.error('Failed to clean up finance request after workflow start failure', cleanupError);
         }
@@ -206,7 +360,7 @@ const financeController = {
         });
       }
 
-      if (isWorkflowEditor && isTerminalWorkflow && !Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)) {
+      if (isWorkflowEditor && isTerminalWorkflow && !isSuperAdminRequest(req)) {
         return res.status(403).json({
           status: 'error',
           message: 'This request is not editable in current workflow state',
@@ -266,6 +420,15 @@ const financeController = {
         });
       }
 
+      const financeMeta = {
+        unplannedBudgetEnabled: Boolean(finance.unplanned_budget_enabled),
+        unplannedBudgetAmount:
+          finance.unplanned_budget_amount !== undefined && finance.unplanned_budget_amount !== null
+            ? Number(finance.unplanned_budget_amount)
+            : null,
+        unplannedBudgetDescription: normalizeText(finance.unplanned_budget_description) || null,
+      };
+
       const restartResult = await workflowService.startWorkflow({
         moduleKey: 'finance',
         recordId: financeId,
@@ -276,6 +439,7 @@ const financeController = {
           moduleMeta: {
             trigger: 'applicant_resubmit',
             amountBand: Number(finance.total_budget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+            financeMeta,
           },
         },
       });
@@ -306,6 +470,7 @@ const financeController = {
     try {
       const financeId = toPositiveInt(req.params.id);
       const userId = toPositiveInt(req.user?.id);
+      const isSuperAdmin = isSuperAdminRequest(req);
 
       if (!financeId) {
         return res.status(400).json({
@@ -322,7 +487,7 @@ const financeController = {
         });
       }
 
-      if (!userId || toPositiveInt(finance.created_by) !== userId) {
+      if (!isSuperAdmin && (!userId || toPositiveInt(finance.created_by) !== userId)) {
         return res.status(403).json({
           status: 'error',
           message: 'Only applicant can delete this request',
@@ -334,21 +499,25 @@ const financeController = {
       const currentStage = normalizeText(workflowState?.currentStage).toLowerCase();
       const hasStartedApproval = Boolean(workflowState) && currentStage && currentStage !== 'level1';
 
-      if (workflowStatus && ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(workflowStatus)) {
+      if (
+        !isSuperAdmin &&
+        workflowStatus &&
+        ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(workflowStatus)
+      ) {
         return res.status(409).json({
           status: 'error',
           message: 'This request can no longer be deleted',
         });
       }
 
-      if (hasStartedApproval) {
+      if (!isSuperAdmin && hasStartedApproval) {
         return res.status(409).json({
           status: 'error',
           message: 'This request can only be deleted before Level-1 approval',
         });
       }
 
-      await financeModel.deleteFinanceRequest(financeId);
+      await financeModel.deleteFinanceRequest(financeId, normalizeActor(req));
 
       return res.status(200).json({
         status: 'success',
@@ -385,14 +554,15 @@ const financeController = {
       }
 
       const budget = await financeModel.getBudgetBreakup(financeId);
-const incomeRows = await financeModel.getIncomeRows(financeId);
+      const incomeRows = await financeModel.getIncomeRows(financeId);
 
-let statusUpdates = [];
-try {
-  statusUpdates = await financeModel.getStatusUpdates(financeId);
-} catch (statusError) {
-  console.error('Failed to fetch finance status updates:', statusError);
-}
+      let statusUpdates = [];
+      try {
+        const rawStatusUpdates = await financeModel.getStatusUpdates(financeId);
+        statusUpdates = filterEntriesForCurrentCycle(rawStatusUpdates, finance);
+      } catch (statusError) {
+        console.error('Failed to fetch finance status updates:', statusError);
+      }
       return res.status(200).json({
         status: 'success',
         data: {
@@ -546,6 +716,16 @@ try {
       const budgetHead = normalizeText(req.query?.budget_head || req.query?.head);
       const subHead = normalizeText(req.query?.sub_head || req.query?.subHead);
       const preferredBudgetLineId = toPositiveInt(req.query?.budget_line_id);
+      const excludeFinanceId = toPositiveInt(req.query?.finance_id);
+      const beneficiaryType = normalizeText(req.query?.beneficiary_type || req.query?.beneficiaryType) || null;
+      const beneficiaryValue = normalizeText(req.query?.beneficiary_value || req.query?.beneficiaryValue) || null;
+      const departmentId = toPositiveInt(req.query?.department_id || req.query?.departmentId);
+      const beneficiaryEntityId = toPositiveInt(
+        req.query?.beneficiary_entity_id || req.query?.beneficiaryEntityId
+      );
+      const headOnlyMatch = ['1', 'true', 'yes', 'on'].includes(
+        normalizeText(req.query?.head_only_match).toLowerCase()
+      );
 
       if (!userId) {
         return res.status(401).json({
@@ -567,6 +747,12 @@ try {
         budgetHead,
         subHead,
         preferredBudgetLineId,
+        headOnlyMatch,
+        excludeFinanceId,
+        beneficiaryType,
+        beneficiaryValue,
+        departmentId,
+        beneficiaryEntityId,
       });
 
       return res.status(200).json({
@@ -582,6 +768,8 @@ try {
     try {
       const financeId = toPositiveInt(req.params.id);
       const { decision, feedback } = req.body || {};
+      const normalizedDecision = normalizeText(decision).toLowerCase();
+      const actor = normalizeActor(req);
 
       if (!financeId) {
         return res.status(400).json({
@@ -590,21 +778,47 @@ try {
         });
       }
 
-      const result = await workflowService.actOnWorkflow({
-        moduleKey: 'finance',
-        recordId: financeId,
-        decision,
-        feedback,
-        actor: normalizeActor(req),
-        metadata: {
-          origin: 'api',
-          requestId: null,
-          moduleMetaVersion: 1,
-          moduleMeta: {
-            route: 'PATCH /api/finance-requests/:id/approval',
+      let result;
+      const finance = await financeModel.getFinanceRequestById(financeId);
+      if (!finance) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Finance request not found',
+        });
+      }
+
+      const workflowStatus = normalizeText(
+        finance.workflow_state?.status || finance.workflow_status || finance.overall_status
+      ).toLowerCase();
+      const isTerminalWorkflow = ['completed', 'rejected', 'archived'].includes(workflowStatus);
+
+      if (actor.isSuperAdmin && normalizedDecision === 'returned' && isTerminalWorkflow) {
+        result = await financeModel.forceWorkflowTransition(
+          financeId,
+          {
+            decision: 'returned',
+            feedback,
+            actor,
+            stageHint: normalizeText(finance.workflow_stage).toLowerCase() || 'principal',
+          }
+        );
+      } else {
+        result = await workflowService.actOnWorkflow({
+          moduleKey: 'finance',
+          recordId: financeId,
+          decision,
+          feedback,
+          actor,
+          metadata: {
+            origin: 'api',
+            requestId: null,
+            moduleMetaVersion: 1,
+            moduleMeta: {
+              route: 'PATCH /api/finance-requests/:id/approval',
+            },
           },
-        },
-      });
+        });
+      }
 
       return res.status(200).json({
         status: 'success',
@@ -649,6 +863,7 @@ try {
         finance.workflow_state?.status || finance.workflow_status || finance.overall_status
       ).toLowerCase();
       const isArchived = workflowStatus === 'archived' || workflowStatus === 'archive';
+      const actor = normalizeActor(req);
 
       if (isArchived) {
         const latestArchive = await financeModel.getLatestArchiveAction(financeId);
@@ -680,12 +895,34 @@ try {
         });
       }
 
+      const isTerminalWorkflow = ['completed', 'rejected'].includes(workflowStatus);
+      if (actor.isSuperAdmin && isTerminalWorkflow) {
+        const forcedArchiveResult = await financeModel.forceWorkflowTransition(
+          financeId,
+          {
+            decision: 'archived',
+            feedback: normalizeText(req.body?.feedback) || null,
+            actor,
+            stageHint: normalizeText(finance.workflow_stage).toLowerCase() || 'principal',
+          }
+        );
+
+        return res.status(200).json({
+          status: 'success',
+          message: 'Finance request archived successfully',
+          data: {
+            previousState: forcedArchiveResult.previousState,
+            currentState: forcedArchiveResult.currentState,
+          },
+        });
+      }
+
       const archiveResult = await workflowService.actOnWorkflow({
         moduleKey: 'finance',
         recordId: financeId,
         decision: 'archived',
         feedback: normalizeText(req.body?.feedback) || undefined,
-        actor: normalizeActor(req),
+        actor,
         metadata: {
           origin: 'api',
           requestId: null,
@@ -716,8 +953,8 @@ try {
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
       const effectiveLevel1Role = stage === 'level1'
         ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
-            ? normalizedLevel1Role
-            : resolveFinanceLevel1QueueRole(req))
+          ? normalizedLevel1Role
+          : resolveFinanceLevel1QueueRole(req))
         : null;
 
       const queue = await workflowService.listQueue({
@@ -772,10 +1009,11 @@ try {
         });
       }
 
-      const timeline = await workflowService.getTimeline({
+      const rawTimeline = await workflowService.getTimeline({
         moduleKey: 'finance',
         recordId: financeId,
       });
+      const timeline = filterEntriesForCurrentCycle(rawTimeline, finance);
 
       return res.status(200).json({
         status: 'success',
@@ -788,14 +1026,20 @@ try {
 
   async getWorkflowMeta(req, res) {
     try {
-      const metadata = await workflowService.getWorkflowMetadata({
-        moduleKey: 'finance',
-        actor: normalizeActor(req),
-      });
+      const [metadata, availableBeneficiaryTypes] = await Promise.all([
+        workflowService.getWorkflowMetadata({
+          moduleKey: 'finance',
+          actor: normalizeActor(req),
+        }),
+        financeModel.listAvailableBeneficiaryTypes(),
+      ]);
 
       return res.status(200).json({
         status: 'success',
-        data: metadata,
+        data: {
+          ...metadata,
+          availableBeneficiaryTypes,
+        },
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in getWorkflowMeta');
@@ -828,7 +1072,8 @@ try {
       }
 
       const updates = await financeModel.getStatusUpdates(financeId);
-      const timelineCompatible = updates.map((row) => ({
+      const cycleScopedUpdates = filterEntriesForCurrentCycle(updates, finance);
+      const timelineCompatible = cycleScopedUpdates.map((row) => ({
         id: row.id,
         moduleKey: 'finance',
         recordId: row.finance_id,
@@ -890,6 +1135,68 @@ try {
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in getCurrentEmployeeInfo');
+    }
+  },
+
+  async uploadAnnexureFile(req, res) {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'No file uploaded',
+        });
+      }
+
+      const annexureDir = path.resolve(process.cwd(), 'uploads', 'finance-annexures');
+      await fs.promises.mkdir(annexureDir, { recursive: true });
+
+      const extension = sanitizeAnnexureExtension(file.originalname);
+      const storedName = `finance-annexure-${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
+      const finalPath = path.resolve(annexureDir, storedName);
+      const safeBase = `${annexureDir}${path.sep}`;
+      if (!finalPath.startsWith(safeBase)) {
+        throw new Error('Invalid annexure path');
+      }
+
+      const sourcePath = resolveSafeTempUploadPath(file.path);
+      if (!sourcePath) {
+        throw new Error('Invalid upload source path');
+      }
+
+      try {
+        await fs.promises.access(sourcePath, fs.constants.F_OK);
+      } catch {
+        throw new Error('Invalid upload source path');
+      }
+
+      await fs.promises.rename(sourcePath, finalPath);
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Annexure uploaded successfully',
+        data: {
+          originalName: file.originalname,
+          storedName,
+          filePath: `/uploads/finance-annexures/${storedName}`,
+          mimeType: file.mimetype,
+          size: file.size,
+        },
+      });
+    } catch (error) {
+      try {
+        const cleanupPath = resolveSafeTempUploadPath(req.file?.path);
+        if (cleanupPath) {
+          await fs.promises.unlink(cleanupPath).catch((cleanupError) => {
+            if (cleanupError?.code !== 'ENOENT') {
+              throw cleanupError;
+            }
+          });
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+      return handleWorkflowError(res, error, 'Error in uploadAnnexureFile');
     }
   },
 

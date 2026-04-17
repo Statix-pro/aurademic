@@ -395,6 +395,13 @@ export async function startWorkflow({ moduleKey, recordId, metadata = {} }) {
       context,
     });
 
+    const financeMeta = normalizedMeta?.moduleMeta?.financeMeta;
+    if (financeMeta && typeof financeMeta === 'object' && !Array.isArray(financeMeta)) {
+      initialState.financeMeta = {
+        ...financeMeta,
+      };
+    }
+
     await moduleConfig.adapter.updateRecordWorkflowSnapshot(recordId, initialState, {
       tx: conn,
       metadata: normalizedMeta,
@@ -548,6 +555,7 @@ export async function listQueue({ moduleKey, stage, actor, filters = {} }) {
       conn,
       actor: normalizedActor,
       stagePolicy,
+      filters,
     });
 
     return moduleConfig.adapter.listRecordsForQueue(
