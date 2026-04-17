@@ -83,7 +83,11 @@ export async function buildBudgetList(options) {
       MAX(applicant_user.name) AS user_name,
       DATE_FORMAT(bp.request_date, '%Y-%m-%d') AS request_date,
       bp.beneficiary_type,
-      bp.beneficiary_value,
+      CASE
+        WHEN LOWER(TRIM(bp.beneficiary_type)) = 'department'
+          THEN COALESCE(NULLIF(TRIM(md.name), ''), bp.beneficiary_value)
+        ELSE bp.beneficiary_value
+      END AS beneficiary_value,
       bp.department_id,
       md.name AS department,
       md.code AS department_code,
@@ -116,7 +120,7 @@ export async function buildBudgetList(options) {
     LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
   `;
 
-    const where = ['bp.fiscal_year = ?'];
+    const where = ['bp.fiscal_year = ?', "LOWER(TRIM(bp.status)) <> 'deleted'"];
     const params = [Number(currentFY)];
     const isQueueSuperAdminView = Boolean(superAdminQueueView) && ['hod', 'coordinator', 'ithead', 'dof', 'principal'].includes(safeRole);
 
@@ -207,7 +211,7 @@ export async function buildBudgetList(options) {
         }
         case 'coordinator': {
             where.push(`(
-                LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body')
+                LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body', 'section')
                 OR (
                     LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff')
                     AND bp.beneficiary_entity_id IS NOT NULL
@@ -221,7 +225,7 @@ export async function buildBudgetList(options) {
 
                 const filterConditions = [];
                 if (safeUserId > 0) {
-                    filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'))`);
+                    filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'))`);
                     params.push(safeUserId);
                 }
                 if (userEmail) {
@@ -421,7 +425,7 @@ export async function buildBudgetKpiStats(options) {
     const safeRole = normalizeBudgetRole(role);
     const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
 
-    const where = ['bp.fiscal_year = ?'];
+    const where = ['bp.fiscal_year = ?', "LOWER(TRIM(bp.status)) <> 'deleted'"];
     const params = [Number(currentFY)];
     const isQueueSuperAdminView = Boolean(superAdminQueueView) && ['hod', 'coordinator', 'ithead', 'dof', 'principal'].includes(safeRole);
 
@@ -467,14 +471,14 @@ export async function buildBudgetKpiStats(options) {
             break;
         }
         case 'coordinator': {
-            where.push(`(LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body') OR (LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff') AND bp.beneficiary_entity_id IS NOT NULL))`);
+            where.push(`(LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body', 'section') OR (LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff') AND bp.beneficiary_entity_id IS NOT NULL))`);
             if (!isQueueSuperAdminView) {
                 const actionQueueExpr = isAdminView
                     ? `(${level1ProgressionPredicate} OR ${level1ApprovedHistoryPredicate} OR ${archivedStatusPredicate})`
                     : `(${level1ProgressionPredicate} OR ${level1ApprovedHistoryPredicate})`;
                 where.push(actionQueueExpr);
                 const filterConditions = [];
-                if (safeUserId > 0) { filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'))`); params.push(safeUserId); }
+                if (safeUserId > 0) { filterConditions.push(`me.id IN (SELECT entity_id FROM user_entity_roles WHERE user_id = ? AND entity_type IN ('CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'))`); params.push(safeUserId); }
                 if (userEmail) { filterConditions.push('LOWER(TRIM(mec.email)) = LOWER(TRIM(?))'); params.push(userEmail); }
                 where.push(filterConditions.length ? `(${filterConditions.join(' OR ')})` : '1 = 0');
             }

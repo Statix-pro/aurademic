@@ -473,6 +473,7 @@ const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
   Centre: 'CENTRE',
   Cell: 'CELL',
   Club: 'CLUB',
+  Section: 'SECTION',
   'Professional Body': 'PROFESSIONAL_BODY',
 };
 
@@ -655,7 +656,7 @@ const BudgetProposalGuidelines: React.FC<{ embedded?: boolean }> = ({ embedded =
                 <table className="budgetEntryTable">
                   <thead><tr><th>Category</th><th>Budget</th></tr></thead>
                   <tbody>
-                    <tr><td>IPR Filing</td><td className="centerTd">{guidelineCurrency(2400)}</td></tr>
+                    <tr><td>IPR Filing</td><td className="centerTd">{guidelineCurrency(2500)}</td></tr>
                     <tr><td>Seed Fund</td><td className="centerTd" rowSpan={2}>{guidelineCurrency(10000)}</td></tr>
                     <tr><td>Consumables</td></tr>
                   </tbody>
@@ -702,14 +703,34 @@ const Budget: React.FC = () => {
     type: AlertType;
     title?: string;
     onConfirm?: () => void;
+    showCancel?: boolean;
+    confirmText?: string;
+    cancelText?: string;
   }>({
     show: false,
     message: '',
     type: 'info'
   });
 
-  const showAlert = (message: React.ReactNode, type: AlertType = 'info', title?: string, onConfirm?: () => void) => {
-    setAlertConfig({ show: true, message, type, title, onConfirm });
+  const showAlert = (
+    message: React.ReactNode,
+    type: AlertType = 'info',
+    title?: string,
+    onConfirm?: () => void,
+    showCancel = false,
+    confirmText = 'OK',
+    cancelText = 'Cancel'
+  ) => {
+    setAlertConfig({
+      show: true,
+      message,
+      type,
+      title,
+      onConfirm,
+      showCancel,
+      confirmText,
+      cancelText
+    });
   };
 
   const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
@@ -1430,7 +1451,7 @@ const Budget: React.FC = () => {
         const normalizedBeneficiaryValue =
           normalizedBeneficiaryType === 'Department'
             ? (p.department || p.beneficiary_value || '')
-            : ['Centre', 'Cell', 'Club', 'Professional Body'].includes(normalizedBeneficiaryType)
+            : ['Centre', 'Cell', 'Club', 'Section', 'Professional Body'].includes(normalizedBeneficiaryType)
               ? (p.org_unit_name || p.beneficiary_value || '')
               : (p.beneficiary_value || '');
 
@@ -1480,8 +1501,8 @@ const Budget: React.FC = () => {
             lineId: Number(ln.id),
             budgetHead: (ln.budget_head || "").toString(),
             subHead: (ln.sub_head || "").toString(),
-            amount: String(parseInt((isAdminContextEdit ? (ln.approved_unit_amount ?? ln.unit_amount) : ln.unit_amount) || "0", 10)),
-            qty: String(isAdminContextEdit ? roundedApprovedQty : proposedQty),
+            amount: String(parseInt((ln.approved_unit_amount ?? ln.unit_amount) || "0", 10)),
+            qty: String(roundedApprovedQty > 0 ? roundedApprovedQty : proposedQty),
             monthAmounts: lineAllocations,
             description: (ln.line_description || "").toString(),
           };
@@ -1567,25 +1588,29 @@ const Budget: React.FC = () => {
       return;
     }
 
-    if (!window.confirm('Are you sure you want to approve this budget?')) return;
+    showAlert(
+      'Are you sure you want to approve this budget?',
+      'warning',
+      'Confirm Approval',
+      async () => {
+        try {
+          const response: any = await authenticityUtility.patch(`${budgetApiBase}/${id}/approval`, {
+            decision: 'approved',
+          });
 
-    try {
-      const response: any = await authenticityUtility.patch(`${budgetApiBase}/${id}/approval`, {
-        decision: 'approved',
-      });
+          if (response?.success || response?.data?.success) {
+            navigate(-1);
+            return;
+          }
 
-      if (response?.success || response?.data?.success) {
-        showAlert('Budget approved!', 'success', undefined, () => {
-          closeAlert();
-          navigate(-1);
-        });
-        return;
-      }
-
-      showAlert(response?.message || 'Failed to approve', 'error');
-    } catch (error: any) {
-      showAlert(error?.response?.data?.message || 'Failed to approve', 'error');
-    }
+          showAlert(response?.message || 'Failed to approve', 'error');
+        } catch (error: any) {
+          showAlert(error?.response?.data?.message || 'Failed to approve', 'error');
+        }
+      },
+      true,
+      'Approve'
+    );
   };
 
   const onArchive = async () => {
@@ -1594,25 +1619,29 @@ const Budget: React.FC = () => {
       return;
     }
 
-    if (!window.confirm('Are you sure you want to archive this budget?')) return;
+    showAlert(
+      'Are you sure you want to archive this budget?',
+      'warning',
+      'Confirm Archive',
+      async () => {
+        try {
+          const response: any = await authenticityUtility.patch(`${budgetApiBase}/${id}/approval`, {
+            decision: 'archived',
+          });
 
-    try {
-      const response: any = await authenticityUtility.patch(`${budgetApiBase}/${id}/approval`, {
-        decision: 'archived',
-      });
+          if (response?.success || response?.data?.success) {
+            navigate(-1);
+            return;
+          }
 
-      if (response?.success || response?.data?.success) {
-        showAlert('Budget archived!', 'success', undefined, () => {
-          closeAlert();
-          navigate(-1);
-        });
-        return;
-      }
-
-      showAlert(response?.message || 'Failed to archive', 'error');
-    } catch (error: any) {
-      showAlert(error?.response?.data?.message || 'Failed to archive', 'error');
-    }
+          showAlert(response?.message || 'Failed to archive', 'error');
+        } catch (error: any) {
+          showAlert(error?.response?.data?.message || 'Failed to archive', 'error');
+        }
+      },
+      true,
+      'Archive'
+    );
   };
 
   const openActionPopup = (type: 'return' | 'reject') => {
@@ -1652,16 +1681,8 @@ const Budget: React.FC = () => {
       });
 
       if (response?.success || response?.data?.success) {
-        showAlert(
-          actionType === 'return' ? 'Budget returned!' : 'Budget rejected!',
-          'success',
-          undefined,
-          () => {
-            closeAlert();
-            closeActionPopup();
-            navigate(-1);
-          }
-        );
+        closeActionPopup();
+        navigate(-1);
         return;
       }
       showAlert(response?.message || `Failed to ${actionType}`, 'error');
@@ -2073,6 +2094,7 @@ const Budget: React.FC = () => {
                         { value: 'Centre', label: 'Centre' },
                         { value: 'Cell', label: 'Cell' },
                         { value: 'Club', label: 'Club' },
+                        { value: 'Section', label: 'Section' },
                         { value: 'Professional Body', label: 'Professional Body' },
                         { value: 'Institution', label: 'Institution' }
                       ]}
@@ -2980,19 +3002,15 @@ const Budget: React.FC = () => {
         </div>
       </fieldset>
 
-      {/* ADMIN ACTION BUTTONS - Only for admin=true */}
-      {new URLSearchParams(location.search).get('admin') === 'true' && !isSuperAdmin(user) && isEditMode && (
+      {/* ADMIN ACTION BUTTONS */}
+      {(new URLSearchParams(location.search).get('admin') === 'true' || canProcessStage(proposalStage)) && !isSuperAdmin(user) && !isEditMode && (
         <div
           className="budget-admin-actions"
           style={{
-            padding: '24px 20px',
-            background: '#f8f9fa',
-            borderTop: '2px solid #dee2e6',
+            padding: '40px 20px',
             display: 'flex',
-            gap: '48px',
-            rowGap: '30px',
+            gap: '30px',
             justifyContent: 'center',
-            marginTop: '40px',
             flexWrap: 'wrap',
           }}
         >
@@ -3157,6 +3175,9 @@ const Budget: React.FC = () => {
         type={alertConfig.type}
         title={alertConfig.title}
         onConfirm={alertConfig.onConfirm}
+        showCancel={alertConfig.showCancel}
+        confirmText={alertConfig.confirmText}
+        cancelText={alertConfig.cancelText}
       />
 
       {actionPopupOpen && (

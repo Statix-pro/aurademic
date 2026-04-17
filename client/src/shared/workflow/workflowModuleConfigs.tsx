@@ -3,6 +3,17 @@ import { WorkflowApprovalModuleConfig } from './workflowApprovalTypes';
 const formatCurrencyINR = (value: number) =>
   `\u20B9 ${Number(value || 0).toLocaleString('en-IN')}`;
 
+const formatFinanceBeneficiary = (record: Record<string, any>) => {
+  const type = String(record?.beneficiary_type || '').trim();
+  const value = String(record?.beneficiary_value || '').trim();
+
+  if (value) {
+    return value;
+  }
+
+  return type || '-';
+};
+
 export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfig> = {
   finance: {
     moduleKey: 'finance',
@@ -13,10 +24,15 @@ export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfi
       dof: 'DoF',
       principal: 'Principal',
     },
+    getTimelineEndpoint: (id) => `/finance-requests/${id}/status-updates`,
     columns: [
       { key: 'id', label: 'ID' },
       { key: 'applicant_name', label: 'Applicant' },
-      { key: 'beneficiary_type', label: 'Beneficiary' },
+      {
+        key: 'beneficiary_type',
+        label: 'Beneficiary',
+        render: (record) => formatFinanceBeneficiary(record),
+      },
       { key: 'primary_head', label: 'Head' },
       {
         key: 'total_budget',

@@ -7,6 +7,7 @@ export interface WorkflowMeta {
   stages: string[];
   permittedStages: string[];
   isSuperAdmin: boolean;
+  availableBeneficiaryTypes?: string[];
 }
 
 export interface WorkflowTimelineItem {
@@ -14,8 +15,14 @@ export interface WorkflowTimelineItem {
   stage: string;
   decision: string;
   feedback?: string | null;
+  comment?: string | null;
+  summary?: string | null;
+  details?: any;
   actorEmail?: string | null;
+  userName?: string | null;
+  actorRole?: string | null;
   decidedAt?: string | null;
+  createdAt?: string | null;
 }
 
 export interface WorkflowQueueColumn<TRecord extends Record<string, any> = Record<string, any>> {

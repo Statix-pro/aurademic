@@ -195,11 +195,11 @@ export async function getOrgUnits(req, res) {
   try {
     const mappedType = normalizeEntityTypeParam(req.params.type);
 
-    if (!['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(mappedType)) {
+    if (!['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(mappedType)) {
       return res.status(400).json({
         success: false,
         message:
-          'Invalid type. Must be: DEPARTMENT, CENTRE, CELL, CLUB, PROFESSIONAL_BODY (or PROF_BODY)',
+          'Invalid type. Must be: DEPARTMENT, CENTRE, CELL, CLUB, SECTION, PROFESSIONAL_BODY (or PROF_BODY)',
       });
     }
 
@@ -562,7 +562,12 @@ export async function approve(req, res) {
     const isSuperAdmin = hasSuperAdminAccess(req);
     const level1Route = AdminBudgetModel.resolveLevel1Route(proposal);
 
-    if (normalizedDecision !== 'archived' && !requiredPermission) {
+    const isCompletedReversal = currentStage === 'completed' && normalizedDecision === 'returned' && isSuperAdmin;
+    const flowStages = normalizeText(proposal.approval_flow).split('_').filter(Boolean);
+    const lastStage = flowStages.length > 0 ? flowStages[flowStages.length - 1] : 'dof';
+    const effectiveStage = isCompletedReversal ? lastStage : currentStage;
+
+    if (normalizedDecision !== 'archived' && !isCompletedReversal && !requiredPermission) {
       return res.status(400).json({
         success: false,
         message: `Proposal is not in an approvable stage: ${proposal.current_stage}`,
@@ -571,6 +576,7 @@ export async function approve(req, res) {
 
     if (
       normalizedDecision !== 'archived'
+      && !isCompletedReversal
       && !isSuperAdmin
       && !hasPermission(req, requiredPermission)
     ) {
@@ -582,7 +588,7 @@ export async function approve(req, res) {
 
     if (
       normalizedDecision !== 'archived'
-      && currentStage === 'level1'
+      && effectiveStage === 'level1'
       && level1Route.routeType === 'entity_contact'
     ) {
       const entityAssignee = await AdminBudgetModel.resolveEntityLevel1Assignee(level1Route.entityId);
@@ -604,7 +610,7 @@ export async function approve(req, res) {
       proposalId,
       userId,
       userEmail,
-      normalizedDecision === 'archived' ? 'admin' : isSuperAdmin ? 'super_admin' : currentStage,
+      normalizedDecision === 'archived' ? 'admin' : isSuperAdmin ? 'super_admin' : effectiveStage,
       userDepartment,
       userDepartmentId
     );
@@ -617,11 +623,12 @@ export async function approve(req, res) {
     }
 
     await AdminBudgetModel.processApproval(proposalId, {
-      role: currentStage,
+      role: effectiveStage,
       decision: normalizedDecision,
       feedback: ['rejected', 'returned', 'archived'].includes(normalizedDecision) ? feedback : undefined,
       approverUserId: userId,
       approverEmail: userEmail,
+      isCompletedReversal,
     });
 
     return res.json({
@@ -681,21 +688,14 @@ export async function updateApprovedAmounts(req, res) {
       });
     }
 
-    const currentStage = normalizeText(proposal.current_stage).toLowerCase();
-    const requiredPermission = WORKFLOW_STAGE_PERMISSION[currentStage];
     const isSuperAdmin = hasSuperAdminAccess(req);
+    const roleFromRequest = normalizeText(req.query?.role || payload?.role).toLowerCase();
+    const authorizedRole = getAuthorizedRole(req, roleFromRequest);
 
-    if (!requiredPermission && !isSuperAdmin) {
-      return res.status(400).json({
-        success: false,
-        message: `Proposal is not in an editable approval stage: ${proposal.current_stage}`,
-      });
-    }
-
-    if (!isSuperAdmin && !hasPermission(req, requiredPermission)) {
+    if (!isSuperAdmin && authorizedRole === 'user') {
       return res.status(403).json({
         success: false,
-        message: `Insufficient permission for ${currentStage.toUpperCase()} stage`,
+        message: 'Insufficient permission to edit workflow budgets',
       });
     }
 
@@ -708,7 +708,7 @@ export async function updateApprovedAmounts(req, res) {
       proposalId,
       userId,
       userEmail,
-      isSuperAdmin ? 'super_admin' : currentStage,
+      isSuperAdmin ? 'super_admin' : authorizedRole,
       userDepartment,
       userDepartmentId
     );
@@ -721,7 +721,7 @@ export async function updateApprovedAmounts(req, res) {
     }
 
     await AdminBudgetModel.updateApprovedAmounts(proposalId, payload, {
-      editorRole: currentStage,
+      editorRole: isSuperAdmin ? 'super_admin' : authorizedRole,
       editorUserId: userId,
       editorEmail: userEmail,
     });
@@ -771,7 +771,12 @@ export async function deleteProposal(req, res) {
       });
     }
 
-    const deleted = await AdminBudgetModel.delete(proposalId);
+    const deleted = await AdminBudgetModel.delete(proposalId, {
+      userId,
+      email: normalizeText(req.user?.email),
+      role: isSuperAdmin ? 'super_admin' : resolveAccessRoleFromPermissions(req),
+      feedback: 'Deleted by user',
+    });
 
     if (!deleted) {
       throw new Error('Database delete failed');
@@ -831,7 +836,7 @@ export async function createEntity(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Only CENTRE, CELL, CLUB, and PROFESSIONAL_BODY are mutable via this API',
+        message: 'Only CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY are mutable via this API',
       });
     }
 
@@ -858,7 +863,7 @@ export async function updateEntity(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Only CENTRE, CELL, CLUB, and PROFESSIONAL_BODY are mutable via this API',
+        message: 'Only CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY are mutable via this API',
       });
     }
 
@@ -892,7 +897,7 @@ export async function deleteEntity(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Only CENTRE, CELL, CLUB, and PROFESSIONAL_BODY are mutable via this API',
+        message: 'Only CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY are mutable via this API',
       });
     }
 
@@ -933,7 +938,7 @@ export async function getEntityContacts(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Contacts are available only for CENTRE, CELL, CLUB, and PROFESSIONAL_BODY',
+        message: 'Contacts are available only for CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY',
       });
     }
 
@@ -968,7 +973,7 @@ export async function updateEntityContacts(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Contacts are editable only for CENTRE, CELL, CLUB, and PROFESSIONAL_BODY',
+        message: 'Contacts are editable only for CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY',
       });
     }
 
@@ -1565,7 +1570,7 @@ export async function getConsolidation(req, res) {
     const departmentId = await resolveUserDepartmentId(req);
     const userEmail = normalizeText(req.user?.email);
     const userId = getUserId(req);
-    const { fiscalYear, scope: scopeParam, beneficiaryType, q } = req.query;
+    const { fiscalYear, scope: scopeParam, beneficiaryType, beneficiaryValue, q } = req.query;
     const role = getAuthorizedRole(req, scopeParam);
 
     const consolidatedData = await AdminBudgetModel.getConsolidatedData({
@@ -1576,6 +1581,7 @@ export async function getConsolidation(req, res) {
       role,
       fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
       beneficiaryType,
+      beneficiaryValue,
       q,
     });
 

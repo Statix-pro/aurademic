@@ -1,6 +1,7 @@
 import eventDb from '../../../config/connection.js';
 import path from 'path';
 import fs from 'fs';
+import { safeResolvePath } from '../../../utils/pathSecurity.js';
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 
@@ -634,8 +635,8 @@ export const deleteUpload = async (req, res) => {
       return res.status(404).json({ error: 'Upload not found' });
     }
 
-    const filepath = path.join(UPLOAD_DIR, rows[0].filename);
-    if (fs.existsSync(filepath)) {
+    const filepath = safeResolvePath(UPLOAD_DIR, rows[0].filename);
+    if (filepath && fs.existsSync(filepath)) {
       fs.unlinkSync(filepath);
     }
 

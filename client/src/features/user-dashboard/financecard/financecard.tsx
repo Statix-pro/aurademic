@@ -1,7 +1,7 @@
 // client/src/features/user-dashboard/financecard/financecard.tsx
 import React, { useEffect, useState } from 'react';
 import './financecard.css';
-import { Eye, Edit2, Briefcase, Clock, RotateCcw, XCircle, CheckCircle, Archive, Search, Info, Trash2 } from 'lucide-react';
+import { Eye, Edit2, Briefcase, Clock, RotateCcw, XCircle, CheckCircle, Archive, Search, Info, Trash2, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
@@ -12,6 +12,8 @@ interface FinanceCardItem {
   proposal_ref?: string | null;
   applicant_name: string;
   beneficiary_type: string;
+  beneficiary_entity_id?: number | null;
+  level1_route_type?: string | null;
   primary_head: string;
   budget_tag?: string;
   amount?: number;
@@ -227,7 +229,7 @@ const FinanceCard: React.FC = () => {
     const normalizedStatus = getNormalizedStatus(item);
     const rawAmount = normalizedStatus === 'approved'
       ? (item.approved_total_amount ?? item.total_budget ?? item.proposed_amount ?? 0)
-      : (item.proposed_amount ?? item.total_budget ?? item.amount ?? item.workflow_state?.submittedTotalBudget ?? 0);
+      : (item.total_budget ?? item.proposed_amount ?? item.amount ?? item.workflow_state?.submittedTotalBudget ?? 0);
     const parsedAmount = Number(rawAmount);
     return Number.isFinite(parsedAmount) ? parsedAmount : 0;
   };
@@ -238,6 +240,111 @@ const FinanceCard: React.FC = () => {
     return normalized
       .replace(/_/g, ' ')
       .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  const getStageBadgeLabel = (item: FinanceCardItem, stage?: string | null, actorRole?: string | null) => {
+    const stageToken = String(stage || '').trim().toLowerCase();
+    const actorRoleToken = String(actorRole || '').trim().toLowerCase();
+    const level1RouteType = String(item?.level1_route_type || '').trim().toLowerCase();
+    const beneficiaryTypeToken = String(item?.beneficiary_type || '').trim().toLowerCase();
+    const beneficiaryEntityId = Number(item?.beneficiary_entity_id || 0);
+
+    if (stageToken === 'level1') {
+      if (actorRoleToken === 'coordinator' || actorRoleToken === 'entity_approver') {
+        return 'Coordinator';
+      }
+      if (actorRoleToken === 'hod') {
+        return 'HOD';
+      }
+      if (level1RouteType === 'entity_contact') {
+        return 'Coordinator';
+      }
+      if (
+        ['centre', 'cell', 'club', 'section', 'professional body', 'professional bodies'].includes(beneficiaryTypeToken) ||
+        (['faculty', 'staff'].includes(beneficiaryTypeToken) && beneficiaryEntityId > 0)
+      ) {
+        return 'Coordinator';
+      }
+      return 'HOD';
+    }
+
+    if (stageToken === 'dof') return 'DoF';
+    if (stageToken === 'ithead') return 'IT Head';
+    if (stageToken === 'principal') return 'Principal';
+    if (stageToken === 'archived') return 'Archive';
+    return formatLabel(stage);
+  };
+
+  const getUpdateTimestamp = (update: FinanceStatusUpdate) =>
+    String(update.createdAt || update.decidedAt || '').trim();
+
+  const getUpdateSortPriority = (update: FinanceStatusUpdate) => {
+    const decisionToken = String(update.decision || update.status || '').trim().toLowerCase();
+    if (decisionToken.includes('returned')) return 10;
+    if (decisionToken === 'updated') return 20;
+    if (decisionToken.includes('approved') || decisionToken.includes('completed')) return 30;
+    if (decisionToken.includes('rejected')) return 40;
+    return 50;
+  };
+
+  const formatAuditValue = (label: string, rawValue: any) => {
+    const value = String(rawValue ?? '').trim();
+    if (!value || value === '-') return '-';
+
+    const normalizedLabel = String(label || '').toLowerCase();
+    const isAmountField = ['amount', 'budget', 'balance', 'partial'].some((token) => normalizedLabel.includes(token));
+    if (isAmountField) {
+      const num = Number(value);
+      if (Number.isFinite(num)) {
+        return `₹ ${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
+    }
+
+    const parsedMs = Date.parse(value);
+    if (
+      Number.isFinite(parsedMs) &&
+      (
+        normalizedLabel.includes('date') ||
+        /^\d{4}-\d{2}-\d{2}$/.test(value) ||
+        value.includes('GMT')
+      )
+    ) {
+      return new Date(parsedMs).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    }
+
+    return value;
+  };
+
+  const trimUpdatedSummary = (summary: string) => {
+    if (!summary) return '';
+    const parts = summary
+      .split('|')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .filter((part) => !/^\d+\s+field\(s\)\s+updated$/i.test(part));
+
+    return parts.join(' | ');
+  };
+
+  const buildRowUpdateSummary = (details: any) => {
+    const parts: string[] = [];
+    const budgetRowsCount = Number(details?.budgetRowsCount || 0);
+    const incomeRowsCount = Number(details?.incomeRowsCount || 0);
+    const budgetRowsChanged = Boolean(details?.budgetRowsChanged);
+    const incomeRowsChanged = Boolean(details?.incomeRowsChanged);
+
+    if (budgetRowsCount > 0) {
+      parts.push(`Budget rows ${budgetRowsChanged ? 'updated' : 'reviewed'} (${budgetRowsCount} row(s))`);
+    }
+    if (incomeRowsCount > 0) {
+      parts.push(`Income rows ${incomeRowsChanged ? 'updated' : 'reviewed'} (${incomeRowsCount} row(s))`);
+    }
+
+    return parts.join(' | ');
   };
 
   const formatDateTime = (value?: string | null) => {
@@ -285,9 +392,26 @@ const FinanceCard: React.FC = () => {
       decision: 'submitted',
     }];
 
-    updates.forEach((update, index) => {
+    const sortedUpdates = [...updates].sort((left, right) => {
+      const leftMs = Date.parse(getUpdateTimestamp(left) || '') || 0;
+      const rightMs = Date.parse(getUpdateTimestamp(right) || '') || 0;
+
+      if (leftMs !== rightMs) {
+        return leftMs - rightMs;
+      }
+
+      const leftPriority = getUpdateSortPriority(left);
+      const rightPriority = getUpdateSortPriority(right);
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority;
+      }
+
+      return Number(left.id || 0) - Number(right.id || 0);
+    });
+
+    sortedUpdates.forEach((update, index) => {
       const decision = String(update.decision || update.status || '').toLowerCase();
-      const stage = formatLabel(update.stage || update.role);
+      const stage = getStageBadgeLabel(item, update.stage || update.role, update.actorRole);
       const actorName = update.userName;
       const actorEmail = update.actorEmail;
       const actorRole = update.actorRole;
@@ -326,12 +450,22 @@ const FinanceCard: React.FC = () => {
         title = 'Proposal updated';
         const details = update.details && typeof update.details === 'object' ? update.details : null;
         const changedFields = Array.isArray(details?.changedFields) ? details.changedFields : [];
+        const fieldCountSummary = changedFields.length > 0 ? `${changedFields.length} field(s) updated` : '';
+        const rowSummary = buildRowUpdateSummary(details);
         const fieldSummary = changedFields.length
           ? changedFields
-              .map((field: any) => `${field.label}: ${field.before} -> ${field.after}`)
-              .join(' | ')
+              .map((field: any) => {
+                const label = String(field?.label || '').trim() || 'Field';
+                const before = formatAuditValue(label, field?.before);
+                const after = formatAuditValue(label, field?.after);
+                return `${label}: ${before} -> ${after}`;
+              })
+          .join(' | ')
           : '';
-        subtitle = [String(eventSummary || '').trim(), fieldSummary].filter(Boolean).join(' | ') || 'Proposal updated';
+        const fallbackSummary = trimUpdatedSummary(String(eventSummary || '').trim());
+        subtitle = [fieldCountSummary, rowSummary || fallbackSummary, fieldSummary]
+          .filter(Boolean)
+          .join(' | ') || 'Proposal updated';
         if (isAdmin) {
           actorBadgeLabel = 'SUPERADMIN';
         }
@@ -589,6 +723,14 @@ const FinanceCard: React.FC = () => {
       cursor: 'pointer',
     }),
   } as const;
+  const handlePdfPreviewClick = (requestId: number) => {
+    navigate(`/finance/${requestId}`, {
+      state: {
+        openPreview: true,
+        autoDownloadPdf: false,
+      },
+    });
+  };
 
   return (
     <>
@@ -749,6 +891,15 @@ const FinanceCard: React.FC = () => {
                             <span className="beneficiary-value">{item.beneficiary_name || item.beneficiary_value || item.applicant_name}</span>
                           </div>
                           <div className="card-footer-right">
+                            <button
+                              type="button"
+                              className="icon-btn-subtle financecard-download-btn"
+                              title="Open PDF Preview"
+                              onClick={() => handlePdfPreviewClick(item.id)}
+                            >
+                              <FileText size={18} />
+                            </button>
+
                             <button
                               type="button"
                               className={`status-pill-solid status-${status} finance-status-pill ${isStatusExpanded ? 'finance-status-pill--active' : ''}`}

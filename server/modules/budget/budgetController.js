@@ -214,11 +214,11 @@ export async function getOrgUnits(req, res) {
   try {
     const mappedType = normalizeEntityTypeParam(req.params.type);
 
-    if (!['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY'].includes(mappedType)) {
+    if (!['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(mappedType)) {
       return res.status(400).json({
         success: false,
         message:
-          'Invalid type. Must be: DEPARTMENT, CENTRE, CELL, CLUB, PROFESSIONAL_BODY (or PROF_BODY)',
+          'Invalid type. Must be: DEPARTMENT, CENTRE, CELL, CLUB, SECTION, PROFESSIONAL_BODY (or PROF_BODY)',
       });
     }
 
@@ -516,7 +516,12 @@ export async function deleteProposal(req, res) {
       });
     }
 
-    const deleted = await BudgetModel.delete(proposalId);
+    const deleted = await BudgetModel.delete(proposalId, {
+      userId,
+      email: normalizeText(req.user?.email),
+      role: isSuperAdmin ? 'super_admin' : resolveAccessRoleFromPermissions(req),
+      feedback: 'Deleted by user',
+    });
 
     if (!deleted) {
       throw new Error('Database delete failed');
