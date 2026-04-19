@@ -115,19 +115,43 @@ const parseBoolean = (value) => {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
 };
 
-const inferRequestType = (payload) => {
-  const explicitType = normalizeRequestType(payload.request_type || payload.activeTab);
+const inferRequestType = (payload = {}) => {
+  const explicitType = normalizeRequestType(
+    payload.request_type ||
+      payload.requesttype ||
+      payload.requestType ||
+      payload.workflowrequesttype ||
+      payload.workflow_request_type ||
+      payload.activeTab,
+  );
   if (explicitType) return explicitType;
 
-  if (Array.isArray(payload.advance_rows) && payload.advance_rows.some((row) => String(row?.advance || '').trim() !== '')) {
+  if (
+    Array.isArray(payload.advance_rows) &&
+    payload.advance_rows.some((row) => String(row?.advance || row?.advanceamount || '').trim() !== '')
+  ) {
     return 'Advance';
   }
-  if (Array.isArray(payload.settlement_rows) && payload.settlement_rows.some((row) => String(row?.settlement || '').trim() !== '')) {
+
+  if (
+    Array.isArray(payload.settlement_rows) &&
+    payload.settlement_rows.some(
+      (row) => String(row?.settlement || row?.settlementamount || '').trim() !== '',
+    )
+  ) {
     return 'Settlement';
   }
-  if (Array.isArray(payload.expenditure_rows) && payload.expenditure_rows.some((row) => String(row?.expenditure || row?.autoSum || row?.auto_sum_amount || '').trim() !== '')) {
+
+  if (
+    Array.isArray(payload.expenditure_rows) &&
+    payload.expenditure_rows.some(
+      (row) =>
+        String(row?.expenditure || row?.autoSum || row?.autosumamount || row?.expenditureinput || '').trim() !== '',
+    )
+  ) {
     return 'Expenditure';
   }
+
   return null;
 };
 
@@ -723,6 +747,8 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
 	       ) AS applicant_name,
        COALESCE(NULLIF(TRIM(er.beneficiary_type), ''), 'Unknown') AS beneficiary_type,
        COALESCE(NULLIF(TRIM(er.primary_head), ''), 'Not specified') AS primary_head,
+       er.request_type,
+       er.workflow_state,
        COALESCE(er.total_amount, 0) AS amount,
        LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) AS overall_status,
 	       er.created_at
@@ -765,6 +791,9 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
       applicant_name: normalizeText(row.applicant_name),
       beneficiary_type: normalizeText(row.beneficiary_type),
       primary_head: normalizeText(row.primary_head),
+      sub_head: normalizeText(row.sub_head),
+      request_type: normalizeText(row.request_type),
+      workflow_state: row.workflow_state,
       amount: toMoney(row.amount),
       overall_status: normalizeText(row.overall_status) || 'pending',
       created_at: row.created_at,
@@ -936,12 +965,17 @@ const EXPENDITURE_SELECT = `
     er.request_type,
     er.request_date,
     er.description,
+    er.beneficiary_type,
+    er.beneficiary_value,
+    er.budget_tag,
     er.primary_head,
     er.event_sub_head,
+    er.is_budget_proposed,
     er.advance_total_amount,
     er.settlement_total_amount,
     er.expenditure_total_amount,
     er.total_amount,
+    er.debit_status,
     er.payment_debit_account,
     er.payment_mode,
     er.payment_ref_no,
@@ -1671,9 +1705,35 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
     }
 
     const paymentDetails = data.payment_details || {};
-    const advanceRows = Array.isArray(data.advance_rows) ? data.advance_rows : [];
-    const settlementRows = Array.isArray(data.settlement_rows) ? data.settlement_rows : [];
-    const expenditureRows = Array.isArray(data.expenditure_rows) ? data.expenditure_rows : [];
+    const advanceRows = Array.isArray(data.advance_rows)
+  ? data.advance_rows
+  : Array.isArray(data.advancerows)
+    ? data.advancerows
+    : [];
+
+const settlementRows = Array.isArray(data.settlement_rows)
+  ? data.settlement_rows
+  : Array.isArray(data.settlementrows)
+    ? data.settlementrows
+    : [];
+
+const expenditureRows = Array.isArray(data.expenditure_rows)
+  ? data.expenditure_rows
+  : Array.isArray(data.expenditurerows)
+    ? data.expenditurerows
+    : [];
+
+const payeeRows = Array.isArray(data.payee_rows)
+  ? data.payee_rows
+  : Array.isArray(data.payeerows)
+    ? data.payeerows
+    : [];
+
+const incomeRows = Array.isArray(data.income_rows)
+  ? data.income_rows
+  : Array.isArray(data.incomerows)
+    ? data.incomerows
+    : [];
     const usageRows = collectUsageRowsForRequestType(requestType, { advanceRows, expenditureRows });
 
     const advanceTotal = advanceRows.reduce((sum, row) => sum + toMoney(row.advance || row.advance_amount), 0);
@@ -1764,6 +1824,14 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
       payment_date: paymentDetails.date || data.payment_date || null,
       payment_status: normalizePaymentStatus(paymentDetails.status || data.payment_status),
       payment_debit_account: normalizeText(paymentDetails.debitAccount || data.payment_debit_account) || null,
+      workflow_state: JSON.stringify({
+        module: normalizeRequestType(requestType),
+        workflowrowref: normalizeText(data.workflowrowref || null) || null,
+        dashboardRowId: normalizeText(data.dashboard_row_id || data.dashboardRowId || null) || null,
+        rowIndex: toPositiveInt(data.row_index || data.rowIndex),
+        workflowbudgetlineid: toPositiveInt(data.workflowbudgetlineid),
+        workflowbudgetproposalid: toPositiveInt(data.workflowbudgetproposalid),
+      }),
       advance_total_amount: toMoney(advanceTotal),
       settlement_total_amount: toMoney(settlementTotal),
       expenditure_total_amount: toMoney(expenditureTotal),
@@ -1774,7 +1842,7 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
     };
 
     const filteredEntry = Object.fromEntries(
-      Object.entries(entry).filter(([, value]) => value !== null && value !== undefined),
+      Object.entries(entry).filter(([, value]) => value !== null && value !== undefined && value !== ''),
     );
     const entryKeys = Object.keys(filteredEntry);
     const entryValues = Object.values(filteredEntry);
@@ -1788,11 +1856,11 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
 
     const ref = await insertExpenditureRef(conn, expenditureId, requestDate);
 
-    await insertIncomeRows(conn, expenditureId, data.income_rows);
-    await insertPayeeRows(conn, expenditureId, data.payee_rows, userId);
-    await insertAdvanceRows(conn, expenditureId, data.advance_rows, userId);
-    await insertSettlementRows(conn, expenditureId, data.settlement_rows);
-    await insertExpenditureRows(conn, expenditureId, data.expenditure_rows);
+   await insertIncomeRows(conn, expenditureId, incomeRows);
+await insertPayeeRows(conn, expenditureId, payeeRows, userId);
+await insertAdvanceRows(conn, expenditureId, advanceRows, userId);
+await insertSettlementRows(conn, expenditureId, settlementRows);
+await insertExpenditureRows(conn, expenditureId, expenditureRows);
     await applyBudgetUsageDelta(conn, usageRows, 1);
     await insertBillFiles(conn, expenditureId, uploads.billFiles);
     await upsertBulkNeftFile(
