@@ -1,10 +1,11 @@
 import React, { useState, useRef, CSSProperties, useEffect, ChangeEvent, MouseEvent, Fragment } from 'react';
-import { useLocation } from 'react-router-dom';
-import { Info, Plus, X, Upload, Eye, Trash2, Download, ChevronLeft } from 'lucide-react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Info, Plus, X, Upload, Eye, Trash2, Download, ChevronLeft, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import 'bootstrap/dist/css/bootstrap.min.css';
+
 import './expenditureapproval.css';
 import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
 
@@ -283,15 +284,79 @@ const CREDIT_ACCOUNT_OPTIONS = [
   'ISTE Student Chapter KSRCT | 0751301000023696',
   'KSRCT RPS AICTE Project | 0075133800000643',
 ];
+const DEBIT_ACCOUNT_OPTIONS = CREDIT_ACCOUNT_OPTIONS;
 const CATEGORY_TYPE_OPTIONS = [
-  'Individual Faculty',
-  'Faculty_Team',
-  'Student_Team',
+  'Faculty',
+  'Staff',
   'Department',
   'Centre',
   'Cell',
   'Club',
+  'Section',
+  'Professional Body',
   'Institution',
+];
+const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
+  Department: 'DEPARTMENT',
+  Centre: 'CENTRE',
+  Cell: 'CELL',
+  Club: 'CLUB',
+  Section: 'SECTION',
+  'Professional Body': 'PROFESSIONAL_BODY',
+};
+const FALLBACK_SUBCATEGORY_OPTIONS: Record<string, string[]> = {
+  Department: [
+    'Computer Science and Engineering',
+    'Electronics and Communication Engineering',
+    'Mechanical Engineering',
+    'Civil Engineering',
+    'Information Technology',
+  ],
+  Centre: [
+    'Centre for Research',
+    'Centre for Innovation',
+    'Centre for Industry Collaboration',
+  ],
+  Cell: [
+    'Placement Cell',
+    'Entrepreneurship Development Cell',
+    'Women Empowerment Cell',
+    'Alumni Cell',
+  ],
+  Club: [
+    'Coding Club',
+    'Robotics Club',
+    'Cultural Club',
+    'Sports Club',
+  ],
+  Section: [
+    'Section A',
+    'Section B',
+    'Section C',
+  ],
+  'Professional Body': [
+    'American Society of Mechanical Engineers (Student Chapter)',
+    'Computer Society of India',
+    'Erode Salaram Foundation',
+    'Local Library Authority, Erode & Namakkal',
+    'Society for the Advancement of Library and Information Science',
+    'The Indian Institute of Welding',
+    'The Indian Society of Heating, Refrigerating and Air Conditioning',
+  ],
+};
+const FALLBACK_TAG_OPTIONS: SelectOption[] = [
+  { value: 'Laboratory', label: 'Laboratory' },
+  { value: 'Association', label: 'Association' },
+  { value: 'Skilling', label: 'Skilling' },
+  { value: 'Research', label: 'Research' },
+  { value: 'Outreach', label: 'Outreach' },
+  { value: 'Office', label: 'Office' },
+  { value: 'Academics', label: 'Academics' },
+  { value: 'Essentials', label: 'Essentials' },
+  { value: 'Events', label: 'Events' },
+  { value: 'Innovation', label: 'Innovation' },
+  { value: 'Start-up', label: 'Start-up' },
+  { value: 'Entrepreneurship', label: 'Entrepreneurship' },
 ];
 const PAYMENT_MODE_OPTIONS = ['NEFT', 'RTGS', 'IMPS', 'Cheque', 'Cash', 'G-Pay', 'PhonePe', 'Internal Transfer'];
 const PAYMENT_STATUS_OPTIONS = ['Paid', 'Pending', 'Processing', 'Cancelled'];
@@ -421,6 +486,34 @@ const EVENT_SUBHEAD_GROUPS: Record<string, Array<{ label: string; options: Optio
 
 const flattenOptions = (options: Array<OptionType | { label: string; options: OptionType[] }>): OptionType[] =>
   options.flatMap((opt) => ('options' in opt ? opt.options : opt));
+
+const parsePositiveIntLike = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+
+  const direct = Number.parseInt(text, 10);
+  if (Number.isInteger(direct) && direct > 0) {
+    return direct;
+  }
+
+  const match = text.match(/(\d+)(?!.*\d)/);
+  if (!match) return null;
+
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const normalizeWorkflowModule = (value: unknown): 'Advance' | 'Settlement' | 'Expenditure' | null => {
+  const text = String(value ?? '').trim().toLowerCase();
+  if (text === 'advance') return 'Advance';
+  if (text === 'settlement') return 'Settlement';
+  if (text === 'expenditure') return 'Expenditure';
+  return null;
+};
 
 const getSelectedOption = (
   value: string | number,
@@ -948,11 +1041,14 @@ const mapFinanceBeneficiaryTypeToExpenditureCategory = (value: string): string =
   const normalized = String(value || '').trim().toLowerCase();
 
   if (!normalized) return '';
-  if (normalized === 'faculty') return 'Individual Faculty';
+  if (normalized === 'faculty') return 'Faculty';
+  if (normalized === 'staff') return 'Staff';
   if (normalized === 'department') return 'Department';
   if (normalized === 'centre' || normalized === 'center') return 'Centre';
   if (normalized === 'cell') return 'Cell';
   if (normalized === 'club') return 'Club';
+  if (normalized === 'section') return 'Section';
+  if (normalized === 'professional body') return 'Professional Body';
   if (normalized === 'institution') return 'Institution';
 
   return '';
@@ -1283,38 +1379,16 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
 
         <div style={{ padding: '28px 32px' }}>
           {/* Toggle Buttons */}
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '28px', backgroundColor: '#f5f7fa', borderRadius: '40px', padding: '6px', width: '100%' }}>
+          <div className="payee-modal-toggle">
             <button 
               onClick={() => handleToggle('individual')} 
-              style={{ 
-                flex: 1, 
-                padding: '10px 20px', 
-                borderRadius: '32px', 
-                border: 'none', 
-                backgroundColor: beneficiaryType === 'individual' ? '#0069ab' : 'transparent', 
-                color: beneficiaryType === 'individual' ? '#ffffff' : '#4a5568', 
-                fontWeight: 600, 
-                fontSize: '14px', 
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
+              className={`payee-modal-toggle-btn ${beneficiaryType === 'individual' ? 'active' : ''}`}
             >
               Individual
             </button>
             <button 
               onClick={() => handleToggle('organization')} 
-              style={{ 
-                flex: 1, 
-                padding: '10px 20px', 
-                borderRadius: '32px', 
-                border: 'none', 
-                backgroundColor: beneficiaryType === 'organization' ? '#0069ab' : 'transparent', 
-                color: beneficiaryType === 'organization' ? '#ffffff' : '#4a5568', 
-                fontWeight: 600, 
-                fontSize: '14px', 
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
+              className={`payee-modal-toggle-btn ${beneficiaryType === 'organization' ? 'active' : ''}`}
             >
               Organization
             </button>
@@ -1477,28 +1551,83 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
 
 const ExpenditureApproval: React.FC = () => {
   const location = useLocation();
-  const financeRequestIdFromState = (() => {
-    const rawValue = (location.state as { financeRequestId?: unknown; dashboardRowId?: unknown } | null)?.financeRequestId
-      ?? (location.state as { financeRequestId?: unknown; dashboardRowId?: unknown } | null)?.dashboardRowId;
-    const parsed = Number(rawValue);
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  const navigate = useNavigate();
+  const { id: routeId } = useParams<{ id?: string }>();
+  const launchModuleFromState = (() => {
+    const state = location.state as {
+      activeTab?: unknown;
+      submittedModule?: unknown;
+    } | null;
+
+    return normalizeWorkflowModule(state?.activeTab) ?? normalizeWorkflowModule(state?.submittedModule);
   })();
+  const isReadOnlyView = Boolean(routeId) && !launchModuleFromState && !location.pathname.endsWith('/edit');
+  const dashboardRowIdFromState = (() => {
+    const state = location.state as {
+      dashboardRowId?: unknown;
+    } | null;
+
+    return String(state?.dashboardRowId || '').trim() || null;
+  })();
+  const rowIndexFromState = (() => {
+    const state = location.state as {
+      rowIndex?: unknown;
+    } | null;
+
+    return parsePositiveIntLike(state?.rowIndex);
+  })();
+  const financeRequestIdFromState = (() => {
+    const state = location.state as {
+      financeRequestId?: unknown;
+      financeProposal?: { proposalId?: unknown };
+    } | null;
+
+    const candidates = [
+      state?.financeRequestId,
+      state?.financeProposal?.proposalId,
+    ];
+
+    for (const candidate of candidates) {
+      const parsed = parsePositiveIntLike(candidate);
+      if (parsed) return parsed;
+    }
+
+    return null;
+  })();
+  const submittedRequestIdFromState = (() => {
+    const state = location.state as {
+      submittedRequestId?: unknown;
+    } | null;
+
+    return parsePositiveIntLike(state?.submittedRequestId) ?? parsePositiveIntLike(routeId);
+  })();
+  const financeApprovedAmountFromState = (() => {
+    const state = location.state as {
+      financeProposal?: {
+        totalAmount?: unknown;
+      };
+    } | null;
+
+    return Number.parseFloat(String(state?.financeProposal?.totalAmount ?? '0')) || 0;
+  })();
+  const [resolvedFinanceRequestId, setResolvedFinanceRequestId] = useState<number | null>(
+    financeRequestIdFromState,
+  );
+  const [financeApprovedAmount, setFinanceApprovedAmount] = useState<number>(financeApprovedAmountFromState);
+  useEffect(() => {
+    setResolvedFinanceRequestId(financeRequestIdFromState);
+  }, [financeRequestIdFromState]);
+  useEffect(() => {
+    setFinanceApprovedAmount(financeApprovedAmountFromState);
+  }, [financeApprovedAmountFromState]);
   const [applicantName, setApplicantName] = useState<string>('');
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [designation, setDesignation] = useState<string>('');
   const [mobile, setMobile] = useState<string>('');
   const [department, setDepartment] = useState<string>('');
-  const [category, setCategory] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [amountProposed, setAmountProposed] = useState<string>('');
   const [directorComments, setDirectorComments] = useState<string>('');
-  const [directorStatus, setDirectorStatus] = useState<string>('');
-  const [principalComments, setPrincipalComments] = useState<string>('');
-  const [principalStatus, setPrincipalStatus] = useState<string>('');
-  const [principalPriority, setPrincipalPriority] = useState<string>('');
-  const [chairmanComments, setChairmanComments] = useState<string>('');
-  const [chairmanStatus, setChairmanStatus] = useState<string>('');
-  const [showPreview, setShowPreview] = useState<boolean>(false);
   const [isBudgetProposed, setIsBudgetProposed] = useState<string>('');
   const [balanceAmount, setBalanceAmount] = useState<string>('');
   const [debitStatus, setDebitStatus] = useState<'credited' | 'reimbursement' | ''>('');
@@ -1524,6 +1653,7 @@ const ExpenditureApproval: React.FC = () => {
   const bulkNeftInputRef = useRef<HTMLInputElement>(null);
   const [bulkNeftFile, setBulkNeftFile] = useState<File | null>(null);
   const [uploadedPayeeBills, setUploadedPayeeBills] = useState<File[]>([]);
+  const [remarks, setRemarks] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [isExternalApplicant, setIsExternalApplicant] = useState<boolean>(false);
@@ -1555,14 +1685,19 @@ const ExpenditureApproval: React.FC = () => {
   const [newPayee, setNewPayee] = useState<PayeeRow>(createPayeeRow());
   const [approvedBudgetOptions, setApprovedBudgetOptions] = useState<ApprovedBudgetOption[]>([]);
   const [isApprovedBudgetLoading, setIsApprovedBudgetLoading] = useState(false);
+  const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
+  const [tagOptions, setTagOptions] = useState<SelectOption[]>(FALLBACK_TAG_OPTIONS);
+  const [showDebitAccountDropdown, setShowDebitAccountDropdown] = useState(false);
   const payeeLookupTimeoutRef = useRef<number | null>(null);
   const payeeLookupRequestRef = useRef(0);
-
+const normalizeText = (value: unknown): string => String(value ?? '').trim();
   const [expenditureSubRows, setExpenditureSubRows] = useState<ExpenditureFormRow[]>([createExpenditureRow()]);
-  const [activeTab, setActiveTab] = useState<'Advance' | 'Settlement' | 'Expenditure' | null>(location.state?.activeTab || null);
+  const [activeTab, setActiveTab] = useState<'Advance' | 'Settlement' | 'Expenditure' | null>(
+    launchModuleFromState,
+  );
 
   useEffect(() => {
-    if (!financeRequestIdFromState) {
+    if (!resolvedFinanceRequestId) {
       return;
     }
 
@@ -1571,7 +1706,7 @@ const ExpenditureApproval: React.FC = () => {
     const loadFinanceContext = async () => {
       try {
         const response = await authenticityUtility.get(
-          `/expenditure/finance-context/${financeRequestIdFromState}`
+          `/expenditure/finance-context/${resolvedFinanceRequestId}`
         ) as { status: string; data?: FinanceRequestContext };
 
         if (isCancelled || response.status !== 'success' || !response.data) {
@@ -1581,6 +1716,7 @@ const ExpenditureApproval: React.FC = () => {
         const financeContext = response.data;
         const nextCategoryType = mapFinanceBeneficiaryTypeToExpenditureCategory(financeContext.beneficiary_type || '');
 
+        setFinanceApprovedAmount(Number(financeContext.approved_amount || financeApprovedAmountFromState || 0));
         setEmployeeId(financeContext.employee_id ?? null);
         setApplicantName(financeContext.applicant_name || '');
         setApplicantSearchQuery(financeContext.applicant_name || '');
@@ -1605,20 +1741,160 @@ const ExpenditureApproval: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [financeRequestIdFromState]);
+  }, [resolvedFinanceRequestId]);
+
+  useEffect(() => {
+    if (!submittedRequestIdFromState) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadSubmittedRequest = async () => {
+      try {
+        const response = await authenticityUtility.get(`/expenditure/${submittedRequestIdFromState}`) as {
+          status: string;
+          data?: any;
+        };
+
+        if (isCancelled || response.status !== 'success' || !response.data) {
+          return;
+        }
+
+        const record = response.data;
+        setResolvedFinanceRequestId(parsePositiveIntLike(record.finance_request_id) ?? null);
+        const toRowId = (suffix: string, index: number) => `${submittedRequestIdFromState}-${suffix}-${index}`;
+
+        const mapAdvanceRows = Array.isArray(record.advance_rows)
+          ? record.advance_rows.map((row: any, index: number) => ({
+              id: toRowId('advance', index),
+              budgetHead: String(row?.budget_head || ''),
+              subHead: String(row?.sub_head || ''),
+              budget: String(row?.budget_amount ?? ''),
+              preAdvance: String(row?.pre_advance_amount ?? ''),
+              advance: String(row?.advance_amount ?? ''),
+              budgetLineId: row?.budget_line_id ?? null,
+              budgetProposalId: row?.budget_proposal_id ?? null,
+            }))
+          : [];
+
+        const mapSettlementRows = Array.isArray(record.settlement_rows)
+          ? record.settlement_rows.map((row: any, index: number) => ({
+              id: toRowId('settlement', index),
+              budgetHead: String(row?.budget_head || ''),
+              subHead: String(row?.sub_head || ''),
+              budget: String(row?.budget_amount ?? ''),
+              advance: String(row?.advance_amount ?? ''),
+              settlement: String(row?.settlement_amount ?? ''),
+              budgetLineId: row?.budget_line_id ?? null,
+              budgetProposalId: row?.budget_proposal_id ?? null,
+            }))
+          : [];
+
+        const mapExpenditureRows = Array.isArray(record.expenditure_rows)
+          ? record.expenditure_rows.map((row: any, index: number) => ({
+              id: toRowId('expenditure', index),
+              budgetHead: String(row?.budget_head || ''),
+              subHead: String(row?.sub_head || ''),
+              budget: String(row?.budget_amount ?? ''),
+              expenditure: String(row?.expenditure_input ?? ''),
+              autoSum: String(row?.auto_sum_amount ?? ''),
+              budgetLineId: row?.budget_line_id ?? null,
+              budgetProposalId: row?.budget_proposal_id ?? null,
+            }))
+          : [];
+
+        const mapPayeeRows = Array.isArray(record.payee_rows)
+          ? record.payee_rows.map((row: any, index: number) => ({
+              id: `${submittedRequestIdFromState}-payee-${index}`,
+              payeeId: row?.payee_id ?? null,
+              payeeName: String(row?.payee_name || ''),
+              bankName: String(row?.bank_name || ''),
+              accountNo: String(row?.account_no || ''),
+              ifsc: String(row?.ifsc || ''),
+              branchName: String(row?.branch_name || ''),
+              url: String(row?.url || ''),
+              amount: String(row?.amount || ''),
+              mode: String(row?.mode || ''),
+              accountName: String(row?.account_name || ''),
+              panNumber: String(row?.pan_number || ''),
+              accountType: String(row?.account_type || ''),
+              beneficiaryType: String(row?.beneficiary_type || 'individual'),
+              beneficiaryOrg: String(row?.beneficiary_org || ''),
+              organizationType: String(row?.organization_type || ''),
+              msme: String(row?.msme || ''),
+              gstin: String(row?.gstin || ''),
+              tdsDetails: String(row?.tds_details || ''),
+              tdsSection: String(row?.tds_section || ''),
+            }))
+          : [];
+
+        setApplicantName(String(record.applicant_name || ''));
+        setApplicantSearchQuery(String(record.applicant_name || ''));
+        setDesignation(String(record.designation || ''));
+        setDepartment(String(record.department || ''));
+        setEmail(String(record.email || ''));
+        setMobile(String(record.mobile || ''));
+        setDate(String(record.request_date || new Date().toISOString().split('T')[0]));
+        setDescription(String(record.description || ''));
+        setCategoryType(String(record.beneficiary_type || ''));
+        setCategoryItem(String(record.beneficiary_value || ''));
+        setSelectedTag(String(record.budget_tag || ''));
+        setPrimaryHead(String(record.primary_head || ''));
+        setEventSubHead(String(record.event_sub_head || ''));
+        setIsBudgetProposed(String(record.is_budget_proposed || ''));
+        setDebitStatus(String(record.debit_status || '') as 'credited' | 'reimbursement' | '');
+        setAmountProposed(String(record.total_amount ?? record.approved_total_amount ?? ''));
+        if (Number(record.approved_amount || 0) > 0) {
+          setFinanceApprovedAmount(Number(record.approved_amount));
+        }
+        const requestType = normalizeText(record.request_type);
+        setActiveTab(
+          launchModuleFromState
+            ?? (requestType === 'Advance' || requestType === 'Settlement' || requestType === 'Expenditure'
+              ? requestType
+              : null),
+        );
+        setAdvanceRows(mapAdvanceRows.length > 0 ? mapAdvanceRows : [createAdvanceRow()]);
+        setSettlementRows(mapSettlementRows.length > 0 ? mapSettlementRows : [createSettlementRow()]);
+        setExpenditureSubRows(mapExpenditureRows.length > 0 ? mapExpenditureRows : [createExpenditureRow()]);
+        setPayeeRows(mapPayeeRows.length > 0 ? mapPayeeRows : [createPayeeRow()]);
+        setPaymentDetails({
+          mode: String(record.payment_mode || ''),
+          refNo: String(record.payment_ref_no || ''),
+          date: String(record.payment_date || new Date().toISOString().split('T')[0]),
+          status: String(record.payment_status || 'Pending'),
+          debitAccount: String(record.payment_debit_account || ''),
+        });
+        setShowBulkNEFT(Boolean(record.bulk_neft_file));
+        setShowDebitAccountDropdown(Boolean(record.payment_debit_account));
+        setUploadedPayeeBills([]);
+      } catch (error) {
+        if (!isCancelled) {
+          console.error('Failed to load submitted expenditure request:', error);
+        }
+      }
+    };
+
+    loadSubmittedRequest();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [submittedRequestIdFromState]);
 
   useEffect(() => {
     let isCancelled = false;
 
     const loadApprovedBudgets = async () => {
-      if (!financeRequestIdFromState) {
+      if (!resolvedFinanceRequestId) {
         setApprovedBudgetOptions([]);
         return;
       }
 
       try {
         setIsApprovedBudgetLoading(true);
-        const budgetUrl = `/expenditure/budget/approved?finance_request_id=${financeRequestIdFromState}`;
+        const budgetUrl = `/expenditure/budget/approved?finance_request_id=${resolvedFinanceRequestId}`;
         const response = await authenticityUtility.get(budgetUrl) as {
           status: string;
           data?: ApprovedBudgetOption[];
@@ -1644,7 +1920,108 @@ const ExpenditureApproval: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [financeRequestIdFromState]);
+  }, [resolvedFinanceRequestId]);
+ const rowReferenceIdFromState = (() => {
+  const state = location.state as { rowReferenceId?: unknown } | null;
+  const value = String(state?.rowReferenceId ?? '').trim();
+  return value || null;
+})();
+
+const workflowBudgetLineIdFromState = (() => {
+  const state = location.state as {
+    workflowbudgetlineid?: unknown;
+    budgetLineId?: unknown;
+  } | null;
+
+  return (
+    parsePositiveIntLike(state?.workflowbudgetlineid) ??
+    parsePositiveIntLike(state?.budgetLineId)
+  );
+})();
+
+const workflowRowRefFromState = (() => {
+  const state = location.state as { workflowrowref?: unknown } | null;
+  const value = String(state?.workflowrowref ?? '').trim();
+  return value || null;
+})();
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBeneficiaryOptions = async () => {
+      const toOptionList = (rows: any[]): SelectOption[] =>
+        rows
+          .map((row: any) => String(row?.name || '').trim())
+          .filter(Boolean)
+          .map((name: string) => ({ value: name, label: name }));
+
+      const nextOptions: Record<string, SelectOption[]> = {};
+
+      try {
+        const response = await authenticityUtility.get('budget/org-units') as any;
+        const grouped = response?.data?.grouped;
+
+        if (grouped && typeof grouped === 'object') {
+          Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).forEach(([beneficiaryKey, apiType]) => {
+            const rows = Array.isArray((grouped as Record<string, any[]>)[apiType])
+              ? (grouped as Record<string, any[]>)[apiType]
+              : [];
+            nextOptions[beneficiaryKey] = toOptionList(rows);
+          });
+        } else {
+          throw new Error('Grouped org-units payload unavailable');
+        }
+      } catch (error) {
+        console.error('Failed to fetch bulk org units, falling back to per-type calls:', error);
+
+        for (const [beneficiaryKey, apiType] of Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE)) {
+          try {
+            const response = await authenticityUtility.get(`/finance-requests/org-units/${apiType}`) as any;
+            const rows = Array.isArray(response?.data) ? response.data : [];
+            nextOptions[beneficiaryKey] = toOptionList(rows);
+          } catch (fallbackError) {
+            console.error(`Failed to fetch options for ${beneficiaryKey}:`, fallbackError);
+            nextOptions[beneficiaryKey] =
+              FALLBACK_SUBCATEGORY_OPTIONS[beneficiaryKey]?.map((opt) => ({ value: opt, label: opt })) || [];
+          }
+        }
+      }
+
+      if (!cancelled) {
+        setSubcategoryOptionsByType(nextOptions);
+      }
+    };
+
+    loadBeneficiaryOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadTagOptions = async () => {
+      try {
+        const response = await authenticityUtility.get('/finance-requests/tags') as any;
+        if (response?.success && Array.isArray(response?.data)) {
+          const options = response.data
+            .map((row: any) => ({
+              value: String(row?.tag_name || '').trim(),
+              label: String(row?.tag_name || '').trim(),
+            }))
+            .filter((opt: SelectOption) => opt.value.length > 0);
+
+          setTagOptions(options.length > 0 ? options : FALLBACK_TAG_OPTIONS);
+        } else {
+          setTagOptions(FALLBACK_TAG_OPTIONS);
+        }
+      } catch (error) {
+        console.error('Failed to load budget tags', error);
+        setTagOptions(FALLBACK_TAG_OPTIONS);
+      }
+    };
+
+    loadTagOptions();
+  }, []);
 
   const addAdvanceRow = () => setAdvanceRows([...advanceRows, createAdvanceRow()]);
   const removeAdvanceRow = (id: string) => setAdvanceRows(advanceRows.filter(r => r.id !== id));
@@ -1715,11 +2092,11 @@ const ExpenditureApproval: React.FC = () => {
      return category;
    };
  
-   const isMultipleSelect = (type: string) => type === "Faculty_Team" || type === "Student_Team";
- 
-   const subcategoryList = (SUBCATEGORY_OPTIONS as any)[categoryType] ?? [];
+  const isMultipleSelect = (type: string) => type === 'Faculty' || type === 'Staff';
+
+  const subcategoryOptions: OptionType[] = subcategoryOptionsByType[categoryType] || [];
+  const subcategoryList: string[] = subcategoryOptions.map((option) => String(option.value));
    const hasSubcategories = subcategoryList.length > 0;
-   const subcategoryOptions: OptionType[] = subcategoryList.map((s: string) => ({ value: s, label: s }));
  
    const extraDropdownVisible = primaryHead === 'Events & Competitions' || primaryHead === 'Meetings & Audits';
 
@@ -1733,6 +2110,40 @@ const ExpenditureApproval: React.FC = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!categoryType?.trim()) {
+      setSelectedTag('');
+      return;
+    }
+
+    setSelectedTag((prev) => {
+      if (prev && prev.trim() !== '') {
+        return prev;
+      }
+
+      if (categoryType === 'Staff' || categoryType === 'Faculty') {
+        return 'Skilling';
+      }
+
+      if (categoryType === 'Department') {
+        return '';
+      }
+
+      if (
+        categoryType === 'Centre'
+        || categoryType === 'Cell'
+        || categoryType === 'Club'
+        || categoryType === 'Section'
+        || categoryType === 'Institution'
+        || categoryType === 'Professional Body'
+      ) {
+        return 'Essentials';
+      }
+
+      return '';
+    });
+  }, [categoryType]);
 
   const updatePayeeRow = (rowId: string, updater: (row: PayeeRow) => PayeeRow) => {
     setPayeeRows((prev) => prev.map((row) => (row.id === rowId ? updater(row) : row)));
@@ -1954,31 +2365,34 @@ const ExpenditureApproval: React.FC = () => {
   };
 
   const getApprovedBudgetHeadsForAdvance = (): OptionType[] => {
-    const uniqueHeads = Array.from(
-      new Set(
-        approvedBudgetOptions
-          .map((budget) => budget.head)
-          .filter(Boolean)
-      )
-    );
+    const approvedHeads: string[] = approvedBudgetOptions
+      .map((budget) => String(budget.head || '').trim())
+      .filter(Boolean);
 
-    return uniqueHeads.map((head) => ({ value: head, label: head }));
+    if (approvedHeads.length > 0) {
+      return Array.from(new Set(approvedHeads))
+        .map((head) => ({ value: head, label: head }));
+    }
+
+    return PRIMARY_HEAD_OPTIONS.flatMap((group) => group.options)
+      .map((option) => ({ value: String(option.value), label: String(option.label) }));
   };
 
   const getApprovedSubHeadOptionsForAdvance = (budgetHead: string | number): OptionType[] => {
     const normalizedHead = String(budgetHead || '').trim().toLowerCase();
     if (!normalizedHead) return [];
+    const approvedSubHeads: string[] = approvedBudgetOptions
+      .filter((budget) => budget.head.trim().toLowerCase() === normalizedHead)
+      .map((budget) => String(budget.subHead || '').trim())
+      .filter(Boolean);
 
-    const uniqueSubHeads = Array.from(
-      new Set(
-        approvedBudgetOptions
-          .filter((budget) => budget.head.trim().toLowerCase() === normalizedHead)
-          .map((budget) => budget.subHead)
-          .filter(Boolean)
-      )
-    );
+    if (approvedSubHeads.length > 0) {
+      return Array.from(new Set(approvedSubHeads))
+        .map((subHead) => ({ value: subHead, label: subHead }));
+    }
 
-    return uniqueSubHeads.map((subHead) => ({ value: subHead, label: subHead }));
+    return (SUB_HEAD_BY_BUDGET_HEAD[String(budgetHead)] || [])
+      .map((subHead) => ({ value: String(subHead), label: String(subHead) }));
   };
 
   const findApprovedBudgetOption = (budgetHead: string | number, subHead: string | number) => {
@@ -1993,7 +2407,16 @@ const ExpenditureApproval: React.FC = () => {
   };
 
   const getApprovedBudgetAmount = (budget: ApprovedBudgetOption | null) =>
-    budget ? String(budget.totalAmount) : '';
+    String(financeApprovedAmount || budget?.totalAmount || '');
+
+  const getBudgetDisplayValue = (rowBudget: string) => {
+    const approved = Number(financeApprovedAmount || 0);
+    if (approved > 0) {
+      return `₹ ${approved.toLocaleString('en-IN')}`;
+    }
+
+    return rowBudget !== '' ? `₹ ${Number(rowBudget || 0).toLocaleString('en-IN')}` : '';
+  };
 
   const updateAdvanceRow = (rowId: string, updater: (row: AdvanceFormRow) => AdvanceFormRow) => {
     setAdvanceRows((prev) => prev.map((row) => (row.id === rowId ? updater(row) : row)));
@@ -2043,6 +2466,21 @@ const ExpenditureApproval: React.FC = () => {
     }
   };
 
+  const totalAdvanceAmount = advanceRows.reduce((sum, row) => {
+    const amount = Number(String(row.advance || '').replace(/,/g, '').trim());
+    return sum + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+
+  const totalSettlementAmount = settlementRows.reduce((sum, row) => {
+    const amount = Number(String(row.settlement || '').replace(/,/g, '').trim());
+    return sum + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+
+  const totalExpenditureAmount = expenditureSubRows.reduce((sum, row) => {
+    const amount = Number(String(row.autoSum || row.expenditure || '').replace(/,/g, '').trim());
+    return sum + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+
   const handleAdvanceBudgetHeadChange = (rowId: string, budgetHeadValue: string) => {
     updateAdvanceRow(rowId, (row) => ({
       ...row,
@@ -2065,7 +2503,7 @@ const ExpenditureApproval: React.FC = () => {
     updateAdvanceRow(rowId, (currentRow) => ({
       ...currentRow,
       subHead: subHeadValue,
-      budget: selectedBudget ? String(selectedBudget.remainingAmount) : '',
+      budget: getApprovedBudgetAmount(selectedBudget),
       preAdvance: '',
       budgetLineId: selectedBudget?.budgetLineId ?? null,
       budgetProposalId: selectedBudget?.budgetProposalId ?? null,
@@ -2353,314 +2791,7 @@ const ExpenditureApproval: React.FC = () => {
     `,
     documentTitle: "Expenditure_Approval_Request",
   });
-  const generatePDF = async (): Promise<void> => {
-    try {
-      setIsLoading(true);
-
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const margin = 12;
-      let yPos = 10;
-
-      const tableWidth = pageWidth - margin * 2;
-
-      // ======= HEADER TABLE (3 cells: Logo | College Name | FINANCE) =======
-      let compressedLogo: string | null = null;
-      try {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = KSRCTLogo;
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-          setTimeout(resolve, 2000);
-        });
-
-        const logoCanvas = document.createElement('canvas');
-        const targetSize = 100;
-        logoCanvas.width = targetSize;
-        logoCanvas.height = targetSize;
-        const ctx = logoCanvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, targetSize, targetSize);
-          ctx.drawImage(img, 0, 0, targetSize, targetSize);
-          compressedLogo = logoCanvas.toDataURL('image/jpeg', 0.7);
-        }
-      } catch {
-        // If logo fails, skip it
-      }
-
-      // Create header table with borders
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.3, valign: 'middle' },
-        columnStyles: {
-          0: { cellWidth: 22, halign: 'center' },
-          1: { cellWidth: tableWidth - 22 - 22, halign: 'center' },
-          2: { cellWidth: 22, halign: 'center' }
-        },
-        body: [[
-          { content: '', styles: { minCellHeight: 22 } },
-          { content: '', styles: { minCellHeight: 22 } },
-          { content: 'EXPENDITURE', styles: { fontStyle: 'bold', fontSize: 10 } }
-        ]],
-        didDrawCell: (data: any) => {
-          // Draw logo in first cell
-          if (data.column.index === 0 && data.row.index === 0 && compressedLogo) {
-            const logoSize = 15;
-            const x = data.cell.x + (data.cell.width - logoSize) / 2;
-            const y = data.cell.y + (data.cell.height - logoSize) / 2;
-            pdf.addImage(compressedLogo, 'JPEG', x, y, logoSize, logoSize);
-          }
-          // Draw college name with mixed styling in middle cell
-          if (data.column.index === 1 && data.row.index === 0) {
-            const cellCenterX = data.cell.x + data.cell.width / 2;
-            const cellCenterY = data.cell.y + data.cell.height / 2;
-
-            // Bold college name
-            pdf.setFontSize(11);
-            pdf.setFont('helvetica', 'bold');
-            pdf.text('K.S.RANGASAMY COLLEGE OF TECHNOLOGY', cellCenterX, cellCenterY - 4, { align: 'center' });
-
-            // Normal font for Autonomous and address
-            pdf.setFontSize(9);
-            pdf.setFont('helvetica', 'normal');
-            pdf.text('(Autonomous)', cellCenterX, cellCenterY + 1, { align: 'center' });
-            pdf.text('Tiruchengode - 637 215, Namakkal Dt. Tamil Nadu', cellCenterX, cellCenterY + 6, { align: 'center' });
-          }
-        }
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY + 6;
-
-      // Title - centered and larger
-      pdf.setFontSize(13);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('APPLICATION FOR EXPENDITURE APPROVAL', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 6;
-
-      // ======= BUILD MAIN CONTENT AS ONE CONTINUOUS TABLE =======
-      const formattedDate = date ? formatDMY(date) : '';
-      const beneficiaryText = categoryType + (hasSubcategories && categoryItem ? ' - ' + categoryItem : '');
-      const headOfAccountsText = primaryHead + (extraDropdownVisible && eventSubHead ? ' - ' + eventSubHead : '');
-      const budgetProposedText = isBudgetProposed === 'Yes'
-        ? 'Yes | Amount: Rs. ' + (amountProposed || '0.00') + ' | Balance: Rs. ' + (balanceAmount || '0.00')
-        : 'Not Proposed';
-
-      // Build main body rows
-      const mainTableBody: any[] = [
-        // Applicant info
-        ['Name', applicantName || '', 'Date', formattedDate],
-        ['Department', department || '', 'Designation', designation || ''],
-        ['Email', email || '', 'Mobile', mobile || ''],
-        [{ content: 'Beneficiary', styles: { fontStyle: 'bold' } }, { content: beneficiaryText, colSpan: 3 }],
-        [{ content: 'Description', styles: { fontStyle: 'bold' } }, { content: description || '', colSpan: 3 }],
-        [{ content: 'Head of Accounts', styles: { fontStyle: 'bold' } }, { content: headOfAccountsText, colSpan: 3 }],
-        [{ content: 'Proposed in Budget', styles: { fontStyle: 'bold' } }, { content: budgetProposedText, colSpan: 3 }],
-      ];
-
-      // Main info table
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 38, fontStyle: 'bold' },
-          1: { cellWidth: 75 },
-          2: { cellWidth: 22, fontStyle: 'bold' },
-          3: { cellWidth: tableWidth - 38 - 75 - 22 }
-        },
-        body: mainTableBody,
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY; // NO gap
-
-      // ======= BUDGET TABLE =======
-      const budgetTableBody = budgetRows.map((row, index) => [
-        (index + 1).toString(),
-        row.category || '',
-        row.head || '',
-        'Rs. ' + Number(row.amount || 0).toFixed(2)
-      ]);
-      budgetTableBody.push([
-        { content: 'Total Budget:', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' as const } } as any,
-        { content: 'Rs. ' + totalBudget.toFixed(2), styles: { fontStyle: 'bold' } }
-      ]);
-
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 12, halign: 'center' },
-          1: { cellWidth: 45 },
-          2: { cellWidth: 65 },
-          3: { cellWidth: tableWidth - 12 - 45 - 65, halign: 'right' }
-        },
-        body: [
-          [{ content: 'S.No', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-          { content: 'Budget Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-          { content: 'Sub Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-          { content: 'Amount', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } }],
-          ...budgetTableBody
-        ],
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY; // NO gap
-
-      // Amount in words
-      const amountInWords = numberToIndianWords(totalBudget)
-        .replace(/\b\w/g, l => l.toUpperCase())
-        .replace(/([A-Z])(?=[A-Z][a-z])/, '$1 ')
-        .replace(/[A-Z]{2,}/g, m => m.charAt(0) + m.slice(1).toLowerCase());
-
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, halign: 'center' },
-        body: [['Rupees in Words: ' + amountInWords]],
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY; // NO gap
-
-      // ======= INCOME SECTION =======
-      if (showIncomeSection) {
-        const incomeTableBody = incomeRows.flatMap((row, index) => ([
-          [
-            { content: String(index + 1), styles: { halign: 'center' } },
-            { content: row.incomeSource || '' },
-            { content: row.contribution || '' },
-            { content: row.amount ? `Rs. ${row.amount}` : '' },
-            { content: row.status || '' },
-          ],
-          [
-            { content: 'Credit Account', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } },
-            { content: row.creditAccount || '', colSpan: 3 },
-          ],
-        ]));
-
-        autoTable(pdf, {
-          startY: yPos,
-          margin: { left: margin, right: margin },
-          theme: 'grid',
-          tableWidth: tableWidth,
-          styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-          head: [[
-            'S.No',
-            'Income Source',
-            'Contribution',
-            'Amount',
-            'Status',
-          ]],
-          headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
-          columnStyles: {
-            0: { cellWidth: 12, halign: 'center' },
-            1: { cellWidth: 55 },
-            2: { cellWidth: 30, halign: 'center' },
-            3: { cellWidth: 30, halign: 'right' },
-            4: { cellWidth: tableWidth - 12 - 55 - 30 - 30 },
-          },
-          body: incomeTableBody as any,
-        });
-
-        yPos = (pdf as any).lastAutoTable.finalY; // NO gap
-      }
-
-      // ======= DIRECTOR'S SECTION =======
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 38, fontStyle: 'bold' },
-          1: { cellWidth: 100 },
-          2: { cellWidth: tableWidth - 38 - 100 }
-        },
-        body: [
-          [{ content: 'For Office use of Director - Finance and Purchase', colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } }],
-          [{ content: 'Comments', styles: { fontStyle: 'bold', minCellHeight: 12 } }, { content: directorComments || '', colSpan: 2, styles: { minCellHeight: 12 } }],
-          [{ content: 'Status', styles: { fontStyle: 'bold' } }, 'Recommended / Not Recommended', ''],
-        ],
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY; // NO gap
-
-      // ======= PRINCIPAL'S SECTION =======
-      const principalStatusText = totalBudget > 10000 ? 'Recommended / Not Recommended' : 'Approved / Not Approved';
-
-      autoTable(pdf, {
-        startY: yPos,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-        tableWidth: tableWidth,
-        styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-        columnStyles: {
-          0: { cellWidth: 38, fontStyle: 'bold' },
-          1: { cellWidth: 100 },
-          2: { cellWidth: tableWidth - 38 - 100 }
-        },
-        body: [
-          [{ content: "Principal's Approval", colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } }],
-          [{ content: 'Comments', styles: { fontStyle: 'bold', minCellHeight: 12 } }, { content: principalComments || '', colSpan: 2, styles: { minCellHeight: 12 } }],
-          [{ content: 'Status', styles: { fontStyle: 'bold' } }, principalStatusText, ''],
-        ],
-      });
-
-      yPos = (pdf as any).lastAutoTable.finalY; // NO gap
-
-      // ======= PRIORITY & CHAIRMAN'S SECTION (only if totalBudget > 10000) =======
-      if (totalBudget > 10000) {
-        autoTable(pdf, {
-          startY: yPos,
-          margin: { left: margin, right: margin },
-          theme: 'grid',
-          tableWidth: tableWidth,
-          styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
-          columnStyles: {
-            0: { cellWidth: 38, fontStyle: 'bold' },
-            1: { cellWidth: 100 },
-            2: { cellWidth: tableWidth - 38 - 100 }
-          },
-          body: [
-            [{ content: 'Priority', styles: { fontStyle: 'bold' } }, '[ ] Routine      [ ] Urgent      [ ] Most Urgent', ''],
-            [{ content: "Chairman's Approval", colSpan: 3, styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } }],
-            [{ content: 'Comments', styles: { fontStyle: 'bold', minCellHeight: 12 } }, { content: chairmanComments || '', colSpan: 2, styles: { minCellHeight: 12 } }],
-            [{ content: 'Status', styles: { fontStyle: 'bold' } }, 'Approved / Not Approved', ''],
-          ],
-        });
-      }
-
-      // Add page numbers
-      const totalPages = pdf.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        pdf.setPage(i);
-        pdf.setFontSize(9);
-        pdf.setFont('helvetica', 'normal');
-        pdf.text('Page ' + i, pageWidth - margin, pdf.internal.pageSize.getHeight() - 6, { align: 'right' });
-      }
-
-      pdf.save('ExpenditureApprovalRequest.pdf');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      showAlert('Error generating PDF. Please try again.', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const formatSelections = (selections: SelectOption[]): string => {
+   const formatSelections = (selections: SelectOption[]): string => {
     return selections.map(sel => sel.value).join(', ') || '';
   };
 
@@ -2850,19 +2981,40 @@ const ExpenditureApproval: React.FC = () => {
               </button>
             </div>
           </div>
-
-          <div className="payee-footer-grid" style={{ marginTop: '20px' }}>
-            <div className="payee-footer-input-wrap">
-              <span className="payee-footer-input-label">Debit Account</span>
-              <input
-                className="payee-footer-input"
-                value={paymentDetails.debitAccount}
-                onChange={(e) => setPaymentDetails({ ...paymentDetails, debitAccount: e.target.value })}
-                placeholder="Enter debit account details"
-              />
-            </div>
-            <label className="payee-upload-label">
-              <span><Upload size={18} /> Bills Upload</span>
+<div className="payee-footer-grid">
+  <div className="payee-footer-input-wrap">
+    <div className="payee-footer-debit-inline">
+      <div className="payee-footer-debit-left">
+        <span className="payee-footer-input-label">Debit Account</span>
+        <button
+          type="button"
+          className={`payee-footer-switch ${showDebitAccountDropdown ? 'is-on' : 'is-off'}`}
+          onClick={() => setShowDebitAccountDropdown((prev) => !prev)}
+          aria-label={showDebitAccountDropdown ? 'Disable debit account dropdown' : 'Enable debit account dropdown'}
+          aria-pressed={showDebitAccountDropdown}
+        >
+          <span className="payee-footer-switch-thumb" />
+        </button>
+      </div>
+      <div className="payee-footer-debit-dropdown">
+        {showDebitAccountDropdown && (
+          <CustomDropdown
+            name="debitAccount"
+            options={toOptions(DEBIT_ACCOUNT_OPTIONS)}
+            value={getSelectedOption(paymentDetails.debitAccount, toOptions(DEBIT_ACCOUNT_OPTIONS))}
+            onChange={(option) => setPaymentDetails({ ...paymentDetails, debitAccount: String((option as OptionType)?.value || '') })}
+            placeholder="Select debit account"
+            className="mb-0"
+          />
+        )}
+      </div>
+    </div>
+  </div>
+            <label className="payee-upload-label payee-footer-upload-label">
+              <span className="payee-upload-label-content">
+                <span className="payee-upload-label-text">Bills</span>
+                <Upload size={18} />
+              </span>
               <input
                 type="file"
                 className="payee-upload-input"
@@ -2998,6 +3150,12 @@ const ExpenditureApproval: React.FC = () => {
                         
                       />
                     </div>
+                    {(row.tdsDetails || row.tdsSection) && (
+                      <div style={{ marginTop: '8px', fontSize: '12px', color: '#6c757d', lineHeight: 1.5 }}>
+                        {row.tdsDetails && <div>TDS Details: {row.tdsDetails}</div>}
+                        {row.tdsSection && <div>TDS Section: {row.tdsSection}</div>}
+                      </div>
+                    )}
                     TDS   <input type="radio" name={`tds-${row.id}`} /> Yes <input type="radio" name={`tds-${row.id}`} /> No
                   </td>
                   <td style={{ borderBottom: 'none', verticalAlign: 'middle', textAlign: 'center' }}>
@@ -3033,16 +3191,38 @@ const ExpenditureApproval: React.FC = () => {
 
         <div className="payee-footer-grid">
           <div className="payee-footer-input-wrap">
-            <span className="payee-footer-input-label">Debit Account</span>
-            <input
-              className="payee-footer-input"
-              value={paymentDetails.debitAccount}
-              onChange={(e) => setPaymentDetails({ ...paymentDetails, debitAccount: e.target.value })}
-              placeholder=""
-            />
+            <div className="payee-footer-debit-inline">
+              <div className="payee-footer-debit-left">
+                <span className="payee-footer-input-label">Debit Account</span>
+                <button
+                  type="button"
+                  className={`payee-footer-switch ${showDebitAccountDropdown ? 'is-on' : 'is-off'}`}
+                  onClick={() => setShowDebitAccountDropdown((prev) => !prev)}
+                  aria-label={showDebitAccountDropdown ? 'Disable debit account dropdown' : 'Enable debit account dropdown'}
+                  aria-pressed={showDebitAccountDropdown}
+                >
+                  <span className="payee-footer-switch-thumb" />
+                </button>
+              </div>
+              <div className="payee-footer-debit-dropdown">
+                {showDebitAccountDropdown && (
+                  <CustomDropdown
+                    name="debitAccount"
+                    options={toOptions(DEBIT_ACCOUNT_OPTIONS)}
+                    value={getSelectedOption(paymentDetails.debitAccount, toOptions(DEBIT_ACCOUNT_OPTIONS))}
+                    onChange={(option) => setPaymentDetails({ ...paymentDetails, debitAccount: String((option as OptionType)?.value || '') })}
+                    placeholder="Select debit account"
+                    className="mb-0"
+                  />
+                )}
+              </div>
+            </div>
           </div>
-          <label className="payee-upload-label">
-            <span><Upload size={18} /> Bills Upload</span>
+          <label className="payee-upload-label payee-footer-upload-label">
+            <span className="payee-upload-label-content">
+              <span className="payee-upload-label-text">Bills</span>
+              <Upload size={18} />
+            </span>
             <input
               type="file"
               className="payee-upload-input"
@@ -3056,7 +3236,7 @@ const ExpenditureApproval: React.FC = () => {
           <div className="payee-uploaded-files">
             <div className="payee-uploaded-files-header">
               <span>S.No</span>
-              <span>Uploaded File</span>
+              <span>Bills File</span>
               <span>Action</span>
             </div>
             {uploadedPayeeBills.map((file, i) => (
@@ -3084,122 +3264,268 @@ const ExpenditureApproval: React.FC = () => {
       </div>
     );
   };
+  type WorkflowFormRow =
+  | AdvanceFormRow
+  | SettlementFormRow
+  | ExpenditureFormRow;
 
-  const handleSubmit = async (): Promise<void> => {
-    try {
-      if (!financeRequestIdFromState) {
-        showAlert('Open Expenditure from an approved Finance request to continue.', 'warning');
-        return;
-      }
+const getRowsForActiveTab = (): WorkflowFormRow[] => {
+  if (activeTab === 'Advance') return advanceRows;
+  if (activeTab === 'Settlement') return settlementRows;
+  if (activeTab === 'Expenditure') return expenditureSubRows;
+  return [];
+};
 
-      const primaryIncomeRow = showIncomeSection ? incomeRows[0] : undefined;
-      const normalizedPayeeRows = payeeRows.map((row) => ({
-        payee_id: row.payeeId ?? null,
-        payee_name: row.payeeName?.trim() || '',
-        bank_name: row.bankName?.trim() || '',
-        account_no: row.accountNo?.trim() || '',
-        ifsc: row.ifsc?.trim().toUpperCase() || '',
-        branch_name: row.branchName?.trim() || '',
-        url: row.url?.trim() || '',
-        amount: row.amount?.trim() || '',
-        mode: row.mode?.trim() || '',
-        account_name: row.accountName?.trim() || '',
-        pan_number: row.panNumber?.trim() || '',
-        account_type: row.accountType?.trim() || '',
-        beneficiary_type: row.beneficiaryType || 'individual',
-        beneficiary_org: row.beneficiaryOrg?.trim() || '',
-        organization_type: row.organizationType?.trim() || '',
-        msme: row.msme?.trim() || '',
-        gstin: row.gstin?.trim() || '',
-        tds_details: row.tdsDetails?.trim() || '',
-        tds_section: row.tdsSection?.trim() || '',
-      }));
+const getSelectedWorkflowRow = (): WorkflowFormRow | null => {
+  const rows = getRowsForActiveTab();
 
-      const payload = {
-        finance_request_id: financeRequestIdFromState,
-        // For staff: send employee_id, for external: send applicant details
-        employee_id: isExternalApplicant ? null : employeeId,
-        applicant_name: isExternalApplicant ? applicantName : null,
-        designation: isExternalApplicant ? designation : null,
-        department: isExternalApplicant ? department : null,
-        email: isExternalApplicant ? email : null,
-        mobile: isExternalApplicant ? mobile : null,
+  if (rowIndexFromState && rows[rowIndexFromState - 1]) {
+    return rows[rowIndexFromState - 1];
+  }
 
-        request_date: date,
-        description,
+  if (workflowBudgetLineIdFromState) {
+    const matched = rows.find(
+      (row) => parsePositiveIntLike(row.budgetLineId) === workflowBudgetLineIdFromState
+    );
+    if (matched) return matched;
+  }
 
-        beneficiary_type: categoryType,
-        beneficiary_value: categoryItem,
-        beneficiary_entity_id: beneficiaryEmployeeId,
-        budget_tag: selectedTag,
+  if (rows.length === 1) return rows[0];
 
-        primary_head: primaryHead,
-        event_sub_head: eventSubHead,
+  const rowsWithBudgetLine = rows.filter((row) =>
+    Boolean(parsePositiveIntLike(row.budgetLineId))
+  );
 
-        is_budget_proposed: isBudgetProposed,
-        proposed_amount: amountProposed || null,
-        balance_amount: balanceAmount || null,
+  if (rowsWithBudgetLine.length === 1) return rowsWithBudgetLine[0];
 
-        income_type: primaryIncomeRow?.incomeSource || '',
-        income_status: primaryIncomeRow?.creditAccount || '',
-        income_amount_type: primaryIncomeRow?.contribution || '',
-        credit_status: primaryIncomeRow?.status || '',
-        debit_status: debitStatus,
-        partial_amount: primaryIncomeRow?.amount || null,
-        income_rows: showIncomeSection ? incomeRows : [],
-        advance_rows: activeTab === 'Advance' ? advanceRows : [],
-        settlement_rows: activeTab === 'Settlement' ? settlementRows : [],
-        expenditure_rows: activeTab === 'Expenditure' ? expenditureSubRows : [],
-        
-        // Payee & Payment Details
-        payee_rows: normalizedPayeeRows,
-        show_bulk_neft: showBulkNEFT || Boolean(bulkNeftFile),
-        bulk_neft_template_version: BULK_NEFT_TEMPLATE_VERSION,
-        payment_details: paymentDetails,
-      };
+  return null;
+};
 
-      const formData = new FormData();
-      formData.append('payload', JSON.stringify(payload));
+const getSelectedWorkflowBudgetLineId = (): number | null =>
+  parsePositiveIntLike(getSelectedWorkflowRow()?.budgetLineId);
 
-      uploadedPayeeBills.forEach((file) => {
-        formData.append('bill_files', file);
-      });
-
-      if (bulkNeftFile) {
-        formData.append('bulk_neft_file', bulkNeftFile);
-      }
-
-      const result = await authenticityUtility.postFile('/expenditure', formData) as { status: string; message?: string };
-
-      if (result.status !== 'success') {
-        showAlert(result.message || 'Submission failed', 'error');
-        return;
-      }
-
-      showAlert('Expenditure request submitted successfully', 'success');
-
-      // ✅ Reset AFTER successful submit
-      handleReset(true);
-    } catch (error) {
-      console.error('Expenditure submit error:', error);
-      const apiError = error as {
-        response?: {
-          data?: {
-            message?: string;
-            error?: string;
-          };
-        };
-        message?: string;
-      };
-      const errorMessage =
-        apiError.response?.data?.message ||
-        apiError.response?.data?.error ||
-        apiError.message ||
-        'Something went wrong while submitting';
-
-      showAlert(errorMessage, 'error');
+const getSelectedWorkflowBudgetProposalId = (): number | null =>
+  parsePositiveIntLike(getSelectedWorkflowRow()?.budgetProposalId);
+ const handleSubmit = async (): Promise<void> => {
+  try {
+    if (isReadOnlyView) {
+      showAlert('This proposal is opened in view mode and cannot be submitted again.', 'warning');
+      return;
     }
-  };
+
+    if (!resolvedFinanceRequestId) {
+      showAlert('Open Expenditure from an approved Finance request to continue.', 'warning');
+      return;
+    }
+
+    if (!activeTab) {
+      showAlert('Please choose Advance, Settlement, or Expenditure before submitting.', 'warning');
+      return;
+    }
+
+    const selectedWorkflowRow = getSelectedWorkflowRow();
+    const selectedWorkflowBudgetLineId = parsePositiveIntLike(selectedWorkflowRow?.budgetLineId);
+    const selectedWorkflowBudgetProposalId = parsePositiveIntLike(selectedWorkflowRow?.budgetProposalId);
+
+    if (!selectedWorkflowRow) {
+      showAlert(
+        'Unable to identify the selected workflow row. Please open the request again from the dashboard row you want to submit.',
+        'warning'
+      );
+      return;
+    }
+
+    if (!selectedWorkflowBudgetLineId) {
+      showAlert(
+        'Please select a valid approved budget head and sub-head for this row before submitting.',
+        'warning'
+      );
+      return;
+    }
+
+    const primaryIncomeRow = showIncomeSection ? incomeRows[0] : undefined;
+
+    const normalizedPayeeRows = payeeRows.map((row) => ({
+      payee_id: row.payeeId ?? null,
+      payee_name: row.payeeName?.trim() || '',
+      bank_name: row.bankName?.trim() || '',
+      account_no: row.accountNo?.trim() || '',
+      ifsc: row.ifsc?.trim().toUpperCase() || '',
+      branch_name: row.branchName?.trim() || '',
+      url: row.url?.trim() || '',
+      amount: row.amount?.trim() || '',
+      mode: row.mode?.trim() || '',
+      account_name: row.accountName?.trim() || '',
+      pan_number: row.panNumber?.trim() || '',
+      account_type: row.accountType?.trim() || '',
+      beneficiary_type: row.beneficiaryType || 'individual',
+      beneficiary_org: row.beneficiaryOrg?.trim() || '',
+      organization_type: row.organizationType?.trim() || '',
+      msme: row.msme?.trim() || '',
+      gstin: row.gstin?.trim() || '',
+      tds_details: row.tdsDetails?.trim() || '',
+      tds_section: row.tdsSection?.trim() || '',
+    }));
+
+    const selectedAdvanceRows =
+      activeTab === 'Advance' && selectedWorkflowRow
+        ? [selectedWorkflowRow as AdvanceFormRow]
+        : [];
+
+    const selectedSettlementRows =
+      activeTab === 'Settlement' && selectedWorkflowRow
+        ? [selectedWorkflowRow as SettlementFormRow]
+        : [];
+
+    const selectedExpenditureRows =
+      activeTab === 'Expenditure' && selectedWorkflowRow
+        ? [selectedWorkflowRow as ExpenditureFormRow]
+        : [];
+
+    const payload = {
+      financerequestid: resolvedFinanceRequestId,
+      workflowbudgetlineid: selectedWorkflowBudgetLineId,
+      sourcebudgetlineid: selectedWorkflowBudgetLineId,
+      workflowbudgetproposalid: selectedWorkflowBudgetProposalId,
+      workflowrequesttype: activeTab,
+      row_index: rowIndexFromState,
+      dashboard_row_id: dashboardRowIdFromState,
+      workflowrowref:
+        workflowRowRefFromState ?? 
+        rowReferenceIdFromState ?? 
+        dashboardRowIdFromState ??
+        null,
+
+      employeeid: isExternalApplicant ? null : employeeId,
+      applicantname: isExternalApplicant ? applicantName : null,
+      designation: isExternalApplicant ? designation : null,
+      department: isExternalApplicant ? department : null,
+      email: isExternalApplicant ? email : null,
+      mobile: isExternalApplicant ? mobile : null,
+      requestdate: date,
+      description,
+      beneficiarytype: categoryType,
+      beneficiaryvalue: categoryItem,
+      beneficiaryentityid: beneficiaryEmployeeId,
+      budgettag: selectedTag,
+      primaryhead: primaryHead,
+      eventsubhead: eventSubHead,
+      isbudgetproposed: isBudgetProposed,
+      proposedamount: amountProposed || null,
+      balanceamount: balanceAmount || null,
+      incometype: primaryIncomeRow?.incomeSource || null,
+      incomestatus: primaryIncomeRow?.creditAccount || null,
+      incomeamounttype: primaryIncomeRow?.contribution || null,
+      creditstatus: primaryIncomeRow?.status || null,
+      debitstatus: debitStatus,
+      partialamount: primaryIncomeRow?.amount || null,
+
+      incomerows: showIncomeSection ? incomeRows : [],
+      advancerows: selectedAdvanceRows,
+      settlementrows: selectedSettlementRows,
+      expenditurerows: selectedExpenditureRows,
+
+      payeerows: normalizedPayeeRows,
+      showbulkneft: showBulkNEFT || Boolean(bulkNeftFile),
+      bulknefttemplateversion: BULK_NEFT_TEMPLATE_VERSION,
+      paymentdetails: paymentDetails,
+    };
+
+    const formData = new FormData();
+    formData.append('payload', JSON.stringify(payload));
+
+    uploadedPayeeBills.forEach((file) => {
+      formData.append('bill_files', file);
+    });
+
+    if (bulkNeftFile) {
+      formData.append('bulk_neft_file', bulkNeftFile);
+    }
+
+    const result = (await authenticityUtility.postFile('/expenditure', formData)) as {
+      status: string;
+      message?: string;
+      data?: {
+        expenditureId?: unknown;
+        requestRef?: unknown;
+      };
+    };
+
+    if (result.status !== 'success') {
+      showAlert(result.message || 'Submission failed', 'error');
+      return;
+    }
+
+    const submittedAmount =
+      activeTab === 'Advance'
+        ? totalAdvanceAmount
+        : activeTab === 'Settlement'
+          ? totalSettlementAmount
+          : activeTab === 'Expenditure'
+            ? totalExpenditureAmount
+            : 0;
+
+    const savedRequestId = parsePositiveIntLike(result.data?.expenditureId);
+    const savedRequestRef = String(result.data?.requestRef || '').trim();
+    const financeIdLabel = `Finance ID: ${resolvedFinanceRequestId}`;
+    const proposalRefLabel = `Proposal Ref: ${String(
+      (location.state as { financeProposal?: { proposalId?: unknown } } | null)?.financeProposal?.proposalId || ''
+    ).trim()}`;
+    const moduleLabel = activeTab ? `${activeTab} submitted successfully.` : 'Submitted successfully.';
+    const requestLabel = savedRequestRef ? `Request Ref: ${savedRequestRef}` : '';
+
+    showAlert(
+      <div style={{ lineHeight: 1.6 }}>
+        <div>{moduleLabel}</div>
+        <div>{financeIdLabel}</div>
+        {proposalRefLabel.trim() !== 'Proposal Ref:' && <div>{proposalRefLabel}</div>}
+        {requestLabel && <div>{requestLabel}</div>}
+      </div>,
+      'success',
+      'Submission Successful',
+      false,
+      'Continue',
+      () => {
+        closeAlert();
+        navigate('/expenditurecard', {
+          state: {
+            ...(dashboardRowIdFromState ? { dashboardRowId: dashboardRowIdFromState } : {}),
+            ...(rowReferenceIdFromState ? { rowReferenceId: rowReferenceIdFromState } : {}),
+            ...(workflowRowRefFromState ? { workflowrowref: workflowRowRefFromState } : {}),
+            workflowbudgetlineid: selectedWorkflowBudgetLineId,
+            budgetLineId: selectedWorkflowBudgetLineId,
+            workflowbudgetproposalid: selectedWorkflowBudgetProposalId ?? undefined,
+            submittedModule: activeTab ?? undefined,
+            submittedAmount,
+            submittedRequestId: savedRequestId ?? undefined,
+            financeRequestId: resolvedFinanceRequestId ?? undefined,
+            financeProposal:
+              (location.state as { financeProposal?: unknown } | null)?.financeProposal ?? null,
+          },
+        });
+      }
+    );
+    return;
+  } catch (error) {
+    console.error('Expenditure submit error:', error);
+    const apiError = error as {
+      response?: {
+        data?: {
+          message?: string;
+          error?: string;
+        };
+      };
+      message?: string;
+    };
+    const errorMessage =
+      apiError.response?.data?.message ||
+      apiError.response?.data?.error ||
+      apiError.message ||
+      'Something went wrong while submitting';
+
+    showAlert(errorMessage, 'error');
+  }
+};
 
   const handleReset = (force = false): void => {
     const performReset = () => {
@@ -3210,14 +3536,8 @@ const ExpenditureApproval: React.FC = () => {
       setEmail('');
       setDepartment('');
       setDescription('');
-      setDirectorComments('');
-      setDirectorStatus('');
-      setPrincipalComments('');
-      setPrincipalStatus('');
-      setPrincipalPriority('');
-      setChairmanComments('');
-      setChairmanStatus('');
-      setCategoryType('');
+      
+       setCategoryType('');
       setCategoryItem('');
       setBeneficiaryEmployeeId(null);
       setBeneficiarySearchQuery('');
@@ -3277,8 +3597,8 @@ const handleBeneficiarySearch = async (query: string) => {
   setBeneficiarySearchQuery(query);
   try {
     let typeParam = '';
-    if (categoryType === 'Individual Faculty') typeParam = '&type=Teaching';
-    else if (categoryType === 'Individual Staff') typeParam = '&type=Non-Teaching';
+    if (categoryType === 'Faculty') typeParam = '&type=Teaching';
+    else if (categoryType === 'Staff') typeParam = '&type=Non-Teaching';
     const response = await (authenticityUtility as any).get(
       `/expenditure/search-applicant?q=${encodeURIComponent(query)}${typeParam}`
     ) as any;
@@ -3428,13 +3748,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
   };
 
 
-  useEffect(() => {
-    if (showPreview && componentRef.current) {
-      const contentHeight = componentRef.current.scrollHeight;
-      const pageHeight = 270;
-      setTotalPages(Math.ceil(contentHeight / pageHeight));
-    }
-  }, [showPreview, applicantName, department, totalBudget,]);
+  
   const [showSearchModal, setShowSearchModal] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [expandedHead, setExpandedHead] = useState<string>('');
@@ -3500,7 +3814,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         onClick={(e) => {
           if (e.target === e.currentTarget) setShowSearchModal(false);
         }}
-      >
+       >
         <div
           style={{
             backgroundColor: "#fff",
@@ -3756,10 +4070,18 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
   };
 
   return (
-    <div className="expenditure-approval-body" style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}>
+    <div
+      className="expenditure-approval-body"
+      style={{
+        padding: '0',
+        backgroundColor: '#f0f6ff',
+        minHeight: '100vh',
+        pointerEvents: isReadOnlyView ? 'none' : 'auto',
+      }}
+    >
 
 
-      {!showPreview && (
+       (
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
           <div className="ea-applicantCard">
 
@@ -3803,7 +4125,13 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
 
             {/* Expanded form */}
             {isApplicantCardOpen && (
-            <div className="cardContent" style={{ padding: '20px' }}>
+            <div
+              className="cardContent"
+              style={{
+                padding: '20px',
+                pointerEvents: isReadOnlyView ? 'none' : 'auto',
+              }}
+            >
 
             <div className="row mb-3" style={{ marginBottom: '15px' }}>
               <div className="col-md-7">
@@ -4131,15 +4459,15 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                   </label>
 
                   {/* REPLACE the entire beneficiary row with this: */}
-<div className="row mb-3" style={{ alignItems: 'flex-start' }}>
+                        <div className="row mb-3" style={{ alignItems: 'flex-start' }}>
 
-  {/* Column 1: Beneficiary Type */}
-  <div className="col-md-3">
-    <div className="form-group">
-      <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
-        Beneficiary 
-      </label>
-      <CustomDropdown
+                       {/* Column 1: Beneficiary Type */}
+                          <div className="col-md-3">
+                              <div className="form-group">
+                                 <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
+                                      Beneficiary 
+                                      </label>
+                                  <CustomDropdown
         name="categoryType"
         options={toOptions(CATEGORY_TYPE_OPTIONS)}
         value={getSelectedOption(categoryType, toOptions(CATEGORY_TYPE_OPTIONS))}
@@ -4166,11 +4494,11 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
   {/* Column 2: Dynamic field based on type */}
   <div className="col-md-6">
 
-    {/* Faculty / Individual Staff — live search */}
-    {['Individual Faculty', 'Individual Staff'].includes(categoryType) && (
+    {/* Faculty / Staff — live search */}
+    {['Faculty', 'Staff'].includes(categoryType) && (
       <div className="form-group" style={{ position: 'relative' }}>
         <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
-          {categoryType === 'Individual Staff' ? 'Staff Name' : 'Faculty Name'}
+          {categoryType === 'Staff' ? 'Staff Name' : 'Faculty Name'}
         </label>
         <input
           type="text"
@@ -4191,7 +4519,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             e.currentTarget.style.boxShadow = 'none';
             setTimeout(() => setShowBeneficiaryDropdown(false), 200);
           }}
-          placeholder={categoryType === 'Individual Staff' ? 'Search staff by name or ERP ID' : 'Search faculty by name or ERP ID'}
+          placeholder={categoryType === 'Staff' ? 'Search staff by name or ERP ID' : 'Search faculty by name or ERP ID'}
           style={{ borderRadius: 12, border: '1px solid #e0e0e0', padding: '10px 15px', fontSize: '0.95rem', width: '100%', backgroundColor: '#fcfdff', outline: 'none' }}
         />
         {/* Search Results Dropdown */}
@@ -4239,8 +4567,8 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         ) : (
           <CustomDropdown
             name="categoryItem"
-            options={toOptions(subcategoryList)}
-            value={getSelectedOption(categoryItem, toOptions(subcategoryList))}
+            options={subcategoryOptions}
+            value={getSelectedOption(categoryItem, subcategoryOptions)}
             onChange={(option) => {
               const selected = option as OptionType | null;
               setCategoryItem(selected?.value ? String(selected.value) : '');
@@ -4255,16 +4583,13 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
   </div>
 
   {/* Column 3: Tag (same as budget page) */}
-  <div className="col-md-3">
+      <div className="col-md-3">
     {categoryType && (
       <div className="form-group">
         <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>Tag</label>
         <CustomDropdown
           name="selectedTag"
-          options={[
-            'Laboratory','Association','Skilling','Research','Outreach',
-            'Office','Academics','Essentials','Events','Innovation','Start-up','Entrepreneurship'
-          ].map(t => ({ value: t, label: t }))}
+          options={tagOptions}
           value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
           onChange={(option) => {
             const selected = option as OptionType | null;
@@ -4276,12 +4601,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
       </div>
     )}
   </div>
-
 </div>
-
-
-
-
                 </div>
               </div>
             </div>
@@ -4377,7 +4697,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                         <input
                           type="text"
                           placeholder="<Fetch>"
-                          value={row.budget !== '' ? `₹ ${Number(row.budget || 0).toLocaleString('en-IN')}` : ''}
+                          value={getBudgetDisplayValue(row.budget)}
                           readOnly
                           style={{
                             border: '1px solid #e0e0e0',
@@ -4505,7 +4825,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                       Total Advance
                     </td>
                     <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
-                      ₹ 0.00
+                      &#8377; {totalAdvanceAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ border: '1px solid #e0e0e0' }}></td>
                   </tr>
@@ -4530,7 +4850,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                 }}
               >
                 <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                <span style={{ fontWeight: 600 }}>Zero Rupees Only</span>
+                <span style={{ fontWeight: 600 }}>{numberToIndianWords(totalAdvanceAmount)}</span>
               </div>
             </div>
           </div>
@@ -4594,7 +4914,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                         <input
                           type="text"
                           placeholder="<Fetch>"
-                          value={row.budget !== '' ? `₹ ${Number(row.budget || 0).toLocaleString('en-IN')}` : ''}
+                          value={getBudgetDisplayValue(row.budget)}
                           readOnly
                           style={{
                             border: '1px solid #e0e0e0',
@@ -4619,9 +4939,14 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                           placeholder="₹ 0"
                           value={row.settlement}
                           onChange={(e) => {
-                            const updated = settlementRows.map(r => r.id === row.id ? { ...r, settlement: e.target.value } : r);
-                            setSettlementRows(updated);
-                          }}
+  const value = e.target.value;
+  if (!/^\d*\.?\d*$/.test(value)) return;
+
+  const updated = settlementRows.map((r) =>
+    r.id === row.id ? { ...r, settlement: value } : r
+  );
+  setSettlementRows(updated);
+}}
                           style={{
                             border: '1px solid #e0e0e0',
                             borderRadius: '12px',
@@ -4694,16 +5019,37 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr style={{ backgroundColor: '#f0f6ff' }}>
-                    <td colSpan={4} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>
-                      Total Settlement
-                    </td>
-                    <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
-                      ₹ 0.00
-                    </td>
-                    <td style={{ border: '1px solid #e0e0e0' }}></td>
-                  </tr>
-                </tfoot>
+  <tr style={{ backgroundColor: "#f0f6ff" }}>
+    <td
+      colSpan={4}
+      style={{
+        padding: "12px",
+        border: "1px solid #e0e0e0",
+        textAlign: "right",
+        paddingRight: "15px",
+        fontWeight: 600,
+        color: "#0069ab",
+      }}
+    >
+      Total Settlement
+    </td>
+    <td
+      style={{
+        padding: "12px",
+        border: "1px solid #e0e0e0",
+        fontWeight: 600,
+        color: "#0069ab",
+        textAlign: "center",
+      }}
+    >
+      ₹ {totalSettlementAmount.toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}
+    </td>
+    <td style={{ border: "1px solid #e0e0e0" }}></td>
+  </tr>
+</tfoot>
               </table>
 
               <div
@@ -4722,9 +5068,9 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                   textAlign: "center",
                   width: "100%",
                 }}
-              >
+               >
                 <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                <span style={{ fontWeight: 600 }}>Zero Rupees Only</span>
+                <span style={{ fontWeight: 600 }}>{numberToIndianWords(totalAdvanceAmount)}</span>
               </div>
             </div>
           </div>
@@ -4789,7 +5135,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                   <input
                     type="text"
                     placeholder="<Fetch>"
-                    value={row.budget !== '' ? `₹ ${Number(row.budget || 0).toLocaleString('en-IN')}` : ''}
+                    value={getBudgetDisplayValue(row.budget)}
                     readOnly
                     style={{
                       border: '1px solid #e0e0e0',
@@ -4967,38 +5313,124 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           </div>
 
           {/* Payment Status Section - Separate Card */}
-          {!showBulkNEFT && (
-            <div className="payee-details-card" style={{ marginTop: '20px' }}>
-              <div className="payee-details-header">
-                <h5 className="payee-details-title">Payment Status</h5>
-              </div>
-              <div className="payee-status-card-fields" style={{ padding: '20px' }}>
-                <CustomDropdown
-                  options={toOptions(PAYMENT_STATUS_OPTIONS)}
-                  value={getSelectedOption(paymentDetails.status, toOptions(PAYMENT_STATUS_OPTIONS))}
-                  onChange={(opt) => setPaymentDetails({ ...paymentDetails, status: String((opt as OptionType)?.value || '') })}
-                  placeholder="<<Dropdown>>"
-                  
-                />
-                <input
-                  type="date"
-                  className="payee-field"
-                  value={paymentDetails.date}
-                  onChange={(e) => setPaymentDetails({ ...paymentDetails, date: e.target.value })}
-                />
-              </div>
+       {!showBulkNEFT && (
+  <div className="payee-details-card" style={{ marginTop: '20px' }}>
+    <div className="payee-details-header">
+      <h5 className="payee-details-title">Payment Status</h5>
+    </div>
+    <div
+      className="payee-status-card-fields"
+      style={{
+        padding: '20px',
+      }}
+    >
+      {/* 1. Dropdown (Status) */}
+      <div className="payee-status-col payee-status-col-pending">
+        <CustomDropdown
+          options={toOptions(PAYMENT_STATUS_OPTIONS)}
+          value={getSelectedOption(paymentDetails.status, toOptions(PAYMENT_STATUS_OPTIONS))}
+          onChange={(opt) =>
+            setPaymentDetails({ ...paymentDetails, status: String((opt as OptionType)?.value || '') })
+          }
+          placeholder="Status"
+        />
+      </div>
+
+      {/* 2. Date Picker */}
+      <div className="payee-status-col payee-status-col-date">
+        <input
+          type="date"
+          className="payee-field"
+          value={paymentDetails.date}
+          onChange={(e) => setPaymentDetails({ ...paymentDetails, date: e.target.value })}
+          style={{ width: '100%' }}
+        />
+      </div>
+
+      {/* 3. Bills Uploaded Button */}
+      <div className="payee-status-col payee-status-col-bills">
+        <label
+          className="payee-upload-label payee-status-upload-label"
+          style={{
+            margin: 0,
+            justifyContent: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
+          <span className="payee-upload-label-content">
+            <span className="payee-upload-label-text">Bills </span>
+            <Upload size={16} />
+          </span>
+          <input
+            type="file"
+            className="payee-upload-input"
+            multiple
+            onChange={handlePayeeBillUpload}
+          />
+        </label>
+        {uploadedPayeeBills.length > 0 && (
+          <div style={{ fontSize: '11px', color: '#2c7a4d', marginTop: '4px', textAlign: 'center' }}>
+            {uploadedPayeeBills.length} file(s)
+          </div>
+        )}
+      </div>
+
+      {/* 4. Comments Input */}
+      <div className="payee-status-col payee-status-col-comments">
+        <div className="payee-comments-group">
+          <input
+            type="text"
+            className="payee-field payee-status-comment-input"
+            placeholder=""
+            value={remarks}
+            onChange={(e) => setRemarks(e.target.value)}
+            style={{ width: '100%' }}
+          />
+          <button
+            type="button"
+            onClick={() => console.log('Tick clicked, remarks:', remarks)}
+            className="payee-comment-tick-btn"
+            aria-label="Confirm comment"
+          >
+            <CheckCircle2 size={20} strokeWidth={2.2} />
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+)}
+          {/* Submit Button Section */}
+          {!isReadOnlyView && (
+            <div className="expenditure-submit-buttons">
+              <button
+                className="btn-submit"
+                onClick={(e) => { e.preventDefault(); handleSubmit(); }}
+              >
+                Submit
+              </button>
             </div>
           )}
 
-          {/* Submit Button Section */}
-          <div className="expenditure-submit-buttons">
-            <button
-              className="btn-submit"
-              onClick={(e) => { e.preventDefault(); handleSubmit(); }}
-            >
-              Submit
-            </button>
-          </div>
+          <AlertModal
+            show={alertConfig.show}
+            onHide={closeAlert}
+            title={alertConfig.title}
+            message={alertConfig.message}
+            type={alertConfig.type}
+            onConfirm={() => {
+              if (alertConfig.onConfirm) {
+                alertConfig.onConfirm();
+                return;
+              }
+              closeAlert();
+            }}
+            showCancel={alertConfig.showCancel}
+            confirmText={alertConfig.confirmText}
+          />
 
           <AddPayeeModal
             show={showAddPayeeModal}
@@ -5007,609 +5439,9 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             showAlert={showAlert}
           />
         </div>
-      )}
-      {showPreview && (
-        <div ref={componentRef} style={{
-          position: 'relative',
-          backgroundColor: '#fff',
-          padding: '22px 18px',
-          width: '210mm',
-          boxSizing: 'border-box',
-          margin: '0 auto',
-        }}>
-
-          <table
-            style={{
-
-              marginBottom: "14px",
-              tableLayout: "fixed",
-              width: '94%', margin: '0 auto 14px auto', borderCollapse: 'collapse'
-            }}
-          >
-            <tr>
-              {/* Logo box */}
-              <td
-                style={{
-                  width: "16%",
-                  border: "1px solid #000",
-                  textAlign: "center",
-                  verticalAlign: "middle",
-                  padding: "10px 6px",
-                }}
-              >
-                <img
-                  src={KSRCTLogo}
-                  alt="Logo"
-                  style={{ width: "75px", height: "75px", objectFit: "contain" }}
-                />
-              </td>
-
-              {/* College text box */}
-              <td
-                style={{
-                  width: "68%",
-                  border: "1px solid #000",
-                  textAlign: "center",
-                  verticalAlign: "middle",
-                  padding: "8px 10px",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "19px",
-                    fontWeight: "bold",
-                    color: "#000",
-                    lineHeight: "1.05",
-                    marginBottom: "4px",
-                  }}
-                >
-                  K.S.RANGASAMY COLLEGE OF TECHNOLOGY
-                </div>
-                <div style={{ fontSize: "14px", color: "#000", marginBottom: "4px" }}>
-                  (Autonomous)
-                </div>
-                <div style={{ fontSize: "16px", color: "#000", lineHeight: "1.2" }}>
-                  Tiruchengode – 637 215, Namakkal Dt. Tamil Nadu
-                </div>
-              </td>
-
-              {/* FINANCE box */}
-              <td
-                style={{
-                  width: "16%",
-                  border: "1px solid #000",
-                  textAlign: "center",
-                  verticalAlign: "middle",
-                  padding: "10px 6px",
-                }}
-              >
-                <div style={{ fontSize: "16px", fontWeight: "bold", color: "#000" }}>
-                  EXPENDITURE
-                </div>
-              </td>
-            </tr>
-          </table>
-          <h2
-            style={{
-              textAlign: 'center',
-              margin: '0 0 18px 0',
-              fontSize: '18px',
-              fontWeight: 'bold',
-              textTransform: 'uppercase',
-              letterSpacing: '0.4px',
-              color: '#000000'
-            }}
-          >
-            APPLICATION FOR EXPENDITURE APPROVAL
-          </h2>
-
-
-          <table style={{
-            marginBottom: "14px",
-            tableLayout: "fixed",
-            width: '98%',
-            borderCollapse: 'collapse',
-            marginLeft: '24px'
-          }}>
-
-            <tr>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', width: '20%', fontSize: '14px', color: '#000000ff' }}><strong>Name</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', width: '35%', fontSize: '14px', color: '#000000ff' }}>{applicantName || '\u00A0'}</td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', width: '15%', fontSize: '14px', color: '#000000ff' }}><strong>Date</strong></td>
-              <td
-                style={{
-                  padding: '4.5px 5.5px',
-                  border: '1px solid #000000ff',
-                  width: '25%',
-                  fontSize: '14px',
-                  color: '#000000ff',
-                }}
-              >
-                {date ? formatDMY(date) : '\u00A0'}
-              </td>
-
-            </tr>
-            <tr>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}><strong>Department</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}>{department || '\u00A0'}</td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}><strong>Designation</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff', width: '15%' }}>{designation || '\u00A0'}</td>
-
-            </tr>
-            <tr>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}><strong>Email</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}>{email || '\u00A0'}</td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}><strong>Mobile</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }}>{mobile || '\u00A0'}</td>
-            </tr>
-
-            <tr>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', width: '25%', fontSize: '14px', color: '#000000ff' }} colSpan={1}><strong>Beneficiary</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }} colSpan={3}>
-                {categoryType || '\u00A0'}
-                {hasSubcategories && categoryItem && ` - ${categoryItem}`}
-              </td>
-            </tr>
-            <tr>
-              <td style={{
-                padding: '4.5px 5.5px',
-                border: '1px solid #000000ff',
-                width: '25%',
-                fontSize: '14px', color: '#000000ff'
-              }} colSpan={1}>
-                <strong>Description</strong>
-              </td>
-              <td style={{
-                padding: '4.5px 5.5px',
-                border: '1px solid #000000ff',
-                fontSize: '14px', color: '#000000ff',
-                wordWrap: 'break-word',
-                overflowWrap: 'break-word',
-                wordBreak: 'break-word',
-                hyphens: 'auto'
-              }} colSpan={3}>
-                {description || '\u00A0'}
-              </td>
-            </tr>
-
-            <tr>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', width: '30%', fontSize: '14px', color: '#000000ff' }} colSpan={1}><strong>Head of Accounts</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }} colSpan={3}>
-                {primaryHead || '\u00A0'}
-                {extraDropdownVisible && eventSubHead && ` - ${eventSubHead}`}
-              </td>
-
-            </tr>
-            <tr>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff', width: '1%' }} colSpan={1}><strong>Proposed in Budget</strong></td>
-              <td style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff' }} colSpan={3}>
-                {isBudgetProposed === 'Yes' ? `Yes | Amount: ₹ ${amountProposed || '0.00'} | Balance: ₹ ${balanceAmount || '0.00'}` : 'Not Proposed'}
-              </td>
-            </tr>
-
-            <tr>
-              <td
-                colSpan={4}
-                style={{ padding: '8px 6px', border: '1px solid #000000ff', verticalAlign: 'top', color: '#000000ff' }}
-              >
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', marginTop: '4px' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f8f8f8' }}>
-                      <th style={{ padding: '3px 4px', border: '1px solid #000000ff', fontSize: '14px', fontWeight: 'bold', color: '#000000ff', textAlign: 'center' }}>S.No</th>
-                      <th style={{ padding: '3px 4px', border: '1px solid #000000ff', fontSize: '14px', fontWeight: 'bold', color: '#000000ff', textAlign: 'center' }}>Budget Head</th>
-                      <th style={{ padding: '3px 4px', border: '1px solid #000000ff', fontSize: '14px', fontWeight: 'bold', color: '#000000ff', textAlign: 'center' }}>Sub Head</th>
-                      <th style={{ padding: '3px 4px', border: '1px solid #000000ff', fontSize: '14px', fontWeight: 'bold', color: '#000000ff', textAlign: 'center' }}>Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {budgetRows.map((row, index) => (
-                      <tr key={index}>
-                        <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', fontSize: '14px', width: '5%', textAlign: 'center', color: '#000000ff' }}>{index + 1}</td>
-                        <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', fontSize: '14px', width: '35%', color: '#000000ff', textAlign: 'left' }}>{row.category || '\u00A0'}</td>
-                        <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', fontSize: '14px', color: '#000000ff', textAlign: 'left' }}>{row.head || '\u00A0'}</td>
-                        <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', fontSize: '14px', width: '15%', textAlign: 'right', color: '#000000ff' }}>₹ {Number(row.amount || 0).toFixed(2)}</td>
-                      </tr>
-                    ))}
-                    <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
-                      <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000000ff', fontSize: '14px', textAlign: 'right', fontWeight: 'bold', color: '#000000ff' }}>Total Budget:</td>
-                      <td style={{ padding: '3px 4px', border: '1px solid #000000ff', fontSize: '14px', textAlign: 'right', color: '#000000ff' }}>₹ {totalBudget.toFixed(2)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </td>
-            </tr>
-            <tr>
-              <td
-                colSpan={4}
-                style={{
-                  padding: '6px 16px',
-                  border: '1px solid #000000ff',
-                  borderTop: '0',
-                  color: '#000000ff',
-                  textAlign: 'center',
-                  fontSize: '15px',
-                  letterSpacing: '0.5px',
-                  backgroundColor: '#f8f9fa'
-                }}
-              >
-                Rupees in Words:
-                {numberToIndianWords(totalBudget)
-                  .replace(/\b\w/g, l => l.toUpperCase())
-                  .replace(/([A-Z])(?=[A-Z][a-z])/, '$1 ')
-                  .replace(/[A-Z]{2,}/g, m => m.charAt(0) + m.slice(1).toLowerCase())
-                }
-
-              </td>
-            </tr>
-
-            <tr>
-              <td
-                colSpan={4}
-                style={{ padding: '6px 8px', border: '1px solid #000000ff', color: '#000000ff' }}
-              >
-                {showIncomeSection ? (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#f8f8f8' }}>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>S.No</th>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>Income Source</th>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>Contribution</th>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>Amount</th>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {incomeRows.map((row, index) => (
-                        <React.Fragment key={row.id}>
-                          <tr>
-                            <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>{index + 1}</td>
-                            <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff' }}>{row.incomeSource || ''}</td>
-                            <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>{row.contribution || ''}</td>
-                            <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', textAlign: 'right' }}>{row.amount ? `Rs. ${row.amount}` : ''}</td>
-                            <td style={{ padding: '2.5px 4px', border: '1px solid #000000ff', textAlign: 'center' }}>{row.status || ''}</td>
-                          </tr>
-                          <tr>
-                            <td colSpan={2} style={{ padding: '2.5px 4px', border: '1px solid #000000ff', fontWeight: 'bold', backgroundColor: '#f8f8f8' }}>
-                              Credit Account
-                            </td>
-                            <td colSpan={3} style={{ padding: '2.5px 4px', border: '1px solid #000000ff' }}>
-                              {row.creditAccount || ''}
-                            </td>
-                          </tr>
-                        </React.Fragment>
-                      ))}
-                    </tbody>
-
-                  </table>
-                ) : (
-                  <div style={{ textAlign: 'center', fontSize: '14px' }}>Income: Not Applicable</div>
-                )}
-              </td>
-            </tr>
-            <tr>
-              <td
-                colSpan={4}
-                style={{ padding: '6px 8px', border: '1px solid #000000ff', textAlign: 'center', fontSize: '14px', fontWeight: 'bold', color: "#333", backgroundColor: "#f8f9fa", }}
-              >
-                For Office use of Director- Finance and Purchase
-              </td>
-            </tr>
-            <tr>
-            </tr>
-            <tr>
-              <td
-                rowSpan={3}
-                style={{ padding: '4.5px 5.5px', border: '1px solid #000000ff', width: '25%', fontSize: '14px', color: '#000000ff' }}
-              >
-                <strong>Comments</strong>
-              </td>
-              <td
-                rowSpan={3}
-                colSpan={3}
-                style={{
-                  padding: '12px 16px',
-                  border: '1px solid #000000ff',
-                  fontSize: '14px',
-                  verticalAlign: 'top',
-                  color: '#000000ff',
-                  wordWrap: 'break-word',
-                  overflowWrap: 'break-word',
-                  wordBreak: 'break-word',
-                  hyphens: 'auto'
-                }}
-              >
-                {directorComments || '\u00A0'}
-              </td>
-            </tr>
-            <tr>
-              <td style={{ padding: '0', border: 'none', height: '30px' }}></td>
-            </tr>
-            <tr>
-              <td style={{ padding: '0', border: 'none', height: '10px' }}></td>
-            </tr>
-            <tr>
-              <td
-                style={{
-                  padding: '4.5px 5.5px',
-                  border: '1px solid #000000ff',
-                  width: '25%',
-                  fontSize: '14px',
-                  verticalAlign: 'middle',
-                  fontWeight: 'bold',
-                  color: '#000000ff'
-                }}
-              >
-                Status
-              </td>
-              <td
-                colSpan={1}
-                style={{
-                  padding: '4.5px 5.5px',
-                  border: '1px solid #333',
-                  height: '32px',
-                  backgroundColor: '#fff',
-                  position: 'relative', color: '#000000ff'
-                }}
-              >
-                <div style={{
-                  position: 'absolute',
-                  height: '1px',
-                  backgroundColor: '#333',
-
-                }}></div>
-                <span style={{
-                  backgroundColor: '#fff',
-                  fontSize: '14px'
-                  , color: '#000000ff'
-                }}>
-                  Recommended / Not Recommended
-                </span>
-              </td>
-              <td
-                colSpan={2}
-                style={{
-                  padding: '4.5px 5.5px',
-                  border: '1px solid',
-                  height: '32px',
-                  backgroundColor: '#fff',
-                  position: 'relative', color: '#000000ff'
-                }}
-              ></td>
-
-            </tr>
-            <tr>
-              <td
-                colSpan={4}
-                style={{
-                  padding: "6px 8px",
-                  border: "1px solid #000000ff",
-                  textAlign: "center",
-                  fontSize: "14px",
-                  fontWeight: "bold" as const,
-                  color: "#333",
-                  backgroundColor: "#f8f9fa",
-                }}
-              >
-                Principal's Approval
-              </td>
-            </tr>
-            <tr>
-              <td
-                rowSpan={3}
-                style={{
-                  padding: "4.5px 5.5px",
-                  border: "1px solid #000000ff",
-                  width: "25%",
-                  fontSize: "14px",
-                  color: "#000000ff",
-                  backgroundColor: "#f8f9fa",
-                }}
-              >
-                <strong>Comments</strong>
-              </td>
-              <td
-                rowSpan={3}
-                colSpan={3}
-                style={{
-                  padding: "12px 16px",
-                  border: "1px solid #000000ff",
-                  fontSize: "14px",
-                  verticalAlign: "top" as const,
-                  color: "#000000ff",
-                }}
-              >
-                {principalComments || "\u00A0"}
-              </td>
-            </tr>
-            <tr><td style={{ padding: "0", border: "none", height: "30px" }} /></tr>
-            <tr><td style={{ padding: "0", border: "none", height: "10px" }} /></tr>
-
-            <tr>
-              <td
-                style={{
-                  padding: "4.5px 5.5px",
-                  border: "1px solid #000000ff",
-                  width: "25%",
-                  fontSize: "14px",
-                  verticalAlign: "middle" as const,
-                  fontWeight: "bold" as const,
-                  color: "#000000ff",
-                }}
-              >
-                Status
-              </td>
-              <td
-                colSpan={2}
-                style={{
-                  padding: "4.5px 5.5px",
-                  border: "1px solid #333",
-                  height: "32px",
-                  backgroundColor: "#fff",
-                  position: "relative" as const,
-                  color: "#000000ff",
-                }}
-              >
-
-                <span
-                  style={{
-                    backgroundColor: "#fff",
-                    fontSize: "14px",
-                    color: "#000000ff",
-                    padding: "0 4px" as const,
-                  }}
-                >
-                  {totalBudget > 10000 ? "Recommended / Not Recommended" : "Approved / Not Approved"}
-                </span>
-              </td>
-              <td
-                colSpan={1}
-                style={{
-                  padding: '4.5px 5.5px',
-                  border: '1px solid',
-                  height: '32px',
-                  backgroundColor: '#fff',
-                  position: 'relative'
-                }}
-              ></td>
-
-            </tr>
-            {totalBudget > 10000 && (
-              <>
-                <tr>
-                  <td
-                    style={{
-                      padding: "4.5px 5.5px",
-                      border: "1px solid #000000ff",
-                      width: "25%",
-                      fontSize: "14px",
-                      verticalAlign: "middle" as const,
-                      fontWeight: "bold" as const,
-                      color: "#000000ff",
-                    }}
-                  >
-                    Priority
-                  </td>
-
-                  <td
-                    colSpan={2}
-                    style={{
-                      padding: "4.5px 5.5px",
-                      border: "1px solid #333",
-                      height: "32px",
-                      backgroundColor: "#fff",
-                      position: "relative" as const,
-                      color: "#000000ff",
-                    }}
-                  >
-                    <span style={{ backgroundColor: "#fff", fontSize: "14px", whiteSpace: "pre", color: "#000000ff" }}>
-                      ☐ Routine     ☐ Urgent     ☐ Most Urgent
-                    </span>
-                  </td>
-                  <td
-                    colSpan={1}
-                    style={{
-                      padding: "4.5px 5.5px",
-                      border: "1px solid",
-                      height: "32px",
-                      backgroundColor: "#fff",
-                      position: "relative" as const,
-                    }}
-                  ></td>
-                </tr>
-                <tr>
-                  <td
-                    colSpan={4}
-                    style={{
-                      padding: "6px 8px",
-                      border: "1px solid #000000ff",
-                      textAlign: "center",
-                      fontSize: "14px",
-                      fontWeight: "bold" as const,
-                      color: "#000000ff",
-                    }}
-                  >
-                    Chairman's Approval
-                  </td>
-                </tr>
-                <tr>
-                  <td
-                    rowSpan={3}
-                    style={{
-                      padding: "4.5px 5.5px",
-                      border: "1px solid #000000ff",
-                      width: "25%",
-                      fontSize: "14px",
-                      color: "#000000ff",
-                    }}
-                  >
-                    <strong>Comments</strong>
-                  </td>
-                  <td
-                    rowSpan={3}
-                    colSpan={3}
-                    style={{
-                      padding: "12px 16px",
-                      border: "1px solid #000000ff",
-                      fontSize: "14px",
-                      verticalAlign: "top" as const,
-                      color: "#000000ff",
-                    }}
-                  >
-                    {chairmanComments || "\u00A0"}
-                  </td>
-                </tr>
-                <tr><td style={{ padding: "0", border: "none", height: "30px" }} /></tr>
-                <tr><td style={{ padding: "0", border: "none", height: "10px" }} /></tr>
-                <tr>
-                  <td
-                    style={{
-                      padding: "4.5px 5.5px",
-                      border: "1px solid #000000ff",
-                      width: "25%",
-                      fontSize: "14px",
-                      verticalAlign: "middle" as const,
-                      fontWeight: "bold" as const,
-                      color: "#000000ff",
-                    }}
-                  >
-                    Status
-                  </td>
-                  <td
-                    colSpan={2}
-                    style={{
-                      padding: "4.5px 5.5px",
-                      border: "1px solid #333",
-                      height: "32px",
-                      backgroundColor: "#fff",
-                      position: "relative" as const,
-                      color: "#000000ff",
-                    }}
-                  >
-                    <span
-                      style={{
-                        backgroundColor: "#fff",
-                        fontSize: "14px",
-                        color: "#000000ff",
-                        padding: "0 4px" as const,
-                      }}
-                    >
-                      Approved / Not Approved
-                    </span>
-                  </td>
-                  <td
-                    colSpan={1}
-                    style={{
-                      padding: '4.5px 5.5px',
-                      border: '1px solid',
-                      height: '32px',
-                      backgroundColor: '#fff',
-                      position: 'relative'
-                    }}
-                  ></td>
-                </tr>
-              </>
-            )}
-          </table>
+        )
+     
+         
           <div style={{
             position: 'absolute',
             bottom: '2mm',
@@ -5626,21 +5458,13 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             zIndex: 100,
           }}>
           </div>
-        </div>
-      )}
+        
+    
 
-      <AlertModal
-        show={alertConfig.show}
-        onHide={closeAlert}
-        message={alertConfig.message}
-        type={alertConfig.type}
-        title={alertConfig.title}
-        showCancel={alertConfig.showCancel}
-        confirmText={alertConfig.confirmText}
-        onConfirm={alertConfig.onConfirm}
-      />
-    </div>
+     </div>
+    
   );
 };
 
 export default ExpenditureApproval;
+
