@@ -645,13 +645,50 @@
 }
 
 .payee-status-card-fields {
-  display: flex;
-  gap: 20px;
+  --payee-status-control-height: 46px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 24px;
   width: 100%;
+  align-items: stretch;
 }
 
 .payee-status-card-fields > * {
-  flex: 1;
+  min-width: 0;
+}
+
+.payee-status-col {
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+}
+
+.payee-status-col-pending {
+  width: 100%;
+}
+
+.payee-status-col-date {
+  width: 100%;
+}
+
+.payee-status-col-bills {
+  width: 100%;
+}
+
+.payee-status-col-comments {
+  width: 100%;
+}
+
+.payee-status-col > * {
+  width: 100%;
+}
+
+.payee-comments-group {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
 }
 
 .payee-status-submit-btn {
@@ -673,20 +710,141 @@
 }
 
 .payee-footer-grid {
+  --payee-footer-control-height: 42px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 180px;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  gap: 16px;
   margin-top: 18px;
-  align-items: stretch;
+  align-items: start;
   background: transparent;
 }
 
 .payee-footer-input-wrap {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr);
-  align-items: center;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
   width: 100%;
+}
+
+.payee-footer-debit-inline {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: var(--payee-footer-control-height);
+}
+
+.payee-footer-debit-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: max-content;
+  height: var(--payee-footer-control-height);
+}
+
+.payee-footer-debit-dropdown {
+  min-width: 0;
+}
+
+.payee-footer-debit-dropdown .custom-input-group {
+  margin-bottom: 0;
+}
+
+.payee-footer-debit-dropdown .react-select__control {
+  min-height: var(--payee-footer-control-height);
+  height: var(--payee-footer-control-height);
+  border-radius: 12px;
+}
+
+.payee-footer-debit-dropdown .react-select__value-container {
+  min-height: calc(var(--payee-footer-control-height) - 2px);
+  height: calc(var(--payee-footer-control-height) - 2px);
+}
+
+.payee-footer-upload-label {
+  height: var(--payee-footer-control-height) !important;
+  min-height: var(--payee-footer-control-height) !important;
+  border-radius: 12px;
+}
+
+.payee-footer-switch {
+  position: relative;
+  width: 48px;
+  height: 26px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 999px;
+  background: #cbd5e1;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  padding: 0;
+}
+
+.payee-footer-switch.is-on {
+  background: #0069ab;
+}
+
+.payee-footer-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease;
+}
+
+.payee-footer-switch.is-on .payee-footer-switch-thumb {
+  transform: translateX(22px);
+}
+
+.payee-footer-label-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.payee-footer-debit-trigger-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 8px;
+  align-items: center;
+}
+
+.payee-footer-debit-trigger {
+  width: 100%;
+  height: 40px;
+  border: 1px solid #d7dee7;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1f2a37;
+  text-align: left;
+  padding: 0 14px;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.payee-footer-debit-trigger:hover {
+  border-color: #b7cdea;
+}
+
+.payee-footer-dropdown .custom-input-group {
+  margin-bottom: 0;
+}
+
+.payee-footer-dropdown .react-select__control {
+  min-height: 40px;
+}
+
+.payee-footer-dropdown .react-select__value-container {
+  min-height: 38px;
 }
 
 .payee-footer-input-label {
@@ -694,7 +852,40 @@
   color: #6b7280;
   font-size: 0.95rem;
   font-weight: 700;
+  line-height: 1;
   white-space: nowrap;
+}
+
+.payee-footer-toggle-btn {
+  min-width: 78px;
+  height: 32px;
+  border: 1px solid #d7dee7;
+  border-radius: 10px;
+  background: #f8fbff;
+  color: #0b3d75;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 8px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.payee-footer-toggle-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.payee-footer-toggle-btn:hover {
+  border-color: #b7cdea;
+  background: #f1f7ff;
+}
+
+.payee-footer-toggle-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
 }
 
 .payee-footer-input {
@@ -711,10 +902,12 @@
   line-height: normal;
   color: #1f2a37;
   background: #ffffff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .payee-footer-input:focus {
   outline: none;
+  border-color: #0069ab;
   box-shadow: inset 0 0 0 2px rgba(0, 105, 171, 0.15);
 }
 
@@ -728,21 +921,37 @@
   height: 40px;
   min-height: 40px;
   margin: 0;
-  padding: 0 14px;
+  padding: 0 16px;
   border: 1px solid #d7dee7;
   border-radius: 12px;
   background: #f8fbff;
   color: #0b3d75;
   font-weight: 600;
-  line-height: 1;
-  text-align: center;
+  line-height: 1.1;
+  text-align: left;
   cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  white-space: nowrap;
 }
 
-.payee-upload-label span {
+.payee-upload-label:hover {
+  border-color: #b7cdea;
+  background: #f1f7ff;
+}
+
+.payee-upload-label-content {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  justify-content: center;
+  width: auto;
+  white-space: nowrap;
+}
+
+.payee-upload-label-text {
+  display: inline-block;
+  font-size: 0.98rem;
+  letter-spacing: 0.01em;
 }
 
 .payee-upload-input {
@@ -750,6 +959,115 @@
   inset: 0;
   opacity: 0;
   cursor: pointer;
+}
+
+.payee-status-upload-label {
+  height: var(--payee-status-control-height) !important;
+  min-height: var(--payee-status-control-height) !important;
+  border-radius: 18px;
+  padding: 0 14px;
+}
+
+.payee-status-comment-input {
+  height: 46px !important;
+  min-height: 46px !important;
+  border-radius: 18px;
+  padding: 0 14px !important;
+  line-height: normal;
+  flex: 1;
+}
+
+.payee-comment-tick-btn {
+  position: static;
+  height: 46px;
+  min-height: 46px;
+  width: 46px;
+  min-width: 46px;
+  border: none;
+  border-radius: 14px;
+  background: #0069ab;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 8px 18px rgba(0, 105, 171, 0.28);
+}
+
+.payee-comment-tick-btn:hover {
+  background: #005492;
+  transform: translateY(-1px);
+}
+
+.payee-status-col-date .payee-field {
+  height: var(--payee-status-control-height);
+  min-height: var(--payee-status-control-height);
+  border-radius: 18px;
+  padding-left: 14px;
+  padding-right: 14px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.payee-status-col-pending .custom-input-group {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.payee-status-col-pending .react-select__control {
+  min-height: var(--payee-status-control-height);
+  height: var(--payee-status-control-height);
+  border-radius: 18px;
+  width: 100%;
+}
+
+.payee-status-col-pending .react-select__value-container {
+  min-height: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.payee-modal-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 28px;
+  padding: 6px;
+  width: 100%;
+  background-color: #f5f7fa;
+  border-radius: 40px;
+}
+
+.payee-modal-toggle-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 32px;
+  background-color: transparent;
+  color: #4a5568;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.payee-modal-toggle-btn.active {
+  background-color: #0069ab;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 105, 171, 0.18);
+}
+
+.payee-modal-toggle-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
 }
 
 .payee-uploaded-files {
@@ -1056,6 +1374,15 @@
     grid-template-columns: 1fr;
   }
 
+  .payee-footer-debit-inline {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .payee-footer-debit-left {
+    justify-content: space-between;
+  }
+
   .payee-status-card {
     padding: 20px;
   }
@@ -1072,6 +1399,29 @@
   .payee-upload-label {
     border-left: none;
     border-top: 1px solid #d7dee7;
+  }
+
+  .payee-status-upload-label,
+  .payee-status-comment-input {
+    height: 48px !important;
+    min-height: 48px !important;
+    border-radius: 12px;
+  }
+
+  .payee-comment-tick-btn {
+    height: 48px;
+    min-height: 48px;
+    width: 48px;
+    min-width: 48px;
+    border-radius: 12px;
+  }
+
+  .payee-status-col,
+  .payee-status-col-pending,
+  .payee-status-col-date,
+  .payee-status-col-bills,
+  .payee-status-col-comments {
+    min-width: 0;
   }
 
   .payee-uploaded-files-header,
