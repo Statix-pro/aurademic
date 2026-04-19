@@ -42,20 +42,44 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
   const customStyles = {
     control: (provided: any, state: any) => ({
       ...provided,
+      minHeight: '45px',
       backgroundColor: 'var(--bg-input)',
       borderColor: error ? 'var(--error-color)' : (state.isFocused ? 'var(--border-focus)' : 'var(--border-color)'),
       borderRadius: 'var(--border-radius-md)',
-      padding: '0.1rem',
+      padding: '0 4px',
       boxShadow: state.isFocused ? 'var(--shadow-focus)' : 'none',
+      transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
       '&:hover': {
         borderColor: state.isFocused ? 'var(--border-focus)' : 'var(--border-focus)',
       }
+    }),
+    valueContainer: (provided: any) => ({
+      ...provided,
+      minHeight: '43px',
+      padding: '0 12px',
+    }),
+    indicatorsContainer: (provided: any) => ({
+      ...provided,
+      minHeight: '43px',
+      paddingRight: '6px',
+    }),
+    indicatorSeparator: (provided: any) => ({
+      ...provided,
+      backgroundColor: 'var(--border-color)',
+      marginTop: '8px',
+      marginBottom: '8px',
+    }),
+    dropdownIndicator: (provided: any, state: any) => ({
+      ...provided,
+      color: state.isFocused ? 'var(--primary-color)' : 'var(--text-muted)',
+      padding: '0 6px',
+      transition: 'color 0.2s ease',
     }),
     menu: (provided: any) => ({
       ...provided,
       borderRadius: 'var(--border-radius-md)',
       overflow: 'hidden',
-      zIndex: 5,
+      zIndex: 20,
     }),
     option: (provided: any, state: any) => ({
       ...provided,
@@ -107,10 +131,6 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
           width: centerSelect ? 'auto' : '100%',
           minWidth: centerSelect ? '250px' : 'auto',
           flex: centerSelect ? '0 1 auto' : '1',
-          
-          height:'15px',
-          marginBottom:'10px'
-
         }}>
           <Select
             inputId={name}
@@ -141,3 +161,4 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
 };
 
 export default CustomDropdown;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          

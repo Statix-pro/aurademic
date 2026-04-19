@@ -356,6 +356,18 @@
   flex-wrap: nowrap;
 }
 
+.expenditure-demo-row__rowlabel {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
 .expenditure-demo-row__buttons {
   display: flex;
   align-items: center;
@@ -389,12 +401,36 @@
   white-space: nowrap;
 }
 
+.expenditure-demo-row__amount-chip--button {
+  cursor: pointer;
+  width: auto;
+  min-width: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid #e2e8f0;
+  font: inherit;
+}
+
+.expenditure-demo-row__amount-chip--button:hover {
+  border-color: #b9d8f5;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  transform: translateY(-1px);
+}
+
 .expenditure-demo-row__amount-label {
   font-size: 11px;
   font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.expenditure-demo-row__amount-subhead {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0a2540;
+  line-height: 1.15;
+  text-align: center;
 }
 
 .expenditure-demo-row__amount-chip strong {
@@ -486,8 +522,20 @@
   background: #f0fbf4;
 }
 
+.expenditure-demo-option.submitted {
+  border-color: #9fc5ff;
+  background: #eaf2ff;
+  color: #0b4f8a;
+}
+
 .expenditure-demo-option.disabled {
   opacity: 0.55;
+}
+
+.expenditure-demo-option.submitted.disabled {
+  opacity: 0.92;
+  border-style: solid;
+  box-shadow: inset 0 0 0 1px rgba(11, 79, 138, 0.08);
 }
 
 .expenditure-demo-row__status {

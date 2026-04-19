@@ -8,11 +8,9 @@ import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
 const EXPENDITURE_TEMPLATE_DIR = path.resolve(__dirname, '../../templates/expenditure');
-const BULK_NEFT_TEMPLATE_PATH = path.join(
-  EXPENDITURE_TEMPLATE_DIR,
-  'bulk-neft-template.xls',
-);
+const BULK_NEFT_TEMPLATE_PATH = path.join(EXPENDITURE_TEMPLATE_DIR, 'bulk-neft-template.xls');
 const SAMPLE_BULK_NEFT_TEMPLATE_PATH = path.join(
   EXPENDITURE_TEMPLATE_DIR,
   'sample-bulk-neft-template.xls',
@@ -122,23 +120,118 @@ const parseRequestPayload = (req) => {
   return req.body || {};
 };
 
-const isDomainValidationError = (message = '') => [
-  'not found',
-  'not yet approved',
-  'exceeds',
-  'required',
-  'Invalid request type',
-].some((fragment) => message.includes(fragment));
+const VALID_REQUEST_TYPES = new Set(['Advance', 'Settlement', 'Expenditure']);
+
+const normalizeRequestType = (value) => {
+  const text = normalizeText(value);
+  if (!text) return null;
+  const formatted = `${text.charAt(0).toUpperCase()}${text.slice(1).toLowerCase()}`;
+  return VALID_REQUEST_TYPES.has(formatted) ? formatted : null;
+};
+
+const normalizeIncomingPayload = (payload = {}) => {
+  const normalized = { ...payload };
+
+  if (normalized.financerequestid && !normalized.finance_request_id) {
+    normalized.finance_request_id = normalized.financerequestid;
+  }
+  if (normalized.employeeid && !normalized.employee_id) {
+    normalized.employee_id = normalized.employeeid;
+  }
+  if (normalized.applicantname && !normalized.applicant_name) {
+    normalized.applicant_name = normalized.applicantname;
+  }
+  if (normalized.beneficiarytype && !normalized.beneficiary_type) {
+    normalized.beneficiary_type = normalized.beneficiarytype;
+  }
+  if (normalized.beneficiaryvalue && !normalized.beneficiary_value) {
+    normalized.beneficiary_value = normalized.beneficiaryvalue;
+  }
+  if (normalized.beneficiaryentityid && !normalized.beneficiary_entity_id) {
+    normalized.beneficiary_entity_id = normalized.beneficiaryentityid;
+  }
+  if (normalized.primaryhead && !normalized.primary_head) {
+    normalized.primary_head = normalized.primaryhead;
+  }
+  if (normalized.eventsubhead && !normalized.event_sub_head) {
+    normalized.event_sub_head = normalized.eventsubhead;
+  }
+  if (normalized.isbudgetproposed && !normalized.is_budget_proposed) {
+    normalized.is_budget_proposed = normalized.isbudgetproposed;
+  }
+  if (normalized.proposedamount && !normalized.proposed_amount) {
+    normalized.proposed_amount = normalized.proposedamount;
+  }
+  if (normalized.balanceamount && !normalized.balance_amount) {
+    normalized.balance_amount = normalized.balanceamount;
+  }
+  if (normalized.debitstatus && !normalized.debit_status) {
+    normalized.debit_status = normalized.debitstatus;
+  }
+  if (normalized.partialamount && !normalized.partial_amount) {
+    normalized.partial_amount = normalized.partialamount;
+  }
+  if (normalized.paymentdetails && !normalized.payment_details) {
+    normalized.payment_details = normalized.paymentdetails;
+  }
+  if (normalized.paymentmode && !normalized.payment_mode) {
+    normalized.payment_mode = normalized.paymentmode;
+  }
+  if (normalized.paymentrefno && !normalized.payment_ref_no) {
+    normalized.payment_ref_no = normalized.paymentrefno;
+  }
+  if (normalized.paymentdate && !normalized.payment_date) {
+    normalized.payment_date = normalized.paymentdate;
+  }
+  if (normalized.paymentstatus && !normalized.payment_status) {
+    normalized.payment_status = normalized.paymentstatus;
+  }
+  if (normalized.paymentdebitaccount && !normalized.payment_debit_account) {
+    normalized.payment_debit_account = normalized.paymentdebitaccount;
+  }
+  if (normalized.showbulkneft !== undefined && normalized.show_bulk_neft === undefined) {
+    normalized.show_bulk_neft = normalized.showbulkneft;
+  }
+  if (normalized.bulknefttemplateversion && !normalized.bulk_neft_template_version) {
+    normalized.bulk_neft_template_version = normalized.bulknefttemplateversion;
+  }
+
+  if (Array.isArray(normalized.advancerows) && !normalized.advance_rows) {
+    normalized.advance_rows = normalized.advancerows;
+  }
+  if (Array.isArray(normalized.settlementrows) && !normalized.settlement_rows) {
+    normalized.settlement_rows = normalized.settlementrows;
+  }
+  if (Array.isArray(normalized.expenditurerows) && !normalized.expenditure_rows) {
+    normalized.expenditure_rows = normalized.expenditurerows;
+  }
+  if (Array.isArray(normalized.payeerows) && !normalized.payee_rows) {
+    normalized.payee_rows = normalized.payeerows;
+  }
+  if (Array.isArray(normalized.incomerows) && !normalized.income_rows) {
+    normalized.income_rows = normalized.incomerows;
+  }
+
+  normalized.request_type = normalizeRequestType(
+    normalized.request_type ||
+      normalized.requesttype ||
+      normalized.requestType ||
+      normalized.workflowrequesttype ||
+      normalized.workflow_request_type ||
+      normalized.activeTab,
+  );
+
+  return normalized;
+};
+
+const isDomainValidationError = (message = '') =>
+  ['not found', 'not yet approved', 'exceeds', 'required', 'Invalid request type'].some(
+    (fragment) => message.includes(fragment),
+  );
 
 const resolveBulkNeftTemplatePath = () => {
-  if (fs.existsSync(BULK_NEFT_TEMPLATE_PATH)) {
-    return BULK_NEFT_TEMPLATE_PATH;
-  }
-
-  if (fs.existsSync(SAMPLE_BULK_NEFT_TEMPLATE_PATH)) {
-    return SAMPLE_BULK_NEFT_TEMPLATE_PATH;
-  }
-
+  if (fs.existsSync(BULK_NEFT_TEMPLATE_PATH)) return BULK_NEFT_TEMPLATE_PATH;
+  if (fs.existsSync(SAMPLE_BULK_NEFT_TEMPLATE_PATH)) return SAMPLE_BULK_NEFT_TEMPLATE_PATH;
   return null;
 };
 
@@ -190,9 +283,7 @@ const expenditureController = {
   async downloadBulkNeftTemplate(req, res) {
     try {
       const templatePath = resolveBulkNeftTemplatePath();
-      if (!templatePath) {
-        return sendError(res, 404, 'Bulk NEFT template not found');
-      }
+      if (!templatePath) return sendError(res, 404, 'Bulk NEFT template not found');
 
       res.setHeader('Content-Type', 'application/vnd.ms-excel');
       return res.download(templatePath, BULK_NEFT_TEMPLATE_DOWNLOAD_NAME);
@@ -220,11 +311,13 @@ const expenditureController = {
       const userId = toPositiveInt(req.user?.id);
       const userEmail = normalizeText(req.user?.email);
       const financeRequestId = toPositiveInt(req.query.finance_request_id);
-      if (!financeRequestId) {
-        return sendError(res, 400, 'finance_request_id is required');
-      }
+      if (!financeRequestId) return sendError(res, 400, 'finance_request_id is required');
 
-      let budgets = await expenditureModel.getApprovedBudgets({ userId, userEmail, financeRequestId });
+      let budgets = await expenditureModel.getApprovedBudgets({
+        userId,
+        userEmail,
+        financeRequestId,
+      });
 
       const head = normalizeText(req.query.head).toLowerCase();
       const subHead = normalizeText(req.query.sub_head).toLowerCase();
@@ -358,15 +451,11 @@ const expenditureController = {
 
       const data = req.body || {};
 
-      if (!data.budget_line_id) {
-        return sendError(res, 400, 'budget_line_id is required');
-      }
+      if (!data.budget_line_id) return sendError(res, 400, 'budget_line_id is required');
       if (!data.amount || Number(data.amount) <= 0) {
         return sendError(res, 400, 'amount must be a positive number');
       }
-      if (!data.purpose) {
-        return sendError(res, 400, 'purpose is required');
-      }
+      if (!data.purpose) return sendError(res, 400, 'purpose is required');
       if (!data.payee_id && !data.payment_details) {
         return sendError(
           res,
@@ -393,9 +482,7 @@ const expenditureController = {
         data: result,
       });
     } catch (err) {
-      if (isDomainValidationError(err.message)) {
-        return sendError(res, 400, err.message);
-      }
+      if (isDomainValidationError(err.message)) return sendError(res, 400, err.message);
       return handleError(res, err, 'Error submitting advance request');
     }
   },
@@ -407,14 +494,30 @@ const expenditureController = {
 
       let payload;
       try {
-        payload = parseRequestPayload(req);
+        payload = normalizeIncomingPayload(parseRequestPayload(req));
       } catch {
         return sendError(res, 400, 'Invalid payload JSON');
       }
 
+      if (!payload.request_type) {
+        return sendError(
+          res,
+          400,
+          'Invalid request type. Expected Advance, Settlement, or Expenditure.',
+        );
+      }
+
       const uploads = {
-        billFiles: Array.isArray(req.files?.bill_files) ? req.files.bill_files : [],
-        bulkNeftFile: Array.isArray(req.files?.bulk_neft_file) ? req.files.bulk_neft_file[0] : null,
+        billFiles: Array.isArray(req.files?.billfiles)
+          ? req.files.billfiles
+          : Array.isArray(req.files?.bill_files)
+            ? req.files.bill_files
+            : [],
+        bulkNeftFile: Array.isArray(req.files?.bulkneftfile)
+          ? req.files.bulkneftfile[0]
+          : Array.isArray(req.files?.bulk_neft_file)
+            ? req.files.bulk_neft_file[0]
+            : null,
       };
 
       const result = await expenditureModel.createExpenditureRequest(payload, userId, uploads);
@@ -447,9 +550,7 @@ const expenditureController = {
         data: result,
       });
     } catch (err) {
-      if (isDomainValidationError(err.message)) {
-        return sendError(res, 400, err.message);
-      }
+      if (isDomainValidationError(err.message)) return sendError(res, 400, err.message);
       return handleError(res, err, 'Error submitting expenditure request');
     }
   },

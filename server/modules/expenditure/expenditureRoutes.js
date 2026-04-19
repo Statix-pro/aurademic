@@ -124,8 +124,8 @@ router.get('/:id/timeline', expenditureController.getExpenditureWorkflowTimeline
 router.post(
   '/',
   expenditureUpload.fields([
-    { name: 'bulk_neft_file', maxCount: 1 },
-    { name: 'bill_files', maxCount: 20 },
+    { name: 'bulkneftfile', maxCount: 1 },
+    { name: 'billfiles', maxCount: 20 },
   ]),
   expenditureController.createExpenditureRequest,
 );
