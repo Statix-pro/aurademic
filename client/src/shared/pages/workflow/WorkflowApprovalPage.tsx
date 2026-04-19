@@ -457,13 +457,16 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [activeStageTabKey, setActiveStageTabKey] = useState<string>('');
 
   const permittedStages = useMemo(() => meta?.permittedStages || [], [meta]);
+  const enableLevel1RoleTabs = Boolean(config.enableLevel1RoleTabs);
+  const enableSuperAdminAllProposals = Boolean(config.enableSuperAdminAllProposals);
+  const enableSecondaryFilter = Boolean(config.enableSecondaryFilter);
 
   const stageTabs = useMemo<WorkflowStageTab[]>(() => {
     const roleTokens = Array.isArray(user?.roles) ? user.roles : [];
     const normalizedRoles = roleTokens.map((role) => String(role || '').trim().toLowerCase());
     const tabs: WorkflowStageTab[] = permittedStages.flatMap<WorkflowStageTab>((stage) => {
       const normalizedStage = String(stage || '').trim().toLowerCase();
-      if (config.moduleKey === 'finance' && normalizedStage === 'level1') {
+      if (enableLevel1RoleTabs && normalizedStage === 'level1') {
         if (meta?.isSuperAdmin) {
           return [
             { key: 'level1-hod', stage: 'level1', label: 'HOD', level1Role: 'hod' as const },
@@ -499,9 +502,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       ];
     });
 
-    if (config.moduleKey === 'finance' && meta?.isSuperAdmin && permittedStages.length > 0) {
+    if (enableSuperAdminAllProposals && meta?.isSuperAdmin && permittedStages.length > 0) {
       tabs.push({
-        key: 'finance-all-proposals',
+        key: `${config.moduleKey}-all-proposals`,
         stage: tabs[0]?.stage || String(permittedStages[0] || '').trim().toLowerCase() || 'level1',
         label: 'All Proposals',
         showAllProposals: true,
@@ -509,7 +512,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
 
     return tabs;
-  }, [config.moduleKey, config.stageLabels, meta?.isSuperAdmin, permittedStages, user?.roles]);
+  }, [config.moduleKey, config.stageLabels, enableLevel1RoleTabs, enableSuperAdminAllProposals, meta?.isSuperAdmin, permittedStages, user?.roles]);
 
   const activeWorkflowTab = useMemo(
     () => stageTabs.find((tab) => tab.key === activeStageTabKey) || null,
@@ -538,7 +541,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }, [meta?.availableBeneficiaryTypes]);
 
   const filteredBeneficiaryOptions = useMemo(() => {
-    if (config.moduleKey !== 'finance') {
+    if (!enableLevel1RoleTabs) {
       return beneficiaryOptionsFromMeta;
     }
 
@@ -553,7 +556,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
 
     return beneficiaryOptionsFromMeta;
-  }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryOptionsFromMeta, config.moduleKey]);
+  }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryOptionsFromMeta, enableLevel1RoleTabs]);
 
   const getRecordId = useCallback(
     (record: Record<string, any>) => {
@@ -737,7 +740,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         const isAllProposalsTab = Boolean(activeTab?.showAllProposals);
         const normalizedStage = String(stage || '').toLowerCase();
         const level1RoleFilter =
-          config.moduleKey === 'finance' &&
+          enableLevel1RoleTabs &&
           normalizedStage === 'level1' &&
           activeTab?.level1Role
             ? activeTab.level1Role
@@ -784,7 +787,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       isVisibleInWorkflowList,
       limit,
       mapQueueResponse,
-      config.moduleKey,
+      enableLevel1RoleTabs,
       fiscalYear,
       beneficiaryFilter,
       searchTerm,
@@ -823,7 +826,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     setLogLoading(true);
     setLogRef(ref);
     setLogPopupOpen(true);
-    if (config.moduleKey === 'finance') {
+    if (enableLevel1RoleTabs) {
       const routeType = String(record?.level1_route_type || record?.level1RouteType || '').trim().toLowerCase();
       setLogLevel1Role(routeType === 'entity_contact' ? 'coordinator' : 'hod');
     } else {
@@ -839,7 +842,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     } finally {
       setLogLoading(false);
     }
-  }, [config.moduleKey, getTimelineEndpoint, mapTimelineResponse]);
+  }, [enableLevel1RoleTabs, getTimelineEndpoint, mapTimelineResponse]);
 
   useEffect(() => {
     loadMeta().catch((metaError: any) => {
@@ -1016,7 +1019,7 @@ showAlert(
     }
 
     const activeTab = stageTabs.find((tab) => tab.key === activeStageTabKey) || null;
-    if (config.moduleKey === 'finance') {
+    if (enableLevel1RoleTabs) {
       const currentStageToken = String(getRecordCurrentStage(record) || '').toLowerCase();
       if (currentStageToken === 'level1') {
         if (activeStage === 'level1' && activeTab?.level1Role) {
@@ -1035,7 +1038,7 @@ showAlert(
   }, [
     activeStage,
     activeStageTabKey,
-    config.moduleKey,
+    enableLevel1RoleTabs,
     config.stageLabels,
     getRecordCurrentStage,
     getRecordStageDecision,
@@ -1056,11 +1059,11 @@ showAlert(
     const activeLevel1Role = activeWorkflowTab?.level1Role || null;
 
     let filtered = rows;
-    if (config.moduleKey === 'finance' && activeStage === 'level1' && activeLevel1Role) {
+    if (enableLevel1RoleTabs && activeStage === 'level1' && activeLevel1Role) {
       filtered = filtered.filter((record) => resolveFinanceLevel1Role(record) === activeLevel1Role);
     }
 
-    if (config.moduleKey === 'finance' && beneficiaryFilter !== 'All Beneficiary') {
+    if (enableSecondaryFilter && beneficiaryFilter !== 'All Beneficiary') {
       const normalizedBeneficiaryFilter = beneficiaryFilter.toLowerCase();
       filtered = filtered.filter((record) => {
         const itemBeneficiaryType = String(record.beneficiary_type || record.beneficiaryType || '').toLowerCase();
@@ -1069,10 +1072,10 @@ showAlert(
     }
 
     return filtered;
-  }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryFilter, config.moduleKey, rows]);
+  }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryFilter, enableLevel1RoleTabs, enableSecondaryFilter, rows]);
 
   const secondaryFilterOptions = useMemo(() => {
-    if (config.moduleKey !== 'finance') {
+    if (!enableSecondaryFilter) {
       return [];
     }
 
@@ -1084,7 +1087,7 @@ showAlert(
       }
     }
     return Array.from(values).sort((a, b) => a.localeCompare(b, 'en-IN'));
-  }, [beneficiaryFilter, config.moduleKey, stageScopedRows]);
+  }, [beneficiaryFilter, enableSecondaryFilter, stageScopedRows]);
 
   const secondaryFilterLabel = useMemo(
     () => getSecondaryFilterLabel(beneficiaryFilter),
@@ -1096,7 +1099,7 @@ showAlert(
   );
 
   const secondaryScopedRows = useMemo(() => {
-    if (config.moduleKey !== 'finance' || !secondaryFilter) {
+    if (!enableSecondaryFilter || !secondaryFilter) {
       return stageScopedRows;
     }
 
@@ -1104,7 +1107,7 @@ showAlert(
     return stageScopedRows.filter((record) => {
       return getSecondaryFilterValue(record, beneficiaryFilter).toLowerCase() === expected;
     });
-  }, [beneficiaryFilter, config.moduleKey, secondaryFilter, stageScopedRows]);
+  }, [beneficiaryFilter, enableSecondaryFilter, secondaryFilter, stageScopedRows]);
 
   useEffect(() => {
     if (secondaryFilter && !secondaryFilterOptions.includes(secondaryFilter)) {
@@ -1170,7 +1173,7 @@ showAlert(
   const getTimelineStageLabel = useCallback((entry: WorkflowTimelineItem) => {
     const stageToken = String(entry?.stage || '').trim().toLowerCase();
 
-    if (config.moduleKey === 'finance' && stageToken === 'level1') {
+    if (enableLevel1RoleTabs && stageToken === 'level1') {
       const actorRoleToken = String(entry?.actorRole || '').trim().toLowerCase();
       if (actorRoleToken === 'coordinator' || actorRoleToken === 'entity_approver') {
         return 'Coordinator';
@@ -1187,7 +1190,7 @@ showAlert(
     }
 
     return formatStageLabel(entry.stage, config.stageLabels);
-  }, [config.moduleKey, config.stageLabels, logLevel1Role]);
+  }, [config.stageLabels, enableLevel1RoleTabs, logLevel1Role]);
 
   const closeLogPopup = () => {
     setLogPopupOpen(false);
@@ -1344,7 +1347,7 @@ showAlert(
                 ))}
               </select>
 
-              {config.moduleKey === 'finance' && (
+              {enableSecondaryFilter && (
                 <select
                   className="fw-control"
                   value={secondaryFilter}
@@ -1448,7 +1451,8 @@ showAlert(
                     const timelineKey = String(recordId);
                     const statusCategory = resolveStatusCategory(record);
                     const recordCurrentStage = getRecordCurrentStage(record);
-                    const isSuperAdminDeleteMode = isSuperAdminView;
+                    const isSuperAdminDeleteMode =
+                      Boolean(config.enableSuperAdminDelete) && isSuperAdminView;
                     const isPending = statusCategory === 'pending' && recordCurrentStage === activeStage.toLowerCase();
                     const isActionablePending =
                       isPending ||
@@ -1702,7 +1706,7 @@ showAlert(
                                     }}
                                     disabled={
                                       archivingIds.has(recordId) ||
-                                      (isSuperAdminView && config.moduleKey !== 'finance' && !isActionablePending)
+                                      (isSuperAdminView && !isActionablePending)
                                     }
                                   >
                                     <Archive size={18} />

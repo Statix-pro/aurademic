@@ -2,6 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as expenditureModel from './expenditureModel.js';
+import './expenditureWorkflowAdapter.js';
+import workflowService from '../shared/workflow/workflowService.js';
+import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,10 +26,76 @@ const toPositiveInt = (value) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
+const parseWorkflowState = (value) => {
+  if (!value) return null;
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value !== 'string') return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const parseDateMs = (value) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return null;
+  const ms = Date.parse(normalized);
+  return Number.isFinite(ms) ? ms : null;
+};
+
+const resolveCurrentCycleStartMs = (record, entries = []) => {
+  const workflowState = parseWorkflowState(record?.workflow_state) || {};
+  const resubmittedAtMs = parseDateMs(workflowState.resubmittedAt);
+
+  if (resubmittedAtMs) {
+    let latestReturnMs = null;
+    for (const entry of entries) {
+      const decisionToken = normalizeText(entry?.decision || entry?.status).toLowerCase();
+      if (decisionToken !== 'returned' && decisionToken !== 'return') continue;
+
+      const actionMs =
+        parseDateMs(entry?.decidedAt) ||
+        parseDateMs(entry?.decided_at) ||
+        parseDateMs(entry?.createdAt) ||
+        parseDateMs(entry?.created_at);
+
+      if (!actionMs) continue;
+      if (actionMs <= resubmittedAtMs && (!latestReturnMs || actionMs > latestReturnMs)) {
+        latestReturnMs = actionMs;
+      }
+    }
+
+    return latestReturnMs || resubmittedAtMs;
+  }
+
+  return parseDateMs(workflowState.startedAt) || parseDateMs(record?.created_at) || null;
+};
+
+const filterEntriesForCurrentCycle = (entries, record) => {
+  if (!Array.isArray(entries) || entries.length === 0) return [];
+  const cycleStartMs = resolveCurrentCycleStartMs(record, entries);
+  if (!cycleStartMs) return entries;
+
+  return entries.filter((entry) => {
+    const actionMs =
+      parseDateMs(entry?.decidedAt) ||
+      parseDateMs(entry?.decided_at) ||
+      parseDateMs(entry?.createdAt) ||
+      parseDateMs(entry?.created_at);
+    if (!actionMs) return true;
+    return actionMs >= cycleStartMs;
+  });
+};
+
 const resolveActor = (req) => ({
   id: req.user?.id,
+  userId: req.user?.id,
   email: req.user?.email,
   role: Array.isArray(req.user?.roles) ? req.user.roles[0] : null,
+  roles: Array.isArray(req.user?.roles) ? req.user.roles : [],
+  permissions: Array.isArray(req.user?.permissions) ? req.user.permissions : [],
   isSuperAdmin: Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin),
 });
 
@@ -34,6 +103,13 @@ const sendError = (res, status, message) =>
   res.status(status).json({ status: 'error', message });
 
 const handleError = (res, err, fallback) => {
+  if (err instanceof WorkflowError) {
+    return res.status(err.statusCode || 400).json({
+      status: 'error',
+      message: err.message,
+      code: err.code,
+    });
+  }
   console.error(fallback, err);
   return res.status(500).json({ status: 'error', message: err.message || fallback });
 };
@@ -64,6 +140,50 @@ const resolveBulkNeftTemplatePath = () => {
   }
 
   return null;
+};
+
+const isSuperAdminRequest = (req) =>
+  Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)
+  || (Array.isArray(req.user?.roles)
+    ? req.user.roles.some((role) => normalizeText(role).toLowerCase() === 'super_admin')
+    : false);
+
+const hasAnyExpenditureWorkflowPermission = (req) => {
+  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+  return permissions.some((permission) =>
+    normalizeText(permission).toLowerCase().startsWith('expenditure.workflow.')
+  );
+};
+
+const hasExpenditureStagePermission = (req, stage) => {
+  const normalizedStage = normalizeText(stage).toLowerCase();
+  if (!normalizedStage) return false;
+  if (isSuperAdminRequest(req)) return true;
+
+  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+  const normalizedPermissions = permissions.map((permission) => normalizeText(permission).toLowerCase());
+  return normalizedPermissions.includes(`expenditure.workflow.${normalizedStage}`);
+};
+
+const resolveExpenditureLevel1QueueRole = (req) => {
+  const normalizedRoles = Array.isArray(req.user?.roles)
+    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
+    : [];
+
+  const hasCoordinatorRole = normalizedRoles.includes('coordinator') || normalizedRoles.includes('entity_approver');
+  const hasHodRole = normalizedRoles.includes('hod');
+
+  if (hasCoordinatorRole && !hasHodRole) return 'coordinator';
+  if (hasHodRole && !hasCoordinatorRole) return 'hod';
+  return null;
+};
+
+const canAccessExpenditureRecord = (req, record) => {
+  const userId = toPositiveInt(req.user?.id);
+  if (!record) return false;
+  if (isSuperAdminRequest(req)) return true;
+  if (userId && userId === toPositiveInt(record.created_by)) return true;
+  return hasAnyExpenditureWorkflowPermission(req);
 };
 
 const expenditureController = {
@@ -299,6 +419,28 @@ const expenditureController = {
 
       const result = await expenditureModel.createExpenditureRequest(payload, userId, uploads);
 
+      try {
+        await workflowService.startWorkflow({
+          moduleKey: 'expenditure',
+          recordId: result.expenditureId,
+          metadata: {
+            origin: 'system',
+            requestId: null,
+            moduleMetaVersion: 1,
+            moduleMeta: {
+              trigger: 'create_expenditure_request',
+            },
+          },
+        });
+      } catch (workflowError) {
+        try {
+          await expenditureModel.hardDeleteExpenditureRequest(result.expenditureId);
+        } catch (cleanupError) {
+          console.error('Failed to clean up expenditure request after workflow start failure', cleanupError);
+        }
+        throw workflowError;
+      }
+
       return res.status(201).json({
         status: 'success',
         message: 'Expenditure request submitted successfully',
@@ -362,15 +504,20 @@ const expenditureController = {
       if (!record) return sendError(res, 404, 'Expenditure request not found');
 
       const userId = toPositiveInt(req.user?.id);
-      const isOwner = userId && userId === toPositiveInt(record.created_by);
-      const isSuperAdmin = Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin);
-
-      if (!isOwner && !isSuperAdmin) {
+      if (!canAccessExpenditureRecord(req, record)) {
         return sendError(res, 403, 'Access denied');
       }
 
       const details = await expenditureModel.getExpenditureDetails(id);
-      return res.json({ status: 'success', data: { ...record, ...details } });
+      let statusUpdates = [];
+      try {
+        const rawStatusUpdates = await expenditureModel.getStatusUpdates(id);
+        statusUpdates = filterEntriesForCurrentCycle(rawStatusUpdates, record);
+      } catch (statusError) {
+        console.error('Failed to fetch expenditure status updates:', statusError);
+      }
+
+      return res.json({ status: 'success', data: { ...record, ...details, status_updates: statusUpdates } });
     } catch (err) {
       return handleError(res, err, 'Error fetching expenditure request');
     }
@@ -386,8 +533,27 @@ const expenditureController = {
       if (!record) return sendError(res, 404, 'Expenditure request not found');
 
       const isOwner = userId && userId === toPositiveInt(record.created_by);
-      const isSuperAdmin = Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin);
-      if (!isOwner && !isSuperAdmin) return sendError(res, 403, 'Access denied');
+      const isWorkflowEditor = hasAnyExpenditureWorkflowPermission(req) || isSuperAdminRequest(req);
+      const workflowState = parseWorkflowState(record.workflow_state) || null;
+      const workflowStatus = normalizeText(workflowState?.status || record.workflow_status || record.overall_status).toLowerCase();
+      const currentStage = normalizeText(workflowState?.currentStage || record.workflow_stage).toLowerCase();
+      const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(workflowStatus);
+
+      if (!isOwner && !isWorkflowEditor) return sendError(res, 403, 'Access denied');
+
+      const isApplicantEditable =
+        Boolean(workflowState?.isEditableByApplicant) ||
+        workflowStatus === 'returned' ||
+        workflowStatus === 'submitted' ||
+        currentStage === 'level1';
+
+      if (isOwner && !isApplicantEditable) {
+        return sendError(res, 403, 'This request is not editable in current workflow state');
+      }
+
+      if (isWorkflowEditor && isTerminalWorkflow && !isSuperAdminRequest(req)) {
+        return sendError(res, 403, 'This request is not editable in current workflow state');
+      }
 
       const result = await expenditureModel.updateExpenditure(id, req.body || {}, resolveActor(req));
 
@@ -404,15 +570,34 @@ const expenditureController = {
   async deleteExpenditure(req, res) {
     try {
       const id = toPositiveInt(req.params.id);
+      const userId = toPositiveInt(req.user?.id);
+      const isSuperAdmin = isSuperAdminRequest(req);
       if (!id) return sendError(res, 400, 'Invalid expenditure ID');
 
       const record = await expenditureModel.getExpenditureById(id);
       if (!record) return sendError(res, 404, 'Expenditure request not found');
 
+      if (!isSuperAdmin && (!userId || toPositiveInt(record.created_by) !== userId)) {
+        return sendError(res, 403, 'Only applicant can delete this request');
+      }
+
+      const workflowState = parseWorkflowState(record.workflow_state) || null;
+      const workflowStatus = normalizeText(workflowState?.status || record.workflow_status || record.overall_status).toLowerCase();
+      const currentStage = normalizeText(workflowState?.currentStage || record.workflow_stage).toLowerCase();
+      const hasStartedApproval = Boolean(workflowState) && currentStage && currentStage !== 'level1';
+
+      if (!isSuperAdmin && workflowStatus && ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(workflowStatus)) {
+        return sendError(res, 409, 'This request can no longer be deleted');
+      }
+
+      if (!isSuperAdmin && hasStartedApproval) {
+        return sendError(res, 409, 'This request can only be deleted before Level-1 approval');
+      }
+
       await expenditureModel.deleteExpenditure(id);
       return res.json({ status: 'success', message: 'Expenditure request deleted' });
     } catch (err) {
-      if (err.message.includes('Only pending')) return sendError(res, 400, err.message);
+      if (normalizeText(err.message).toLowerCase().includes('only pending')) return sendError(res, 409, err.message);
       return handleError(res, err, 'Error deleting expenditure request');
     }
   },
@@ -422,13 +607,366 @@ const expenditureController = {
       const id = toPositiveInt(req.params.id);
       if (!id) return sendError(res, 400, 'Invalid expenditure ID');
 
-      const exists = await expenditureModel.getExpenditureOwner(id);
-      if (!exists) return sendError(res, 404, 'Expenditure request not found');
+      const record = await expenditureModel.getExpenditureById(id);
+      if (!record) return sendError(res, 404, 'Expenditure request not found');
+      if (!canAccessExpenditureRecord(req, record)) return sendError(res, 403, 'Access denied');
 
       const updates = await expenditureModel.getStatusUpdates(id);
-      return res.json({ status: 'success', data: updates });
+      const cycleScopedUpdates = filterEntriesForCurrentCycle(updates, record);
+      return res.json({ status: 'success', data: cycleScopedUpdates });
     } catch (err) {
       return handleError(res, err, 'Error fetching expenditure timeline');
+    }
+  },
+
+  async getWorkflowMeta(req, res) {
+    try {
+      const [metadata, availableBeneficiaryTypes] = await Promise.all([
+        workflowService.getWorkflowMetadata({
+          moduleKey: 'expenditure',
+          actor: resolveActor(req),
+        }),
+        expenditureModel.listAvailableBeneficiaryTypes(),
+      ]);
+
+      return res.status(200).json({
+        status: 'success',
+        data: {
+          ...metadata,
+          availableBeneficiaryTypes,
+        },
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error in getWorkflowMeta');
+    }
+  },
+
+  async getExpenditureQueue(req, res) {
+    try {
+      const stage = normalizeText(req.params.stage).toLowerCase();
+      const { page, limit, workflowStatus, level1Role } = req.query;
+      const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
+      const effectiveLevel1Role = stage === 'level1'
+        ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
+          ? normalizedLevel1Role
+          : resolveExpenditureLevel1QueueRole(req))
+        : null;
+
+      const queue = await workflowService.listQueue({
+        moduleKey: 'expenditure',
+        stage,
+        actor: resolveActor(req),
+        filters: {
+          page,
+          limit,
+          workflowStatus,
+          level1Role: effectiveLevel1Role,
+        },
+      });
+
+      return res.status(200).json({
+        status: 'success',
+        data: queue.items,
+        pagination: {
+          total: queue.total,
+          page: queue.page,
+          limit: queue.limit,
+        },
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error in getExpenditureQueue');
+    }
+  },
+
+  async approveExpenditureWorkflow(req, res) {
+    try {
+      const expenditureId = toPositiveInt(req.params.id);
+      const { decision, feedback } = req.body || {};
+      const normalizedDecision = normalizeText(decision).toLowerCase();
+      const actor = resolveActor(req);
+
+      if (!expenditureId) {
+        return sendError(res, 400, 'Invalid expenditure request ID');
+      }
+
+      const record = await expenditureModel.getExpenditureById(expenditureId);
+      if (!record) {
+        return sendError(res, 404, 'Expenditure request not found');
+      }
+
+      const workflowState = parseWorkflowState(record.workflow_state) || null;
+      const workflowStatus = normalizeText(
+        workflowState?.status || record.workflow_status || record.overall_status
+      ).toLowerCase();
+      const isTerminalWorkflow = ['completed', 'rejected', 'archived'].includes(workflowStatus);
+
+      let result;
+      if (actor.isSuperAdmin && normalizedDecision === 'returned' && isTerminalWorkflow) {
+        result = await expenditureModel.forceWorkflowTransition(expenditureId, {
+          decision: 'returned',
+          feedback,
+          actor,
+          stageHint: normalizeText(record.workflow_stage).toLowerCase() || 'principal',
+        });
+      } else {
+        result = await workflowService.actOnWorkflow({
+          moduleKey: 'expenditure',
+          recordId: expenditureId,
+          decision,
+          feedback,
+          actor,
+          metadata: {
+            origin: 'api',
+            requestId: null,
+            moduleMetaVersion: 1,
+            moduleMeta: {
+              route: 'PATCH /api/expenditure-requests/:id/approval',
+            },
+          },
+        });
+      }
+
+      return res.status(200).json({
+        status: 'success',
+        message: `Workflow ${result.decision} at stage ${result.stage}`,
+        data: {
+          previousState: result.previousState,
+          currentState: result.currentState,
+        },
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error in approveExpenditureWorkflow');
+    }
+  },
+
+  async toggleArchiveStatus(req, res) {
+    try {
+      const expenditureId = toPositiveInt(req.params.id);
+      if (!expenditureId) {
+        return sendError(res, 400, 'Invalid expenditure request ID');
+      }
+
+      const record = await expenditureModel.getExpenditureById(expenditureId);
+      if (!record) {
+        return sendError(res, 404, 'Expenditure request not found');
+      }
+
+      if (!canAccessExpenditureRecord(req, record)) {
+        return sendError(res, 403, 'Access denied');
+      }
+
+      const workflowState = parseWorkflowState(record.workflow_state) || null;
+      const workflowStatus = normalizeText(
+        workflowState?.status || record.workflow_status || record.overall_status
+      ).toLowerCase();
+      const isArchived = workflowStatus === 'archived' || workflowStatus === 'archive';
+      const actor = resolveActor(req);
+
+      if (isArchived) {
+        const latestArchive = await expenditureModel.getLatestArchiveAction(expenditureId);
+        const archivedStage = normalizeText(latestArchive?.stage).toLowerCase();
+
+        if (!hasExpenditureStagePermission(req, archivedStage)) {
+          return sendError(
+            res,
+            403,
+            archivedStage
+              ? `Only ${archivedStage.toUpperCase()} stage users (or super admin) can unarchive this request`
+              : 'You are not allowed to unarchive this request'
+          );
+        }
+
+        const restoreResult = await expenditureModel.restoreWorkflowSnapshotFromLatestArchive(expenditureId);
+        if (!restoreResult.restored) {
+          return sendError(res, 409, restoreResult.reason || 'Unable to unarchive this request');
+        }
+
+        return res.status(200).json({
+          status: 'success',
+          message: 'Expenditure request unarchived successfully',
+          data: {
+            workflow_state: restoreResult.restoredState,
+          },
+        });
+      }
+
+      const isTerminalWorkflow = ['completed', 'rejected'].includes(workflowStatus);
+      if (actor.isSuperAdmin && isTerminalWorkflow) {
+        const forcedArchiveResult = await expenditureModel.forceWorkflowTransition(expenditureId, {
+          decision: 'archived',
+          feedback: normalizeText(req.body?.feedback) || null,
+          actor,
+          stageHint: normalizeText(record.workflow_stage).toLowerCase() || 'principal',
+        });
+
+        return res.status(200).json({
+          status: 'success',
+          message: 'Expenditure request archived successfully',
+          data: {
+            previousState: forcedArchiveResult.previousState,
+            currentState: forcedArchiveResult.currentState,
+          },
+        });
+      }
+
+      const archiveResult = await workflowService.actOnWorkflow({
+        moduleKey: 'expenditure',
+        recordId: expenditureId,
+        decision: 'archived',
+        feedback: normalizeText(req.body?.feedback) || undefined,
+        actor,
+        metadata: {
+          origin: 'api',
+          requestId: null,
+          moduleMetaVersion: 1,
+          moduleMeta: {
+            route: 'PATCH /api/expenditure-requests/:id/archive-toggle',
+          },
+        },
+      });
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Expenditure request archived successfully',
+        data: {
+          previousState: archiveResult.previousState,
+          currentState: archiveResult.currentState,
+        },
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error in toggleArchiveStatus');
+    }
+  },
+
+  async resubmitExpenditureRequest(req, res) {
+    try {
+      const expenditureId = toPositiveInt(req.params.id);
+      const userId = toPositiveInt(req.user?.id);
+
+      if (!expenditureId) {
+        return sendError(res, 400, 'Invalid expenditure request ID');
+      }
+
+      const record = await expenditureModel.getExpenditureById(expenditureId);
+      if (!record) {
+        return sendError(res, 404, 'Expenditure request not found');
+      }
+
+      if (!userId || toPositiveInt(record.created_by) !== userId) {
+        return sendError(res, 403, 'Only applicant can resubmit this request');
+      }
+
+      const workflowState = parseWorkflowState(record.workflow_state) || null;
+      if (!workflowState || normalizeText(workflowState.status).toLowerCase() !== 'returned') {
+        return sendError(res, 409, 'Only returned requests can be resubmitted');
+      }
+
+      const restartResult = await workflowService.startWorkflow({
+        moduleKey: 'expenditure',
+        recordId: expenditureId,
+        metadata: {
+          origin: 'resubmit',
+          requestId: null,
+          moduleMetaVersion: 1,
+          moduleMeta: {
+            trigger: 'applicant_resubmit',
+          },
+        },
+      });
+
+      const resubmittedAt = new Date().toISOString();
+      await expenditureModel.updateExpenditureWorkflowSnapshot(expenditureId, {
+        ...(restartResult.state || {}),
+        status: 'in_progress',
+        currentStage: 'level1',
+        isEditableByApplicant: false,
+        lastDecision: 'resubmitted',
+        lastFeedback: null,
+        resubmittedAt,
+        updatedAt: resubmittedAt,
+        resolvedAt: null,
+      });
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Expenditure request resubmitted successfully',
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error in resubmitExpenditureRequest');
+    }
+  },
+
+  async getExpenditureWorkflowTimeline(req, res) {
+    try {
+      const expenditureId = toPositiveInt(req.params.id);
+      if (!expenditureId) {
+        return sendError(res, 400, 'Invalid expenditure request ID');
+      }
+
+      const record = await expenditureModel.getExpenditureById(expenditureId);
+      if (!record) {
+        return sendError(res, 404, 'Expenditure request not found');
+      }
+
+      if (!canAccessExpenditureRecord(req, record)) {
+        return sendError(res, 403, 'Access denied');
+      }
+
+      const rawTimeline = await workflowService.getTimeline({
+        moduleKey: 'expenditure',
+        recordId: expenditureId,
+      });
+      const timeline = filterEntriesForCurrentCycle(rawTimeline, record);
+
+      return res.status(200).json({
+        status: 'success',
+        data: timeline,
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error in getExpenditureWorkflowTimeline');
+    }
+  },
+
+  async getStatusUpdates(req, res) {
+    try {
+      const expenditureId = toPositiveInt(req.params.id);
+      if (!expenditureId) return sendError(res, 400, 'Invalid expenditure request ID');
+
+      const record = await expenditureModel.getExpenditureById(expenditureId);
+      if (!record) return sendError(res, 404, 'Expenditure request not found');
+      if (!canAccessExpenditureRecord(req, record)) return sendError(res, 403, 'Access denied');
+
+      const updates = await expenditureModel.getStatusUpdates(expenditureId);
+      const cycleScopedUpdates = filterEntriesForCurrentCycle(updates, record);
+      const timelineCompatible = cycleScopedUpdates.map((row) => ({
+        id: row.id,
+        moduleKey: 'expenditure',
+        recordId: row.expenditure_id,
+        stage: row.stage || row.role || null,
+        decision: row.decision || row.status || null,
+        feedback: row.feedback ?? row.comment ?? null,
+        actorUserId: row.user_id || null,
+        actorEmail: row.actor_email || null,
+        actorRole: row.actor_role || null,
+        decidedAt: row.decided_at || row.created_at || null,
+        snapshotBefore: row.snapshot_before || null,
+        meta: row.meta || null,
+        summary: row.summary ?? row.comment ?? row.feedback ?? null,
+        details: row.details ?? null,
+        isAdmin: row.is_admin ?? null,
+        role: row.role || null,
+        status: row.status || null,
+        comment: row.comment ?? row.feedback ?? null,
+        createdAt: row.created_at || null,
+        userName: row.user_name || row.actor_name || null,
+      }));
+
+      return res.status(200).json({
+        status: 'success',
+        data: timelineCompatible,
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error in getStatusUpdates');
     }
   },
 };

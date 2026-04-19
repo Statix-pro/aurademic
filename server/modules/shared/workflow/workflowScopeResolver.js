@@ -23,7 +23,7 @@ const resolveEffectiveScopeType = ({ stagePolicy, recordContext, filters = {} })
   const stageKey = normalizeText(stagePolicy?.stageKey || stagePolicy?.stage_key).toLowerCase();
   const level1Role = normalizeText(filters?.level1Role).toLowerCase();
 
-  if (moduleKey !== 'finance' || stageKey !== 'level1') {
+  if (!['finance', 'expenditure'].includes(moduleKey) || stageKey !== 'level1') {
     return baseScopeType;
   }
 

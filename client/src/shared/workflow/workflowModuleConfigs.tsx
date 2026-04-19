@@ -29,6 +29,9 @@ export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfi
     getEditRoute: (id) => `/finance/${id}/edit?admin=true`,
     enablePdfPreview: true,
     enableSuperAdminDelete: true,
+    enableLevel1RoleTabs: true,
+    enableSuperAdminAllProposals: true,
+    enableSecondaryFilter: true,
     deleteEntityLabel: 'finance request',
     columns: [
       { key: 'id', label: 'ID' },
@@ -49,7 +52,7 @@ export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfi
   },
   expenditure: {
     moduleKey: 'expenditure',
-    title: 'Expenditure Workflow Queue',
+    title: 'Expenditure Requests',
     apiBasePath: '/expenditure-requests',
     stageLabels: {
       level1: 'Level-1',
@@ -59,6 +62,10 @@ export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfi
     getTimelineEndpoint: (id) => `/expenditure-requests/${id}/status-updates`,
     getViewRoute: (id) => `/expenditure/${id}?admin=true`,
     getEditRoute: (id) => `/expenditure/${id}/edit?admin=true`,
+    enableSuperAdminDelete: true,
+    enableLevel1RoleTabs: true,
+    enableSuperAdminAllProposals: true,
+    enableSecondaryFilter: true,
     deleteEntityLabel: 'expenditure request',
     columns: [
       { key: 'id', label: 'ID' },
