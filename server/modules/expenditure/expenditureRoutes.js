@@ -1,18 +1,10 @@
-/**
- * expenditureRoutes.js
- *
- * Express router for the Expenditure (Advance) module.
- * All routes require authentication via authMiddleware.
- * Includes Dashboard, Form Auto-fill, Budget, Payee, and CRUD operations.
- */
-
 import express from 'express';
 import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import expenditureController from './expenditureController.js';
 import * as expenditureModel from './expenditureModel.js';
-import { authMiddleware } from '../../middleware/authMiddleware.js';
+import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
 const expenditureUploadRoot = path.join(process.cwd(), 'uploads', 'expenditure');
@@ -68,10 +60,20 @@ const expenditureUpload = multer({
   },
 });
 
-// ─── Delete guard ─────────────────────────────────────────────────────────────
+const EXPENDITURE_WORKFLOW_PERMISSIONS = [
+  'expenditure.workflow.*',
+];
+
+const canAccessExpenditureWorkflow = permissionMiddleware(EXPENDITURE_WORKFLOW_PERMISSIONS);
+
 const canDelete = async (req, res, next) => {
   try {
-    if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)) return next();
+    const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+    const hasWorkflowPermission = permissions.some((permission) =>
+      String(permission || '').trim().startsWith('expenditure.workflow.')
+    );
+
+    if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || hasWorkflowPermission) return next();
 
     const id = Number.parseInt(req.params.id, 10);
     const userId = Number.parseInt(req.user?.id, 10);
@@ -81,7 +83,7 @@ const canDelete = async (req, res, next) => {
     }
 
     const owner = await expenditureModel.getExpenditureOwner(id);
-    if (!owner) return next(); 
+    if (!owner) return next();
 
     if (Number.parseInt(owner.created_by, 10) === userId) return next();
 
@@ -91,37 +93,33 @@ const canDelete = async (req, res, next) => {
   }
 };
 
-// ─── Apply auth to every route ────────────────────────────────────────────────
 router.use(authMiddleware);
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
-/**
- * GET /expenditure/dashboard
- * Returns summary statistics for the expenditure module.
- */
 router.get('/dashboard', expenditureController.getExpenditureDashboard);
 
-// ─── Utility & Context ────────────────────────────────────────────────────────
 router.get('/templates/bulk-neft', expenditureController.downloadBulkNeftTemplate);
 router.get('/finance-context/:financeId', expenditureController.getFinanceRequestContext);
 
-// ─── Applicant auto-fill ──────────────────────────────────────────────────────
 router.get('/me', expenditureController.getCurrentEmployeeInfo);
 router.get('/search-applicant', expenditureController.searchApplicant);
 
-// ─── Budget & Advances ────────────────────────────────────────────────────────
 router.get('/budget/approved', expenditureController.getApprovedBudgets);
 router.get('/advance-summary', expenditureController.getAdvanceSummary);
 
-// ─── Payee master ─────────────────────────────────────────────────────────────
 router.get('/payees', expenditureController.listPayees);
 router.post('/payees', expenditureController.createPayee);
 router.get('/payees/:id', expenditureController.getPayee);
 
-// ─── Expenditure Requests (CRUD) ──────────────────────────────────────────────
 router.get('/', expenditureController.listExpenditures);
+router.get('/workflow/meta', canAccessExpenditureWorkflow, expenditureController.getWorkflowMeta);
+router.get('/queue/:stage', canAccessExpenditureWorkflow, expenditureController.getExpenditureQueue);
+router.patch('/:id/approval', canAccessExpenditureWorkflow, expenditureController.approveExpenditureWorkflow);
+router.patch('/:id/archive-toggle', canAccessExpenditureWorkflow, expenditureController.toggleArchiveStatus);
+router.post('/:id/resubmit', expenditureController.resubmitExpenditureRequest);
+router.get('/:id/status-updates', expenditureController.getStatusUpdates);
+
 router.get('/:id', expenditureController.getExpenditure);
-router.get('/:id/timeline', expenditureController.getTimeline);
+router.get('/:id/timeline', expenditureController.getExpenditureWorkflowTimeline);
 
 router.post(
   '/',

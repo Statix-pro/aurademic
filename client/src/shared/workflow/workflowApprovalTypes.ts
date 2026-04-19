@@ -57,6 +57,9 @@ export interface WorkflowApprovalModuleConfig<TRecord extends Record<string, any
   getEditRoute?: (id: number | string) => string;
   enablePdfPreview?: boolean;
   enableSuperAdminDelete?: boolean;
+  enableLevel1RoleTabs?: boolean;
+  enableSuperAdminAllProposals?: boolean;
+  enableSecondaryFilter?: boolean;
   deleteEntityLabel?: string;
   queueParams?: {
     page?: number;

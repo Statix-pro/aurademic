@@ -138,6 +138,7 @@ app.use('/api/finance-requests', financePageRoutes);
 app.use('/api/budget', budgetRoutes);
 app.use('/api/adminbudget', adminBudgetRoutes);
 app.use('/api/expenditure', expenditureRoutes);
+app.use('/api/expenditure-requests', expenditureRoutes);
 app.use('/api/expenditure-dashboard', expenditureUserDashboardRoutes);
 
 // FinanceCard API

@@ -2174,3 +2174,476 @@ export async function getStatusUpdates(expenditureId) {
     return ta !== tb ? ta - tb : (Number(a.id) || 0) - (Number(b.id) || 0);
   });
 }
+
+const WORKFLOW_STATUS_SQL_EXPR = `
+  COALESCE(
+    NULLIF(LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.status')))), ''),
+    NULLIF(LOWER(TRIM(er.workflow_status)), ''),
+    'in_progress'
+  )
+`;
+
+const WORKFLOW_STAGE_SQL_EXPR = `
+  COALESCE(
+    NULLIF(LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.currentStage')))), ''),
+    NULLIF(LOWER(TRIM(er.workflow_stage)), ''),
+    ''
+  )
+`;
+
+const normalizeWorkflowState = (workflowState) => {
+  if (!workflowState) return null;
+  if (typeof workflowState === 'object' && !Array.isArray(workflowState)) {
+    return {
+      ...workflowState,
+      flow: Array.isArray(workflowState.flow) ? workflowState.flow : [],
+      currentStage: normalizeText(workflowState.currentStage).toLowerCase() || null,
+      status: normalizeText(workflowState.status).toLowerCase() || null,
+      isEditableByApplicant: Boolean(workflowState.isEditableByApplicant),
+    };
+  }
+
+  if (typeof workflowState === 'string') {
+    try {
+      const parsed = JSON.parse(workflowState);
+      return normalizeWorkflowState(parsed);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+};
+
+const mapWorkflowStatusToOverallStatus = (workflowState) => {
+  const status = normalizeText(workflowState?.status).toLowerCase();
+  if (status === 'completed') return 'approved';
+  if (status === 'rejected') return 'rejected';
+  if (status === 'archived') return 'archived';
+  if (status === 'deleted') return 'deleted';
+  return 'pending';
+};
+
+const LEVEL1_COORDINATOR_BENEFICIARY_TYPES = Object.freeze([
+  'centre',
+  'cell',
+  'club',
+  'section',
+  'professional body',
+  'professional bodies',
+]);
+
+const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY = Object.freeze(['faculty', 'staff']);
+const escapeSqlLiteral = (value) => `'${String(value || '').replace(/'/g, "''")}'`;
+
+const resolveExpenditureLevel1RouteType = (record = {}) => {
+  const beneficiaryType = normalizeBeneficiaryType(record?.beneficiary_type).toLowerCase();
+  const beneficiaryEntityId = toPositiveInt(record?.beneficiary_entity_id);
+
+  if (LEVEL1_COORDINATOR_BENEFICIARY_TYPES.includes(beneficiaryType)) {
+    return 'entity_contact';
+  }
+
+  if (LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY.includes(beneficiaryType) && beneficiaryEntityId) {
+    return 'entity_contact';
+  }
+
+  return 'department_hod';
+};
+
+const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_SQL = LEVEL1_COORDINATOR_BENEFICIARY_TYPES
+  .map(escapeSqlLiteral)
+  .join(', ');
+const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY_SQL = LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY
+  .map(escapeSqlLiteral)
+  .join(', ');
+
+const LEVEL1_COORDINATOR_ROUTE_SQL_EXPR = `
+  (
+    LOWER(TRIM(COALESCE(er.beneficiary_type, ''))) IN (${LEVEL1_COORDINATOR_BENEFICIARY_TYPES_SQL})
+    OR (
+      LOWER(TRIM(COALESCE(er.beneficiary_type, ''))) IN (${LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY_SQL})
+      AND COALESCE(er.beneficiary_entity_id, 0) > 0
+    )
+  )
+`;
+
+export async function getExpenditureRecordContext(recordId, { tx = db, forUpdate = false } = {}) {
+  const normalizedRecordId = toPositiveInt(recordId);
+  if (!normalizedRecordId) return null;
+
+  const lockClause = forUpdate ? ' FOR UPDATE' : '';
+  const [rows] = await tx.query(
+    `SELECT
+       er.id,
+       er.created_by,
+       er.beneficiary_type,
+       er.beneficiary_entity_id,
+       er.department_id,
+       er.total_amount
+     FROM expenditure_requests er
+     WHERE er.id = ?${lockClause}`,
+    [normalizedRecordId]
+  );
+
+  if (!rows.length) return null;
+  const row = rows[0];
+
+  return {
+    beneficiaryType: normalizeBeneficiaryType(row.beneficiary_type) || normalizeText(row.beneficiary_type),
+    beneficiaryEntityId: toPositiveInt(row.beneficiary_entity_id),
+    departmentId: toPositiveInt(row.department_id),
+    totalBudget: toMoney(row.total_amount),
+    applicantUserId: toPositiveInt(row.created_by),
+  };
+}
+
+export async function updateExpenditureWorkflowSnapshot(recordId, newState, { tx = db } = {}) {
+  const normalizedRecordId = toPositiveInt(recordId);
+  if (!normalizedRecordId) return false;
+
+  const workflowStatePayload = JSON.stringify(newState || null);
+  const overallStatus = mapWorkflowStatusToOverallStatus(newState);
+
+  const [result] = await tx.query(
+    `UPDATE expenditure_requests
+        SET workflow_state = ?,
+            overall_status = ?,
+            updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`,
+    [workflowStatePayload, overallStatus, normalizedRecordId]
+  );
+
+  return result.affectedRows > 0;
+}
+
+export async function forceWorkflowTransition(recordId, {
+  decision,
+  feedback = null,
+  actor = {},
+  stageHint = null,
+} = {}, { tx = db } = {}) {
+  const normalizedRecordId = toPositiveInt(recordId);
+  const normalizedDecision = normalizeText(decision).toLowerCase();
+
+  if (!normalizedRecordId) {
+    throw new Error('Invalid expenditure request ID');
+  }
+
+  if (!['returned', 'archived'].includes(normalizedDecision)) {
+    throw new Error(`Unsupported forced workflow transition: ${normalizedDecision}`);
+  }
+
+  const [rows] = await tx.query(
+    `SELECT workflow_state
+       FROM expenditure_requests
+      WHERE id = ?
+      FOR UPDATE`,
+    [normalizedRecordId]
+  );
+
+  if (!rows.length) {
+    throw new Error('Expenditure request not found');
+  }
+
+  const previousState = normalizeWorkflowState(rows[0].workflow_state);
+  if (!previousState) {
+    throw new Error('Workflow state not found');
+  }
+
+  const flow = Array.isArray(previousState.flow) && previousState.flow.length
+    ? previousState.flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
+    : ['level1', 'dof', 'principal'];
+  const fallbackStage =
+    normalizeText(stageHint).toLowerCase() ||
+    normalizeText(previousState.currentStage).toLowerCase() ||
+    flow[flow.length - 1] ||
+    'level1';
+
+  const nowIso = new Date().toISOString();
+  const normalizedFeedback = normalizeText(feedback) || null;
+  const nextState = {
+    ...previousState,
+    flow,
+    status: normalizedDecision,
+    currentStage: normalizedDecision === 'returned' ? fallbackStage : null,
+    isEditableByApplicant: normalizedDecision === 'returned',
+    resolvedAt: normalizedDecision === 'archived' ? nowIso : null,
+    lastDecision: normalizedDecision,
+    lastFeedback: normalizedFeedback,
+    updatedAt: nowIso,
+  };
+
+  const actorUserId = toPositiveInt(actor?.userId || actor?.id);
+  const actorEmail = normalizeText(actor?.email).toLowerCase() || null;
+  const actorRole = normalizeText(actor?.role).toLowerCase() || null;
+
+  await tx.query(
+    `INSERT INTO workflow_actions (
+        module_key,
+        record_id,
+        stage,
+        decision,
+        feedback,
+        actor_user_id,
+        actor_email,
+        actor_role,
+        snapshot_before,
+        meta
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      'expenditure',
+      normalizedRecordId,
+      fallbackStage,
+      normalizedDecision,
+      normalizedFeedback,
+      actorUserId,
+      actorEmail,
+      actorRole,
+      JSON.stringify(previousState),
+      JSON.stringify({
+        origin: 'api',
+        requestId: null,
+        moduleMetaVersion: 1,
+        moduleMeta: {
+          trigger: 'super_admin_forced_transition',
+          route: normalizedDecision === 'archived'
+            ? 'PATCH /api/expenditure-requests/:id/archive-toggle'
+            : 'PATCH /api/expenditure-requests/:id/approval',
+        },
+      }),
+    ]
+  );
+
+  const updated = await updateExpenditureWorkflowSnapshot(normalizedRecordId, nextState, { tx });
+  if (!updated) {
+    throw new Error('Failed to update workflow snapshot');
+  }
+
+  return {
+    previousState,
+    currentState: nextState,
+    decision: normalizedDecision,
+    stage: fallbackStage,
+  };
+}
+
+export async function restoreWorkflowSnapshotFromLatestArchive(recordId, { tx = db } = {}) {
+  const normalizedRecordId = toPositiveInt(recordId);
+  if (!normalizedRecordId) {
+    return { restored: false, reason: 'Invalid expenditure request ID' };
+  }
+
+  const [rows] = await tx.query(
+    `SELECT snapshot_before
+       FROM workflow_actions
+      WHERE module_key = 'expenditure'
+        AND record_id = ?
+        AND decision = 'archived'
+      ORDER BY decided_at DESC, id DESC
+      LIMIT 1`,
+    [normalizedRecordId]
+  );
+
+  if (!rows.length) {
+    return { restored: false, reason: 'No archived snapshot found' };
+  }
+
+  const previousState = normalizeWorkflowState(rows[0].snapshot_before);
+  if (!previousState) {
+    return { restored: false, reason: 'Archived snapshot is not restorable' };
+  }
+
+  const updated = await updateExpenditureWorkflowSnapshot(normalizedRecordId, previousState, { tx });
+  return {
+    restored: Boolean(updated),
+    restoredState: previousState,
+    reason: updated ? null : 'Failed to update workflow snapshot',
+  };
+}
+
+export async function getLatestArchiveAction(recordId, { tx = db } = {}) {
+  const normalizedRecordId = toPositiveInt(recordId);
+  if (!normalizedRecordId) return null;
+
+  const [rows] = await tx.query(
+    `SELECT id, stage, actor_user_id, actor_email, decided_at
+       FROM workflow_actions
+      WHERE module_key = 'expenditure'
+        AND record_id = ?
+        AND decision = 'archived'
+      ORDER BY decided_at DESC, id DESC
+      LIMIT 1`,
+    [normalizedRecordId]
+  );
+
+  if (!rows.length) return null;
+  return {
+    id: toPositiveInt(rows[0].id),
+    stage: normalizeText(rows[0].stage).toLowerCase() || null,
+    actorUserId: toPositiveInt(rows[0].actor_user_id),
+    actorEmail: normalizeText(rows[0].actor_email).toLowerCase() || null,
+    decidedAt: rows[0].decided_at || null,
+  };
+}
+
+export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db } = {}) {
+  const normalizedStage = normalizeText(stage).toLowerCase();
+  const workflowStatus = normalizeText(filters.workflowStatus).toLowerCase() || 'in_progress';
+  const isSuperAdmin = Boolean(filters.isSuperAdmin);
+  const level1Role = normalizeText(filters.level1Role).toLowerCase();
+
+  const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
+  const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
+  const offset = (page - 1) * limit;
+
+  const whereParts = [`LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'`];
+  const whereParams = [];
+
+  if (workflowStatus === 'all') {
+    if (isSuperAdmin) {
+      whereParts.push('1 = 1');
+    } else {
+      whereParts.push(
+        `( 
+          (${WORKFLOW_STAGE_SQL_EXPR} = ? AND ${WORKFLOW_STATUS_SQL_EXPR} IN ('in_progress', 'returned'))
+          OR EXISTS (
+            SELECT 1
+            FROM workflow_actions wa
+            WHERE wa.module_key = 'expenditure'
+              AND wa.record_id = er.id
+              AND LOWER(TRIM(wa.stage)) = ?
+              AND wa.decision IN ('approved', 'returned', 'rejected', 'archived')
+          )
+        )`
+      );
+      whereParams.push(normalizedStage, normalizedStage);
+    }
+  } else {
+    whereParts.push(`${WORKFLOW_STAGE_SQL_EXPR} = ?`, `${WORKFLOW_STATUS_SQL_EXPR} = ?`);
+    whereParams.push(normalizedStage, workflowStatus);
+  }
+
+  const scopeFilters = filters.scopeFilters || {};
+
+  if (normalizedStage === 'level1' && ['hod', 'coordinator'].includes(level1Role)) {
+    if (level1Role === 'coordinator') {
+      whereParts.push(LEVEL1_COORDINATOR_ROUTE_SQL_EXPR);
+    } else {
+      whereParts.push(`NOT ${LEVEL1_COORDINATOR_ROUTE_SQL_EXPR}`);
+    }
+  }
+
+  if (!scopeFilters.forceAll) {
+    if (scopeFilters.scopeType === 'department') {
+      const departmentIds = Array.from(scopeFilters.departmentIds || [])
+        .map((id) => toPositiveInt(id))
+        .filter(Boolean);
+      if (scopeFilters.forceEmpty || departmentIds.length === 0) {
+        return { items: [], total: 0, page, limit };
+      }
+      whereParts.push('er.department_id IN (?)');
+      whereParams.push(departmentIds);
+    }
+
+    if (scopeFilters.scopeType === 'entity') {
+      const entityIds = Array.from(scopeFilters.entityIds || [])
+        .map((id) => toPositiveInt(id))
+        .filter(Boolean);
+      if (scopeFilters.forceEmpty || entityIds.length === 0) {
+        return { items: [], total: 0, page, limit };
+      }
+      whereParts.push('er.beneficiary_entity_id IN (?)');
+      whereParams.push(entityIds);
+    }
+  }
+
+  const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+
+  const [countRows] = await tx.query(
+    `SELECT COUNT(*) AS total
+       FROM expenditure_requests er
+       ${whereClause}`,
+    whereParams
+  );
+  const total = Number(countRows?.[0]?.total || 0);
+
+  const [rows] = await tx.query(
+    `SELECT
+       er.id,
+       COALESCE(err.request_ref, CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))) AS proposal_ref,
+       er.created_by,
+       er.beneficiary_type,
+       er.beneficiary_value,
+       er.beneficiary_entity_id,
+       er.primary_head,
+       er.total_amount,
+       er.approved_total_amount,
+       er.department,
+       er.workflow_state,
+       ${WORKFLOW_STATUS_SQL_EXPR} AS workflow_status,
+       ${WORKFLOW_STAGE_SQL_EXPR} AS workflow_stage,
+       (
+         SELECT wa.decision
+         FROM workflow_actions wa
+         WHERE wa.module_key = 'expenditure'
+           AND wa.record_id = er.id
+           AND LOWER(TRIM(wa.stage)) = ?
+         ORDER BY wa.decided_at DESC, wa.id DESC
+         LIMIT 1
+       ) AS workflow_stage_decision,
+       COALESCE(
+         NULLIF(TRIM(CONCAT(COALESCE(emp.title,''), ' ', COALESCE(emp.first_name,''), ' ', COALESCE(emp.last_name,''))), ''),
+         NULLIF(TRIM(er.applicant_name), ''),
+         'Unknown Applicant'
+       ) AS applicant_name,
+       er.created_at,
+       er.updated_at
+     FROM expenditure_requests er
+     LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
+     LEFT JOIN master_employees emp ON emp.id = er.employee_id
+     ${whereClause}
+     ORDER BY er.created_at DESC
+     LIMIT ? OFFSET ?`,
+    [normalizedStage, ...whereParams, limit, offset]
+  );
+
+  return {
+    items: rows.map((row) => ({
+      ...row,
+      workflow_state: normalizeWorkflowState(row.workflow_state),
+      level1_route_type: resolveExpenditureLevel1RouteType(row),
+    })),
+    total,
+    page,
+    limit,
+  };
+}
+
+export async function listAvailableBeneficiaryTypes({ tx = db } = {}) {
+  const [rows] = await tx.query(
+    `SELECT DISTINCT TRIM(beneficiary_type) AS beneficiary_type
+       FROM expenditure_requests er
+      WHERE LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+        AND beneficiary_type IS NOT NULL
+        AND TRIM(beneficiary_type) <> ''
+      ORDER BY TRIM(beneficiary_type) ASC`
+  );
+
+  const dedup = new Map();
+  for (const row of rows || []) {
+    const normalized = normalizeBeneficiaryType(row?.beneficiary_type) || normalizeText(row?.beneficiary_type);
+    const key = normalizeText(normalized).toLowerCase();
+    if (!key || dedup.has(key)) continue;
+    dedup.set(key, normalized);
+  }
+
+  return Array.from(dedup.values());
+}
+
+export async function hardDeleteExpenditureRequest(id) {
+  const expenditureId = toPositiveInt(id);
+  if (!expenditureId) return false;
+  const [result] = await db.execute('DELETE FROM expenditure_requests WHERE id = ?', [expenditureId]);
+  return result.affectedRows > 0;
+}
