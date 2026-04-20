@@ -46,11 +46,9 @@ const ProjectFormOptions: React.FC = () => {
       setLoading(true);
       setError("");
       const response = await authenticityUtility.get(`/form-options/project-options/${activeTab}`) as { data: ProjectOption[] };
-      setOptions(response.data || []);
+      setOptions(Array.isArray(response.data) ? response.data : []);
     } catch (err: unknown) {
       console.error("Error fetching options:", err);
-      const error = err as { response?: { message?: string } };
-      setError("Failed to fetch options. " + (error.response?.message || "Please try again later."));
       setOptions([]);
     } finally {
       setLoading(false);
@@ -166,7 +164,9 @@ const ProjectFormOptions: React.FC = () => {
             ))
           ) : (
             <tr>
-              <td colSpan={2} className="text-center">{loading ? "Loading..." : "No options found"}</td>
+              <td colSpan={2} className="text-center text-muted py-4">
+                {loading ? "Loading..." : "No data available. Add your first entry to get started."}
+              </td>
             </tr>
           )}
         </tbody>

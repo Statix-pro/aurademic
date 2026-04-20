@@ -63,11 +63,9 @@ const JournalManagement: React.FC = () => {
       setLoading(true);
       setError("");
       const response = await authenticityUtility.get("/form-options/journals") as { data: JournalOption[] };
-      setJournals(response.data || []);
+      setJournals(Array.isArray(response.data) ? response.data : []);
     } catch (err: unknown) {
       console.error("Error fetching journals:", err);
-      const error = err as { response?: { message?: string } };
-      setError("Failed to fetch journals. " + (error.response?.message || "Please try again later."));
       setJournals([]);
     } finally {
       setLoading(false);
