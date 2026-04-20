@@ -5,7 +5,7 @@
 :root {
   --sb-width-expanded: 250px;
   --sb-width-collapsed: 68px;
-  --sb-bg: #0069ab;
+  --sb-bg: #2b6da7;
   --sb-bg-hover: rgba(255, 255, 255, 0.12);
   --sb-bg-active: rgba(255, 255, 255, 0.18);
   --sb-text: rgba(255, 255, 255, 0.85);
@@ -53,9 +53,11 @@
 .sb-nav::-webkit-scrollbar {
   width: 4px;
 }
+
 .sb-nav::-webkit-scrollbar-track {
   background: transparent;
 }
+
 .sb-nav::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 10px;
@@ -67,7 +69,8 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 10px 20px; /* Fixed side padding */
+  padding: 10px 20px;
+  /* Fixed side padding */
   border: none;
   background: none;
   color: var(--sb-text);
@@ -153,7 +156,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px 8px 52px; /* aligns exactly with sb-text */
+  padding: 8px 12px 8px 52px;
+  /* aligns exactly with sb-text */
   font-size: 14px;
   font-weight: 500;
   color: var(--sb-text);
@@ -222,7 +226,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 9px; /* Aligns avatar visually with icons above */
+  padding: 10px 9px;
+  /* Aligns avatar visually with icons above */
   border-radius: 10px;
   cursor: pointer;
   transition: background 0.2s;

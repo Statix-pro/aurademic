@@ -141,6 +141,17 @@ interface SidebarProps {
   setCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
+const getNameInitial = (name?: string): string => {
+  if (!name) return 'U';
+  const salutations = ['dr.', 'mr.', 'mrs.', 'ms.', 'prof.', 'er.'];
+  const parts = name.trim().split(/\s+/);
+  const firstWord = parts[0].toLowerCase();
+  if (salutations.includes(firstWord) && parts.length > 1) {
+    return parts[1].charAt(0).toUpperCase();
+  }
+  return parts[0].charAt(0).toUpperCase();
+};
+
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const { logout, user } = useAuth();
   const location = useLocation();
@@ -159,12 +170,10 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const showSuperAdminMenu = isSuperAdmin(user);
 
   const toggleDropdown = (menuName: string) => {
-    // If we're fully collapsed and not hovering (e.g. mobile tap), expand permanently
     if (collapsed && !isHovered) {
       setCollapsed(false);
       setActiveMenu(menuName);
     } else {
-      // If we are already expanded or just temporarily hovering smoothly, just toggle the menu
       setActiveMenu(prev => (prev === menuName ? null : menuName));
     }
   };
@@ -175,7 +184,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
 
   const isActive = (path: string) => location.pathname === path;
   const isGroupActive = (paths: string[]) => paths.some(p => location.pathname === p || location.pathname.startsWith(`${p}/`));
-  const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
+  const userInitial = getNameInitial(user?.name);
 
   return (
     <aside

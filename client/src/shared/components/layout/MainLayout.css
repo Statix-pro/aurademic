@@ -60,6 +60,35 @@
   text-overflow: ellipsis;
 }
 
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.topbar-welcome {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+  padding-right: 4px;
+}
+
 /* ─── Content ─── */
 .app-content {
   position: absolute;
@@ -75,6 +104,9 @@
 @media (max-width: 768px) {
   .topbar-title {
     font-size: 12px;
+  }
+  .topbar-welcome {
+    display: none;
   }
   .app-content {
     left: 0;
