@@ -393,48 +393,18 @@ const normalizeToken = (value) =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 
-const normalizeWords = (value) =>
-  normalizeText(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .split(' ')
-    .map((token) => token.trim())
-    .filter(Boolean);
+const normalizeStringForMatch = (value) =>
+  normalizeText(value).toLowerCase().trim();
 
 const isLooseTextMatch = (leftValue, rightValue) => {
-  const leftToken = normalizeToken(leftValue);
-  const rightToken = normalizeToken(rightValue);
+  const leftNormalized = normalizeStringForMatch(leftValue);
+  const rightNormalized = normalizeStringForMatch(rightValue);
 
-  if (!leftToken || !rightToken) {
+  if (!leftNormalized || !rightNormalized) {
     return false;
   }
 
-  if (leftToken === rightToken) {
-    return true;
-  }
-
-  if (leftToken.includes(rightToken) || rightToken.includes(leftToken)) {
-    return true;
-  }
-
-  const leftWords = new Set(normalizeWords(leftValue));
-  const rightWords = new Set(normalizeWords(rightValue));
-
-  if (!leftWords.size || !rightWords.size) {
-    return false;
-  }
-
-  let commonCount = 0;
-  for (const token of leftWords) {
-    if (rightWords.has(token)) {
-      commonCount += 1;
-    }
-  }
-
-  const unionSize = new Set([...leftWords, ...rightWords]).size;
-  const similarity = unionSize > 0 ? commonCount / unionSize : 0;
-
-  return commonCount >= 1 && similarity >= 0.5;
+  return leftNormalized === rightNormalized;
 };
 
 // Fallback only: preferred behavior is to pass head_only_match from frontend

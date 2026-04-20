@@ -399,6 +399,12 @@ async function resolveDepartmentId(conn, payload) {
   const beneficiaryValue = normalizeText(payload?.beneficiary_value);
   const requestDepartment = normalizeText(payload?.department);
 
+  // Institution proposals are NEVER linked to a specific department in the database.
+  // This ensures they consolidate correctly under the "Institution" row.
+  if (beneficiaryType === 'Institution') {
+    return null;
+  }
+
   if (beneficiaryType === 'Department' && beneficiaryValue) {
     const department = await getDepartmentByName(beneficiaryValue, conn);
 
@@ -449,7 +455,14 @@ async function resolveBeneficiaryEntity(conn, beneficiaryType, beneficiaryValue,
     return { entityTypeCode: null, beneficiaryEntityId: null };
   }
 
-  const normalizedBeneficiaryValue = normalizeText(beneficiaryValue);
+  let normalizedBeneficiaryValue = normalizeText(beneficiaryValue);
+
+  // Auto-resolve Institution name if it's missing or generic
+  if (normalizedBeneficiaryType === 'Institution') {
+    if (!normalizedBeneficiaryValue || normalizedBeneficiaryValue.toLowerCase() === 'institution') {
+      normalizedBeneficiaryValue = 'K.S.Rangasamy College of Technology';
+    }
+  }
 
   if (!normalizedBeneficiaryValue) {
     throw new Error(`beneficiary_value required for ${beneficiaryType}`);

@@ -298,6 +298,7 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
   'Events & Competitions': [
     'Remuneration',
     'Travel',
+    'Travel Allowance',
     'Accommodation',
     'Memento & Gifts',
     'Food & Refreshment',
@@ -310,6 +311,7 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
     'Decorations',
     'Event Logistics',
     'Registration Kit',
+    'Registration fee',
     'T-Shirt',
     'Bag',
     'Others',
@@ -317,11 +319,13 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
   'Meetings & Audits': [
     'Remuneration',
     'Travel',
+    'Travel Allowance',
     'Accommodation',
     'Memento & Gifts',
     'Food & Refreshment',
     'Stationary',
     'Printing',
+    'Registration fee',
     'Others',
   ],
 };
@@ -585,7 +589,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Incentives',
     'Staff Welfare', 'Medical Expenses'
   ],
-  'Sudent Empowerment': [
+  'Student Empowerment': [
     'Registration fee',
     'Travel Support',
     'Food & Refreshment',
@@ -643,6 +647,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Seed Fund (Product Development)',
     'Seed Fund (IPR Charges)',
     'Seed Fund (Travel)',
+    'Seed Fund (Consumables)',
+    'Seed Fund (Testing)',
     'Institute Research Fellowship',
     'Research Grant',
     'Publication Support',
@@ -1326,11 +1332,11 @@ const FinanceApproval: React.FC = () => {
 
       const annexureSummary = annexureFiles.length
         ? annexureFiles
-            .map((row) => {
-              const type = String(row.annexureType || '').trim();
-              return type || 'Unnamed File';
-            })
-            .join(', ')
+          .map((row) => {
+            const type = String(row.annexureType || '').trim();
+            return type || 'Unnamed File';
+          })
+          .join(', ')
         : 'Not Added';
 
       const skippedFiles = await generateAndDownloadFinancePdf({
@@ -1544,7 +1550,14 @@ const FinanceApproval: React.FC = () => {
         },
       }));
     } else if (field === 'amount') {
-      let num = Number(value) || 0;
+      const raw = String(value ?? '').trim();
+      if (raw === '') {
+        updated[index][field] = '';
+        setBudgetRows(updated);
+        return;
+      }
+
+      let num = Number(raw) || 0;
       if (num > MAX_AMOUNT) num = MAX_AMOUNT;
       const remainingAmount = getRemainingAvailableForRow(index);
       if (num > remainingAmount) {
@@ -1558,6 +1571,8 @@ const FinanceApproval: React.FC = () => {
     } else {
       updated[index][field] = value;
       if (field === 'head') {
+        // Reset entered amount when sub head changes so placeholder reflects fresh availability.
+        updated[index].amount = '';
         const selectedHead = updated[index].category;
         fetchBudgetAvailability(index, selectedHead, normalizeSubHeadForDb(value));
       }
@@ -1611,16 +1626,16 @@ const FinanceApproval: React.FC = () => {
   };
 
   const handleIncomeRowChange = (id: string, field: keyof IncomeRow, value: string) =>
-  setIncomeRows((prev) =>
-    prev.map((row) =>
-      row.id === id
-        ? {
+    setIncomeRows((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? {
             ...row,
             [field]: field === "amount" ? value.replace(/\D/g, "") : value,
           }
-        : row
-    )
-  );
+          : row
+      )
+    );
   const createAnnexureRowId = () => `annexure-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
 
   const handleAnnexureFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -1709,7 +1724,7 @@ const FinanceApproval: React.FC = () => {
     ...iconBtn,
     background: '#ffe6e6',
     alignItems: 'center',
-    color:'#dc3545'
+    color: '#dc3545'
   };
   const annexureUploadButtonStyle: CSSProperties = {
     display: 'inline-flex',
@@ -2163,7 +2178,7 @@ const FinanceApproval: React.FC = () => {
     setWfActionComment('');
   };
 
- const handleReset = (force = false): void => {
+  const handleReset = (force = false): void => {
     const performReset = () => {
       setApplicantName('');
       setDate('');
@@ -2280,46 +2295,46 @@ const FinanceApproval: React.FC = () => {
   const { user } = useAuth();
   const { id } = useParams<{ id?: string }>();
   const isEditMode = Boolean(id && location.pathname.includes('edit'));
-const isViewMode = Boolean(id && !isEditMode);
-const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
-const isApprovalMode = isViewMode && isAdminWorkflowContext;
+  const isViewMode = Boolean(id && !isEditMode);
+  const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
+  const isApprovalMode = isViewMode && isAdminWorkflowContext;
 
-const normalizedWorkflowStatus = String(
-  loadedWorkflowStatus || ''
-).toLowerCase();
-const hasDofApproval = statusUpdates.some((update: any) => {
-  const stage = String(update?.stage || update?.role || '').toLowerCase();
-  const decision = String(update?.decision || update?.status || '').toLowerCase();
-  return stage.includes('dof') && (decision === 'approved' || decision.includes('approved'));
-});
-const canDownloadPdf =
-  ['approved', 'completed'].includes(normalizedWorkflowStatus) ||
-  (isAdminWorkflowContext && totalBudget > 10000 && hasDofApproval);
+  const normalizedWorkflowStatus = String(
+    loadedWorkflowStatus || ''
+  ).toLowerCase();
+  const hasDofApproval = statusUpdates.some((update: any) => {
+    const stage = String(update?.stage || update?.role || '').toLowerCase();
+    const decision = String(update?.decision || update?.status || '').toLowerCase();
+    return stage.includes('dof') && (decision === 'approved' || decision.includes('approved'));
+  });
+  const canDownloadPdf =
+    ['approved', 'completed'].includes(normalizedWorkflowStatus) ||
+    (isAdminWorkflowContext && totalBudget > 10000 && hasDofApproval);
 
-const isSuperAdminUser = Boolean(user?.is_super_admin) || (
-  Array.isArray(user?.roles) &&
-  user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
-);
-
-const routeStateIsActionablePending = (location.state as any)?.isActionablePending;
-const hideWorkflowActionsForFinalStatus =
-  !isSuperAdminUser && (
-    routeStateIsActionablePending === false ||
-    normalizedWorkflowStatus.includes('approved') ||
-    normalizedWorkflowStatus.includes('returned') ||
-    normalizedWorkflowStatus.includes('completed') ||
-    normalizedWorkflowStatus.includes('rejected') ||
-    normalizedWorkflowStatus.includes('archived')
+  const isSuperAdminUser = Boolean(user?.is_super_admin) || (
+    Array.isArray(user?.roles) &&
+    user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
   );
 
-// Only allow the respective stage head to act (not super admin)
-const canActOnCurrentStage = (() => {
-  if (!isViewMode || !loadedCurrentStage) return false;
-  // Super admin cannot approve/reject — only the respective head can
-  if (isSuperAdminUser) return false;
-  const userPermissions = (user?.permissions || []).map(p => String(p).toLowerCase());
-  return userPermissions.includes(`finance.workflow.${loadedCurrentStage}`);
-})();
+  const routeStateIsActionablePending = (location.state as any)?.isActionablePending;
+  const hideWorkflowActionsForFinalStatus =
+    !isSuperAdminUser && (
+      routeStateIsActionablePending === false ||
+      normalizedWorkflowStatus.includes('approved') ||
+      normalizedWorkflowStatus.includes('returned') ||
+      normalizedWorkflowStatus.includes('completed') ||
+      normalizedWorkflowStatus.includes('rejected') ||
+      normalizedWorkflowStatus.includes('archived')
+    );
+
+  // Only allow the respective stage head to act (not super admin)
+  const canActOnCurrentStage = (() => {
+    if (!isViewMode || !loadedCurrentStage) return false;
+    // Super admin cannot approve/reject — only the respective head can
+    if (isSuperAdminUser) return false;
+    const userPermissions = (user?.permissions || []).map(p => String(p).toLowerCase());
+    return userPermissions.includes(`finance.workflow.${loadedCurrentStage}`);
+  })();
 
   // Tag auto-selection based on beneficiary type
   useEffect(() => {
@@ -2685,10 +2700,10 @@ const canActOnCurrentStage = (() => {
       return rows.map((row, index) =>
         index === 0
           ? {
-              ...row,
-              category: nextCategory,
-              head: syncedHead,
-            }
+            ...row,
+            category: nextCategory,
+            head: syncedHead,
+          }
           : row
       );
     });
@@ -3464,7 +3479,7 @@ const canActOnCurrentStage = (() => {
                                   justifyContent: 'center',
                                   fontSize: '18px',
                                   transition: 'all 0.15s ease',
-                                  color:'#dc3545'
+                                  color: '#dc3545'
                                 }}
                                 title="Delete Row"
                                 onMouseEnter={(e) => {
@@ -3498,7 +3513,7 @@ const canActOnCurrentStage = (() => {
                                   fontSize: '18px',
                                   transition: 'all 0.15s ease',
                                   opacity: isBudgetRowReadyForAdd(index) ? 1 : 0.5,
-                                  color:'#0069ab'
+                                  color: '#0069ab'
                                 }}
                                 title={getBudgetAddTooltip(index)}
                                 onMouseEnter={(e) => {
@@ -3636,7 +3651,7 @@ const canActOnCurrentStage = (() => {
                 marginBottom: '20px',
                 boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
               }}
-             >
+            >
               <div className="row mt-3">
                 <div className="col-md-12">
                   <div className="form-group">
@@ -3688,7 +3703,7 @@ const canActOnCurrentStage = (() => {
                                   {/* First Row - Income Details */}
                                   <tr>
                                     <td style={incomeCellStyle}>{index + 1}</td>
-                                    
+
                                     <td style={incomeCellStyle}>
                                       <CustomDropdown
                                         name={`incomeSource-${row.id}`}
@@ -3706,8 +3721,8 @@ const canActOnCurrentStage = (() => {
                                         type="text"
                                         value={row.amount}
                                         onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                                                  handleIncomeRowChange(row.id, "amount", e.target.value.replace(/\D/g, ""))
-                                                }
+                                          handleIncomeRowChange(row.id, "amount", e.target.value.replace(/\D/g, ""))
+                                        }
                                         placeholder="₹  0"
                                         min="0"
                                         step="0"
@@ -3784,7 +3799,7 @@ const canActOnCurrentStage = (() => {
                                       textAlign: 'center',
                                       verticalAlign: 'middle',
                                       backgroundColor: '#fff',
-                                      }}>
+                                    }}>
                                       <div style={actionCell}>
                                         {(index > 0 || (index === 0 && incomeRows.length > 1)) && (
                                           <button
@@ -3805,7 +3820,7 @@ const canActOnCurrentStage = (() => {
                                           >
                                             ×
                                           </button>
-                                    )}
+                                        )}
                                         {isLastRow && (
                                           <button
                                             type="button"
@@ -3826,7 +3841,7 @@ const canActOnCurrentStage = (() => {
                                               justifyContent: 'center',
                                               fontSize: '18px',
                                               transition: 'all 0.15s ease',
-                                              color:'#0069ab',
+                                              color: '#0069ab',
                                               opacity: isIncomeRowReadyForAdd(row) ? 1 : 0.5,
                                             }}
                                             title={getIncomeAddTooltip(row, index)}
@@ -3983,7 +3998,7 @@ const canActOnCurrentStage = (() => {
               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
               border: '1px solid #e0e0e0',
             }}
-           >
+          >
             <div className="row mt-3">
               <div className="col-md-12">
                 <div className="form-group">
@@ -3996,7 +4011,7 @@ const canActOnCurrentStage = (() => {
                   <div className="row g-3">
                     <div className="col-md-6">
                       <div className="form-group mb-0">
-                        
+
                         <CustomDropdown
                           name="annexureType"
                           options={toOptions(ANNEXURE_TYPE_OPTIONS)}
@@ -4013,7 +4028,7 @@ const canActOnCurrentStage = (() => {
 
                     <div className="col-md-6">
                       <div className="form-group mb-0">
-                        
+
                         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
                           <input
                             ref={annexureFileInputRef}
@@ -4037,8 +4052,8 @@ const canActOnCurrentStage = (() => {
                               isViewMode
                                 ? 'View mode'
                                 : hasFilledText(annexureType)
-                                ? 'Choose annexure file'
-                                : 'Select annexure type before choosing files'
+                                  ? 'Choose annexure file'
+                                  : 'Select annexure type before choosing files'
                             }
                             onMouseEnter={(e) => {
                               if (!isViewMode && hasFilledText(annexureType)) {
@@ -4087,7 +4102,7 @@ const canActOnCurrentStage = (() => {
                                       padding: '2px',
                                     }}
                                     title="View uploaded document"
-                                    >
+                                  >
                                     <Eye size={18} />
                                   </button>
                                   {!isViewMode && (
@@ -4128,60 +4143,81 @@ const canActOnCurrentStage = (() => {
         </div>
       )}
 
-    <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0' }}>
-      <div
-        style={{
-          maxWidth: '100%',
-          margin: '0 auto',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '18px',
-        }}
-      >
-        {!showPreview && !isViewMode && (
-          <button
-            type="button"
-            onClick={handleSubmit}
-            style={{
-              backgroundColor: '#0069ab',
-              color: '#fff',
-              border: 'none',
-              padding: '12px 24px',
-              borderRadius: '12px',
-              fontSize: '0.95rem',
-              fontWeight: '500',
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              transition: 'all 0.3s ease',
-              minWidth: '140px',
-              opacity: isLoading ? 0.7 : 1,
-              whiteSpace: 'nowrap',
-            }}
-            disabled={isLoading}
-            onMouseEnter={(e) => {
-              if (!isLoading) e.currentTarget.style.backgroundColor = '#005492';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#0069ab';
-            }}
-          >
-            {isLoading ? 'Submitting...' : isEditMode ? 'Update Form' : 'Submit Form'}
-          </button>
-        )}
+      <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0' }}>
+        <div
+          style={{
+            maxWidth: '100%',
+            margin: '0 auto',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '18px',
+          }}
+        >
+          {!showPreview && !isViewMode && (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              style={{
+                backgroundColor: '#0069ab',
+                color: '#fff',
+                border: 'none',
+                padding: '12px 24px',
+                borderRadius: '12px',
+                fontSize: '0.95rem',
+                fontWeight: '500',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease',
+                minWidth: '140px',
+                opacity: isLoading ? 0.7 : 1,
+                whiteSpace: 'nowrap',
+              }}
+              disabled={isLoading}
+              onMouseEnter={(e) => {
+                if (!isLoading) e.currentTarget.style.backgroundColor = '#005492';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#0069ab';
+              }}
+            >
+              {isLoading ? 'Submitting...' : isEditMode ? 'Update Form' : 'Submit Form'}
+            </button>
+          )}
 
-        {(isApprovalMode || canActOnCurrentStage) && !hideWorkflowActionsForFinalStatus && !showPreview ? (
-          <div className="finance-workflow-actions">
-            {!isSuperAdminUser && canActOnCurrentStage && (
-              <>
-                <button
-                  type="button"
-                  className="finance-workflow-btn finance-workflow-btn--approve"
-                  onClick={() => handleWorkflowAction('approved')}
-                  disabled={isLoading}
-                >
-                  <CheckCircle2 size={18} />
-                  Approve
-                </button>
+          {(isApprovalMode || canActOnCurrentStage) && !hideWorkflowActionsForFinalStatus && !showPreview ? (
+            <div className="finance-workflow-actions">
+              {!isSuperAdminUser && canActOnCurrentStage && (
+                <>
+                  <button
+                    type="button"
+                    className="finance-workflow-btn finance-workflow-btn--approve"
+                    onClick={() => handleWorkflowAction('approved')}
+                    disabled={isLoading}
+                  >
+                    <CheckCircle2 size={18} />
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="finance-workflow-btn finance-workflow-btn--return"
+                    onClick={() => handleWorkflowAction('returned')}
+                    disabled={isLoading}
+                  >
+                    <RotateCcw size={18} />
+                    Return
+                  </button>
+                  <button
+                    type="button"
+                    className="finance-workflow-btn finance-workflow-btn--reject"
+                    onClick={() => handleWorkflowAction('rejected')}
+                    disabled={isLoading}
+                  >
+                    <XCircle size={18} />
+                    Reject
+                  </button>
+                </>
+              )}
+              {isSuperAdminUser && (
                 <button
                   type="button"
                   className="finance-workflow-btn finance-workflow-btn--return"
@@ -4191,130 +4227,109 @@ const canActOnCurrentStage = (() => {
                   <RotateCcw size={18} />
                   Return
                 </button>
-                <button
-                  type="button"
-                  className="finance-workflow-btn finance-workflow-btn--reject"
-                  onClick={() => handleWorkflowAction('rejected')}
-                  disabled={isLoading}
-                >
-                  <XCircle size={18} />
-                  Reject
-                </button>
-              </>
-            )}
-            {isSuperAdminUser && (
+              )}
               <button
                 type="button"
-                className="finance-workflow-btn finance-workflow-btn--return"
-                onClick={() => handleWorkflowAction('returned')}
+                className="finance-workflow-btn finance-workflow-btn--archive"
+                onClick={() => handleWorkflowAction('archived')}
                 disabled={isLoading}
               >
-                <RotateCcw size={18} />
-                Return
+                <Archive size={18} />
+                Archive
               </button>
-            )}
-            <button
-              type="button"
-              className="finance-workflow-btn finance-workflow-btn--archive"
-              onClick={() => handleWorkflowAction('archived')}
-              disabled={isLoading}
-            >
-              <Archive size={18} />
-              Archive
-            </button>
-          </div>
-        ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
-    </div>
 
       {showPreview && (() => {
         const getApprovalDetailUi = (stageKeys: string[]) => {
-  let lastResetIdx = -1;
+          let lastResetIdx = -1;
 
-  for (let i = statusUpdates.length - 1; i >= 0; i--) {
-    const dec = String(statusUpdates[i]?.decision || '').toLowerCase();
-    const stat = String(statusUpdates[i]?.status || '').toLowerCase();
+          for (let i = statusUpdates.length - 1; i >= 0; i--) {
+            const dec = String(statusUpdates[i]?.decision || '').toLowerCase();
+            const stat = String(statusUpdates[i]?.status || '').toLowerCase();
 
-    if (
-      dec === 'returned' ||
-      dec === 'rejected' ||
-      stat === 'returned' ||
-      stat === 'rejected' ||
-      dec === 'resubmitted' ||
-      dec.includes('resubmit')
-    ) {
-      lastResetIdx = i;
-      break;
-    }
-  }
+            if (
+              dec === 'returned' ||
+              dec === 'rejected' ||
+              stat === 'returned' ||
+              stat === 'rejected' ||
+              dec === 'resubmitted' ||
+              dec.includes('resubmit')
+            ) {
+              lastResetIdx = i;
+              break;
+            }
+          }
 
-  const currentFlowUpdates = statusUpdates.slice(lastResetIdx + 1);
+          const currentFlowUpdates = statusUpdates.slice(lastResetIdx + 1);
 
-  const approved = currentFlowUpdates.filter((u: any) => {
-    const stage = String(u?.stage || '').toLowerCase();
-    const decision = String(u?.decision || '').toLowerCase();
-    const status = String(u?.status || '').toLowerCase();
+          const approved = currentFlowUpdates.filter((u: any) => {
+            const stage = String(u?.stage || '').toLowerCase();
+            const decision = String(u?.decision || '').toLowerCase();
+            const status = String(u?.status || '').toLowerCase();
 
-    return (
-      stageKeys.includes(stage) &&
-      (decision === 'approved' || status === 'approved' || status.includes('approved'))
-    );
-  });
+            return (
+              stageKeys.includes(stage) &&
+              (decision === 'approved' || status === 'approved' || status.includes('approved'))
+            );
+          });
 
-  if (approved.length === 0) {
-    return { name: '', email: '', date: '' };
-  }
+          if (approved.length === 0) {
+            return { name: '', email: '', date: '' };
+          }
 
-  approved.sort((a: any, b: any) => {
-    const tA = new Date(a?.decidedat || a?.createdat || 0).getTime();
-    const tB = new Date(b?.decidedat || b?.createdat || 0).getTime();
-    return tB - tA;
-  });
+          approved.sort((a: any, b: any) => {
+            const tA = new Date(a?.decidedat || a?.createdat || 0).getTime();
+            const tB = new Date(b?.decidedat || b?.createdat || 0).getTime();
+            return tB - tA;
+          });
 
-  const latest = approved[0];
-  const dateStr = latest?.decidedat || latest?.createdat;
+          const latest = approved[0];
+          const dateStr = latest?.decidedat || latest?.createdat;
 
-  const formattedDate = dateStr
-    ? new Date(dateStr).toLocaleString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        hour12: true,
-      })
-    : '';
+          const formattedDate = dateStr
+            ? new Date(dateStr).toLocaleString('en-IN', {
+              timeZone: 'Asia/Kolkata',
+              hour12: true,
+            })
+            : '';
 
- return {
-  name: latest?.username || latest?.actorname || '',
-  email: latest?.email || latest?.actoremail || latest?.useremail || '',
-  date: formattedDate,
-};
-};
-const getSubmittedDetailUi = () => {
-  const approvalHistory = getWorkflowTimeline(statusUpdates, {
-    name: applicantName || '',
-    email: email || '',
-    date: submittedAt ? formatWorkflowTimestamp(submittedAt) : getCurrentWorkflowTimestamp(),
-  });
-  const submittedTimestamp = getSubmittedTimestamp(
-    approvalHistory,
-    submittedAt ? formatWorkflowTimestamp(submittedAt) : '',
-    !id
-  );
-  const submitted = approvalHistory.find((entry) => entry.label === 'Submitted');
+          return {
+            name: latest?.username || latest?.actorname || '',
+            email: latest?.email || latest?.actoremail || latest?.useremail || '',
+            date: formattedDate,
+          };
+        };
+        const getSubmittedDetailUi = () => {
+          const approvalHistory = getWorkflowTimeline(statusUpdates, {
+            name: applicantName || '',
+            email: email || '',
+            date: submittedAt ? formatWorkflowTimestamp(submittedAt) : getCurrentWorkflowTimestamp(),
+          });
+          const submittedTimestamp = getSubmittedTimestamp(
+            approvalHistory,
+            submittedAt ? formatWorkflowTimestamp(submittedAt) : '',
+            !id
+          );
+          const submitted = approvalHistory.find((entry) => entry.label === 'Submitted');
 
-  if (!submitted) {
-    return { name: applicantName || '', email: email || '', date: submittedTimestamp };
-  }
+          if (!submitted) {
+            return { name: applicantName || '', email: email || '', date: submittedTimestamp };
+          }
 
-  return {
-    name: submitted.actor || applicantName || '',
-    email: submitted.email || email || '',
-    date: submittedTimestamp || submitted.timestamp || '',
-  };
-};
+          return {
+            name: submitted.actor || applicantName || '',
+            email: submitted.email || email || '',
+            date: submittedTimestamp || submitted.timestamp || '',
+          };
+        };
 
         const submittedByUi = getSubmittedDetailUi();
-const level1ApprovalUi = getApprovalDetailUi(['level1', 'hod', 'coordinator', 'ithead']);
-const dofApprovalUi = getApprovalDetailUi(['dof']);
-const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
+        const level1ApprovalUi = getApprovalDetailUi(['level1', 'hod', 'coordinator', 'ithead']);
+        const dofApprovalUi = getApprovalDetailUi(['dof']);
+        const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
         const approvalHistory = getWorkflowTimeline(statusUpdates, {
           name: applicantName || '',
           email: email || '',
@@ -4326,46 +4341,46 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
         );
         const showSeniorApprovalRow = totalBudget > 10000;
 
-  const renderPersonLine = (name?: string, mail?: string, timestamp?: string) => {
-  const trimmedName = String(name || '').trim();
-  const trimmedMail = String(mail || '').trim();
-  const trimmedTime = String(timestamp || '').trim();
+        const renderPersonLine = (name?: string, mail?: string, timestamp?: string) => {
+          const trimmedName = String(name || '').trim();
+          const trimmedMail = String(mail || '').trim();
+          const trimmedTime = String(timestamp || '').trim();
 
-  const actorAlreadyHasMail =
-    trimmedMail.length > 0 &&
-    trimmedName.toLowerCase().includes(trimmedMail.toLowerCase());
+          const actorAlreadyHasMail =
+            trimmedMail.length > 0 &&
+            trimmedName.toLowerCase().includes(trimmedMail.toLowerCase());
 
-  const displayName = trimmedName || '-';
-  const displayMail = trimmedMail && !actorAlreadyHasMail ? ` (${trimmedMail})` : '';
-  const displayTime = trimmedTime ? ` on ${trimmedTime}` : '';
+          const displayName = trimmedName || '-';
+          const displayMail = trimmedMail && !actorAlreadyHasMail ? ` (${trimmedMail})` : '';
+          const displayTime = trimmedTime ? ` on ${trimmedTime}` : '';
 
-  return (
-    <span>
-      {displayName}
-      {displayMail}
-      {displayTime}
-    </span>
-  );
-};
-  const previewTimelineRowStyle: CSSProperties = {
-    padding: '8px 10px',
-    fontSize: '14px',
-    lineHeight: '1.45',
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '4px',
-    alignItems: 'baseline',
-  };
+          return (
+            <span>
+              {displayName}
+              {displayMail}
+              {displayTime}
+            </span>
+          );
+        };
+        const previewTimelineRowStyle: CSSProperties = {
+          padding: '8px 10px',
+          fontSize: '14px',
+          lineHeight: '1.45',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '4px',
+          alignItems: 'baseline',
+        };
 
-  const previewTimelineLabelStyle: CSSProperties = {
-    fontWeight: 600,
-    whiteSpace: 'nowrap',
-  };
+        const previewTimelineLabelStyle: CSSProperties = {
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+        };
 
-  const previewTimelineValueStyle: CSSProperties = {
-    flex: '1 1 auto',
-    minWidth: 0,
-  };
+        const previewTimelineValueStyle: CSSProperties = {
+          flex: '1 1 auto',
+          minWidth: 0,
+        };
         return (
           <div ref={componentRef} style={{
             position: 'relative',
@@ -4483,14 +4498,14 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                   {primaryHead || '\u00A0'}
                   {extraDropdownVisible && eventSubHead && ` - ${eventSubHead}`}
                 </td>
-                
+
                 <td style={{ padding: '8px 5.5px', border: '1px solid #000', fontSize: '14px', verticalAlign: 'middle', height: '42px' }}><strong>Annexure</strong></td>
-                <td  style={{ padding: '8px 5.5px', border: '1px solid #000', fontSize: '14px', verticalAlign: 'middle', height: '42px', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                <td style={{ padding: '8px 5.5px', border: '1px solid #000', fontSize: '14px', verticalAlign: 'middle', height: '42px', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
                   {getAnnexureSummary()}
                 </td>
-              
+
               </tr>
-              
+
               <tr>
                 <td colSpan={4} style={{ padding: '8px 6px', border: '1px solid #000', verticalAlign: 'top' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', marginTop: '4px', tableLayout: 'fixed' }}>
@@ -4511,7 +4526,7 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                     <tbody>
                       {budgetRows.map((row, index) => (
                         <tr key={index}>
-                          <td  style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
+                          <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
                           <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.category || '\u00A0'}</td>
                           <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{getSubHeadDisplayText(row.head) || '\u00A0'}</td>
                           <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>₹  {Number(row.amount || 0)}</td>
@@ -4519,8 +4534,8 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                       ))}
                       {hasUnplannedBudgetPreview && (
                         <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
-                         <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'left', fontWeight: 'bold' }}>Unplanned Budget:{unplannedBudgetDescription || '\u00A0'}</td>
-                         <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹  {Number(unplannedBudgetAmount || 0)}</td>
+                          <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'left', fontWeight: 'bold' }}>Unplanned Budget:{unplannedBudgetDescription || '\u00A0'}</td>
+                          <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹  {Number(unplannedBudgetAmount || 0)}</td>
                         </tr>
                       )}
                       <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
@@ -4540,17 +4555,17 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                 <td colSpan={4} style={{ padding: '6px 8px', border: '1px solid #000' }}>
                   {showIncomeSection ? (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', tableLayout: 'fixed' }}>
-                    <colgroup>
-                      <col style={{ width: '8%' }} />
-                      <col style={{ width: '25%' }} />
-                      <col style={{ width: '20%' }} />
-                      <col style={{ width: '15%' }} />
-                      <col style={{ width: '27%' }} />
-                    </colgroup>
+                      <colgroup>
+                        <col style={{ width: '8%' }} />
+                        <col style={{ width: '25%' }} />
+                        <col style={{ width: '20%' }} />
+                        <col style={{ width: '15%' }} />
+                        <col style={{ width: '27%' }} />
+                      </colgroup>
                       <thead>
                         <tr style={{ backgroundColor: '#f8f8f8' }}>
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>S.No</th>
-                          
+
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Income Source</th>
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Status</th>
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Amount</th>
@@ -4561,15 +4576,15 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                         {incomeRows.map((row, index) => (
                           <React.Fragment key={row.id}>
                             <tr>
-                              <td rowSpan={2}style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
-                             
+                              <td rowSpan={2} style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
+
                               <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.incomeSource || ''}</td>
-                               <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{row.status || ''}</td>
+                              <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{row.status || ''}</td>
                               <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {row.amount ? ` ${row.amount}` : ''}</td>
                               <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.remarks || ''}</td>
                             </tr>
                             <tr>
-                              
+
                               <td colSpan={1} style={{ padding: '2.5px 4px', border: '1px solid #000', fontWeight: 'bold', backgroundColor: '#f8f8f8' }}>
                                 <strong>Contribution</strong>{row.contribution ? ` - ${row.contribution}` : ''}
                               </td>
@@ -4588,89 +4603,89 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                 </td>
               </tr>
               <tr>
-  <td colSpan={4} style={{ padding: '0', border: '1px solid #000' }}>
-    <div
-      style={{
-        ...previewTimelineRowStyle,
-        borderBottom: approvalSteps.length > 0 || showSeniorApprovalRow ? '1px solid #000' : 'none',
-      }}
-    >
-      <span style={previewTimelineLabelStyle}>Submitted by</span>
-      <span style={previewTimelineValueStyle}>
-        {renderPersonLine(submittedByUi.name, submittedByUi.email, submittedByUi.date)}
-      </span>
-    </div>
+                <td colSpan={4} style={{ padding: '0', border: '1px solid #000' }}>
+                  <div
+                    style={{
+                      ...previewTimelineRowStyle,
+                      borderBottom: approvalSteps.length > 0 || showSeniorApprovalRow ? '1px solid #000' : 'none',
+                    }}
+                  >
+                    <span style={previewTimelineLabelStyle}>Submitted by</span>
+                    <span style={previewTimelineValueStyle}>
+                      {renderPersonLine(submittedByUi.name, submittedByUi.email, submittedByUi.date)}
+                    </span>
+                  </div>
 
-    
 
-    {approvalSteps.map((entry, index) => {
-      const entryKey = String(entry.key || `${entry.label}-${index}`);
-      const hasExpandedDetails =
-        Boolean(entry.fullSubtitle) &&
-        entry.fullSubtitle !== entry.subtitle;
-      const detailText = hasExpandedDetails && expandedTimelineDetails[entryKey]
-        ? entry.fullSubtitle
-        : entry.subtitle;
 
-      return (
-        <div
-          key={entryKey}
-          style={{
-            ...previewTimelineRowStyle,
-            borderBottom: index === approvalSteps.length - 1 ? 'none' : '1px solid #000',
-          }}
-        >
-          <span style={previewTimelineLabelStyle}>{entry.label} by</span>
-          <span
-            style={{
-              ...previewTimelineValueStyle,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              gap: '4px',
-            }}
-          >
-            <span>
-              {renderPersonLine(entry.actor, entry.email, entry.timestamp)}
-            </span>
-            {detailText ? (
-              <span style={{ fontSize: '12px', color: '#495057', lineHeight: 1.4 }}>
-                {detailText}
-              </span>
-            ) : null}
-            {hasExpandedDetails ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setExpandedTimelineDetails((prev) => ({
-                    ...prev,
-                    [entryKey]: !prev[entryKey],
-                  }));
-                }}
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  color: '#0d6efd',
-                  padding: 0,
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                }}
-              >
-                {expandedTimelineDetails[entryKey] ? 'Show less' : 'Show full changes'}
-              </button>
-            ) : null}
-          </span>
-        </div>
-      );
-    })}
-    {approvalHistory.length === 0 ? (
-      <div style={previewTimelineRowStyle}>
-        No approval history available
-      </div>
-    ) : null}
-  </td>
-</tr>
+                  {approvalSteps.map((entry, index) => {
+                    const entryKey = String(entry.key || `${entry.label}-${index}`);
+                    const hasExpandedDetails =
+                      Boolean(entry.fullSubtitle) &&
+                      entry.fullSubtitle !== entry.subtitle;
+                    const detailText = hasExpandedDetails && expandedTimelineDetails[entryKey]
+                      ? entry.fullSubtitle
+                      : entry.subtitle;
+
+                    return (
+                      <div
+                        key={entryKey}
+                        style={{
+                          ...previewTimelineRowStyle,
+                          borderBottom: index === approvalSteps.length - 1 ? 'none' : '1px solid #000',
+                        }}
+                      >
+                        <span style={previewTimelineLabelStyle}>{entry.label} by</span>
+                        <span
+                          style={{
+                            ...previewTimelineValueStyle,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'flex-start',
+                            gap: '4px',
+                          }}
+                        >
+                          <span>
+                            {renderPersonLine(entry.actor, entry.email, entry.timestamp)}
+                          </span>
+                          {detailText ? (
+                            <span style={{ fontSize: '12px', color: '#495057', lineHeight: 1.4 }}>
+                              {detailText}
+                            </span>
+                          ) : null}
+                          {hasExpandedDetails ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExpandedTimelineDetails((prev) => ({
+                                  ...prev,
+                                  [entryKey]: !prev[entryKey],
+                                }));
+                              }}
+                              style={{
+                                border: 'none',
+                                background: 'transparent',
+                                color: '#0d6efd',
+                                padding: 0,
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {expandedTimelineDetails[entryKey] ? 'Show less' : 'Show full changes'}
+                            </button>
+                          ) : null}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {approvalHistory.length === 0 ? (
+                    <div style={previewTimelineRowStyle}>
+                      No approval history available
+                    </div>
+                  ) : null}
+                </td>
+              </tr>
             </table>
 
             {(isApprovalMode || canActOnCurrentStage) && !hideWorkflowActionsForFinalStatus ? (
@@ -4789,7 +4804,7 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
 
       <CustomModal
         show={wfActionPopupOpen}
-        onHide={wfActionSubmitting ? (() => {}) : closeWfActionPopup}
+        onHide={wfActionSubmitting ? (() => { }) : closeWfActionPopup}
         title={wfActionType === 'returned' ? 'Return Item - Comments' : 'Reject Item - Comments'}
         size="sm"
         centered
@@ -4848,5 +4863,4 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
 };
 
 export default FinanceApproval;
-
 
