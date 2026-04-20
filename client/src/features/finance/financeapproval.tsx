@@ -329,6 +329,12 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
     'Travel Allowance',
     'Others',
   ],
+  'Club Activities': [
+    'Flash Mob',
+    'Fun Events',
+    'Road show',
+    'Wall Painting'
+  ],
 };
 
 const flattenOptions = (options: Array<OptionType | { label: string; options: OptionType[] }>): OptionType[] =>
@@ -358,8 +364,8 @@ const HEAD_TO_GROUP: Record<string, string> = BUDGET_HEAD_GROUPS.reduce(
 
 const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
 
+
 const getHoacGroupForHead = (head: string): string | undefined => {
-  if (!head || head === 'Club Activities') return undefined;
   if (HOAC_GROUPS.has(head)) return head;
   const mapped = HEAD_TO_GROUP[head];
   if (mapped && HOAC_GROUPS.has(mapped)) return mapped;
@@ -1351,9 +1357,9 @@ const FinanceApproval: React.FC = () => {
   };
 
   const getSubHeadOptions = (budgetHead: string): string[] => {
-    const hoacGroup = getHoacGroupForHead(budgetHead);
-    if (hoacGroup && HOAC_SUBHEAD_OPTIONS[hoacGroup]) {
-      return HOAC_SUBHEAD_OPTIONS[hoacGroup];
+    const headGroup = HEAD_TO_GROUP[budgetHead];
+    if (headGroup && HOAC_GROUPS.has(headGroup) && HOAC_SUBHEAD_OPTIONS[headGroup]) {
+      return HOAC_SUBHEAD_OPTIONS[headGroup];
     }
     return SUB_HEAD_BY_BUDGET_HEAD[budgetHead] ?? [];
   };
