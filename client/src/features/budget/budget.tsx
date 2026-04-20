@@ -290,7 +290,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   ],
   'Conferences & Conclaves': [
     'Conclave',
-    'Consumables',
     'Convention',
     'Industry Interaction',
     'International Conference',
@@ -301,13 +300,11 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Alumni Interaction',
     'Alumni Meeting',
     'Association Function',
-    'Consumables',
     'Parents Meeting'
   ],
   'Outreach Event': [
     'Awareness Program',
     'Campaigns',
-    'Consumables',
     'Education Fair',
     'Mini Marathon',
     'Rally',
@@ -315,12 +312,11 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   ],
   'Cultural & Celebrations': [
     'Celebration Day',
-    'Consumables',
     'Festival Celebrations',
     'Harmonicks',
     'Hostel Day'
   ],
-  'Sports': ['Consumables', 'Sports Day', 'Sports Meet'],
+  'Sports': ['Sports Day', 'Sports Meet'],
   'Club Activities': [
     'Flash Mob',
     'Fun Events',
@@ -329,7 +325,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   ],
   'Competitions': [
     'Competitions',
-    'Consumables',
     'Hackathons',
     'Ideathon',
     'Project Expo',
@@ -368,7 +363,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   ],
 
   'Academic Events': [
-    'Consumables',
     'Expert Visit',
     'FDP (Faculty Development Programme)',
     'Guest Lecture',
@@ -383,7 +377,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
 
   'College Events': [
     'Annual Day',
-    'Consumables',
     'Dakshaa',
     'Founder Day',
     'Graduation Day',
