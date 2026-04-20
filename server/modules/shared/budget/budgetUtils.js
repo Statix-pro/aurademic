@@ -33,10 +33,11 @@ export const ENTITY_TYPE_BY_BENEFICIARY = Object.freeze({
     'Professional Body': 'PROFESSIONAL_BODY',
     ProfessionalBodies: 'PROFESSIONAL_BODY',
     'Professional Bodies': 'PROFESSIONAL_BODY',
+    Institution: 'INSTITUTION',
 });
 
 export const ENTITY_BENEFICIARY_TYPES = Object.freeze([
-    'Centre', 'Cell', 'Club', 'Professional Body', 'Section',
+    'Centre', 'Cell', 'Club', 'Professional Body', 'Section', 'Institution',
 ]);
 
 export const LEVEL1_ROUTE_TYPE = Object.freeze({

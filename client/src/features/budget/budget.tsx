@@ -394,6 +394,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Seed Fund (Product Development)',
     'Seed Fund (IPR Charges)',
     'Seed Fund (Travel)',
+    'Seed Fund (Consumables)',
+    'Seed Fund (Testing)',
     'Institute Research Fellowship',
     'Research Grant',
     'Publication Support',
