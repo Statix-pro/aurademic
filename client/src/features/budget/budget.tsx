@@ -305,10 +305,12 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   'Outreach Event': [
     'Awareness Program',
     'Campaigns',
+    'Crash Course',
     'Education Fair',
     'Mini Marathon',
     'Rally',
-    'School Visit'
+    'School Visit',
+    'Summer Internship'
   ],
   'Cultural & Celebrations': [
     'Celebration Day',
@@ -491,7 +493,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Spirit License',
     'Water Tax'
   ],
-  'Salary:': [
+  'Salary': [
     'Allowances',
     'Emoluments',
     'ESI Scheme',
@@ -615,7 +617,7 @@ const guidelineDeptData: Record<Exclude<GuidelineSectionId, "skill" | "events" |
   lab: ["Equipment", "Consumables", "Maintenance", "Calibration"],
   departmentEvents: ["Webinar", "Guest Lecture", "Hands-on Training", "Conclave", "Convention", "Networking Event", "Industry Interaction"],
   assoc: ["Association Function", "Alumni Meeting", "Alumni Interaction", "Parents Meeting"],
-  outreach: ["School Visit", "Awareness Program", "Campaigns", "Mini Marathon", "Education Fair", "Rally"],
+  outreach: ["School Visit", "Awareness Program", "Campaigns", "Crash Course", "Summer Internship", "Mini Marathon", "Education Fair", "Rally"],
   academics: ["DAB Meeting", "BoS Meeting", "Printing"],
   office: ["Stationary", "Test Notes", "Printing"],
   student: ["Skill Development Training", "Aptitude Training", "Higher Education Coaching", "Competitive Exam Coaching", "Placement Training", "Placement Drives", "One Credit Course", "Value Added Course", "Certification Programs", "Exposure Visit", "Language Proficiency Courses"],

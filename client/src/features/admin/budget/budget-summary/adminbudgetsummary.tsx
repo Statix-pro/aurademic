@@ -559,10 +559,10 @@ const AdminBudgetSummary: React.FC = () => {
                             <tr>
                               <th>S.No</th>
                               <th>Beneficiary</th>
-                              <th>Proposed</th>
-                              <th>Approved</th>
                               <th>Initial</th>
                               <th>Additional</th>
+                              <th>Proposed</th>
+                              <th>Approved</th>
                               <th>Expenditure</th>
                               <th>Balance</th>
                             </tr>
@@ -576,10 +576,10 @@ const AdminBudgetSummary: React.FC = () => {
                                 <tr key={row.beneficiaryKey}>
                                   <td>{globalIndex}</td>
                                   <td>{row.beneficiaryLabel}</td>
-                                  <td>{rupeeSymbol}{formatINR(row.proposed)}</td>
-                                  <td>{rupeeSymbol}{formatINR(row.approved)}</td>
                                   <td>{rupeeSymbol}{formatINR(row.initial)}</td>
                                   <td>{rupeeSymbol}{formatINR(row.additional)}</td>
+                                  <td>{rupeeSymbol}{formatINR(row.proposed)}</td>
+                                  <td>{rupeeSymbol}{formatINR(row.approved)}</td>
                                   <td>{rupeeSymbol}{formatINR(row.expenditure)}</td>
                                   <td>{rupeeSymbol}{formatINR(row.balance)}</td>
                                 </tr>
@@ -591,10 +591,10 @@ const AdminBudgetSummary: React.FC = () => {
                           <tr className="adminbudgetsummary-type-total-row">
                             <td></td>
                             <td><strong>{type} Total</strong></td>
-                            <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.proposed, 0))}</strong></td>
-                            <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.approved, 0))}</strong></td>
                             <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.initial, 0))}</strong></td>
                             <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.additional, 0))}</strong></td>
+                            <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.proposed, 0))}</strong></td>
+                            <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.approved, 0))}</strong></td>
                             <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.expenditure, 0))}</strong></td>
                             <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.balance, 0))}</strong></td>
                           </tr>
@@ -611,10 +611,10 @@ const AdminBudgetSummary: React.FC = () => {
                   <tr>
                     <td></td>
                     <td><strong>GRAND TOTAL</strong></td>
-                    <td><strong>{rupeeSymbol}{formatINR(summaryTotals.proposed)}</strong></td>
-                    <td><strong>{rupeeSymbol}{formatINR(summaryTotals.approved)}</strong></td>
                     <td><strong>{rupeeSymbol}{formatINR(summaryTotals.initial)}</strong></td>
                     <td><strong>{rupeeSymbol}{formatINR(summaryTotals.additional)}</strong></td>
+                    <td><strong>{rupeeSymbol}{formatINR(summaryTotals.proposed)}</strong></td>
+                    <td><strong>{rupeeSymbol}{formatINR(summaryTotals.approved)}</strong></td>
                     <td><strong>{rupeeSymbol}{formatINR(summaryTotals.expenditure)}</strong></td>
                     <td><strong>{rupeeSymbol}{formatINR(summaryTotals.balance)}</strong></td>
                   </tr>

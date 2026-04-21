@@ -568,10 +568,12 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   'Outreach Event': [
     'Awareness Program',
     'Campaigns',
+    'Crash Course',
     'Education Fair',
     'Mini Marathon',
     'Rally',
-    'School Visit'
+    'School Visit',
+    'Summer Internship'
   ],
   'Cultural & Celebrations': [
     'Celebration Day',
@@ -753,7 +755,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Spirit License',
     'Water Tax'
   ],
-  'Salary:': [
+  'Salary': [
     'Allowances',
     'Emoluments',
     'ESI Scheme',

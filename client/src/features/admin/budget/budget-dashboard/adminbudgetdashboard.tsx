@@ -495,10 +495,10 @@ const AdminBudgetDashboard: React.FC = () => {
                         <tr>
                           <th>S.No</th>
                           <th>Budget Head</th>
-                          <th>Proposed</th>
-                          <th>Approved</th>
                           <th>Initial</th>
                           <th>Additional</th>
+                          <th>Proposed</th>
+                          <th>Approved</th>
                           <th>Expenditure</th>
                           <th>Balance</th>
                         </tr>
@@ -529,10 +529,10 @@ const AdminBudgetDashboard: React.FC = () => {
                                   <span>{row.budgetHead}</span>
                                 </button>
                               </td>
-                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.proposed)}` : '--'}</td>
-                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.approved)}` : '--'}</td>
                               <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.initial)}` : '--'}</td>
                               <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.additional)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.proposed)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.approved)}` : '--'}</td>
                               <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.expenditure)}` : '--'}</td>
                               <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(row.balance)}` : '--'}</td>
                             </tr>
@@ -546,16 +546,16 @@ const AdminBudgetDashboard: React.FC = () => {
                             <strong>Total</strong>
                           </td>
                           <td>
-                            <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.proposed)}` : '--'}</strong>
-                          </td>
-                          <td>
-                            <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.approved)}` : '--'}</strong>
-                          </td>
-                          <td>
                             <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.initial)}` : '--'}</strong>
                           </td>
                           <td>
                             <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.additional)}` : '--'}</strong>
+                          </td>
+                          <td>
+                            <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.proposed)}` : '--'}</strong>
+                          </td>
+                          <td>
+                            <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.approved)}` : '--'}</strong>
                           </td>
                           <td>
                             <strong>{canViewAmounts ? `${rupeeSymbol}${formatINR(consolidatedTotals.expenditure)}` : '--'}</strong>
@@ -593,10 +593,10 @@ const AdminBudgetDashboard: React.FC = () => {
                             <th>S.No</th>
                             <th>Applicant</th>
                             <th>Sub Head</th>
-                            <th>Proposed</th>
-                            <th>Approved</th>
                             <th>Initial</th>
                             <th>Additional</th>
+                            <th>Proposed</th>
+                            <th>Approved</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -605,10 +605,10 @@ const AdminBudgetDashboard: React.FC = () => {
                               <td>{index + 1}</td>
                               <td>{detail.applicantName}</td>
                               <td>{detail.subHead}</td>
-                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.proposedAmount)}` : '--'}</td>
-                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.approvedAmount)}` : '--'}</td>
                               <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.initialAmount)}` : '--'}</td>
                               <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.additionalAmount)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.proposedAmount)}` : '--'}</td>
+                              <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.approvedAmount)}` : '--'}</td>
                             </tr>
                           ))}
                           {filteredDetailsForExpandedHead.length === 0 && (
