@@ -37,7 +37,7 @@ export const ENTITY_TYPE_BY_BENEFICIARY = Object.freeze({
 });
 
 export const ENTITY_BENEFICIARY_TYPES = Object.freeze([
-    'Centre', 'Cell', 'Club', 'Professional Body', 'Section', 'Institution',
+    'Centre', 'Cell', 'Club', 'Professional Body', 'Section',
 ]);
 
 export const LEVEL1_ROUTE_TYPE = Object.freeze({
