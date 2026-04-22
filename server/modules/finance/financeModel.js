@@ -300,7 +300,10 @@ const applyBudgetLookupOverrides = (rows = [], financeData = {}) => {
   return rows.map((row) => ({
     ...row,
     budget_head: primaryHead || row.budget_head,
-    sub_head: eventSubHead || row.sub_head,
+    // Keep the original sub_head (HOAC expense category) for DB storage.
+    // Provide lookup_sub_head for budget-line matching (uses eventSubHead).
+    sub_head: row.sub_head,
+    lookup_sub_head: eventSubHead || row.sub_head,
   }));
 };
 
@@ -1122,7 +1125,7 @@ const enrichBudgetRowsWithBudgetRefs = async (
       userId,
       userEmail,
       budgetHead: row.budget_head,
-      subHead: row.sub_head,
+      subHead: row.lookup_sub_head || row.sub_head,
       preferredBudgetLineId: row.budget_line_id,
       headOnlyMatch: Boolean(row.head_only_match),
       excludeFinanceId,
