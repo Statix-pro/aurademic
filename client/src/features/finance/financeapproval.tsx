@@ -165,7 +165,8 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Software',
       'Membership & Subscriptions',
       'College Essentials',
-      'Printing & Stationery',
+      'Printing',
+      'Stationery',
       'Postal Expenses',
       'Local Conveyance',
     ],
@@ -521,21 +522,35 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Professional Body fees'
   ],
   'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Others'],
-  'Printing & Stationery': [
+  'Printing': [
     'Banner',
+    'Beach Flag',
+    'ID Card',
+    'Badge',
     'Brochure',
+    'Binding',
+    'Reports',
+    'Magazines',
+    'News Letters',
     'Calendar',
     'Certificates',
     'Diary',
-    'Entry Registers',
-    'Files/ Folders',
+    'Registers',
     'Pamphlet',
+    'Vinyl Board',
+    'Sign Board',
+    'Letter Pad',
+    'Note Pad',
+    'Wiro Pad',
+    'Visiting Card',
+    'Others'
+  ],
+  'Stationery': [
+    'Files/ Folders',
     'Pen/ Pencil/ Eraser',
     'Print Sheets',
     'Seal/ Stamp Pad',
     'Stapler/ Punching Machine',
-    'Vinyl Boards',
-    'Visiting Card',
     'Others'
   ],
   'Postal Expenses': [
@@ -786,7 +801,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Others'
   ],
 };
-
 const getSubHeadOptionsForHeadSearch = (budgetHead: string): string[] => {
   const hoacGroup = getHoacGroupForHead(budgetHead);
   if (hoacGroup && HOAC_SUBHEAD_OPTIONS[hoacGroup]) {
@@ -2144,7 +2158,7 @@ const FinanceApproval: React.FC = () => {
         partial_amount: primaryIncomeRow?.amount || null,
         budget_rows: budgetRows.map((row, index) => ({
           budget_head: normalizeText(primaryHead) || row.category,
-          sub_head: (extraDropdownVisible ? normalizeText(eventSubHead) : '') || row.head,
+          sub_head: normalizeText(row.head),
           head_only_match: false,
           amount: Number(row.amount || 0),
           budget_line_id: budgetLineMetaByRow[index]?.budgetLineId || null,
@@ -2763,7 +2777,6 @@ const FinanceApproval: React.FC = () => {
     if (!primaryHead) return;
 
     const nextCategory = normalizeText(primaryHead);
-    const nextHead = normalizeText(eventSubHead);
 
     setBudgetRows((rows) => {
       if (rows.length === 0) return rows;
@@ -2781,15 +2794,15 @@ const FinanceApproval: React.FC = () => {
 
       if (!shouldAutoFill) return rows;
 
-      const syncedHead = nextHead || '';
-      firstBudgetRowAutoSyncRef.current = { category: nextCategory, head: syncedHead };
+      // Only auto-sync the budget head (category); leave sub head for the
+      // user to pick from the HOAC sub-head options in the table dropdown.
+      firstBudgetRowAutoSyncRef.current = { category: nextCategory, head: firstRow.head || '' };
 
       return rows.map((row, index) =>
         index === 0
           ? {
             ...row,
             category: nextCategory,
-            head: syncedHead,
           }
           : row
       );
@@ -3500,7 +3513,10 @@ const FinanceApproval: React.FC = () => {
                           <CustomDropdown
                             name={`subHead-${index}`}
                             options={getSubHeadDropdownOptions(row.category)}
-                            value={getSelectedOption(row.head, getSubHeadDropdownOptions(row.category))}
+                            value={
+                              getSelectedOption(row.head, getSubHeadDropdownOptions(row.category))
+                              || (row.head ? { value: row.head, label: getSubHeadDisplayText(row.head) } : null)
+                            }
                             onChange={(option) => {
                               const selected = option as OptionType | null;
                               handleBudgetChange(index, 'head', selected?.value ? String(selected.value) : '');
