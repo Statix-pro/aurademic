@@ -326,6 +326,8 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
   ],
 };
 
+const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
+
 const flattenOptions = (options: Array<OptionType | { label: string; options: OptionType[] }>): OptionType[] =>
   options.flatMap((opt) => ('options' in opt ? opt.options : opt));
 
@@ -350,16 +352,6 @@ const HEAD_TO_GROUP: Record<string, string> = BUDGET_HEAD_GROUPS.reduce(
   },
   {} as Record<string, string>
 );
-
-const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
-
-const getHoacGroupForHead = (head: string): string | undefined => {
-  if (!head) return undefined;
-  if (HOAC_GROUPS.has(head)) return head;
-  const mapped = HEAD_TO_GROUP[head];
-  if (mapped && HOAC_GROUPS.has(mapped)) return mapped;
-  return undefined;
-};
 
 const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {
   FDP: ['AICTE Sponsored', 'Naan Mudhalvan', 'Industry', 'International'],
@@ -457,7 +449,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Lift Maintenance',
     'Printer Maintenance',
     'Painting', 'Playground Maintenance', 'Office Maintenance',
-    'Housekeeping Expenses', 'General Repairs'
+    'Housekeeping Expenses', 'General Repairs','Farm Maintenance'
   ],
   Spares: ['Printer Donors', 'SMPS', 'Chargers'],
   'Annual Maintenance Charges': ['Equipment Maintenance', 'Software Maintenance'],
@@ -496,6 +488,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Data Subscription Charges',
   ],
   'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Others'],
+  
   'Printing & Stationery': [
     'Banner',
     'Pamphlet',
@@ -585,7 +578,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Incentives',
     'Staff Welfare', 'Medical Expenses'
   ],
-  'Sudent Empowerment': [
+  'Student Empowerment': [
     'Registration fee',
     'Travel Support',
     'Food & Refreshment',
@@ -667,7 +660,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Testing Charges', 'Legal Expenses'
   ],
   'Licenses & Taxes': ['DTCP Approval', 'Water Tax', 'Road Tax', 'Property Tax', 'Building Tax', 'Spirit License', 'License Renewal'],
-  'Salary:': [
+  'Salary': [
     'Monthly Salary',
     'Provident Fund',
     'Emoluments',
@@ -2041,8 +2034,8 @@ const FinanceApproval: React.FC = () => {
         debit_status: debitStatus || null,
         partial_amount: primaryIncomeRow?.amount || null,
         budget_rows: budgetRows.map((row, index) => ({
-          budget_head: normalizeText(primaryHead) || row.category,
-          sub_head: (extraDropdownVisible ? normalizeText(eventSubHead) : '') || row.head,
+          budget_head: row.category,
+          sub_head: row.head,
           head_only_match: false,
           amount: Number(row.amount || 0),
           budget_line_id: budgetLineMetaByRow[index]?.budgetLineId || null,
@@ -2649,8 +2642,11 @@ const canActOnCurrentStage = (() => {
     // on every render due function identity churn; guards above keep it safe.
   }, [autoDownloadPdf, canDownloadPdf, isLoading, showPreview]);
 
-  const activeHoacGroup = getHoacGroupForHead(primaryHead);
-  const extraDropdownVisible = Boolean(activeHoacGroup);
+  const activeHoacGroup = HEAD_TO_GROUP[primaryHead];
+  const extraDropdownVisible =
+    Boolean(primaryHead) &&
+    primaryHead !== 'Faculty Empowerment' &&
+    primaryHead !== 'Student Empowerment';
   const hoacSubheadDropdownOptions = toOptions(
     SUB_HEAD_BY_BUDGET_HEAD[primaryHead] ||
     HOAC_SUBHEAD_OPTIONS[activeHoacGroup || ''] ||
