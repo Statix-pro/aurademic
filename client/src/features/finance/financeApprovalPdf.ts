@@ -845,8 +845,3 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
   const primaryPdfBuffer = pdf.output('arraybuffer');
   return mergeAndDownloadPdfWithAnnexures(primaryPdfBuffer, annexureFiles, baseUrl, authToken, fileName);
 };
-
-
-
-
-
