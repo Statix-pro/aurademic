@@ -365,9 +365,6 @@ const HEAD_TO_GROUP: Record<string, string> = BUDGET_HEAD_GROUPS.reduce(
   {} as Record<string, string>
 );
 
-const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
-
-
 const getHoacGroupForHead = (head: string): string | undefined => {
   if (HOAC_GROUPS.has(head)) return head;
   const mapped = HEAD_TO_GROUP[head];
@@ -483,8 +480,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Playground Maintenance',
     'Plumbing Maintenance',
     'Printer Maintenance',
-    'Painting', 'Playground Maintenance', 'Office Maintenance',
-    'Housekeeping Expenses', 'General Repairs','Farm Maintenance'
+    'Farm Maintenance',
     'Software Maintenance',
     'UPS Maintenance',
     'Vehicle Maintenance'
@@ -526,8 +522,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Professional Body fees'
   ],
   'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Others'],
-  
-  'Printing & Stationery': [
+
   'Printing': [
     'Banner',
     'Beach Flag',
@@ -551,6 +546,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Visiting Card',
     'Others'
   ],
+
   'Stationery': [
     'Files/ Folders',
     'Pen/ Pencil/ Eraser',
@@ -559,6 +555,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Stapler/ Punching Machine',
     'Others'
   ],
+  
   'Postal Expenses': [
     'Courier Charges',
     'Frieght Charges',
@@ -675,14 +672,10 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Daily Allowance',
     'Food & Refreshment',
     'Incentives',
-    'Staff Welfare', 'Medical Expenses'
-  ],
-  'Student Empowerment': [
-    'Medical Expenses',
-    'Registration fee',
     'Staff Welfare',
-    'Travel Allowance'
+    'Medical Expenses'
   ],
+
   'Student Empowerment': [
     'Accommodation',
     'Certification Costs',
@@ -732,7 +725,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Promotions',
     'Sponsorship'
   ],
-  Admissions: [
+  'Admissions': [
     'Consultant Charges',
     'Field Visits',
     'School Visits',
@@ -770,10 +763,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Stamp Charges',
     'Testing Charges'
   ],
-  'Licenses & Taxes': ['DTCP Approval', 'Water Tax', 'Road Tax', 'Property Tax', 'Building Tax', 'Spirit License', 'License Renewal'],
-  'Salary': [
-    'Monthly Salary',
-    'Provident Fund',
   'Licenses & Taxes': [
     'Building Tax',
     'DTCP Approval',
@@ -783,6 +772,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Spirit License',
     'Water Tax'
   ],
+
   'Salary': [
     'Allowances',
     'Emoluments',
