@@ -1784,6 +1784,7 @@ export async function getConsolidatedData({
     FROM budget_proposals bp
     LEFT JOIN master_departments md ON bp.department_id = md.id
     LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+    LEFT JOIN master_employees applicant_emp ON bp.user_id = applicant_emp.user_id AND applicant_emp.status = 'Active'
     WHERE ${where.join(' AND ')}
     ORDER BY bp.beneficiary_type ASC
   `;
@@ -1808,13 +1809,27 @@ export async function getConsolidatedData({
 
   if (normalizeText(q)) {
     const searchPattern = `%${normalizeText(q)}%`;
+    const hasApplicantNameColumn = await hasBudgetProposalColumn('applicant_name');
     where.push(`(
       bp.proposal_ref LIKE ?
       OR bp.beneficiary_value LIKE ?
       OR md.name LIKE ?
       OR me.name LIKE ?
+      OR ${hasApplicantNameColumn ? "bp.applicant_name LIKE ?" : "1=0"}
+      OR applicant_emp.first_name LIKE ?
+      OR applicant_emp.last_name LIKE ?
+      OR CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, '')) LIKE ?
     )`);
-    params.push(searchPattern, searchPattern, searchPattern, searchPattern);
+    params.push(
+        searchPattern, 
+        searchPattern, 
+        searchPattern, 
+        searchPattern, 
+        searchPattern, 
+        searchPattern, 
+        searchPattern, 
+        searchPattern
+    );
   }
 
   const whereClause = `WHERE ${where.join(' AND ')}`;
@@ -1850,6 +1865,7 @@ export async function getConsolidatedData({
     FROM budget_proposals bp
     LEFT JOIN master_departments md ON bp.department_id = md.id
     LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+    LEFT JOIN master_employees applicant_emp ON bp.user_id = applicant_emp.user_id AND applicant_emp.status = 'Active'
     JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
     ${whereClause}
     GROUP BY bpl.budget_head
@@ -1871,6 +1887,7 @@ export async function getConsolidatedData({
       bpl.budget_head,
       bpl.sub_head,
       bp.id AS proposalId,
+      bp.proposal_ref AS proposalRef,
       ${applicantNameExpr} AS applicantName,
       COALESCE(bpl.approved_line_total, bpl.line_total, 0) AS proposedAmount,
       CASE WHEN ${approvedCondition} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END AS approvedAmount,
@@ -1894,6 +1911,7 @@ export async function getConsolidatedData({
     }
     detailsByHead[row.budget_head].push({
       proposalId: row.proposalId,
+      proposalRef: row.proposalRef,
       applicantName: row.applicantName,
       subHead: row.sub_head,
       proposedAmount: Number(row.proposedAmount || 0),

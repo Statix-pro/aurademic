@@ -99,7 +99,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
   {
     label: 'Academics',
     options: [
-      'Faculty Empowerment', 'Staff Empowerment', 'Student Empowerment', 'Student Capacity Building', 'Accreditation Expenses', 'Examination Expenses',
+      'Faculty Empowerment', 'Staff Empowerment', 'Student Empowerment', 'Student Capacity Building', 'Ranking & Accreditation', 'Examination Expenses',
     ],
   },
   {
@@ -259,7 +259,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Membership fees',
     'Professional Body fees'
   ],
-  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Others'],
+  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Student Uniform', 'Others'],
   'Printing': [
     'Banner',
     'Beach Flag',
@@ -420,7 +420,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Medical Expense',
     'Prizes',
     'Registration fee',
-    'Student Uniform',
     'Student Welfare',
     'Travel Support'
   ],
@@ -441,11 +440,14 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Others'
   ],
 
-  'Accreditation Expenses': [
+  'Ranking & Accreditation': [
     'NAAC Fees',
     'NAAC Inspection',
     'NBA Fees',
-    'NBA Inspection'
+    'NBA Inspection',
+    'QS Ranking',
+    'SDG Ranking',
+    'Other Rankings'
   ],
   'Examination Expenses': [
     'Autonomous Exam Remuneration',
