@@ -166,7 +166,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Membership & Subscriptions',
       'College Essentials',
       'Printing',
-      'Stationery',
+      'Stationary',
       'Postal Expenses',
       'Local Conveyance',
     ],
@@ -191,7 +191,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Staff Empowerment',
       'Student Empowerment',
       'Student Capacity Building',
-      'Accreditation Expenses',
+      'Ranking & Accreditation',
       'Examination Expenses',
     ],
   },
@@ -298,13 +298,18 @@ const CATEGORY_TYPE_OPTIONS = [
 const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
   'Events & Competitions': [
     'A/V Arrangements',
+    'Accessories',
     'Accommodation',
+    'Auditing Charge',
     'Bag',
     'Consumables',
     'Decorations',
+    'Driver Bata',
     'Event Logistics',
     'Food & Refreshment',
+    'Honorarium',
     'Memento & Gifts',
+    'Miscellaneous',
     'Printing',
     'Prizes',
     'Promotions',
@@ -312,10 +317,10 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
     'Registration fee',
     'Registration Kit',
     'Remuneration',
-    'Stationary',
+    'Sitting Fees',
+    'Stationery',
     'T-Shirt',
     'Travel',
-    'Travel Allowance',
     'Others',
   ],
   'Meetings & Audits': [
@@ -521,7 +526,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Membership fees',
     'Professional Body fees'
   ],
-  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Others'],
+  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Student Uniform', 'Others'],
 
   'Printing': [
     'Banner',
@@ -684,7 +689,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Medical Expense',
     'Prizes',
     'Registration fee',
-    'Student Uniform',
     'Student Welfare',
     'Travel Support'
   ],
@@ -705,11 +709,14 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Others'
   ],
 
-  'Accreditation Expenses': [
+  'Ranking & Accreditation': [
     'NAAC Fees',
     'NAAC Inspection',
     'NBA Fees',
-    'NBA Inspection'
+    'NBA Inspection',
+    'QS Ranking',
+    'SDG Ranking',
+    'Other Rankings'
   ],
   'Examination Expenses': [
     'Autonomous Exam Remuneration',
@@ -1748,6 +1755,18 @@ const FinanceApproval: React.FC = () => {
 
     if (!String(annexureType || '').trim()) {
       showAlert('Please select annexure type before uploading files.', 'warning');
+      if (annexureFileInputRef.current) {
+        annexureFileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    const invalidFiles = files.filter(
+      (file) => file.type !== 'application/pdf' || file.size >= 2 * 1024 * 1024
+    );
+
+    if (invalidFiles.length > 0) {
+      showAlert('Only PDF files with a size less than 2MB are allowed.', 'warning');
       if (annexureFileInputRef.current) {
         annexureFileInputRef.current.value = '';
       }
@@ -4143,6 +4162,7 @@ const FinanceApproval: React.FC = () => {
                             ref={annexureFileInputRef}
                             id="annexure-file-input"
                             type="file"
+                            accept="application/pdf,.pdf"
                             multiple
                             style={{ display: 'none' }}
                             disabled={isViewMode}

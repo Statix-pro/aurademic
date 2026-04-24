@@ -770,7 +770,7 @@ const resolveBudgetAvailabilityScope = async (conn, scope = {}) => {
       entityId: null,
     };
   }
-  
+
   if (isIndividualBeneficiaryType(beneficiaryTypeToken)) {
     if (beneficiaryValue) {
       return {
@@ -962,7 +962,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
     beneficiaryEntityId,
   });
 
-  let ownerScopeSql = `
+  const userOwnerScopeSql = `
       (
         (? IS NOT NULL AND bp.user_id = ?)
         OR (? <> '' AND LOWER(TRIM(bp.user_email)) = ?)
@@ -977,7 +977,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
             )
         )
       )`;
-  let ownerScopeParams = [
+  const userOwnerScopeParams = [
     normalizedUserId,
     normalizedUserId,
     normalizedUserEmail,
@@ -987,6 +987,8 @@ const resolveBudgetAvailabilityForUser = async (conn, {
     normalizedUserEmail,
     normalizedUserEmail,
   ];
+  let ownerScopeSql = userOwnerScopeSql;
+  let ownerScopeParams = [...userOwnerScopeParams];
 
   if (scope.mode === 'department') {
     ownerScopeSql = `bp.department_id = ? AND LOWER(TRIM(bp.beneficiary_type)) = 'department'`;
@@ -1000,8 +1002,31 @@ const resolveBudgetAvailabilityForUser = async (conn, {
     ownerScopeSql = `LOWER(TRIM(bp.beneficiary_type)) = 'institution'`;
     ownerScopeParams = [];
   } else if (scope.mode === 'individual') {
-    ownerScopeSql = `LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff')`;
-    ownerScopeParams = [];
+    const scopeTypeToken = normalizeBeneficiaryTypeToken(scope?.beneficiaryType);
+    const hasScopedType = scopeTypeToken === 'faculty' || scopeTypeToken === 'staff';
+    const scopeValue = normalizeText(scope?.beneficiaryValue).toLowerCase();
+    const beneficiaryTypeSql = hasScopedType
+      ? `LOWER(TRIM(bp.beneficiary_type)) = ?`
+      : `LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff')`;
+
+    ownerScopeSql = `
+      (
+        ${beneficiaryTypeSql}
+        AND (
+          (? <> '' AND LOWER(TRIM(bp.beneficiary_value)) = ?)
+          OR (
+            (? <> '' AND (bp.beneficiary_value IS NULL OR TRIM(bp.beneficiary_value) = ''))
+            AND (${userOwnerScopeSql})
+          )
+        )
+      )`;
+    ownerScopeParams = [
+      ...(hasScopedType ? [scopeTypeToken] : []),
+      scopeValue,
+      scopeValue,
+      scopeValue,
+      ...userOwnerScopeParams,
+    ];
   }
 
   if (
@@ -1095,17 +1120,6 @@ const resolveBudgetAvailabilityForUser = async (conn, {
     .filter((row) => {
       if (!isLooseTextMatch(row.budgetHead, normalizedBudgetHead)) {
         return false;
-      }
-      
-      if (scope.mode === 'individual') {
-        const scopeType = normalizeText(scope?.beneficiaryType);
-        const scopeValue = normalizeText(scope?.beneficiaryValue);
-        if (scopeType && !isLooseTextMatch(row.proposalBeneficiaryType, scopeType)) {
-          return false;
-        }
-        if (scopeValue && !isLooseTextMatch(row.proposalBeneficiaryValue, scopeValue)) {
-          return false;
-        }
       }
 
       if (applyHeadOnlyMatch) {
@@ -1533,7 +1547,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
     'SELECT unplanned_budget_enabled, unplanned_budget_amount FROM finance_requests WHERE id = ? FOR UPDATE',
     [financeId]
   );
-  
+
   const financeRequest = financeRows[0] || {};
   const unplannedBudgetEnabled = Boolean(financeRequest.unplanned_budget_enabled);
   const unplannedBudgetAmount = toMoney(financeRequest.unplanned_budget_amount);

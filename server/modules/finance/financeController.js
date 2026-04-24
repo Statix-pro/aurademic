@@ -1148,6 +1148,16 @@ const financeController = {
         });
       }
 
+      if (file.mimetype !== 'application/pdf' || file.size >= 2 * 1024 * 1024) {
+        if (file.path) {
+          fs.promises.unlink(file.path).catch(() => {});
+        }
+        return res.status(400).json({
+          status: 'error',
+          message: 'Only PDF files with a size less than 2MB are allowed.',
+        });
+      }
+
       const annexureDir = path.resolve(process.cwd(), 'uploads', 'finance-annexures');
       await fs.promises.mkdir(annexureDir, { recursive: true });
 
