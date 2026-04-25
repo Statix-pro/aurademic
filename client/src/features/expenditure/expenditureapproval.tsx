@@ -1281,6 +1281,73 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
     'Others'
   ];
 
+  const INDIAN_BANK_OPTIONS = [
+    'State Bank of India',
+    'Punjab National Bank',
+    'Bank of Baroda',
+    'Canara Bank',
+    'Union Bank of India',
+    'Indian Bank',
+    'Bank of India',
+    'Central Bank of India',
+    'Indian Overseas Bank',
+    'UCO Bank',
+    'Bank of Maharashtra',
+    'Punjab & Sind Bank',
+    'HDFC Bank',
+    'ICICI Bank',
+    'Axis Bank',
+    'Kotak Mahindra Bank',
+    'IndusInd Bank',
+    'Yes Bank',
+    'IDFC FIRST Bank',
+    'Federal Bank',
+    'South Indian Bank',
+    'Karnataka Bank',
+    'Karur Vysya Bank',
+    'City Union Bank',
+    'Dhanlaxmi Bank',
+    'Tamilnad Mercantile Bank',
+    'RBL Bank',
+    'Bandhan Bank',
+    'CSB Bank',
+    'DCB Bank',
+    'Nainital Bank',
+    'Jammu & Kashmir Bank',
+    'IDBI Bank',
+    'AU Small Finance Bank',
+    'Ujjivan Small Finance Bank',
+    'Equitas Small Finance Bank',
+    'Jana Small Finance Bank',
+    'Suryoday Small Finance Bank',
+    'ESAF Small Finance Bank',
+    'Fincare Small Finance Bank',
+    'Utkarsh Small Finance Bank',
+    'North East Small Finance Bank',
+    'Capital Small Finance Bank',
+    'Shivalik Small Finance Bank',
+    'Airtel Payments Bank',
+    'India Post Payments Bank',
+    'Fino Payments Bank',
+    'Paytm Payments Bank',
+    'NSDL Payments Bank',
+    'Aditya Birla Idea Payments Bank',
+    'Deutsche Bank India',
+    'HSBC India',
+    'Standard Chartered Bank',
+    'Citibank India',
+    'DBS Bank India',
+    'Barclays Bank',
+    'BNP Paribas India',
+    'JPMorgan Chase Bank India',
+    'MUFG Bank India',
+    'Mizuho Bank India',
+    'Bank of America N.A. India',
+    'American Express Banking Corp',
+    'Societe Generale India',
+    'Credit Agricole CIB India',
+  ];
+
   const handleModalSubmit = async () => {
     if (!newPayeeName || !newAccountNo || !newIfsc || !newBankName || !newBranchName) {
       showAlert('Please enter beneficiary name, account number, IFSC, bank name and branch name', 'warning');
@@ -1341,9 +1408,9 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
       <div 
         style={{
           backgroundColor: '#ffffff',
-          borderRadius: '24px',
-          width: '560px',
-          maxWidth: '90%',
+          borderRadius: '28px',
+          width: '920px',
+          maxWidth: '94%',
           maxHeight: '85vh',
           overflowY: 'auto',
           padding: '0',
@@ -1377,7 +1444,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
           <X size={18} />
         </button>
 
-        <div style={{ padding: '28px 32px' }}>
+        <div style={{ padding: '22px 42px 30px' }}>
           {/* Toggle Buttons */}
           <div className="payee-modal-toggle">
             <button 
@@ -1396,129 +1463,223 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
 
           {/* Individual Fields */}
           {beneficiaryType === 'individual' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '130px', fontSize: '0.9rem', fontWeight: 600, color: '#2d3748' }}>Beneficiary</label>
+                <label style={{ width: '170px' }}>Beneficiary</label>
                 <div style={{ flex: 1, display: 'flex', gap: '24px' }}>
                   {['KSRCT', 'KSREI', 'External'].map(opt => (
-                    <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input type="radio" name="beneficiaryInd" value={opt} checked={newPayeeName === opt} onChange={() => setNewPayeeName(opt)} />
-                      <span>{opt}</span>
+                    <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#5f6f85', fontWeight: 500 }}>
+                      <input type="radio" name="beneficiaryInd" value={opt} checked={newPayeeName === opt} onChange={() => setNewPayeeName(opt)} style={{ accentColor: '#8aa9c6' }} />
+                      <span style={{ color: '#5f6f85' }}>{opt}</span>
                     </label>
                   ))}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '130px' }}>Account Name</label>
-                <input type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Enter account name" />
+                <label style={{ width: '170px' }}>Account Name</label>
+                <input className="payee-modal-field-input" type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff' }} value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Enter account name" />
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '130px' }}>PAN Number</label>
-                <input type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={newPanNumber} onChange={(e) => setNewPanNumber(e.target.value)} placeholder="Enter PAN number" />
+                <label style={{ width: '170px' }}>PAN Number</label>
+                <input className="payee-modal-field-input" type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={newPanNumber} onChange={(e) => setNewPanNumber(e.target.value)} placeholder="Enter PAN number" />
               </div>
             </div>
           )}
 
           {/* Organization Fields */}
           {beneficiaryType === 'organization' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '130px' }}>Beneficiary</label>
+                <label style={{ width: '170px' }}>Beneficiary</label>
                 <div style={{ flex: 1, display: 'flex', gap: '24px' }}>
                   {['KSRCT', 'KSREI', 'External'].map(opt => (
-                    <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input type="radio" name="beneficiaryOrg" value={opt} checked={newPayeeName === opt} onChange={() => setNewPayeeName(opt)} />
-                      <span>{opt}</span>
+                    <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#5f6f85', fontWeight: 500 }}>
+                      <input type="radio" name="beneficiaryOrg" value={opt} checked={newPayeeName === opt} onChange={() => setNewPayeeName(opt)} style={{ accentColor: '#8aa9c6' }} />
+                      <span style={{ color: '#5f6f85' }}>{opt}</span>
                     </label>
                   ))}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '130px' }}>Account Name</label>
-                <input type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Enter organization name" />
+                <label style={{ width: '170px' }}>Account Name</label>
+                <input className="payee-modal-field-input" type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Enter organization name" />
               </div>
                <div style={{ display: 'flex', alignItems: 'center' }}>
-  <label style={{ width: '129px' }}>Organization Type</label>
+  <label style={{ width: '170px' }}>Organization Type</label>
   <div style={{ flex: 1 }}>
-    <CustomDropdown
-      options={ORGANIZATION_TYPE_OPTIONS.map(opt => ({ value: opt, label: opt }))}
-      value={orgType ? { value: orgType, label: orgType } : null}
-      onChange={(option) => {
-        const selected = option as OptionType | null;
-        setOrgType(selected?.value ? String(selected.value) : '');
-      }}
-      placeholder="Select Organization Type"
-    />
+<CustomDropdown
+  className="organization-type-dropdown"
+  menuPortalTarget={null}
+  menuPosition="absolute"
+  options={ORGANIZATION_TYPE_OPTIONS.map(opt => ({ value: opt, label: opt }))}
+  value={orgType ? { value: orgType, label: orgType } : null}
+  onChange={(option) => {
+    const selected = option as OptionType | null;
+    setOrgType(selected?.value ? String(selected.value) : '');
+  }}
+  placeholder="Select Organization Type"
+  styles={{
+    menuPortal: (base) => ({ ...base, zIndex: 9999 })
+  }}
+/>
   </div>
 </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '130px' }}>MSME</label>
+                <label style={{ width: '170px' }}>MSME</label>
                 <div style={{ flex: 1, display: 'flex', gap: '24px' }}>
                   <label><input type="radio" name="msme" value="Yes" onChange={(e) => setMsmeValue(e.target.value)} /> Yes</label>
                   <label><input type="radio" name="msme" value="No" onChange={(e) => setMsmeValue(e.target.value)} /> No</label>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '130px' }}>GSTIN</label>
-                <input type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={gstinValue} onChange={(e) => setGstinValue(e.target.value)} placeholder="Enter GSTIN" />
+                <label style={{ width: '170px' }}>GSTIN</label>
+                <input className="payee-modal-field-input" type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={gstinValue} onChange={(e) => setGstinValue(e.target.value)} placeholder="Enter GSTIN" />
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '130px' }}>PAN Number</label>
-                <input type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={orgPanNumber} onChange={(e) => setOrgPanNumber(e.target.value)} placeholder="Enter PAN number" />
+                <label style={{ width: '170px' }}>PAN Number</label>
+                <input className="payee-modal-field-input" type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={orgPanNumber} onChange={(e) => setOrgPanNumber(e.target.value)} placeholder="Enter PAN number" />
               </div>
                  {/* TDS Details - All in one horizontal line */}
-<div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
-  <label style={{ width: '130px', fontSize: '0.9rem', fontWeight: 600, color: '#2d3748' }}>TDS Details</label>
-  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '16px' }}>
-    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
+<div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+  <label style={{ width: '170px' }}>TDS Details</label>
+  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '20px' }}>
+    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', margin: 0, lineHeight: 1 }}>
       <input type="radio" name="tds" value="Yes" checked={tdsValue === 'Yes'} onChange={(e) => setTdsValue(e.target.value)} /> Yes
     </label>
-    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
+    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', margin: 0, lineHeight: 1 }}>
       <input type="radio" name="tds" value="No" checked={tdsValue === 'No'} onChange={(e) => setTdsValue(e.target.value)} /> No
     </label>
-    {tdsValue === 'Yes' && (
-      <div style={{ flex: 1, minWidth: '200px' }}>
-        <CustomDropdown
-          options={TDS_SECTION_OPTIONS.map(opt => ({ value: opt, label: opt }))}
-          value={tdsSectionValue ? { value: tdsSectionValue, label: tdsSectionValue } : null}
-          onChange={(option) => {
-            const selected = option as OptionType | null;
-            setTdsSectionValue(selected?.value ? String(selected.value) : '');
-          }}
-          placeholder="Select TDS Section"
-        />
+    <div
+      style={{
+        flex: '1 1 0',
+        minWidth: '320px',
+        display: 'flex',
+        alignItems: 'center',
+        width: '100%',
+        visibility: tdsValue === 'Yes' ? 'visible' : 'hidden',
+        pointerEvents: tdsValue === 'Yes' ? 'auto' : 'none',
+      }}
+    >
+       <CustomDropdown
+  className="tds-section-dropdown"
+  menuPortalTarget={null}
+  menuPosition="absolute"
+  options={TDS_SECTION_OPTIONS.map(opt => ({ value: opt, label: opt }))}
+  value={tdsSectionValue ? { value: tdsSectionValue, label: tdsSectionValue } : null}
+  onChange={(option) => {
+    const selected = option as OptionType | null;
+    setTdsSectionValue(selected?.value ? String(selected.value) : '');
+  }}
+  placeholder="Select TDS Section"
+  styles={{
+    container: (base) => ({
+      ...base,
+      width: '100%',
+      flex: 1,
+    }),
+    control: (base) => ({
+      ...base,
+      minHeight: '48px',
+      height: '48px',
+      width: '100%',
+      borderRadius: '16px',
+      borderColor: '#d6dce5',
+      backgroundColor: '#f8fafc',
+      boxShadow: 'none',
+    }),
+    valueContainer: (base) => ({
+      ...base,
+      minHeight: '46px',
+      height: '46px',
+      padding: '0 16px',
+    }),
+    placeholder: (base) => ({
+      ...base,
+      color: '#6f7682',
+    }),
+    singleValue: (base) => ({
+      ...base,
+      color: '#6f7682',
+    }),
+    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+  }}
+/>
       </div>
-    )}
   </div>
 </div>
             </div>
           )}
 
           {/* Common Bank Details (appear for both) */}
-          <div style={{ marginTop: beneficiaryType === 'individual' ? '28px' : '20px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ marginTop: beneficiaryType === 'individual' ? '22px' : '18px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '130px' }}>Account Number</label>
-                <input type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={newAccountNo} onChange={(e) => setNewAccountNo(e.target.value)} placeholder="Enter account number" />
+                <label style={{ width: '170px' }}>Account Number</label>
+                <input className="payee-modal-field-input" type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={newAccountNo} onChange={(e) => setNewAccountNo(e.target.value)} placeholder="Enter account number" />
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '130px' }}>Account Type</label>
+                <label style={{ width: '170px' }}>Account Type</label>
                 <div style={{ flex: 1, display: 'flex', gap: '24px' }}>
                   <label><input type="radio" name="accountType" value="Savings" checked={newAccountType === 'Savings'} onChange={() => setNewAccountType('Savings')} /> Savings</label>
                   <label><input type="radio" name="accountType" value="Current" checked={newAccountType === 'Current'} onChange={() => setNewAccountType('Current')} /> Current</label>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '130px' }}>Bank Name</label>
-                <input type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={newBankName} onChange={(e) => setNewBankName(e.target.value)} placeholder="Enter bank name" />
+                <label style={{ width: '170px' }}>Bank Name</label>
+                <div style={{ flex: 1 }}>
+                  <CustomDropdown
+                    className="payee-modal-select-dropdown"
+                    menuPortalTarget={null}
+                    menuPosition="absolute"
+                    options={INDIAN_BANK_OPTIONS.map((bank) => ({ value: bank, label: bank }))}
+                    value={newBankName ? { value: newBankName, label: newBankName } : null}
+                    onChange={(option) => {
+                      const selected = option as OptionType | null;
+                      setNewBankName(selected?.value ? String(selected.value) : '');
+                    }}
+                    placeholder="Select bank name"
+                    styles={{
+                      control: (base, state) => ({
+                        ...base,
+                        minHeight: '48px',
+                        height: '48px',
+                        borderRadius: '16px',
+                        borderColor: state.isFocused ? '#2b9ed6' : '#d6dce5',
+                        backgroundColor: '#f8fafc',
+                        boxShadow: state.isFocused ? '0 0 0 4px rgba(43, 158, 214, 0.2)' : 'none',
+                        '&:hover': {
+                          borderColor: state.isFocused ? '#2b9ed6' : '#d6dce5',
+                        },
+                      }),
+                      valueContainer: (base) => ({
+                        ...base,
+                        minHeight: '46px',
+                        height: '46px',
+                        padding: '0 16px',
+                      }),
+                      placeholder: (base) => ({
+                        ...base,
+                        color: '#6b7280',
+                      }),
+                      singleValue: (base) => ({
+                        ...base,
+                        color: '#4b5563',
+                      }),
+                      indicatorSeparator: () => ({
+                        display: 'none',
+                      }),
+                      menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                    }}
+                  />
+                </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '130px' }}>Branch Name</label>
-                <input type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={newBranchName} onChange={(e) => setNewBranchName(e.target.value)} placeholder="Enter branch name" />
+                <label style={{ width: '170px' }}>Branch Name</label>
+                <input className="payee-modal-field-input" type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={newBranchName} onChange={(e) => setNewBranchName(e.target.value)} placeholder="Enter branch name" />
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '130px' }}>IFSC Code</label>
-                <input type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', textTransform: 'uppercase' }} value={newIfsc} onChange={(e) => setNewIfsc(e.target.value.toUpperCase())} placeholder="Enter IFSC code" />
+                <label style={{ width: '170px' }}>IFSC Code</label>
+                <input className="payee-modal-field-input" type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', textTransform: 'uppercase' }} value={newIfsc} onChange={(e) => setNewIfsc(e.target.value.toUpperCase())} placeholder="Enter IFSC code" />
               </div>
             </div>
           </div>
@@ -2846,29 +3007,30 @@ const workflowRowRefFromState = (() => {
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: '10px',
+    gap: '12px',
+    flexWrap: 'nowrap',
   };
 
   const iconBtn: CSSProperties = {
-    width: '44px',
-    height: '44px',
+    width: '38px',
+    height: '38px',
     borderRadius: '50%',
     border: 'none',
-    background: '#f0f7ff',
-    color: '#0069ab',
+    background: '#eaf3ff',
+    color: '#7d9cc3',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '18px',
+    fontSize: '16px',
     transition: 'all 0.3s ease',
   };
 
   const deleteIconBtn: CSSProperties = {
     ...iconBtn,
-    background: '#fff5f5',
-    color: '#ff4d4f',
-    alignItems:'center'
+    background: '#fce8ea',
+    color: '#de8b95',
+    alignItems: 'center'
   };
 
   const inputStyle: CSSProperties = {
@@ -3048,7 +3210,7 @@ const workflowRowRefFromState = (() => {
               <tr>
                 <th className="payee-col-sno">S.No</th>
                 <th>Payee Details</th>
-                <th style={{ width: '25%' }}>Transaction</th>
+                <th className="payee-col-transaction">Transaction</th>
                 <th className="payee-col-action">Action</th>
               </tr>
             </thead>
@@ -3062,7 +3224,7 @@ const workflowRowRefFromState = (() => {
                         <div className="payee-field-wrap">
                           <input
                             className="payee-field"
-                            placeholder="<<Payee Name>>"
+                            placeholder="Payee Name"
                             value={row.payeeName}
                             onChange={(e) => {
                               handlePayeeLookupInputChange(row.id, 'payeeName', e.target.value);
@@ -3075,7 +3237,7 @@ const workflowRowRefFromState = (() => {
                         <div className="payee-field-wrap">
                           <input
                             className="payee-field"
-                            placeholder="<<Account No.>>"
+                            placeholder="Account No."
                             value={row.accountNo}
                             onChange={(e) => {
                               handlePayeeLookupInputChange(row.id, 'accountNo', e.target.value);
@@ -3088,7 +3250,7 @@ const workflowRowRefFromState = (() => {
                         <div className="payee-field-wrap">
                           <input
                             className="payee-field"
-                            placeholder="<<Bank Name>>"
+                            placeholder="Bank Name"
                             value={row.bankName}
                             onChange={(e) => {
                               handlePayeeLookupInputChange(row.id, 'bankName', e.target.value);
@@ -3101,7 +3263,7 @@ const workflowRowRefFromState = (() => {
                         <div className="payee-field-wrap">
                           <input
                             className="payee-field"
-                            placeholder="<<IFSC>>"
+                            placeholder="IFSC"
                             value={row.ifsc}
                             onChange={(e) => {
                               handlePayeeLookupInputChange(row.id, 'ifsc', e.target.value);
@@ -3114,7 +3276,7 @@ const workflowRowRefFromState = (() => {
                         <div className="payee-field-wrap payee-field-wrap-full">
                           <input
                             className="payee-field"
-                            placeholder="<<Branch Name>>"
+                            placeholder="Branch Name"
                             value={row.branchName}
                             onChange={(e) => {
                               handlePayeeLookupInputChange(row.id, 'branchName', e.target.value);
@@ -3127,11 +3289,12 @@ const workflowRowRefFromState = (() => {
                       </div>
                     </div>
                   </td>
-                  <td>
+                  <td className="payee-transaction-cell">
+                    <div className="payee-transaction-inner">
                     <div className="payee-stack">
                       <input
-                        className="payee-field"
-                        placeholder="<<Amount>>"
+                        className="payee-field payee-transaction-field"
+                        placeholder="Amount"
                         value={row.amount}
                         onChange={(e) => {
                           const updated = payeeRows.map(r => r.id === row.id ? { ...r, amount: e.target.value } : r);
@@ -3139,6 +3302,7 @@ const workflowRowRefFromState = (() => {
                         }}
                       />
                       <CustomDropdown
+                        className="payee-transaction-mode-dropdown"
                         options={toOptions(PAYMENT_MODE_OPTIONS)}
                         value={getSelectedOption(row.mode, toOptions(PAYMENT_MODE_OPTIONS))}
                         onChange={(opt) => {
@@ -3146,7 +3310,7 @@ const workflowRowRefFromState = (() => {
                           const updated = payeeRows.map(r => r.id === row.id ? { ...r, mode: selected?.value ? String(selected.value) : '' } : r);
                           setPayeeRows(updated);
                         }}
-                        placeholder="<<Mode>>"
+                        placeholder="Mode"
                         
                       />
                     </div>
@@ -3156,22 +3320,33 @@ const workflowRowRefFromState = (() => {
                         {row.tdsSection && <div>TDS Section: {row.tdsSection}</div>}
                       </div>
                     )}
-                    TDS   <input type="radio" name={`tds-${row.id}`} /> Yes <input type="radio" name={`tds-${row.id}`} /> No
+                    <div className="payee-tds-row">
+                      <span className="payee-tds-label">TDS</span>
+                      <label className="payee-tds-option">
+                        <input type="radio" name={`tds-${row.id}`} /> Yes
+                      </label>
+                      <label className="payee-tds-option">
+                        <input type="radio" name={`tds-${row.id}`} /> No
+                      </label>
+                    </div>
+                    </div>
                   </td>
                   <td style={{ borderBottom: 'none', verticalAlign: 'middle', textAlign: 'center' }}>
                     <div className="payee-row-actions">
-                      <button
-                        className="payee-row-btn"
-                        disabled={!row.payeeName || !row.accountNo || !row.bankName || !row.ifsc || !row.branchName || !row.amount || !row.mode}
-                        onClick={(e) => { e.preventDefault(); addPayeeRow(); }}
-                        title={(!row.payeeName || !row.accountNo || !row.bankName || !row.ifsc || !row.branchName || !row.amount || !row.mode) ? "Please fill all fields to add a new row" : "Add Row"}
-                        style={{
-                          opacity: (!row.payeeName || !row.accountNo || !row.bankName || !row.ifsc || !row.branchName || !row.amount || !row.mode) ? 0.5 : 1,
-                          cursor: (!row.payeeName || !row.accountNo || !row.bankName || !row.ifsc || !row.branchName || !row.amount || !row.mode) ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        <Plus size={20} />
-                      </button>
+                      {index === payeeRows.length - 1 && (
+                        <button
+                          className="payee-row-btn"
+                          disabled={!row.payeeName || !row.accountNo || !row.bankName || !row.ifsc || !row.branchName || !row.amount || !row.mode}
+                          onClick={(e) => { e.preventDefault(); addPayeeRow(); }}
+                          title={(!row.payeeName || !row.accountNo || !row.bankName || !row.ifsc || !row.branchName || !row.amount || !row.mode) ? "Please fill all fields to add a new row" : "Add Row"}
+                          style={{
+                            opacity: (!row.payeeName || !row.accountNo || !row.bankName || !row.ifsc || !row.branchName || !row.amount || !row.mode) ? 0.5 : 1,
+                            cursor: (!row.payeeName || !row.accountNo || !row.bankName || !row.ifsc || !row.branchName || !row.amount || !row.mode) ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          <Plus size={20} />
+                        </button>
+                      )}
                       {payeeRows.length > 1 && (
                         <button
                           className="payee-row-btn payee-row-btn-delete"
@@ -4464,7 +4639,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                        {/* Column 1: Beneficiary Type */}
                           <div className="col-md-3">
                               <div className="form-group">
-                                 <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
+                                 <label style={{ fontSize: 14, color: '#3b4f73', marginBottom: 8, fontWeight: 600, display: 'block' }}>
                                       Beneficiary 
                                       </label>
                                   <CustomDropdown
@@ -4672,6 +4847,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                       <td style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', verticalAlign: 'middle', color: '#495057' }}>{idx + 1}</td>
                       <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
                         <CustomDropdown
+                          className="mb-0"
                           options={getApprovedBudgetHeadsForAdvance()}
                           value={getSelectedOption(row.budgetHead, getApprovedBudgetHeadsForAdvance())}
                           onChange={(option) => {
@@ -4683,6 +4859,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                       </td>
                       <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
                         <CustomDropdown
+                          className="mb-0"
                           options={getApprovedSubHeadOptionsForAdvance(row.budgetHead)}
                           value={getSelectedOption(row.subHead, getApprovedSubHeadOptionsForAdvance(row.budgetHead))}
                           onChange={async (option) => {
@@ -4782,8 +4959,8 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                               }}
                               style={deleteIconBtn}
                               title="Delete Row"
-                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#ffd6d6')}
-                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fff5f5')}
+                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f9dce0')}
+                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fce8ea')}
                             >
                               <X size={20} />
                             </button>
@@ -4804,10 +4981,10 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                                 }}
                                 title="Add Row"
                                 onMouseEnter={(e) => {
-                                  if (isFilled) e.currentTarget.style.backgroundColor = '#e0efff';
+                                  if (isFilled) e.currentTarget.style.backgroundColor = '#ddeaff';
                                 }}
                                 onMouseLeave={(e) => {
-                                  if (isFilled) e.currentTarget.style.backgroundColor = '#f0f7ff';
+                                  if (isFilled) e.currentTarget.style.backgroundColor = '#eaf3ff';
                                 }}
                               >
                                 <Plus size={16} />
@@ -4889,6 +5066,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                       <td style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', verticalAlign: 'middle', color: '#495057' }}>{idx + 1}</td>
                       <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
                         <CustomDropdown
+                          className="mb-0"
                           options={getApprovedBudgetHeadsForAdvance()}
                           value={getSelectedOption(row.budgetHead, getApprovedBudgetHeadsForAdvance())}
                           onChange={(option) => {
@@ -4900,6 +5078,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                       </td>
                       <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
                         <CustomDropdown
+                          className="mb-0"
                           options={getApprovedSubHeadOptionsForAdvance(row.budgetHead)}
                           value={getSelectedOption(row.subHead, getApprovedSubHeadOptionsForAdvance(row.budgetHead))}
                           onChange={(option) => {
@@ -4981,8 +5160,8 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                               }}
                               style={deleteIconBtn}
                               title="Delete Row"
-                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#ffd6d6')}
-                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fff5f5')}
+                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f9dce0')}
+                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fce8ea')}
                             >
                               <X size={20} />
                             </button>
@@ -5003,10 +5182,10 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                                 }}
                                 title="Add Row"
                                 onMouseEnter={(e) => {
-                                  if (isFilled) e.currentTarget.style.backgroundColor = '#e0efff';
+                                  if (isFilled) e.currentTarget.style.backgroundColor = '#ddeaff';
                                 }}
                                 onMouseLeave={(e) => {
-                                  if (isFilled) e.currentTarget.style.backgroundColor = '#f0f7ff';
+                                  if (isFilled) e.currentTarget.style.backgroundColor = '#eaf3ff';
                                 }}
                               >
                                 <Plus size={16} />
@@ -5110,6 +5289,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                 </td>
                 <td style={{ padding: '12px', border: '1px solid #e0e0e0', borderBottom: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
                   <CustomDropdown
+                    className="mb-0"
                     options={getApprovedBudgetHeadsForAdvance()}
                     value={getSelectedOption(row.budgetHead, getApprovedBudgetHeadsForAdvance())}
                     onChange={(option) => {
@@ -5121,6 +5301,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                 </td>
                 <td style={{ padding: '12px', border: '1px solid #e0e0e0', borderBottom: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
                   <CustomDropdown
+                    className="mb-0"
                     options={getApprovedSubHeadOptionsForAdvance(row.budgetHead)}
                     value={getSelectedOption(row.subHead, getApprovedSubHeadOptionsForAdvance(row.budgetHead))}
                     onChange={(option) => {
@@ -5155,7 +5336,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                   />
                 </td>
                 <td style={{ padding: '12px', border: '1px solid #e0e0e0', borderBottom: '1px solid #e0e0e0', textAlign: 'center', verticalAlign: 'middle' }} rowSpan={2}>
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', alignItems: 'center', flexWrap: 'nowrap' }}>
                     {expenditureSubRows.length > 1 && (
                       <button
                         onClick={(e) => {
@@ -5164,44 +5345,46 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                         }}
                         title="Delete Row"
                         style={{
-                          width: '44px',
-                          height: '44px',
+                          width: '38px',
+                          height: '38px',
                           borderRadius: '50%',
                           border: 'none',
-                          background: '#fff5f5',
-                          color: '#ff4d4f',
+                          background: '#fce8ea',
+                          color: '#de8b95',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center'
                         }}
                       >
-                        <X size={20} />
+                        <X size={18} />
                       </button>
                     )}
-                    <button
-                      disabled={!row.budgetHead || !row.subHead || !row.expenditure}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        addExpenditureRow();
-                      }}
-                      title={(!row.budgetHead || !row.subHead || !row.expenditure) ? "Please fill all fields to add a new row" : "Add Row"}
-                      style={{
-                        width: '44px',
-                        height: '44px',
-                        borderRadius: '50%',
-                        border: 'none',
-                        background: '#eaf2ff',
-                        color: '#0069ab',
-                        cursor: (!row.budgetHead || !row.subHead || !row.expenditure) ? 'not-allowed' : 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: (!row.budgetHead || !row.subHead || !row.expenditure) ? 0.5 : 1
-                      }}
-                    >
-                      <Plus size={20} />
-                    </button>
+                    {idx === expenditureSubRows.length - 1 && (
+                      <button
+                        disabled={!row.budgetHead || !row.subHead || !row.expenditure}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          addExpenditureRow();
+                        }}
+                        title={(!row.budgetHead || !row.subHead || !row.expenditure) ? "Please fill all fields to add a new row" : "Add Row"}
+                        style={{
+                          width: '38px',
+                          height: '38px',
+                          borderRadius: '50%',
+                          border: 'none',
+                          background: '#eaf3ff',
+                          color: '#7d9cc3',
+                          cursor: (!row.budgetHead || !row.subHead || !row.expenditure) ? 'not-allowed' : 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: (!row.budgetHead || !row.subHead || !row.expenditure) ? 0.5 : 1
+                        }}
+                      >
+                        <Plus size={18} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -5214,7 +5397,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                     <span style={{ fontWeight: '500', color: '#495057', minWidth: '80px' }}>Expenditure</span>
                     <input
                       type="text"
-                      placeholder="Enter amount"
+                      placeholder="Eg: 455+345+780"
                       value={row.expenditure}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -5232,17 +5415,19 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                         height: '45px',
                         boxSizing: 'border-box',
                         fontFamily: 'inherit',
-                        backgroundColor: '#fff',
+                        backgroundColor: '#fcfdff',
                         color: '#000',
                         outline: 'none',
                       }}
                       onFocus={(e) => {
                         e.currentTarget.style.borderColor = '#0069ab';
                         e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                        e.currentTarget.style.backgroundColor = '#fcfdff';
                       }}
                       onBlur={(e) => {
                         e.currentTarget.style.borderColor = '#e0e0e0';
                         e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.backgroundColor = '#fcfdff';
                       }}
                     />
                     <input
@@ -5254,7 +5439,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                         borderRadius: '12px',
                         padding: '10px 15px',
                         fontSize: '0.95rem',
-                        width: '120px',
+                        width: '145px',
                         height: '45px',
                         boxSizing: 'border-box',
                         fontFamily: 'inherit',
@@ -5271,13 +5456,10 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             </React.Fragment>
           ))}
         </tbody>
-        <tfoot>
+                <tfoot>
           <tr style={{ backgroundColor: '#f0f6ff' }}>
-            <td colSpan={4} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>
-              Total Expenditure
-            </td>
-            <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
-              ₹ {expenditureSubRows.reduce((sum, r) => sum + (parseFloat(r.autoSum) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            <td colSpan={5} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '18px', fontWeight: '600', color: '#0069ab' }}>
+              Total Expenditure: &#8377; {expenditureSubRows.reduce((sum, r) => sum + (parseFloat(r.autoSum) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             </td>
           </tr>
         </tfoot>
@@ -5361,7 +5543,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           }}
         >
           <span className="payee-upload-label-content">
-            <span className="payee-upload-label-text">Bills </span>
+            <span className="payee-upload-label-text">Payment proof </span>
             <Upload size={16} />
           </span>
           <input
@@ -5384,7 +5566,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           <input
             type="text"
             className="payee-field payee-status-comment-input"
-            placeholder=""
+            placeholder="Transaction number"
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
             style={{ width: '100%' }}
@@ -5467,4 +5649,5 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
 };
 
 export default ExpenditureApproval;
+
 

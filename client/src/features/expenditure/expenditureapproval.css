@@ -432,6 +432,7 @@
   border-collapse: collapse;
   border: 1px solid #e0e0e0;
   min-width: 820px;
+  table-layout: fixed;
 }
 
 .payee-details-table thead tr {
@@ -456,28 +457,107 @@
 }
 
 .payee-col-transaction {
-  width: 22%;
+  width: 24%;
 }
 
 .payee-col-action {
-  width: 12%;
+  width: 10.5%;
+  text-align: center;
+  vertical-align: middle !important;
+}
+
+.payee-details-table td:last-child,
+.payee-details-table th:last-child {
+  text-align: center;
+  vertical-align: middle;
 }
 
 .payee-sno-cell {
   text-align: center;
   color: #495057;
   font-weight: 500;
+  vertical-align: middle !important;
 }
 
 .payee-stack {
   display: grid;
-  gap: 10px;
+  gap: 14px;
+}
+
+.payee-transaction-cell {
+  vertical-align: top !important;
+}
+
+.payee-transaction-inner {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.payee-transaction-mode-dropdown {
+  margin-bottom: 0 !important;
+}
+
+.payee-transaction-mode-dropdown .react-select__control {
+  min-height: 45px;
+  height: 45px;
+  border-radius: 12px;
+}
+
+.payee-transaction-mode-dropdown .react-select__value-container {
+  min-height: 43px;
+  height: 43px;
+}
+
+.payee-tds-row {
+  margin-top: 26px;
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: center;
+  justify-content: center;
+  column-gap: 18px;
+  color: #364152;
+  line-height: 1.2;
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.payee-tds-label {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  display: block;
+  margin: 0;
+  padding: 0;
+  color: #3b4f73;
+}
+
+.payee-tds-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-weight: 500;
+  margin: 0;
+  padding: 0;
+  line-height: 1.2;
+  color: #3b4f73;
+}
+
+.payee-tds-option input[type="radio"] {
+  margin: 0;
+  vertical-align: middle;
+  transform: translateY(0);
 }
 
 .payee-details-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px 14px;
+  gap: 14px;
+}
+
+.payee-details-table tbody td {
+  vertical-align: top;
 }
 
 .payee-field-full {
@@ -569,19 +649,19 @@
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-wrap: nowrap;
+  gap: 12px;
 }
 
 .payee-row-btn {
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border: none;
   border-radius: 50%;
   padding: 0;
-  background: #f5f6f8;
-  color: #111827;
-  font-size: 22px;
+  background: #eaf3ff;
+  color: #7d9cc3;
+  font-size: 20px;
   line-height: 1;
   font-weight: 500;
   cursor: pointer;
@@ -592,17 +672,22 @@
 }
 
 .payee-row-btn:hover {
-  background: #eceef2;
+  background: #ddeaff;
   transform: translateY(-1px);
 }
 
 .payee-row-btn-delete {
-  background: #fdecec;
-  color: #111827;
+  background: #fce8ea;
+  color: #de8b95;
+  order: 1;
 }
 
 .payee-row-btn-delete:hover {
-  background: #fadede;
+  background: #f9dce0;
+}
+
+.payee-row-btn:not(.payee-row-btn-delete) {
+  order: 2;
 }
 
 .payee-status-row td {
@@ -647,7 +732,7 @@
 .payee-status-card-fields {
   --payee-status-control-height: 46px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 0.85fr) minmax(0, 0.75fr) minmax(0, 1.55fr);
   gap: 24px;
   width: 100%;
   align-items: stretch;
@@ -710,9 +795,9 @@
 }
 
 .payee-footer-grid {
-  --payee-footer-control-height: 42px;
+  --payee-footer-control-height: 45px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 210px;
+  grid-template-columns: minmax(0, 1fr) 185px;
   gap: 16px;
   margin-top: 18px;
   align-items: start;
@@ -966,6 +1051,7 @@
   min-height: var(--payee-status-control-height) !important;
   border-radius: 18px;
   padding: 0 14px;
+   background-color: #f8fafc !important;
 }
 
 .payee-status-comment-input {
@@ -1068,6 +1154,145 @@
 .payee-modal-toggle-btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+}
+
+/* Match Organization Type dropdown with modal text inputs */
+.organization-type-dropdown {
+  margin-bottom: 0 !important;
+  width: 100%;
+}
+
+.organization-type-dropdown .react-select__control {
+  min-height: 48px !important;
+  height: 48px !important;
+  border-radius: 16px !important;
+  border: 1px solid #d6dce5 !important;
+  background-color: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+.organization-type-dropdown .react-select__control:hover,
+.organization-type-dropdown .react-select__control--is-focused {
+  border-color: #2b9ed6 !important;
+  box-shadow: 0 0 0 4px rgba(43, 158, 214, 0.2) !important;
+}
+
+.organization-type-dropdown .react-select__value-container {
+  min-height: 46px !important;
+  height: 46px !important;
+  padding: 0 16px !important;
+}
+
+.organization-type-dropdown .react-select__single-value,
+.organization-type-dropdown .react-select__placeholder {
+  color: #6f7682 !important;
+}
+
+.tds-section-dropdown {
+  width: 100% !important;
+  margin-bottom: 0 !important;
+}
+
+.tds-section-dropdown.custom-input-group {
+  width: 100% !important;
+}
+
+.tds-section-dropdown .react-select__control {
+  width: 100% !important;
+  min-height: 48px !important;
+  height: 48px !important;
+  border-radius: 16px !important;
+  border: 1px solid #d6dce5 !important;
+  background-color: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+.tds-section-dropdown .react-select__control:hover,
+.tds-section-dropdown .react-select__control--is-focused {
+  border-color: #2b9ed6 !important;
+  box-shadow: 0 0 0 4px rgba(43, 158, 214, 0.2) !important;
+}
+
+.tds-section-dropdown .react-select__value-container {
+  min-height: 46px !important;
+  height: 46px !important;
+  padding: 0 16px !important;
+}
+
+.organization-type-dropdown .react-select__indicators {
+  min-height: 46px !important;
+  height: 46px !important;
+}
+
+.payee-modal-field-input:focus {
+  outline: none !important;
+  border-color: #2b9ed6 !important;
+  box-shadow: 0 0 0 4px rgba(43, 158, 214, 0.2) !important;
+  background-color: #ffffff !important;
+}
+
+.payee-modal-field-input {
+  background-color: #f8fafc !important;
+  border-color: #d6dce5 !important;
+  color: #6f7682 !important;
+}
+
+.payee-modal-select-dropdown .react-select__control {
+  min-height: 48px !important;
+  height: 48px !important;
+  border-radius: 16px !important;
+  border: 1px solid #e2e8f0 !important;
+  background-color: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+.payee-modal-select-dropdown .react-select__control:hover,
+.payee-modal-select-dropdown .react-select__control--is-focused {
+  border-color: #2b9ed6 !important;
+  background-color: #f8fafc !important;
+  box-shadow: 0 0 0 4px rgba(43, 158, 214, 0.2) !important;
+}
+
+.payee-modal-select-dropdown .react-select__value-container {
+  min-height: 46px !important;
+  height: 46px !important;
+  padding: 0 16px !important;
+}
+
+.payee-modal-select-dropdown .react-select__placeholder {
+  color: #6b7280 !important;
+}
+
+.payee-modal-select-dropdown .react-select__single-value {
+  color: #4b5563 !important;
+}
+
+.payee-modal-select-dropdown .react-select__indicator-separator {
+  display: none !important;
+}
+
+.payee-modal-select-dropdown .react-select__dropdown-indicator {
+  color: #9ca3af !important;
+  padding-right: 14px !important;
+}
+
+.payee-modal-select-dropdown .react-select__menu {
+  margin-top: 8px !important;
+  border: 1px solid #d6dce5 !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12) !important;
+}
+
+.payee-modal-select-dropdown .react-select__menu-list {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+
+.payee-modal-select-dropdown .react-select__single-value,
+.payee-modal-select-dropdown .react-select__placeholder,
+.payee-modal-field-input::placeholder {
+  color: #6f7682 !important;
 }
 
 .payee-uploaded-files {
