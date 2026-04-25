@@ -17,7 +17,12 @@ const normalizeText = (value) => String(value || '').trim();
 const normalizeSubHeadForLookup = (value) => {
   const normalized = normalizeText(value);
   if (!normalized) return '';
-  return normalized.includes('::') ? normalizeText(normalized.split('::')[0]) : normalized;
+  if (!normalized.includes('::')) return normalized;
+  const parts = normalized.split('::');
+  if (parts[0] === 'sub' && parts.length >= 3) {
+    return normalizeText(parts.slice(2).join('::'));
+  }
+  return normalizeText(parts[1]);
 };
 const FINANCE_ANNEXURE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'finance-annexures');
 const FINANCE_ANNEXURE_PUBLIC_PREFIX = '/uploads/finance-annexures/';
