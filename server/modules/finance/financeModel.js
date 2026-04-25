@@ -14,6 +14,16 @@ const safeParseJSON = (value, fallback = null) => {
 };
 
 const normalizeText = (value) => String(value || '').trim();
+const normalizeSubHeadForLookup = (value) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return '';
+  if (!normalized.includes('::')) return normalized;
+  const parts = normalized.split('::');
+  if (parts[0] === 'sub' && parts.length >= 3) {
+    return normalizeText(parts.slice(2).join('::'));
+  }
+  return normalizeText(parts[1]);
+};
 const FINANCE_ANNEXURE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'finance-annexures');
 const FINANCE_ANNEXURE_PUBLIC_PREFIX = '/uploads/finance-annexures/';
 const FINANCE_ANNEXURE_STORED_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
@@ -291,20 +301,6 @@ const normalizeBudgetRows = (rows = []) => {
   }
 
   return normalizedRows;
-};
-
-const applyBudgetLookupOverrides = (rows = [], financeData = {}) => {
-  const primaryHead = normalizeText(financeData?.primary_head);
-  const eventSubHead = normalizeText(financeData?.event_sub_head);
-
-  return rows.map((row) => ({
-    ...row,
-    budget_head: primaryHead || row.budget_head,
-    // Keep the original sub_head (HOAC expense category) for DB storage.
-    // Provide lookup_sub_head for budget-line matching (uses eventSubHead).
-    sub_head: row.sub_head,
-    lookup_sub_head: eventSubHead || row.sub_head,
-  }));
 };
 
 const normalizeIncomeRows = (rows = []) =>
@@ -771,7 +767,26 @@ const resolveBudgetAvailabilityScope = async (conn, scope = {}) => {
   const providedDepartmentId = toPositiveInt(scope?.departmentId || scope?.department_id);
   const providedEntityId = toPositiveInt(scope?.beneficiaryEntityId || scope?.beneficiary_entity_id);
 
-  if (!beneficiaryTypeToken || isIndividualBeneficiaryType(beneficiaryTypeToken)) {
+  if (!beneficiaryTypeToken) {
+    return {
+      mode: 'user',
+      beneficiaryType,
+      departmentId: null,
+      entityId: null,
+    };
+  }
+
+  if (isIndividualBeneficiaryType(beneficiaryTypeToken)) {
+    if (beneficiaryValue) {
+      return {
+        mode: 'individual',
+        beneficiaryType,
+        beneficiaryValue,
+        departmentId: null,
+        entityId: null,
+      };
+    }
+
     return {
       mode: 'user',
       beneficiaryType,
@@ -941,7 +956,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   const normalizedUserId = toPositiveInt(userId);
   const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
   const normalizedBudgetHead = normalizeText(budgetHead);
-  const normalizedSubHead = normalizeText(subHead);
+  const normalizedSubHead = normalizeSubHeadForLookup(subHead);
   const normalizedPreferredBudgetLineId = toPositiveInt(preferredBudgetLineId);
   const normalizedExcludeFinanceId = toPositiveInt(excludeFinanceId);
   const applyHeadOnlyMatch = Boolean(headOnlyMatch) || shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead);
@@ -952,7 +967,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
     beneficiaryEntityId,
   });
 
-  let ownerScopeSql = `
+  const userOwnerScopeSql = `
       (
         (? IS NOT NULL AND bp.user_id = ?)
         OR (? <> '' AND LOWER(TRIM(bp.user_email)) = ?)
@@ -967,7 +982,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
             )
         )
       )`;
-  let ownerScopeParams = [
+  const userOwnerScopeParams = [
     normalizedUserId,
     normalizedUserId,
     normalizedUserEmail,
@@ -977,6 +992,8 @@ const resolveBudgetAvailabilityForUser = async (conn, {
     normalizedUserEmail,
     normalizedUserEmail,
   ];
+  let ownerScopeSql = userOwnerScopeSql;
+  let ownerScopeParams = [...userOwnerScopeParams];
 
   if (scope.mode === 'department') {
     ownerScopeSql = `bp.department_id = ? AND LOWER(TRIM(bp.beneficiary_type)) = 'department'`;
@@ -989,6 +1006,32 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   } else if (scope.mode === 'institution') {
     ownerScopeSql = `LOWER(TRIM(bp.beneficiary_type)) = 'institution'`;
     ownerScopeParams = [];
+  } else if (scope.mode === 'individual') {
+    const scopeTypeToken = normalizeBeneficiaryTypeToken(scope?.beneficiaryType);
+    const hasScopedType = scopeTypeToken === 'faculty' || scopeTypeToken === 'staff';
+    const scopeValue = normalizeText(scope?.beneficiaryValue).toLowerCase();
+    const beneficiaryTypeSql = hasScopedType
+      ? `LOWER(TRIM(bp.beneficiary_type)) = ?`
+      : `LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff')`;
+
+    ownerScopeSql = `
+      (
+        ${beneficiaryTypeSql}
+        AND (
+          (? <> '' AND LOWER(TRIM(bp.beneficiary_value)) = ?)
+          OR (
+            (? <> '' AND (bp.beneficiary_value IS NULL OR TRIM(bp.beneficiary_value) = ''))
+            AND (${userOwnerScopeSql})
+          )
+        )
+      )`;
+    ownerScopeParams = [
+      ...(hasScopedType ? [scopeTypeToken] : []),
+      scopeValue,
+      scopeValue,
+      scopeValue,
+      ...userOwnerScopeParams,
+    ];
   }
 
   if (
@@ -1013,6 +1056,8 @@ const resolveBudgetAvailabilityForUser = async (conn, {
        bpl.sub_head,
        bp.proposal_ref,
        bp.fiscal_year,
+       bp.beneficiary_type,
+       bp.beneficiary_value,
        COALESCE(bpl.approved_line_total, bpl.line_total, 0) AS budget_line_amount,
        COALESCE(fblu.consumed_amount, 0) AS consumed_amount,
        COALESCE(frbr.reserved_amount, 0) AS reserved_amount,
@@ -1068,6 +1113,8 @@ const resolveBudgetAvailabilityForUser = async (conn, {
       budgetProposalId: toPositiveInt(row.budget_proposal_id),
       proposalRef: normalizeText(row.proposal_ref) || null,
       fiscalYear: row.fiscal_year ? Number(row.fiscal_year) : null,
+      proposalBeneficiaryType: normalizeText(row.beneficiary_type),
+      proposalBeneficiaryValue: normalizeText(row.beneficiary_value),
       budgetHead: normalizeText(row.budget_head),
       subHead: normalizeText(row.sub_head),
       budgetLineAmount: toMoney(row.budget_line_amount),
@@ -1115,19 +1162,28 @@ const enrichBudgetRowsWithBudgetRefs = async (
     beneficiaryValue = null,
     departmentId = null,
     beneficiaryEntityId = null,
+    lookupBudgetHead = null,
+    lookupSubHead = null,
   } = {}
 ) => {
   const enrichedRows = [];
   const requestedByBudgetLine = new Map();
+  const normalizedLookupBudgetHead = normalizeText(lookupBudgetHead);
+  const normalizedLookupSubHead = normalizeSubHeadForLookup(lookupSubHead);
 
   for (const row of budgetRows) {
+    const effectiveLookupBudgetHead = normalizedLookupBudgetHead || row.budget_head;
+    const effectiveLookupSubHead = normalizedLookupSubHead || normalizeSubHeadForLookup(row.sub_head);
+    const applyHeadOnlyMatch =
+      Boolean(row.head_only_match) || shouldUseHeadOnlyAvailabilityMatch(effectiveLookupBudgetHead);
+
     const availability = await resolveBudgetAvailabilityForUser(conn, {
       userId,
       userEmail,
-      budgetHead: row.budget_head,
-      subHead: row.lookup_sub_head || row.sub_head,
+      budgetHead: effectiveLookupBudgetHead,
+      subHead: effectiveLookupSubHead,
       preferredBudgetLineId: row.budget_line_id,
-      headOnlyMatch: Boolean(row.head_only_match),
+      headOnlyMatch: applyHeadOnlyMatch,
       excludeFinanceId,
       beneficiaryType,
       beneficiaryValue,
@@ -1138,13 +1194,13 @@ const enrichBudgetRowsWithBudgetRefs = async (
     const selected = availability.selected;
     if (!selected) {
       throw new Error(
-        `No approved budget allocation found for "${row.budget_head}" / "${row.sub_head}" in the selected beneficiary scope`
+        `No approved budget allocation found for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}" in the selected beneficiary scope`
       );
     }
 
     if (row.amount > selected.availableAmount) {
       throw new Error(
-        `Requested amount ${row.amount.toFixed(2)} exceeds available amount ${selected.availableAmount.toFixed(2)} for "${row.budget_head}" / "${row.sub_head}"`
+        `Requested amount ${row.amount.toFixed(2)} exceeds available amount ${selected.availableAmount.toFixed(2)} for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}"`
       );
     }
 
@@ -1152,7 +1208,7 @@ const enrichBudgetRowsWithBudgetRefs = async (
     const remainingAfterLocalReservations = Math.max(0, selected.availableAmount - alreadyRequested);
     if (row.amount > remainingAfterLocalReservations) {
       throw new Error(
-        `Requested amount ${row.amount.toFixed(2)} exceeds remaining available amount ${remainingAfterLocalReservations.toFixed(2)} for "${row.budget_head}" / "${row.sub_head}" after other rows in this request`
+        `Requested amount ${row.amount.toFixed(2)} exceeds remaining available amount ${remainingAfterLocalReservations.toFixed(2)} for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}" after other rows in this request`
       );
     }
     requestedByBudgetLine.set(selected.budgetLineId, alreadyRequested + row.amount);
@@ -1496,7 +1552,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
     'SELECT unplanned_budget_enabled, unplanned_budget_amount FROM finance_requests WHERE id = ? FOR UPDATE',
     [financeId]
   );
-  
+
   const financeRequest = financeRows[0] || {};
   const unplannedBudgetEnabled = Boolean(financeRequest.unplanned_budget_enabled);
   const unplannedBudgetAmount = toMoney(financeRequest.unplanned_budget_amount);
@@ -1641,12 +1697,13 @@ const financeModel = {
 
       const workflowContext = await resolveFinanceWorkflowContext(connection, financeData);
       const normalizedBudgetRows = normalizeBudgetRows(Array.isArray(financeData.budget_rows) ? financeData.budget_rows : []);
-      const budgetLookupRows = applyBudgetLookupOverrides(normalizedBudgetRows, financeData);
-      const budgetRows = await enrichBudgetRowsWithBudgetRefs(connection, userId, userEmail, budgetLookupRows, {
+      const budgetRows = await enrichBudgetRowsWithBudgetRefs(connection, userId, userEmail, normalizedBudgetRows, {
         beneficiaryType: financeData.beneficiary_type,
         beneficiaryValue: financeData.beneficiary_value,
         departmentId: workflowContext.departmentId,
         beneficiaryEntityId: workflowContext.beneficiaryEntityId,
+        lookupBudgetHead: financeData.primary_head,
+        lookupSubHead: financeData.event_sub_head,
       });
       const incomeRows = normalizeIncomeRows(Array.isArray(financeData.income_rows) ? financeData.income_rows : []);
       const normalizedAnnexures = await normalizeFinanceAnnexures(financeData.annexures);
@@ -1843,6 +1900,8 @@ const financeModel = {
         employee_id: financeData.employee_id ?? existingRecord.employee_id,
         beneficiary_type: financeData.beneficiary_type ?? existingRecord.beneficiary_type,
         beneficiary_value: financeData.beneficiary_value ?? existingRecord.beneficiary_value,
+        primary_head: financeData.primary_head ?? existingRecord.primary_head,
+        event_sub_head: financeData.event_sub_head ?? existingRecord.event_sub_head,
       };
       const workflowContext = await resolveFinanceWorkflowContext(connection, mergedRecordForContext);
       const hasBudgetRowsInput = Object.prototype.hasOwnProperty.call(financeData, 'budget_rows');
@@ -1851,24 +1910,20 @@ const financeModel = {
       const normalizedBudgetRows = hasBudgetRowsInput
         ? normalizeBudgetRows(Array.isArray(financeData.budget_rows) ? financeData.budget_rows : [])
         : [];
-      const budgetLookupRows = hasBudgetRowsInput
-        ? applyBudgetLookupOverrides(normalizedBudgetRows, {
-          ...existingRecord,
-          ...financeData,
-        })
-        : [];
       const budgetRows = hasBudgetRowsInput
         ? await enrichBudgetRowsWithBudgetRefs(
           connection,
           toPositiveInt(existingRecord.created_by),
           normalizeText(existingRecord.created_by_email) || null,
-          budgetLookupRows,
+          normalizedBudgetRows,
           {
             excludeFinanceId: id,
             beneficiaryType: mergedRecordForContext.beneficiary_type,
             beneficiaryValue: mergedRecordForContext.beneficiary_value,
             departmentId: workflowContext.departmentId,
             beneficiaryEntityId: workflowContext.beneficiaryEntityId,
+            lookupBudgetHead: mergedRecordForContext.primary_head,
+            lookupSubHead: mergedRecordForContext.event_sub_head,
           }
         )
         : [];
@@ -2240,7 +2295,9 @@ const financeModel = {
            fr.beneficiary_type,
            fr.beneficiary_value,
            fr.department_id,
-           fr.beneficiary_entity_id
+           fr.beneficiary_entity_id,
+           fr.primary_head,
+           fr.event_sub_head
          FROM finance_requests fr
          LEFT JOIN users u ON u.id = fr.created_by
          WHERE fr.id = ?
@@ -2264,6 +2321,8 @@ const financeModel = {
           beneficiaryValue: ownerRows[0].beneficiary_value,
           departmentId: toPositiveInt(ownerRows[0].department_id),
           beneficiaryEntityId: toPositiveInt(ownerRows[0].beneficiary_entity_id),
+          lookupBudgetHead: ownerRows[0].primary_head,
+          lookupSubHead: ownerRows[0].event_sub_head,
         }
       );
       await replaceBudgetRows(connection, financeId, enrichedRows);

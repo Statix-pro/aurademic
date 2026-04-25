@@ -371,10 +371,15 @@ export async function buildBudgetList(options) {
         OR bp.beneficiary_value LIKE ?
         OR md.name LIKE ?
         OR me.name LIKE ?
+        OR ${hasColumnCache.applicant_name ? "bp.applicant_name LIKE ?" : "1=0"}
         OR applicant_emp.first_name LIKE ?
         OR applicant_emp.last_name LIKE ?
+        OR CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, '')) LIKE ?
+        OR applicant_user.name LIKE ?
     )`);
-        params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+        params.push(searchPattern, searchPattern, searchPattern, searchPattern);
+        if (hasColumnCache.applicant_name) params.push(searchPattern);
+        params.push(searchPattern, searchPattern, searchPattern, searchPattern);
     }
 
     sql += ` WHERE ${where.join(' AND ')}
