@@ -377,17 +377,9 @@ export async function buildBudgetList(options) {
         OR CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, '')) LIKE ?
         OR applicant_user.name LIKE ?
     )`);
-        params.push(
-            searchPattern,
-            searchPattern,
-            searchPattern,
-            searchPattern,
-            searchPattern,
-            searchPattern,
-            searchPattern,
-            searchPattern,
-            searchPattern
-        );
+        params.push(searchPattern, searchPattern, searchPattern, searchPattern);
+        if (hasColumnCache.applicant_name) params.push(searchPattern);
+        params.push(searchPattern, searchPattern, searchPattern, searchPattern);
     }
 
     sql += ` WHERE ${where.join(' AND ')}
