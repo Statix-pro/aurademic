@@ -1,5 +1,5 @@
 import React from 'react';
-import Select, { OptionsOrGroups, SingleValue, MultiValue, GroupBase } from 'react-select';
+import Select, { OptionsOrGroups, SingleValue, MultiValue, GroupBase, StylesConfig } from 'react-select';
 import './common.css';
 
 export interface OptionType {
@@ -19,8 +19,9 @@ interface CustomDropdownProps {
   isDisabled?: boolean;
   isMulti?: boolean;
   className?: string;
-  centerSelect?: boolean;
-  filterOption?: ((option: { label: string; value: string; data: OptionType }, inputValue: string) => boolean) | null;
+  styles?: StylesConfig<OptionType, boolean>;
+  menuPortalTarget?: HTMLElement | null;
+  menuPosition?: 'absolute' | 'fixed';
 }
 
 const CustomDropdown: React.FC<CustomDropdownProps> = ({
@@ -34,21 +35,23 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
   isDisabled = false,
   isMulti = false,
   className = '',
-  centerSelect = false,
+  styles: customStyles,
+  menuPortalTarget,
+  menuPosition = 'fixed',
   ...props
 }) => {
 
-  // Custom styles for react-select to match our theme
-  const customStyles = {
+  // Default styles (keep your existing ones)
+  const defaultStyles = {
     control: (provided: any, state: any) => ({
       ...provided,
       minHeight: '45px',
+      height: '45px',
       backgroundColor: 'var(--bg-input)',
       borderColor: error ? 'var(--error-color)' : (state.isFocused ? 'var(--border-focus)' : 'var(--border-color)'),
       borderRadius: 'var(--border-radius-md)',
       padding: '0 4px',
       boxShadow: state.isFocused ? 'var(--shadow-focus)' : 'none',
-      transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
       '&:hover': {
         borderColor: state.isFocused ? 'var(--border-focus)' : 'var(--border-focus)',
       }
@@ -56,30 +59,30 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
     valueContainer: (provided: any) => ({
       ...provided,
       minHeight: '43px',
+      height: '43px',
       padding: '0 12px',
+      display: 'flex',
+      alignItems: 'center',
     }),
     indicatorsContainer: (provided: any) => ({
       ...provided,
       minHeight: '43px',
-      paddingRight: '6px',
+      height: '43px',
     }),
     indicatorSeparator: (provided: any) => ({
       ...provided,
-      backgroundColor: 'var(--border-color)',
       marginTop: '8px',
       marginBottom: '8px',
-    }),
-    dropdownIndicator: (provided: any, state: any) => ({
-      ...provided,
-      color: state.isFocused ? 'var(--primary-color)' : 'var(--text-muted)',
-      padding: '0 6px',
-      transition: 'color 0.2s ease',
     }),
     menu: (provided: any) => ({
       ...provided,
       borderRadius: 'var(--border-radius-md)',
       overflow: 'hidden',
-      zIndex: 20,
+      zIndex: 4000,
+    }),
+    menuPortal: (provided: any) => ({
+      ...provided,
+      zIndex: 5000,
     }),
     option: (provided: any, state: any) => ({
       ...provided,
@@ -104,61 +107,30 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
     }),
   };
 
+  // Merge custom styles with defaults (custom styles override)
+  const mergedStyles = customStyles ? { ...defaultStyles, ...customStyles } : defaultStyles;
+
   return (
-    <div className={`custom-input-group ${className}`} style={{ 
-      display: 'flex', 
-      flexDirection: 'column',
-      width: '100%'
-    }}>
-      {label && (
-        <label className="custom-label" htmlFor={name} style={{ 
-          alignSelf: 'flex-start',
-          width: '100%',
-          textAlign: 'left',
-         
-        }}>
-          {label}
-        </label>
-      )}
-      <div style={{ 
-        width: '100%',
-        display: 'flex',
-        justifyContent: centerSelect ? 'center' : 'flex-start',
-      
-        
-      }}>
-        <div style={{ 
-          width: centerSelect ? 'auto' : '100%',
-          minWidth: centerSelect ? '250px' : 'auto',
-          flex: centerSelect ? '0 1 auto' : '1',
-        }}>
-          <Select
-            inputId={name}
-            name={name}
-            options={options}
-            value={value}
-            onChange={onChange}
-            placeholder={placeholder}
-            isDisabled={isDisabled}
-            isMulti={isMulti}
-            styles={customStyles}
-            classNamePrefix="react-select"
-            {...props}
-          />
-        </div>
-      </div>
-      {error && (
-        <div className="custom-error-text" style={{ 
-          alignSelf: 'flex-start',
-          width: '100%',
-          textAlign: 'left'
-        }}>
-          {error}
-        </div>
-      )}
+    <div className={`custom-input-group ${className}`}>
+      {label && <label className="custom-label" htmlFor={name}>{label}</label>}
+      <Select
+        inputId={name}
+        name={name}
+        options={options}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        isDisabled={isDisabled}
+        isMulti={isMulti}
+        styles={mergedStyles}
+        classNamePrefix="react-select"
+        menuPortalTarget={menuPortalTarget !== undefined ? menuPortalTarget : (typeof document !== 'undefined' ? document.body : null)}
+        menuPosition={menuPosition}
+        {...props}
+      />
+      {error && <div className="custom-error-text">{error}</div>}
     </div>
   );
 };
 
 export default CustomDropdown;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
