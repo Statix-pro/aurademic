@@ -1,10 +1,11 @@
 // client/src/features/user-dashboard/financecard/financecard.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './financecard.css';
-import { Eye, Edit2, Briefcase, Clock, RotateCcw, XCircle, CheckCircle, Archive, Search, Info, Trash2, FileText } from 'lucide-react';
+import { Eye, Edit2, Briefcase, Clock, XCircle, CheckCircle, Archive, Search, Info, Trash2, FileText, Download, RotateCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { useAuth } from '../../../contexts/AuthContext';
 
 
 interface FinanceCardItem {
@@ -33,6 +34,14 @@ interface FinanceCardItem {
     isEditableByApplicant?: boolean;
     submittedTotalBudget?: number | string | null;
   };
+  principal_document?: {
+    id?: number | null;
+    original_name?: string | null;
+    stored_name?: string | null;
+    file_path?: string | null;
+    mime_type?: string | null;
+    file_size?: number | null;
+  } | null;
 }
 
 interface FinanceStatusUpdate {
@@ -67,6 +76,7 @@ interface FinanceLogEvent {
 }
 
 const FinanceCard: React.FC = () => {
+  const { user } = useAuth();
   const [data, setData] = useState<FinanceCardItem[]>([]);
   const [filteredData, setFilteredData] = useState<FinanceCardItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -86,6 +96,9 @@ const FinanceCard: React.FC = () => {
   const [showFinanceStatusDetail, setShowFinanceStatusDetail] = useState<Record<number, boolean>>({});
   const [statusUpdatesById, setStatusUpdatesById] = useState<Record<number, FinanceStatusUpdate[]>>({});
   const navigate = useNavigate();
+  const principalDocInputRef = useRef<HTMLInputElement | null>(null);
+  const [principalDocTargetId, setPrincipalDocTargetId] = useState<number | null>(null);
+  const [principalDocBusyId, setPrincipalDocBusyId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchDashboard();
@@ -232,6 +245,156 @@ const FinanceCard: React.FC = () => {
       : (item.total_budget ?? item.proposed_amount ?? item.amount ?? item.workflow_state?.submittedTotalBudget ?? 0);
     const parsedAmount = Number(rawAmount);
     return Number.isFinite(parsedAmount) ? parsedAmount : 0;
+  };
+
+  const getPrincipalDocument = (item: FinanceCardItem) => item.principal_document || null;
+
+  const getPrincipalDocumentUrl = (item: FinanceCardItem) => {
+    const filePath = String(getPrincipalDocument(item)?.file_path || '').trim();
+    if (!filePath) return '';
+    if (filePath.startsWith('http://') || filePath.startsWith('https://') || filePath.startsWith('blob:')) {
+      return filePath;
+    }
+    return `${authenticityUtility.getBaseURL()}${filePath}`;
+  };
+
+  const isPrincipalUser = Boolean(
+    Array.isArray(user?.roles) &&
+    user.roles.some((role) => String(role || '').trim().toLowerCase() === 'principal')
+  );
+
+  const isPrincipalDocumentEligible = (item: FinanceCardItem) => {
+    const amount = getDisplayAmount(item);
+    const workflowStatus = getWorkflowStatus(item);
+
+    return amount > 10000 && (
+      workflowStatus === 'approved' ||
+      workflowStatus === 'completed' ||
+      workflowStatus === 'principal_approved'
+    );
+  };
+
+  const isPrincipalDocumentFeatureVisible = (item: FinanceCardItem) => getDisplayAmount(item) > 10000;
+
+  const canShowPrincipalDocumentAction = (item: FinanceCardItem) => {
+    return Boolean(getPrincipalDocumentUrl(item));
+  };
+
+  const openPrincipalDocumentPicker = (item: FinanceCardItem) => {
+    if (!isPrincipalUser || !isPrincipalDocumentEligible(item)) return;
+    setPrincipalDocTargetId(item.id);
+    window.setTimeout(() => principalDocInputRef.current?.click(), 0);
+  };
+
+  const handlePrincipalDocumentUploadClick = (item: FinanceCardItem) => {
+    if (!isPrincipalDocumentFeatureVisible(item)) {
+      return;
+    }
+
+    if (!isPrincipalDocumentEligible(item)) {
+      window.alert('Once approved, you can upload the principal document.');
+      return;
+    }
+
+    openPrincipalDocumentPicker(item);
+  };
+
+  const uploadPrincipalDocument = async (item: FinanceCardItem, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    setPrincipalDocBusyId(item.id);
+    try {
+      const response = await authenticityUtility.postFile(`/finance-requests/${item.id}/principal-document`, formData) as {
+        status?: string;
+        message?: string;
+        data?: {
+          originalName?: string;
+          storedName?: string;
+          filePath?: string;
+          mimeType?: string;
+          size?: number;
+        };
+      };
+
+      if (response?.status !== 'success') {
+        window.alert(response?.message || 'Failed to upload principal document');
+        return;
+      }
+
+      window.alert(`${file.name} uploaded successfully`);
+      setData((prev) =>
+        prev.map((row) => {
+          if (row.id !== item.id) {
+            return row;
+          }
+
+          return {
+            ...row,
+            principal_document: {
+              ...(row.principal_document || {}),
+              original_name: file.name,
+              stored_name: response?.data?.storedName || null,
+              file_path: response?.data?.filePath || null,
+              mime_type: response?.data?.mimeType || 'application/pdf',
+              file_size: Number.isFinite(Number(response?.data?.size)) ? Number(response.data.size) : file.size,
+            },
+          };
+        })
+      );
+    } catch (error: any) {
+      window.alert(error?.response?.data?.message || error?.message || 'Failed to upload principal document');
+    } finally {
+      setPrincipalDocBusyId(null);
+    }
+  };
+
+  const deletePrincipalDocument = async (item: FinanceCardItem) => {
+    if (!isPrincipalUser || !getPrincipalDocumentUrl(item)) return;
+
+    const confirmed = window.confirm('Delete the uploaded principal document?');
+    if (!confirmed) return;
+
+    setPrincipalDocBusyId(item.id);
+    try {
+      const response = await authenticityUtility.delete(`/finance-requests/${item.id}/principal-document`) as {
+        status?: string;
+        message?: string;
+      };
+
+      if (response?.status !== 'success') {
+        window.alert(response?.message || 'Failed to delete principal document');
+        return;
+      }
+
+      setData((prev) =>
+        prev.map((row) => (row.id === item.id ? { ...row, principal_document: null } : row))
+      );
+    } catch (error: any) {
+      window.alert(error?.response?.data?.message || error?.message || 'Failed to delete principal document');
+    } finally {
+      setPrincipalDocBusyId(null);
+    }
+  };
+
+  const handlePrincipalDocumentFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const targetId = principalDocTargetId;
+    event.target.value = '';
+
+    if (!file || targetId === null) {
+      return;
+    }
+
+    if ((file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) || file.size >= 2 * 1024 * 1024) {
+      window.alert('Only PDF files with a size less than 2MB are allowed.');
+      return;
+    }
+
+    const targetItem = data.find((row) => row.id === targetId);
+    if (!targetItem) return;
+
+    await uploadPrincipalDocument(targetItem, file);
+    setPrincipalDocTargetId(null);
   };
 
   const formatLabel = (value?: string | null) => {
@@ -734,6 +897,13 @@ const FinanceCard: React.FC = () => {
 
   return (
     <>
+      <input
+        ref={principalDocInputRef}
+        type="file"
+        accept="application/pdf,.pdf"
+        hidden
+        onChange={handlePrincipalDocumentFileChange}
+      />
       <section className="financecard-page">
         <div className="financecard-container">
           <div className="financecard-card">
@@ -831,6 +1001,15 @@ const FinanceCard: React.FC = () => {
                     const canEdit = canEditRequest(item);
                     const canDelete = canDeleteRequest(item);
                     const isStatusExpanded = Boolean(showFinanceStatusDetail[item.id]);
+                    const principalDocument = getPrincipalDocument(item);
+                    const principalDocumentUrl = getPrincipalDocumentUrl(item);
+                    const principalDocumentTitle = String(
+                      principalDocument?.original_name ||
+                      principalDocument?.stored_name ||
+                      'Principal Document'
+                    ).trim();
+                    const showPrincipalDocumentAction = canShowPrincipalDocumentAction(item);
+                    const principalActionLoading = principalDocBusyId === item.id;
                     return (
                       <div key={item.id} className="financecard-item-card">
                         <div className="card-row-top">
@@ -891,6 +1070,51 @@ const FinanceCard: React.FC = () => {
                             <span className="beneficiary-value">{item.beneficiary_name || item.beneficiary_value || item.applicant_name}</span>
                           </div>
                           <div className="card-footer-right">
+                            {showPrincipalDocumentAction && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="icon-btn-subtle financecard-download-btn financecard-principal-download-btn"
+                                  title={principalDocumentTitle}
+                                  onClick={() => {
+                                    if (!principalDocumentUrl) return;
+                                    const link = document.createElement('a');
+                                    link.href = principalDocumentUrl;
+                                    link.download = principalDocumentTitle || 'Principal Document.pdf';
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                  }}
+                                  disabled={principalActionLoading}
+                                >
+                                  <Download size={18} />
+                                </button>
+
+                                {isPrincipalUser && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="icon-btn-subtle financecard-principal-mini-btn"
+                                      title={`View ${principalDocumentTitle}`}
+                                      onClick={() => window.open(principalDocumentUrl, '_blank', 'noopener,noreferrer')}
+                                      disabled={principalActionLoading}
+                                    >
+                                      <Eye size={16} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="icon-btn-subtle financecard-principal-mini-btn financecard-principal-delete-btn"
+                                      title={`Delete ${principalDocumentTitle}`}
+                                      onClick={() => deletePrincipalDocument(item)}
+                                      disabled={principalActionLoading}
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </>
+                                )}
+                              </>
+                            )}
+
                             <button
                               type="button"
                               className="icon-btn-subtle financecard-download-btn"
