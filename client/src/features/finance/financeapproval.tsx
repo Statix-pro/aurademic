@@ -166,7 +166,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Membership & Subscriptions',
       'College Essentials',
       'Printing',
-      'Stationery',
+      'Stationary',
       'Postal Expenses',
       'Local Conveyance',
     ],
@@ -191,7 +191,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Staff Empowerment',
       'Student Empowerment',
       'Student Capacity Building',
-      'Accreditation Expenses',
+      'Ranking & Accreditation',
       'Examination Expenses',
     ],
   },
@@ -298,13 +298,18 @@ const CATEGORY_TYPE_OPTIONS = [
 const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
   'Events & Competitions': [
     'A/V Arrangements',
+    'Accessories',
     'Accommodation',
+    'Auditing Charge',
     'Bag',
     'Consumables',
     'Decorations',
+    'Driver Bata',
     'Event Logistics',
     'Food & Refreshment',
+    'Honorarium',
     'Memento & Gifts',
+    'Miscellaneous',
     'Printing',
     'Prizes',
     'Promotions',
@@ -312,10 +317,10 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
     'Registration fee',
     'Registration Kit',
     'Remuneration',
-    'Stationary',
+    'Sitting Fees',
+    'Stationery',
     'T-Shirt',
     'Travel',
-    'Travel Allowance',
     'Others',
   ],
   'Meetings & Audits': [
@@ -337,6 +342,8 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
     'Wall Painting'
   ],
 };
+
+const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
 
 const flattenOptions = (options: Array<OptionType | { label: string; options: OptionType[] }>): OptionType[] =>
   options.flatMap((opt) => ('options' in opt ? opt.options : opt));
@@ -362,9 +369,6 @@ const HEAD_TO_GROUP: Record<string, string> = BUDGET_HEAD_GROUPS.reduce(
   },
   {} as Record<string, string>
 );
-
-const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
-
 
 const getHoacGroupForHead = (head: string): string | undefined => {
   if (HOAC_GROUPS.has(head)) return head;
@@ -470,6 +474,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Computer Maintenance',
     'Electrical Maintenance',
     'Equipment Maintenance',
+    'Farm Maintenance',
     'Furniture Maintenance',
     'Garden Maintenance',
     'General Repairs',
@@ -521,7 +526,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Membership fees',
     'Professional Body fees'
   ],
-  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Others'],
+  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Student Uniform', 'Others'],
+
   'Printing': [
     'Banner',
     'Beach Flag',
@@ -545,6 +551,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Visiting Card',
     'Others'
   ],
+
   'Stationery': [
     'Files/ Folders',
     'Pen/ Pencil/ Eraser',
@@ -553,6 +560,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Stapler/ Punching Machine',
     'Others'
   ],
+  
   'Postal Expenses': [
     'Courier Charges',
     'Frieght Charges',
@@ -669,11 +677,10 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Daily Allowance',
     'Food & Refreshment',
     'Incentives',
-    'Medical Expenses',
-    'Registration fee',
     'Staff Welfare',
-    'Travel Allowance'
+    'Medical Expenses'
   ],
+
   'Student Empowerment': [
     'Accommodation',
     'Certification Costs',
@@ -682,7 +689,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Medical Expense',
     'Prizes',
     'Registration fee',
-    'Student Uniform',
     'Student Welfare',
     'Travel Support'
   ],
@@ -703,11 +709,14 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Others'
   ],
 
-  'Accreditation Expenses': [
+  'Ranking & Accreditation': [
     'NAAC Fees',
     'NAAC Inspection',
     'NBA Fees',
-    'NBA Inspection'
+    'NBA Inspection',
+    'QS Ranking',
+    'SDG Ranking',
+    'Other Rankings'
   ],
   'Examination Expenses': [
     'Autonomous Exam Remuneration',
@@ -723,7 +732,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Promotions',
     'Sponsorship'
   ],
-  Admissions: [
+  'Admissions': [
     'Consultant Charges',
     'Field Visits',
     'School Visits',
@@ -770,6 +779,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Spirit License',
     'Water Tax'
   ],
+
   'Salary': [
     'Allowances',
     'Emoluments',
@@ -1751,6 +1761,18 @@ const FinanceApproval: React.FC = () => {
       return;
     }
 
+    const invalidFiles = files.filter(
+      (file) => file.type !== 'application/pdf' || file.size >= 2 * 1024 * 1024
+    );
+
+    if (invalidFiles.length > 0) {
+      showAlert('Only PDF files with a size less than 2MB are allowed.', 'warning');
+      if (annexureFileInputRef.current) {
+        annexureFileInputRef.current.value = '';
+      }
+      return;
+    }
+
     const nextRows = files.map((file) => ({
       id: createAnnexureRowId(),
       annexureType: annexureType,
@@ -2157,7 +2179,7 @@ const FinanceApproval: React.FC = () => {
         debit_status: debitStatus || null,
         partial_amount: primaryIncomeRow?.amount || null,
         budget_rows: budgetRows.map((row, index) => ({
-          budget_head: normalizeText(primaryHead) || row.category,
+          budget_head: normalizeText(row.category),
           sub_head: normalizeText(row.head),
           head_only_match: false,
           amount: Number(row.amount || 0),
@@ -2765,8 +2787,12 @@ const FinanceApproval: React.FC = () => {
     // on every render due function identity churn; guards above keep it safe.
   }, [autoDownloadPdf, canDownloadPdf, isLoading, showPreview]);
 
-  const activeHoacGroup = getHoacGroupForHead(primaryHead);
-  const extraDropdownVisible = Boolean(activeHoacGroup);
+  const activeHoacGroup = HEAD_TO_GROUP[primaryHead];
+  const extraDropdownVisible =
+    Boolean(primaryHead) &&
+    primaryHead !== 'Faculty Empowerment' &&
+    primaryHead !== 'Staff Empowerment' &&
+    primaryHead !== 'Student Empowerment';
   const hoacSubheadDropdownOptions = toOptions(
     SUB_HEAD_BY_BUDGET_HEAD[primaryHead] ||
     HOAC_SUBHEAD_OPTIONS[activeHoacGroup || ''] ||
@@ -4137,6 +4163,7 @@ const FinanceApproval: React.FC = () => {
                             ref={annexureFileInputRef}
                             id="annexure-file-input"
                             type="file"
+                            accept="application/pdf,.pdf"
                             multiple
                             style={{ display: 'none' }}
                             disabled={isViewMode}

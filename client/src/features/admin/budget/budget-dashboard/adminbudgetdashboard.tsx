@@ -590,7 +590,7 @@ const AdminBudgetDashboard: React.FC = () => {
                       <table className="adminbudgetdashboard-detail-table">
                         <thead>
                           <tr>
-                            <th>S.No</th>
+                            <th>Proposal ID</th>
                             <th>Applicant</th>
                             <th>Sub Head</th>
                             <th>Initial</th>
@@ -602,7 +602,7 @@ const AdminBudgetDashboard: React.FC = () => {
                         <tbody>
                           {filteredDetailsForExpandedHead.map((detail, index) => (
                             <tr key={`${expandedHead}-${detail.proposalId}-${index}`}>
-                              <td>{index + 1}</td>
+                              <td style={{ fontWeight: 600, color: '#0069ab' }}>{detail.proposalRef}</td>
                               <td>{detail.applicantName}</td>
                               <td>{detail.subHead}</td>
                               <td>{canViewAmounts ? `${rupeeSymbol}${formatINR(detail.initialAmount)}` : '--'}</td>

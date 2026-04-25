@@ -66,6 +66,7 @@ WITH pending_pool AS (
       OR me.name LIKE CONCAT('%', @q, '%')
       OR applicant_emp.first_name LIKE CONCAT('%', @q, '%')
       OR applicant_emp.last_name LIKE CONCAT('%', @q, '%')
+      OR CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, '')) LIKE CONCAT('%', @q, '%')
     )
 
     AND (
@@ -137,6 +138,7 @@ WITH pending_pool AS (
       OR me.name LIKE CONCAT('%', @q, '%')
       OR applicant_emp.first_name LIKE CONCAT('%', @q, '%')
       OR applicant_emp.last_name LIKE CONCAT('%', @q, '%')
+      OR CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, '')) LIKE CONCAT('%', @q, '%')
     )
 
     AND (
@@ -201,6 +203,7 @@ WITH pending_pool AS (
       OR me.name LIKE CONCAT('%', @q, '%')
       OR applicant_emp.first_name LIKE CONCAT('%', @q, '%')
       OR applicant_emp.last_name LIKE CONCAT('%', @q, '%')
+      OR CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, '')) LIKE CONCAT('%', @q, '%')
     )
 
     AND (
