@@ -208,6 +208,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Computer Maintenance',
     'Electrical Maintenance',
     'Equipment Maintenance',
+    'Farm Maintenance',
     'Furniture Maintenance',
     'Garden Maintenance',
     'General Repairs',
