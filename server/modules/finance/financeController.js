@@ -30,6 +30,9 @@ const sanitizeAnnexureExtension = (originalName) => {
   return SAFE_ANNEXURE_EXTENSIONS.has(normalizedExt) ? normalizedExt : '';
 };
 
+const FINANCE_PRINCIPAL_DOC_DIR = path.resolve(process.cwd(), 'uploads', 'finance-principal-documents');
+const FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX = '/uploads/finance-principal-documents/';
+
 const TEMP_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'temp');
 
 const resolveSafeTempUploadPath = (unsafePath) => {
@@ -43,6 +46,28 @@ const resolveSafeTempUploadPath = (unsafePath) => {
   }
 
   return resolved;
+};
+
+const isPrincipalRoleRequest = (req) => {
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  return roles.some((role) => normalizeText(role).toLowerCase() === 'principal');
+};
+
+const isEligibleForPrincipalDocument = (finance) => {
+  const totalBudget = Number(finance?.total_budget || finance?.proposed_amount || 0);
+  const workflowStatus = normalizeText(
+    finance?.workflow_state?.status || finance?.workflow_status || finance?.overall_status
+  ).toLowerCase();
+
+  if (!(totalBudget > 10000)) {
+    return false;
+  }
+
+  return (
+    workflowStatus === 'principal_approved' ||
+    workflowStatus === 'completed' ||
+    workflowStatus === 'approved'
+  );
 };
 
 const parseDateMs = (value) => {
@@ -1207,6 +1232,187 @@ const financeController = {
         // Ignore cleanup errors
       }
       return handleWorkflowError(res, error, 'Error in uploadAnnexureFile');
+    }
+  },
+
+  async uploadPrincipalDocument(req, res) {
+    const uploadedFilePath = resolveSafeTempUploadPath(req.file?.path);
+    let savedFilePath = null;
+
+    try {
+      const financeId = toPositiveInt(req.params.id);
+      if (!financeId) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Invalid finance request ID',
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'No file uploaded',
+        });
+      }
+
+      const file = req.file;
+      const originalName = normalizeText(file.originalname);
+      const isPdf =
+        normalizeText(file.mimetype).toLowerCase() === 'application/pdf' ||
+        originalName.toLowerCase().endsWith('.pdf');
+
+      if (!isPdf || file.size >= 2 * 1024 * 1024) {
+        if (uploadedFilePath) {
+          await fs.promises.unlink(uploadedFilePath).catch(() => {});
+        }
+        return res.status(400).json({
+          status: 'error',
+          message: 'Only PDF files with a size less than 2MB are allowed.',
+        });
+      }
+
+      const finance = await financeModel.getFinanceRequestById(financeId);
+      if (!finance) {
+        if (uploadedFilePath) {
+          await fs.promises.unlink(uploadedFilePath).catch(() => {});
+        }
+        return res.status(404).json({
+          status: 'error',
+          message: 'Finance request not found',
+        });
+      }
+
+      if (!isPrincipalRoleRequest(req)) {
+        if (uploadedFilePath) {
+          await fs.promises.unlink(uploadedFilePath).catch(() => {});
+        }
+        return res.status(403).json({
+          status: 'error',
+          message: 'Only principal can upload this document',
+        });
+      }
+
+      if (!isEligibleForPrincipalDocument(finance)) {
+        if (uploadedFilePath) {
+          await fs.promises.unlink(uploadedFilePath).catch(() => {});
+        }
+        return res.status(409).json({
+          status: 'error',
+          message: 'Principal document is only available for proposals above 10000 at principal stage or after principal approval',
+        });
+      }
+
+      await fs.promises.mkdir(FINANCE_PRINCIPAL_DOC_DIR, { recursive: true });
+
+      const extension = '.pdf';
+      const storedName = `finance-principal-${financeId}-${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
+      const finalPath = path.resolve(FINANCE_PRINCIPAL_DOC_DIR, storedName);
+      const safeBase = `${FINANCE_PRINCIPAL_DOC_DIR}${path.sep}`;
+      if (!finalPath.startsWith(safeBase)) {
+        throw new Error('Invalid principal document path');
+      }
+
+      if (!uploadedFilePath) {
+        throw new Error('Invalid upload source path');
+      }
+
+      await fs.promises.rename(uploadedFilePath, finalPath);
+      savedFilePath = finalPath;
+
+      const previousDocument = await financeModel.getPrincipalDocument(financeId);
+      await financeModel.setPrincipalDocument(financeId, {
+        original_name: originalName || file.originalname || null,
+        stored_name: storedName,
+        file_path: `${FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX}${storedName}`,
+        mime_type: 'application/pdf',
+        file_size: file.size,
+        uploaded_by: req.user?.id || null,
+      });
+
+      if (previousDocument?.file_path) {
+        const previousPath = path.resolve(process.cwd(), `.${String(previousDocument.file_path || '').trim()}`);
+        if (previousPath !== savedFilePath) {
+          await fs.promises.unlink(previousPath).catch(() => {});
+        }
+      }
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Principal document uploaded successfully',
+        data: {
+          originalName: originalName || file.originalname || null,
+          storedName,
+          filePath: `${FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX}${storedName}`,
+          mimeType: 'application/pdf',
+          size: file.size,
+        },
+      });
+    } catch (error) {
+      try {
+        if (uploadedFilePath) {
+          await fs.promises.unlink(uploadedFilePath).catch(() => {});
+        }
+        if (savedFilePath) {
+          await fs.promises.unlink(savedFilePath).catch(() => {});
+        }
+      } catch {
+        // ignore cleanup errors
+      }
+      return handleWorkflowError(res, error, 'Error in uploadPrincipalDocument');
+    }
+  },
+
+  async deletePrincipalDocument(req, res) {
+    try {
+      const financeId = toPositiveInt(req.params.id);
+      if (!financeId) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Invalid finance request ID',
+        });
+      }
+
+      if (!isPrincipalRoleRequest(req)) {
+        return res.status(403).json({
+          status: 'error',
+          message: 'Only principal can delete this document',
+        });
+      }
+
+      const finance = await financeModel.getFinanceRequestById(financeId);
+      if (!finance) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Finance request not found',
+        });
+      }
+
+      if (!isEligibleForPrincipalDocument(finance)) {
+        return res.status(409).json({
+          status: 'error',
+          message: 'Principal document is only available for proposals above 10000 at principal stage or after principal approval',
+        });
+      }
+
+      const document = await financeModel.getPrincipalDocument(financeId);
+      if (!document) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Principal document not found',
+        });
+      }
+
+      await financeModel.deletePrincipalDocument(financeId);
+
+      const resolvedPath = path.resolve(process.cwd(), `.${String(document.file_path || '').trim()}`);
+      await fs.promises.unlink(resolvedPath).catch(() => {});
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Principal document deleted successfully',
+      });
+    } catch (error) {
+      return handleWorkflowError(res, error, 'Error in deletePrincipalDocument');
     }
   },
 

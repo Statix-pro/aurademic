@@ -101,6 +101,7 @@ const createUploadDirectories = () => {
     'uploads/projectReport',
     'uploads/bankStatement',
     'uploads/journal-article',
+    'uploads/finance-principal-documents',
   ];
 
   directories.forEach((dir) => {
