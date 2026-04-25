@@ -474,6 +474,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Computer Maintenance',
     'Electrical Maintenance',
     'Equipment Maintenance',
+    'Farm Maintenance',
     'Furniture Maintenance',
     'Garden Maintenance',
     'General Repairs',
@@ -485,7 +486,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Playground Maintenance',
     'Plumbing Maintenance',
     'Printer Maintenance',
-    'Farm Maintenance',
     'Software Maintenance',
     'UPS Maintenance',
     'Vehicle Maintenance'
@@ -2791,6 +2791,7 @@ const FinanceApproval: React.FC = () => {
   const extraDropdownVisible =
     Boolean(primaryHead) &&
     primaryHead !== 'Faculty Empowerment' &&
+    primaryHead !== 'Staff Empowerment' &&
     primaryHead !== 'Student Empowerment';
   const hoacSubheadDropdownOptions = toOptions(
     SUB_HEAD_BY_BUDGET_HEAD[primaryHead] ||
