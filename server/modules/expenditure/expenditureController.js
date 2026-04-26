@@ -225,7 +225,18 @@ const normalizeIncomingPayload = (payload = {}) => {
 };
 
 const isDomainValidationError = (message = '') =>
-  ['not found', 'not yet approved', 'exceeds', 'required', 'Invalid request type'].some(
+  [
+    'not found',
+    'not yet approved',
+    'exceeds',
+    'required',
+    'Invalid request type',
+    'already exists',
+    'requires an existing advance',
+    'cannot be created',
+    'outstanding advance',
+    'Create a new row',
+  ].some(
     (fragment) => message.includes(fragment),
   );
 
@@ -334,14 +345,24 @@ const expenditureController = {
     try {
       const userId = toPositiveInt(req.user?.id);
       const budgetLineId = toPositiveInt(req.query.budget_line_id);
+      const financeRequestId = toPositiveInt(req.query.finance_request_id);
+      const rowIndex = toPositiveInt(req.query.row_index);
+      const sourceRequestId = toPositiveInt(req.query.source_request_id);
       const head = normalizeText(req.query.head);
       const subHead = normalizeText(req.query.sub_head);
+      const dashboardRowId = normalizeText(req.query.dashboard_row_id);
+      const workflowRowRef = normalizeText(req.query.workflowrowref || req.query.workflow_row_ref);
 
       const summary = await expenditureModel.getAdvanceSummary({
         userId,
         budgetLineId,
         head,
         subHead,
+        financeRequestId,
+        rowIndex,
+        sourceRequestId,
+        dashboardRowId,
+        workflowRowRef,
       });
       return res.json({ status: 'success', data: summary });
     } catch (err) {
@@ -654,6 +675,65 @@ const expenditureController = {
 
       if (isWorkflowEditor && isTerminalWorkflow && !isSuperAdminRequest(req)) {
         return sendError(res, 403, 'This request is not editable in current workflow state');
+      }
+
+      const hasProposalPayload = Boolean(
+        req.body?.payload ||
+        req.files?.billfiles ||
+        req.files?.bill_files ||
+        req.files?.bulkneftfile ||
+        req.files?.bulk_neft_file ||
+        req.body?.workflowrequesttype ||
+        req.body?.workflow_request_type ||
+        req.body?.request_type ||
+        req.body?.advance_rows ||
+        req.body?.advancerows ||
+        req.body?.settlement_rows ||
+        req.body?.settlementrows ||
+        req.body?.expenditure_rows ||
+        req.body?.expenditurerows ||
+        req.body?.payee_rows ||
+        req.body?.payeerows ||
+        req.body?.paymentdetails ||
+        req.body?.payment_details
+      );
+
+      if (hasProposalPayload) {
+        let payload;
+        try {
+          payload = normalizeIncomingPayload(parseRequestPayload(req));
+        } catch {
+          return sendError(res, 400, 'Invalid payload JSON');
+        }
+
+        if (!payload.request_type) {
+          return sendError(
+            res,
+            400,
+            'Invalid request type. Expected Advance, Settlement, or Expenditure.',
+          );
+        }
+
+        const uploads = {
+          billFiles: Array.isArray(req.files?.billfiles)
+            ? req.files.billfiles
+            : Array.isArray(req.files?.bill_files)
+              ? req.files.bill_files
+              : [],
+          bulkNeftFile: Array.isArray(req.files?.bulkneftfile)
+            ? req.files.bulkneftfile[0]
+            : Array.isArray(req.files?.bulk_neft_file)
+              ? req.files.bulk_neft_file[0]
+              : null,
+        };
+
+        const result = await expenditureModel.updateExpenditureRequest(id, payload, userId, uploads);
+
+        return res.json({
+          status: 'success',
+          message: 'Expenditure request updated successfully',
+          data: result,
+        });
       }
 
       const result = await expenditureModel.updateExpenditure(id, req.body || {}, resolveActor(req));

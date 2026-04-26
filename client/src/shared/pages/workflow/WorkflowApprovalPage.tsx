@@ -460,10 +460,18 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const enableLevel1RoleTabs = Boolean(config.enableLevel1RoleTabs);
   const enableSuperAdminAllProposals = Boolean(config.enableSuperAdminAllProposals);
   const enableSecondaryFilter = Boolean(config.enableSecondaryFilter);
+  const isExpenditureWorkflowAdminRole = useMemo(() => {
+    const roleTokens = Array.isArray(user?.roles) ? user.roles : [];
+    return roleTokens.some((role) => {
+      const normalized = String(role || '').trim().toLowerCase();
+      return ['admin', 'hod', 'coordinator', 'dof', 'principal', 'entity_approver'].includes(normalized);
+    });
+  }, [user?.roles]);
 
   const stageTabs = useMemo<WorkflowStageTab[]>(() => {
     const roleTokens = Array.isArray(user?.roles) ? user.roles : [];
     const normalizedRoles = roleTokens.map((role) => String(role || '').trim().toLowerCase());
+    const isAdminViewer = meta?.isSuperAdmin || Boolean(user?.is_admin) || isExpenditureWorkflowAdminRole;
     const tabs: WorkflowStageTab[] = permittedStages.flatMap<WorkflowStageTab>((stage) => {
       const normalizedStage = String(stage || '').trim().toLowerCase();
       if (enableLevel1RoleTabs && normalizedStage === 'level1') {
@@ -502,7 +510,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       ];
     });
 
-    if (enableSuperAdminAllProposals && meta?.isSuperAdmin && permittedStages.length > 0) {
+    if (enableSuperAdminAllProposals && isAdminViewer && permittedStages.length > 0) {
       tabs.push({
         key: `${config.moduleKey}-all-proposals`,
         stage: tabs[0]?.stage || String(permittedStages[0] || '').trim().toLowerCase() || 'level1',
@@ -512,7 +520,17 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
 
     return tabs;
-  }, [config.moduleKey, config.stageLabels, enableLevel1RoleTabs, enableSuperAdminAllProposals, meta?.isSuperAdmin, permittedStages, user?.roles]);
+  }, [
+    config.moduleKey,
+    config.stageLabels,
+    enableLevel1RoleTabs,
+    enableSuperAdminAllProposals,
+    isExpenditureWorkflowAdminRole,
+    meta?.isSuperAdmin,
+    permittedStages,
+    user?.is_admin,
+    user?.roles,
+  ]);
 
   const activeWorkflowTab = useMemo(
     () => stageTabs.find((tab) => tab.key === activeStageTabKey) || null,

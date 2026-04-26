@@ -65,6 +65,19 @@ const EXPENDITURE_WORKFLOW_PERMISSIONS = [
 ];
 
 const canAccessExpenditureWorkflow = permissionMiddleware(EXPENDITURE_WORKFLOW_PERMISSIONS);
+const canAccessExpenditureWorkflowForAdmins = (req, res, next) => {
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  const normalizedRoles = roles.map((role) => String(role || '').trim().toLowerCase());
+  const isWorkflowRole = normalizedRoles.some((role) =>
+    ['admin', 'hod', 'coordinator', 'dof', 'principal', 'entity_approver'].includes(role)
+  );
+
+  if (Boolean(req.user?.isAdmin || req.user?.is_admin) || isWorkflowRole) {
+    return next();
+  }
+
+  return canAccessExpenditureWorkflow(req, res, next);
+};
 
 const canDelete = async (req, res, next) => {
   try {
@@ -111,10 +124,10 @@ router.post('/payees', expenditureController.createPayee);
 router.get('/payees/:id', expenditureController.getPayee);
 
 router.get('/', expenditureController.listExpenditures);
-router.get('/workflow/meta', canAccessExpenditureWorkflow, expenditureController.getWorkflowMeta);
-router.get('/queue/:stage', canAccessExpenditureWorkflow, expenditureController.getExpenditureQueue);
-router.patch('/:id/approval', canAccessExpenditureWorkflow, expenditureController.approveExpenditureWorkflow);
-router.patch('/:id/archive-toggle', canAccessExpenditureWorkflow, expenditureController.toggleArchiveStatus);
+router.get('/workflow/meta', canAccessExpenditureWorkflowForAdmins, expenditureController.getWorkflowMeta);
+router.get('/queue/:stage', canAccessExpenditureWorkflowForAdmins, expenditureController.getExpenditureQueue);
+router.patch('/:id/approval', canAccessExpenditureWorkflowForAdmins, expenditureController.approveExpenditureWorkflow);
+router.patch('/:id/archive-toggle', canAccessExpenditureWorkflowForAdmins, expenditureController.toggleArchiveStatus);
 router.post('/:id/resubmit', expenditureController.resubmitExpenditureRequest);
 router.get('/:id/status-updates', expenditureController.getStatusUpdates);
 
@@ -125,13 +138,24 @@ router.post(
   '/',
   expenditureUpload.fields([
     { name: 'bulkneftfile', maxCount: 1 },
+    { name: 'bulk_neft_file', maxCount: 1 },
     { name: 'billfiles', maxCount: 20 },
+    { name: 'bill_files', maxCount: 20 },
   ]),
   expenditureController.createExpenditureRequest,
 );
 
 router.post('/advance', expenditureController.createAdvance);
-router.put('/:id', expenditureController.updateExpenditure);
+router.put(
+  '/:id',
+  expenditureUpload.fields([
+    { name: 'bulkneftfile', maxCount: 1 },
+    { name: 'bulk_neft_file', maxCount: 1 },
+    { name: 'billfiles', maxCount: 20 },
+    { name: 'bill_files', maxCount: 20 },
+  ]),
+  expenditureController.updateExpenditure,
+);
 router.delete('/:id', canDelete, expenditureController.deleteExpenditure);
 
 export default router;

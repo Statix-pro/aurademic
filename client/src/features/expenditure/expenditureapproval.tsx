@@ -1009,7 +1009,7 @@ const createAdvanceRow = (): AdvanceFormRow => ({
   budgetHead: '',
   subHead: '',
   budget: '',
-  preAdvance: '',
+  preAdvance: '0',
   advance: '',
   budgetLineId: null,
   budgetProposalId: null,
@@ -1064,6 +1064,34 @@ interface AddPayeeModalProps {
 }
 
 const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee, showAlert }) => {
+  // Empty form templates for fresh start
+  const emptyIndividualData = {
+    payeeName: '',
+    accountName: '',
+    panNumber: '',
+    accountNo: '',
+    accountType: '',
+    bankName: '',
+    branchName: '',
+    ifsc: '',
+  };
+
+  const emptyOrganizationData = {
+    payeeName: '',
+    accountName: '',
+    organizationType: '',
+    msme: '',
+    gstin: '',
+    panNumber: '',
+    tdsDetails: '',
+    tdsSection: '',
+    accountNo: '',
+    accountType: '',
+    bankName: '',
+    branchName: '',
+    ifsc: '',
+  };
+
   // Separate data for Individual and Organization
   const [individualData, setIndividualData] = useState<{
     payeeName: string;
@@ -1074,16 +1102,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
     bankName: string;
     branchName: string;
     ifsc: string;
-  }>({
-    payeeName: '',
-    accountName: '',
-    panNumber: '',
-    accountNo: '',
-    accountType: '',
-    bankName: '',
-    branchName: '',
-    ifsc: '',
-  });
+  }>(emptyIndividualData);
 
   const [organizationData, setOrganizationData] = useState<{
     payeeName: string;
@@ -1099,21 +1118,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
     bankName: string;
     branchName: string;
     ifsc: string;
-  }>({
-    payeeName: '',
-    accountName: '',
-    organizationType: '',
-    msme: '',
-    gstin: '',
-    panNumber: '',
-    tdsDetails: '',
-    tdsSection: '',
-    accountNo: '',
-    accountType: '',
-    bankName: '',
-    branchName: '',
-    ifsc: '',
-  });
+  }>(emptyOrganizationData);
 
   const [beneficiaryType, setBeneficiaryType] = useState<'individual' | 'organization'>('individual');
 
@@ -1207,7 +1212,9 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
   useEffect(() => {
     if (show) {
       setBeneficiaryType('individual');
-      loadDataForType('individual');
+      resetToEmpty();
+      setIndividualData(emptyIndividualData);
+      setOrganizationData(emptyOrganizationData);
     }
   }, [show]);
 
@@ -1509,8 +1516,6 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
   <div style={{ flex: 1 }}>
 <CustomDropdown
   className="organization-type-dropdown"
-  menuPortalTarget={null}
-  menuPosition="absolute"
   options={ORGANIZATION_TYPE_OPTIONS.map(opt => ({ value: opt, label: opt }))}
   value={orgType ? { value: orgType, label: orgType } : null}
   onChange={(option) => {
@@ -1562,8 +1567,6 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
     >
        <CustomDropdown
   className="tds-section-dropdown"
-  menuPortalTarget={null}
-  menuPosition="absolute"
   options={TDS_SECTION_OPTIONS.map(opt => ({ value: opt, label: opt }))}
   value={tdsSectionValue ? { value: tdsSectionValue, label: tdsSectionValue } : null}
   onChange={(option) => {
@@ -1629,8 +1632,6 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
                 <div style={{ flex: 1 }}>
                   <CustomDropdown
                     className="payee-modal-select-dropdown"
-                    menuPortalTarget={null}
-                    menuPosition="absolute"
                     options={INDIAN_BANK_OPTIONS.map((bank) => ({ value: bank, label: bank }))}
                     value={newBankName ? { value: newBankName, label: newBankName } : null}
                     onChange={(option) => {
@@ -1722,7 +1723,25 @@ const ExpenditureApproval: React.FC = () => {
 
     return normalizeWorkflowModule(state?.activeTab) ?? normalizeWorkflowModule(state?.submittedModule);
   })();
-  const isReadOnlyView = Boolean(routeId) && !launchModuleFromState && !location.pathname.endsWith('/edit');
+  
+  // Check if this is Advance2
+  const isAdvance2 = (() => {
+    const state = location.state as {
+      isAdvance2?: boolean;
+    } | null;
+    return Boolean(state?.isAdvance2);
+  })();
+
+  const isReadOnlyNavigation = (() => {
+    const state = location.state as {
+      viewOnly?: boolean;
+    } | null;
+    return Boolean(state?.viewOnly);
+  })();
+
+  const isReadOnlyView =
+    Boolean(routeId) &&
+    (isReadOnlyNavigation || (!launchModuleFromState && !location.pathname.endsWith('/edit')));
   const dashboardRowIdFromState = (() => {
     const state = location.state as {
       dashboardRowId?: unknown;
@@ -1761,6 +1780,15 @@ const ExpenditureApproval: React.FC = () => {
     } | null;
 
     return parsePositiveIntLike(state?.submittedRequestId) ?? parsePositiveIntLike(routeId);
+  })();
+  const isEditingExistingRequest = Boolean(submittedRequestIdFromState);
+  const sourceRequestIdFromState = (() => {
+    const state = location.state as {
+      sourceRequestId?: unknown;
+      source_request_id?: unknown;
+    } | null;
+
+    return parsePositiveIntLike(state?.sourceRequestId) ?? parsePositiveIntLike(state?.source_request_id);
   })();
   const financeApprovedAmountFromState = (() => {
     const state = location.state as {
@@ -2568,15 +2596,19 @@ const workflowRowRefFromState = (() => {
   };
 
   const getApprovedBudgetAmount = (budget: ApprovedBudgetOption | null) =>
-    String(financeApprovedAmount || budget?.totalAmount || '');
+    budget ? String(budget.remainingAmount ?? budget.totalAmount ?? '') : '';
 
   const getBudgetDisplayValue = (rowBudget: string) => {
-    const approved = Number(financeApprovedAmount || 0);
-    if (approved > 0) {
-      return `₹ ${approved.toLocaleString('en-IN')}`;
+    if (rowBudget !== '') {
+      return `Rs ${Number(rowBudget || 0).toLocaleString('en-IN')}`;
     }
 
-    return rowBudget !== '' ? `₹ ${Number(rowBudget || 0).toLocaleString('en-IN')}` : '';
+    const approved = Number(financeApprovedAmount || 0);
+    if (approved > 0) {
+      return `Rs ${approved.toLocaleString('en-IN')}`;
+    }
+
+    return '';
   };
 
   const updateAdvanceRow = (rowId: string, updater: (row: AdvanceFormRow) => AdvanceFormRow) => {
@@ -2601,7 +2633,7 @@ const workflowRowRefFromState = (() => {
     const normalizedSubHead = String(subHead || '').trim();
 
     if (!budgetLineId && (!normalizedHead || !normalizedSubHead)) {
-      updateAdvanceRow(rowId, (row) => ({ ...row, preAdvance: '' }));
+      updateAdvanceRow(rowId, (row) => ({ ...row, preAdvance: '0' }));
       return;
     }
 
@@ -2610,6 +2642,15 @@ const workflowRowRefFromState = (() => {
       if (budgetLineId) query.set('budget_line_id', String(budgetLineId));
       if (normalizedHead) query.set('head', normalizedHead);
       if (normalizedSubHead) query.set('sub_head', normalizedSubHead);
+      if (resolvedFinanceRequestId) query.set('finance_request_id', String(resolvedFinanceRequestId));
+      if (dashboardRowIdFromState) query.set('dashboard_row_id', dashboardRowIdFromState);
+      if (workflowRowRefFromState ?? rowReferenceIdFromState) {
+        query.set('workflowrowref', workflowRowRefFromState ?? rowReferenceIdFromState ?? '');
+      }
+      if (sourceRequestIdFromState) query.set('source_request_id', String(sourceRequestIdFromState));
+      if (!dashboardRowIdFromState && !(workflowRowRefFromState ?? rowReferenceIdFromState) && rowIndexFromState) {
+        query.set('row_index', String(rowIndexFromState));
+      }
 
       const response = await authenticityUtility.get(
         `/expenditure/advance-summary?${query.toString()}`
@@ -2642,13 +2683,19 @@ const workflowRowRefFromState = (() => {
     return sum + (Number.isFinite(amount) ? amount : 0);
   }, 0);
 
+  const getPayeeTransactionTotal = (rows: PayeeRow[]): number =>
+    rows.reduce((sum, row) => {
+      const amount = parseAmountValue(row.amount);
+      return sum + (Number.isFinite(amount) ? amount : 0);
+    }, 0);
+
   const handleAdvanceBudgetHeadChange = (rowId: string, budgetHeadValue: string) => {
     updateAdvanceRow(rowId, (row) => ({
       ...row,
       budgetHead: budgetHeadValue,
       subHead: '',
       budget: '',
-      preAdvance: '',
+      preAdvance: '0',
       advance: row.advance,
       budgetLineId: null,
       budgetProposalId: null,
@@ -2743,12 +2790,12 @@ const workflowRowRefFromState = (() => {
       beneficiaryType: String(payee.beneficiary_type || '').trim().toLowerCase() === 'organization'
         ? 'organization'
         : 'individual',
-      beneficiaryOrg: String(payee.beneficiary_org || '').trim() || row.beneficiaryOrg,
-      organizationType: String(payee.organization_type || '').trim() || row.organizationType,
-      msme: String(payee.msme || '').trim() || row.msme,
-      gstin: String(payee.gstin || '').trim() || row.gstin,
-      tdsDetails: String(payee.tds_details || '').trim() || row.tdsDetails,
-      tdsSection: String(payee.tds_section || '').trim() || row.tdsSection,
+      beneficiaryOrg: String(payee.beneficiary_org || '').trim(),
+      organizationType: String(payee.organization_type || '').trim(),
+      msme: String(payee.msme || '').trim(),
+      gstin: String(payee.gstin || '').trim(),
+      tdsDetails: '',
+      tdsSection: '',
     }));
 
     closePayeeLookup();
@@ -2886,6 +2933,98 @@ const workflowRowRefFromState = (() => {
   };
 
   const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+
+  const parseAmountValue = (value: unknown): number => {
+    const normalized = String(value ?? '').replace(/,/g, '').trim();
+    if (!normalized) return 0;
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const getRowBudgetLimit = (budgetValue: string | number): number | null => {
+    const normalized = String(budgetValue ?? '').replace(/,/g, '').trim();
+    if (!normalized) return null;
+
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) return null;
+
+    return Math.max(parsed, 0);
+  };
+
+  const formatAmountInputValue = (value: number): string => {
+    if (!Number.isFinite(value)) return '';
+    return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
+  };
+
+  const handleAdvanceAmountChange = (rowId: string, nextValue: string) => {
+    if (!/^\d*\.?\d*$/.test(nextValue)) return;
+
+    let exceededLimit: number | null = null;
+
+    setAdvanceRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== rowId) return row;
+
+        const budgetLimit = getRowBudgetLimit(row.budget);
+        const requestedAmount = parseAmountValue(nextValue);
+
+        if (budgetLimit !== null && requestedAmount > budgetLimit) {
+          exceededLimit = budgetLimit;
+          return {
+            ...row,
+            advance: formatAmountInputValue(budgetLimit),
+          };
+        }
+
+        return {
+          ...row,
+          advance: nextValue,
+        };
+      }),
+    );
+
+    if (exceededLimit !== null) {
+      showAlert(
+        `Advance amount cannot exceed the remaining budget of Rs ${exceededLimit.toLocaleString('en-IN')}.`,
+        'warning',
+      );
+    }
+  };
+
+  const handleExpenditureAmountChange = (rowId: string, nextValue: string) => {
+    if (!/^[0-9+.]*$/.test(nextValue)) return;
+
+    let exceededLimit: number | null = null;
+
+    setExpenditureSubRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== rowId) return row;
+
+        const nextSum = calculateSum(nextValue);
+        const budgetLimit = getRowBudgetLimit(row.budget);
+        const requestedAmount = parseAmountValue(nextSum);
+
+        if (budgetLimit !== null && requestedAmount > budgetLimit) {
+          exceededLimit = budgetLimit;
+          return row;
+        }
+
+        return {
+          ...row,
+          expenditure: nextValue,
+          autoSum: nextSum,
+        };
+      }),
+    );
+
+    if (exceededLimit !== null) {
+      showAlert(
+        `Expenditure amount cannot exceed the remaining budget of Rs ${exceededLimit.toLocaleString('en-IN')}.`,
+        'warning',
+      );
+    }
+  };
 
   // Search applicant handler
   const handleApplicantSearch = async (query: string) => {
@@ -3297,8 +3436,7 @@ const workflowRowRefFromState = (() => {
                         placeholder="Amount"
                         value={row.amount}
                         onChange={(e) => {
-                          const updated = payeeRows.map(r => r.id === row.id ? { ...r, amount: e.target.value } : r);
-                          setPayeeRows(updated);
+                          handlePayeeAmountChange(row.id, e.target.value);
                         }}
                       />
                       <CustomDropdown
@@ -3314,19 +3452,32 @@ const workflowRowRefFromState = (() => {
                         
                       />
                     </div>
-                    {(row.tdsDetails || row.tdsSection) && (
+                    {((row.tdsDetails && row.tdsDetails !== 'Yes' && row.tdsDetails !== 'No')
+                      || (row.tdsSection && row.tdsSection !== 'Yes' && row.tdsSection !== 'No')) && (
                       <div style={{ marginTop: '8px', fontSize: '12px', color: '#6c757d', lineHeight: 1.5 }}>
-                        {row.tdsDetails && <div>TDS Details: {row.tdsDetails}</div>}
-                        {row.tdsSection && <div>TDS Section: {row.tdsSection}</div>}
+                        {row.tdsDetails && row.tdsDetails !== 'Yes' && row.tdsDetails !== 'No' && <div>TDS Details: {row.tdsDetails}</div>}
+                        {row.tdsSection && row.tdsSection !== 'Yes' && row.tdsSection !== 'No' && <div>TDS Section: {row.tdsSection}</div>}
                       </div>
                     )}
                     <div className="payee-tds-row">
                       <span className="payee-tds-label">TDS</span>
                       <label className="payee-tds-option">
-                        <input type="radio" name={`tds-${row.id}`} /> Yes
+                        <input
+                          type="radio"
+                          name={`tds-${row.id}`}
+                          value="Yes"
+                          checked={row.tdsSection === 'Yes'}
+                          onChange={() => updatePayeeRow(row.id, (r) => ({ ...r, tdsSection: 'Yes' }))}
+                        /> Yes
                       </label>
                       <label className="payee-tds-option">
-                        <input type="radio" name={`tds-${row.id}`} /> No
+                        <input
+                          type="radio"
+                          name={`tds-${row.id}`}
+                          value="No"
+                          checked={row.tdsSection === 'No'}
+                          onChange={() => updatePayeeRow(row.id, (r) => ({ ...r, tdsSection: 'No' }))}
+                        /> No
                       </label>
                     </div>
                     </div>
@@ -3479,8 +3630,45 @@ const getSelectedWorkflowRow = (): WorkflowFormRow | null => {
 const getSelectedWorkflowBudgetLineId = (): number | null =>
   parsePositiveIntLike(getSelectedWorkflowRow()?.budgetLineId);
 
-const getSelectedWorkflowBudgetProposalId = (): number | null =>
+  const getSelectedWorkflowBudgetProposalId = (): number | null =>
   parsePositiveIntLike(getSelectedWorkflowRow()?.budgetProposalId);
+
+const getActiveTabTransactionAmount = (
+  tab: 'Advance' | 'Settlement' | 'Expenditure',
+): number => {
+  if (tab === 'Advance') return totalAdvanceAmount;
+  if (tab === 'Settlement') return totalSettlementAmount;
+  return totalExpenditureAmount;
+};
+
+const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
+  if (!/^\d*\.?\d*$/.test(nextValue)) return;
+
+  const workflowAmount = activeTab
+    ? getActiveTabTransactionAmount(activeTab)
+    : 0;
+  let exceededLimit = false;
+
+  setPayeeRows((prev) => {
+    const updatedRows = prev.map((row) => (
+      row.id === rowId ? { ...row, amount: nextValue } : row
+    ));
+
+    if (workflowAmount > 0 && getPayeeTransactionTotal(updatedRows) > workflowAmount) {
+      exceededLimit = true;
+      return prev;
+    }
+
+    return updatedRows;
+  });
+
+  if (exceededLimit && activeTab) {
+    showAlert(
+      `Total payee transaction amount cannot exceed the ${activeTab.toLowerCase()} amount of Rs ${workflowAmount.toLocaleString('en-IN')}.`,
+      'warning',
+    );
+  }
+};
  const handleSubmit = async (): Promise<void> => {
   try {
     if (isReadOnlyView) {
@@ -3513,6 +3701,57 @@ const getSelectedWorkflowBudgetProposalId = (): number | null =>
     if (!selectedWorkflowBudgetLineId) {
       showAlert(
         'Please select a valid approved budget head and sub-head for this row before submitting.',
+        'warning'
+      );
+      return;
+    }
+
+    if (activeTab === 'Advance') {
+      const selectedAdvanceRow = selectedWorkflowRow as AdvanceFormRow;
+      const budgetLimit = getRowBudgetLimit(selectedAdvanceRow.budget);
+      const requestedAdvance = parseAmountValue(selectedAdvanceRow.advance);
+
+      if (budgetLimit !== null && requestedAdvance > budgetLimit) {
+        showAlert(
+          `Advance amount cannot exceed the remaining budget of Rs ${budgetLimit.toLocaleString('en-IN')}.`,
+          'warning',
+        );
+        return;
+      }
+    }
+
+    if (activeTab === 'Expenditure') {
+      const selectedExpenditureRow = selectedWorkflowRow as ExpenditureFormRow;
+      const budgetLimit = getRowBudgetLimit(selectedExpenditureRow.budget);
+      const requestedExpenditure = parseAmountValue(
+        selectedExpenditureRow.autoSum || selectedExpenditureRow.expenditure,
+      );
+
+      if (budgetLimit !== null && requestedExpenditure > budgetLimit) {
+        showAlert(
+          `Expenditure amount cannot exceed the remaining budget of Rs ${budgetLimit.toLocaleString('en-IN')}.`,
+          'warning',
+        );
+        return;
+      }
+    }
+
+    const normalizedTotalPayeeTransactionAmount = Number(
+      getPayeeTransactionTotal(payeeRows).toFixed(2),
+    );
+    const normalizedWorkflowAmount = Number(
+      getActiveTabTransactionAmount(activeTab).toFixed(2),
+    );
+
+    if (normalizedTotalPayeeTransactionAmount !== normalizedWorkflowAmount) {
+      showAlert(
+        `${activeTab} amount is Rs ${normalizedWorkflowAmount.toLocaleString('en-IN', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} and total payee transaction amount is Rs ${normalizedTotalPayeeTransactionAmount.toLocaleString('en-IN', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}. Both must be exactly the same. Form cannot be submitted.`,
         'warning'
       );
       return;
@@ -3565,6 +3804,7 @@ const getSelectedWorkflowBudgetProposalId = (): number | null =>
       workflowrequesttype: activeTab,
       row_index: rowIndexFromState,
       dashboard_row_id: dashboardRowIdFromState,
+      source_request_id: sourceRequestIdFromState,
       workflowrowref:
         workflowRowRefFromState ?? 
         rowReferenceIdFromState ?? 
@@ -3617,7 +3857,17 @@ const getSelectedWorkflowBudgetProposalId = (): number | null =>
       formData.append('bulk_neft_file', bulkNeftFile);
     }
 
-    const result = (await authenticityUtility.postFile('/expenditure', formData)) as {
+    const endpoint = isEditingExistingRequest && submittedRequestIdFromState
+      ? `/expenditure/${submittedRequestIdFromState}`
+      : '/expenditure';
+    const result = isEditingExistingRequest && submittedRequestIdFromState
+      ? await authenticityUtility.put(endpoint, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+      : await authenticityUtility.postFile(endpoint, formData);
+    const normalizedResult = result as {
       status: string;
       message?: string;
       data?: {
@@ -3626,8 +3876,8 @@ const getSelectedWorkflowBudgetProposalId = (): number | null =>
       };
     };
 
-    if (result.status !== 'success') {
-      showAlert(result.message || 'Submission failed', 'error');
+    if (normalizedResult.status !== 'success') {
+      showAlert(normalizedResult.message || 'Submission failed', 'error');
       return;
     }
 
@@ -3640,13 +3890,17 @@ const getSelectedWorkflowBudgetProposalId = (): number | null =>
             ? totalExpenditureAmount
             : 0;
 
-    const savedRequestId = parsePositiveIntLike(result.data?.expenditureId);
-    const savedRequestRef = String(result.data?.requestRef || '').trim();
+    const savedRequestId = parsePositiveIntLike(normalizedResult.data?.expenditureId);
+    const savedRequestRef = String(normalizedResult.data?.requestRef || '').trim();
     const financeIdLabel = `Finance ID: ${resolvedFinanceRequestId}`;
     const proposalRefLabel = `Proposal Ref: ${String(
       (location.state as { financeProposal?: { proposalId?: unknown } } | null)?.financeProposal?.proposalId || ''
     ).trim()}`;
-    const moduleLabel = activeTab ? `${activeTab} submitted successfully.` : 'Submitted successfully.';
+    const moduleLabel = activeTab
+      ? `${activeTab} ${isEditingExistingRequest ? 'updated successfully.' : 'submitted successfully.'}`
+      : isEditingExistingRequest
+        ? 'Updated successfully.'
+        : 'Submitted successfully.';
     const requestLabel = savedRequestRef ? `Request Ref: ${savedRequestRef}` : '';
 
     showAlert(
@@ -4921,10 +5175,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                           type="text"
                           placeholder="₹ 0"
                           value={row.advance}
-                          onChange={(e) => {
-                            const updated = advanceRows.map(r => r.id === row.id ? { ...r, advance: e.target.value } : r);
-                            setAdvanceRows(updated);
-                          }}
+                          onChange={(e) => handleAdvanceAmountChange(row.id, e.target.value)}
                           style={{
                             border: '1px solid #e0e0e0',
                             borderRadius: '12px',
@@ -5249,7 +5500,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                 }}
                >
                 <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                <span style={{ fontWeight: 600 }}>{numberToIndianWords(totalAdvanceAmount)}</span>
+                <span style={{ fontWeight: 600 }}>{numberToIndianWords(totalSettlementAmount)}</span>
               </div>
             </div>
           </div>
@@ -5399,13 +5650,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                       type="text"
                       placeholder="Eg: 455+345+780"
                       value={row.expenditure}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (!/^[0-9+.]*$/.test(val)) return;
-                        const sum = calculateSum(val);
-                        const updated = expenditureSubRows.map(r => r.id === row.id ? { ...r, expenditure: val, autoSum: sum } : r);
-                        setExpenditureSubRows(updated);
-                      }}
+                      onChange={(e) => handleExpenditureAmountChange(row.id, e.target.value)}
                       style={{
                         border: '1px solid #e0e0e0',
                         borderRadius: '12px',
@@ -5649,5 +5894,3 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
 };
 
 export default ExpenditureApproval;
-
-
