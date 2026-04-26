@@ -36,6 +36,7 @@ interface DashboardReturnState {
   submittedAmount?: number;
   submittedRequestId?: number;
   financeRequestId?: number;
+  viewOnly?: boolean;
   financeProposal?: {
     proposalId: string;
     applicantName: string;
@@ -77,23 +78,31 @@ interface WorkflowRow {
   id: string;
   requestId?: number | null;
   advanceRequestId?: number | null;
+  advanceRequestId2?: number | null; // For second advance
   expenditureRequestId?: number | null;
   settlementRequestId?: number | null;
   rowIndex: number;
   baseRowRef: string;
   advanceRef: string;
+  advanceRef2?: string; // For second advance
   expenditureRef: string;
   settlementRef: string;
   primaryChoice: WorkflowModule | null;
   advanceAmount: number;
+  advanceAmount2?: number; // For second advance
   expenditureAmount: number;
   settlementAmount: number;
   advanceSubHead?: string;
+  advanceSubHead2?: string; // For second advance
   expenditureSubHead?: string;
   settlementSubHead?: string;
   advanceStatus?: string;
+  advanceStatus2?: string; // For second advance
   expenditureStatus?: string;
   settlementStatus?: string;
+  latestRequestId?: number | null;
+  latestRequestType?: WorkflowModule | null;
+  latestWorkflowStatus?: string;
   approvalLevel: number;
 }
 
@@ -127,7 +136,7 @@ const normalizeModule = (value: unknown): WorkflowModule | null => {
 
   const normalizeStatus = (value: unknown) => normalizeText(value).toLowerCase() || "pending";
 
-  const parseWorkflowState = (value: unknown): Record<string, unknown> | null => {
+const parseWorkflowState = (value: unknown): Record<string, unknown> | null => {
     if (!value) return null;
     if (typeof value === "object" && !Array.isArray(value)) {
       return value as Record<string, unknown>;
@@ -138,22 +147,43 @@ const normalizeModule = (value: unknown): WorkflowModule | null => {
       return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
     } catch {
       return null;
-    }
-  };
+  }
+};
 
-  const getRowKey = (req: ExpenditureItem) => {
+const getRequestWorkflowStatus = (req: ExpenditureItem) => {
+  const workflowState = parseWorkflowState(req.workflow_state);
+  return normalizeStatus(
+    workflowState?.status ??
+      workflowState?.workflowStatus ??
+      workflowState?.overallStatus ??
+      req.overallstatus,
+  );
+};
+
+const getRowKey = (req: ExpenditureItem) => {
     const state = parseWorkflowState(req.workflow_state);
     const direct = normalizeText(
+      state?.dashboardRowId ??
       state?.workflowrowref ??
       state?.rowReferenceId ??
-      state?.dashboardRowId ??
       state?.rowIndex ??
       ""
     );
 
     if (direct) return direct;
-    return `finance-${normalizeText(req.financeid ?? "")}-legacy`;
-  };
+  return `finance-${normalizeText(req.financeid ?? "")}-request-${normalizeText(req.id ?? "")}`;
+};
+
+const getWorkflowStateRowIndex = (value: unknown): number | null => {
+  const state = parseWorkflowState(value);
+  const raw = Number(state?.rowIndex);
+  return Number.isInteger(raw) && raw > 0 ? raw : null;
+};
+
+const getNextWorkflowRowIndex = (rows: WorkflowRow[]): number => {
+  const maxIndex = rows.reduce((max, row) => Math.max(max, Number(row.rowIndex) || 0), 0);
+  return maxIndex + 1;
+};
 
 const ExpenditureDashboard: React.FC = () => {
   const [data, setData] = useState<ExpenditureItem[]>([]);
@@ -214,6 +244,19 @@ const ExpenditureDashboard: React.FC = () => {
   const isApprovedStatus = (status?: string | null) =>
     normalizeStatus(status) === "approved";
 
+  const isEditableWorkflowStatus = (status?: string | null) => {
+    const normalized = normalizeStatus(status);
+    return [
+      "pending",
+      "submitted",
+      "in_progress",
+      "in progress",
+      "returned",
+      "rejected",
+      "draft",
+    ].includes(normalized);
+  };
+
   const isWorkflowRowCompleted = (row: WorkflowRow) => {
     if (row.primaryChoice === "Advance") {
       return isApprovedStatus(row.settlementStatus);
@@ -250,34 +293,93 @@ const ExpenditureDashboard: React.FC = () => {
     return "idle";
   };
 
+  const createWorkflowRow = (financeId: string, rowIndex: number): WorkflowRow => ({
+    id: `${financeId}-manual-${rowIndex}`,
+    requestId: null,
+    advanceRequestId: null,
+    advanceRequestId2: null,
+    expenditureRequestId: null,
+    settlementRequestId: null,
+    rowIndex,
+    baseRowRef: `${financeId}-manual-${rowIndex}`,
+    advanceRef: `${financeId}-advance-manual-${rowIndex}`,
+    advanceRef2: `${financeId}-advance2-manual-${rowIndex}`,
+    expenditureRef: `${financeId}-expenditure-manual-${rowIndex}`,
+    settlementRef: `${financeId}-settlement-manual-${rowIndex}`,
+    primaryChoice: null,
+    advanceAmount: 0,
+    advanceAmount2: 0,
+    expenditureAmount: 0,
+    settlementAmount: 0,
+    advanceSubHead: "",
+    advanceSubHead2: "",
+    expenditureSubHead: "",
+    settlementSubHead: "",
+    advanceStatus: "pending",
+    advanceStatus2: "pending",
+    expenditureStatus: "pending",
+    settlementStatus: "pending",
+    latestRequestId: null,
+    latestRequestType: null,
+    latestWorkflowStatus: "pending",
+    approvalLevel: 0,
+  });
+
   const handleModuleLaunch = (
     row: WorkflowRow,
-    module: WorkflowModule,
-    card: ExpenditureProposalCard
+    module: WorkflowModule | "Advance2",
+    card: ExpenditureProposalCard,
+    options?: { forceNew?: boolean; mode?: "create" | "edit" | "view" }
    ) => {
-    const rowReferenceId =
-      module === "Advance"
-        ? row.advanceRef
-        : module === "Expenditure"
-        ? row.expenditureRef
-        : row.settlementRef;
+    const targetRow = row;
 
-    const requestId =
-      module === "Advance"
-        ? row.advanceRequestId
-        : module === "Expenditure"
-        ? row.expenditureRequestId
-        : row.settlementRequestId;
+    // Handle Advance2 specifically
+    const isAdvance2 = module === "Advance2";
+    const targetModule = isAdvance2 ? "Advance" : module;
+
+    const rowReferenceId =
+      targetModule === "Advance"
+        ? isAdvance2
+          ? targetRow.advanceRef2 ?? `${targetRow.advanceRef}-2`
+          : targetRow.advanceRef
+        : targetModule === "Expenditure"
+        ? targetRow.expenditureRef
+        : targetRow.settlementRef;
+
+    const requestId = options?.forceNew
+      ? null
+      : targetModule === "Advance"
+      ? isAdvance2
+        ? targetRow.advanceRequestId2
+        : targetRow.advanceRequestId
+      : targetModule === "Expenditure"
+      ? targetRow.expenditureRequestId
+      : targetRow.settlementRequestId;
 
     const targetRequestId = requestId ?? null;
+    const launchMode =
+      options?.mode ??
+      (targetRequestId
+        ? isEditableWorkflowStatus(targetRow.latestWorkflowStatus)
+          ? "edit"
+          : "view"
+        : "create");
+    const route =
+      launchMode === "edit" && targetRequestId
+        ? `/expenditure/${targetRequestId}/edit`
+        : targetRequestId
+        ? `/expenditure/${targetRequestId}`
+        : "/expenditure/new";
 
-    navigate(targetRequestId ? `/expenditure/${targetRequestId}` : "/expenditure/new", {
+    navigate(route, {
       state: {
-        activeTab: module,
-        dashboardRowId: row.baseRowRef,
+        ...(launchMode === "view" ? { viewOnly: true } : { activeTab: targetModule }),
+        isAdvance2: isAdvance2, // Pass flag for Advance2
+        dashboardRowId: targetRow.baseRowRef,
         rowReferenceId,
-        rowIndex: row.rowIndex,
+        rowIndex: targetRow.rowIndex,
         submittedRequestId: targetRequestId ?? undefined,
+        sourceRequestId: row.requestId ?? undefined,
         financeRequestId: Number(card.financeRequestId),
         financeProposal: {
           proposalId: card.proposalId,
@@ -293,42 +395,45 @@ const ExpenditureDashboard: React.FC = () => {
 
   const getRowActions = (row: WorkflowRow) => {
     const isCompleted = isWorkflowRowCompleted(row);
-    const advanceLabel = "Advance";
+    const showAdvance2 = Boolean(row.advanceRequestId2) || Boolean(row.advanceRequestId) || row.primaryChoice === "Advance";
 
     if (isCompleted) {
       return [
-        { label: advanceLabel, module: "Advance" as const, disabled: true, submitted: row.primaryChoice === "Advance" },
-        { label: "Settlement", module: "Settlement" as const, disabled: true, submitted: row.primaryChoice === "Settlement" },
-        { label: "Expenditure", module: "Expenditure" as const, disabled: true, submitted: row.primaryChoice === "Expenditure" },
+        { label: "Advance", module: "Advance" as const, hidden: !Boolean(row.advanceRequestId), submitted: Boolean(row.advanceRequestId) },
+        { label: "Advance2", module: "Advance2" as const, hidden: !Boolean(row.advanceRequestId2), submitted: Boolean(row.advanceRequestId2) },
+        { label: "Settlement", module: "Settlement" as const, hidden: !Boolean(row.settlementRequestId), submitted: Boolean(row.settlementRequestId) },
+        { label: "Expenditure", module: "Expenditure" as const, hidden: !Boolean(row.expenditureRequestId), submitted: Boolean(row.expenditureRequestId) },
       ];
     }
 
     if (row.primaryChoice === "Advance") {
       return [
-        { label: advanceLabel, module: "Advance" as const, disabled: true, submitted: true },
-        { label: "Settlement", module: "Settlement" as const, disabled: Boolean(row.settlementRequestId), submitted: Boolean(row.settlementRequestId) },
-        { label: "Expenditure", module: "Expenditure" as const, disabled: true, submitted: false },
+        { label: "Advance", module: "Advance" as const, hidden: false, submitted: Boolean(row.advanceRequestId) },
+        { label: "Advance2", module: "Advance2" as const, hidden: !showAdvance2, submitted: Boolean(row.advanceRequestId2) },
+        { label: "Settlement", module: "Settlement" as const, hidden: !Boolean(row.advanceRequestId || row.settlementRequestId), submitted: Boolean(row.settlementRequestId) },
+        { label: "Expenditure", module: "Expenditure" as const, hidden: true, submitted: false },
       ];
     }
 
     if (row.primaryChoice === "Expenditure") {
       return [
-        { label: "Advance", module: "Advance" as const, disabled: true, submitted: false },
-        { label: "Expenditure", module: "Expenditure" as const, disabled: true, submitted: true },
+        { label: "Advance", module: "Advance" as const, hidden: true, submitted: false },
+        { label: "Expenditure", module: "Expenditure" as const, hidden: false, submitted: true },
       ];
     }
 
     if (row.primaryChoice === "Settlement") {
       return [
-        { label: "Advance", module: "Advance" as const, disabled: true, submitted: false },
-        { label: "Settlement", module: "Settlement" as const, disabled: true, submitted: true },
-        { label: "Expenditure", module: "Expenditure" as const, disabled: true, submitted: false },
+        { label: "Advance", module: "Advance" as const, hidden: !Boolean(row.advanceRequestId), submitted: Boolean(row.advanceRequestId) },
+        { label: "Settlement", module: "Settlement" as const, hidden: false, submitted: Boolean(row.settlementRequestId) },
+        { label: "Expenditure", module: "Expenditure" as const, hidden: true, submitted: false },
       ];
     }
 
     return [
-      { label: "Advance", module: "Advance" as const, disabled: false, submitted: false },
-      { label: "Expenditure", module: "Expenditure" as const, disabled: false, submitted: false },
+      { label: "Advance", module: "Advance" as const, hidden: false, submitted: false },
+      { label: "Advance2", module: "Advance2" as const, hidden: true, submitted: false },
+      { label: "Expenditure", module: "Expenditure" as const, hidden: false, submitted: false },
     ];
   };
 
@@ -454,6 +559,7 @@ const ExpenditureDashboard: React.FC = () => {
           if (aTime !== bTime) return bTime - aTime;
           return b.id - a.id;
         })[0] ?? null;
+        const latestWorkflowStatus = latestRequest ? getRequestWorkflowStatus(latestRequest) : "pending";
 
         const firstRequest = [...rowRequests].sort((a, b) => {
           const aTime = new Date(a.createdat || 0).getTime();
@@ -482,35 +588,73 @@ const ExpenditureDashboard: React.FC = () => {
           };
         };
 
-        const advanceSummary = summarizeModule("Advance");
+        // Special handling for Advance - separate first and second advance
+        const advanceRows = rowRequests
+          .filter((req) => normalizeModule(req.request_type) === "Advance")
+          .sort((a, b) => {
+            const aTime = new Date(a.createdat || 0).getTime();
+            const bTime = new Date(b.createdat || 0).getTime();
+            if (aTime !== bTime) return aTime - bTime; // Oldest first for advance
+            return a.id - b.id;
+          });
+
+        const firstAdvance = advanceRows[0] ?? null;
+        const secondAdvance = advanceRows[1] ?? null;
+
+        const advanceSummary = {
+          requestId: firstAdvance?.id ?? null,
+          amount: Number(firstAdvance?.amount ?? 0),
+          subHead: normalizeText(firstAdvance?.sub_head),
+          status: normalizeStatus(firstAdvance?.overallstatus),
+        };
+
+        const advanceSummary2 = secondAdvance ? {
+          requestId: secondAdvance.id,
+          amount: Number(secondAdvance.amount ?? 0),
+          subHead: normalizeText(secondAdvance.sub_head),
+          status: normalizeStatus(secondAdvance.overallstatus),
+        } : null;
+
         const expenditureSummary = summarizeModule("Expenditure");
         const settlementSummary = summarizeModule("Settlement");
+        const persistedRowIndex =
+          rowRequests
+            .map((req) => getWorkflowStateRowIndex(req.workflow_state))
+            .find((value): value is number => Boolean(value)) ?? (index + 1);
 
         return {
           id: rowKey || `${financeId}-req-${latestRequest?.id ?? index + 1}`,
           requestId: latestRequest?.id ?? null,
           advanceRequestId: advanceSummary.requestId,
+          advanceRequestId2: advanceSummary2?.requestId ?? null,
           expenditureRequestId: expenditureSummary.requestId,
           settlementRequestId: settlementSummary.requestId,
-          rowIndex: index + 1,
+          rowIndex: persistedRowIndex,
           baseRowRef: rowKey || `${financeId}-req-${latestRequest?.id ?? index + 1}`,
           advanceRef: `${financeId}-advance-${rowKey || index + 1}`,
+          advanceRef2: `${financeId}-advance2-${rowKey || index + 1}`,
           expenditureRef: `${financeId}-expenditure-${rowKey || index + 1}`,
           settlementRef: `${financeId}-settlement-${rowKey || index + 1}`,
           primaryChoice: normalizeModule(firstRequest?.request_type),
           advanceAmount: advanceSummary.amount,
+          advanceAmount2: advanceSummary2?.amount ?? 0,
           expenditureAmount: expenditureSummary.amount,
           settlementAmount: settlementSummary.amount,
           advanceSubHead: advanceSummary.subHead,
+          advanceSubHead2: advanceSummary2?.subHead ?? "",
           expenditureSubHead: expenditureSummary.subHead,
           settlementSubHead: settlementSummary.subHead,
           advanceStatus: advanceSummary.status,
+          advanceStatus2: advanceSummary2?.status ?? "pending",
           expenditureStatus: expenditureSummary.status,
           settlementStatus: settlementSummary.status,
+          latestRequestId: latestRequest?.id ?? null,
+          latestRequestType: normalizeModule(latestRequest?.request_type),
+          latestWorkflowStatus,
           approvalLevel: latestRequest
-            ? latestRequest.overallstatus === "approved"
+            ? latestWorkflowStatus === "approved"
               ? 3
-              : latestRequest.overallstatus === "rejected"
+              : latestWorkflowStatus === "rejected"
               ? 0
               : 1
             : 0,
@@ -521,21 +665,30 @@ const ExpenditureDashboard: React.FC = () => {
         {
           id: `${financeId}-blank-1`,
           requestId: null,
+          advanceRequestId: null,
+          advanceRequestId2: null,
           rowIndex: 1,
           baseRowRef: `${financeId}-blank-1`,
           advanceRef: `${financeId}-advance-blank-1`,
+          advanceRef2: `${financeId}-advance2-blank-1`,
           expenditureRef: `${financeId}-expenditure-blank-1`,
           settlementRef: `${financeId}-settlement-blank-1`,
           primaryChoice: null,
           advanceAmount: 0,
+          advanceAmount2: 0,
           expenditureAmount: 0,
           settlementAmount: 0,
           advanceSubHead: "",
+          advanceSubHead2: "",
           expenditureSubHead: "",
           settlementSubHead: "",
           advanceStatus: "pending",
+          advanceStatus2: "pending",
           expenditureStatus: "pending",
           settlementStatus: "pending",
+          latestRequestId: null,
+          latestRequestType: null,
+          latestWorkflowStatus: "pending",
           approvalLevel: 0,
         },
       ];
@@ -547,30 +700,7 @@ const ExpenditureDashboard: React.FC = () => {
   const addRow = (financeId: string) => {
     setCardRows((prev) => {
       const existing = prev[financeId] ?? [];
-      const nextIndex = existing.length + 1;
-      const nextRow: WorkflowRow = {
-        id: `${financeId}-manual-${nextIndex}`,
-        requestId: null,
-        advanceRequestId: null,
-        expenditureRequestId: null,
-        settlementRequestId: null,
-        rowIndex: nextIndex,
-        baseRowRef: `${financeId}-manual-${nextIndex}`,
-        advanceRef: `${financeId}-advance-manual-${nextIndex}`,
-        expenditureRef: `${financeId}-expenditure-manual-${nextIndex}`,
-        settlementRef: `${financeId}-settlement-manual-${nextIndex}`,
-        primaryChoice: null,
-        advanceAmount: 0,
-        expenditureAmount: 0,
-        settlementAmount: 0,
-        advanceSubHead: "",
-        expenditureSubHead: "",
-        settlementSubHead: "",
-        advanceStatus: "pending",
-        expenditureStatus: "pending",
-        settlementStatus: "pending",
-        approvalLevel: 0,
-      };
+      const nextRow = createWorkflowRow(financeId, getNextWorkflowRowIndex(existing));
 
       return {
         ...prev,
@@ -584,12 +714,7 @@ const ExpenditureDashboard: React.FC = () => {
       const existing = prev[financeId] ?? [];
       if (existing.length <= 1) return prev;
 
-      const nextRows = existing
-        .filter((row) => row.id !== rowId)
-        .map((row, index) => ({
-          ...row,
-          rowIndex: index + 1,
-        }));
+      const nextRows = existing.filter((row) => row.id !== rowId);
 
       return {
         ...prev,
@@ -839,6 +964,10 @@ const ExpenditureDashboard: React.FC = () => {
                                 const showExpenditureAmount = row.expenditureAmount > 0;
                                 const showSettlementAmount = row.settlementAmount > 0;
                                 const isCompleted = isWorkflowRowCompleted(row);
+                                const canEditRow =
+                                  row.latestWorkflowStatus
+                                    ? isEditableWorkflowStatus(row.latestWorkflowStatus)
+                                    : !Boolean(row.latestRequestId);
 
                                 return (
                                   <div
@@ -852,13 +981,15 @@ const ExpenditureDashboard: React.FC = () => {
                                     <div className="expenditure-demo-row__header">
                                       <div className="expenditure-demo-row__left">
                                         <div className="expenditure-demo-row__buttons">
-                                          {actions.map((option) => (
+                                          {actions.map((option) => {
+                                            // Skip hidden buttons
+                                            if (option.hidden) return null;
+                                            
+                                            return (
                                             <button
                                               key={`${row.id}-${option.label}`}
                                               type="button"
                                               className={`expenditure-demo-option ${
-                                                option.disabled ? "disabled" : ""
-                                              } ${
                                                 option.submitted ? "submitted" : ""
                                               } ${
                                                 row.primaryChoice === option.module ||
@@ -868,16 +999,31 @@ const ExpenditureDashboard: React.FC = () => {
                                                   : ""
                                               }`}
                                               onClick={() =>
-                                                !option.disabled &&
-                                                handleModuleLaunch(row, option.module, card)
+                                                handleModuleLaunch(
+                                                  row,
+                                                  option.module,
+                                                  card,
+                                                  {
+                                                    mode: (
+                                                      (option.module === "Advance" && Boolean(row.advanceRequestId)) ||
+                                                      (option.module === "Advance2" && Boolean(row.advanceRequestId2)) ||
+                                                      (option.module === "Settlement" && Boolean(row.settlementRequestId)) ||
+                                                      (option.module === "Expenditure" && Boolean(row.expenditureRequestId))
+                                                    )
+                                                      ? "view"
+                                                      : "create",
+                                                    forceNew:
+                                                      option.module === "Advance2" &&
+                                                      !Boolean(row.advanceRequestId2),
+                                                  }
+                                                )
                                               }
-                                              disabled={option.disabled}
                                             >
                                               <span className="expenditure-demo-option__label">
                                                 {option.label}
                                               </span>
                                             </button>
-                                          ))}
+                                          )})}
                                         </div>
 
                                         <div className="expenditure-demo-row__amounts">
@@ -885,7 +1031,11 @@ const ExpenditureDashboard: React.FC = () => {
                                             <button
                                               type="button"
                                               className="expenditure-demo-row__amount-chip expenditure-demo-row__amount-chip--button"
-                                              onClick={() => handleModuleLaunch(row, "Advance", card)}
+                                              onClick={() =>
+                                                handleModuleLaunch(row, "Advance", card, {
+                                                  mode: "view",
+                                                })
+                                              }
                                             >
                                               <span className="expenditure-demo-row__amount-label">
                                                 Advance
@@ -899,12 +1049,37 @@ const ExpenditureDashboard: React.FC = () => {
                                             </button>
                                           )}
 
+                                          {/* Show Advance2 if it has amount */}
+                                          {row.advanceAmount2 !== undefined && row.advanceAmount2 > 0 && (
+                                            <button
+                                              type="button"
+                                              className="expenditure-demo-row__amount-chip expenditure-demo-row__amount-chip--button"
+                                              onClick={() =>
+                                                handleModuleLaunch(row, "Advance2", card, {
+                                                  mode: "view",
+                                                })
+                                              }
+                                            >
+                                              <span className="expenditure-demo-row__amount-label">
+                                                Advance2
+                                              </span>
+                                              <strong>
+                                                {row.advanceSubHead2
+                                                  ? `${row.advanceSubHead2} | `
+                                                  : ""}
+                                                {formatAmount(row.advanceAmount2)}
+                                              </strong>
+                                            </button>
+                                          )}
+
                                           {showExpenditureAmount && (
                                             <button
                                               type="button"
                                               className="expenditure-demo-row__amount-chip expenditure-demo-row__amount-chip--button"
                                               onClick={() =>
-                                                handleModuleLaunch(row, "Expenditure", card)
+                                                handleModuleLaunch(row, "Expenditure", card, {
+                                                  mode: "view",
+                                                })
                                               }
                                             >
                                               <span className="expenditure-demo-row__amount-label">
@@ -923,7 +1098,11 @@ const ExpenditureDashboard: React.FC = () => {
                                             <button
                                               type="button"
                                               className="expenditure-demo-row__amount-chip expenditure-demo-row__amount-chip--button"
-                                              onClick={() => handleModuleLaunch(row, "Settlement", card)}
+                                              onClick={() =>
+                                                handleModuleLaunch(row, "Settlement", card, {
+                                                  mode: "view",
+                                                })
+                                              }
                                             >
                                               <span className="expenditure-demo-row__amount-label">
                                                 Settlement
@@ -940,6 +1119,38 @@ const ExpenditureDashboard: React.FC = () => {
                                       </div>
 
                                       <div className="expenditure-demo-row__status">
+                                        {/* Edit button - only show before level 1 approval or if returned */}
+                                        {canEditRow && (
+                                          <button
+                                            type="button"
+                                            className="expenditure-demo-row__icon-btn"
+                                            onClick={() => {
+                                              // Navigate to the last submitted module for editing
+                                              if (row.latestRequestType === "Advance" && row.advanceRequestId2) {
+                                                handleModuleLaunch(row, "Advance2", card, { mode: "edit" });
+                                              } else if (row.latestRequestType === "Advance" && row.advanceRequestId) {
+                                                handleModuleLaunch(row, "Advance", card, { mode: "edit" });
+                                              } else if (row.latestRequestType === "Expenditure" && row.expenditureRequestId) {
+                                                handleModuleLaunch(row, "Expenditure", card, { mode: "edit" });
+                                              } else if (row.latestRequestType === "Settlement" && row.settlementRequestId) {
+                                                handleModuleLaunch(row, "Settlement", card, { mode: "edit" });
+                                              } else if (row.advanceRequestId2) {
+                                                handleModuleLaunch(row, "Advance2", card, { mode: "edit" });
+                                              } else if (row.advanceRequestId) {
+                                                handleModuleLaunch(row, "Advance", card, { mode: "edit" });
+                                              } else if (row.settlementRequestId) {
+                                                handleModuleLaunch(row, "Settlement", card, { mode: "edit" });
+                                              } else if (row.expenditureRequestId) {
+                                                handleModuleLaunch(row, "Expenditure", card, { mode: "edit" });
+                                              }
+                                            }}
+                                            title="Edit proposal"
+                                            aria-label="Edit proposal"
+                                          >
+                                            <Edit2 size={14} />
+                                          </button>
+                                        )}
+
                                         <button
                                           type="button"
                                           className={`expenditure-status-pill ${
@@ -1004,7 +1215,10 @@ const ExpenditureDashboard: React.FC = () => {
                                           </button>
                                         )}
 
-                                        {rows.length > 1 && (
+                                        {/* Hide delete button after approval/completion/archive */}
+                                        {row.latestWorkflowStatus !== "approved" &&
+                                          row.latestWorkflowStatus !== "completed" &&
+                                          row.latestWorkflowStatus !== "archived" && (
                                           <button
                                             type="button"
                                             className="expenditure-demo-row__icon-btn expenditure-demo-row__icon-btn--danger"
