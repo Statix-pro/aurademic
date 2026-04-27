@@ -222,9 +222,10 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Printer Maintenance',
     'Software Maintenance',
     'UPS Maintenance',
-    'Vehicle Maintenance'
+    'Vehicle Maintenance',
+    'Toner Refill'
   ],
-  Spares: ['Chargers', 'Printer Donors', 'SMPS'],
+  Spares: ['Chargers', 'Printer Toner', 'SMPS'],
   'Annual Maintenance Charges': ['Equipment Maintenance', 'Software Maintenance'],
   Consumables: [
     'Carpentary Items',
