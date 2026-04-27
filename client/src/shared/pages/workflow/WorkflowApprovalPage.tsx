@@ -475,10 +475,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   };
 
   const isSuperAdminView = Boolean(meta?.isSuperAdmin);
-  const isPrincipalUser = Boolean(
-    Array.isArray(user?.roles) &&
-    user.roles.some((role) => String(role || '').trim().toLowerCase() === 'principal')
-  );
+  const canManagePrincipalDocuments = Boolean(isSuperAdminView || activeStage === 'principal');
   const isPrincipalDocumentEligible = useCallback((record: Record<string, any>) => {
     const amount = getWorkflowProposedAmount(record);
     const status = String(record.workflow_state?.status || record.workflow_status || record.overall_status || '').toLowerCase();
@@ -504,6 +501,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     window.setTimeout(() => principalDocumentInputRef.current?.click(), 0);
   }, []);
   const handlePrincipalDocumentUploadClick = useCallback((record: Record<string, any>, recordId: number | string) => {
+    if (!canManagePrincipalDocuments) {
+      showAlert('You do not have access to manage principal documents.', 'error');
+      return;
+    }
+
     if (!isPrincipalDocumentFeatureVisible(record)) {
       return;
     }
@@ -514,7 +516,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
 
     openPrincipalDocumentPicker(recordId);
-  }, [isPrincipalDocumentEligible, isPrincipalDocumentFeatureVisible, openPrincipalDocumentPicker, showAlert]);
+  }, [canManagePrincipalDocuments, isPrincipalDocumentEligible, isPrincipalDocumentFeatureVisible, openPrincipalDocumentPicker, showAlert]);
   const uploadPrincipalDocument = useCallback(async (recordId: number | string, file: File): Promise<boolean> => {
     const formData = new FormData();
     formData.append('file', file);
@@ -1122,7 +1124,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }
 
   const record = rows.find(r => getRecordId(r) === recordId);
-  if (record && isPrincipalUser && activeStage === 'principal' && isPrincipalDocumentFeatureVisible(record) && !getWorkflowPrincipalDocumentUrl(record)) {
+  if (record && activeStage === 'principal' && isPrincipalDocumentFeatureVisible(record) && !getWorkflowPrincipalDocumentUrl(record)) {
       setPrincipalApprovalPopupId(recordId);
       setPrincipalApprovalFile(null);
       setPrincipalApprovalPopupOpen(true);
@@ -1889,10 +1891,25 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                     >
                                       <Download size={18} />
                                   </button>
-                                ) : null
+                                ) : (
+                                  canManagePrincipalDocuments && isPrincipalDocumentEligible(record) ? (
+                                    <button
+                                      type="button"
+                                      className="fw-action-btn fw-action-btn--download"
+                                      title="Upload Principal Document"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handlePrincipalDocumentUploadClick(record, recordId);
+                                      }}
+                                      disabled={principalDocumentActionBusy}
+                                    >
+                                      <Upload size={18} />
+                                    </button>
+                                  ) : null
+                                )
                               )}
 
-                              {config.moduleKey === 'finance' && principalDocumentUrl && isPrincipalUser && (
+                              {config.moduleKey === 'finance' && principalDocumentUrl && canManagePrincipalDocuments && (
                                 <>
                                   <button
                                     type="button"
