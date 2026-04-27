@@ -356,7 +356,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [archivingIds, setArchivingIds] = useState<Set<number | string>>(new Set());
   const [principalDocumentBusyId, setPrincipalDocumentBusyId] = useState<number | string | null>(null);
   const [principalDocumentTargetId, setPrincipalDocumentTargetId] = useState<number | string | null>(null);
+  const [pendingApprovalAfterUploadId, setPendingApprovalAfterUploadId] = useState<number | string | null>(null);
   const principalDocumentInputRef = useRef<HTMLInputElement | null>(null);
+  
+  const [principalApprovalPopupOpen, setPrincipalApprovalPopupOpen] = useState(false);
+  const [principalApprovalPopupId, setPrincipalApprovalPopupId] = useState<number | string | null>(null);
+  const [principalApprovalFile, setPrincipalApprovalFile] = useState<File | null>(null);
+  const [principalApprovalSubmitting, setPrincipalApprovalSubmitting] = useState(false);
   
   // Action popups
   const [actionPopupOpen, setActionPopupOpen] = useState(false);
@@ -509,7 +515,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     openPrincipalDocumentPicker(recordId);
   }, [isPrincipalDocumentEligible, isPrincipalDocumentFeatureVisible, openPrincipalDocumentPicker, showAlert]);
-  const uploadPrincipalDocument = useCallback(async (recordId: number | string, file: File) => {
+  const uploadPrincipalDocument = useCallback(async (recordId: number | string, file: File): Promise<boolean> => {
     const formData = new FormData();
     formData.append('file', file);
     setPrincipalDocumentBusyId(recordId);
@@ -528,7 +534,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
       if (response?.status !== 'success') {
         showAlert(response?.message || 'Failed to upload principal document', 'error');
-        return;
+        return false;
       }
 
       showAlert(`${file.name} uploaded successfully`, 'success');
@@ -553,8 +559,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
           };
         })
         );
+      return true;
     } catch (error: any) {
       showAlert(error?.response?.data?.message || error?.message || 'Failed to upload principal document', 'error');
+      return false;
     } finally {
       setPrincipalDocumentBusyId(null);
     }
@@ -603,23 +611,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       'Cancel'
     );
   }, [showAlert]);
-  const handlePrincipalDocumentFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    const targetId = principalDocumentTargetId;
-    event.target.value = '';
-
-    if (!file || targetId === null || targetId === undefined) {
-      return;
-    }
-
-    if ((file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) || file.size >= 2 * 1024 * 1024) {
-      showAlert('Only PDF files with a size less than 2MB are allowed.', 'error');
-      return;
-    }
-
-    await uploadPrincipalDocument(targetId, file);
-    setPrincipalDocumentTargetId(null);
-  }, [principalDocumentTargetId, showAlert, uploadPrincipalDocument]);
   // Filter states
   const [fiscalYear, setFiscalYear] = useState<number>(() => {
     const d = new Date();
@@ -1078,17 +1069,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     setPage(1);
   }, [activeStage, fiscalYear, beneficiaryFilter, searchTerm, secondaryFilter]);
 
-  const onApprove = async (recordId?: number | string) => {
-  if (!recordId) {
-  showAlert('Missing record id.', 'warning');
-  return;
-}
-
-showAlert(
-  'Are you sure you want to approve this proposal?',
-  'warning',
-  'Confirm Approval',
-  async () => {
+  const performApproval = useCallback(async (recordId: number | string) => {
     setActingRecordId(recordId);
     setError('');
 
@@ -1108,11 +1089,57 @@ showAlert(
     } finally {
       setActingRecordId(null);
     }
-  },
-  true,
-  'Approve',
-  'Cancel'
-);
+  }, [activeStage, getApprovalEndpoint, loadQueue, page, showAlert]);
+
+  const handlePrincipalDocumentFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const targetId = principalDocumentTargetId;
+    event.target.value = '';
+
+    if (!file || targetId === null || targetId === undefined) {
+      setPendingApprovalAfterUploadId(null);
+      return;
+    }
+
+    if ((file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) || file.size >= 2 * 1024 * 1024) {
+      showAlert('Only PDF files with a size less than 2MB are allowed.', 'error');
+      setPendingApprovalAfterUploadId(null);
+      return;
+    }
+
+    const success = await uploadPrincipalDocument(targetId, file);
+    if (success && pendingApprovalAfterUploadId === targetId) {
+      await performApproval(targetId);
+      setPendingApprovalAfterUploadId(null);
+    }
+    setPrincipalDocumentTargetId(null);
+  }, [principalDocumentTargetId, showAlert, uploadPrincipalDocument, pendingApprovalAfterUploadId, performApproval]);
+
+  const onApprove = async (recordId?: number | string) => {
+  if (!recordId) {
+    showAlert('Missing record id.', 'warning');
+    return;
+  }
+
+  const record = rows.find(r => getRecordId(r) === recordId);
+  if (record && isPrincipalUser && activeStage === 'principal' && isPrincipalDocumentFeatureVisible(record) && !getWorkflowPrincipalDocumentUrl(record)) {
+      setPrincipalApprovalPopupId(recordId);
+      setPrincipalApprovalFile(null);
+      setPrincipalApprovalPopupOpen(true);
+      return;
+  }
+
+  showAlert(
+    'Are you sure you want to approve this proposal?',
+    'warning',
+    'Confirm Approval',
+    async () => {
+      await performApproval(recordId);
+    },
+    true,
+    'Approve',
+    'Cancel'
+  );
 };
 
   const openActionPopup = (type: "return" | "reject", id: number | string, ref: string) => {
@@ -1129,7 +1156,34 @@ showAlert(
     setActionId(null);
     setActionRef("");
     setActionComment("");
-    setActionSubmitting(false);
+  };
+
+  const closePrincipalApprovalPopup = () => {
+    if (principalApprovalSubmitting) return;
+    setPrincipalApprovalPopupOpen(false);
+    setPrincipalApprovalPopupId(null);
+    setPrincipalApprovalFile(null);
+  };
+
+  const submitPrincipalApproval = async () => {
+    if (!principalApprovalPopupId || principalApprovalSubmitting) return;
+    if (!principalApprovalFile) {
+      showAlert('Please select a PDF document to upload before approving.', 'warning');
+      return;
+    }
+
+    setPrincipalApprovalSubmitting(true);
+    try {
+      const success = await uploadPrincipalDocument(principalApprovalPopupId, principalApprovalFile);
+      if (success) {
+        await performApproval(principalApprovalPopupId);
+        setPrincipalApprovalPopupOpen(false);
+        setPrincipalApprovalPopupId(null);
+        setPrincipalApprovalFile(null);
+      }
+    } finally {
+      setPrincipalApprovalSubmitting(false);
+    }
   };
 
   const submitActionWithComment = async () => {
@@ -1822,20 +1876,7 @@ showAlert(
 
                             <div className="fw-right">
                               {config.moduleKey === 'finance' && showPrincipalDocumentAction && (
-                                !principalDocumentUrl && isPrincipalUser ? (
-                                  <button
-                                    type="button"
-                                    className="fw-action-btn fw-action-btn--download"
-                                    title={isPrincipalDocumentEligible(record) ? 'Upload principal PDF' : 'Once approved, you can upload'}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handlePrincipalDocumentUploadClick(record, recordId);
-                                    }}
-                                    disabled={principalDocumentActionBusy}
-                                  >
-                                    <Upload size={18} />
-                                  </button>
-                                ) : principalDocumentUrl ? (
+                                principalDocumentUrl ? (
                                   <button
                                     type="button"
                                     className="fw-action-btn fw-action-btn--download"
@@ -2226,6 +2267,59 @@ showAlert(
           placeholder="Enter comments (required)..."
           className="form-control"
         />
+      </CustomModal>
+
+      <CustomModal
+        show={principalApprovalPopupOpen}
+        onHide={closePrincipalApprovalPopup}
+        title="Principal Approval Form"
+        centered
+        backdrop={principalApprovalSubmitting ? "static" : true}
+        keyboard={!principalApprovalSubmitting}
+        hideCloseButton={principalApprovalSubmitting}
+        footer={
+          <div className="d-flex justify-content-end gap-2 w-100">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={closePrincipalApprovalPopup}
+              disabled={principalApprovalSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-success"
+              onClick={submitPrincipalApproval}
+              disabled={principalApprovalSubmitting || !principalApprovalFile}
+            >
+              {principalApprovalSubmitting ? "Submitting..." : "Approve and Submit"}
+            </button>
+          </div>
+        }
+      >
+        <div style={{ fontSize: 14, marginBottom: 15 }}>
+          Please upload the required annexure document before approving this request.
+        </div>
+        <div className="mb-3">
+          <label className="form-label fw-bold">Upload Principal Annexure (PDF)</label>
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            className="form-control"
+            disabled={principalApprovalSubmitting}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file && ((file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) || file.size >= 2 * 1024 * 1024)) {
+                showAlert('Only PDF files with a size less than 2MB are allowed.', 'error');
+                e.target.value = '';
+                setPrincipalApprovalFile(null);
+                return;
+              }
+              setPrincipalApprovalFile(file || null);
+            }}
+          />
+        </div>
       </CustomModal>
 
       <CustomModal

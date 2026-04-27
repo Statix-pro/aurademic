@@ -4,6 +4,7 @@ import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 import fs from 'fs';
 import path from 'path';
+import db from '../../config/connection.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -58,6 +59,9 @@ const isEligibleForPrincipalDocument = (finance) => {
   const workflowStatus = normalizeText(
     finance?.workflow_state?.status || finance?.workflow_status || finance?.overall_status
   ).toLowerCase();
+  const currentStage = normalizeText(
+    finance?.workflow_state?.currentStage || finance?.workflow_stage
+  ).toLowerCase();
 
   if (!(totalBudget > 10000)) {
     return false;
@@ -66,7 +70,9 @@ const isEligibleForPrincipalDocument = (finance) => {
   return (
     workflowStatus === 'principal_approved' ||
     workflowStatus === 'completed' ||
-    workflowStatus === 'approved'
+    workflowStatus === 'approved' ||
+    currentStage === 'principal' ||
+    currentStage === 'chairman'
   );
 };
 
@@ -255,6 +261,27 @@ const handleWorkflowError = (res, error, fallbackMessage) => {
     status: 'error',
     message: error.message || fallbackMessage,
   });
+};
+
+const sanitizeFinanceRecordForUser = (req, financeRecord) => {
+  if (!financeRecord) return financeRecord;
+  
+  const isPrincipal = isPrincipalRoleRequest(req);
+  const isSuperAdmin = isSuperAdminRequest(req);
+  const workflowStatus = normalizeText(
+    financeRecord.workflow_state?.status || financeRecord.workflow_status || financeRecord.overall_status
+  ).toLowerCase();
+  
+  const isApproved = workflowStatus === 'approved' || workflowStatus === 'completed' || workflowStatus === 'principal_approved';
+
+  if (!isPrincipal && !isSuperAdmin && !isApproved) {
+    return {
+      ...financeRecord,
+      principal_document: null,
+    };
+  }
+
+  return financeRecord;
 };
 
 const financeController = {
@@ -590,12 +617,12 @@ const financeController = {
       }
       return res.status(200).json({
         status: 'success',
-        data: {
+        data: sanitizeFinanceRecordForUser(req, {
           ...finance,
           budget,
           income_rows: incomeRows,
           status_updates: statusUpdates,
-        },
+        }),
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in getFinanceRequest');
@@ -615,7 +642,7 @@ const financeController = {
 
       return res.json({
         status: 'success',
-        data: rows,
+        data: rows.map(row => sanitizeFinanceRecordForUser(req, row)),
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in listFinanceRequests');
@@ -1242,6 +1269,9 @@ const financeController = {
     try {
       const financeId = toPositiveInt(req.params.id);
       if (!financeId) {
+        if (uploadedFilePath) {
+          await fs.promises.unlink(uploadedFilePath).catch(() => {});
+        }
         return res.status(400).json({
           status: 'error',
           message: 'Invalid finance request ID',
@@ -1249,6 +1279,9 @@ const financeController = {
       }
 
       if (!req.file) {
+        if (uploadedFilePath) {
+          await fs.promises.unlink(uploadedFilePath).catch(() => {});
+        }
         return res.status(400).json({
           status: 'error',
           message: 'No file uploaded',
@@ -1258,7 +1291,7 @@ const financeController = {
       const file = req.file;
       const originalName = normalizeText(file.originalname);
       const isPdf =
-        normalizeText(file.mimetype).toLowerCase() === 'application/pdf' ||
+        normalizeText(file.mimetype).toLowerCase() === 'application/pdf' &&
         originalName.toLowerCase().endsWith('.pdf');
 
       if (!isPdf || file.size >= 2 * 1024 * 1024) {
@@ -1320,14 +1353,24 @@ const financeController = {
       savedFilePath = finalPath;
 
       const previousDocument = await financeModel.getPrincipalDocument(financeId);
-      await financeModel.setPrincipalDocument(financeId, {
-        original_name: originalName || file.originalname || null,
-        stored_name: storedName,
-        file_path: `${FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX}${storedName}`,
-        mime_type: 'application/pdf',
-        file_size: file.size,
-        uploaded_by: req.user?.id || null,
-      });
+      
+      const connection = await db.getConnection();
+      try {
+        await connection.beginTransaction();
+        await financeModel.setPrincipalDocument(financeId, {
+          original_name: originalName || file.originalname || null,
+          stored_name: storedName,
+          file_path: `${FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX}${storedName}`,
+          mime_type: 'application/pdf',
+          file_size: file.size,
+        }, { tx: connection });
+        await connection.commit();
+      } catch (dbError) {
+        await connection.rollback();
+        throw dbError;
+      } finally {
+        connection.release();
+      }
 
       if (previousDocument?.file_path) {
         const previousPath = path.resolve(process.cwd(), `.${String(previousDocument.file_path || '').trim()}`);

@@ -400,7 +400,7 @@ const Navbar: React.FC = () => {
                       document.body.classList.remove('menu-open');
                     }}
                   >
-                    <li>Finance Workflow</li>
+                    <li>Finance-Approval</li>
                   </Link>
                 )}
               </ul>
