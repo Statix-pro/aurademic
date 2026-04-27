@@ -269,6 +269,28 @@ const hasExpenditureStagePermission = (req, stage) => {
   return normalizedPermissions.includes(`expenditure.workflow.${normalizedStage}`);
 };
 
+const canAccessExpenditureByRole = (req) => {
+  const normalizedRoles = Array.isArray(req.user?.roles)
+    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
+    : [];
+
+  if (!normalizedRoles.length) {
+    return false;
+  }
+
+  if (normalizedRoles.includes('super_admin')) {
+    return true;
+  }
+
+  if (normalizedRoles.includes('admin')) {
+    return true;
+  }
+
+  return normalizedRoles.some((role) =>
+    ['hod', 'coordinator', 'entity_approver', 'dof', 'principal'].includes(role)
+  );
+};
+
 const resolveExpenditureLevel1QueueRole = (req) => {
   const normalizedRoles = Array.isArray(req.user?.roles)
     ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
@@ -287,7 +309,8 @@ const canAccessExpenditureRecord = (req, record) => {
   if (!record) return false;
   if (isSuperAdminRequest(req)) return true;
   if (userId && userId === toPositiveInt(record.created_by)) return true;
-  return hasAnyExpenditureWorkflowPermission(req);
+  if (hasAnyExpenditureWorkflowPermission(req)) return true;
+  return canAccessExpenditureByRole(req);
 };
 
 const expenditureController = {

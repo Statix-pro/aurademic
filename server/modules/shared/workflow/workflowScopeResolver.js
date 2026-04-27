@@ -14,6 +14,38 @@ const toPositiveInt = (value) => {
 const normalizeRoleCodes = (roleCodes = []) =>
   [...new Set(roleCodes.map((roleCode) => normalizeText(roleCode).toLowerCase()).filter(Boolean))];
 
+const canAccessExpenditureStageByRole = (actor = {}, stageKey = '') => {
+  const normalizedStage = normalizeText(stageKey).toLowerCase();
+  if (!normalizedStage) {
+    return false;
+  }
+
+  const roleTokens = Array.isArray(actor?.roles) ? actor.roles : [];
+  const roles = roleTokens.map((role) => normalizeText(role).toLowerCase()).filter(Boolean);
+
+  if (Boolean(actor?.isSuperAdmin || actor?.is_super_admin) || roles.includes('super_admin')) {
+    return true;
+  }
+
+  if (roles.includes('admin')) {
+    return true;
+  }
+
+  if (normalizedStage === 'level1') {
+    return roles.some((role) => ['hod', 'coordinator', 'entity_approver'].includes(role));
+  }
+
+  if (normalizedStage === 'dof') {
+    return roles.includes('dof');
+  }
+
+  if (normalizedStage === 'principal') {
+    return roles.includes('principal');
+  }
+
+  return false;
+};
+
 const getActorUserId = (actor = {}) =>
   toPositiveInt(actor?.userId || actor?.id || actor?.actorUserId);
 
@@ -154,6 +186,17 @@ async function resolveScopedActorIds(conn, actor, stagePolicy, options = {}) {
       assignmentBuckets.departmentIds.add(primaryContext.departmentId);
     }
 
+    if (!assignmentBuckets.departmentIds.size && normalizeText(stagePolicy?.moduleKey || stagePolicy?.module_key).toLowerCase() === 'expenditure' && canAccessExpenditureStageByRole(actor, stagePolicy?.stageKey || stagePolicy?.stage_key)) {
+      return {
+        scopeType,
+        requireAssignment,
+        departmentIds: new Set(),
+        entityIds: new Set(),
+        forceAll: true,
+        forceEmpty: false,
+      };
+    }
+
     return {
       scopeType,
       requireAssignment,
@@ -167,6 +210,17 @@ async function resolveScopedActorIds(conn, actor, stagePolicy, options = {}) {
   if (scopeType === 'entity') {
     if (!assignmentBuckets.entityIds.size && !requireAssignment && primaryContext.entityId) {
       assignmentBuckets.entityIds.add(primaryContext.entityId);
+    }
+
+    if (!assignmentBuckets.entityIds.size && normalizeText(stagePolicy?.moduleKey || stagePolicy?.module_key).toLowerCase() === 'expenditure' && canAccessExpenditureStageByRole(actor, stagePolicy?.stageKey || stagePolicy?.stage_key)) {
+      return {
+        scopeType,
+        requireAssignment,
+        departmentIds: new Set(),
+        entityIds: new Set(),
+        forceAll: true,
+        forceEmpty: false,
+      };
     }
 
     return {
