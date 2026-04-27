@@ -362,30 +362,7 @@ const cleanupOrphanFinanceAnnexureFiles = async (storedNames = []) => {
   }
 };
 
-const ensureFinancePrincipalDocumentTable = async (tx = db) => {
-  try {
-    await tx.query(
-      `CREATE TABLE IF NOT EXISTS finance_request_principal_documents (
-         id INT AUTO_INCREMENT PRIMARY KEY,
-         finance_id INT NOT NULL,
-         original_name VARCHAR(255) NULL,
-         stored_name VARCHAR(255) NULL,
-         file_path VARCHAR(500) NOT NULL,
-         mime_type VARCHAR(100) NULL,
-         file_size BIGINT NULL,
-         uploaded_by INT NULL,
-         uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-         UNIQUE KEY uniq_finance_principal_document (finance_id)
-       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
-    );
-    return true;
-  } catch (error) {
-    if (error?.code === 'ER_TABLE_EXISTS_ERROR') {
-      return true;
-    }
-    return false;
-  }
-};
+
 
 const normalizeFinancePrincipalDocument = (row = {}) => ({
   id: toPositiveInt(row.id),
@@ -395,8 +372,7 @@ const normalizeFinancePrincipalDocument = (row = {}) => ({
   file_path: normalizeText(row.file_path),
   mime_type: normalizeText(row.mime_type),
   file_size: Number.isFinite(Number(row.file_size)) ? Number(row.file_size) : null,
-  uploaded_by: toPositiveInt(row.uploaded_by),
-  uploaded_at: row.uploaded_at || null,
+  uploaded_at: row.created_at || null,
 });
 
 const getFinancePrincipalDocumentsByFinanceIds = async (financeIds = [], { tx = db } = {}) => {
@@ -412,17 +388,15 @@ const getFinancePrincipalDocumentsByFinanceIds = async (financeIds = [], { tx = 
     return new Map();
   }
 
-  const tableReady = await ensureFinancePrincipalDocumentTable(tx);
-  if (!tableReady) {
-    return new Map();
-  }
+
 
   const placeholders = normalizedFinanceIds.map(() => '?').join(', ');
   try {
     const [rows] = await tx.query(
-      `SELECT id, finance_id, original_name, stored_name, file_path, mime_type, file_size, uploaded_by, uploaded_at
-         FROM finance_request_principal_documents
-        WHERE finance_id IN (${placeholders})`,
+      `SELECT id, finance_id, original_name, stored_name, file_path, mime_type, file_size, created_at
+         FROM finance_request_annexures
+        WHERE annexure_type = 'principal_approval'
+          AND finance_id IN (${placeholders})`,
       normalizedFinanceIds
     );
 
@@ -455,13 +429,10 @@ const setFinancePrincipalDocument = async (financeId, document, { tx = db } = {}
     return null;
   }
 
-  const tableReady = await ensureFinancePrincipalDocumentTable(tx);
-  if (!tableReady) {
-    return null;
-  }
+
 
   await tx.query(
-    `DELETE FROM finance_request_principal_documents WHERE finance_id = ?`,
+    `DELETE FROM finance_request_annexures WHERE annexure_type = 'principal_approval' AND finance_id = ?`,
     [normalizedFinanceId]
   );
 
@@ -470,9 +441,9 @@ const setFinancePrincipalDocument = async (financeId, document, { tx = db } = {}
   }
 
   const [result] = await tx.query(
-    `INSERT INTO finance_request_principal_documents
-       (finance_id, original_name, stored_name, file_path, mime_type, file_size, uploaded_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO finance_request_annexures
+       (finance_id, annexure_type, original_name, stored_name, file_path, mime_type, file_size)
+     VALUES (?, 'principal_approval', ?, ?, ?, ?, ?)`,
     [
       normalizedFinanceId,
       normalizeText(document.original_name) || null,
@@ -480,7 +451,6 @@ const setFinancePrincipalDocument = async (financeId, document, { tx = db } = {}
       normalizeText(document.file_path),
       normalizeText(document.mime_type) || null,
       Number.isFinite(Number(document.file_size)) ? Number(document.file_size) : null,
-      toPositiveInt(document.uploaded_by) || null,
     ]
   );
 
@@ -492,7 +462,6 @@ const setFinancePrincipalDocument = async (financeId, document, { tx = db } = {}
     file_path: normalizeText(document.file_path),
     mime_type: normalizeText(document.mime_type) || null,
     file_size: Number.isFinite(Number(document.file_size)) ? Number(document.file_size) : null,
-    uploaded_by: toPositiveInt(document.uploaded_by) || null,
     uploaded_at: new Date().toISOString(),
   };
 };
@@ -503,13 +472,10 @@ const deleteFinancePrincipalDocumentByFinanceId = async (financeId, { tx = db } 
     return false;
   }
 
-  const tableReady = await ensureFinancePrincipalDocumentTable(tx);
-  if (!tableReady) {
-    return false;
-  }
+
 
   const [result] = await tx.query(
-    `DELETE FROM finance_request_principal_documents WHERE finance_id = ?`,
+    `DELETE FROM finance_request_annexures WHERE annexure_type = 'principal_approval' AND finance_id = ?`,
     [normalizedFinanceId]
   );
 
