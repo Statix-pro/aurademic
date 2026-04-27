@@ -2344,6 +2344,7 @@ const FinanceApproval: React.FC = () => {
         showAlert(response?.message || 'Failed to upload principal document', 'error');
         return false;
       }
+      setHasPrincipalDocument(true);
       return true;
     } catch (error: any) {
       showAlert(error?.response?.data?.message || error?.message || 'Failed to upload principal document', 'error');
@@ -5124,4 +5125,3 @@ const FinanceApproval: React.FC = () => {
 };
 
 export default FinanceApproval;
-

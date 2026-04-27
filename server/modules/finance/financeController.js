@@ -54,6 +54,19 @@ const isPrincipalRoleRequest = (req) => {
   return roles.some((role) => normalizeText(role).toLowerCase() === 'principal');
 };
 
+const hasFinanceWorkflowPermission = (req) => {
+  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+  return permissions.some((permission) =>
+    normalizeText(permission).toLowerCase().startsWith('finance.workflow.')
+  );
+};
+
+const canManagePrincipalDocumentsRequest = (req) => (
+  Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) ||
+  isPrincipalRoleRequest(req) ||
+  hasFinanceWorkflowPermission(req)
+);
+
 const isEligibleForPrincipalDocument = (finance) => {
   const totalBudget = Number(finance?.total_budget || finance?.proposed_amount || 0);
   const workflowStatus = normalizeText(
@@ -266,15 +279,7 @@ const handleWorkflowError = (res, error, fallbackMessage) => {
 const sanitizeFinanceRecordForUser = (req, financeRecord) => {
   if (!financeRecord) return financeRecord;
   
-  const isPrincipal = isPrincipalRoleRequest(req);
-  const isSuperAdmin = isSuperAdminRequest(req);
-  const workflowStatus = normalizeText(
-    financeRecord.workflow_state?.status || financeRecord.workflow_status || financeRecord.overall_status
-  ).toLowerCase();
-  
-  const isApproved = workflowStatus === 'approved' || workflowStatus === 'completed' || workflowStatus === 'principal_approved';
-
-  if (!isPrincipal && !isSuperAdmin && !isApproved) {
+  if (!canManagePrincipalDocumentsRequest(req)) {
     return {
       ...financeRecord,
       principal_document: null,
@@ -1023,7 +1028,7 @@ const financeController = {
 
       return res.status(200).json({
         status: 'success',
-        data: queue.items,
+        data: queue.items.map((row) => sanitizeFinanceRecordForUser(req, row)),
         pagination: {
           total: queue.total,
           page: queue.page,
@@ -1315,13 +1320,13 @@ const financeController = {
         });
       }
 
-      if (!isPrincipalRoleRequest(req)) {
+      if (!canManagePrincipalDocumentsRequest(req)) {
         if (uploadedFilePath) {
           await fs.promises.unlink(uploadedFilePath).catch(() => {});
         }
         return res.status(403).json({
           status: 'error',
-          message: 'Only principal can upload this document',
+          message: 'You do not have access to upload this document',
         });
       }
 
@@ -1415,10 +1420,10 @@ const financeController = {
         });
       }
 
-      if (!isPrincipalRoleRequest(req)) {
+      if (!canManagePrincipalDocumentsRequest(req)) {
         return res.status(403).json({
           status: 'error',
-          message: 'Only principal can delete this document',
+          message: 'You do not have access to delete this document',
         });
       }
 
