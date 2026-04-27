@@ -124,11 +124,47 @@ export const canAccessModuleWorkflow = (
     return true;
   }
 
+  if (String(moduleKey || '').trim().toLowerCase() === 'expenditure' && canAccessAdminArea(user)) {
+    return true;
+  }
+
   return getWorkflowPermissionsForModule(user, moduleKey).length > 0;
 };
 
 export const canAccessFinanceWorkflow = (user?: User | null) =>
   canAccessModuleWorkflow(user, 'finance');
 
-export const canAccessExpenditureWorkflow = (user?: User | null) =>
-  canAccessModuleWorkflow(user, 'expenditure');
+const isAdminOrWorkflowRole = (user?: User | null) => {
+  if (!user) {
+    return false;
+  }
+
+  if (isSuperAdmin(user) || user.is_admin) {
+    return true;
+  }
+
+  const normalizedRoles = normalizeRoleCodes(user);
+  const workflowRoles = ['admin', 'hod', 'coordinator', 'dof', 'principal', 'entity_approver'];
+  
+  return normalizedRoles.some((role) => workflowRoles.includes(role.toLowerCase()));
+};
+
+export const canAccessExpenditureWorkflow = (user?: User | null) => {
+  if (!user) {
+    return false;
+  }
+
+  // Super admins and admin-area users should be able to open expenditure approvals.
+  if (isSuperAdmin(user) || canAccessAdminArea(user)) {
+    return true;
+  }
+
+  // Check for expenditure workflow permissions
+  const hasWorkflowPermission = canAccessModuleWorkflow(user, 'expenditure');
+  if (hasWorkflowPermission) {
+    return true;
+  }
+
+  // Fallback: check for admin/workflow roles
+  return isAdminOrWorkflowRole(user);
+};

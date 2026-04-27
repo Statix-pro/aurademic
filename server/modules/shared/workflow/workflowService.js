@@ -342,6 +342,10 @@ const assertDecisionPermission = ({ moduleKey, currentStage, actor }) => {
     return;
   }
 
+  if (normalizeText(moduleKey).toLowerCase() === 'expenditure' && canAccessExpenditureStageByRole(actor, currentStage)) {
+    return;
+  }
+
   const permissionSet = normalizePermissionSet(actor);
   const requiredPermission = `${moduleKey}.workflow.${currentStage}`;
 
@@ -362,6 +366,45 @@ const normalizeActorPayload = (actor = {}) => ({
   permissions: Array.isArray(actor?.permissions) ? actor.permissions : [],
   isSuperAdmin: Boolean(actor?.isSuperAdmin || actor?.is_super_admin),
 });
+
+const getNormalizedActorRoles = (actor = {}) =>
+  (Array.isArray(actor?.roles) ? actor.roles : [])
+    .map((role) => normalizeText(role).toLowerCase())
+    .filter(Boolean);
+
+const canAccessExpenditureStageByRole = (actor = {}, stageKey = '') => {
+  const normalizedStage = normalizeText(stageKey).toLowerCase();
+  if (!normalizedStage) {
+    return false;
+  }
+
+  if (isSuperAdminActor(actor)) {
+    return true;
+  }
+
+  const roles = getNormalizedActorRoles(actor);
+  if (!roles.length) {
+    return false;
+  }
+
+  if (roles.includes('admin')) {
+    return true;
+  }
+
+  if (normalizedStage === 'level1') {
+    return roles.some((role) => ['hod', 'coordinator', 'entity_approver'].includes(role));
+  }
+
+  if (normalizedStage === 'dof') {
+    return roles.includes('dof');
+  }
+
+  if (normalizedStage === 'principal') {
+    return roles.includes('principal');
+  }
+
+  return false;
+};
 
 export async function startWorkflow({ moduleKey, recordId, metadata = {} }) {
   const moduleConfig = getWorkflowModule(moduleKey);
@@ -687,7 +730,10 @@ export async function getWorkflowMetadata({ moduleKey, actor }) {
   const allStageKeys = orderedStages;
   const permittedStageKeys = isSuperAdminActor(normalizedActor)
     ? allStageKeys
-    : allStageKeys.filter((stageKey) => permissionSet.has(`${normalizedModuleKey}.workflow.${stageKey}`));
+    : allStageKeys.filter((stageKey) =>
+        permissionSet.has(`${normalizedModuleKey}.workflow.${stageKey}`) ||
+        (normalizedModuleKey === 'expenditure' && canAccessExpenditureStageByRole(normalizedActor, stageKey))
+      );
 
   return {
     moduleKey: normalizedModuleKey,

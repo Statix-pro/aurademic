@@ -947,7 +947,19 @@ showAlert(
       });
 
       if (response?.status === 'success' || response?.success || response?.data?.success) {
-        await loadQueue(activeStage, page);
+        const nextStage = String(
+          response?.data?.currentState?.currentStage ||
+          response?.data?.currentState?.stage ||
+          response?.data?.workflow_state?.currentStage ||
+          ''
+        ).toLowerCase();
+
+        if (nextStage && nextStage !== activeStage) {
+          setStatusFilter('pending');
+          await switchToWorkflowStage(nextStage);
+        } else {
+          await loadQueue(activeStage, page);
+        }
         return;
       }
 
@@ -1001,7 +1013,19 @@ showAlert(
 
       if (response?.status === 'success' || response?.success || response?.data?.success) {
         closeActionPopup();
-        await loadQueue(activeStage, page);
+        const nextStage = String(
+          response?.data?.currentState?.currentStage ||
+          response?.data?.currentState?.stage ||
+          response?.data?.workflow_state?.currentStage ||
+          ''
+        ).toLowerCase();
+
+        if (nextStage && nextStage !== activeStage) {
+          setStatusFilter('pending');
+          await switchToWorkflowStage(nextStage);
+        } else {
+          await loadQueue(activeStage, page);
+        }
         return;
       } else {
        showAlert(response?.message || response?.data?.message || `Failed to ${actionType}`, 'error');

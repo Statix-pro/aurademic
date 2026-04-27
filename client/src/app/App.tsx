@@ -16,6 +16,7 @@ import {
   FinanceWorkflowRoute,
   ModuleWorkflowRoute,
   SuperAdminRoute,
+  ExpenditureApprovalRoute,
 } from '../shared/components/ProtectedRoute';
 
 import { MsalProvider } from '../shared/components/MsalProvider';
@@ -100,7 +101,7 @@ function App() {
                    <Route path="/expenditure/new" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
                  <Route path="/expenditure/:id" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
                   <Route path="/expenditure/:id/edit" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
-                  <Route path="/expenditure/approval" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
+                  <Route path="/expenditure/approval" element={<ExpenditureApprovalRoute><ExpenditureApproval /></ExpenditureApprovalRoute>} />
 
                   {/* ADMIN */}
                   <Route path="/admin-dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
