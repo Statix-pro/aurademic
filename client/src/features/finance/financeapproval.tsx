@@ -2217,7 +2217,23 @@ const FinanceApproval: React.FC = () => {
         }
       }
 
-      navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard');
+      const responseId = isEditMode ? id : (result as any).data?.id;
+      const refNo = responseId ? `#F-${new Date().getFullYear()}-${String(responseId).padStart(4, '0')}` : '';
+
+      showAlert(
+        <div>
+          <div>{isEditMode ? 'Finance request updated successfully!' : 'Finance request submitted successfully!'}</div>
+          {refNo && <div style={{ marginTop: '8px', fontWeight: 'bold' }}>Reference No.: {refNo}</div>}
+        </div>,
+        'success',
+        'Success',
+        false,
+        'OK',
+        () => {
+          closeAlert();
+          navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard');
+        }
+      );
     } catch (error) {
       console.error('Finance submit error:', error);
       const apiMessage =
