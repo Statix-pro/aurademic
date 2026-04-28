@@ -251,6 +251,7 @@ const normalizeBudgetRows = (rows = []) => {
     const rowNo = index + 1;
     const budgetHead = normalizeText(row?.budget_head || row?.category);
     const subHead = normalizeText(row?.sub_head || row?.head);
+    const headOnlyMatch = Boolean(row?.head_only_match);
     const parsedAmount = Number(row?.amount);
     const hasAvailableSnapshot =
       row?.available_amount_snapshot !== undefined && row?.available_amount_snapshot !== null;
@@ -263,7 +264,7 @@ const normalizeBudgetRows = (rows = []) => {
       rowErrors.push(`Row ${rowNo}: budget head is required`);
     }
 
-    if (!subHead) {
+    if (!subHead && !headOnlyMatch) {
       rowErrors.push(`Row ${rowNo}: sub head is required`);
     }
 
@@ -285,7 +286,7 @@ const normalizeBudgetRows = (rows = []) => {
     normalizedRows.push({
       budget_head: budgetHead,
       sub_head: subHead,
-      head_only_match: Boolean(row?.head_only_match),
+      head_only_match: headOnlyMatch,
       amount: toMoney(parsedAmount),
       budget_line_id: toPositiveInt(row?.budget_line_id),
       budget_proposal_id: toPositiveInt(row?.budget_proposal_id),
@@ -1290,12 +1291,13 @@ const enrichBudgetRowsWithBudgetRefs = async (
 ) => {
   const enrichedRows = [];
   const requestedByBudgetLine = new Map();
+  const requestedByHead = new Map();
   const normalizedLookupBudgetHead = normalizeText(lookupBudgetHead);
   const normalizedLookupSubHead = normalizeSubHeadForLookup(lookupSubHead);
 
   for (const row of budgetRows) {
-    const effectiveLookupBudgetHead = normalizedLookupBudgetHead || row.budget_head;
-    const effectiveLookupSubHead = normalizedLookupSubHead || normalizeSubHeadForLookup(row.sub_head);
+    const effectiveLookupBudgetHead = row.budget_head || normalizedLookupBudgetHead;
+    const effectiveLookupSubHead = normalizeSubHeadForLookup(row.sub_head) || normalizedLookupSubHead;
     const applyHeadOnlyMatch =
       Boolean(row.head_only_match) || shouldUseHeadOnlyAvailabilityMatch(effectiveLookupBudgetHead);
 
@@ -1313,6 +1315,34 @@ const enrichBudgetRowsWithBudgetRefs = async (
       beneficiaryEntityId,
     });
 
+    const headReservationKey =
+      normalizeHeadLabelForMatch(effectiveLookupBudgetHead) || normalizeText(effectiveLookupBudgetHead).toLowerCase();
+    const alreadyRequestedForHead = toMoney(requestedByHead.get(headReservationKey) || 0);
+    const remainingHeadAfterLocalReservations = Math.max(0, availability.totalAvailable - alreadyRequestedForHead);
+
+    if (applyHeadOnlyMatch) {
+      if (!availability.matches.length || remainingHeadAfterLocalReservations <= 0) {
+        throw new Error(
+          `No approved budget allocation found for "${effectiveLookupBudgetHead}" in the selected beneficiary scope`
+        );
+      }
+
+      if (row.amount > remainingHeadAfterLocalReservations) {
+        throw new Error(
+          `Requested amount ${row.amount.toFixed(2)} exceeds remaining available amount ${remainingHeadAfterLocalReservations.toFixed(2)} for "${effectiveLookupBudgetHead}" after other rows in this request`
+        );
+      }
+
+      requestedByHead.set(headReservationKey, alreadyRequestedForHead + row.amount);
+      enrichedRows.push({
+        ...row,
+        budget_line_id: null,
+        budget_proposal_id: null,
+        available_amount_snapshot: remainingHeadAfterLocalReservations,
+      });
+      continue;
+    }
+
     const selected = availability.selected;
     if (!selected) {
       throw new Error(
@@ -1326,19 +1356,27 @@ const enrichBudgetRowsWithBudgetRefs = async (
       );
     }
 
-    const alreadyRequested = toMoney(requestedByBudgetLine.get(selected.budgetLineId) || 0);
+    const selectedBudgetLineId = toPositiveInt(selected.budgetLineId);
+    if (!selectedBudgetLineId) {
+      throw new Error(
+        `No approved budget allocation found for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}" in the selected beneficiary scope`
+      );
+    }
+
+    const alreadyRequested = toMoney(requestedByBudgetLine.get(selectedBudgetLineId) || 0);
     const remainingAfterLocalReservations = Math.max(0, selected.availableAmount - alreadyRequested);
     if (row.amount > remainingAfterLocalReservations) {
       throw new Error(
         `Requested amount ${row.amount.toFixed(2)} exceeds remaining available amount ${remainingAfterLocalReservations.toFixed(2)} for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}" after other rows in this request`
       );
     }
-    requestedByBudgetLine.set(selected.budgetLineId, alreadyRequested + row.amount);
+    requestedByBudgetLine.set(selectedBudgetLineId, alreadyRequested + row.amount);
+    requestedByHead.set(headReservationKey, alreadyRequestedForHead + row.amount);
 
     enrichedRows.push({
       ...row,
-      budget_line_id: selected.budgetLineId,
-      budget_proposal_id: selected.budgetProposalId,
+      budget_line_id: selectedBudgetLineId,
+      budget_proposal_id: toPositiveInt(selected.budgetProposalId),
       available_amount_snapshot: remainingAfterLocalReservations,
     });
   }
@@ -1678,6 +1716,27 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
   const financeRequest = financeRows[0] || {};
   const unplannedBudgetEnabled = Boolean(financeRequest.unplanned_budget_enabled);
   const unplannedBudgetAmount = toMoney(financeRequest.unplanned_budget_amount);
+  const [ownerRows] = await conn.query(
+    `SELECT
+       fr.created_by,
+       u.email AS created_by_email,
+       fr.beneficiary_type,
+       fr.beneficiary_value,
+       fr.department_id,
+       fr.beneficiary_entity_id
+     FROM finance_requests fr
+     LEFT JOIN users u ON u.id = fr.created_by
+     WHERE fr.id = ?
+     LIMIT 1`,
+    [financeId]
+  );
+  const ownerRecord = ownerRows[0] || {};
+  const ownerUserId = toPositiveInt(ownerRecord.created_by);
+  const ownerUserEmail = normalizeText(ownerRecord.created_by_email) || null;
+  const ownerDepartmentId = toPositiveInt(ownerRecord.department_id);
+  const ownerBeneficiaryEntityId = toPositiveInt(ownerRecord.beneficiary_entity_id);
+  const ownerBeneficiaryType = normalizeText(ownerRecord.beneficiary_type) || null;
+  const ownerBeneficiaryValue = normalizeText(ownerRecord.beneficiary_value) || null;
 
   const [rows] = await conn.query(
     `SELECT
@@ -1700,16 +1759,119 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
     const budgetLineId = toPositiveInt(row.budget_line_id);
     const requestedAmount = toMoney(row.amount);
 
-    if (!budgetLineId) {
-      throw new Error(
-        `Budget line mapping is missing for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`
-      );
-    }
-
     if (requestedAmount <= 0) {
       throw new Error(
         `Requested amount must be greater than 0 for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`
       );
+    }
+
+    if (!budgetLineId) {
+      const lookupBudgetHead = normalizeText(row.budget_head);
+      if (!lookupBudgetHead) {
+        throw new Error(
+          `Budget line mapping is missing for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`
+        );
+      }
+
+      const headLevelAvailability = await resolveBudgetAvailabilityForUser(conn, {
+        userId: ownerUserId,
+        userEmail: ownerUserEmail,
+        budgetHead: lookupBudgetHead,
+        subHead: normalizeSubHeadForLookup(row.sub_head),
+        headOnlyMatch: true,
+        excludeFinanceId: financeId,
+        beneficiaryType: ownerBeneficiaryType,
+        beneficiaryValue: ownerBeneficiaryValue,
+        departmentId: ownerDepartmentId,
+        beneficiaryEntityId: ownerBeneficiaryEntityId,
+      });
+
+      if (requestedAmount > headLevelAvailability.totalAvailable) {
+        throw new Error(
+          `Insufficient budget balance for "${lookupBudgetHead}". Requested ${requestedAmount.toFixed(2)}, available ${headLevelAvailability.totalAvailable.toFixed(2)}`
+        );
+      }
+
+      let remainingToConsume = requestedAmount;
+      for (const match of headLevelAvailability.matches) {
+        if (remainingToConsume <= 0) {
+          break;
+        }
+
+        const candidateBudgetLineId = toPositiveInt(match.budgetLineId);
+        if (!candidateBudgetLineId) {
+          continue;
+        }
+
+        await conn.query(
+          `INSERT IGNORE INTO finance_budget_line_usage (budget_line_id, consumed_amount)
+           VALUES (?, 0.00)`,
+          [candidateBudgetLineId]
+        );
+
+        const [usageRows] = await conn.query(
+          `SELECT consumed_amount
+           FROM finance_budget_line_usage
+           WHERE budget_line_id = ?
+           FOR UPDATE`,
+          [candidateBudgetLineId]
+        );
+
+        const consumedAmount = toMoney(usageRows?.[0]?.consumed_amount);
+        const lineBudgetAmount = toMoney(match.budgetLineAmount);
+        const availableOnLine = Math.max(0, lineBudgetAmount - consumedAmount);
+        if (availableOnLine <= 0) {
+          continue;
+        }
+
+        const consumeAmount = Math.min(remainingToConsume, availableOnLine);
+        const balanceAfter = consumedAmount + consumeAmount;
+
+        await conn.query(
+          `UPDATE finance_budget_line_usage
+           SET consumed_amount = ?, updated_at = CURRENT_TIMESTAMP
+           WHERE budget_line_id = ?`,
+          [balanceAfter, candidateBudgetLineId]
+        );
+
+        await conn.query(
+          `INSERT INTO finance_budget_usage_ledger
+           (finance_id, finance_budget_breakup_id, budget_line_id, operation, amount, balance_after, actor_user_id, remarks)
+           VALUES (?, ?, ?, 'consume', ?, ?, ?, ?)`,
+          [
+            financeId,
+            row.id,
+            candidateBudgetLineId,
+            consumeAmount,
+            balanceAfter,
+            toPositiveInt(actorUserId),
+            'Principal approval committed amount',
+          ]
+        );
+
+        remainingToConsume = toMoney(remainingToConsume - consumeAmount);
+      }
+
+      if (remainingToConsume > 0) {
+        throw new Error(
+          `Insufficient budget balance for "${lookupBudgetHead}". Requested ${requestedAmount.toFixed(2)}, available ${headLevelAvailability.totalAvailable.toFixed(2)}`
+        );
+      }
+
+      const remainingAfter = Math.max(0, headLevelAvailability.totalAvailable - requestedAmount);
+
+      await conn.query(
+        `UPDATE finance_budget_breakup
+         SET approved_amount = ?,
+             remaining_amount_snapshot = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [requestedAmount, remainingAfter, row.id]
+      );
+
+      approvedTotalAmount += requestedAmount;
+      totalRemainingAmount += remainingAfter;
+      continue;
     }
 
     const budgetLine = await getBudgetLineAvailabilityById(conn, budgetLineId);

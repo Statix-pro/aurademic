@@ -295,6 +295,8 @@ const CATEGORY_TYPE_OPTIONS = [
   'Institution',
 ];
 
+// 1. Shared HOAC Sub-Heads (for Events & Competitions, Meetings & Audits)
+// Used in the 'extra' top-level dropdown (eventSubHead) when a HOAC group is active.
 const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
   'Events & Competitions': [
     'A/V Arrangements',
@@ -340,12 +342,6 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
     'Travel',
     'Others',
   ],
-  'Club Activities': [
-    'Flash Mob',
-    'Fun Events',
-    'Road show',
-    'Wall Painting'
-  ],
 };
 
 const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
@@ -382,6 +378,15 @@ const getHoacGroupForHead = (head: string): string | undefined => {
   return undefined;
 };
 
+const isHeadInSharedHoacGroup = (head: string): boolean =>
+  Boolean(getHoacGroupForHead(String(head || '').trim()));
+
+const shouldUseHeadOnlyAvailabilityMatch = (budgetHead: string, subHead: string): boolean => {
+  const normalizedHead = String(budgetHead || '').trim();
+  void subHead;
+  return Boolean(normalizedHead);
+};
+
 const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {
   FDP: ['AICTE Sponsored', 'Naan Mudhalvan', 'Industry', 'International'],
   Workshop: ['Hands-on', 'Skill Development'],
@@ -390,8 +395,9 @@ const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {
   'Guest Lecture': ['Industry', 'Academic'],
 };
 
+// 2. Specific Budget Sub-Heads (Head-specific mapping)
+// Used in the row-level budget table (subHead-${index}) to pick specific expenses for a head.
 const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
-
   'Civil Infrastructure': [
     'Canopy',
     'Construction Works',
@@ -566,7 +572,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Stapler/ Punching Machine',
     'Others'
   ],
-  
+
   'Postal Expenses': [
     'Courier Charges',
     'Frieght Charges',
@@ -611,6 +617,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Hostel Day'
   ],
   'Sports': ['Sports Day', 'Sports Meet'],
+
   'Club Activities': [
     'Flash Mob',
     'Fun Events',
@@ -1578,6 +1585,10 @@ const FinanceApproval: React.FC = () => {
     const effectiveHead = normalizeText(primaryHead) || normalizeText(row?.category);
     const effectiveSubHead =
       (extraDropdownVisible ? normalizeText(eventSubHead) : '') || normalizeText(row?.head);
+    const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(effectiveHead, effectiveSubHead);
+    if (headOnlyMatch) {
+      return `head:${effectiveHead}|mode:head-only`;
+    }
     return `head:${effectiveHead}|sub:${effectiveSubHead}`;
   };
 
@@ -1599,8 +1610,9 @@ const FinanceApproval: React.FC = () => {
     const normalizedHead = normalizeText(primaryHead) || normalizeText(budgetHead);
     const normalizedSubHead =
       (extraDropdownVisible ? normalizeText(eventSubHead) : '') || normalizeText(subHead);
+    const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(normalizedHead, normalizedSubHead);
 
-    if (!normalizedHead || !normalizedSubHead) {
+    if (!normalizedHead || (!headOnlyMatch && !normalizedSubHead)) {
       setBudgetLineMetaByRow((prev) => ({
         ...prev,
         [rowIndex]: {
@@ -1616,8 +1628,8 @@ const FinanceApproval: React.FC = () => {
       const response = await authenticityUtility.get('/finance-requests/budget-availability', {
         params: {
           budget_head: normalizedHead,
-          sub_head: normalizeSubHeadForDb(normalizedSubHead),
-          head_only_match: '0',
+          ...(normalizedSubHead ? { sub_head: normalizeSubHeadForDb(normalizedSubHead) } : {}),
+          head_only_match: headOnlyMatch ? '1' : '0',
           finance_id: isEditMode && id ? id : undefined,
           beneficiary_type: beneficiaryType || undefined,
           beneficiary_value: beneficiaryValue || undefined,
@@ -1635,13 +1647,21 @@ const FinanceApproval: React.FC = () => {
       };
 
       const selected = response?.data?.selected || null;
-      const availableAmount = Number(selected?.availableAmount ?? response?.data?.totalAvailable ?? 0);
+      const availableAmount = Number(
+        headOnlyMatch
+          ? (response?.data?.totalAvailable ?? selected?.availableAmount ?? 0)
+          : (selected?.availableAmount ?? response?.data?.totalAvailable ?? 0)
+      );
 
       setBudgetLineMetaByRow((prev) => ({
         ...prev,
         [rowIndex]: {
-          budgetLineId: selected?.budgetLineId ? Number(selected.budgetLineId) : null,
-          budgetProposalId: selected?.budgetProposalId ? Number(selected.budgetProposalId) : null,
+          budgetLineId: headOnlyMatch
+            ? null
+            : (selected?.budgetLineId ? Number(selected.budgetLineId) : null),
+          budgetProposalId: headOnlyMatch
+            ? null
+            : (selected?.budgetProposalId ? Number(selected.budgetProposalId) : null),
           availableAmount: Number.isFinite(availableAmount) ? availableAmount : 0,
         },
       }));
@@ -1694,8 +1714,7 @@ const FinanceApproval: React.FC = () => {
       if (field === 'head') {
         // Reset entered amount when sub head changes so placeholder reflects fresh availability.
         updated[index].amount = '';
-        const selectedHead = updated[index].category;
-        fetchBudgetAvailability(index, selectedHead, normalizeSubHeadForDb(value));
+        fetchBudgetAvailability(index, normalizeText(primaryHead) || updated[index].category, normalizeSubHeadForDb(value));
       }
     }
     setBudgetRows(updated);
@@ -1717,8 +1736,10 @@ const FinanceApproval: React.FC = () => {
       return updated;
     });
 
-    if (selectedHead && selectedSubHead) {
-      fetchBudgetAvailability(index, selectedHead, normalizeSubHeadForDb(selectedSubHead));
+    const effectiveLookupHead = normalizeText(primaryHead) || selectedHead;
+    const canFetchWithHeadOnly = shouldUseHeadOnlyAvailabilityMatch(effectiveLookupHead, selectedSubHead);
+    if (effectiveLookupHead && (selectedSubHead || canFetchWithHeadOnly)) {
+      fetchBudgetAvailability(index, effectiveLookupHead, normalizeSubHeadForDb(selectedSubHead));
     } else {
       setBudgetLineMetaByRow((prev) => ({
         ...prev,
@@ -1730,6 +1751,8 @@ const FinanceApproval: React.FC = () => {
       }));
     }
   };
+
+  const availabilityFetchKeyByRowRef = useRef<Record<number, string>>({});
 
   const handleAddIncomeRow = () => {
     const lastIndex = incomeRows.length - 1;
@@ -1902,13 +1925,10 @@ const FinanceApproval: React.FC = () => {
 
   const getBudgetRowMissingFields = (row: BudgetRow): string[] => {
     const missing: string[] = [];
+    const normalizedBudgetHead = normalizeText(row.category);
 
-    if (!hasFilledText(row.category)) {
+    if (!normalizedBudgetHead) {
       missing.push('Budget Head');
-    }
-
-    if (!hasFilledText(row.head)) {
-      missing.push('Sub Head');
     }
 
     if (!(Number(row.amount || 0) > 0)) {
@@ -1922,7 +1942,6 @@ const FinanceApproval: React.FC = () => {
     const row = budgetRows[index];
     if (!row) return false;
     if (!hasFilledText(primaryHead)) return false;
-    if (extraDropdownVisible && !hasFilledText(eventSubHead)) return false;
     return getBudgetRowMissingFields(row).length === 0;
   };
 
@@ -1930,9 +1949,6 @@ const FinanceApproval: React.FC = () => {
     const row = budgetRows[index];
     if (!hasFilledText(primaryHead)) {
       return 'Select Head of Accounts first';
-    }
-    if (extraDropdownVisible && !hasFilledText(eventSubHead)) {
-      return 'Select the sub head for Head of Accounts first';
     }
     if (!row) {
       return 'Fill the current budget row first';
@@ -2030,10 +2046,6 @@ const FinanceApproval: React.FC = () => {
       }
       if (!hasFilledText(primaryHead)) {
         showAlert('Please select Head of Accounts.', 'warning');
-        return;
-      }
-      if (extraDropdownVisible && !hasFilledText(eventSubHead)) {
-        showAlert('Please select the sub head for Head of Accounts.', 'warning');
         return;
       }
       if (showUnplannedBudget) {
@@ -2188,15 +2200,20 @@ const FinanceApproval: React.FC = () => {
         credit_status: primaryIncomeRow?.status || '',
         debit_status: debitStatus || null,
         partial_amount: primaryIncomeRow?.amount || null,
-        budget_rows: budgetRows.map((row, index) => ({
-          budget_head: normalizeText(row.category),
-          sub_head: normalizeText(row.head),
-          head_only_match: false,
-          amount: Number(row.amount || 0),
-          budget_line_id: budgetLineMetaByRow[index]?.budgetLineId || null,
-          budget_proposal_id: budgetLineMetaByRow[index]?.budgetProposalId || null,
-          available_amount_snapshot: budgetLineMetaByRow[index]?.availableAmount ?? null,
-        })),
+        budget_rows: budgetRows.map((row, index) => {
+          const normalizedBudgetHead = normalizeText(primaryHead) || normalizeText(row.category);
+          const normalizedSubHead = normalizeText(row.head);
+          const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead, normalizedSubHead);
+          return {
+            budget_head: normalizedBudgetHead,
+            sub_head: headOnlyMatch ? '' : normalizedSubHead,
+            head_only_match: headOnlyMatch,
+            amount: Number(row.amount || 0),
+            budget_line_id: headOnlyMatch ? null : (budgetLineMetaByRow[index]?.budgetLineId || null),
+            budget_proposal_id: headOnlyMatch ? null : (budgetLineMetaByRow[index]?.budgetProposalId || null),
+            available_amount_snapshot: budgetLineMetaByRow[index]?.availableAmount ?? null,
+          };
+        }),
         income_rows: showIncomeSection ? incomeRows : [],
       };
 
@@ -2261,7 +2278,7 @@ const FinanceApproval: React.FC = () => {
         setPrincipalApprovalPopupOpen(true);
         return;
       }
-      
+
       const isArchivedAction = decision === 'archived';
       showAlert(
         isArchivedAction
@@ -2474,6 +2491,7 @@ const FinanceApproval: React.FC = () => {
   const [categorySelections, setCategorySelections] = useState<string[]>([]);
 
   const [primaryHead, setPrimaryHead] = useState<string>('');
+  // eventSubHead: Shared sub-head for the entire request (appears for HOAC groups)
   const [eventSubHead, setEventSubHead] = useState<string>('');
   const MAX_AMOUNT = 999999999;
   const [selectedBudgetHeadForModal, setSelectedBudgetHeadForModal] = useState<string>('');
@@ -2867,17 +2885,52 @@ const FinanceApproval: React.FC = () => {
     // on every render due function identity churn; guards above keep it safe.
   }, [autoDownloadPdf, canDownloadPdf, isLoading, showPreview]);
 
-  const activeHoacGroup = HEAD_TO_GROUP[primaryHead];
-  const extraDropdownVisible =
-    Boolean(primaryHead) &&
-    primaryHead !== 'Faculty Empowerment' &&
-    primaryHead !== 'Staff Empowerment' &&
-    primaryHead !== 'Student Empowerment';
-  const hoacSubheadDropdownOptions = toOptions(
-    SUB_HEAD_BY_BUDGET_HEAD[primaryHead] ||
-    HOAC_SUBHEAD_OPTIONS[activeHoacGroup || ''] ||
-    []
-  );
+  const activeHoacGroup = getHoacGroupForHead(primaryHead) || '';
+  const extraDropdownVisible = Boolean(activeHoacGroup);
+  const hoacSubheadDropdownOptions = useMemo(() => {
+    if (!activeHoacGroup) return [];
+    const budgetSubHeads = SUB_HEAD_BY_BUDGET_HEAD[primaryHead] || [];
+    if (primaryHead === 'Club Activities') {
+      return toOptions(budgetSubHeads);
+    }
+    const groupSubHeads = HOAC_SUBHEAD_OPTIONS[activeHoacGroup] || [];
+    const combined = Array.from(new Set([...budgetSubHeads, ...groupSubHeads]));
+    return toOptions(combined);
+  }, [primaryHead, activeHoacGroup]);
+  useEffect(() => {
+    const nextFetchKeys: Record<number, string> = {};
+    const normalizedBeneficiaryType = normalizeText(beneficiaryType);
+    const normalizedBeneficiaryValue = normalizeText(beneficiaryValue);
+    const normalizedFinanceId = isEditMode && id ? String(id) : '';
+
+    budgetRows.forEach((row, index) => {
+      const normalizedHead = normalizeText(primaryHead) || normalizeText(row.category);
+      const rowSubHead = normalizeText(row.head);
+      const effectiveSubHead = (extraDropdownVisible ? normalizeText(eventSubHead) : '') || rowSubHead;
+      const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(normalizedHead, effectiveSubHead);
+
+      if (!normalizedHead || (!headOnlyMatch && !effectiveSubHead)) {
+        return;
+      }
+
+      const fetchKey = [
+        normalizedHead,
+        effectiveSubHead,
+        headOnlyMatch ? '1' : '0',
+        normalizedBeneficiaryType,
+        normalizedBeneficiaryValue,
+        normalizedFinanceId,
+      ].join('|');
+      nextFetchKeys[index] = fetchKey;
+      if (availabilityFetchKeyByRowRef.current[index] === fetchKey) {
+        return;
+      }
+
+      fetchBudgetAvailability(index, normalizedHead, rowSubHead);
+    });
+
+    availabilityFetchKeyByRowRef.current = nextFetchKeys;
+  }, [budgetRows, primaryHead, eventSubHead, extraDropdownVisible, beneficiaryType, beneficiaryValue, isEditMode, id]);
   const firstBudgetRowAutoSyncRef = useRef<{ category: string; head: string }>({ category: '', head: '' });
   useEffect(() => {
     if (!primaryHead) return;
@@ -3481,6 +3534,7 @@ const FinanceApproval: React.FC = () => {
 
                         <div style={{ flex: '1 1 180px', minWidth: '180px' }}>
                           <CustomDropdown
+                            // SHARED EVENT/MEETING SUB-HEAD DROPDOWN (Extra Dropdown)
                             name="eventSubHead"
                             options={hoacSubheadDropdownOptions}
                             value={getSelectedOption(eventSubHead, hoacSubheadDropdownOptions)}
@@ -3617,6 +3671,7 @@ const FinanceApproval: React.FC = () => {
                         </td>
                         <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
                           <CustomDropdown
+                            // ROW-LEVEL BUDGET SUB-HEAD DROPDOWN
                             name={`subHead-${index}`}
                             options={getSubHeadDropdownOptions(row.category)}
                             value={
