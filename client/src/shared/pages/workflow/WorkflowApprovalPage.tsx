@@ -1072,6 +1072,19 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }, [activeStage, fiscalYear, beneficiaryFilter, searchTerm, secondaryFilter]);
 
   const performApproval = useCallback(async (recordId: number | string) => {
+    const record = rows.find((r) => getRecordId(r) === recordId);
+    if (
+      record
+      && activeStage === 'principal'
+      && isPrincipalDocumentFeatureVisible(record)
+      && !getWorkflowPrincipalDocumentUrl(record)
+    ) {
+      setPrincipalApprovalPopupId(recordId);
+      setPrincipalApprovalFile(null);
+      setPrincipalApprovalPopupOpen(true);
+      return;
+    }
+
     setActingRecordId(recordId);
     setError('');
 
@@ -1091,7 +1104,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     } finally {
       setActingRecordId(null);
     }
-  }, [activeStage, getApprovalEndpoint, loadQueue, page, showAlert]);
+  }, [activeStage, getApprovalEndpoint, getWorkflowPrincipalDocumentUrl, isPrincipalDocumentFeatureVisible, loadQueue, page, rows, showAlert]);
 
   const handlePrincipalDocumentFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -2323,6 +2336,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
           <input
             type="file"
             accept="application/pdf,.pdf"
+            required
             className="form-control"
             disabled={principalApprovalSubmitting}
             onChange={(e) => {
