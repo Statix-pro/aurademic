@@ -790,10 +790,12 @@ const financeController = {
         });
       }
 
-      if (!budgetHead || !subHead) {
+      if (!budgetHead || (!headOnlyMatch && !subHead)) {
         return res.status(400).json({
           status: 'error',
-          message: 'budget_head and sub_head are required',
+          message: headOnlyMatch
+            ? 'budget_head is required'
+            : 'budget_head and sub_head are required',
         });
       }
 
