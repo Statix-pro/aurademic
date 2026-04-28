@@ -27,6 +27,8 @@ const normalizeSubHeadForLookup = (value) => {
 const FINANCE_ANNEXURE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'finance-annexures');
 const FINANCE_ANNEXURE_PUBLIC_PREFIX = '/uploads/finance-annexures/';
 const FINANCE_ANNEXURE_STORED_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
+const FINANCE_PRINCIPAL_DOC_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'finance-principal-documents');
+const FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX = '/uploads/finance-principal-documents/';
 const FINANCE_REQUEST_COLUMN_EXISTS_CACHE = new Map();
 const FINANCE_BUDGET_BREAKUP_COLUMN_EXISTS_CACHE = new Map();
 const FINANCE_INCOME_ROWS_COLUMN_EXISTS_CACHE = new Map();
@@ -358,6 +360,126 @@ const cleanupOrphanFinanceAnnexureFiles = async (storedNames = []) => {
       // Ignore unlink failures to avoid reporting false negatives to API clients.
     }
   }
+};
+
+
+
+const normalizeFinancePrincipalDocument = (row = {}) => ({
+  id: toPositiveInt(row.id),
+  finance_id: toPositiveInt(row.finance_id),
+  original_name: normalizeText(row.original_name),
+  stored_name: normalizeText(row.stored_name),
+  file_path: normalizeText(row.file_path),
+  mime_type: normalizeText(row.mime_type),
+  file_size: Number.isFinite(Number(row.file_size)) ? Number(row.file_size) : null,
+  uploaded_at: row.created_at || null,
+});
+
+const getFinancePrincipalDocumentsByFinanceIds = async (financeIds = [], { tx = db } = {}) => {
+  const normalizedFinanceIds = Array.from(
+    new Set(
+      (Array.isArray(financeIds) ? financeIds : [])
+        .map((value) => toPositiveInt(value))
+        .filter(Boolean)
+    )
+  );
+
+  if (!normalizedFinanceIds.length) {
+    return new Map();
+  }
+
+
+
+  const placeholders = normalizedFinanceIds.map(() => '?').join(', ');
+  try {
+    const [rows] = await tx.query(
+      `SELECT id, finance_id, original_name, stored_name, file_path, mime_type, file_size, created_at
+         FROM finance_request_annexures
+        WHERE annexure_type = 'principal_approval'
+          AND finance_id IN (${placeholders})`,
+      normalizedFinanceIds
+    );
+
+    const map = new Map();
+    for (const row of rows || []) {
+      map.set(toPositiveInt(row.finance_id), normalizeFinancePrincipalDocument(row));
+    }
+    return map;
+  } catch (error) {
+    if (error?.code === 'ER_NO_SUCH_TABLE') {
+      return new Map();
+    }
+    throw error;
+  }
+};
+
+const getFinancePrincipalDocumentByFinanceId = async (financeId, { tx = db } = {}) => {
+  const normalizedFinanceId = toPositiveInt(financeId);
+  if (!normalizedFinanceId) {
+    return null;
+  }
+
+  const map = await getFinancePrincipalDocumentsByFinanceIds([normalizedFinanceId], { tx });
+  return map.get(normalizedFinanceId) || null;
+};
+
+const setFinancePrincipalDocument = async (financeId, document, { tx = db } = {}) => {
+  const normalizedFinanceId = toPositiveInt(financeId);
+  if (!normalizedFinanceId) {
+    return null;
+  }
+
+
+
+  await tx.query(
+    `DELETE FROM finance_request_annexures WHERE annexure_type = 'principal_approval' AND finance_id = ?`,
+    [normalizedFinanceId]
+  );
+
+  if (!document || !normalizeText(document.file_path)) {
+    return null;
+  }
+
+  const [result] = await tx.query(
+    `INSERT INTO finance_request_annexures
+       (finance_id, annexure_type, original_name, stored_name, file_path, mime_type, file_size)
+     VALUES (?, 'principal_approval', ?, ?, ?, ?, ?)`,
+    [
+      normalizedFinanceId,
+      normalizeText(document.original_name) || null,
+      normalizeText(document.stored_name) || null,
+      normalizeText(document.file_path),
+      normalizeText(document.mime_type) || null,
+      Number.isFinite(Number(document.file_size)) ? Number(document.file_size) : null,
+    ]
+  );
+
+  return {
+    id: toPositiveInt(result.insertId),
+    finance_id: normalizedFinanceId,
+    original_name: normalizeText(document.original_name) || null,
+    stored_name: normalizeText(document.stored_name) || null,
+    file_path: normalizeText(document.file_path),
+    mime_type: normalizeText(document.mime_type) || null,
+    file_size: Number.isFinite(Number(document.file_size)) ? Number(document.file_size) : null,
+    uploaded_at: new Date().toISOString(),
+  };
+};
+
+const deleteFinancePrincipalDocumentByFinanceId = async (financeId, { tx = db } = {}) => {
+  const normalizedFinanceId = toPositiveInt(financeId);
+  if (!normalizedFinanceId) {
+    return false;
+  }
+
+
+
+  const [result] = await tx.query(
+    `DELETE FROM finance_request_annexures WHERE annexure_type = 'principal_approval' AND finance_id = ?`,
+    [normalizedFinanceId]
+  );
+
+  return Number(result?.affectedRows || 0) > 0;
 };
 
 const getLegacyAnnexureFromRecord = (record = {}) => {
@@ -2241,6 +2363,7 @@ const financeModel = {
       finance.level1_route_type = resolveFinanceLevel1RouteType(finance);
       const annexures = await getFinanceAnnexures(id);
       finance.annexures = annexures.length ? annexures : getLegacyAnnexureFromRecord(finance);
+      finance.principal_document = await getFinancePrincipalDocumentByFinanceId(id);
 
       return finance;
     } catch (error) {
@@ -2269,6 +2392,7 @@ const financeModel = {
       query += ' ORDER BY fr.created_at DESC';
 
       const [rows] = await db.query(query, params);
+      const principalDocuments = await getFinancePrincipalDocumentsByFinanceIds(rows.map((row) => row.id));
 
       return rows.map((row) => ({
         ...row,
@@ -2276,6 +2400,7 @@ const financeModel = {
         workflow_state: normalizeWorkflowState(row.workflow_state),
         level1_route_type: resolveFinanceLevel1RouteType(row),
         annexures: getLegacyAnnexureFromRecord(row),
+        principal_document: principalDocuments.get(toPositiveInt(row.id)) || null,
       }));
     } catch (error) {
       throw new Error(`Error listing finance requests: ${error.message}`);
@@ -3162,6 +3287,7 @@ const financeModel = {
        LIMIT ? OFFSET ?`,
       [normalizedStage, ...whereParams, limit, offset]
     );
+    const principalDocuments = await getFinancePrincipalDocumentsByFinanceIds(rows.map((row) => row.id), { tx });
 
     return {
       items: rows.map((row) => ({
@@ -3169,6 +3295,7 @@ const financeModel = {
         enclosures: safeParseJSON(row.enclosures, []),
         workflow_state: normalizeWorkflowState(row.workflow_state),
         level1_route_type: resolveFinanceLevel1RouteType(row),
+        principal_document: principalDocuments.get(toPositiveInt(row.id)) || null,
       })),
       total,
       page,
@@ -3212,6 +3339,18 @@ const financeModel = {
     );
 
     return rows.length ? rows[0] : null;
+  },
+
+  async getPrincipalDocument(recordId) {
+    return getFinancePrincipalDocumentByFinanceId(recordId);
+  },
+
+  async setPrincipalDocument(recordId, document, { tx = db } = {}) {
+    return setFinancePrincipalDocument(recordId, document, { tx });
+  },
+
+  async deletePrincipalDocument(recordId, { tx = db } = {}) {
+    return deleteFinancePrincipalDocumentByFinanceId(recordId, { tx });
   },
 };
 

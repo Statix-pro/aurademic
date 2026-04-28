@@ -63,6 +63,8 @@ router.get('/budget-availability', financeController.getBudgetAvailability);
 router.get('/search-applicant', financeController.searchApplicant);
 router.get('/me', financeController.getCurrentEmployeeInfo);
 router.post('/annexure/upload', upload.single('file'), financeController.uploadAnnexureFile);
+router.post('/:id/principal-document', upload.single('file'), financeController.uploadPrincipalDocument);
+router.delete('/:id/principal-document', financeController.deletePrincipalDocument);
 
 // Workflow metadata + queues
 router.get('/workflow/meta', canAccessFinanceWorkflow, financeController.getWorkflowMeta);
