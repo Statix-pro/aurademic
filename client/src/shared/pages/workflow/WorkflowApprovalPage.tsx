@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Briefcase, CheckCircle2, Clock, RotateCcw, XCircle, Eye, Info, Edit2, Archive, Trash2, FileText } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Briefcase, CheckCircle2, Clock, XCircle, Eye, Info, Edit2, Archive, Trash2, FileText, Upload, Download ,RotateCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import authenticityUtility from '../../utils/authenticityUtility';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -135,6 +135,25 @@ const getSecondaryFilterAllLabel = (beneficiaryType: string) => {
   }
 
   return `All ${beneficiaryType}s`;
+};
+
+type FinanceAmountFilter = '' | 'lt_10000' | 'gte_10000';
+
+const getWorkflowProposedAmount = (record: Record<string, any>) => {
+  const rawAmount = record.total_amount ?? record.total_budget ?? record.amount ?? record.proposed_amount ?? 0;
+  const parsedAmount = Number(rawAmount);
+  return Number.isFinite(parsedAmount) ? parsedAmount : 0;
+};
+
+const getWorkflowPrincipalDocument = (record: Record<string, any>) => record?.principal_document || null;
+
+const getWorkflowPrincipalDocumentUrl = (record: Record<string, any>) => {
+  const filePath = String(getWorkflowPrincipalDocument(record)?.file_path || '').trim();
+  if (!filePath) return '';
+  if (filePath.startsWith('http://') || filePath.startsWith('https://') || filePath.startsWith('blob:')) {
+    return filePath;
+  }
+  return `${authenticityUtility.getBaseURL()}${filePath}`;
 };
 
 
@@ -335,6 +354,15 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [logLevel1Role, setLogLevel1Role] = useState<'hod' | 'coordinator' | null>(null);
   const [logLoading, setLogLoading] = useState(false);
   const [archivingIds, setArchivingIds] = useState<Set<number | string>>(new Set());
+  const [principalDocumentBusyId, setPrincipalDocumentBusyId] = useState<number | string | null>(null);
+  const [principalDocumentTargetId, setPrincipalDocumentTargetId] = useState<number | string | null>(null);
+  const [pendingApprovalAfterUploadId, setPendingApprovalAfterUploadId] = useState<number | string | null>(null);
+  const principalDocumentInputRef = useRef<HTMLInputElement | null>(null);
+  
+  const [principalApprovalPopupOpen, setPrincipalApprovalPopupOpen] = useState(false);
+  const [principalApprovalPopupId, setPrincipalApprovalPopupId] = useState<number | string | null>(null);
+  const [principalApprovalFile, setPrincipalApprovalFile] = useState<File | null>(null);
+  const [principalApprovalSubmitting, setPrincipalApprovalSubmitting] = useState(false);
   
   // Action popups
   const [actionPopupOpen, setActionPopupOpen] = useState(false);
@@ -447,6 +475,144 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   };
 
   const isSuperAdminView = Boolean(meta?.isSuperAdmin);
+  const canManagePrincipalDocuments = Boolean(isSuperAdminView || activeStage === 'principal');
+  const isPrincipalDocumentEligible = useCallback((record: Record<string, any>) => {
+    const amount = getWorkflowProposedAmount(record);
+    const status = String(record.workflow_state?.status || record.workflow_status || record.overall_status || '').toLowerCase();
+
+    if (!(amount > 10000)) {
+      return false;
+    }
+
+    return (
+      status === 'principal_approved' ||
+      status === 'approved' ||
+      status === 'completed'
+    );
+  }, []);
+  const isPrincipalDocumentFeatureVisible = useCallback((record: Record<string, any>) => {
+    return getWorkflowProposedAmount(record) > 10000;
+  }, []);
+  const canShowPrincipalDocumentAction = useCallback((record: Record<string, any>) => {
+    return isPrincipalDocumentFeatureVisible(record);
+  }, [isPrincipalDocumentFeatureVisible]);
+  const openPrincipalDocumentPicker = useCallback((recordId: number | string) => {
+    setPrincipalDocumentTargetId(recordId);
+    window.setTimeout(() => principalDocumentInputRef.current?.click(), 0);
+  }, []);
+  const handlePrincipalDocumentUploadClick = useCallback((record: Record<string, any>, recordId: number | string) => {
+    if (!canManagePrincipalDocuments) {
+      showAlert('You do not have access to manage principal documents.', 'error');
+      return;
+    }
+
+    if (!isPrincipalDocumentFeatureVisible(record)) {
+      return;
+    }
+
+    if (!isPrincipalDocumentEligible(record)) {
+      showAlert('Once approved, you can upload the principal document.', 'warning');
+      return;
+    }
+
+    openPrincipalDocumentPicker(recordId);
+  }, [canManagePrincipalDocuments, isPrincipalDocumentEligible, isPrincipalDocumentFeatureVisible, openPrincipalDocumentPicker, showAlert]);
+  const uploadPrincipalDocument = useCallback(async (recordId: number | string, file: File): Promise<boolean> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    setPrincipalDocumentBusyId(recordId);
+    try {
+      const response = await authenticityUtility.postFile(`/finance-requests/${recordId}/principal-document`, formData) as {
+        status?: string;
+        message?: string;
+        data?: {
+          originalName?: string;
+          storedName?: string;
+          filePath?: string;
+          mimeType?: string;
+          size?: number;
+        };
+      };
+
+      if (response?.status !== 'success') {
+        showAlert(response?.message || 'Failed to upload principal document', 'error');
+        return false;
+      }
+
+      showAlert(`${file.name} uploaded successfully`, 'success');
+      setRows((prevRows) =>
+        prevRows.map((row) => {
+          if (String(row.id) !== String(recordId)) {
+            return row;
+          }
+
+          return {
+            ...row,
+            principal_document: {
+              ...(row.principal_document || {}),
+              original_name: response?.data?.originalName || file.name,
+              stored_name: response?.data?.storedName || null,
+              file_path: response?.data?.filePath || null,
+              mime_type: response?.data?.mimeType || 'application/pdf',
+              file_size: Number.isFinite(Number(response?.data?.size))
+                ? Number(response?.data?.size)
+                : file.size,
+            },
+          };
+        })
+        );
+      return true;
+    } catch (error: any) {
+      showAlert(error?.response?.data?.message || error?.message || 'Failed to upload principal document', 'error');
+      return false;
+    } finally {
+      setPrincipalDocumentBusyId(null);
+    }
+  }, [showAlert]);
+  const deletePrincipalDocument = useCallback(async (record: Record<string, any>) => {
+    const recordId = record?.id;
+    if (recordId === undefined || recordId === null) return;
+
+    showAlert(
+      'Delete the uploaded principal document?',
+      'warning',
+      'Confirm Delete',
+      async () => {
+        setPrincipalDocumentBusyId(recordId);
+        try {
+          const response = await authenticityUtility.delete(`/finance-requests/${recordId}/principal-document`) as {
+            status?: string;
+            message?: string;
+          };
+
+          if (response?.status !== 'success') {
+            showAlert(response?.message || 'Failed to delete principal document', 'error');
+            return;
+          }
+
+          setRows((prevRows) =>
+            prevRows.map((row) => {
+              if (String(row.id) !== String(recordId)) {
+                return row;
+              }
+
+              return {
+                ...row,
+                principal_document: null,
+              };
+            })
+          );
+        } catch (error: any) {
+          showAlert(error?.response?.data?.message || error?.message || 'Failed to delete principal document', 'error');
+        } finally {
+          setPrincipalDocumentBusyId(null);
+        }
+      },
+      true,
+      'Delete',
+      'Cancel'
+    );
+  }, [showAlert]);
   // Filter states
   const [fiscalYear, setFiscalYear] = useState<number>(() => {
     const d = new Date();
@@ -454,6 +620,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   });
   const [beneficiaryFilter, setBeneficiaryFilter] = useState<string>("All Beneficiary");
   const [secondaryFilter, setSecondaryFilter] = useState<string>('');
+  const [amountFilter, setAmountFilter] = useState<FinanceAmountFilter>('');
   const [activeStageTabKey, setActiveStageTabKey] = useState<string>('');
 
   const permittedStages = useMemo(() => meta?.permittedStages || [], [meta]);
@@ -748,6 +915,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             ...(level1RoleFilter ? { level1Role: level1RoleFilter } : {}),
             ...(beneficiaryFilter !== 'All Beneficiary' ? { beneficiaryType: beneficiaryFilter } : {}),
             ...(searchTerm ? { q: searchTerm } : {}),
+            ...(amountFilter ? { amountBand: amountFilter } : {}),
           },
         });
 
@@ -783,6 +951,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       config.moduleKey,
       fiscalYear,
       beneficiaryFilter,
+      amountFilter,
       searchTerm,
       stageTabs,
     ]
@@ -902,17 +1071,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     setPage(1);
   }, [activeStage, fiscalYear, beneficiaryFilter, searchTerm, secondaryFilter]);
 
-  const onApprove = async (recordId?: number | string) => {
-  if (!recordId) {
-  showAlert('Missing record id.', 'warning');
-  return;
-}
-
-showAlert(
-  'Are you sure you want to approve this proposal?',
-  'warning',
-  'Confirm Approval',
-  async () => {
+  const performApproval = useCallback(async (recordId: number | string) => {
     setActingRecordId(recordId);
     setError('');
 
@@ -932,11 +1091,57 @@ showAlert(
     } finally {
       setActingRecordId(null);
     }
-  },
-  true,
-  'Approve',
-  'Cancel'
-);
+  }, [activeStage, getApprovalEndpoint, loadQueue, page, showAlert]);
+
+  const handlePrincipalDocumentFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const targetId = principalDocumentTargetId;
+    event.target.value = '';
+
+    if (!file || targetId === null || targetId === undefined) {
+      setPendingApprovalAfterUploadId(null);
+      return;
+    }
+
+    if ((file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) || file.size >= 2 * 1024 * 1024) {
+      showAlert('Only PDF files with a size less than 2MB are allowed.', 'error');
+      setPendingApprovalAfterUploadId(null);
+      return;
+    }
+
+    const success = await uploadPrincipalDocument(targetId, file);
+    if (success && pendingApprovalAfterUploadId === targetId) {
+      await performApproval(targetId);
+      setPendingApprovalAfterUploadId(null);
+    }
+    setPrincipalDocumentTargetId(null);
+  }, [principalDocumentTargetId, showAlert, uploadPrincipalDocument, pendingApprovalAfterUploadId, performApproval]);
+
+  const onApprove = async (recordId?: number | string) => {
+  if (!recordId) {
+    showAlert('Missing record id.', 'warning');
+    return;
+  }
+
+  const record = rows.find(r => getRecordId(r) === recordId);
+  if (record && activeStage === 'principal' && isPrincipalDocumentFeatureVisible(record) && !getWorkflowPrincipalDocumentUrl(record)) {
+      setPrincipalApprovalPopupId(recordId);
+      setPrincipalApprovalFile(null);
+      setPrincipalApprovalPopupOpen(true);
+      return;
+  }
+
+  showAlert(
+    'Are you sure you want to approve this proposal?',
+    'warning',
+    'Confirm Approval',
+    async () => {
+      await performApproval(recordId);
+    },
+    true,
+    'Approve',
+    'Cancel'
+  );
 };
 
   const openActionPopup = (type: "return" | "reject", id: number | string, ref: string) => {
@@ -953,7 +1158,34 @@ showAlert(
     setActionId(null);
     setActionRef("");
     setActionComment("");
-    setActionSubmitting(false);
+  };
+
+  const closePrincipalApprovalPopup = () => {
+    if (principalApprovalSubmitting) return;
+    setPrincipalApprovalPopupOpen(false);
+    setPrincipalApprovalPopupId(null);
+    setPrincipalApprovalFile(null);
+  };
+
+  const submitPrincipalApproval = async () => {
+    if (!principalApprovalPopupId || principalApprovalSubmitting) return;
+    if (!principalApprovalFile) {
+      showAlert('Please select a PDF document to upload before approving.', 'warning');
+      return;
+    }
+
+    setPrincipalApprovalSubmitting(true);
+    try {
+      const success = await uploadPrincipalDocument(principalApprovalPopupId, principalApprovalFile);
+      if (success) {
+        await performApproval(principalApprovalPopupId);
+        setPrincipalApprovalPopupOpen(false);
+        setPrincipalApprovalPopupId(null);
+        setPrincipalApprovalFile(null);
+      }
+    } finally {
+      setPrincipalApprovalSubmitting(false);
+    }
   };
 
   const submitActionWithComment = async () => {
@@ -1102,6 +1334,22 @@ showAlert(
     });
   }, [beneficiaryFilter, config.moduleKey, secondaryFilter, stageScopedRows]);
 
+  const amountScopedRows = useMemo(() => {
+    if (config.moduleKey !== 'finance' || !amountFilter) {
+      return secondaryScopedRows;
+    }
+
+    const threshold = 10000;
+    return secondaryScopedRows.filter((record) => {
+      const proposedAmount = getWorkflowProposedAmount(record);
+      if (amountFilter === 'lt_10000') {
+        return proposedAmount < threshold;
+      }
+
+      return proposedAmount >= threshold;
+    });
+  }, [amountFilter, config.moduleKey, secondaryScopedRows]);
+
   useEffect(() => {
     if (secondaryFilter && !secondaryFilterOptions.includes(secondaryFilter)) {
       setSecondaryFilter('');
@@ -1109,16 +1357,16 @@ showAlert(
   }, [secondaryFilter, secondaryFilterOptions]);
 
   const statusStats = useMemo(() => {
-    const stats = { total: secondaryScopedRows.length, pending: 0, approved: 0, returned: 0, rejected: 0, archived: 0 };
-    for (const row of secondaryScopedRows) {
+    const stats = { total: amountScopedRows.length, pending: 0, approved: 0, returned: 0, rejected: 0, archived: 0 };
+    for (const row of amountScopedRows) {
       const category = resolveStatusCategory(row);
       stats[category] += 1;
     }
     return stats;
-  }, [resolveStatusCategory, secondaryScopedRows]);
+  }, [amountScopedRows, resolveStatusCategory]);
 
   const filteredRows = useMemo(() => {
-    let filtered = secondaryScopedRows;
+    let filtered = amountScopedRows;
 
     if (statusFilter !== 'total') {
       filtered = filtered.filter(record => resolveStatusCategory(record) === statusFilter);
@@ -1143,7 +1391,7 @@ showAlert(
     }
     
     return filtered;
-  }, [searchTerm, secondaryScopedRows, statusFilter, resolveStatusCategory]);
+  }, [amountScopedRows, searchTerm, statusFilter, resolveStatusCategory]);
 
   const totalPages = Math.max(1, Math.ceil((totalRows || 0) / (limit || 20)));
 
@@ -1266,6 +1514,22 @@ showAlert(
     [getFinanceRoute, navigate]
   );
 
+  const handlePrincipalDocumentDownload = useCallback((record: Record<string, any>) => {
+    const url = getWorkflowPrincipalDocumentUrl(record);
+    if (!url) return;
+    const title = String(
+      getWorkflowPrincipalDocument(record)?.original_name ||
+      getWorkflowPrincipalDocument(record)?.stored_name ||
+      'Principal Document'
+    ).trim();
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = title || 'Principal Document.pdf';
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+  }, []);
+
   const filteredColumns = useMemo(() => {
     return config.columns.filter(column => 
       column.key !== 'applicant_name' && 
@@ -1281,7 +1545,15 @@ showAlert(
   }, [config.columns]);
 
   return (
-    <div className="fw-page">
+    <>
+      <input
+        ref={principalDocumentInputRef}
+        type="file"
+        accept="application/pdf,.pdf"
+        hidden
+        onChange={handlePrincipalDocumentFileChange}
+      />
+      <div className="fw-page">
       <div className="fw-container">
         <div className="fw-card">
           <div className="fw-header">
@@ -1311,6 +1583,35 @@ showAlert(
             )}
 
             <div className="fw-header-actions">
+              {config.moduleKey === 'finance' && (
+                <div className="fw-amount-filters" role="group" aria-label="Amount filter shortcuts">
+                  <button
+                    type="button"
+                    className={`fw-amount-filter-btn ${amountFilter === 'lt_10000' ? 'active' : ''}`}
+                    aria-pressed={amountFilter === 'lt_10000'}
+                    onClick={() => {
+                      setAmountFilter((current) => (current === 'lt_10000' ? '' : 'lt_10000'));
+                      setPage(1);
+                    }}
+                    title="Shortlist proposals below 10,000"
+                  >
+                    {'< 10k'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`fw-amount-filter-btn ${amountFilter === 'gte_10000' ? 'active' : ''}`}
+                    aria-pressed={amountFilter === 'gte_10000'}
+                    onClick={() => {
+                      setAmountFilter((current) => (current === 'gte_10000' ? '' : 'gte_10000'));
+                      setPage(1);
+                    }}
+                    title="Shortlist proposals 10,000 and above"
+                  >
+                    {'> 10k'}
+                  </button>
+                </div>
+              )}
+
               <select
                 className="fw-control"
                 value={fiscalYear}
@@ -1457,10 +1758,19 @@ showAlert(
                     const isSuperAdminReturnAllowed =
                       isSuperAdminDeleteMode &&
                       ['pending', 'approved', 'rejected', 'archived'].includes(statusCategory);
-                    const proposedAmount = record.total_amount || record.total_budget || record.amount || 0;
+                    const proposedAmount = getWorkflowProposedAmount(record);
                     const approvedAmount = record.approved_total_amount || record.approved_amount || null;
                     const showApprovedAmount = approvedAmount !== null && approvedAmount !== undefined && approvedAmount !== 0;
                     const proposalRef = getRecordProposalRef(record);
+                    const principalDocument = getWorkflowPrincipalDocument(record);
+                    const principalDocumentUrl = getWorkflowPrincipalDocumentUrl(record);
+                    const principalDocumentTitle = String(
+                      principalDocument?.original_name ||
+                      principalDocument?.stored_name ||
+                      'Principal Document'
+                    ).trim();
+                    const showPrincipalDocumentAction = canShowPrincipalDocumentAction(record);
+                    const principalDocumentActionBusy = principalDocumentBusyId === recordId;
                     
                     // Get tag based on beneficiary type
                     const beneficiaryType = record.beneficiary_type || record.beneficiaryType || '';
@@ -1567,6 +1877,69 @@ showAlert(
                             </div>
 
                             <div className="fw-right">
+                              {config.moduleKey === 'finance' && showPrincipalDocumentAction && (
+                                principalDocumentUrl ? (
+                                  <button
+                                    type="button"
+                                    className="fw-action-btn fw-action-btn--download"
+                                    title={principalDocumentTitle}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handlePrincipalDocumentDownload(record);
+                                    }}
+                                    disabled={principalDocumentActionBusy || !principalDocumentUrl}
+                                    >
+                                      <Download size={18} />
+                                  </button>
+                                ) : (
+                                  canManagePrincipalDocuments && isPrincipalDocumentEligible(record) ? (
+                                    <button
+                                      type="button"
+                                      className="fw-action-btn fw-action-btn--download"
+                                      title="Upload Principal Document"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handlePrincipalDocumentUploadClick(record, recordId);
+                                      }}
+                                      disabled={principalDocumentActionBusy}
+                                    >
+                                      <Upload size={18} />
+                                    </button>
+                                  ) : null
+                                )
+                              )}
+
+                              {config.moduleKey === 'finance' && principalDocumentUrl && canManagePrincipalDocuments && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="fw-action-btn fw-action-btn--download"
+                                    title={`View ${principalDocumentTitle}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.open(principalDocumentUrl, '_blank', 'noopener,noreferrer');
+                                    }}
+                                    disabled={principalDocumentActionBusy}
+                                    style={{ background: '#eef6ff', color: '#184d92' }}
+                                  >
+                                    <Eye size={18} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="fw-action-btn fw-action-btn--download"
+                                    title={`Delete ${principalDocumentTitle}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deletePrincipalDocument(record);
+                                    }}
+                                    disabled={principalDocumentActionBusy}
+                                    style={{ background: '#fef2f2', color: '#dc2626' }}
+                                  >
+                                    <Trash2 size={18} />
+                                  </button>
+                                </>
+                              )}
+
                               {config.moduleKey === 'finance' && (
                                 <button
                                   type="button"
@@ -1914,6 +2287,59 @@ showAlert(
       </CustomModal>
 
       <CustomModal
+        show={principalApprovalPopupOpen}
+        onHide={closePrincipalApprovalPopup}
+        title="Principal Approval Form"
+        centered
+        backdrop={principalApprovalSubmitting ? "static" : true}
+        keyboard={!principalApprovalSubmitting}
+        hideCloseButton={principalApprovalSubmitting}
+        footer={
+          <div className="d-flex justify-content-end gap-2 w-100">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={closePrincipalApprovalPopup}
+              disabled={principalApprovalSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-success"
+              onClick={submitPrincipalApproval}
+              disabled={principalApprovalSubmitting || !principalApprovalFile}
+            >
+              {principalApprovalSubmitting ? "Submitting..." : "Approve and Submit"}
+            </button>
+          </div>
+        }
+      >
+        <div style={{ fontSize: 14, marginBottom: 15 }}>
+          Please upload the required annexure document before approving this request.
+        </div>
+        <div className="mb-3">
+          <label className="form-label fw-bold">Upload Principal Annexure (PDF)</label>
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            className="form-control"
+            disabled={principalApprovalSubmitting}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file && ((file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) || file.size >= 2 * 1024 * 1024)) {
+                showAlert('Only PDF files with a size less than 2MB are allowed.', 'error');
+                e.target.value = '';
+                setPrincipalApprovalFile(null);
+                return;
+              }
+              setPrincipalApprovalFile(file || null);
+            }}
+          />
+        </div>
+      </CustomModal>
+
+      <CustomModal
         show={logPopupOpen}
         onHide={closeLogPopup}
         title="Workflow Timeline"
@@ -2027,6 +2453,7 @@ showAlert(
         </div>
       </CustomModal>
     </div>
+    </>
   );
 };
 

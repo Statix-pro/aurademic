@@ -324,15 +324,20 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
     'Others',
   ],
   'Meetings & Audits': [
+    'Accessories',
     'Accommodation',
+    'Auditing Charge',
+    'Driver Bata',
     'Food & Refreshment',
+    'Honorarium',
     'Memento & Gifts',
+    'Miscellaneous',
     'Printing',
     'Registration fee',
     'Remuneration',
-    'Stationary',
+    'Sitting Fees',
+    'Stationery',
     'Travel',
-    'Travel Allowance',
     'Others',
   ],
   'Club Activities': [
@@ -488,9 +493,10 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Printer Maintenance',
     'Software Maintenance',
     'UPS Maintenance',
-    'Vehicle Maintenance'
+    'Vehicle Maintenance',
+    'Toner Refill'
   ],
-  Spares: ['Chargers', 'Printer Donors', 'SMPS'],
+  Spares: ['Chargers', 'Printer Toner', 'SMPS'],
   'Annual Maintenance Charges': ['Equipment Maintenance', 'Software Maintenance'],
   Consumables: [
     'Carpentary Items',
@@ -1187,6 +1193,10 @@ const FinanceApproval: React.FC = () => {
   const [showUnplannedBudget, setShowUnplannedBudget] = useState<boolean>(false);
   const [unplannedBudgetAmount, setUnplannedBudgetAmount] = useState<string>('');
   const [unplannedBudgetDescription, setUnplannedBudgetDescription] = useState<string>('');
+  const [hasPrincipalDocument, setHasPrincipalDocument] = useState<boolean>(false);
+  const [principalApprovalPopupOpen, setPrincipalApprovalPopupOpen] = useState(false);
+  const [principalApprovalFile, setPrincipalApprovalFile] = useState<File | null>(null);
+  const [principalApprovalSubmitting, setPrincipalApprovalSubmitting] = useState(false);
   // State for dynamic subcategory options (Department, Centre, Cell, Club, Professional Body)
   const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
   const [annexureType, setAnnexureType] = useState<string>('');
@@ -2207,7 +2217,23 @@ const FinanceApproval: React.FC = () => {
         }
       }
 
-      navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard');
+      const responseId = isEditMode ? id : (result as any).data?.id;
+      const refNo = responseId ? `#F-${new Date().getFullYear()}-${String(responseId).padStart(4, '0')}` : '';
+
+      showAlert(
+        <div>
+          <div>{isEditMode ? 'Finance request updated successfully!' : 'Finance request submitted successfully!'}</div>
+          {refNo && <div style={{ marginTop: '8px', fontWeight: 'bold' }}>Reference No.: {refNo}</div>}
+        </div>,
+        'success',
+        'Success',
+        false,
+        'OK',
+        () => {
+          closeAlert();
+          navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard');
+        }
+      );
     } catch (error) {
       console.error('Finance submit error:', error);
       const apiMessage =
@@ -2230,6 +2256,12 @@ const FinanceApproval: React.FC = () => {
     }
 
     if (decision === 'approved' || decision === 'archived') {
+      if (decision === 'approved' && loadedCurrentStage === 'principal' && totalBudget > 10000 && !hasPrincipalDocument) {
+        setPrincipalApprovalFile(null);
+        setPrincipalApprovalPopupOpen(true);
+        return;
+      }
+      
       const isArchivedAction = decision === 'archived';
       showAlert(
         isArchivedAction
@@ -2299,6 +2331,53 @@ const FinanceApproval: React.FC = () => {
     setWfActionPopupOpen(false);
     setWfActionType(null);
     setWfActionComment('');
+  };
+
+  const uploadPrincipalDocument = async (file: File): Promise<boolean> => {
+    if (!id) return false;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      setIsLoading(true);
+      const response = await authenticityUtility.postFile(`/finance-requests/${id}/principal-document`, formData) as any;
+      if (response?.status !== 'success') {
+        showAlert(response?.message || 'Failed to upload principal document', 'error');
+        return false;
+      }
+      setHasPrincipalDocument(true);
+      return true;
+    } catch (error: any) {
+      showAlert(error?.response?.data?.message || error?.message || 'Failed to upload principal document', 'error');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const closePrincipalApprovalPopup = () => {
+    if (principalApprovalSubmitting) return;
+    setPrincipalApprovalPopupOpen(false);
+    setPrincipalApprovalFile(null);
+  };
+
+  const submitPrincipalApproval = async () => {
+    if (principalApprovalSubmitting) return;
+    if (!principalApprovalFile) {
+      showAlert('Please select a PDF document to upload before approving.', 'warning');
+      return;
+    }
+
+    setPrincipalApprovalSubmitting(true);
+    try {
+      const success = await uploadPrincipalDocument(principalApprovalFile);
+      if (success) {
+        await executeWorkflowAction('approved');
+        setPrincipalApprovalPopupOpen(false);
+        setPrincipalApprovalFile(null);
+      }
+    } finally {
+      setPrincipalApprovalSubmitting(false);
+    }
   };
 
   const handleReset = (force = false): void => {
@@ -2648,6 +2727,7 @@ const FinanceApproval: React.FC = () => {
             }))
             : [createIncomeRow()]
         );
+        setHasPrincipalDocument(Boolean(record.principal_document && record.principal_document.file_path));
         setStatusUpdates(record.status_updates || []);
       } catch (error) {
         console.error('Failed to load finance request', error);
@@ -4988,9 +5068,60 @@ const FinanceApproval: React.FC = () => {
         confirmText={alertConfig.confirmText}
         cancelText={alertConfig.cancelText}
       />
+      <CustomModal
+        show={principalApprovalPopupOpen}
+        onHide={closePrincipalApprovalPopup}
+        title="Principal Approval Form"
+        centered
+        backdrop={principalApprovalSubmitting ? "static" : true}
+        keyboard={!principalApprovalSubmitting}
+        hideCloseButton={principalApprovalSubmitting}
+        footer={
+          <div className="d-flex justify-content-end gap-2 w-100">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={closePrincipalApprovalPopup}
+              disabled={principalApprovalSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-success"
+              onClick={submitPrincipalApproval}
+              disabled={principalApprovalSubmitting || !principalApprovalFile}
+            >
+              {principalApprovalSubmitting ? "Submitting..." : "Approve and Submit"}
+            </button>
+          </div>
+        }
+      >
+        <div style={{ fontSize: 14, marginBottom: 15 }}>
+          Please upload the required annexure document before approving this request.
+        </div>
+        <div className="mb-3">
+          <label className="form-label fw-bold">Upload Principal Annexure (PDF)</label>
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            className="form-control"
+            disabled={principalApprovalSubmitting}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file && ((file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) || file.size >= 2 * 1024 * 1024)) {
+                showAlert('Only PDF files with a size less than 2MB are allowed.', 'error');
+                e.target.value = '';
+                setPrincipalApprovalFile(null);
+                return;
+              }
+              setPrincipalApprovalFile(file || null);
+            }}
+          />
+        </div>
+      </CustomModal>
     </div>
   );
 };
 
 export default FinanceApproval;
-
