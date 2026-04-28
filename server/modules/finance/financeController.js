@@ -848,7 +848,23 @@ const financeController = {
       const workflowStatus = normalizeText(
         finance.workflow_state?.status || finance.workflow_status || finance.overall_status
       ).toLowerCase();
+      const currentStage = normalizeText(
+        finance.workflow_state?.currentStage || finance.workflow_stage
+      ).toLowerCase();
       const isTerminalWorkflow = ['completed', 'rejected', 'archived'].includes(workflowStatus);
+
+      if (
+        normalizedDecision === 'approved'
+        && currentStage === 'principal'
+        && isEligibleForPrincipalDocument(finance)
+        && !finance?.principal_document?.file_path
+      ) {
+        return res.status(409).json({
+          status: 'error',
+          message: 'Principal annexure PDF is required before principal approval.',
+          code: 'FINANCE_PRINCIPAL_DOCUMENT_REQUIRED',
+        });
+      }
 
       if (actor.isSuperAdmin && normalizedDecision === 'returned' && isTerminalWorkflow) {
         result = await financeModel.forceWorkflowTransition(

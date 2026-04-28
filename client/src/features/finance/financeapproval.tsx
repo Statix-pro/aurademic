@@ -2206,7 +2206,7 @@ const FinanceApproval: React.FC = () => {
           const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead, normalizedSubHead);
           return {
             budget_head: normalizedBudgetHead,
-            sub_head: headOnlyMatch ? '' : normalizedSubHead,
+            sub_head: normalizedSubHead,
             head_only_match: headOnlyMatch,
             amount: Number(row.amount || 0),
             budget_line_id: headOnlyMatch ? null : (budgetLineMetaByRow[index]?.budgetLineId || null),
@@ -2301,6 +2301,16 @@ const FinanceApproval: React.FC = () => {
 
   const executeWorkflowAction = async (decision: 'approved' | 'returned' | 'rejected' | 'archived', feedback?: string) => {
     if (!id) return;
+    if (
+      decision === 'approved'
+      && loadedCurrentStage === 'principal'
+      && totalBudget > 10000
+      && !hasPrincipalDocument
+    ) {
+      setPrincipalApprovalFile(null);
+      setPrincipalApprovalPopupOpen(true);
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -5160,6 +5170,7 @@ const FinanceApproval: React.FC = () => {
           <input
             type="file"
             accept="application/pdf,.pdf"
+            required
             className="form-control"
             disabled={principalApprovalSubmitting}
             onChange={(e) => {
