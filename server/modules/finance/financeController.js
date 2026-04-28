@@ -63,8 +63,7 @@ const hasFinanceWorkflowPermission = (req) => {
 
 const canManagePrincipalDocumentsRequest = (req) => (
   Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) ||
-  isPrincipalRoleRequest(req) ||
-  hasFinanceWorkflowPermission(req)
+  isPrincipalRoleRequest(req)
 );
 
 const isEligibleForPrincipalDocument = (finance) => {
