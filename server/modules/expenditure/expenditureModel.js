@@ -2362,9 +2362,15 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     }
 
     const [existingRows] = await conn.execute(
-      `SELECT id, finance_request_id, request_ref, request_type, workflow_state, overall_status
-         FROM expenditure_requests
-        WHERE id = ?
+      `SELECT er.id,
+              er.finance_request_id,
+              COALESCE(err.request_ref, CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))) AS request_ref,
+              er.request_type,
+              er.workflow_state,
+              er.overall_status
+         FROM expenditure_requests er
+    LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
+        WHERE er.id = ?
         LIMIT 1
         FOR UPDATE`,
       [normalizedExpenditureId],
@@ -2536,6 +2542,21 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       await getRemainingBudgetByLine(conn, financeRequestId, usageRows.map((row) => row.budgetLineId)),
     );
 
+    const normalizeSqlDate = (value) => {
+      const text = normalizeText(value);
+      if (!text) return null;
+
+      const date = new Date(text);
+      if (!Number.isNaN(date.getTime())) {
+        return date.toISOString().slice(0, 10);
+      }
+
+      const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+      return match ? match[1] : null;
+    };
+
+    const normalizedPaymentDate = normalizeSqlDate(paymentDetails.date || data.payment_date);
+
     const updatedEntry = {
       finance_request_id: financeRequestId,
       employee_id: employeeId || null,
@@ -2568,7 +2589,7 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       show_bulk_neft: (parseBoolean(data.show_bulk_neft) || Boolean(uploads.bulkNeftFile)) ? 1 : 0,
       payment_mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
       payment_ref_no: normalizeText(paymentDetails.refNo || data.payment_ref_no) || null,
-      payment_date: paymentDetails.date || data.payment_date || null,
+      payment_date: normalizedPaymentDate,
       payment_status: normalizePaymentStatus(paymentDetails.status || data.payment_status),
       payment_debit_account: normalizeText(paymentDetails.debitAccount || data.payment_debit_account) || null,
       advance_total_amount: toMoney(advanceTotal),
@@ -3099,36 +3120,41 @@ export async function getExpenditureRecordContext(recordId, { tx = db, forUpdate
   };
 }
 
-export async function updateExpenditureWorkflowSnapshot(recordId, newState, tx = db) {
+export async function updateExpenditureWorkflowSnapshot(recordId, newState, { tx = db } = {}) {
   const normalizedRecordId = toPositiveInt(recordId);
   if (!normalizedRecordId) return false;
 
-  const existingRows = await tx.query(
-    `SELECT workflowstate FROM expenditurerequests WHERE id = ? LIMIT 1`,
-    [normalizedRecordId]
+  const source = tx?.execute ? tx : db;
+
+  const [existingRows] = await source.execute(
+    `SELECT workflow_state
+       FROM expenditure_requests
+      WHERE id = ?
+      LIMIT 1`,
+    [normalizedRecordId],
   );
 
   const previousState = normalizeWorkflowState(existingRows?.[0]?.workflowstate);
   const persistentState = getPersistentWorkflowRowState(previousState);
 
-  const mergedState = { ...persistentState, ...newState };
+  const mergedState = {
+    ...persistentState,
+    ...(newState || {}),
+  };
+
   const workflowStatePayload = JSON.stringify(mergedState ?? null);
   const overallStatus = mapWorkflowStatusToOverallStatus(mergedState);
-  const workflowStatus = normalizeText(mergedState?.status?.toLowerCase()) || null;
-  const workflowStage = normalizeText(mergedState?.currentStage?.toLowerCase()) || null;
 
-  const result = await tx.query(
-    `UPDATE expenditurerequests
-     SET workflowstate = ?,
-         overallstatus = ?,
-         workflowstatus = ?,
-         workflowstage = ?,
-         updatedat = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    [workflowStatePayload, overallStatus, workflowStatus, workflowStage, normalizedRecordId]
+  const [result] = await source.execute(
+    `UPDATE expenditure_requests
+        SET workflow_state = ?,
+            overall_status = ?,
+            updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`,
+    [workflowStatePayload, overallStatus, normalizedRecordId],
   );
 
-  return result.affectedRows > 0;
+  return Number(result?.affectedRows || 0) > 0;
 }
 
 export async function forceWorkflowTransition(recordId, {
@@ -3393,6 +3419,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
     `SELECT
        er.id,
        COALESCE(err.request_ref, CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))) AS proposal_ref,
+       er.request_type,
        er.created_by,
        er.beneficiary_type,
        er.beneficiary_value,

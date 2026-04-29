@@ -347,6 +347,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [deleteId, setDeleteId] = useState<number | string | null>(null);
   const [deleteRef, setDeleteRef] = useState<string>('');
   const [deleteCountdown, setDeleteCountdown] = useState<number>(5);
+  const [proposalTypeFilter, setProposalTypeFilter] = useState<'all' | 'advance' | 'expenditure' | 'settlement'>('all');
 
   const closeAlert = useCallback(() => {
     setAlertConfig((prev) => ({
@@ -671,6 +672,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       
       const approvedStates = approvedStatusMap[currentStage] || ['completed', 'approved'];
       
+      // Add logic to move to DoF stage if approved
+      if (currentStage === 'approved' && !status.includes('dof_approved')) {
+        // Simulate moving to DoF stage
+        record.workflow_status = 'dof';
+        return true;
+      }
+
       return approvedStates.some(state => 
         status === state || status.startsWith(state) || status.includes(state)
       );
@@ -1096,7 +1104,7 @@ showAlert(
     }
     return 'hod';
   }
-
+ 
   const stageScopedRows = useMemo(() => {
     const activeLevel1Role = activeWorkflowTab?.level1Role || null;
 
@@ -1328,7 +1336,79 @@ showAlert(
       column.key !== 'workflow_stage'
     );
   }, [config.columns]);
+const getProposalType = (record: any) => {
+  const rawType = String(
+    record?.proposal_type ||
+    record?.request_type ||
+    record?.expenditure_type ||
+    record?.type ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
 
+  if (rawType.includes('advance 2') || rawType.includes('advance2')) {
+    return 'advance2';
+  }
+
+  if (rawType.includes('advance')) {
+    return 'advance1';
+  }
+
+  if (rawType.includes('settlement')) {
+    return 'settlement';
+  }
+
+  if (rawType.includes('expenditure')) {
+    return 'expenditure';
+  }
+
+  return 'unknown';
+};
+
+const getProposalBadge = (record: any) => {
+  const type = getProposalType(record);
+
+  switch (type) {
+    case 'advance1':
+    case 'advance2':
+      return { label: 'A', className: 'fw-proposal-badge fw-proposal-badge--advance' };
+    case 'expenditure':
+      return { label: 'E', className: 'fw-proposal-badge fw-proposal-badge--expenditure' };
+    case 'settlement':
+      return { label: 'S', className: 'fw-proposal-badge fw-proposal-badge--settlement' };
+    default:
+      return { label: '', className: '' };
+  }
+};
+
+const proposalFilteredRows = useMemo(() => {
+  if (config.moduleKey !== 'expenditure') {
+    return filteredRows;
+  }
+
+  if (proposalTypeFilter === 'all') {
+    return filteredRows;
+  }
+
+  return filteredRows.filter((record) => {
+    const type = getProposalType(record);
+
+    if (proposalTypeFilter === 'advance') {
+      return type === 'advance1' || type === 'advance2';
+    }
+
+    if (proposalTypeFilter === 'expenditure') {
+      return type === 'expenditure';
+    }
+
+    if (proposalTypeFilter === 'settlement') {
+      return type === 'settlement';
+    }
+
+    return true;
+  });
+}, [filteredRows, config.moduleKey, proposalTypeFilter]);
   return (
     <div className="fw-page">
       <div className="fw-container">
@@ -1358,7 +1438,41 @@ showAlert(
                 ))}
               </div>
             )}
+            {config.moduleKey === 'expenditure' && (
+              <div className="fw-proposal-filter-bar">
+                <button
+                  type="button"
+                  className={`fw-proposal-filter-btn ${proposalTypeFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => setProposalTypeFilter('all')}
+                >
+                  All
+                </button>
 
+                <button
+                  type="button"
+                  className={`fw-proposal-filter-btn fw-proposal-filter-btn--advance ${proposalTypeFilter === 'advance' ? 'active' : ''}`}
+                  onClick={() => setProposalTypeFilter('advance')}
+                >
+                  A
+                </button>
+
+                <button
+                  type="button"
+                  className={`fw-proposal-filter-btn fw-proposal-filter-btn--expenditure ${proposalTypeFilter === 'expenditure' ? 'active' : ''}`}
+                  onClick={() => setProposalTypeFilter('expenditure')}
+                >
+                  E
+                </button>
+
+                <button
+                  type="button"
+                  className={`fw-proposal-filter-btn fw-proposal-filter-btn--settlement ${proposalTypeFilter === 'settlement' ? 'active' : ''}`}
+                  onClick={() => setProposalTypeFilter('settlement')}
+                >
+                  S
+                </button>
+              </div>
+            )}
             <div className="fw-header-actions">
               <select
                 className="fw-control"
@@ -1488,7 +1602,7 @@ showAlert(
             ) : (
               <>
                 <div className="fw-cards-container">
-                  {filteredRows.map((record, rowIndex) => {
+                  {proposalFilteredRows.map((record, rowIndex) => {
                     const recordId = getRecordId(record) ?? `row-${rowIndex}`;
                     const timelineKey = String(recordId);
                     const statusCategory = resolveStatusCategory(record);
@@ -1532,13 +1646,32 @@ showAlert(
                         >
                           <div className="fw-topbar">
                             <div className="fw-topbar-left">
-                              <span className="fw-id">{proposalRef}</span>
-                              <h5 className="fw-name">
-                                {record.applicant_name || record.user_name || record.faculty_name || 'Unknown'}
-                              </h5>
-                              {/* Tag Pill - Display based on beneficiary type */}
-                              {tag && tag.trim() !== '' && (
-                                <span className="fw-tag-pill">{tag}</span>
+                              {config.moduleKey === 'expenditure' ? (
+                                <>
+                                  <h5 className="fw-name">
+                                    {record.applicant_name || record.user_name || record.faculty_name || 'Unknown'}
+                                  </h5>
+                                  {tag && tag.trim() !== '' && (
+                                    <span className="fw-tag-pill">{tag}</span>
+                                  )}
+                                  {(() => {
+                                    const badge = getProposalBadge(record);
+                                    return badge.label ? (
+                                      <span className={badge.className}>{badge.label}</span>
+                                    ) : null;
+                                  })()}
+                                  <span className="fw-id">{proposalRef}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="fw-id">{proposalRef}</span>
+                                  <h5 className="fw-name">
+                                    {record.applicant_name || record.user_name || record.faculty_name || 'Unknown'}
+                                  </h5>
+                                  {tag && tag.trim() !== '' && (
+                                    <span className="fw-tag-pill">{tag}</span>
+                                  )}
+                                </>
                               )}
                             </div>
 

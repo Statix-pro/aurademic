@@ -1355,6 +1355,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
     'Credit Agricole CIB India',
   ];
 
+  
   const handleModalSubmit = async () => {
     if (!newPayeeName || !newAccountNo || !newIfsc || !newBankName || !newBranchName) {
       showAlert('Please enter beneficiary name, account number, IFSC, bank name and branch name', 'warning');
@@ -1387,6 +1388,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
 
     await onAddPayee(payeeToAdd);
   };
+  
 
   if (!show) return null;
 
@@ -1782,6 +1784,7 @@ const ExpenditureApproval: React.FC = () => {
     return parsePositiveIntLike(state?.submittedRequestId) ?? parsePositiveIntLike(routeId);
   })();
   const isEditingExistingRequest = Boolean(submittedRequestIdFromState);
+  const submitActionLabel = isEditingExistingRequest ? 'Update' : 'Submit';
   const sourceRequestIdFromState = (() => {
     const state = location.state as {
       sourceRequestId?: unknown;
@@ -1842,6 +1845,7 @@ const ExpenditureApproval: React.FC = () => {
   const bulkNeftInputRef = useRef<HTMLInputElement>(null);
   const [bulkNeftFile, setBulkNeftFile] = useState<File | null>(null);
   const [uploadedPayeeBills, setUploadedPayeeBills] = useState<File[]>([]);
+  const [existingPayeeBills, setExistingPayeeBills] = useState<Array<{ id?: number; original_name?: string; file_url?: string | null }>>([]);
   const [remarks, setRemarks] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
@@ -1934,6 +1938,7 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
 
   useEffect(() => {
     if (!submittedRequestIdFromState) {
+      setExistingPayeeBills([]);
       return;
     }
 
@@ -2057,6 +2062,7 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
         });
         setShowBulkNEFT(Boolean(record.bulk_neft_file));
         setShowDebitAccountDropdown(Boolean(record.payment_debit_account));
+        setExistingPayeeBills(Array.isArray(record.bill_files) ? record.bill_files : []);
         setUploadedPayeeBills([]);
       } catch (error) {
         if (!isCancelled) {
@@ -2952,79 +2958,269 @@ const workflowRowRefFromState = (() => {
     return Math.max(parsed, 0);
   };
 
+  const findAdvanceBudgetExceededRow = (
+    rows: AdvanceFormRow[],
+  ): { rowNumber: number; budgetLimit: number } | null => {
+    const cumulativeAmountsByBudgetLine = new Map<number, number>();
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const budgetLimit = getRowBudgetLimit(row.budget);
+      const requestedAmount = parseAmountValue(row.advance);
+
+      if (budgetLimit === null || requestedAmount <= 0) continue;
+
+      const budgetLineId = parsePositiveIntLike(row.budgetLineId);
+
+      if (!budgetLineId) {
+        if (requestedAmount > budgetLimit) {
+          return {
+            rowNumber: index + 1,
+            budgetLimit,
+          };
+        }
+        continue;
+      }
+
+      const nextCumulativeAmount = Number(
+        ((cumulativeAmountsByBudgetLine.get(budgetLineId) || 0) + requestedAmount).toFixed(2),
+      );
+
+      cumulativeAmountsByBudgetLine.set(budgetLineId, nextCumulativeAmount);
+
+      if (nextCumulativeAmount > budgetLimit) {
+        return {
+          rowNumber: index + 1,
+          budgetLimit,
+        };
+      }
+    }
+
+    return null;
+  };
+
+  const findExpenditureBudgetExceededRow = (
+    rows: ExpenditureFormRow[],
+  ): { rowNumber: number; budgetLimit: number } | null => {
+    const cumulativeAmountsByBudgetLine = new Map<number, number>();
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const budgetLimit = getRowBudgetLimit(row.budget);
+      const requestedAmount = parseAmountValue(row.autoSum || row.expenditure);
+
+      if (budgetLimit === null || requestedAmount <= 0) continue;
+
+      const budgetLineId = parsePositiveIntLike(row.budgetLineId);
+
+      if (!budgetLineId) {
+        if (requestedAmount > budgetLimit) {
+          return {
+            rowNumber: index + 1,
+            budgetLimit,
+          };
+        }
+        continue;
+      }
+
+      const nextCumulativeAmount = Number(
+        ((cumulativeAmountsByBudgetLine.get(budgetLineId) || 0) + requestedAmount).toFixed(2),
+      );
+
+      cumulativeAmountsByBudgetLine.set(budgetLineId, nextCumulativeAmount);
+
+      if (nextCumulativeAmount > budgetLimit) {
+        return {
+          rowNumber: index + 1,
+          budgetLimit,
+        };
+      }
+    }
+
+    return null;
+  };
+
   const formatAmountInputValue = (value: number): string => {
     if (!Number.isFinite(value)) return '';
     return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
   };
 
-  const handleAdvanceAmountChange = (rowId: string, nextValue: string) => {
-    if (!/^\d*\.?\d*$/.test(nextValue)) return;
+  const toNumber = (value: unknown) => {
+  const n = Number(String(value ?? "").replace(/,/g, "").trim());
+  return Number.isFinite(n) ? n : 0;
+};
+const groupedAdvanceUsage = new Map<string, { budget: number; used: number }>();
 
-    let exceededLimit: number | null = null;
+advanceRows.forEach((row) => {
+  const key = [
+    String(row.budgetHead ?? "").trim().toLowerCase(),
+    String(row.subHead ?? "").trim().toLowerCase(),
+  ].join("||");
 
-    setAdvanceRows((prev) =>
-      prev.map((row) => {
-        if (row.id !== rowId) return row;
-
-        const budgetLimit = getRowBudgetLimit(row.budget);
-        const requestedAmount = parseAmountValue(nextValue);
-
-        if (budgetLimit !== null && requestedAmount > budgetLimit) {
-          exceededLimit = budgetLimit;
-          return {
-            ...row,
-            advance: formatAmountInputValue(budgetLimit),
-          };
-        }
-
-        return {
-          ...row,
-          advance: nextValue,
-        };
-      }),
-    );
-
-    if (exceededLimit !== null) {
-      showAlert(
-        `Advance amount cannot exceed the remaining budget of Rs ${exceededLimit.toLocaleString('en-IN')}.`,
-        'warning',
-      );
-    }
+  const current = groupedAdvanceUsage.get(key) ?? {
+    budget: toNumber(row.budget),
+    used: 0,
   };
 
-  const handleExpenditureAmountChange = (rowId: string, nextValue: string) => {
-    if (!/^[0-9+.]*$/.test(nextValue)) return;
+  current.used += toNumber(row.advance);
+  current.budget = Math.max(current.budget, toNumber(row.budget));
 
-    let exceededLimit: number | null = null;
+  groupedAdvanceUsage.set(key, current);
+});
 
-    setExpenditureSubRows((prev) =>
-      prev.map((row) => {
-        if (row.id !== rowId) return row;
-
-        const nextSum = calculateSum(nextValue);
-        const budgetLimit = getRowBudgetLimit(row.budget);
-        const requestedAmount = parseAmountValue(nextSum);
-
-        if (budgetLimit !== null && requestedAmount > budgetLimit) {
-          exceededLimit = budgetLimit;
-          return row;
-        }
-
-        return {
-          ...row,
-          expenditure: nextValue,
-          autoSum: nextSum,
-        };
-      }),
+for (const [, group] of groupedAdvanceUsage) {
+  if (group.used > group.budget) {
+    window.alert(
+      `Total entered advance ₹ ${group.used.toLocaleString("en-IN")} exceeds available balance ₹ ${group.budget.toLocaleString("en-IN")} for one of the selected budget lines.`
     );
+    return;
+  }
+}
 
-    if (exceededLimit !== null) {
-      showAlert(
-        `Expenditure amount cannot exceed the remaining budget of Rs ${exceededLimit.toLocaleString('en-IN')}.`,
-        'warning',
-      );
+
+const getAdvanceRowAvailableBalance = (rowId: string | number) => {
+  const currentRow = advanceRows.find((row) => row.id === rowId);
+  if (!currentRow) return 0;
+
+  const rowBudget = toNumber(currentRow.budget);
+  const currentHead = String(currentRow.budgetHead ?? "").trim().toLowerCase();
+  const currentSubHead = String(currentRow.subHead ?? "").trim().toLowerCase();
+
+  const usedByOtherRows = advanceRows.reduce((sum, row) => {
+    if (row.id === rowId) return sum;
+
+    const sameHead =
+      String(row.budgetHead ?? "").trim().toLowerCase() === currentHead;
+    const sameSubHead =
+      String(row.subHead ?? "").trim().toLowerCase() === currentSubHead;
+
+    if (!sameHead || !sameSubHead) return sum;
+
+    return sum + toNumber(row.advance);
+  }, 0);
+
+  return Math.max(0, rowBudget - usedByOtherRows);
+};
+const getExpenditureRowAvailableBalance = (rowId: string | number) => {
+  const currentRow = expenditureSubRows.find((row) => row.id === rowId);
+  if (!currentRow) return 0;
+
+  const rowBudget = toNumber(currentRow.budget);
+  const currentHead = String(currentRow.budgetHead ?? "").trim().toLowerCase();
+  const currentSubHead = String(currentRow.subHead ?? "").trim().toLowerCase();
+
+  const usedByOtherRows = expenditureSubRows.reduce((sum, row) => {
+    if (row.id === rowId) return sum;
+
+    const sameHead =
+      String(row.budgetHead ?? "").trim().toLowerCase() === currentHead;
+    const sameSubHead =
+      String(row.subHead ?? "").trim().toLowerCase() === currentSubHead;
+
+    if (!sameHead || !sameSubHead) return sum;
+
+    return sum + toNumber(row.autoSum);
+  }, 0);
+
+  return Math.max(0, rowBudget - usedByOtherRows);
+};
+ const handleAdvanceAmountChange = (rowId: string | number, value: string) => {
+  if (!/^\d*\.?\d*$/.test(value)) return;
+
+  const numericValue = toNumber(value);
+  const allowedBalance = getAdvanceRowAvailableBalance(rowId);
+
+  if (numericValue > allowedBalance) {
+    window.alert(
+      `Entered amount exceeds available balance. Maximum allowed is ₹ ${allowedBalance.toLocaleString("en-IN")}.`
+    );
+    return;
+  }
+
+  const updatedRows = advanceRows.map((row) =>
+    row.id === rowId
+      ? { ...row, advance: value }
+      : row
+  );
+
+  setAdvanceRows(updatedRows);
+};
+
+ const handleExpenditureAmountChange = (rowId: string | number, value: string) => {
+  const sanitizedValue = value.replace(/[^\d.+\-*/() ]/g, "");
+
+  const updatedRows = expenditureSubRows.map((row) =>
+    row.id === rowId
+      ? { ...row, expenditure: sanitizedValue }
+      : row
+  );
+
+  const targetRow = updatedRows.find((row) => row.id === rowId);
+  if (!targetRow) {
+    setExpenditureSubRows(updatedRows);
+    return;
+  }
+
+  let evaluatedAmount = 0;
+
+  try {
+    if (sanitizedValue.trim()) {
+      const expression = sanitizedValue.replace(/[^0-9+\-*/(). ]/g, "");
+      evaluatedAmount = Function(`"use strict"; return (${expression})`)();
+      if (!Number.isFinite(evaluatedAmount)) evaluatedAmount = 0;
     }
+  } catch {
+    evaluatedAmount = 0;
+  }
+
+  const allowedBalance = getExpenditureRowAvailableBalance(rowId);
+
+  if (evaluatedAmount > allowedBalance) {
+    window.alert(
+      `Entered expenditure exceeds available balance. Maximum allowed is ₹ ${allowedBalance.toLocaleString("en-IN")}.`
+    );
+    return;
+  }
+
+  const finalRows = updatedRows.map((row) =>
+    row.id === rowId
+      ? {
+          ...row,
+          expenditure: sanitizedValue,
+          autoSum: evaluatedAmount ? String(evaluatedAmount) : "",
+        }
+      : row
+  );
+
+  setExpenditureSubRows(finalRows);
+};
+const groupedExpenditureUsage = new Map<string, { budget: number; used: number }>();
+
+expenditureSubRows.forEach((row) => {
+  const key = [
+    String(row.budgetHead ?? "").trim().toLowerCase(),
+    String(row.subHead ?? "").trim().toLowerCase(),
+  ].join("||");
+
+  const current = groupedExpenditureUsage.get(key) ?? {
+    budget: toNumber(row.budget),
+    used: 0,
   };
+
+  current.used += toNumber(row.autoSum);
+  current.budget = Math.max(current.budget, toNumber(row.budget));
+
+  groupedExpenditureUsage.set(key, current);
+});
+
+for (const [, group] of groupedExpenditureUsage) {
+  if (group.used > group.budget) {
+    window.alert(
+      `Total expenditure ₹ ${group.used.toLocaleString("en-IN")} exceeds available balance ₹ ${group.budget.toLocaleString("en-IN")} for one of the selected budget lines.`
+    );
+    return;
+  }
+}
 
   // Search applicant handler
   const handleApplicantSearch = async (query: string) => {
@@ -3624,7 +3820,9 @@ const getSelectedWorkflowRow = (): WorkflowFormRow | null => {
 
   if (rowsWithBudgetLine.length === 1) return rowsWithBudgetLine[0];
 
-  return null;
+  if (rowsWithBudgetLine.length > 1) return rowsWithBudgetLine[0];
+
+  return rows[0] || null;
 };
 
 const getSelectedWorkflowBudgetLineId = (): number | null =>
@@ -3686,13 +3884,14 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       return;
     }
 
-    const selectedWorkflowRow = getSelectedWorkflowRow();
+    const workflowRows = getRowsForActiveTab();
+    const selectedWorkflowRow = getSelectedWorkflowRow() || workflowRows.find((row) => parsePositiveIntLike(row.budgetLineId)) || workflowRows[0] || null;
     const selectedWorkflowBudgetLineId = parsePositiveIntLike(selectedWorkflowRow?.budgetLineId);
     const selectedWorkflowBudgetProposalId = parsePositiveIntLike(selectedWorkflowRow?.budgetProposalId);
 
-    if (!selectedWorkflowRow) {
+    if (!workflowRows.length) {
       showAlert(
-        'Unable to identify the selected workflow row. Please open the request again from the dashboard row you want to submit.',
+        'No workflow rows were found for the selected request type.',
         'warning'
       );
       return;
@@ -3707,13 +3906,11 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     }
 
     if (activeTab === 'Advance') {
-      const selectedAdvanceRow = selectedWorkflowRow as AdvanceFormRow;
-      const budgetLimit = getRowBudgetLimit(selectedAdvanceRow.budget);
-      const requestedAdvance = parseAmountValue(selectedAdvanceRow.advance);
+      const exceededAdvanceRow = findAdvanceBudgetExceededRow(advanceRows);
 
-      if (budgetLimit !== null && requestedAdvance > budgetLimit) {
+      if (exceededAdvanceRow) {
         showAlert(
-          `Advance amount cannot exceed the remaining budget of Rs ${budgetLimit.toLocaleString('en-IN')}.`,
+          `Advance amount in row ${exceededAdvanceRow.rowNumber} cannot exceed the budget amount of Rs ${exceededAdvanceRow.budgetLimit.toLocaleString('en-IN')}.`,
           'warning',
         );
         return;
@@ -3721,19 +3918,21 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     }
 
     if (activeTab === 'Expenditure') {
-      const selectedExpenditureRow = selectedWorkflowRow as ExpenditureFormRow;
-      const budgetLimit = getRowBudgetLimit(selectedExpenditureRow.budget);
-      const requestedExpenditure = parseAmountValue(
-        selectedExpenditureRow.autoSum || selectedExpenditureRow.expenditure,
-      );
+      const exceededExpenditureRow = findExpenditureBudgetExceededRow(expenditureSubRows);
 
-      if (budgetLimit !== null && requestedExpenditure > budgetLimit) {
+      if (exceededExpenditureRow) {
         showAlert(
-          `Expenditure amount cannot exceed the remaining budget of Rs ${budgetLimit.toLocaleString('en-IN')}.`,
+          `Expenditure amount in row ${exceededExpenditureRow.rowNumber} cannot exceed the remaining budget of Rs ${exceededExpenditureRow.budgetLimit.toLocaleString('en-IN')}.`,
           'warning',
         );
         return;
       }
+    }
+
+    const hasExistingBills = isEditingExistingRequest && existingPayeeBills.length > 0;
+    if (uploadedPayeeBills.length === 0 && !hasExistingBills) {
+      showAlert('Please upload bills before submitting the form.', 'warning');
+      return;
     }
 
     const normalizedTotalPayeeTransactionAmount = Number(
@@ -3782,18 +3981,18 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     }));
 
     const selectedAdvanceRows =
-      activeTab === 'Advance' && selectedWorkflowRow
-        ? [selectedWorkflowRow as AdvanceFormRow]
+      activeTab === 'Advance'
+        ? advanceRows
         : [];
 
     const selectedSettlementRows =
-      activeTab === 'Settlement' && selectedWorkflowRow
-        ? [selectedWorkflowRow as SettlementFormRow]
+      activeTab === 'Settlement'
+        ? settlementRows
         : [];
 
     const selectedExpenditureRows =
-      activeTab === 'Expenditure' && selectedWorkflowRow
-        ? [selectedWorkflowRow as ExpenditureFormRow]
+      activeTab === 'Expenditure'
+        ? expenditureSubRows
         : [];
 
     const payload = {
@@ -5128,7 +5327,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                         <input
                           type="text"
                           placeholder="<Fetch>"
-                          value={getBudgetDisplayValue(row.budget)}
+                          value={`Rs ${getAdvanceRowAvailableBalance(row.id).toLocaleString("en-IN")}`}
                           readOnly
                           style={{
                             border: '1px solid #e0e0e0',
@@ -5173,7 +5372,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                       <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
                         <input
                           type="text"
-                          placeholder="₹ 0"
+                          placeholder={`₹ ${getAdvanceRowAvailableBalance(row.id).toLocaleString("en-IN")}`}
                           value={row.advance}
                           onChange={(e) => handleAdvanceAmountChange(row.id, e.target.value)}
                           style={{
@@ -5835,12 +6034,12 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             <div className="expenditure-submit-buttons">
               <button
                 className="btn-submit"
-                onClick={(e) => { e.preventDefault(); handleSubmit(); }}
-              >
-                Submit
-              </button>
-            </div>
-          )}
+            onClick={(e) => { e.preventDefault(); handleSubmit(); }}
+          >
+            {submitActionLabel}
+          </button>
+        </div>
+      )}
 
           <AlertModal
             show={alertConfig.show}

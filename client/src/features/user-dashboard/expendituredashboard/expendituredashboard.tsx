@@ -422,49 +422,151 @@ const ExpenditureDashboard: React.FC = () => {
   };
 
   const getRowActions = (row: WorkflowRow) => {
-    const isCompleted = isWorkflowRowCompleted(row);
-    const showAdvance2 = Boolean(row.advanceRequestId2) || Boolean(row.advanceRequestId) || row.primaryChoice === "Advance";
+  const isCompleted = isWorkflowRowCompleted(row);
 
-    if (isCompleted) {
-      return [
-        { label: "Advance", module: "Advance" as const, hidden: !Boolean(row.advanceRequestId), submitted: Boolean(row.advanceRequestId) },
-        { label: "Advance2", module: "Advance2" as const, hidden: !Boolean(row.advanceRequestId2), submitted: Boolean(row.advanceRequestId2) },
-        { label: "Settlement", module: "Settlement" as const, hidden: !Boolean(row.settlementRequestId), submitted: Boolean(row.settlementRequestId) },
-        { label: "Expenditure", module: "Expenditure" as const, hidden: !Boolean(row.expenditureRequestId), submitted: Boolean(row.expenditureRequestId) },
-      ];
-    }
-
-    if (row.primaryChoice === "Advance") {
-      return [
-        { label: "Advance", module: "Advance" as const, hidden: false, submitted: Boolean(row.advanceRequestId) },
-        { label: "Advance2", module: "Advance2" as const, hidden: !showAdvance2, submitted: Boolean(row.advanceRequestId2) },
-        { label: "Settlement", module: "Settlement" as const, hidden: !Boolean(row.advanceRequestId || row.settlementRequestId), submitted: Boolean(row.settlementRequestId) },
-        { label: "Expenditure", module: "Expenditure" as const, hidden: true, submitted: false },
-      ];
-    }
-
-    if (row.primaryChoice === "Expenditure") {
-      return [
-        { label: "Advance", module: "Advance" as const, hidden: true, submitted: false },
-        { label: "Expenditure", module: "Expenditure" as const, hidden: false, submitted: true },
-      ];
-    }
-
-    if (row.primaryChoice === "Settlement") {
-      return [
-        { label: "Advance", module: "Advance" as const, hidden: !Boolean(row.advanceRequestId), submitted: Boolean(row.advanceRequestId) },
-        { label: "Settlement", module: "Settlement" as const, hidden: false, submitted: Boolean(row.settlementRequestId) },
-        { label: "Expenditure", module: "Expenditure" as const, hidden: true, submitted: false },
-      ];
-    }
-
+  if (isCompleted) {
     return [
-      { label: "Advance", module: "Advance" as const, hidden: false, submitted: false },
-      { label: "Advance2", module: "Advance2" as const, hidden: true, submitted: false },
-      { label: "Expenditure", module: "Expenditure" as const, hidden: false, submitted: false },
+      {
+        label: "Advance",
+        module: "Advance" as const,
+        hidden: !Boolean(row.advanceRequestId),
+        submitted: Boolean(row.advanceRequestId),
+      },
+      {
+        label: "Advance2",
+        module: "Advance2" as const,
+        hidden: !Boolean(row.advanceRequestId2),
+        submitted: Boolean(row.advanceRequestId2),
+      },
+      {
+        label: "Settlement",
+        module: "Settlement" as const,
+        hidden: !Boolean(row.settlementRequestId),
+        submitted: Boolean(row.settlementRequestId),
+      },
+      {
+        label: "Expenditure",
+        module: "Expenditure" as const,
+        hidden: !Boolean(row.expenditureRequestId),
+        submitted: Boolean(row.expenditureRequestId),
+      },
     ];
-  };
+  }
 
+  if (row.primaryChoice === "Advance") {
+    return [
+      {
+        label: "Advance",
+        module: "Advance" as const,
+        hidden: false,
+        submitted: Boolean(row.advanceRequestId),
+      },
+      {
+        label: "Advance2",
+        module: "Advance2" as const,
+        hidden: !Boolean(row.advanceRequestId || row.advanceRequestId2),
+        submitted: Boolean(row.advanceRequestId2),
+      },
+      {
+        label: "Settlement",
+        module: "Settlement" as const,
+        hidden: !Boolean(row.advanceRequestId || row.settlementRequestId),
+        submitted: Boolean(row.settlementRequestId),
+      },
+      {
+        label: "Expenditure",
+        module: "Expenditure" as const,
+        hidden: true,
+        submitted: Boolean(row.expenditureRequestId),
+      },
+    ];
+  }
+
+  if (row.primaryChoice === "Expenditure") {
+    return [
+      {
+        label: "Advance",
+        module: "Advance" as const,
+        hidden: true,
+        submitted: false,
+      },
+      {
+        label: "Advance2",
+        module: "Advance2" as const,
+        hidden: true,
+        submitted: false,
+      },
+      {
+        label: "Settlement",
+        module: "Settlement" as const,
+        hidden: true,
+        submitted: false,
+      },
+      {
+        label: "Expenditure",
+        module: "Expenditure" as const,
+        hidden: false,
+        submitted: Boolean(row.expenditureRequestId) || row.expenditureAmount > 0,
+      },
+    ];
+  }
+
+  if (row.primaryChoice === "Settlement") {
+    return [
+      {
+        label: "Advance",
+        module: "Advance" as const,
+        hidden: !Boolean(row.advanceRequestId),
+        submitted: Boolean(row.advanceRequestId),
+      },
+      {
+        label: "Advance2",
+        module: "Advance2" as const,
+        hidden: !Boolean(row.advanceRequestId2),
+        submitted: Boolean(row.advanceRequestId2),
+      },
+      {
+        label: "Settlement",
+        module: "Settlement" as const,
+        hidden: false,
+        submitted: Boolean(row.settlementRequestId),
+      },
+      {
+        label: "Expenditure",
+        module: "Expenditure" as const,
+        hidden: true,
+        submitted: false,
+      },
+    ];
+  }
+
+  return [
+    {
+      label: "Advance",
+      module: "Advance" as const,
+      hidden: false,
+      submitted: false,
+    },
+    {
+      label: "Advance2",
+      module: "Advance2" as const,
+      hidden: true,
+      submitted: false,
+    },
+    {
+      label: "Settlement",
+      module: "Settlement" as const,
+      hidden: true,
+      submitted: false,
+    },
+    {
+      label: "Expenditure",
+      module: "Expenditure" as const,
+      hidden: false,
+      submitted: false,
+    },
+  ];
+};
   const getWorkflowStatusLabel = (row: WorkflowRow) => {
     return getWorkflowApprovalLabel(parseWorkflowState(row.latestWorkflowState));
   };
@@ -504,6 +606,56 @@ const ExpenditureDashboard: React.FC = () => {
     item: ExpenditureItem,
     stage: "hod" | "dof" | "principal"
   ) => getWorkflowApprovalStageState(parseWorkflowState(item.workflow_state), stage);
+
+  const isWorkflowActionLocked = (row: WorkflowRow) => {
+    const workflowState = parseWorkflowState(row.latestWorkflowState);
+    const currentStage = normalizeText(
+      workflowState?.currentStage ?? workflowState?.workflowStage ?? ""
+    ).toLowerCase();
+    const status = normalizeStatus(
+      workflowState?.status ?? row.latestWorkflowStatus ?? ""
+    );
+
+    if (["returned", "rejected"].includes(status)) {
+      return false;
+    }
+
+    return currentStage === "dof" || currentStage === "principal";
+  };
+
+ const getWorkflowGateMessage = (
+  row: WorkflowRow,
+  module: WorkflowModule | "Advance2"
+) => {
+  const advanceApproved = isApprovedStatus(row.advanceStatus);
+
+  if (module === "Advance2" && !advanceApproved) {
+    return "Advance 2 can be filled only after Advance 1 is completely approved.";
+  }
+
+  if (module === "Settlement" && !advanceApproved) {
+    return "Settlement can be filled only after Advance 1 is completely approved.";
+  }
+
+  return null;
+};
+
+  const hasSubmittedProposal = (row: WorkflowRow) =>
+    Boolean(
+      row.latestRequestId ||
+        row.advanceRequestId ||
+        row.advanceRequestId2 ||
+        row.expenditureRequestId ||
+        row.settlementRequestId
+    );
+
+  const getRowWorkflowLabel = (row: WorkflowRow) => {
+    if (!hasSubmittedProposal(row)) {
+      return "Not Submitted";
+    }
+
+    return getWorkflowStatusLabel(row);
+  };
 
   const buildRowsFromRequests = (
     cards: ExpenditureProposalCard[],
@@ -700,6 +852,14 @@ const ExpenditureDashboard: React.FC = () => {
   };
 
   const addRow = (financeId: string) => {
+    const sourceCard = proposalCards.find((card) => card.financeRequestId === financeId);
+    const cardBalanceAmount = Math.max(Number(sourceCard?.balanceAmount || 0), 0);
+
+    if (cardBalanceAmount <= 0) {
+      window.alert('No remaining balance is available for this proposal.');
+      return;
+    }
+
     setCardRows((prev) => {
       const existing = prev[financeId] ?? [];
       const nextRow = createWorkflowRow(financeId, getNextWorkflowRowIndex(existing));
@@ -896,6 +1056,7 @@ const ExpenditureDashboard: React.FC = () => {
                 const cardExpenditureAmount = Number(card.expenditureAmount || 0);
                 const cardBalanceAmount = Math.max(Number(card.balanceAmount || 0), 0);
                 const rows = cardRows[card.financeRequestId] ?? [];
+                const canAddRow = cardBalanceAmount > 0;
 
                 return (
                   <div
@@ -966,10 +1127,14 @@ const ExpenditureDashboard: React.FC = () => {
                                 const showExpenditureAmount = row.expenditureAmount > 0;
                                 const showSettlementAmount = row.settlementAmount > 0;
                                 const isCompleted = isWorkflowRowCompleted(row);
+                                const isActionLocked = isWorkflowActionLocked(row);
+                                const hasProposal = hasSubmittedProposal(row);
                                 const canEditRow =
-                                  row.latestWorkflowStatus
+                                  hasProposal &&
+                                  !isActionLocked &&
+                                  (row.latestWorkflowStatus
                                     ? isEditableWorkflowStatus(row.latestWorkflowStatus)
-                                    : !Boolean(row.latestRequestId);
+                                    : !Boolean(row.latestRequestId));
 
                                 return (
                                   <div
@@ -986,6 +1151,7 @@ const ExpenditureDashboard: React.FC = () => {
                                           {actions.map((option) => {
                                             // Skip hidden buttons
                                             if (option.hidden) return null;
+                                            const gateMessage = getWorkflowGateMessage(row, option.module);
                                             
                                             return (
                                             <button
@@ -994,6 +1160,8 @@ const ExpenditureDashboard: React.FC = () => {
                                               className={`expenditure-demo-option ${
                                                 option.submitted ? "submitted" : ""
                                               } ${
+                                                gateMessage ? "disabled" : ""
+                                              } ${
                                                 row.primaryChoice === option.module ||
                                                 (option.module === "Settlement" &&
                                                   row.settlementAmount > 0)
@@ -1001,25 +1169,28 @@ const ExpenditureDashboard: React.FC = () => {
                                                   : ""
                                               }`}
                                               onClick={() =>
-                                                handleModuleLaunch(
-                                                  row,
-                                                  option.module,
-                                                  card,
-                                                  {
-                                                    mode: (
-                                                      (option.module === "Advance" && Boolean(row.advanceRequestId)) ||
-                                                      (option.module === "Advance2" && Boolean(row.advanceRequestId2)) ||
-                                                      (option.module === "Settlement" && Boolean(row.settlementRequestId)) ||
-                                                      (option.module === "Expenditure" && Boolean(row.expenditureRequestId))
+                                                gateMessage
+                                                  ? window.alert(gateMessage)
+                                                  : handleModuleLaunch(
+                                                      row,
+                                                      option.module,
+                                                      card,
+                                                      {
+                                                        mode: (
+                                                          (option.module === "Advance" && Boolean(row.advanceRequestId)) ||
+                                                          (option.module === "Advance2" && Boolean(row.advanceRequestId2)) ||
+                                                          (option.module === "Settlement" && Boolean(row.settlementRequestId)) ||
+                                                          (option.module === "Expenditure" && Boolean(row.expenditureRequestId))
+                                                        )
+                                                          ? "view"
+                                                          : "create",
+                                                        forceNew:
+                                                          option.module === "Advance2" &&
+                                                          !Boolean(row.advanceRequestId2),
+                                                      }
                                                     )
-                                                      ? "view"
-                                                      : "create",
-                                                    forceNew:
-                                                      option.module === "Advance2" &&
-                                                      !Boolean(row.advanceRequestId2),
-                                                  }
-                                                )
                                               }
+                                              title={gateMessage || undefined}
                                             >
                                               <span className="expenditure-demo-option__label">
                                                 {option.label}
@@ -1121,12 +1292,15 @@ const ExpenditureDashboard: React.FC = () => {
                                       </div>
 
                                       <div className="expenditure-demo-row__status">
-                                        {/* Edit button - only show before level 1 approval or if returned */}
-                                        {canEditRow && (
+                                        {/* Edit button - only show for submitted proposals */}
+                                        {hasProposal && (
                                           <button
                                             type="button"
                                             className="expenditure-demo-row__icon-btn"
+                                            disabled={!canEditRow}
                                             onClick={() => {
+                                              if (!canEditRow) return;
+
                                               // Navigate to the last submitted module for editing
                                               if (row.latestRequestType === "Advance" && row.advanceRequestId2) {
                                                 handleModuleLaunch(row, "Advance2", card, { mode: "edit" });
@@ -1146,39 +1320,45 @@ const ExpenditureDashboard: React.FC = () => {
                                                 handleModuleLaunch(row, "Expenditure", card, { mode: "edit" });
                                               }
                                             }}
-                                            title="Edit proposal"
+                                            title={
+                                              canEditRow
+                                                ? "Edit proposal"
+                                                : "Editing is disabled while approval is in progress"
+                                            }
                                             aria-label="Edit proposal"
                                           >
                                             <Edit2 size={14} />
                                           </button>
                                         )}
 
-                                        <button
-                                          type="button"
-                                          className={`expenditure-status-pill ${
-                                            isCompleted
-                                              ? "expenditure-status-pill--approved"
-                                              : ""
-                                          } ${
-                                            showWorkflowStatusDetail[row.id]
-                                              ? "expenditure-status-pill--active"
-                                              : ""
-                                          }`}
-                                          onClick={() =>
-                                            setShowWorkflowStatusDetail((prev) => ({
-                                              ...prev,
-                                              [row.id]: !prev[row.id],
-                                            }))
-                                          }
-                                          aria-expanded={Boolean(
-                                            showWorkflowStatusDetail[row.id]
-                                          )}
-                                          aria-label={`Toggle approval status for ${row.id}`}
-                                        >
-                                          {getWorkflowStatusLabel(row)}
-                                        </button>
+                                        {hasProposal && (
+                                          <button
+                                            type="button"
+                                            className={`expenditure-status-pill ${
+                                              isCompleted
+                                                ? "expenditure-status-pill--approved"
+                                                : ""
+                                            } ${
+                                              showWorkflowStatusDetail[row.id]
+                                                ? "expenditure-status-pill--active"
+                                                : ""
+                                            }`}
+                                            onClick={() =>
+                                              setShowWorkflowStatusDetail((prev) => ({
+                                                ...prev,
+                                                [row.id]: !prev[row.id],
+                                              }))
+                                            }
+                                            aria-expanded={Boolean(
+                                              showWorkflowStatusDetail[row.id]
+                                            )}
+                                            aria-label={`Toggle approval status for ${row.id}`}
+                                          >
+                                            {getRowWorkflowLabel(row)}
+                                          </button>
+                                        )}
 
-                                        {showWorkflowStatusDetail[row.id] && (
+                                        {hasProposal && showWorkflowStatusDetail[row.id] && (
                                           <div className="expenditure-status-detail-line">
                                             {(["hod", "dof", "principal"] as const).map(
                                               (stage, stepIndex, array) => {
@@ -1205,7 +1385,7 @@ const ExpenditureDashboard: React.FC = () => {
                                       </div>
 
                                       <div className="expenditure-demo-row__actions">
-                                        {isLastRow && (
+                                        {isLastRow && canAddRow && (
                                           <button
                                             type="button"
                                             className="expenditure-demo-row__icon-btn"
@@ -1218,19 +1398,35 @@ const ExpenditureDashboard: React.FC = () => {
                                         )}
 
                                         {/* Hide delete button after approval/completion/archive */}
-                                        {row.latestWorkflowStatus !== "approved" &&
-                                          row.latestWorkflowStatus !== "completed" &&
-                                          row.latestWorkflowStatus !== "archived" && (
-                                          <button
-                                            type="button"
-                                            className="expenditure-demo-row__icon-btn expenditure-demo-row__icon-btn--danger"
-                                            onClick={() => deleteWorkflowRow(card.financeRequestId, row)}
-                                            title="Delete row"
-                                            aria-label="Delete workflow row"
-                                          >
-                                            <Trash2 size={14} />
-                                          </button>
-                                        )}
+                                        <button
+                                          type="button"
+                                          className="expenditure-demo-row__icon-btn expenditure-demo-row__icon-btn--danger"
+                                          disabled={
+                                            isActionLocked ||
+                                            row.latestWorkflowStatus === "approved" ||
+                                            row.latestWorkflowStatus === "completed" ||
+                                            row.latestWorkflowStatus === "archived"
+                                          }
+                                          onClick={() => {
+                                            if (
+                                              isActionLocked ||
+                                              row.latestWorkflowStatus === "approved" ||
+                                              row.latestWorkflowStatus === "completed" ||
+                                              row.latestWorkflowStatus === "archived"
+                                            ) {
+                                              return;
+                                            }
+                                            deleteWorkflowRow(card.financeRequestId, row);
+                                          }}
+                                          title={
+                                            isActionLocked
+                                              ? "Delete is disabled while approval is in progress"
+                                              : "Delete row"
+                                          }
+                                          aria-label="Delete workflow row"
+                                        >
+                                          <Trash2 size={14} />
+                                        </button>
                                       </div>
                                     </div>
                                   </div>

@@ -827,3 +827,75 @@
   background: #f7c6c6;
   transform: translateY(-1px);
 }
+.fw-proposal-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.fw-proposal-filter-btn {
+  min-width: 42px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid #d7deea;
+  background: #ffffff;
+  color: #0b5f97;
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0 14px;
+}
+
+.fw-proposal-filter-btn.active {
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.12);
+}
+
+.fw-proposal-filter-btn--advance.active {
+  background: #fde9ea;
+  color: #c63d4a;
+  border-color: #f2bcc2;
+}
+
+.fw-proposal-filter-btn--expenditure.active {
+  background: #fff4cc;
+  color: #9d7800;
+  border-color: #ecd88f;
+}
+
+.fw-proposal-filter-btn--settlement.active {
+  background: #e6f7ea;
+  color: #2f8a57;
+  border-color: #b9e2c6;
+}
+
+.fw-proposal-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 32px;
+  border-radius: 999px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.fw-proposal-badge--advance {
+  background: #fde9ea;
+  color: #c63d4a;
+}
+
+.fw-proposal-badge--expenditure {
+  background: #fff4cc;
+  color: #9d7800;
+}
+
+.fw-proposal-badge--settlement {
+  background: #e6f7ea;
+  color: #2f8a57;
+}
