@@ -228,7 +228,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
     options: [
       'Faculty Empowerment',
       'Staff Empowerment',
-      'Sudent Empowerment',
+      'Student Empowerment',
       'Student Capacity Building',
       'Learning Resources',
       'Accreditation Expenses',
@@ -751,7 +751,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Staff Welfare',
   ],
 
-  'Sudent Empowerment': [
+  'Student Empowerment': [
     'Registration fee',
     'Travel Support',
     'Food & Refreshment',
@@ -3045,9 +3045,70 @@ const workflowRowRefFromState = (() => {
     return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
   };
 
-  const toNumber = (value: unknown) => {
+const toNumber = (value: unknown) => {
   const n = Number(String(value ?? "").replace(/,/g, "").trim());
   return Number.isFinite(n) ? n : 0;
+};
+const evaluateArithmeticExpression = (input: string) => {
+  const expression = String(input || "").replace(/\s+/g, "");
+  if (!expression || !/^[\d+\-*/().]+$/.test(expression)) return 0;
+  const tokens = expression.match(/\d+(?:\.\d+)?|[()+\-*/]/g);
+  if (!tokens) return 0;
+
+  const output: string[] = [];
+  const operators: string[] = [];
+  const precedence: Record<string, number> = { "+": 1, "-": 1, "*": 2, "/": 2 };
+
+  for (const token of tokens) {
+    if (/^\d+(?:\.\d+)?$/.test(token)) {
+      output.push(token);
+      continue;
+    }
+    if (token === "(") {
+      operators.push(token);
+      continue;
+    }
+    if (token === ")") {
+      while (operators.length && operators[operators.length - 1] !== "(") {
+        output.push(operators.pop() as string);
+      }
+      if (!operators.length) return 0;
+      operators.pop();
+      continue;
+    }
+    while (
+      operators.length &&
+      operators[operators.length - 1] !== "(" &&
+      precedence[operators[operators.length - 1]] >= precedence[token]
+    ) {
+      output.push(operators.pop() as string);
+    }
+    operators.push(token);
+  }
+
+  while (operators.length) {
+    const op = operators.pop() as string;
+    if (op === "(" || op === ")") return 0;
+    output.push(op);
+  }
+
+  const stack: number[] = [];
+  for (const token of output) {
+    if (/^\d+(?:\.\d+)?$/.test(token)) {
+      stack.push(Number(token));
+      continue;
+    }
+    const b = stack.pop();
+    const a = stack.pop();
+    if (a === undefined || b === undefined) return 0;
+    if (token === "+") stack.push(a + b);
+    else if (token === "-") stack.push(a - b);
+    else if (token === "*") stack.push(a * b);
+    else if (token === "/") stack.push(b === 0 ? 0 : a / b);
+  }
+
+  if (stack.length !== 1 || !Number.isFinite(stack[0])) return 0;
+  return Math.max(0, stack[0]);
 };
 const groupedAdvanceUsage = new Map<string, { budget: number; used: number }>();
 
@@ -3165,9 +3226,7 @@ const getExpenditureRowAvailableBalance = (rowId: string | number) => {
 
   try {
     if (sanitizedValue.trim()) {
-      const expression = sanitizedValue.replace(/[^0-9+\-*/(). ]/g, "");
-      evaluatedAmount = Function(`"use strict"; return (${expression})`)();
-      if (!Number.isFinite(evaluatedAmount)) evaluatedAmount = 0;
+      evaluatedAmount = evaluateArithmeticExpression(sanitizedValue);
     }
   } catch {
     evaluatedAmount = 0;
@@ -6017,7 +6076,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           />
           <button
             type="button"
-            onClick={() => console.log('Tick clicked, remarks:', remarks)}
+            onClick={() => setRemarks((prev) => prev.trim())}
             className="payee-comment-tick-btn"
             aria-label="Confirm comment"
           >
@@ -6093,3 +6152,5 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
 };
 
 export default ExpenditureApproval;
+
+

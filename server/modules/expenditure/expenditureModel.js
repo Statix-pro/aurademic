@@ -3134,7 +3134,9 @@ export async function updateExpenditureWorkflowSnapshot(recordId, newState, { tx
     [normalizedRecordId],
   );
 
-  const previousState = normalizeWorkflowState(existingRows?.[0]?.workflowstate);
+  const previousState = normalizeWorkflowState(
+    existingRows?.[0]?.workflow_state ?? existingRows?.[0]?.workflowstate
+  );
   const persistentState = getPersistentWorkflowRowState(previousState);
 
   const mergedState = {
