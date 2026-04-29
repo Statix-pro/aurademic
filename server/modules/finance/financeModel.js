@@ -135,6 +135,7 @@ const normalizeBeneficiaryTypeForStorage = (beneficiaryType) => {
   if (normalized === 'centre') return 'Centre';
   if (normalized === 'cell') return 'Cell';
   if (normalized === 'club') return 'Club';
+  if (normalized === 'section') return 'Section';
   if (normalized === 'institution') return 'Institution';
 
   return 'Institution';
