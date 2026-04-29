@@ -1327,6 +1327,9 @@ const EXPENDITURE_SELECT = `
     er.payment_date,
     er.payment_status,
     er.overall_status,
+    er.workflow_state,
+    er.workflow_status,
+    er.workflow_stage,
     er.created_at,
     er.updated_at,
     sample_row.budget_line_id,
@@ -3096,34 +3099,33 @@ export async function getExpenditureRecordContext(recordId, { tx = db, forUpdate
   };
 }
 
-export async function updateExpenditureWorkflowSnapshot(recordId, newState, { tx = db } = {}) {
+export async function updateExpenditureWorkflowSnapshot(recordId, newState, tx = db) {
   const normalizedRecordId = toPositiveInt(recordId);
   if (!normalizedRecordId) return false;
 
-  const [existingRows] = await tx.query(
-    `SELECT workflow_state
-       FROM expenditure_requests
-      WHERE id = ?
-      LIMIT 1`,
-    [normalizedRecordId],
+  const existingRows = await tx.query(
+    `SELECT workflowstate FROM expenditurerequests WHERE id = ? LIMIT 1`,
+    [normalizedRecordId]
   );
-  const previousState = normalizeWorkflowState(existingRows?.[0]?.workflow_state) || {};
+
+  const previousState = normalizeWorkflowState(existingRows?.[0]?.workflowstate);
   const persistentState = getPersistentWorkflowRowState(previousState);
-  const mergedState = {
-    ...persistentState,
-    ...(newState || {}),
-  };
 
-  const workflowStatePayload = JSON.stringify(mergedState || null);
+  const mergedState = { ...persistentState, ...newState };
+  const workflowStatePayload = JSON.stringify(mergedState ?? null);
   const overallStatus = mapWorkflowStatusToOverallStatus(mergedState);
+  const workflowStatus = normalizeText(mergedState?.status?.toLowerCase()) || null;
+  const workflowStage = normalizeText(mergedState?.currentStage?.toLowerCase()) || null;
 
-  const [result] = await tx.query(
-    `UPDATE expenditure_requests
-        SET workflow_state = ?,
-            overall_status = ?,
-            updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?`,
-    [workflowStatePayload, overallStatus, normalizedRecordId]
+  const result = await tx.query(
+    `UPDATE expenditurerequests
+     SET workflowstate = ?,
+         overallstatus = ?,
+         workflowstatus = ?,
+         workflowstage = ?,
+         updatedat = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [workflowStatePayload, overallStatus, workflowStatus, workflowStage, normalizedRecordId]
   );
 
   return result.affectedRows > 0;
@@ -3304,6 +3306,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
   const workflowStatus = normalizeText(filters.workflowStatus).toLowerCase() || 'in_progress';
   const isSuperAdmin = Boolean(filters.isSuperAdmin);
   const level1Role = normalizeText(filters.level1Role).toLowerCase();
+  const isAllStage = normalizedStage === 'all';
 
   const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
   const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
@@ -3314,6 +3317,8 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
 
   if (workflowStatus === 'all') {
     if (isSuperAdmin) {
+      whereParts.push('1 = 1');
+    } else if (isAllStage) {
       whereParts.push('1 = 1');
     } else {
       whereParts.push(
@@ -3332,8 +3337,12 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
       whereParams.push(normalizedStage, normalizedStage);
     }
   } else {
-    whereParts.push(`${WORKFLOW_STAGE_SQL_EXPR} = ?`, `${WORKFLOW_STATUS_SQL_EXPR} = ?`);
-    whereParams.push(normalizedStage, workflowStatus);
+    if (!isAllStage) {
+      whereParts.push(`${WORKFLOW_STAGE_SQL_EXPR} = ?`);
+      whereParams.push(normalizedStage);
+    }
+    whereParts.push(`${WORKFLOW_STATUS_SQL_EXPR} = ?`);
+    whereParams.push(workflowStatus);
   }
 
   const scopeFilters = filters.scopeFilters || {};
@@ -3400,7 +3409,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
          FROM workflow_actions wa
          WHERE wa.module_key = 'expenditure'
            AND wa.record_id = er.id
-           AND LOWER(TRIM(wa.stage)) = ?
+           AND (? = 'all' OR LOWER(TRIM(wa.stage)) = ?)
          ORDER BY wa.decided_at DESC, wa.id DESC
          LIMIT 1
        ) AS workflow_stage_decision,
@@ -3417,7 +3426,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
      ${whereClause}
      ORDER BY er.created_at DESC
      LIMIT ? OFFSET ?`,
-    [normalizedStage, ...whereParams, limit, offset]
+    [normalizedStage, normalizedStage, ...whereParams, limit, offset]
   );
 
   return {

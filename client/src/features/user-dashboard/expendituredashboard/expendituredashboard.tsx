@@ -102,11 +102,10 @@ interface WorkflowRow {
   settlementStatus?: string;
   latestRequestId?: number | null;
   latestRequestType?: WorkflowModule | null;
+  latestWorkflowState?: unknown;
   latestWorkflowStatus?: string;
   approvalLevel: number;
 }
-
-type WorkflowStage = "idle" | "advance" | "settlement" | "expenditure" | "completed";
 
 const formatFY = (fyStart: number) => `${fyStart}-${String(fyStart + 1).slice(-2)}`;
 
@@ -158,6 +157,55 @@ const getRequestWorkflowStatus = (req: ExpenditureItem) => {
       workflowState?.overallStatus ??
       req.overallstatus,
   );
+};
+
+const getRequestWorkflowState = (req: ExpenditureItem) => parseWorkflowState(req.workflow_state);
+
+const getWorkflowApprovalLabel = (workflowState: Record<string, unknown> | null | undefined) => {
+  const status = normalizeStatus(
+    workflowState?.status ??
+      workflowState?.workflowStatus ??
+      workflowState?.overallStatus ??
+      "",
+  );
+  const currentStage = normalizeText(
+    workflowState?.currentStage ??
+      workflowState?.workflowStage ??
+      "",
+  ).toLowerCase();
+
+  if (status === "approved" || status === "completed") return "Approved";
+  if (status === "rejected") return "Rejected";
+  if (status === "returned") return "Returned";
+  if (currentStage === "dof") return "Pending DoF Approval";
+  if (currentStage === "principal") return "Pending Principal Approval";
+  return "Pending HOD Approval";
+};
+
+const getWorkflowApprovalStageState = (
+  workflowState: Record<string, unknown> | null | undefined,
+  stage: "hod" | "dof" | "principal",
+) => {
+  const status = normalizeStatus(
+    workflowState?.status ??
+      workflowState?.workflowStatus ??
+      workflowState?.overallStatus ??
+      "",
+  );
+  const currentStage = normalizeText(
+    workflowState?.currentStage ??
+      workflowState?.workflowStage ??
+      "",
+  ).toLowerCase();
+  const stageOrder = ["hod", "dof", "principal"];
+  const currentIndex = stageOrder.indexOf(currentStage);
+  const stageIndex = stageOrder.indexOf(stage);
+
+  if (status === "approved" || status === "completed") return "completed";
+  if (currentIndex === -1) return "pending";
+  if (stageIndex < currentIndex) return "completed";
+  if (stageIndex === currentIndex) return "current";
+  return "pending";
 };
 
 const getRowKey = (req: ExpenditureItem) => {
@@ -271,26 +319,6 @@ const ExpenditureDashboard: React.FC = () => {
     }
 
     return false;
-  };
-
-  const getWorkflowStage = (row: WorkflowRow): WorkflowStage => {
-    if (isWorkflowRowCompleted(row)) {
-      return "completed";
-    }
-
-    if (row.primaryChoice === "Advance") {
-      return row.settlementRequestId ? "settlement" : "advance";
-    }
-
-    if (row.primaryChoice === "Expenditure") {
-      return "expenditure";
-    }
-
-    if (row.primaryChoice === "Settlement") {
-      return row.settlementAmount > 0 ? "settlement" : "advance";
-    }
-
-    return "idle";
   };
 
   const createWorkflowRow = (financeId: string, rowIndex: number): WorkflowRow => ({
@@ -438,42 +466,14 @@ const ExpenditureDashboard: React.FC = () => {
   };
 
   const getWorkflowStatusLabel = (row: WorkflowRow) => {
-    const stage = getWorkflowStage(row);
-
-    if (stage === "completed") return "Approved";
-    if (stage === "advance") return "Advance Submitted";
-    if (stage === "settlement") return "Settlement Submitted";
-    if (stage === "expenditure") return "Expenditure Submitted";
-    return "Status";
+    return getWorkflowApprovalLabel(parseWorkflowState(row.latestWorkflowState));
   };
 
   const getWorkflowTimelineState = (
     row: WorkflowRow,
     stage: "hod" | "dof" | "principal"
   ) => {
-    const workflowStage = getWorkflowStage(row);
-
-    if (workflowStage === "completed") {
-      return "completed";
-    }
-
-    if (workflowStage === "settlement") {
-      if (stage === "hod") return "completed";
-      if (stage === "dof") return "current";
-      return "pending";
-    }
-
-    if (workflowStage === "advance") {
-      if (stage === "hod") return "current";
-      return "pending";
-    }
-
-    if (workflowStage === "expenditure") {
-      if (stage === "hod") return "current";
-      return "pending";
-    }
-
-    return "pending";
+    return getWorkflowApprovalStageState(parseWorkflowState(row.latestWorkflowState), stage);
   };
 
   const getModuleSummary = (row: WorkflowRow, module: WorkflowModule) => {
@@ -497,21 +497,13 @@ const ExpenditureDashboard: React.FC = () => {
     };
   };
 
-  const getRequestStatusLabel = (status: ExpenditureItem["overallstatus"]) => {
-    if (status === "approved") return "Approved";
-    if (status === "rejected") return "Rejected";
-    return "Pending";
-  };
+  const getRequestStatusLabel = (item: ExpenditureItem) =>
+    getWorkflowApprovalLabel(parseWorkflowState(item.workflow_state));
 
   const getRequestTimelineState = (
-    status: ExpenditureItem["overallstatus"],
+    item: ExpenditureItem,
     stage: "hod" | "dof" | "principal"
-  ) => {
-    if (status === "approved") return "completed";
-    if (status === "rejected") return "pending";
-    if (stage === "hod") return "current";
-    return "pending";
-  };
+  ) => getWorkflowApprovalStageState(parseWorkflowState(item.workflow_state), stage);
 
   const buildRowsFromRequests = (
     cards: ExpenditureProposalCard[],
@@ -560,6 +552,10 @@ const ExpenditureDashboard: React.FC = () => {
           return b.id - a.id;
         })[0] ?? null;
         const latestWorkflowStatus = latestRequest ? getRequestWorkflowStatus(latestRequest) : "pending";
+        const latestWorkflowState = latestRequest?.workflow_state ?? null;
+        const latestWorkflowCurrentStage = latestRequest
+          ? normalizeText(getRequestWorkflowState(latestRequest)?.currentStage ?? "").toLowerCase()
+          : "";
 
         const firstRequest = [...rowRequests].sort((a, b) => {
           const aTime = new Date(a.createdat || 0).getTime();
@@ -650,12 +646,17 @@ const ExpenditureDashboard: React.FC = () => {
           settlementStatus: settlementSummary.status,
           latestRequestId: latestRequest?.id ?? null,
           latestRequestType: normalizeModule(latestRequest?.request_type),
+          latestWorkflowState,
           latestWorkflowStatus,
           approvalLevel: latestRequest
             ? latestWorkflowStatus === "approved"
               ? 3
               : latestWorkflowStatus === "rejected"
               ? 0
+              : latestWorkflowCurrentStage === "principal"
+              ? 3
+              : latestWorkflowCurrentStage === "dof"
+              ? 2
               : 1
             : 0,
         };
@@ -688,6 +689,7 @@ const ExpenditureDashboard: React.FC = () => {
           settlementStatus: "pending",
           latestRequestId: null,
           latestRequestType: null,
+          latestWorkflowState: null,
           latestWorkflowStatus: "pending",
           approvalLevel: 0,
         },
@@ -1248,7 +1250,7 @@ const ExpenditureDashboard: React.FC = () => {
               <div className="expenditure-request-list">
                 {filteredData.map((item, idx) => {
                   const isExpanded = Boolean(showRequestStatusDetail[item.id]);
-                  const statusLabel = getRequestStatusLabel(item.overallstatus);
+                  const statusLabel = getRequestStatusLabel(item);
 
                   return (
                     <div key={item.id} className="expenditure-request-card">
@@ -1320,10 +1322,7 @@ const ExpenditureDashboard: React.FC = () => {
                         <div className="expenditure-request-cardtimeline">
                           {(["hod", "dof", "principal"] as const).map(
                             (stage, stageIndex, arr) => {
-                              const stageState = getRequestTimelineState(
-                                item.overallstatus,
-                                stage
-                              );
+                              const stageState = getRequestTimelineState(item, stage);
 
                               return (
                                 <React.Fragment key={stage}>
