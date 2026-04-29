@@ -467,6 +467,18 @@
   transform: translateY(-1px);
 }
 
+.expenditure-demo-row__icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.expenditure-demo-row__icon-btn:disabled:hover {
+  background: #f8fbff;
+  border-color: #d7e3ef;
+}
+
 .expenditure-demo-row__icon-btn--danger {
   color: #c2410c;
 }
