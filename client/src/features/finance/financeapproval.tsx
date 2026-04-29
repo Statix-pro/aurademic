@@ -166,7 +166,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Membership & Subscriptions',
       'College Essentials',
       'Printing',
-      'Stationary',
+      'Stationery',
       'Postal Expenses',
       'Local Conveyance',
     ],
@@ -252,6 +252,8 @@ const ANNEXURE_TYPE_OPTIONS = [
   'Bills',
   'Pamphlet',
   'Email',
+  'Not Applicable',
+  'Others',
 ];
 const formatDateForInput = (value: unknown): string => {
   if (value === null || value === undefined || value === '') return '';
@@ -570,6 +572,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Print Sheets',
     'Seal/ Stamp Pad',
     'Stapler/ Punching Machine',
+    'Grade Sheet',
+    'Answer Booklet',
     'Others'
   ],
 
@@ -734,7 +738,10 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   'Examination Expenses': [
     'Autonomous Exam Remuneration',
     'Government Exam Remuneration',
-    'Online Exam Remuneration'
+    'Online Exam Remuneration',
+    'QP Setting Expenses',
+    'Degree Recommendation',
+    'CoE Staff Remuneration'
   ],
   'Advertisement & Branding': ['Digital Promotion', 'News Paper Advertisement'],
   'Public Relations': [
