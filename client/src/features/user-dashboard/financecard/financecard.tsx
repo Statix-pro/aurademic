@@ -99,6 +99,10 @@ const FinanceCard: React.FC = () => {
   const principalDocInputRef = useRef<HTMLInputElement | null>(null);
   const [principalDocTargetId, setPrincipalDocTargetId] = useState<number | null>(null);
   const [principalDocBusyId, setPrincipalDocBusyId] = useState<number | null>(null);
+  const isSuperAdminUser = Boolean((user as any)?.is_super_admin || (user as any)?.isSuperAdmin) || (
+    Array.isArray((user as any)?.roles) &&
+    (user as any).roles.some((role: unknown) => String(role || '').toLowerCase() === 'super_admin')
+  );
 
   useEffect(() => {
     fetchDashboard();
@@ -691,6 +695,7 @@ const FinanceCard: React.FC = () => {
   };
 
   const canEditRequest = (item: FinanceCardItem) => {
+    if (isSuperAdminUser) return true;
     const normalizedStatus = getNormalizedStatus(item);
     const currentStage = getCurrentStage(item);
 

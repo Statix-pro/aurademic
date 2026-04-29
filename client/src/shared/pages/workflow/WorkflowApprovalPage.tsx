@@ -1864,11 +1864,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                 title="Edit"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (!isApproved) {
+                                  if (!isApproved || (isSuperAdminView && config.moduleKey === 'finance')) {
                                     navigate(getFinanceRoute(recordId, 'edit'));
                                   }
                                 }}
-                                disabled={isApproved}
+                                disabled={isApproved && !(isSuperAdminView && config.moduleKey === 'finance')}
                               >
                                 <Edit2 size={16} />
                               </button>

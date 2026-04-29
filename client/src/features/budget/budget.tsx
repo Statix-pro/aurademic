@@ -499,6 +499,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Insurance Charges',
     'International Travel',
     'Legal Expenses',
+    'Office Expenses',
     'Scholarship Expenses',
     'Stamp Charges',
     'Testing Charges'
@@ -862,7 +863,10 @@ const Budget: React.FC = () => {
   const [tagOptions, setTagOptions] = useState<SelectOption[]>([]);
   const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
   const { user } = useAuth();
-  const isSuperAdminUser = Boolean(user?.is_super_admin) || (
+  const isSuperAdminUser =
+    Boolean(user?.is_super_admin)
+    || Boolean((user as any)?.isSuperAdmin)
+    || (
     Array.isArray(user?.roles) &&
     user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
   );

@@ -779,6 +779,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Insurance Charges',
     'International Travel',
     'Legal Expenses',
+    'Office Expenses',
     'Scholarship Expenses',
     'Stamp Charges',
     'Testing Charges'
@@ -2541,7 +2542,7 @@ const FinanceApproval: React.FC = () => {
     ['approved', 'completed'].includes(normalizedWorkflowStatus) ||
     (isAdminWorkflowContext && totalBudget > 10000 && hasDofApproval);
 
-  const isSuperAdminUser = Boolean(user?.is_super_admin) || (
+  const isSuperAdminUser = Boolean(user?.is_super_admin || (user as any)?.isSuperAdmin) || (
     Array.isArray(user?.roles) &&
     user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
   );
