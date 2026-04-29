@@ -14,6 +14,18 @@ const toPositiveInt = (value) => {
 const normalizeRoleCodes = (roleCodes = []) =>
   [...new Set(roleCodes.map((roleCode) => normalizeText(roleCode).toLowerCase()).filter(Boolean))];
 
+const extractRoleToken = (value) => {
+  if (typeof value === 'string') return normalizeText(value);
+  if (value && typeof value === 'object') {
+    const candidates = [value.role, value.role_code, value.roleCode, value.code, value.name, value.value];
+    for (const candidate of candidates) {
+      const normalized = normalizeText(candidate);
+      if (normalized) return normalized;
+    }
+  }
+  return '';
+};
+
 const canAccessExpenditureStageByRole = (actor = {}, stageKey = '') => {
   const normalizedStage = normalizeText(stageKey).toLowerCase();
   if (!normalizedStage) {
@@ -21,7 +33,7 @@ const canAccessExpenditureStageByRole = (actor = {}, stageKey = '') => {
   }
 
   const roleTokens = Array.isArray(actor?.roles) ? actor.roles : [];
-  const roles = roleTokens.map((role) => normalizeText(role).toLowerCase()).filter(Boolean);
+  const roles = roleTokens.map((role) => extractRoleToken(role).toLowerCase()).filter(Boolean);
 
   if (Boolean(actor?.isSuperAdmin || actor?.is_super_admin) || roles.includes('super_admin')) {
     return true;
@@ -164,6 +176,8 @@ async function resolveScopedActorIds(conn, actor, stagePolicy, options = {}) {
 
   const userId = getActorUserId(actor);
   const superAdmin = isSuperAdminActor(actor);
+  const normalizedModuleKey = normalizeText(stagePolicy?.moduleKey || stagePolicy?.module_key).toLowerCase();
+  const normalizedStageKey = normalizeText(stagePolicy?.stageKey || stagePolicy?.stage_key).toLowerCase();
 
   if (superAdmin || scopeType === 'global') {
     return {
@@ -181,20 +195,24 @@ async function resolveScopedActorIds(conn, actor, stagePolicy, options = {}) {
   const assignmentBuckets = await loadAssignmentBuckets(conn, userId, assignmentRoleCodes);
   const primaryContext = await loadPrimaryEmployeeContext(conn, userId);
 
+  if (
+    normalizedModuleKey === 'expenditure' &&
+    normalizedStageKey === 'dof' &&
+    canAccessExpenditureStageByRole(actor, normalizedStageKey)
+  ) {
+    return {
+      scopeType,
+      requireAssignment,
+      departmentIds: new Set(),
+      entityIds: new Set(),
+      forceAll: true,
+      forceEmpty: false,
+    };
+  }
+
   if (scopeType === 'department') {
     if (!assignmentBuckets.departmentIds.size && !requireAssignment && primaryContext.departmentId) {
       assignmentBuckets.departmentIds.add(primaryContext.departmentId);
-    }
-
-    if (!assignmentBuckets.departmentIds.size && normalizeText(stagePolicy?.moduleKey || stagePolicy?.module_key).toLowerCase() === 'expenditure' && canAccessExpenditureStageByRole(actor, stagePolicy?.stageKey || stagePolicy?.stage_key)) {
-      return {
-        scopeType,
-        requireAssignment,
-        departmentIds: new Set(),
-        entityIds: new Set(),
-        forceAll: true,
-        forceEmpty: false,
-      };
     }
 
     return {
@@ -210,17 +228,6 @@ async function resolveScopedActorIds(conn, actor, stagePolicy, options = {}) {
   if (scopeType === 'entity') {
     if (!assignmentBuckets.entityIds.size && !requireAssignment && primaryContext.entityId) {
       assignmentBuckets.entityIds.add(primaryContext.entityId);
-    }
-
-    if (!assignmentBuckets.entityIds.size && normalizeText(stagePolicy?.moduleKey || stagePolicy?.module_key).toLowerCase() === 'expenditure' && canAccessExpenditureStageByRole(actor, stagePolicy?.stageKey || stagePolicy?.stage_key)) {
-      return {
-        scopeType,
-        requireAssignment,
-        departmentIds: new Set(),
-        entityIds: new Set(),
-        forceAll: true,
-        forceEmpty: false,
-      };
     }
 
     return {

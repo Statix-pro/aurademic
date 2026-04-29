@@ -20,7 +20,7 @@ interface ExpenditureItem {
   primaryhead: string;
   sub_head?: string;
   amount: number;
-  overallstatus: "pending" | "approved" | "rejected";
+  overallstatus: string;
   createdat: string;
   request_type?: string;
   workflow_state?: unknown;
@@ -177,6 +177,10 @@ const getWorkflowApprovalLabel = (workflowState: Record<string, unknown> | null 
   if (status === "approved" || status === "completed") return "Approved";
   if (status === "rejected") return "Rejected";
   if (status === "returned") return "Returned";
+  if (status === "principal_approved") return "Approved";
+  if (status === "dof_approved") return "Pending Principal Approval";
+  if (status === "hod_approved" || status === "level1_approved") return "Pending DoF Approval";
+  if (currentStage === "level1" || currentStage === "hod") return "Pending HOD Approval";
   if (currentStage === "dof") return "Pending DoF Approval";
   if (currentStage === "principal") return "Pending Principal Approval";
   return "Pending HOD Approval";
@@ -197,11 +201,13 @@ const getWorkflowApprovalStageState = (
       workflowState?.workflowStage ??
       "",
   ).toLowerCase();
+  const normalizedCurrentStage =
+    currentStage === "level1" ? "hod" : currentStage;
   const stageOrder = ["hod", "dof", "principal"];
-  const currentIndex = stageOrder.indexOf(currentStage);
+  const currentIndex = stageOrder.indexOf(normalizedCurrentStage);
   const stageIndex = stageOrder.indexOf(stage);
 
-  if (status === "approved" || status === "completed") return "completed";
+  if (status === "approved" || status === "completed" || status === "principal_approved") return "completed";
   if (currentIndex === -1) return "pending";
   if (stageIndex < currentIndex) return "completed";
   if (stageIndex === currentIndex) return "current";
@@ -290,7 +296,7 @@ const ExpenditureDashboard: React.FC = () => {
     `Rs ${Number(amount || 0).toLocaleString("en-IN")}`;
 
   const isApprovedStatus = (status?: string | null) =>
-    normalizeStatus(status) === "approved";
+    ["approved", "completed", "principal_approved"].includes(normalizeStatus(status));
 
   const isEditableWorkflowStatus = (status?: string | null) => {
     const normalized = normalizeStatus(status);
@@ -955,10 +961,7 @@ const ExpenditureDashboard: React.FC = () => {
         primaryhead: String(item.primaryhead ?? item.primary_head ?? ""),
         sub_head: String(item.sub_head ?? item.subHead ?? ""),
         amount: Number(item.amount ?? 0),
-        overallstatus: String(item.overallstatus ?? item.overall_status ?? "pending") as
-          | "pending"
-          | "approved"
-          | "rejected",
+        overallstatus: String(item.overallstatus ?? item.overall_status ?? "pending"),
         createdat: String(item.createdat ?? item.created_at ?? ""),
         request_type: item.request_type ? String(item.request_type) : item.type ? String(item.type) : undefined,
         workflow_state: item.workflow_state ?? item.workflowState ?? null,
@@ -1480,15 +1483,35 @@ const ExpenditureDashboard: React.FC = () => {
                           </div>
 
                           <div className="expenditure-request-cardactions">
-                            <button title="View" className="expenditure-action-global">
+                            <button
+                              type="button"
+                              title="View"
+                              className="expenditure-action-global"
+                              onClick={() => navigate(`/expenditure/${item.id}`)}
+                            >
                               <Eye size={16} />
                             </button>
-                            <button title="Edit" className="expenditure-action-global">
+                            <button
+                              type="button"
+                              title="Edit"
+                              className="expenditure-action-global"
+                              disabled={!isEditableWorkflowStatus(getRequestWorkflowStatus(item))}
+                              onClick={() => {
+                                if (!isEditableWorkflowStatus(getRequestWorkflowStatus(item))) return;
+                                navigate(`/expenditure/${item.id}/edit`);
+                              }}
+                            >
                               <Edit2 size={16} />
                             </button>
                             <button
+                              type="button"
                               title="Delete"
                               className="expenditure-action-global"
+                              disabled={!isEditableWorkflowStatus(getRequestWorkflowStatus(item))}
+                              onClick={() => {
+                                if (!isEditableWorkflowStatus(getRequestWorkflowStatus(item))) return;
+                                deleteExpenditureRequest(item.id);
+                              }}
                               style={{ color: "#dc2626" }}
                             >
                               <Trash2 size={16} />
