@@ -92,6 +92,20 @@ interface FinanceRequestContext {
   event_sub_head?: string;
   approved_amount?: number;
 }
+interface WorkflowStateSnapshot {
+  status?: string;
+  lastDecision?: string;
+  currentStage?: string;
+}
+interface BillFileRecord {
+  id?: number;
+  original_name?: string;
+  file_url?: string | null;
+  download_url?: string | null;
+  file_path?: string | null;
+  stored_name?: string | null;
+  mime_type?: string | null;
+}
 interface ApprovedBudgetOption {
   budgetLineId: number;
   budgetProposalId: number | null;
@@ -228,7 +242,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
     options: [
       'Faculty Empowerment',
       'Staff Empowerment',
-      'Sudent Empowerment',
+      'Student Empowerment',
       'Student Capacity Building',
       'Learning Resources',
       'Accreditation Expenses',
@@ -515,6 +529,26 @@ const normalizeWorkflowModule = (value: unknown): 'Advance' | 'Settlement' | 'Ex
   return null;
 };
 
+const resolveTagValue = (value: unknown, options: SelectOption[]) => {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return '';
+
+  const matched = options.find(
+    (option) => String(option.value ?? '').trim().toLowerCase() === normalized.toLowerCase(),
+  );
+
+  return matched?.value || normalized;
+};
+
+const resolveBillFileUrl = (file: BillFileRecord) => {
+  const rawUrl = String(file.file_url ?? file.download_url ?? file.file_path ?? '').trim();
+  if (!rawUrl) return '';
+  if (/^https?:\/\//i.test(rawUrl)) return rawUrl;
+
+  const baseUrl = authenticityUtility.getBaseURL();
+  return rawUrl.startsWith('/') ? `${baseUrl}${rawUrl}` : `${baseUrl}/${rawUrl}`;
+};
+
 const getSelectedOption = (
   value: string | number,
   options: Array<OptionType | { label: string; options: OptionType[] }>
@@ -751,7 +785,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Staff Welfare',
   ],
 
-  'Sudent Empowerment': [
+  'Student Empowerment': [
     'Registration fee',
     'Travel Support',
     'Food & Refreshment',
@@ -1355,6 +1389,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
     'Credit Agricole CIB India',
   ];
 
+  
   const handleModalSubmit = async () => {
     if (!newPayeeName || !newAccountNo || !newIfsc || !newBankName || !newBranchName) {
       showAlert('Please enter beneficiary name, account number, IFSC, bank name and branch name', 'warning');
@@ -1387,6 +1422,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
 
     await onAddPayee(payeeToAdd);
   };
+  
 
   if (!show) return null;
 
@@ -1782,6 +1818,7 @@ const ExpenditureApproval: React.FC = () => {
     return parsePositiveIntLike(state?.submittedRequestId) ?? parsePositiveIntLike(routeId);
   })();
   const isEditingExistingRequest = Boolean(submittedRequestIdFromState);
+  const submitActionLabel = isEditingExistingRequest ? 'Update' : 'Submit';
   const sourceRequestIdFromState = (() => {
     const state = location.state as {
       sourceRequestId?: unknown;
@@ -1802,6 +1839,7 @@ const ExpenditureApproval: React.FC = () => {
   const [resolvedFinanceRequestId, setResolvedFinanceRequestId] = useState<number | null>(
     financeRequestIdFromState,
   );
+  const [isReturnedWorkflowRequest, setIsReturnedWorkflowRequest] = useState<boolean>(false);
   const [financeApprovedAmount, setFinanceApprovedAmount] = useState<number>(financeApprovedAmountFromState);
   useEffect(() => {
     setResolvedFinanceRequestId(financeRequestIdFromState);
@@ -1842,6 +1880,7 @@ const ExpenditureApproval: React.FC = () => {
   const bulkNeftInputRef = useRef<HTMLInputElement>(null);
   const [bulkNeftFile, setBulkNeftFile] = useState<File | null>(null);
   const [uploadedPayeeBills, setUploadedPayeeBills] = useState<File[]>([]);
+  const [existingPayeeBills, setExistingPayeeBills] = useState<BillFileRecord[]>([]);
   const [remarks, setRemarks] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
@@ -1918,6 +1957,16 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
         setEventSubHead((prev) => prev || financeContext.event_sub_head || '');
         setCategoryType((prev) => prev || nextCategoryType);
         setCategoryItem((prev) => prev || financeContext.beneficiary_value || '');
+        setSelectedTag((prev) =>
+          prev ||
+          resolveTagValue(
+            (financeContext as FinanceRequestContext & Record<string, unknown>).budget_tag ??
+              (financeContext as FinanceRequestContext & Record<string, unknown>).budgetTag ??
+              (financeContext as FinanceRequestContext & Record<string, unknown>).tag ??
+              '',
+            tagOptions,
+          ),
+        );
       } catch (error) {
         if (!isCancelled) {
           console.error('Failed to load finance context for expenditure form:', error);
@@ -1934,6 +1983,8 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
 
   useEffect(() => {
     if (!submittedRequestIdFromState) {
+      setExistingPayeeBills([]);
+      setIsReturnedWorkflowRequest(false);
       return;
     }
 
@@ -1952,6 +2003,31 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
 
         const record = response.data;
         setResolvedFinanceRequestId(parsePositiveIntLike(record.finance_request_id) ?? null);
+        const workflowState = (() => {
+          const rawState = record.workflow_state;
+          if (rawState && typeof rawState === 'object' && !Array.isArray(rawState)) {
+            return rawState as WorkflowStateSnapshot;
+          }
+
+          if (typeof rawState === 'string') {
+            try {
+              const parsed = JSON.parse(rawState) as WorkflowStateSnapshot;
+              return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+            } catch {
+              return null;
+            }
+          }
+
+          return null;
+        })();
+        const workflowStatus = String(
+          workflowState?.status ||
+            workflowState?.lastDecision ||
+            record.workflow_status ||
+            record.overall_status ||
+            '',
+        ).toLowerCase();
+        setIsReturnedWorkflowRequest(workflowStatus === 'returned');
         const toRowId = (suffix: string, index: number) => `${submittedRequestIdFromState}-${suffix}-${index}`;
 
         const mapAdvanceRows = Array.isArray(record.advance_rows)
@@ -2028,7 +2104,18 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
         setDescription(String(record.description || ''));
         setCategoryType(String(record.beneficiary_type || ''));
         setCategoryItem(String(record.beneficiary_value || ''));
-        setSelectedTag(String(record.budget_tag || ''));
+        setSelectedTag(
+          resolveTagValue(
+            record.budget_tag ??
+              record.budgettag ??
+              record.budgetTag ??
+              record.tag ??
+              record.finance_tag ??
+              record.financeTag ??
+              '',
+            tagOptions,
+          ),
+        );
         setPrimaryHead(String(record.primary_head || ''));
         setEventSubHead(String(record.event_sub_head || ''));
         setIsBudgetProposed(String(record.is_budget_proposed || ''));
@@ -2057,10 +2144,12 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
         });
         setShowBulkNEFT(Boolean(record.bulk_neft_file));
         setShowDebitAccountDropdown(Boolean(record.payment_debit_account));
+        setExistingPayeeBills(Array.isArray(record.bill_files) ? record.bill_files : []);
         setUploadedPayeeBills([]);
       } catch (error) {
         if (!isCancelled) {
           console.error('Failed to load submitted expenditure request:', error);
+          setIsReturnedWorkflowRequest(false);
         }
       }
     };
@@ -2070,7 +2159,8 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
     return () => {
       isCancelled = true;
     };
-  }, [submittedRequestIdFromState]);
+  }, [submittedRequestIdFromState, tagOptions]);
+
 
   useEffect(() => {
     let isCancelled = false;
@@ -2678,6 +2768,11 @@ const workflowRowRefFromState = (() => {
     return sum + (Number.isFinite(amount) ? amount : 0);
   }, 0);
 
+  const totalSettlementAdvanceAmount = settlementRows.reduce((sum, row) => {
+    const amount = Number(String(row.advance || '').replace(/,/g, '').trim());
+    return sum + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+
   const totalExpenditureAmount = expenditureSubRows.reduce((sum, row) => {
     const amount = Number(String(row.autoSum || row.expenditure || '').replace(/,/g, '').trim());
     return sum + (Number.isFinite(amount) ? amount : 0);
@@ -2952,79 +3047,328 @@ const workflowRowRefFromState = (() => {
     return Math.max(parsed, 0);
   };
 
+  const findAdvanceBudgetExceededRow = (
+    rows: AdvanceFormRow[],
+  ): { rowNumber: number; budgetLimit: number } | null => {
+    const cumulativeAmountsByBudgetLine = new Map<number, number>();
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const budgetLimit = getRowBudgetLimit(row.budget);
+      const requestedAmount = parseAmountValue(row.advance);
+
+      if (budgetLimit === null || requestedAmount <= 0) continue;
+
+      const budgetLineId = parsePositiveIntLike(row.budgetLineId);
+
+      if (!budgetLineId) {
+        if (requestedAmount > budgetLimit) {
+          return {
+            rowNumber: index + 1,
+            budgetLimit,
+          };
+        }
+        continue;
+      }
+
+      const nextCumulativeAmount = Number(
+        ((cumulativeAmountsByBudgetLine.get(budgetLineId) || 0) + requestedAmount).toFixed(2),
+      );
+
+      cumulativeAmountsByBudgetLine.set(budgetLineId, nextCumulativeAmount);
+
+      if (nextCumulativeAmount > budgetLimit) {
+        return {
+          rowNumber: index + 1,
+          budgetLimit,
+        };
+      }
+    }
+
+    return null;
+  };
+
+  const findExpenditureBudgetExceededRow = (
+    rows: ExpenditureFormRow[],
+  ): { rowNumber: number; budgetLimit: number } | null => {
+    const cumulativeAmountsByBudgetLine = new Map<number, number>();
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const budgetLimit = getRowBudgetLimit(row.budget);
+      const requestedAmount = parseAmountValue(row.autoSum || row.expenditure);
+
+      if (budgetLimit === null || requestedAmount <= 0) continue;
+
+      const budgetLineId = parsePositiveIntLike(row.budgetLineId);
+
+      if (!budgetLineId) {
+        if (requestedAmount > budgetLimit) {
+          return {
+            rowNumber: index + 1,
+            budgetLimit,
+          };
+        }
+        continue;
+      }
+
+      const nextCumulativeAmount = Number(
+        ((cumulativeAmountsByBudgetLine.get(budgetLineId) || 0) + requestedAmount).toFixed(2),
+      );
+
+      cumulativeAmountsByBudgetLine.set(budgetLineId, nextCumulativeAmount);
+
+      if (nextCumulativeAmount > budgetLimit) {
+        return {
+          rowNumber: index + 1,
+          budgetLimit,
+        };
+      }
+    }
+
+    return null;
+  };
+
   const formatAmountInputValue = (value: number): string => {
     if (!Number.isFinite(value)) return '';
     return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
   };
 
-  const handleAdvanceAmountChange = (rowId: string, nextValue: string) => {
-    if (!/^\d*\.?\d*$/.test(nextValue)) return;
+const toNumber = (value: unknown) => {
+  const n = Number(String(value ?? "").replace(/,/g, "").trim());
+  return Number.isFinite(n) ? n : 0;
+};
+const evaluateArithmeticExpression = (input: string) => {
+  const expression = String(input || "").replace(/\s+/g, "");
+  if (!expression || !/^[\d+\-*/().]+$/.test(expression)) return 0;
+  const tokens = expression.match(/\d+(?:\.\d+)?|[()+\-*/]/g);
+  if (!tokens) return 0;
 
-    let exceededLimit: number | null = null;
+  const output: string[] = [];
+  const operators: string[] = [];
+  const precedence: Record<string, number> = { "+": 1, "-": 1, "*": 2, "/": 2 };
 
-    setAdvanceRows((prev) =>
-      prev.map((row) => {
-        if (row.id !== rowId) return row;
-
-        const budgetLimit = getRowBudgetLimit(row.budget);
-        const requestedAmount = parseAmountValue(nextValue);
-
-        if (budgetLimit !== null && requestedAmount > budgetLimit) {
-          exceededLimit = budgetLimit;
-          return {
-            ...row,
-            advance: formatAmountInputValue(budgetLimit),
-          };
-        }
-
-        return {
-          ...row,
-          advance: nextValue,
-        };
-      }),
-    );
-
-    if (exceededLimit !== null) {
-      showAlert(
-        `Advance amount cannot exceed the remaining budget of Rs ${exceededLimit.toLocaleString('en-IN')}.`,
-        'warning',
-      );
+  for (const token of tokens) {
+    if (/^\d+(?:\.\d+)?$/.test(token)) {
+      output.push(token);
+      continue;
     }
+    if (token === "(") {
+      operators.push(token);
+      continue;
+    }
+    if (token === ")") {
+      while (operators.length && operators[operators.length - 1] !== "(") {
+        output.push(operators.pop() as string);
+      }
+      if (!operators.length) return 0;
+      operators.pop();
+      continue;
+    }
+    while (
+      operators.length &&
+      operators[operators.length - 1] !== "(" &&
+      precedence[operators[operators.length - 1]] >= precedence[token]
+    ) {
+      output.push(operators.pop() as string);
+    }
+    operators.push(token);
+  }
+
+  while (operators.length) {
+    const op = operators.pop() as string;
+    if (op === "(" || op === ")") return 0;
+    output.push(op);
+  }
+
+  const stack: number[] = [];
+  for (const token of output) {
+    if (/^\d+(?:\.\d+)?$/.test(token)) {
+      stack.push(Number(token));
+      continue;
+    }
+    const b = stack.pop();
+    const a = stack.pop();
+    if (a === undefined || b === undefined) return 0;
+    if (token === "+") stack.push(a + b);
+    else if (token === "-") stack.push(a - b);
+    else if (token === "*") stack.push(a * b);
+    else if (token === "/") stack.push(b === 0 ? 0 : a / b);
+  }
+
+  if (stack.length !== 1 || !Number.isFinite(stack[0])) return 0;
+  return Math.max(0, stack[0]);
+};
+const groupedAdvanceUsage = new Map<string, { budget: number; used: number }>();
+
+advanceRows.forEach((row) => {
+  const key = [
+    String(row.budgetHead ?? "").trim().toLowerCase(),
+    String(row.subHead ?? "").trim().toLowerCase(),
+  ].join("||");
+
+  const current = groupedAdvanceUsage.get(key) ?? {
+    budget: toNumber(row.budget),
+    used: 0,
   };
 
-  const handleExpenditureAmountChange = (rowId: string, nextValue: string) => {
-    if (!/^[0-9+.]*$/.test(nextValue)) return;
+  current.used += toNumber(row.advance);
+  current.budget = Math.max(current.budget, toNumber(row.budget));
 
-    let exceededLimit: number | null = null;
+  groupedAdvanceUsage.set(key, current);
+});
 
-    setExpenditureSubRows((prev) =>
-      prev.map((row) => {
-        if (row.id !== rowId) return row;
-
-        const nextSum = calculateSum(nextValue);
-        const budgetLimit = getRowBudgetLimit(row.budget);
-        const requestedAmount = parseAmountValue(nextSum);
-
-        if (budgetLimit !== null && requestedAmount > budgetLimit) {
-          exceededLimit = budgetLimit;
-          return row;
-        }
-
-        return {
-          ...row,
-          expenditure: nextValue,
-          autoSum: nextSum,
-        };
-      }),
+for (const [, group] of groupedAdvanceUsage) {
+  if (group.used > group.budget) {
+    window.alert(
+      `Total entered advance ₹ ${group.used.toLocaleString("en-IN")} exceeds available balance ₹ ${group.budget.toLocaleString("en-IN")} for one of the selected budget lines.`
     );
+    return;
+  }
+}
 
-    if (exceededLimit !== null) {
-      showAlert(
-        `Expenditure amount cannot exceed the remaining budget of Rs ${exceededLimit.toLocaleString('en-IN')}.`,
-        'warning',
-      );
+
+const getAdvanceRowAvailableBalance = (rowId: string | number) => {
+  const currentRow = advanceRows.find((row) => row.id === rowId);
+  if (!currentRow) return 0;
+
+  const rowBudget = toNumber(currentRow.budget);
+  const currentHead = String(currentRow.budgetHead ?? "").trim().toLowerCase();
+  const currentSubHead = String(currentRow.subHead ?? "").trim().toLowerCase();
+
+  const usedByOtherRows = advanceRows.reduce((sum, row) => {
+    if (row.id === rowId) return sum;
+
+    const sameHead =
+      String(row.budgetHead ?? "").trim().toLowerCase() === currentHead;
+    const sameSubHead =
+      String(row.subHead ?? "").trim().toLowerCase() === currentSubHead;
+
+    if (!sameHead || !sameSubHead) return sum;
+
+    return sum + toNumber(row.advance);
+  }, 0);
+
+  return Math.max(0, rowBudget - usedByOtherRows);
+};
+const getExpenditureRowAvailableBalance = (rowId: string | number) => {
+  const currentRow = expenditureSubRows.find((row) => row.id === rowId);
+  if (!currentRow) return 0;
+
+  const rowBudget = toNumber(currentRow.budget);
+  const currentHead = String(currentRow.budgetHead ?? "").trim().toLowerCase();
+  const currentSubHead = String(currentRow.subHead ?? "").trim().toLowerCase();
+
+  const usedByOtherRows = expenditureSubRows.reduce((sum, row) => {
+    if (row.id === rowId) return sum;
+
+    const sameHead =
+      String(row.budgetHead ?? "").trim().toLowerCase() === currentHead;
+    const sameSubHead =
+      String(row.subHead ?? "").trim().toLowerCase() === currentSubHead;
+
+    if (!sameHead || !sameSubHead) return sum;
+
+    return sum + toNumber(row.autoSum);
+  }, 0);
+
+  return Math.max(0, rowBudget - usedByOtherRows);
+};
+ const handleAdvanceAmountChange = (rowId: string | number, value: string) => {
+  if (!/^\d*\.?\d*$/.test(value)) return;
+
+  const numericValue = toNumber(value);
+  const allowedBalance = getAdvanceRowAvailableBalance(rowId);
+
+  if (numericValue > allowedBalance) {
+    window.alert(
+      `Entered amount exceeds available balance. Maximum allowed is ₹ ${allowedBalance.toLocaleString("en-IN")}.`
+    );
+    return;
+  }
+
+  const updatedRows = advanceRows.map((row) =>
+    row.id === rowId
+      ? { ...row, advance: value }
+      : row
+  );
+
+  setAdvanceRows(updatedRows);
+};
+
+ const handleExpenditureAmountChange = (rowId: string | number, value: string) => {
+  const sanitizedValue = value.replace(/[^\d.+\-*/() ]/g, "");
+
+  const updatedRows = expenditureSubRows.map((row) =>
+    row.id === rowId
+      ? { ...row, expenditure: sanitizedValue }
+      : row
+  );
+
+  const targetRow = updatedRows.find((row) => row.id === rowId);
+  if (!targetRow) {
+    setExpenditureSubRows(updatedRows);
+    return;
+  }
+
+  let evaluatedAmount = 0;
+
+  try {
+    if (sanitizedValue.trim()) {
+      evaluatedAmount = evaluateArithmeticExpression(sanitizedValue);
     }
+  } catch {
+    evaluatedAmount = 0;
+  }
+
+  const allowedBalance = getExpenditureRowAvailableBalance(rowId);
+
+  if (evaluatedAmount > allowedBalance) {
+    window.alert(
+      `Entered expenditure exceeds available balance. Maximum allowed is ₹ ${allowedBalance.toLocaleString("en-IN")}.`
+    );
+    return;
+  }
+
+  const finalRows = updatedRows.map((row) =>
+    row.id === rowId
+      ? {
+          ...row,
+          expenditure: sanitizedValue,
+          autoSum: evaluatedAmount ? String(evaluatedAmount) : "",
+        }
+      : row
+  );
+
+  setExpenditureSubRows(finalRows);
+};
+const groupedExpenditureUsage = new Map<string, { budget: number; used: number }>();
+
+expenditureSubRows.forEach((row) => {
+  const key = [
+    String(row.budgetHead ?? "").trim().toLowerCase(),
+    String(row.subHead ?? "").trim().toLowerCase(),
+  ].join("||");
+
+  const current = groupedExpenditureUsage.get(key) ?? {
+    budget: toNumber(row.budget),
+    used: 0,
   };
+
+  current.used += toNumber(row.autoSum);
+  current.budget = Math.max(current.budget, toNumber(row.budget));
+
+  groupedExpenditureUsage.set(key, current);
+});
+
+for (const [, group] of groupedExpenditureUsage) {
+  if (group.used > group.budget) {
+    window.alert(
+      `Total expenditure ₹ ${group.used.toLocaleString("en-IN")} exceeds available balance ₹ ${group.budget.toLocaleString("en-IN")} for one of the selected budget lines.`
+    );
+    return;
+  }
+}
 
   // Search applicant handler
   const handleApplicantSearch = async (query: string) => {
@@ -3544,44 +3888,80 @@ const workflowRowRefFromState = (() => {
               </div>
             </div>
           </div>
-          <label className="payee-upload-label payee-footer-upload-label">
-            <span className="payee-upload-label-content">
-              <span className="payee-upload-label-text">Bills</span>
-              <Upload size={18} />
-            </span>
-            <input
-              type="file"
-              className="payee-upload-input"
-              multiple
-              onChange={handlePayeeBillUpload}
-            />
-          </label>
+          {!isReadOnlyView && (
+            <label className="payee-upload-label payee-footer-upload-label">
+              <span className="payee-upload-label-content">
+                <span className="payee-upload-label-text">Bills</span>
+                <Upload size={18} />
+              </span>
+              <input
+                type="file"
+                className="payee-upload-input"
+                multiple
+                onChange={handlePayeeBillUpload}
+              />
+            </label>
+          )}
         </div>
 
-        {uploadedPayeeBills.length > 0 && (
-          <div className="payee-uploaded-files">
+        {(existingPayeeBills.length > 0 || uploadedPayeeBills.length > 0) && (
+          <div className="payee-uploaded-files" style={{ marginTop: '14px', pointerEvents: 'auto' }}>
             <div className="payee-uploaded-files-header">
               <span>S.No</span>
               <span>Bills File</span>
               <span>Action</span>
             </div>
+            {existingPayeeBills.map((file, i) => {
+              const fileUrl = resolveBillFileUrl(file);
+              const displayName =
+                normalizeText(file.original_name || file.stored_name || file.file_path || `File ${i + 1}`);
+
+              return (
+                <div key={`existing-${file.id ?? i}`} className="payee-uploaded-file-row">
+                  <span className="payee-uploaded-file-index">{i + 1}</span>
+                  <span className="payee-uploaded-file-name" title={displayName}>
+                    {displayName}
+                  </span>
+                  <div className="payee-upload-actions">
+                    <button
+                      className="payee-upload-view-btn"
+                      disabled={!fileUrl}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (fileUrl) window.open(fileUrl, '_blank', 'noopener,noreferrer');
+                      }}
+                    >
+                      <Eye size={16} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
             {uploadedPayeeBills.map((file, i) => (
-              <div key={i} className="payee-uploaded-file-row">
-                <span className="payee-uploaded-file-index">{i + 1}</span>
+              <div key={`uploaded-${i}`} className="payee-uploaded-file-row">
+                <span className="payee-uploaded-file-index">{existingPayeeBills.length + i + 1}</span>
                 <span className="payee-uploaded-file-name" title={file.name}>{file.name}</span>
                 <div className="payee-upload-actions">
                   <button
                     className="payee-upload-view-btn"
-                    onClick={(e) => { e.preventDefault(); if (file) window.open(URL.createObjectURL(file), '_blank'); }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (file) window.open(URL.createObjectURL(file), '_blank', 'noopener,noreferrer');
+                    }}
                   >
                     <Eye size={16} />
                   </button>
-                  <button
-                    className="payee-upload-view-btn payee-upload-delete-btn"
-                    onClick={(e) => { e.preventDefault(); removePayeeBill(i); }}
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  {!isReadOnlyView && (
+                    <button
+                      className="payee-upload-view-btn payee-upload-delete-btn"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        removePayeeBill(i);
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -3624,7 +4004,9 @@ const getSelectedWorkflowRow = (): WorkflowFormRow | null => {
 
   if (rowsWithBudgetLine.length === 1) return rowsWithBudgetLine[0];
 
-  return null;
+  if (rowsWithBudgetLine.length > 1) return rowsWithBudgetLine[0];
+
+  return rows[0] || null;
 };
 
 const getSelectedWorkflowBudgetLineId = (): number | null =>
@@ -3669,7 +4051,71 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     );
   }
 };
- const handleSubmit = async (): Promise<void> => {
+  const getSettlementAdjustmentNotice = () => {
+    if (activeTab !== 'Settlement') {
+      return null;
+    }
+
+    const difference = Number((totalSettlementAmount - totalSettlementAdvanceAmount).toFixed(2));
+    if (difference === 0) {
+      return null;
+    }
+
+    if (difference < 0) {
+      const returnedAmount = Math.abs(difference);
+      return {
+        title: 'Settlement Adjustment',
+        message: (
+          <div style={{ lineHeight: 1.6 }}>
+            <div>
+              Settlement is Rs {returnedAmount.toLocaleString('en-IN', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })} less than the advance amount.
+            </div>
+            <div>
+              The returned amount will be added back to the balance.
+            </div>
+          </div>
+        ),
+      };
+    }
+
+    return {
+      title: 'Settlement Adjustment',
+      message: (
+        <div style={{ lineHeight: 1.6 }}>
+          <div>
+            Settlement is Rs {difference.toLocaleString('en-IN', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })} more than the advance amount.
+          </div>
+          <div>
+            The excess amount will be reduced from the balance.
+          </div>
+        </div>
+      ),
+    };
+  };
+
+  const getComputedBalanceAmount = () => {
+    if (activeTab === 'Settlement') {
+      return Math.max(0, financeApprovedAmount - totalSettlementAmount - totalExpenditureAmount);
+    }
+
+    if (activeTab === 'Advance') {
+      return Math.max(0, financeApprovedAmount - totalAdvanceAmount - totalExpenditureAmount);
+    }
+
+    if (activeTab === 'Expenditure') {
+      return Math.max(0, financeApprovedAmount - totalAdvanceAmount - totalExpenditureAmount);
+    }
+
+    return 0;
+  };
+
+  const performSubmit = async (): Promise<void> => {
   try {
     if (isReadOnlyView) {
       showAlert('This proposal is opened in view mode and cannot be submitted again.', 'warning');
@@ -3686,13 +4132,14 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       return;
     }
 
-    const selectedWorkflowRow = getSelectedWorkflowRow();
+    const workflowRows = getRowsForActiveTab();
+    const selectedWorkflowRow = getSelectedWorkflowRow() || workflowRows.find((row) => parsePositiveIntLike(row.budgetLineId)) || workflowRows[0] || null;
     const selectedWorkflowBudgetLineId = parsePositiveIntLike(selectedWorkflowRow?.budgetLineId);
     const selectedWorkflowBudgetProposalId = parsePositiveIntLike(selectedWorkflowRow?.budgetProposalId);
 
-    if (!selectedWorkflowRow) {
+    if (!workflowRows.length) {
       showAlert(
-        'Unable to identify the selected workflow row. Please open the request again from the dashboard row you want to submit.',
+        'No workflow rows were found for the selected request type.',
         'warning'
       );
       return;
@@ -3707,13 +4154,11 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     }
 
     if (activeTab === 'Advance') {
-      const selectedAdvanceRow = selectedWorkflowRow as AdvanceFormRow;
-      const budgetLimit = getRowBudgetLimit(selectedAdvanceRow.budget);
-      const requestedAdvance = parseAmountValue(selectedAdvanceRow.advance);
+      const exceededAdvanceRow = findAdvanceBudgetExceededRow(advanceRows);
 
-      if (budgetLimit !== null && requestedAdvance > budgetLimit) {
+      if (exceededAdvanceRow) {
         showAlert(
-          `Advance amount cannot exceed the remaining budget of Rs ${budgetLimit.toLocaleString('en-IN')}.`,
+          `Advance amount in row ${exceededAdvanceRow.rowNumber} cannot exceed the budget amount of Rs ${exceededAdvanceRow.budgetLimit.toLocaleString('en-IN')}.`,
           'warning',
         );
         return;
@@ -3721,19 +4166,21 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     }
 
     if (activeTab === 'Expenditure') {
-      const selectedExpenditureRow = selectedWorkflowRow as ExpenditureFormRow;
-      const budgetLimit = getRowBudgetLimit(selectedExpenditureRow.budget);
-      const requestedExpenditure = parseAmountValue(
-        selectedExpenditureRow.autoSum || selectedExpenditureRow.expenditure,
-      );
+      const exceededExpenditureRow = findExpenditureBudgetExceededRow(expenditureSubRows);
 
-      if (budgetLimit !== null && requestedExpenditure > budgetLimit) {
+      if (exceededExpenditureRow) {
         showAlert(
-          `Expenditure amount cannot exceed the remaining budget of Rs ${budgetLimit.toLocaleString('en-IN')}.`,
+          `Expenditure amount in row ${exceededExpenditureRow.rowNumber} cannot exceed the remaining budget of Rs ${exceededExpenditureRow.budgetLimit.toLocaleString('en-IN')}.`,
           'warning',
         );
         return;
       }
+    }
+
+    const hasExistingBills = isEditingExistingRequest && existingPayeeBills.length > 0;
+    if (uploadedPayeeBills.length === 0 && !hasExistingBills) {
+      showAlert('Please upload bills before submitting the form.', 'warning');
+      return;
     }
 
     const normalizedTotalPayeeTransactionAmount = Number(
@@ -3782,18 +4229,18 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     }));
 
     const selectedAdvanceRows =
-      activeTab === 'Advance' && selectedWorkflowRow
-        ? [selectedWorkflowRow as AdvanceFormRow]
+      activeTab === 'Advance'
+        ? advanceRows
         : [];
 
     const selectedSettlementRows =
-      activeTab === 'Settlement' && selectedWorkflowRow
-        ? [selectedWorkflowRow as SettlementFormRow]
+      activeTab === 'Settlement'
+        ? settlementRows
         : [];
 
     const selectedExpenditureRows =
-      activeTab === 'Expenditure' && selectedWorkflowRow
-        ? [selectedWorkflowRow as ExpenditureFormRow]
+      activeTab === 'Expenditure'
+        ? expenditureSubRows
         : [];
 
     const payload = {
@@ -3827,7 +4274,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       eventsubhead: eventSubHead,
       isbudgetproposed: isBudgetProposed,
       proposedamount: amountProposed || null,
-      balanceamount: balanceAmount || null,
+      balanceamount: getComputedBalanceAmount() || null,
       incometype: primaryIncomeRow?.incomeSource || null,
       incomestatus: primaryIncomeRow?.creditAccount || null,
       incomeamounttype: primaryIncomeRow?.contribution || null,
@@ -3881,6 +4328,26 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       return;
     }
 
+    const shouldResubmitAfterSave =
+      isEditingExistingRequest &&
+      Boolean(submittedRequestIdFromState) &&
+      isReturnedWorkflowRequest;
+
+    if (shouldResubmitAfterSave) {
+      const resubmitResult = (await authenticityUtility.post(
+        `/expenditure/${submittedRequestIdFromState}/resubmit`,
+        {},
+      )) as { status?: string; message?: string };
+
+      if (resubmitResult.status !== 'success') {
+        showAlert(
+          resubmitResult.message || 'Request updated, but resubmission failed',
+          'error',
+        );
+        return;
+      }
+    }
+
     const submittedAmount =
       activeTab === 'Advance'
         ? totalAdvanceAmount
@@ -3897,9 +4364,11 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       (location.state as { financeProposal?: { proposalId?: unknown } } | null)?.financeProposal?.proposalId || ''
     ).trim()}`;
     const moduleLabel = activeTab
-      ? `${activeTab} ${isEditingExistingRequest ? 'updated successfully.' : 'submitted successfully.'}`
+      ? shouldResubmitAfterSave
+        ? `${activeTab} resubmitted successfully.`
+        : `${activeTab} ${isEditingExistingRequest ? 'updated successfully.' : 'submitted successfully.'}`
       : isEditingExistingRequest
-        ? 'Updated successfully.'
+        ? (shouldResubmitAfterSave ? 'Resubmitted successfully.' : 'Updated successfully.')
         : 'Submitted successfully.';
     const requestLabel = savedRequestRef ? `Request Ref: ${savedRequestRef}` : '';
 
@@ -3955,6 +4424,27 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     showAlert(errorMessage, 'error');
   }
 };
+
+  const handleSubmit = async (): Promise<void> => {
+    const settlementNotice = getSettlementAdjustmentNotice();
+
+    if (settlementNotice) {
+      showAlert(
+        settlementNotice.message,
+        'warning',
+        settlementNotice.title,
+        true,
+        'Continue',
+        () => {
+          closeAlert();
+          void performSubmit();
+        },
+      );
+      return;
+    }
+
+    await performSubmit();
+  };
 
   const handleReset = (force = false): void => {
     const performReset = () => {
@@ -4022,6 +4512,15 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
 // Tag
 const [selectedTag, setSelectedTag] = useState<string>('');
+useEffect(() => {
+  if (!selectedTag) return;
+
+  const resolvedTag = resolveTagValue(selectedTag, tagOptions);
+  if (resolvedTag !== selectedTag) {
+    setSelectedTag(resolvedTag);
+  }
+}, [selectedTag, tagOptions]);
+
 const handleBeneficiarySearch = async (query: string) => {
   setBeneficiarySearchQuery(query);
   try {
@@ -4510,7 +5009,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
     >
 
 
-       (
+      
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
           <div className="ea-applicantCard">
 
@@ -5019,7 +5518,10 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         <CustomDropdown
           name="selectedTag"
           options={tagOptions}
-          value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
+          value={(() => {
+            const resolvedTag = resolveTagValue(selectedTag, tagOptions);
+            return resolvedTag ? { value: resolvedTag, label: resolvedTag } : null;
+          })()}
           onChange={(option) => {
             const selected = option as OptionType | null;
             setSelectedTag(selected?.value ? String(selected.value) : '');
@@ -5128,7 +5630,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                         <input
                           type="text"
                           placeholder="<Fetch>"
-                          value={getBudgetDisplayValue(row.budget)}
+                          value={`Rs ${getAdvanceRowAvailableBalance(row.id).toLocaleString("en-IN")}`}
                           readOnly
                           style={{
                             border: '1px solid #e0e0e0',
@@ -5173,7 +5675,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                       <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
                         <input
                           type="text"
-                          placeholder="₹ 0"
+                          placeholder={`₹ ${getAdvanceRowAvailableBalance(row.id).toLocaleString("en-IN")}`}
                           value={row.advance}
                           onChange={(e) => handleAdvanceAmountChange(row.id, e.target.value)}
                           style={{
@@ -5776,28 +6278,30 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
 
       {/* 3. Bills Uploaded Button */}
       <div className="payee-status-col payee-status-col-bills">
-        <label
-          className="payee-upload-label payee-status-upload-label"
-          style={{
-            margin: 0,
-            justifyContent: 'center',
-            display: 'flex',
-            alignItems: 'center',
-            width: '100%',
-            boxSizing: 'border-box',
-          }}
-        >
-          <span className="payee-upload-label-content">
-            <span className="payee-upload-label-text">Payment proof </span>
-            <Upload size={16} />
-          </span>
-          <input
-            type="file"
-            className="payee-upload-input"
-            multiple
-            onChange={handlePayeeBillUpload}
-          />
-        </label>
+        {!isReadOnlyView && (
+          <label
+            className="payee-upload-label payee-status-upload-label"
+            style={{
+              margin: 0,
+              justifyContent: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              boxSizing: 'border-box',
+            }}
+          >
+            <span className="payee-upload-label-content">
+              <span className="payee-upload-label-text">Payment proof </span>
+              <Upload size={16} />
+            </span>
+            <input
+              type="file"
+              className="payee-upload-input"
+              multiple
+              onChange={handlePayeeBillUpload}
+            />
+          </label>
+        )}
         {uploadedPayeeBills.length > 0 && (
           <div style={{ fontSize: '11px', color: '#2c7a4d', marginTop: '4px', textAlign: 'center' }}>
             {uploadedPayeeBills.length} file(s)
@@ -5818,7 +6322,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           />
           <button
             type="button"
-            onClick={() => console.log('Tick clicked, remarks:', remarks)}
+            onClick={() => setRemarks((prev) => prev.trim())}
             className="payee-comment-tick-btn"
             aria-label="Confirm comment"
           >
@@ -5835,12 +6339,12 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             <div className="expenditure-submit-buttons">
               <button
                 className="btn-submit"
-                onClick={(e) => { e.preventDefault(); handleSubmit(); }}
-              >
-                Submit
-              </button>
-            </div>
-          )}
+            onClick={(e) => { e.preventDefault(); handleSubmit(); }}
+          >
+            {submitActionLabel}
+          </button>
+        </div>
+      )}
 
           <AlertModal
             show={alertConfig.show}
@@ -5894,3 +6398,5 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
 };
 
 export default ExpenditureApproval;
+
+
