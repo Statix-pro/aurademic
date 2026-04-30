@@ -401,9 +401,11 @@ export async function update(req, res) {
     const userDepartment = await resolveUserDepartment(req);
     const userDepartmentId = await resolveUserDepartmentId(req);
     const userRole = resolveAccessRoleFromPermissions(req);
+    const isSuperAdmin = hasSuperAdminAccess(req);
 
-    const canBypassAccessCheck = ['super_admin', 'admin', 'dof', 'principal'].includes(userRole);
-    const canBypassEditStateValidation = canBypassAccessCheck || ['hod', 'ithead'].includes(userRole);
+    const canBypassAccessCheck = isSuperAdmin || ['super_admin', 'admin', 'dof', 'principal'].includes(userRole);
+    const canBypassEditStateValidation =
+      isSuperAdmin || canBypassAccessCheck || ['hod', 'ithead'].includes(userRole);
 
     if (!canBypassAccessCheck) {
       const hasAccess = await BudgetModel.validateUserAccess(

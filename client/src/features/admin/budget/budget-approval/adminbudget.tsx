@@ -1560,7 +1560,7 @@ const AdminBudget: React.FC = () => {
                                         e.stopPropagation();
                                         navigate(`/budget/${item.id}/edit?admin=true`);
                                       }}
-                                      disabled={isActionLocked}
+                                      disabled={isActionLocked && !isSuperAdmin(user)}
                                     >
                                       <Edit2 size={16} />
                                     </button>
