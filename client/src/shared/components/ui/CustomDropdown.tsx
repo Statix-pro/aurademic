@@ -22,6 +22,7 @@ interface CustomDropdownProps {
   styles?: StylesConfig<OptionType, boolean>;
   menuPortalTarget?: HTMLElement | null;
   menuPosition?: 'absolute' | 'fixed';
+  filterOption?: (candidate: any, input: string) => boolean;
 }
 
 const CustomDropdown: React.FC<CustomDropdownProps> = ({
