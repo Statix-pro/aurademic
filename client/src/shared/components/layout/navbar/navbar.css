@@ -202,120 +202,111 @@
 }
 
 /* ═══════════════════════════════════════════
-   Profile Footer (Notion / Linear style)
+   Profile Footer
    ═══════════════════════════════════════════ */
 .sb-profile {
   flex-shrink: 0;
   padding: 0 8px 8px;
 }
 
-/* Profile links — only when expanded */
-.sb-profile-links {
+/* Logout link — red tint */
+.sb-logout-link {
+  color: #fca5a5;
+}
+
+.sb-logout-link:hover {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
+/* ─── Logout Confirm Modal ─── */
+.sb-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sb-modal {
+  background: #fff;
+  border-radius: 14px;
+  padding: 32px 28px 24px;
+  width: 320px;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.sb-modal-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #fef2f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ef4444;
   margin-bottom: 4px;
 }
 
-.sb-profile-links .sb-sublink {
-  padding: 7px 12px;
-  gap: 10px;
+.sb-modal-icon .sb-icon {
+  width: 22px;
+  height: 22px;
 }
 
-/* User card row */
-.sb-profile-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 9px;
-  /* Aligns avatar visually with icons above */
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.2s;
-  overflow: hidden;
-  position: relative;
-}
-
-.sb-profile-card:hover {
-  background: var(--sb-bg-hover);
-}
-
-/* Avatar circle */
-.sb-avatar {
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  color: #fff;
-  font-size: 14px;
+.sb-modal-title {
+  font-size: 17px;
   font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  color: #111827;
+  margin: 0;
 }
 
-/* Name + email */
-.sb-profile-info {
+.sb-modal-msg {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 8px;
+  text-align: center;
+}
+
+.sb-modal-actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.sb-modal-cancel,
+.sb-modal-ok {
   flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  opacity: 1;
-  transition: opacity 0.2s ease;
-}
-
-.sb-profile-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-}
-
-.sb-profile-email {
-  font-size: 11px;
-  color: var(--sb-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-}
-
-/* Logout icon button */
-.sb-logout-btn {
-  background: none;
-  border: none;
-  color: #fca5a5;
-  cursor: pointer;
-  padding: 6px;
+  padding: 10px 0;
   border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
   transition: all 0.15s;
-  flex-shrink: 0;
-  opacity: 1;
 }
 
-.sb-logout-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+.sb-modal-cancel {
+  background: #f3f4f6;
+  color: #374151;
 }
 
-.sb-logout-btn .sb-icon {
-  width: 18px;
-  height: 18px;
+.sb-modal-cancel:hover {
+  background: #e5e7eb;
 }
 
-/* Hide seamlessly on collapse */
-.sidebar.collapsed .sb-profile-info,
-.sidebar.collapsed .sb-logout-btn {
-  opacity: 0;
-  pointer-events: none;
+.sb-modal-ok {
+  background: #ef4444;
+  color: #fff;
+}
+
+.sb-modal-ok:hover {
+  background: #dc2626;
 }
 
 /* ─── Overlay backdrop ─── */

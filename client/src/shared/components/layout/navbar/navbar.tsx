@@ -232,6 +232,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const location = useLocation();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isHovered, setIsHovered] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
 
   const isExpanded = !collapsed || isHovered;
@@ -267,8 +268,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
     paths.some(
       (p) => location.pathname === p || location.pathname.startsWith(`${p}/`)
     );
-
-  const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : "U";
 
   return (
     <aside
@@ -659,49 +658,56 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
       <div className="sb-profile">
         <div className="sb-divider" />
 
-        {isExpanded && (
-          <div className="sb-profile-links">
-            <Link
-              to="/profile"
-              className={`sb-sublink ${isActive("/profile") ? "active" : ""}`}
-              onClick={handleLinkClick}
-            >
-              <IconProfile /> My Profile
-            </Link>
-            <Link
-              to="/kpi"
-              className={`sb-sublink ${isActive("/kpi") ? "active" : ""}`}
-              onClick={handleLinkClick}
-            >
-              <IconKpi /> KPI
-            </Link>
-          </div>
-        )}
-
-        <div
-          className="sb-profile-card"
-          onClick={() => {
-            if (collapsed) setCollapsed(false);
-          }}
-          title={collapsed ? "Expand to see profile" : ""}
+        <Link
+          to="/profile"
+          className={`sb-link ${isActive("/profile") ? "active" : ""}`}
+          onClick={handleLinkClick}
+          title="My Profile"
         >
-          <div className="sb-avatar">{userInitial}</div>
-          <div className="sb-profile-info">
-            <span className="sb-profile-name">{user?.name || "User"}</span>
-            <span className="sb-profile-email">{user?.email || ""}</span>
-          </div>
-          <button
-            className="sb-logout-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              logout();
-            }}
-            title="Logout"
-          >
-            <IconLogout />
-          </button>
-        </div>
+          <IconProfile />
+          <span className="sb-text">My Profile</span>
+        </Link>
+
+        <Link
+          to="/kpi"
+          className={`sb-link ${isActive("/kpi") ? "active" : ""}`}
+          onClick={handleLinkClick}
+          title="KPI"
+        >
+          <IconKpi />
+          <span className="sb-text">KPI</span>
+        </Link>
+
+        <button
+          className="sb-link sb-logout-link"
+          onClick={() => setShowLogoutConfirm(true)}
+          title="Logout"
+        >
+          <IconLogout />
+          <span className="sb-text">Logout</span>
+        </button>
       </div>
+
+      {/* ────────────── LOGOUT CONFIRM MODAL ────────────── */}
+      {showLogoutConfirm && (
+        <div className="sb-modal-overlay" onClick={() => setShowLogoutConfirm(false)}>
+          <div className="sb-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="sb-modal-icon">
+              <IconLogout />
+            </div>
+            <h3 className="sb-modal-title">Logout</h3>
+            <p className="sb-modal-msg">Are you sure you want to logout?</p>
+            <div className="sb-modal-actions">
+              <button className="sb-modal-cancel" onClick={() => setShowLogoutConfirm(false)}>
+                Cancel
+              </button>
+              <button className="sb-modal-ok" onClick={logout}>
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 };
