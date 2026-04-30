@@ -55,6 +55,11 @@ const uniqueStringArray = (values = []) => [
 
 const normalizeDecodedUser = (decoded) => {
   const userId = decoded.userId || decoded.id;
+  const decodedRoles = Array.isArray(decoded.roles)
+    ? decoded.roles
+    : decoded.role
+      ? [decoded.role]
+      : [];
 
   return {
     id: userId,
@@ -62,7 +67,7 @@ const normalizeDecodedUser = (decoded) => {
     name: decoded.name,
     isAdmin: Boolean(decoded.isAdmin ?? decoded.is_admin),
     isSuperAdmin: Boolean(decoded.isSuperAdmin ?? decoded.is_super_admin),
-    roles: uniqueStringArray(Array.isArray(decoded.roles) ? decoded.roles : []),
+    roles: uniqueStringArray(decodedRoles),
     permissions: uniqueStringArray(
       Array.isArray(decoded.permissions) ? decoded.permissions : []
     ),
@@ -75,7 +80,13 @@ const normalizeRequestUser = (requestUser = {}) => ({
   name: requestUser.name,
   isAdmin: Boolean(requestUser.isAdmin ?? requestUser.is_admin),
   isSuperAdmin: Boolean(requestUser.isSuperAdmin ?? requestUser.is_super_admin),
-  roles: uniqueStringArray(Array.isArray(requestUser.roles) ? requestUser.roles : []),
+  roles: uniqueStringArray(
+    Array.isArray(requestUser.roles)
+      ? requestUser.roles
+      : requestUser.role
+        ? [requestUser.role]
+        : []
+  ),
   permissions: uniqueStringArray(
     Array.isArray(requestUser.permissions) ? requestUser.permissions : []
   ),
@@ -88,6 +99,7 @@ const toRequestUser = (user) => ({
   isAdmin: Boolean(user.isAdmin),
   isSuperAdmin: Boolean(user.isSuperAdmin),
   roles: uniqueStringArray(user.roles),
+  role: uniqueStringArray(user.roles)[0] || null,
   permissions: uniqueStringArray(user.permissions),
   authorizationResolved: Boolean(user.authorizationResolved),
   // Backward compatibility for older handlers/components

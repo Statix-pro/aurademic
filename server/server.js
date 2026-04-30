@@ -13,6 +13,8 @@ import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
 import editRequestRoutes from './modules/editRequest/editRequestRoutes.js';
 import budgetRoutes from './modules/budget/budgetRoutes.js';
 import adminBudgetRoutes from './modules/adminbudget/adminBudgetRoutes.js';
+import expenditureRoutes from './modules/expenditure/expenditureRoutes.js';
+import expenditureUserDashboardRoutes from './modules/expenditure/expenditureUserDashboardRoutes.js';
 
 
 // Events routes
@@ -101,6 +103,7 @@ const createUploadDirectories = () => {
     'uploads/projectReport',
     'uploads/bankStatement',
     'uploads/journal-article',
+    'uploads/finance-principal-documents',
   ];
 
   directories.forEach((dir) => {
@@ -135,6 +138,9 @@ app.use('/api/finance-requests', financePageRoutes);
 // Budget routes
 app.use('/api/budget', budgetRoutes);
 app.use('/api/adminbudget', adminBudgetRoutes);
+app.use('/api/expenditure', expenditureRoutes);
+app.use('/api/expenditure-requests', expenditureRoutes);
+app.use('/api/expenditure-dashboard', expenditureUserDashboardRoutes);
 
 // FinanceCard API
 // app.use('/api/finance-dashboard', financeCardRoutes);

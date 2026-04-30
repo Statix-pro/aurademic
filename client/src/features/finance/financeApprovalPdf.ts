@@ -377,6 +377,14 @@ export const getSubmittedTimestamp = (
   return fallbackToCurrent ? getCurrentWorkflowTimestamp() : '';
 };
 
+const getWorkflowDecisionText = (entry: WorkflowTimelineEntry): string => {
+  const stageToken = String(entry.stage || '').toLowerCase();
+  if (entry.label === 'Approved') {
+    return stageToken.includes('principal') ? 'Approved by' : 'Recommended by';
+  }
+  return `${entry.label} by`;
+};
+
 export const getAnnexureOpenUrl = (row: FinancePdfAnnexureRow, baseUrl: string): string => {
   const sourceUrl = String(row.previewUrl || row.filePath || '').trim();
   if (!sourceUrl) return '';
@@ -810,7 +818,7 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     [{ content: `Submitted by ${formatWorkflowPersonText(submittedByUi.actor, submittedByUi.email, submittedByUi.timestamp)}`, colSpan: 2 }],
     ...approvalSteps.map((entry) => ([
       {
-        content: `${entry.label} by ${formatWorkflowPersonText(entry.actor, entry.email, entry.timestamp)}`,
+        content: `${getWorkflowDecisionText(entry)} ${formatWorkflowPersonText(entry.actor, entry.email, entry.timestamp)}`,
         colSpan: 2,
       },
     ])),
@@ -845,8 +853,3 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
   const primaryPdfBuffer = pdf.output('arraybuffer');
   return mergeAndDownloadPdfWithAnnexures(primaryPdfBuffer, annexureFiles, baseUrl, authToken, fileName);
 };
-
-
-
-
-
