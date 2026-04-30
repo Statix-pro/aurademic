@@ -1837,8 +1837,12 @@ const proposalFilteredRows = useMemo(() => {
                       isSuperAdminDeleteMode &&
                       ['pending', 'approved', 'rejected', 'archived'].includes(statusCategory);
                     const proposedAmount = record.total_amount || record.total_budget || record.amount || 0;
-                    const approvedAmount = record.approved_total_amount || record.approved_amount || null;
-                    const showApprovedAmount = approvedAmount !== null && approvedAmount !== undefined && approvedAmount !== 0;
+                    const rawApprovedAmount = Number(record.approved_total_amount ?? record.approved_amount ?? 0);
+                    const approvedAmount =
+                      isApproved && rawApprovedAmount <= 0
+                        ? proposedAmount
+                        : rawApprovedAmount;
+                    const showApprovedAmount = isApproved || approvedAmount > 0;
                     const proposalRef = getRecordProposalRef(record);
                     
                     // Get tag based on beneficiary type
