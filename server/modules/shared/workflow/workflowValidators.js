@@ -203,5 +203,9 @@ export const isSuperAdminActor = (actor = {}) => {
 
 export const normalizePermissionSet = (actor = {}) => {
   const permissions = Array.isArray(actor.permissions) ? actor.permissions : [];
-  return new Set(permissions.map((permission) => normalizeText(permission)).filter(Boolean));
+  return new Set(
+    permissions
+      .map((permission) => normalizeText(permission).toLowerCase())
+      .filter(Boolean)
+  );
 };

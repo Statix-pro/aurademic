@@ -66,13 +66,15 @@ const EXPENDITURE_WORKFLOW_PERMISSIONS = [
 
 const canAccessExpenditureWorkflow = permissionMiddleware(EXPENDITURE_WORKFLOW_PERMISSIONS);
 const canAccessExpenditureWorkflowForAdmins = (req, res, next) => {
-  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  const roles = Array.isArray(req.user?.roles)
+    ? req.user.roles
+    : (req.user?.roles ? [req.user.roles] : (req.user?.role ? [req.user.role] : []));
   const normalizedRoles = roles.map((role) => String(role || '').trim().toLowerCase());
   const isWorkflowRole = normalizedRoles.some((role) =>
     ['admin', 'hod', 'coordinator', 'dof', 'principal', 'entity_approver'].includes(role)
   );
 
-  if (Boolean(req.user?.isAdmin || req.user?.is_admin) || isWorkflowRole) {
+  if (Boolean(req.user?.isAdmin || req.user?.is_admin || req.user?.is_super_admin || req.user?.isSuperAdmin) || isWorkflowRole) {
     return next();
   }
 

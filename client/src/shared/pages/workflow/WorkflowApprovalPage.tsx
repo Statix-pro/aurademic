@@ -81,6 +81,110 @@ const FINANCE_COORDINATOR_BENEFICIARY_OPTIONS = [
   'Institution',
 ];
 
+const resolvePreferredStageByRoles = (roles: string[], permitted: string[]) => {
+  const permittedSet = new Set(permitted.map((stage) => String(stage || '').trim().toLowerCase()));
+  if (!permittedSet.size) return '';
+
+  if (roles.includes('super_admin')) {
+    if (permittedSet.has('level1')) return 'level1';
+    return permitted[0] || '';
+  }
+
+  if (roles.includes('dof') && permittedSet.has('dof')) return 'dof';
+  if (roles.includes('principal') && permittedSet.has('principal')) return 'principal';
+  if ((roles.includes('hod') || roles.includes('coordinator') || roles.includes('entity_approver')) && permittedSet.has('level1')) {
+    return 'level1';
+  }
+
+  return permitted[0] || '';
+};
+
+const resolvePreferredTabKey = (
+  tabs: WorkflowStageTab[],
+  roles: string[],
+  fallbackStage = ''
+) => {
+  if (!tabs.length) return '';
+
+  const normalizedRoles = roles.map((role) => String(role || '').trim().toLowerCase());
+  const normalizedFallbackStage = String(fallbackStage || '').trim().toLowerCase();
+
+  const pickByStage = (stage: string) =>
+    tabs.find((tab) => String(tab.stage || '').trim().toLowerCase() === stage) || null;
+
+  if (normalizedRoles.includes('dof')) {
+    const dofTab = pickByStage('dof');
+    if (dofTab) return dofTab.key;
+  }
+
+  if (normalizedRoles.includes('principal')) {
+    const principalTab = pickByStage('principal');
+    if (principalTab) return principalTab.key;
+  }
+
+  if (normalizedRoles.some((role) => ['hod', 'coordinator', 'entity_approver'].includes(role))) {
+    const level1Tab = pickByStage('level1');
+    if (level1Tab) return level1Tab.key;
+  }
+
+  if (normalizedFallbackStage) {
+    const fallbackTab = pickByStage(normalizedFallbackStage);
+    if (fallbackTab) return fallbackTab.key;
+  }
+
+  return tabs[0].key;
+};
+
+const getNormalizedUserRoles = (user: any): string[] => {
+  const extractRoleToken = (value: any): string => {
+    if (typeof value === 'string') return value.trim();
+    if (value && typeof value === 'object') {
+      const candidates = [value.role, value.role_code, value.roleCode, value.code, value.name, value.value];
+      for (const candidate of candidates) {
+        const normalized = String(candidate || '').trim();
+        if (normalized) return normalized;
+      }
+    }
+    return '';
+  };
+
+  const roleTokens: string[] = [];
+  if (Array.isArray(user?.roles)) {
+    roleTokens.push(...user.roles.map((role: any) => extractRoleToken(role)).filter(Boolean));
+  } else if (user?.roles) {
+    roleTokens.push(extractRoleToken(user.roles));
+  }
+  if (user?.role) {
+    roleTokens.push(extractRoleToken(user.role));
+  }
+  return Array.from(new Set(roleTokens.map((role) => role.toLowerCase()).filter(Boolean)));
+};
+
+const getNormalizedUserPermissions = (user: any): string[] => {
+  const extractPermissionToken = (value: any): string => {
+    if (typeof value === 'string') return value.trim();
+    if (value && typeof value === 'object') {
+      const candidates = [value.permission, value.permission_key, value.permissionKey, value.code, value.name, value.value];
+      for (const candidate of candidates) {
+        const normalized = String(candidate || '').trim();
+        if (normalized) return normalized;
+      }
+    }
+    return '';
+  };
+
+  const permissionTokens: string[] = [];
+  if (Array.isArray(user?.permissions)) {
+    permissionTokens.push(...user.permissions.map((permission: any) => extractPermissionToken(permission)).filter(Boolean));
+  } else if (user?.permissions) {
+    permissionTokens.push(extractPermissionToken(user.permissions));
+  }
+  if (user?.permission) {
+    permissionTokens.push(extractPermissionToken(user.permission));
+  }
+  return Array.from(new Set(permissionTokens.map((permission) => permission.toLowerCase()).filter(Boolean)));
+};
+
 const getSecondaryFilterValue = (record: Record<string, any>, beneficiaryType: string) => {
   const normalizedType = String(beneficiaryType || '').trim().toLowerCase();
 
@@ -375,6 +479,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [deleteId, setDeleteId] = useState<number | string | null>(null);
   const [deleteRef, setDeleteRef] = useState<string>('');
   const [deleteCountdown, setDeleteCountdown] = useState<number>(5);
+  const [proposalTypeFilter, setProposalTypeFilter] = useState<'all' | 'advance' | 'expenditure' | 'settlement'>('all');
 
   const closeAlert = useCallback(() => {
     setAlertConfig((prev) => ({
@@ -623,22 +728,59 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [amountFilter, setAmountFilter] = useState<FinanceAmountFilter>('');
   const [activeStageTabKey, setActiveStageTabKey] = useState<string>('');
 
-  const permittedStages = useMemo(() => meta?.permittedStages || [], [meta]);
+  const permittedStages = useMemo(() => {
+  const fromMeta = Array.isArray(meta?.permittedStages) ? meta.permittedStages : [];
+  if (fromMeta.length > 0) return fromMeta;
+
+  const roles = getNormalizedUserRoles(user);
+  const permissions = getNormalizedUserPermissions(user);
+
+  if (meta?.isSuperAdmin || roles.includes('super_admin')) {
+    return ['level1', 'dof', 'principal'];
+  }
+
+  const fallback = new Set<string>();
+
+  // Role‑based access (module‑agnostic)
+  if (roles.some((role) => ['hod', 'coordinator', 'entity_approver'].includes(role))) {
+    fallback.add('level1');
+  }
+  if (roles.includes('dof')) {
+    fallback.add('dof');
+  }
+  if (roles.includes('principal')) {
+    fallback.add('principal');
+  }
+
+  // Permission‑based access:
+  // For expenditure, also accept finance.workflow.* permissions
+  const permissionModuleKeys =
+    config.moduleKey === 'expenditure' ? ['expenditure', 'finance'] : [config.moduleKey];
+
+  const hasPermissionForStage = (stageKey: string) =>
+    permissionModuleKeys.some((mk) =>
+      permissions.includes(`${mk}.workflow.${stageKey}`)
+    );
+
+  if (hasPermissionForStage('level1')) {
+    fallback.add('level1');
+  }
+  if (hasPermissionForStage('dof')) {
+    fallback.add('dof');
+  }
+  if (hasPermissionForStage('principal')) {
+    fallback.add('principal');
+  }
+
+  return Array.from(fallback);
+}, [config.moduleKey, meta?.isSuperAdmin, meta?.permittedStages, user]);
+  
   const enableLevel1RoleTabs = Boolean(config.enableLevel1RoleTabs);
   const enableSuperAdminAllProposals = Boolean(config.enableSuperAdminAllProposals);
   const enableSecondaryFilter = Boolean(config.enableSecondaryFilter);
-  const isExpenditureWorkflowAdminRole = useMemo(() => {
-    const roleTokens = Array.isArray(user?.roles) ? user.roles : [];
-    return roleTokens.some((role) => {
-      const normalized = String(role || '').trim().toLowerCase();
-      return ['admin', 'hod', 'coordinator', 'dof', 'principal', 'entity_approver'].includes(normalized);
-    });
-  }, [user?.roles]);
 
   const stageTabs = useMemo<WorkflowStageTab[]>(() => {
-    const roleTokens = Array.isArray(user?.roles) ? user.roles : [];
-    const normalizedRoles = roleTokens.map((role) => String(role || '').trim().toLowerCase());
-    const isAdminViewer = meta?.isSuperAdmin || Boolean(user?.is_admin) || isExpenditureWorkflowAdminRole;
+    const normalizedRoles = getNormalizedUserRoles(user);
     const tabs: WorkflowStageTab[] = permittedStages.flatMap<WorkflowStageTab>((stage) => {
       const normalizedStage = String(stage || '').trim().toLowerCase();
       if (enableLevel1RoleTabs && normalizedStage === 'level1') {
@@ -677,7 +819,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       ];
     });
 
-    if (enableSuperAdminAllProposals && isAdminViewer && permittedStages.length > 0) {
+    if (enableSuperAdminAllProposals && meta?.isSuperAdmin && permittedStages.length > 0) {
       tabs.push({
         key: `${config.moduleKey}-all-proposals`,
         stage: tabs[0]?.stage || String(permittedStages[0] || '').trim().toLowerCase() || 'level1',
@@ -692,11 +834,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     config.stageLabels,
     enableLevel1RoleTabs,
     enableSuperAdminAllProposals,
-    isExpenditureWorkflowAdminRole,
     meta?.isSuperAdmin,
     permittedStages,
-    user?.is_admin,
-    user?.roles,
+    user,
   ]);
 
   const activeWorkflowTab = useMemo(
@@ -803,7 +943,23 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }, []);
 
   const getRecordCurrentStage = useCallback((record: Record<string, any>) => {
-    return String(record.workflow_state?.currentStage || record.workflow_stage || '').toLowerCase();
+    const fromState =
+      record.workflow_state?.currentStage ||
+      record.workflow_state?.stage ||
+      record.workflow_state?.current_stage;
+    const fromRecord = record.workflow_stage || record.currentStage || record.current_stage;
+    const normalized = String(fromState || fromRecord || '').trim().toLowerCase();
+
+    if (normalized) {
+      return normalized;
+    }
+
+    const status = String(record.workflow_status || record.status || '').trim().toLowerCase();
+    if (['level1', 'hod', 'coordinator', 'ithead', 'dof', 'principal'].includes(status)) {
+      return status;
+    }
+
+    return '';
   }, []);
 
   const getRecordStageDecision = useCallback((record: Record<string, any>) => {
@@ -821,7 +977,43 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     return String(record.workflow_state?.lastDecision || record.lastDecision || '').toLowerCase();
   }, []);
 
-  // Enhanced approved status detection for current stage
+  const applyWorkflowDecisionLocally = useCallback(
+    (recordId: number | string, decision: WorkflowDecision, nextStage?: string | null) => {
+      const normalizedNextStage = String(nextStage || '').trim().toLowerCase();
+      setRows((prev) =>
+        prev.map((row) => {
+          const currentId = getRecordId(row);
+          if (String(currentId) !== String(recordId)) return row;
+
+          const currentWorkflowState =
+            row.workflow_state && typeof row.workflow_state === 'object' && !Array.isArray(row.workflow_state)
+              ? row.workflow_state
+              : {};
+
+          const nextStatus =
+            decision === 'approved'
+              ? (normalizedNextStage ? 'in_progress' : 'completed')
+              : decision;
+
+          return {
+            ...row,
+            workflow_state: {
+              ...currentWorkflowState,
+              currentStage: normalizedNextStage || currentWorkflowState.currentStage || null,
+              status: nextStatus,
+              lastDecision: decision,
+              updatedAt: new Date().toISOString(),
+            },
+            workflow_stage: normalizedNextStage || row.workflow_stage,
+            workflow_status: nextStatus,
+            workflow_stage_decision: decision,
+          };
+        })
+      );
+    },
+    [getRecordId]
+  );
+
   const isApprovedForCurrentStage = useCallback(
     (record: Record<string, any>) => {
       const status = String(record.workflow_status || record.status || '').toLowerCase();
@@ -857,6 +1049,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     if (token.includes('rejected') || workflowDecision === 'rejected') return 'rejected';
     if (token.includes('returned') || token.includes('return') || workflowDecision === 'returned') return 'returned';
 
+    if (currentStage && activeStageKey && currentStage === activeStageKey) {
+      return 'pending';
+    }
+
     // For requests actively in-progress, treat as pending to prevent stale
     // historical stage decisions (e.g. old "approved"/"returned" from a previous
     // cycle) from overriding fresh resubmission cycles.
@@ -872,7 +1068,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     if (workflowDecision === 'resubmitted') return 'pending';
 
-    if (token.includes('completed') || token.includes('approved')) return 'approved';
+    if (token.includes('completed')) return 'approved';
+
+    if (token === 'approved' || token === 'principal_approved') return 'approved';
+
+    if (token.includes('approved') && currentStage) return 'pending';
+
+    if (token.includes('approved')) return 'approved';
 
     if (stageDecision.includes('rejected')) return 'rejected';
     if (stageDecision.includes('returned') || stageDecision.includes('return')) return 'returned';
@@ -900,14 +1102,22 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     if (response?.data) {
       const payload: WorkflowMeta = response.data;
       setMeta(payload);
-      const initialStage = Array.isArray(payload.permittedStages) ? payload.permittedStages[0] : '';
+      const normalizedRoles = getNormalizedUserRoles(user);
+      const permitted = Array.isArray(payload.permittedStages) ? payload.permittedStages : [];
+      const initialStage = resolvePreferredStageByRoles(normalizedRoles, permitted);
       setActiveStage((prev) => prev || initialStage || '');
+      if (!initialStage) {
+        setLoading(false);
+      }
       return;
     }
 
     setMeta(null);
     setActiveStage('');
-  }, [getMetaEndpoint]);
+    setRows([]);
+    setTotalRows(0);
+    setLoading(false);
+  }, [getMetaEndpoint, user]);
 
   const loadQueue = useCallback(
     async (stage: string, requestedPage = 1) => {
@@ -986,11 +1196,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     async (nextStage: string | null | undefined) => {
       const normalizedNextStage = String(nextStage || '').toLowerCase();
       if (!normalizedNextStage) {
-        return;
+        return false;
       }
 
       if (permittedStages.length > 0 && !permittedStages.includes(normalizedNextStage)) {
-        return;
+        return false;
       }
 
       const matchingTabs = stageTabs.filter((tab) => tab.stage === normalizedNextStage);
@@ -1005,6 +1215,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       setActiveStage(normalizedNextStage);
       setPage(1);
       await loadQueue(normalizedNextStage, 1);
+      return true;
     },
     [activeStageTabKey, loadQueue, permittedStages, stageTabs]
   );
@@ -1068,10 +1279,12 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     const activeTab = stageTabs.find((tab) => tab.key === activeStageTabKey);
     if (!activeTab) {
-      const firstTab = stageTabs[0];
-      setActiveStageTabKey(firstTab.key);
-      if (firstTab.stage !== activeStage) {
-        setActiveStage(firstTab.stage);
+      const normalizedRoles = getNormalizedUserRoles(user);
+      const preferredTabKey = resolvePreferredTabKey(stageTabs, normalizedRoles, activeStage);
+      const preferredTab = stageTabs.find((tab) => tab.key === preferredTabKey) || stageTabs[0];
+      setActiveStageTabKey(preferredTab.key);
+      if (preferredTab.stage !== activeStage) {
+        setActiveStage(preferredTab.stage);
       }
       return;
     }
@@ -1079,7 +1292,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     if (activeTab.stage !== activeStage) {
       setActiveStage(activeTab.stage);
     }
-  }, [activeStage, activeStageTabKey, stageTabs]);
+  }, [activeStage, activeStageTabKey, stageTabs, user]);
 
   useEffect(() => {
     if (!filteredBeneficiaryOptions.includes(beneficiaryFilter)) {
@@ -1118,22 +1331,27 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         decision: 'approved',
       });
 
-      if (response?.status === 'success' || response?.success || response?.data?.success) {
-        const nextStage = String(
-          response?.data?.currentState?.currentStage ||
-          response?.data?.currentState?.stage ||
-          response?.data?.workflow_state?.currentStage ||
-          ''
-        ).toLowerCase();
+	      if (response?.status === 'success' || response?.success || response?.data?.success) {
+	        const nextStage = String(
+	          response?.data?.currentState?.currentStage ||
+	          response?.data?.currentState?.stage ||
+	          response?.data?.workflow_state?.currentStage ||
+	          ''
+	        ).toLowerCase();
 
-        if (nextStage && nextStage !== activeStage) {
-          setStatusFilter('pending');
-          await switchToWorkflowStage(nextStage);
-        } else {
-          await loadQueue(activeStage, page);
-        }
-        return;
-      }
+          applyWorkflowDecisionLocally(recordId, 'approved', nextStage);
+
+	        if (nextStage && nextStage !== activeStage) {
+	          setStatusFilter('pending');
+	          const switched = await switchToWorkflowStage(nextStage);
+            if (!switched) {
+              await loadQueue(activeStage, page);
+            }
+	        } else {
+	          await loadQueue(activeStage, page);
+	        }
+	        return;
+	      }
 
       showAlert(response?.message || response?.data?.message || 'Failed to approve', 'error');
     } catch (approvalError: any) {
@@ -1256,23 +1474,28 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         feedback: comment,
       });
 
-      if (response?.status === 'success' || response?.success || response?.data?.success) {
-        closeActionPopup();
-        const nextStage = String(
-          response?.data?.currentState?.currentStage ||
-          response?.data?.currentState?.stage ||
-          response?.data?.workflow_state?.currentStage ||
-          ''
-        ).toLowerCase();
+	      if (response?.status === 'success' || response?.success || response?.data?.success) {
+	        closeActionPopup();
+	        const nextStage = String(
+	          response?.data?.currentState?.currentStage ||
+	          response?.data?.currentState?.stage ||
+	          response?.data?.workflow_state?.currentStage ||
+	          ''
+	        ).toLowerCase();
 
-        if (nextStage && nextStage !== activeStage) {
-          setStatusFilter('pending');
-          await switchToWorkflowStage(nextStage);
-        } else {
-          await loadQueue(activeStage, page);
-        }
-        return;
-      } else {
+          applyWorkflowDecisionLocally(actionId, actionType === "return" ? "returned" : "rejected", nextStage);
+
+	        if (nextStage && nextStage !== activeStage) {
+	          setStatusFilter('pending');
+	          const switched = await switchToWorkflowStage(nextStage);
+            if (!switched) {
+              await loadQueue(activeStage, page);
+            }
+	        } else {
+	          await loadQueue(activeStage, page);
+	        }
+	        return;
+	      } else {
        showAlert(response?.message || response?.data?.message || `Failed to ${actionType}`, 'error');
       }
     } catch (approvalError: any) {
@@ -1341,7 +1564,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
     return 'hod';
   }
-
+ 
   const stageScopedRows = useMemo(() => {
     const activeLevel1Role = activeWorkflowTab?.level1Role || null;
 
@@ -1605,7 +1828,79 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       column.key !== 'workflow_stage'
     );
   }, [config.columns]);
+const getProposalType = (record: any) => {
+  const rawType = String(
+    record?.proposal_type ||
+    record?.request_type ||
+    record?.expenditure_type ||
+    record?.type ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
 
+  if (rawType.includes('advance 2') || rawType.includes('advance2')) {
+    return 'advance2';
+  }
+
+  if (rawType.includes('advance')) {
+    return 'advance1';
+  }
+
+  if (rawType.includes('settlement')) {
+    return 'settlement';
+  }
+
+  if (rawType.includes('expenditure')) {
+    return 'expenditure';
+  }
+
+  return 'unknown';
+};
+
+const getProposalBadge = (record: any) => {
+  const type = getProposalType(record);
+
+  switch (type) {
+    case 'advance1':
+    case 'advance2':
+      return { label: 'A', className: 'fw-proposal-badge fw-proposal-badge--advance' };
+    case 'expenditure':
+      return { label: 'E', className: 'fw-proposal-badge fw-proposal-badge--expenditure' };
+    case 'settlement':
+      return { label: 'S', className: 'fw-proposal-badge fw-proposal-badge--settlement' };
+    default:
+      return { label: '', className: '' };
+  }
+};
+
+const proposalFilteredRows = useMemo(() => {
+  if (config.moduleKey !== 'expenditure') {
+    return filteredRows;
+  }
+
+  if (proposalTypeFilter === 'all') {
+    return filteredRows;
+  }
+
+  return filteredRows.filter((record) => {
+    const type = getProposalType(record);
+
+    if (proposalTypeFilter === 'advance') {
+      return type === 'advance1' || type === 'advance2';
+    }
+
+    if (proposalTypeFilter === 'expenditure') {
+      return type === 'expenditure';
+    }
+
+    if (proposalTypeFilter === 'settlement') {
+      return type === 'settlement';
+    }
+
+    return true;
+  });
+}, [filteredRows, config.moduleKey, proposalTypeFilter]);
   return (
     <>
       <input
@@ -1643,7 +1938,41 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                 ))}
               </div>
             )}
+            {config.moduleKey === 'expenditure' && (
+              <div className="fw-proposal-filter-bar">
+                <button
+                  type="button"
+                  className={`fw-proposal-filter-btn ${proposalTypeFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => setProposalTypeFilter('all')}
+                >
+                  All
+                </button>
 
+                <button
+                  type="button"
+                  className={`fw-proposal-filter-btn fw-proposal-filter-btn--advance ${proposalTypeFilter === 'advance' ? 'active' : ''}`}
+                  onClick={() => setProposalTypeFilter('advance')}
+                >
+                  A
+                </button>
+
+                <button
+                  type="button"
+                  className={`fw-proposal-filter-btn fw-proposal-filter-btn--expenditure ${proposalTypeFilter === 'expenditure' ? 'active' : ''}`}
+                  onClick={() => setProposalTypeFilter('expenditure')}
+                >
+                  E
+                </button>
+
+                <button
+                  type="button"
+                  className={`fw-proposal-filter-btn fw-proposal-filter-btn--settlement ${proposalTypeFilter === 'settlement' ? 'active' : ''}`}
+                  onClick={() => setProposalTypeFilter('settlement')}
+                >
+                  S
+                </button>
+              </div>
+            )}
             <div className="fw-header-actions">
               {config.moduleKey === 'finance' && (
                 <div className="fw-amount-filters" role="group" aria-label="Amount filter shortcuts">
@@ -1802,7 +2131,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             ) : (
               <>
                 <div className="fw-cards-container">
-                  {filteredRows.map((record, rowIndex) => {
+                  {proposalFilteredRows.map((record, rowIndex) => {
                     const recordId = getRecordId(record) ?? `row-${rowIndex}`;
                     const timelineKey = String(recordId);
                     const statusCategory = resolveStatusCategory(record);
@@ -1821,9 +2150,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                     const isSuperAdminReturnAllowed =
                       isSuperAdminDeleteMode &&
                       ['pending', 'approved', 'rejected', 'archived'].includes(statusCategory);
-                    const proposedAmount = getWorkflowProposedAmount(record);
-                    const approvedAmount = record.approved_total_amount || record.approved_amount || null;
-                    const showApprovedAmount = approvedAmount !== null && approvedAmount !== undefined && approvedAmount !== 0;
+                    const proposedAmount = record.total_amount || record.total_budget || record.amount || 0;
+                    const rawApprovedAmount = Number(record.approved_total_amount ?? record.approved_amount ?? 0);
+                    const approvedAmount =
+                      isApproved && rawApprovedAmount <= 0
+                        ? proposedAmount
+                        : rawApprovedAmount;
+                    const showApprovedAmount = isApproved || approvedAmount > 0;
                     const proposalRef = getRecordProposalRef(record);
                     const principalDocument = getWorkflowPrincipalDocument(record);
                     const principalDocumentUrl = getWorkflowPrincipalDocumentUrl(record);
@@ -1855,13 +2188,32 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                         >
                           <div className="fw-topbar">
                             <div className="fw-topbar-left">
-                              <span className="fw-id">{proposalRef}</span>
-                              <h5 className="fw-name">
-                                {record.applicant_name || record.user_name || record.faculty_name || 'Unknown'}
-                              </h5>
-                              {/* Tag Pill - Display based on beneficiary type */}
-                              {tag && tag.trim() !== '' && (
-                                <span className="fw-tag-pill">{tag}</span>
+                              {config.moduleKey === 'expenditure' ? (
+                                <>
+                                  <h5 className="fw-name">
+                                    {record.applicant_name || record.user_name || record.faculty_name || 'Unknown'}
+                                  </h5>
+                                  {tag && tag.trim() !== '' && (
+                                    <span className="fw-tag-pill">{tag}</span>
+                                  )}
+                                  {(() => {
+                                    const badge = getProposalBadge(record);
+                                    return badge.label ? (
+                                      <span className={badge.className}>{badge.label}</span>
+                                    ) : null;
+                                  })()}
+                                  <span className="fw-id">{proposalRef}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="fw-id">{proposalRef}</span>
+                                  <h5 className="fw-name">
+                                    {record.applicant_name || record.user_name || record.faculty_name || 'Unknown'}
+                                  </h5>
+                                  {tag && tag.trim() !== '' && (
+                                    <span className="fw-tag-pill">{tag}</span>
+                                  )}
+                                </>
                               )}
                             </div>
 

@@ -87,15 +87,33 @@ const filterEntriesForCurrentCycle = (entries, record) => {
   });
 };
 
-const resolveActor = (req) => ({
-  id: req.user?.id,
-  userId: req.user?.id,
-  email: req.user?.email,
-  role: Array.isArray(req.user?.roles) ? req.user.roles[0] : null,
-  roles: Array.isArray(req.user?.roles) ? req.user.roles : [],
-  permissions: Array.isArray(req.user?.permissions) ? req.user.permissions : [],
-  isSuperAdmin: Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin),
-});
+const resolveActor = (req) => {
+  const roles = Array.isArray(req.user?.roles)
+    ? req.user.roles
+    : normalizeText(req.user?.roles)
+      ? [normalizeText(req.user?.roles)]
+      : normalizeText(req.user?.role)
+        ? [normalizeText(req.user?.role)]
+        : [];
+
+  const role = normalizeText(req.user?.role) || roles[0] || null;
+
+  const permissions = Array.isArray(req.user?.permissions)
+    ? req.user.permissions
+    : normalizeText(req.user?.permissions)
+      ? [normalizeText(req.user?.permissions)]
+      : [];
+
+  return {
+    id: req.user?.id,
+    userId: req.user?.id,
+    email: req.user?.email,
+    role,
+    roles,
+    permissions,
+    isSuperAdmin: Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin),
+  };
+};
 
 const sendError = (res, status, message) =>
   res.status(status).json({ status: 'error', message });

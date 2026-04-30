@@ -70,8 +70,8 @@ async function getWorkflowStateFromRecord(conn, moduleConfig, recordId, { forUpd
   const lockClause = forUpdate ? ' FOR UPDATE' : '';
   const [rows] = await conn.query(
     `SELECT \`${stateColumn}\` AS workflow_state
-       FROM \`${tableName}\`
-       WHERE \`${idColumn}\` = ?${lockClause}`,
+     FROM \`${tableName}\`
+     WHERE \`${idColumn}\` = ?${lockClause}`,
     [normalizedRecordId]
   );
 
@@ -91,10 +91,10 @@ async function resolveEntityTypeCodeFromContext(conn, context = {}) {
 
   const [rows] = await conn.query(
     `SELECT met.code
-       FROM master_entities me
-       JOIN master_entity_types met ON met.id = me.entity_type_id
-      WHERE me.id = ?
-      LIMIT 1`,
+     FROM master_entities me
+     JOIN master_entity_types met ON met.id = me.entity_type_id
+     WHERE me.id = ?
+     LIMIT 1`,
     [beneficiaryEntityId]
   );
 
@@ -112,27 +112,27 @@ async function resolveFlowConfig(conn, { moduleKey, beneficiaryType, entityTypeC
 
   const [rows] = await conn.query(
     `SELECT id, module_key, beneficiary_type, entity_type_code, flow
-       FROM approval_flow_config
-      WHERE is_active = 1
-        AND LOWER(TRIM(module_key)) IN (?, '*')
-        AND LOWER(TRIM(beneficiary_type)) IN (?, '*')
-        AND (
-          (? IS NULL AND entity_type_code IS NULL)
-          OR (? IS NOT NULL AND (
-              UPPER(TRIM(entity_type_code)) = ?
-              OR entity_type_code IS NULL
-          ))
-        )
-      ORDER BY
-        CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END,
-        CASE WHEN LOWER(TRIM(beneficiary_type)) = ? THEN 0 ELSE 1 END,
-        CASE
-          WHEN ? IS NOT NULL AND UPPER(TRIM(entity_type_code)) = ? THEN 0
-          WHEN entity_type_code IS NULL THEN 1
-          ELSE 2
-        END,
-        id ASC
-      LIMIT 1`,
+     FROM approval_flow_config
+     WHERE is_active = 1
+       AND LOWER(TRIM(module_key)) IN (?, '*')
+       AND LOWER(TRIM(beneficiary_type)) IN (?, '*')
+       AND (
+         (? IS NULL AND entity_type_code IS NULL)
+         OR (? IS NOT NULL AND (
+           UPPER(TRIM(entity_type_code)) = ?
+           OR entity_type_code IS NULL
+         ))
+       )
+     ORDER BY
+       CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END,
+       CASE WHEN LOWER(TRIM(beneficiary_type)) = ? THEN 0 ELSE 1 END,
+       CASE
+         WHEN ? IS NOT NULL AND UPPER(TRIM(entity_type_code)) = ? THEN 0
+         WHEN entity_type_code IS NULL THEN 1
+         ELSE 2
+       END,
+       id ASC
+     LIMIT 1`,
     [
       normalizedModuleKey,
       normalizedBeneficiaryType,
@@ -159,12 +159,12 @@ async function resolveStagePolicy(conn, { moduleKey, stageKey }) {
 
   const [rows] = await conn.query(
     `SELECT module_key, stage_key, scope_type, meta
-       FROM workflow_stage_policies
-      WHERE is_active = 1
-        AND LOWER(TRIM(stage_key)) = ?
-        AND LOWER(TRIM(module_key)) IN (?, '*')
-      ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END
-      LIMIT 1`,
+     FROM workflow_stage_policies
+     WHERE is_active = 1
+       AND LOWER(TRIM(stage_key)) = ?
+       AND LOWER(TRIM(module_key)) IN (?, '*')
+     ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END
+     LIMIT 1`,
     [normalizedStageKey, normalizedModuleKey, normalizedModuleKey]
   );
 
@@ -338,38 +338,87 @@ const computeNextWorkflowState = ({ state, decision, feedback }) => {
 };
 
 const assertDecisionPermission = ({ moduleKey, currentStage, actor }) => {
+  const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
+  const normalizedStageKey = normalizeText(currentStage).toLowerCase();
+
+  // Super admin: always allowed
   if (isSuperAdminActor(actor)) {
     return;
   }
 
-  if (normalizeText(moduleKey).toLowerCase() === 'expenditure' && canAccessExpenditureStageByRole(actor, currentStage)) {
+  // Role-based access (hod / coordinator / dof / principal)
+  if (canAccessStageByRole({ moduleKey: normalizedModuleKey, actor, stageKey: normalizedStageKey })) {
     return;
   }
 
   const permissionSet = normalizePermissionSet(actor);
-  const requiredPermission = `${moduleKey}.workflow.${currentStage}`;
 
-  if (!permissionSet.has(requiredPermission)) {
+  // For expenditure, also accept finance.workflow.* permissions
+  const permissionModuleKeys =
+    normalizedModuleKey === 'expenditure'
+      ? ['expenditure', 'finance']
+      : [normalizedModuleKey];
+
+  const hasPermission = permissionModuleKeys.some((mk) =>
+    permissionSet.has(`${mk}.workflow.${normalizedStageKey}`)
+  );
+
+  if (!hasPermission) {
     throw new WorkflowError(
-      `Insufficient permission for stage: ${currentStage}`,
+      `Insufficient permission for stage: ${normalizedStageKey}`,
       403,
       'WORKFLOW_PERMISSION_DENIED'
     );
   }
 };
 
-const normalizeActorPayload = (actor = {}) => ({
-  userId: toPositiveInt(actor?.userId || actor?.id),
-  email: normalizeText(actor?.email).toLowerCase() || null,
-  role: normalizeText(actor?.role).toLowerCase() || null,
-  roles: Array.isArray(actor?.roles) ? actor.roles : [],
-  permissions: Array.isArray(actor?.permissions) ? actor.permissions : [],
-  isSuperAdmin: Boolean(actor?.isSuperAdmin || actor?.is_super_admin),
-});
+const extractToken = (value) => {
+  if (typeof value === 'string') return normalizeText(value);
+  if (value && typeof value === 'object') {
+    const candidates = [
+      value.role,
+      value.role_code,
+      value.roleCode,
+      value.permission,
+      value.permission_key,
+      value.permissionKey,
+      value.code,
+      value.name,
+      value.value,
+    ];
+    for (const candidate of candidates) {
+      const normalized = normalizeText(candidate);
+      if (normalized) return normalized;
+    }
+  }
+  return '';
+};
+
+const normalizeTokenList = (value) => {
+  const list = Array.isArray(value) ? value : [value];
+  return list.map((item) => extractToken(item)).filter(Boolean);
+};
+
+const normalizeActorPayload = (actor = {}) => {
+  const roles = normalizeTokenList(actor?.roles);
+  const role = normalizeText(actor?.role).toLowerCase() || null;
+  if (role && !roles.some((item) => normalizeText(item).toLowerCase() === role)) {
+    roles.push(role);
+  }
+
+  return {
+    userId: toPositiveInt(actor?.userId || actor?.id),
+    email: normalizeText(actor?.email).toLowerCase() || null,
+    role,
+    roles,
+    permissions: normalizeTokenList(actor?.permissions),
+    isSuperAdmin: Boolean(actor?.isSuperAdmin || actor?.is_super_admin),
+  };
+};
 
 const getNormalizedActorRoles = (actor = {}) =>
   (Array.isArray(actor?.roles) ? actor.roles : [])
-    .map((role) => normalizeText(role).toLowerCase())
+    .map((role) => extractToken(role).toLowerCase())
     .filter(Boolean);
 
 const canAccessExpenditureStageByRole = (actor = {}, stageKey = '') => {
@@ -387,10 +436,6 @@ const canAccessExpenditureStageByRole = (actor = {}, stageKey = '') => {
     return false;
   }
 
-  if (roles.includes('admin')) {
-    return true;
-  }
-
   if (normalizedStage === 'level1') {
     return roles.some((role) => ['hod', 'coordinator', 'entity_approver'].includes(role));
   }
@@ -404,6 +449,33 @@ const canAccessExpenditureStageByRole = (actor = {}, stageKey = '') => {
   }
 
   return false;
+};
+
+const canAccessStageByRole = ({ moduleKey, actor = {}, stageKey = '' }) => {
+  const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
+  const normalizedStage = normalizeText(stageKey).toLowerCase();
+  if (!normalizedModuleKey || !normalizedStage) {
+    return false;
+  }
+
+  if (normalizedStage === 'level1') {
+    const roles = getNormalizedActorRoles(actor);
+    return roles.some((role) => ['hod', 'coordinator', 'entity_approver'].includes(role));
+  }
+
+  if (normalizedStage === 'dof') {
+    const roles = getNormalizedActorRoles(actor);
+    return roles.includes('dof');
+  }
+
+  if (normalizedStage === 'principal') {
+    const roles = getNormalizedActorRoles(actor);
+    return roles.includes('principal');
+  }
+
+  return normalizedModuleKey === 'expenditure'
+    ? canAccessExpenditureStageByRole(actor, normalizedStage)
+    : false;
 };
 
 export async function startWorkflow({ moduleKey, recordId, metadata = {} }) {
@@ -442,6 +514,13 @@ export async function startWorkflow({ moduleKey, recordId, metadata = {} }) {
     if (financeMeta && typeof financeMeta === 'object' && !Array.isArray(financeMeta)) {
       initialState.financeMeta = {
         ...financeMeta,
+      };
+    }
+
+    const expenditureMeta = normalizedMeta?.moduleMeta?.expenditureMeta;
+    if (expenditureMeta && typeof expenditureMeta === 'object' && !Array.isArray(expenditureMeta)) {
+      initialState.expenditureMeta = {
+        ...expenditureMeta,
       };
     }
 
@@ -671,17 +750,17 @@ export async function getWorkflowMetadata({ moduleKey, actor }) {
     db.query(
       `SELECT flow
          FROM approval_flow_config
-        WHERE is_active = 1
-          AND LOWER(TRIM(module_key)) IN (?, '*')
-        ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END, id ASC`,
+         WHERE is_active = 1
+           AND LOWER(TRIM(module_key)) IN (?, '*')
+         ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END, id ASC`,
       [normalizedModuleKey, normalizedModuleKey]
     ),
     db.query(
       `SELECT stage_key
          FROM workflow_stage_policies
-        WHERE is_active = 1
-          AND LOWER(TRIM(module_key)) IN (?, '*')
-        ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END, id ASC`,
+         WHERE is_active = 1
+           AND LOWER(TRIM(module_key)) IN (?, '*')
+         ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END, id ASC`,
       [normalizedModuleKey, normalizedModuleKey]
     ),
   ]);
@@ -728,12 +807,18 @@ export async function getWorkflowMetadata({ moduleKey, actor }) {
   }
 
   const allStageKeys = orderedStages;
-  const permittedStageKeys = isSuperAdminActor(normalizedActor)
+  let permittedStageKeys = isSuperAdminActor(normalizedActor)
     ? allStageKeys
     : allStageKeys.filter((stageKey) =>
         permissionSet.has(`${normalizedModuleKey}.workflow.${stageKey}`) ||
-        (normalizedModuleKey === 'expenditure' && canAccessExpenditureStageByRole(normalizedActor, stageKey))
+        canAccessStageByRole({ moduleKey: normalizedModuleKey, actor: normalizedActor, stageKey })
       );
+
+  if (!permittedStageKeys.length) {
+    permittedStageKeys = allStageKeys.filter((stageKey) =>
+      canAccessStageByRole({ moduleKey: normalizedModuleKey, actor: normalizedActor, stageKey })
+    );
+  }
 
   return {
     moduleKey: normalizedModuleKey,

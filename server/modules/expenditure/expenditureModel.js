@@ -338,10 +338,6 @@ function validateWorkflowRowFlow(requestType, rowHistory = [], {
   const hasSettlement = rowHistory.some((row) => row.requestType === 'Settlement');
   const hasExpenditure = rowHistory.some((row) => row.requestType === 'Expenditure');
 
-  const totalAdvance = rowHistory.reduce((sum, row) => sum + row.advanceAmount, 0);
-  const totalSettlement = rowHistory.reduce((sum, row) => sum + row.settlementAmount, 0);
-  const outstandingAdvance = Math.max(0, toMoney(totalAdvance - totalSettlement));
-
   if (requestType === 'Expenditure') {
     if (hasAdvance || hasSettlement) {
       throw new Error('Advance flow already exists for this row. Create a new row for expenditure.');
@@ -380,11 +376,6 @@ function validateWorkflowRowFlow(requestType, rowHistory = [], {
     }
     if (requestedSettlement <= 0) {
       throw new Error('Settlement amount must be greater than 0');
-    }
-    if (requestedSettlement > outstandingAdvance) {
-      throw new Error(
-        `Settlement amount ${requestedSettlement.toFixed(2)} exceeds outstanding advance ${outstandingAdvance.toFixed(2)}.`,
-      );
     }
   }
 }
@@ -1033,7 +1024,12 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        COALESCE(NULLIF(TRIM(emp.designation), ''), NULLIF(TRIM(fr.designation), ''), '') AS designation,
        COALESCE(NULLIF(TRIM(dept.name), ''), NULLIF(TRIM(fr.department), ''), '') AS department,
        COALESCE(NULLIF(TRIM(fr.beneficiary_value), ''), NULLIF(TRIM(fr.beneficiary_type), ''), 'Finance') AS finance_tag,
-       COALESCE(fr.approved_total_amount, fr.total_budget, 0) AS approved_amount,
+       COALESCE(
+         NULLIF(fr.approved_total_amount, 0),
+         NULLIF(fr.total_budget, 0),
+         NULLIF(fr.proposed_amount, 0),
+         0
+       ) AS approved_amount,
        COALESCE(SUM(
          CASE
            WHEN er.request_type = 'Advance'
@@ -1113,7 +1109,9 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
     cards: cardRows.map((row) => {
       const approvedAmount = toMoney(row.approved_amount);
       const advanceAmount = toMoney(row.advance_amount);
+      const settlementAmount = toMoney(row.settlement_amount);
       const expenditureAmount = toMoney(row.expenditure_amount);
+      const effectiveUsageAmount = settlementAmount > 0 ? settlementAmount : advanceAmount;
       return {
         finance_request_id: toPositiveInt(row.finance_request_id),
         request_ref: normalizeText(row.request_ref),
@@ -1124,8 +1122,8 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
         approved_amount: approvedAmount,
         advance_amount: advanceAmount,
         expenditure_amount: expenditureAmount,
-        settlement_amount: toMoney(row.settlement_amount),
-        balance_amount: Math.max(0, approvedAmount - advanceAmount - expenditureAmount),
+        settlement_amount: settlementAmount,
+        balance_amount: Math.max(0, approvedAmount - effectiveUsageAmount - expenditureAmount),
         expenditure_request_count: Number(row.expenditure_request_count || 0),
       };
     }),
@@ -1171,7 +1169,12 @@ export async function getFinanceRequestContext(financeRequestId) {
        fr.beneficiary_value,
        fr.primary_head,
        fr.event_sub_head,
-       COALESCE(fr.approved_total_amount, fr.total_budget, 0) AS approved_amount
+       COALESCE(
+         NULLIF(fr.approved_total_amount, 0),
+         NULLIF(fr.total_budget, 0),
+         NULLIF(fr.proposed_amount, 0),
+         0
+       ) AS approved_amount
      FROM finance_requests fr
      LEFT JOIN finance_request_refs frr ON frr.finance_request_id = fr.id
      LEFT JOIN master_employees emp ON emp.id = fr.employee_id
@@ -1320,6 +1323,11 @@ const EXPENDITURE_SELECT = `
     er.settlement_total_amount,
     er.expenditure_total_amount,
     er.total_amount,
+    CASE
+      WHEN LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
+        THEN COALESCE(NULLIF(er.approved_total_amount, 0), NULLIF(er.total_amount, 0), 0)
+      ELSE COALESCE(er.approved_total_amount, 0)
+    END AS approved_total_amount,
     er.debit_status,
     er.payment_debit_account,
     er.payment_mode,
@@ -1327,6 +1335,9 @@ const EXPENDITURE_SELECT = `
     er.payment_date,
     er.payment_status,
     er.overall_status,
+    er.workflow_state,
+    er.workflow_status,
+    er.workflow_stage,
     er.created_at,
     er.updated_at,
     sample_row.budget_line_id,
@@ -2359,9 +2370,15 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     }
 
     const [existingRows] = await conn.execute(
-      `SELECT id, finance_request_id, request_ref, request_type, workflow_state, overall_status
-         FROM expenditure_requests
-        WHERE id = ?
+      `SELECT er.id,
+              er.finance_request_id,
+              COALESCE(err.request_ref, CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))) AS request_ref,
+              er.request_type,
+              er.workflow_state,
+              er.overall_status
+         FROM expenditure_requests er
+    LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
+        WHERE er.id = ?
         LIMIT 1
         FOR UPDATE`,
       [normalizedExpenditureId],
@@ -2478,10 +2495,6 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       const hasAdvance = filteredWorkflowHistory.some((row) => row.requestType === 'Advance');
       const hasSettlement = filteredWorkflowHistory.some((row) => row.requestType === 'Settlement');
       const hasExpenditure = filteredWorkflowHistory.some((row) => row.requestType === 'Expenditure');
-      const totalAdvance = filteredWorkflowHistory.reduce((sum, row) => sum + row.advanceAmount, 0);
-      const totalSettlement = filteredWorkflowHistory.reduce((sum, row) => sum + row.settlementAmount, 0);
-      const outstandingAdvance = Math.max(0, toMoney(totalAdvance - totalSettlement));
-
       if (requestType === 'Advance') {
         if (hasExpenditure) {
           throw new Error('Expenditure already exists for this row. Create a new row for advance.');
@@ -2495,11 +2508,6 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
         }
         if (hasExpenditure) {
           throw new Error('Settlement cannot be created for an expenditure row.');
-        }
-        if (settlementTotal > outstandingAdvance) {
-          throw new Error(
-            `Settlement amount ${settlementTotal.toFixed(2)} exceeds outstanding advance ${outstandingAdvance.toFixed(2)}.`,
-          );
         }
       }
     }
@@ -2533,6 +2541,21 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       await getRemainingBudgetByLine(conn, financeRequestId, usageRows.map((row) => row.budgetLineId)),
     );
 
+    const normalizeSqlDate = (value) => {
+      const text = normalizeText(value);
+      if (!text) return null;
+
+      const date = new Date(text);
+      if (!Number.isNaN(date.getTime())) {
+        return date.toISOString().slice(0, 10);
+      }
+
+      const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+      return match ? match[1] : null;
+    };
+
+    const normalizedPaymentDate = normalizeSqlDate(paymentDetails.date || data.payment_date);
+
     const updatedEntry = {
       finance_request_id: financeRequestId,
       employee_id: employeeId || null,
@@ -2565,7 +2588,7 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       show_bulk_neft: (parseBoolean(data.show_bulk_neft) || Boolean(uploads.bulkNeftFile)) ? 1 : 0,
       payment_mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
       payment_ref_no: normalizeText(paymentDetails.refNo || data.payment_ref_no) || null,
-      payment_date: paymentDetails.date || data.payment_date || null,
+      payment_date: normalizedPaymentDate,
       payment_status: normalizePaymentStatus(paymentDetails.status || data.payment_status),
       payment_debit_account: normalizeText(paymentDetails.debitAccount || data.payment_debit_account) || null,
       advance_total_amount: toMoney(advanceTotal),
@@ -3100,33 +3123,39 @@ export async function updateExpenditureWorkflowSnapshot(recordId, newState, { tx
   const normalizedRecordId = toPositiveInt(recordId);
   if (!normalizedRecordId) return false;
 
-  const [existingRows] = await tx.query(
+  const source = tx?.execute ? tx : db;
+
+  const [existingRows] = await source.execute(
     `SELECT workflow_state
        FROM expenditure_requests
       WHERE id = ?
       LIMIT 1`,
     [normalizedRecordId],
   );
-  const previousState = normalizeWorkflowState(existingRows?.[0]?.workflow_state) || {};
+
+  const previousState = normalizeWorkflowState(
+    existingRows?.[0]?.workflow_state ?? existingRows?.[0]?.workflowstate
+  );
   const persistentState = getPersistentWorkflowRowState(previousState);
+
   const mergedState = {
     ...persistentState,
     ...(newState || {}),
   };
 
-  const workflowStatePayload = JSON.stringify(mergedState || null);
+  const workflowStatePayload = JSON.stringify(mergedState ?? null);
   const overallStatus = mapWorkflowStatusToOverallStatus(mergedState);
 
-  const [result] = await tx.query(
+  const [result] = await source.execute(
     `UPDATE expenditure_requests
         SET workflow_state = ?,
             overall_status = ?,
             updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`,
-    [workflowStatePayload, overallStatus, normalizedRecordId]
+    [workflowStatePayload, overallStatus, normalizedRecordId],
   );
 
-  return result.affectedRows > 0;
+  return Number(result?.affectedRows || 0) > 0;
 }
 
 export async function forceWorkflowTransition(recordId, {
@@ -3304,6 +3333,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
   const workflowStatus = normalizeText(filters.workflowStatus).toLowerCase() || 'in_progress';
   const isSuperAdmin = Boolean(filters.isSuperAdmin);
   const level1Role = normalizeText(filters.level1Role).toLowerCase();
+  const isAllStage = normalizedStage === 'all';
 
   const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
   const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
@@ -3314,6 +3344,8 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
 
   if (workflowStatus === 'all') {
     if (isSuperAdmin) {
+      whereParts.push('1 = 1');
+    } else if (isAllStage) {
       whereParts.push('1 = 1');
     } else {
       whereParts.push(
@@ -3332,8 +3364,12 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
       whereParams.push(normalizedStage, normalizedStage);
     }
   } else {
-    whereParts.push(`${WORKFLOW_STAGE_SQL_EXPR} = ?`, `${WORKFLOW_STATUS_SQL_EXPR} = ?`);
-    whereParams.push(normalizedStage, workflowStatus);
+    if (!isAllStage) {
+      whereParts.push(`${WORKFLOW_STAGE_SQL_EXPR} = ?`);
+      whereParams.push(normalizedStage);
+    }
+    whereParts.push(`${WORKFLOW_STATUS_SQL_EXPR} = ?`);
+    whereParams.push(workflowStatus);
   }
 
   const scopeFilters = filters.scopeFilters || {};
@@ -3384,6 +3420,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
     `SELECT
        er.id,
        COALESCE(err.request_ref, CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))) AS proposal_ref,
+       er.request_type,
        er.created_by,
        er.beneficiary_type,
        er.beneficiary_value,
@@ -3400,7 +3437,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
          FROM workflow_actions wa
          WHERE wa.module_key = 'expenditure'
            AND wa.record_id = er.id
-           AND LOWER(TRIM(wa.stage)) = ?
+           AND (? = 'all' OR LOWER(TRIM(wa.stage)) = ?)
          ORDER BY wa.decided_at DESC, wa.id DESC
          LIMIT 1
        ) AS workflow_stage_decision,
@@ -3417,7 +3454,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
      ${whereClause}
      ORDER BY er.created_at DESC
      LIMIT ? OFFSET ?`,
-    [normalizedStage, ...whereParams, limit, offset]
+    [normalizedStage, normalizedStage, ...whereParams, limit, offset]
   );
 
   return {

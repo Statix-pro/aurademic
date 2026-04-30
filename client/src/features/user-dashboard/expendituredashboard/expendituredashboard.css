@@ -51,6 +51,22 @@
   min-width: 0;
 }
 
+.expenditure-financial-year-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 170px;
+  flex: 0 0 auto;
+}
+
+.expenditure-financial-year-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #5b6f86;
+  letter-spacing: 0.02em;
+  padding-left: 2px;
+}
+
 .expenditure-search-wrap {
   position: relative;
   display: flex;
@@ -91,11 +107,11 @@
 
 /* Financial Year dropdown */
 .expenditure-financial-year {
-  height: 38px;
-  padding: 0 32px 0 12px;
+  height: 42px;
+  padding: 0 34px 0 14px;
   border: 1.5px solid #d1e3f3;
-  border-radius: 10px;
-  font-size: 14px;
+  border-radius: 12px;
+  font-size: 15px;
   font-weight: 600;
   color: #0069ab;
   background: #f0f7ff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpolyline points='1.5,1.5 6,5.5 10.5,1.5' stroke='%230069ab' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") no-repeat right 10px center;
@@ -465,6 +481,18 @@
   background: #edf5ff;
   border-color: #b9d8f5;
   transform: translateY(-1px);
+}
+
+.expenditure-demo-row__icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.expenditure-demo-row__icon-btn:disabled:hover {
+  background: #f8fbff;
+  border-color: #d7e3ef;
 }
 
 .expenditure-demo-row__icon-btn--danger {
@@ -996,6 +1024,15 @@
     margin-left: 0;
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .expenditure-header-right {
+    flex-wrap: wrap;
+  }
+
+  .expenditure-financial-year-wrap {
+    min-width: 0;
+    width: 100%;
   }
 
   .expenditure-demo-option {
