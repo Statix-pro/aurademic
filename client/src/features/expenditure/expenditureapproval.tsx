@@ -92,6 +92,20 @@ interface FinanceRequestContext {
   event_sub_head?: string;
   approved_amount?: number;
 }
+interface WorkflowStateSnapshot {
+  status?: string;
+  lastDecision?: string;
+  currentStage?: string;
+}
+interface BillFileRecord {
+  id?: number;
+  original_name?: string;
+  file_url?: string | null;
+  download_url?: string | null;
+  file_path?: string | null;
+  stored_name?: string | null;
+  mime_type?: string | null;
+}
 interface ApprovedBudgetOption {
   budgetLineId: number;
   budgetProposalId: number | null;
@@ -513,6 +527,26 @@ const normalizeWorkflowModule = (value: unknown): 'Advance' | 'Settlement' | 'Ex
   if (text === 'settlement') return 'Settlement';
   if (text === 'expenditure') return 'Expenditure';
   return null;
+};
+
+const resolveTagValue = (value: unknown, options: SelectOption[]) => {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return '';
+
+  const matched = options.find(
+    (option) => String(option.value ?? '').trim().toLowerCase() === normalized.toLowerCase(),
+  );
+
+  return matched?.value || normalized;
+};
+
+const resolveBillFileUrl = (file: BillFileRecord) => {
+  const rawUrl = String(file.file_url ?? file.download_url ?? file.file_path ?? '').trim();
+  if (!rawUrl) return '';
+  if (/^https?:\/\//i.test(rawUrl)) return rawUrl;
+
+  const baseUrl = authenticityUtility.getBaseURL();
+  return rawUrl.startsWith('/') ? `${baseUrl}${rawUrl}` : `${baseUrl}/${rawUrl}`;
 };
 
 const getSelectedOption = (
@@ -1805,6 +1839,7 @@ const ExpenditureApproval: React.FC = () => {
   const [resolvedFinanceRequestId, setResolvedFinanceRequestId] = useState<number | null>(
     financeRequestIdFromState,
   );
+  const [isReturnedWorkflowRequest, setIsReturnedWorkflowRequest] = useState<boolean>(false);
   const [financeApprovedAmount, setFinanceApprovedAmount] = useState<number>(financeApprovedAmountFromState);
   useEffect(() => {
     setResolvedFinanceRequestId(financeRequestIdFromState);
@@ -1845,7 +1880,7 @@ const ExpenditureApproval: React.FC = () => {
   const bulkNeftInputRef = useRef<HTMLInputElement>(null);
   const [bulkNeftFile, setBulkNeftFile] = useState<File | null>(null);
   const [uploadedPayeeBills, setUploadedPayeeBills] = useState<File[]>([]);
-  const [existingPayeeBills, setExistingPayeeBills] = useState<Array<{ id?: number; original_name?: string; file_url?: string | null }>>([]);
+  const [existingPayeeBills, setExistingPayeeBills] = useState<BillFileRecord[]>([]);
   const [remarks, setRemarks] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
@@ -1922,6 +1957,16 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
         setEventSubHead((prev) => prev || financeContext.event_sub_head || '');
         setCategoryType((prev) => prev || nextCategoryType);
         setCategoryItem((prev) => prev || financeContext.beneficiary_value || '');
+        setSelectedTag((prev) =>
+          prev ||
+          resolveTagValue(
+            (financeContext as FinanceRequestContext & Record<string, unknown>).budget_tag ??
+              (financeContext as FinanceRequestContext & Record<string, unknown>).budgetTag ??
+              (financeContext as FinanceRequestContext & Record<string, unknown>).tag ??
+              '',
+            tagOptions,
+          ),
+        );
       } catch (error) {
         if (!isCancelled) {
           console.error('Failed to load finance context for expenditure form:', error);
@@ -1939,6 +1984,7 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
   useEffect(() => {
     if (!submittedRequestIdFromState) {
       setExistingPayeeBills([]);
+      setIsReturnedWorkflowRequest(false);
       return;
     }
 
@@ -1957,6 +2003,31 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
 
         const record = response.data;
         setResolvedFinanceRequestId(parsePositiveIntLike(record.finance_request_id) ?? null);
+        const workflowState = (() => {
+          const rawState = record.workflow_state;
+          if (rawState && typeof rawState === 'object' && !Array.isArray(rawState)) {
+            return rawState as WorkflowStateSnapshot;
+          }
+
+          if (typeof rawState === 'string') {
+            try {
+              const parsed = JSON.parse(rawState) as WorkflowStateSnapshot;
+              return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+            } catch {
+              return null;
+            }
+          }
+
+          return null;
+        })();
+        const workflowStatus = String(
+          workflowState?.status ||
+            workflowState?.lastDecision ||
+            record.workflow_status ||
+            record.overall_status ||
+            '',
+        ).toLowerCase();
+        setIsReturnedWorkflowRequest(workflowStatus === 'returned');
         const toRowId = (suffix: string, index: number) => `${submittedRequestIdFromState}-${suffix}-${index}`;
 
         const mapAdvanceRows = Array.isArray(record.advance_rows)
@@ -2033,7 +2104,18 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
         setDescription(String(record.description || ''));
         setCategoryType(String(record.beneficiary_type || ''));
         setCategoryItem(String(record.beneficiary_value || ''));
-        setSelectedTag(String(record.budget_tag || ''));
+        setSelectedTag(
+          resolveTagValue(
+            record.budget_tag ??
+              record.budgettag ??
+              record.budgetTag ??
+              record.tag ??
+              record.finance_tag ??
+              record.financeTag ??
+              '',
+            tagOptions,
+          ),
+        );
         setPrimaryHead(String(record.primary_head || ''));
         setEventSubHead(String(record.event_sub_head || ''));
         setIsBudgetProposed(String(record.is_budget_proposed || ''));
@@ -2067,6 +2149,7 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
       } catch (error) {
         if (!isCancelled) {
           console.error('Failed to load submitted expenditure request:', error);
+          setIsReturnedWorkflowRequest(false);
         }
       }
     };
@@ -2076,7 +2159,8 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
     return () => {
       isCancelled = true;
     };
-  }, [submittedRequestIdFromState]);
+  }, [submittedRequestIdFromState, tagOptions]);
+
 
   useEffect(() => {
     let isCancelled = false;
@@ -2681,6 +2765,11 @@ const workflowRowRefFromState = (() => {
 
   const totalSettlementAmount = settlementRows.reduce((sum, row) => {
     const amount = Number(String(row.settlement || '').replace(/,/g, '').trim());
+    return sum + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+
+  const totalSettlementAdvanceAmount = settlementRows.reduce((sum, row) => {
+    const amount = Number(String(row.advance || '').replace(/,/g, '').trim());
     return sum + (Number.isFinite(amount) ? amount : 0);
   }, 0);
 
@@ -3799,44 +3888,80 @@ for (const [, group] of groupedExpenditureUsage) {
               </div>
             </div>
           </div>
-          <label className="payee-upload-label payee-footer-upload-label">
-            <span className="payee-upload-label-content">
-              <span className="payee-upload-label-text">Bills</span>
-              <Upload size={18} />
-            </span>
-            <input
-              type="file"
-              className="payee-upload-input"
-              multiple
-              onChange={handlePayeeBillUpload}
-            />
-          </label>
+          {!isReadOnlyView && (
+            <label className="payee-upload-label payee-footer-upload-label">
+              <span className="payee-upload-label-content">
+                <span className="payee-upload-label-text">Bills</span>
+                <Upload size={18} />
+              </span>
+              <input
+                type="file"
+                className="payee-upload-input"
+                multiple
+                onChange={handlePayeeBillUpload}
+              />
+            </label>
+          )}
         </div>
 
-        {uploadedPayeeBills.length > 0 && (
-          <div className="payee-uploaded-files">
+        {(existingPayeeBills.length > 0 || uploadedPayeeBills.length > 0) && (
+          <div className="payee-uploaded-files" style={{ marginTop: '14px', pointerEvents: 'auto' }}>
             <div className="payee-uploaded-files-header">
               <span>S.No</span>
               <span>Bills File</span>
               <span>Action</span>
             </div>
+            {existingPayeeBills.map((file, i) => {
+              const fileUrl = resolveBillFileUrl(file);
+              const displayName =
+                normalizeText(file.original_name || file.stored_name || file.file_path || `File ${i + 1}`);
+
+              return (
+                <div key={`existing-${file.id ?? i}`} className="payee-uploaded-file-row">
+                  <span className="payee-uploaded-file-index">{i + 1}</span>
+                  <span className="payee-uploaded-file-name" title={displayName}>
+                    {displayName}
+                  </span>
+                  <div className="payee-upload-actions">
+                    <button
+                      className="payee-upload-view-btn"
+                      disabled={!fileUrl}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (fileUrl) window.open(fileUrl, '_blank', 'noopener,noreferrer');
+                      }}
+                    >
+                      <Eye size={16} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
             {uploadedPayeeBills.map((file, i) => (
-              <div key={i} className="payee-uploaded-file-row">
-                <span className="payee-uploaded-file-index">{i + 1}</span>
+              <div key={`uploaded-${i}`} className="payee-uploaded-file-row">
+                <span className="payee-uploaded-file-index">{existingPayeeBills.length + i + 1}</span>
                 <span className="payee-uploaded-file-name" title={file.name}>{file.name}</span>
                 <div className="payee-upload-actions">
                   <button
                     className="payee-upload-view-btn"
-                    onClick={(e) => { e.preventDefault(); if (file) window.open(URL.createObjectURL(file), '_blank'); }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (file) window.open(URL.createObjectURL(file), '_blank', 'noopener,noreferrer');
+                    }}
                   >
                     <Eye size={16} />
                   </button>
-                  <button
-                    className="payee-upload-view-btn payee-upload-delete-btn"
-                    onClick={(e) => { e.preventDefault(); removePayeeBill(i); }}
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  {!isReadOnlyView && (
+                    <button
+                      className="payee-upload-view-btn payee-upload-delete-btn"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        removePayeeBill(i);
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -3926,7 +4051,71 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     );
   }
 };
- const handleSubmit = async (): Promise<void> => {
+  const getSettlementAdjustmentNotice = () => {
+    if (activeTab !== 'Settlement') {
+      return null;
+    }
+
+    const difference = Number((totalSettlementAmount - totalSettlementAdvanceAmount).toFixed(2));
+    if (difference === 0) {
+      return null;
+    }
+
+    if (difference < 0) {
+      const returnedAmount = Math.abs(difference);
+      return {
+        title: 'Settlement Adjustment',
+        message: (
+          <div style={{ lineHeight: 1.6 }}>
+            <div>
+              Settlement is Rs {returnedAmount.toLocaleString('en-IN', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })} less than the advance amount.
+            </div>
+            <div>
+              The returned amount will be added back to the balance.
+            </div>
+          </div>
+        ),
+      };
+    }
+
+    return {
+      title: 'Settlement Adjustment',
+      message: (
+        <div style={{ lineHeight: 1.6 }}>
+          <div>
+            Settlement is Rs {difference.toLocaleString('en-IN', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })} more than the advance amount.
+          </div>
+          <div>
+            The excess amount will be reduced from the balance.
+          </div>
+        </div>
+      ),
+    };
+  };
+
+  const getComputedBalanceAmount = () => {
+    if (activeTab === 'Settlement') {
+      return Math.max(0, financeApprovedAmount - totalSettlementAmount - totalExpenditureAmount);
+    }
+
+    if (activeTab === 'Advance') {
+      return Math.max(0, financeApprovedAmount - totalAdvanceAmount - totalExpenditureAmount);
+    }
+
+    if (activeTab === 'Expenditure') {
+      return Math.max(0, financeApprovedAmount - totalAdvanceAmount - totalExpenditureAmount);
+    }
+
+    return 0;
+  };
+
+  const performSubmit = async (): Promise<void> => {
   try {
     if (isReadOnlyView) {
       showAlert('This proposal is opened in view mode and cannot be submitted again.', 'warning');
@@ -4085,7 +4274,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       eventsubhead: eventSubHead,
       isbudgetproposed: isBudgetProposed,
       proposedamount: amountProposed || null,
-      balanceamount: balanceAmount || null,
+      balanceamount: getComputedBalanceAmount() || null,
       incometype: primaryIncomeRow?.incomeSource || null,
       incomestatus: primaryIncomeRow?.creditAccount || null,
       incomeamounttype: primaryIncomeRow?.contribution || null,
@@ -4139,6 +4328,26 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       return;
     }
 
+    const shouldResubmitAfterSave =
+      isEditingExistingRequest &&
+      Boolean(submittedRequestIdFromState) &&
+      isReturnedWorkflowRequest;
+
+    if (shouldResubmitAfterSave) {
+      const resubmitResult = (await authenticityUtility.post(
+        `/expenditure/${submittedRequestIdFromState}/resubmit`,
+        {},
+      )) as { status?: string; message?: string };
+
+      if (resubmitResult.status !== 'success') {
+        showAlert(
+          resubmitResult.message || 'Request updated, but resubmission failed',
+          'error',
+        );
+        return;
+      }
+    }
+
     const submittedAmount =
       activeTab === 'Advance'
         ? totalAdvanceAmount
@@ -4155,9 +4364,11 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       (location.state as { financeProposal?: { proposalId?: unknown } } | null)?.financeProposal?.proposalId || ''
     ).trim()}`;
     const moduleLabel = activeTab
-      ? `${activeTab} ${isEditingExistingRequest ? 'updated successfully.' : 'submitted successfully.'}`
+      ? shouldResubmitAfterSave
+        ? `${activeTab} resubmitted successfully.`
+        : `${activeTab} ${isEditingExistingRequest ? 'updated successfully.' : 'submitted successfully.'}`
       : isEditingExistingRequest
-        ? 'Updated successfully.'
+        ? (shouldResubmitAfterSave ? 'Resubmitted successfully.' : 'Updated successfully.')
         : 'Submitted successfully.';
     const requestLabel = savedRequestRef ? `Request Ref: ${savedRequestRef}` : '';
 
@@ -4213,6 +4424,27 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     showAlert(errorMessage, 'error');
   }
 };
+
+  const handleSubmit = async (): Promise<void> => {
+    const settlementNotice = getSettlementAdjustmentNotice();
+
+    if (settlementNotice) {
+      showAlert(
+        settlementNotice.message,
+        'warning',
+        settlementNotice.title,
+        true,
+        'Continue',
+        () => {
+          closeAlert();
+          void performSubmit();
+        },
+      );
+      return;
+    }
+
+    await performSubmit();
+  };
 
   const handleReset = (force = false): void => {
     const performReset = () => {
@@ -4280,6 +4512,15 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
 // Tag
 const [selectedTag, setSelectedTag] = useState<string>('');
+useEffect(() => {
+  if (!selectedTag) return;
+
+  const resolvedTag = resolveTagValue(selectedTag, tagOptions);
+  if (resolvedTag !== selectedTag) {
+    setSelectedTag(resolvedTag);
+  }
+}, [selectedTag, tagOptions]);
+
 const handleBeneficiarySearch = async (query: string) => {
   setBeneficiarySearchQuery(query);
   try {
@@ -4768,7 +5009,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
     >
 
 
-       (
+      
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
           <div className="ea-applicantCard">
 
@@ -5277,7 +5518,10 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         <CustomDropdown
           name="selectedTag"
           options={tagOptions}
-          value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
+          value={(() => {
+            const resolvedTag = resolveTagValue(selectedTag, tagOptions);
+            return resolvedTag ? { value: resolvedTag, label: resolvedTag } : null;
+          })()}
           onChange={(option) => {
             const selected = option as OptionType | null;
             setSelectedTag(selected?.value ? String(selected.value) : '');
@@ -6034,28 +6278,30 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
 
       {/* 3. Bills Uploaded Button */}
       <div className="payee-status-col payee-status-col-bills">
-        <label
-          className="payee-upload-label payee-status-upload-label"
-          style={{
-            margin: 0,
-            justifyContent: 'center',
-            display: 'flex',
-            alignItems: 'center',
-            width: '100%',
-            boxSizing: 'border-box',
-          }}
-        >
-          <span className="payee-upload-label-content">
-            <span className="payee-upload-label-text">Payment proof </span>
-            <Upload size={16} />
-          </span>
-          <input
-            type="file"
-            className="payee-upload-input"
-            multiple
-            onChange={handlePayeeBillUpload}
-          />
-        </label>
+        {!isReadOnlyView && (
+          <label
+            className="payee-upload-label payee-status-upload-label"
+            style={{
+              margin: 0,
+              justifyContent: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              boxSizing: 'border-box',
+            }}
+          >
+            <span className="payee-upload-label-content">
+              <span className="payee-upload-label-text">Payment proof </span>
+              <Upload size={16} />
+            </span>
+            <input
+              type="file"
+              className="payee-upload-input"
+              multiple
+              onChange={handlePayeeBillUpload}
+            />
+          </label>
+        )}
         {uploadedPayeeBills.length > 0 && (
           <div style={{ fontSize: '11px', color: '#2c7a4d', marginTop: '4px', textAlign: 'center' }}>
             {uploadedPayeeBills.length} file(s)

@@ -338,10 +338,6 @@ function validateWorkflowRowFlow(requestType, rowHistory = [], {
   const hasSettlement = rowHistory.some((row) => row.requestType === 'Settlement');
   const hasExpenditure = rowHistory.some((row) => row.requestType === 'Expenditure');
 
-  const totalAdvance = rowHistory.reduce((sum, row) => sum + row.advanceAmount, 0);
-  const totalSettlement = rowHistory.reduce((sum, row) => sum + row.settlementAmount, 0);
-  const outstandingAdvance = Math.max(0, toMoney(totalAdvance - totalSettlement));
-
   if (requestType === 'Expenditure') {
     if (hasAdvance || hasSettlement) {
       throw new Error('Advance flow already exists for this row. Create a new row for expenditure.');
@@ -380,11 +376,6 @@ function validateWorkflowRowFlow(requestType, rowHistory = [], {
     }
     if (requestedSettlement <= 0) {
       throw new Error('Settlement amount must be greater than 0');
-    }
-    if (requestedSettlement > outstandingAdvance) {
-      throw new Error(
-        `Settlement amount ${requestedSettlement.toFixed(2)} exceeds outstanding advance ${outstandingAdvance.toFixed(2)}.`,
-      );
     }
   }
 }
@@ -1033,7 +1024,12 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        COALESCE(NULLIF(TRIM(emp.designation), ''), NULLIF(TRIM(fr.designation), ''), '') AS designation,
        COALESCE(NULLIF(TRIM(dept.name), ''), NULLIF(TRIM(fr.department), ''), '') AS department,
        COALESCE(NULLIF(TRIM(fr.beneficiary_value), ''), NULLIF(TRIM(fr.beneficiary_type), ''), 'Finance') AS finance_tag,
-       COALESCE(fr.approved_total_amount, fr.total_budget, 0) AS approved_amount,
+       COALESCE(
+         NULLIF(fr.approved_total_amount, 0),
+         NULLIF(fr.total_budget, 0),
+         NULLIF(fr.proposed_amount, 0),
+         0
+       ) AS approved_amount,
        COALESCE(SUM(
          CASE
            WHEN er.request_type = 'Advance'
@@ -1113,7 +1109,9 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
     cards: cardRows.map((row) => {
       const approvedAmount = toMoney(row.approved_amount);
       const advanceAmount = toMoney(row.advance_amount);
+      const settlementAmount = toMoney(row.settlement_amount);
       const expenditureAmount = toMoney(row.expenditure_amount);
+      const effectiveUsageAmount = settlementAmount > 0 ? settlementAmount : advanceAmount;
       return {
         finance_request_id: toPositiveInt(row.finance_request_id),
         request_ref: normalizeText(row.request_ref),
@@ -1124,8 +1122,8 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
         approved_amount: approvedAmount,
         advance_amount: advanceAmount,
         expenditure_amount: expenditureAmount,
-        settlement_amount: toMoney(row.settlement_amount),
-        balance_amount: Math.max(0, approvedAmount - advanceAmount - expenditureAmount),
+        settlement_amount: settlementAmount,
+        balance_amount: Math.max(0, approvedAmount - effectiveUsageAmount - expenditureAmount),
         expenditure_request_count: Number(row.expenditure_request_count || 0),
       };
     }),
@@ -1171,7 +1169,12 @@ export async function getFinanceRequestContext(financeRequestId) {
        fr.beneficiary_value,
        fr.primary_head,
        fr.event_sub_head,
-       COALESCE(fr.approved_total_amount, fr.total_budget, 0) AS approved_amount
+       COALESCE(
+         NULLIF(fr.approved_total_amount, 0),
+         NULLIF(fr.total_budget, 0),
+         NULLIF(fr.proposed_amount, 0),
+         0
+       ) AS approved_amount
      FROM finance_requests fr
      LEFT JOIN finance_request_refs frr ON frr.finance_request_id = fr.id
      LEFT JOIN master_employees emp ON emp.id = fr.employee_id
@@ -1320,6 +1323,11 @@ const EXPENDITURE_SELECT = `
     er.settlement_total_amount,
     er.expenditure_total_amount,
     er.total_amount,
+    CASE
+      WHEN LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
+        THEN COALESCE(NULLIF(er.approved_total_amount, 0), NULLIF(er.total_amount, 0), 0)
+      ELSE COALESCE(er.approved_total_amount, 0)
+    END AS approved_total_amount,
     er.debit_status,
     er.payment_debit_account,
     er.payment_mode,
@@ -2487,10 +2495,6 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       const hasAdvance = filteredWorkflowHistory.some((row) => row.requestType === 'Advance');
       const hasSettlement = filteredWorkflowHistory.some((row) => row.requestType === 'Settlement');
       const hasExpenditure = filteredWorkflowHistory.some((row) => row.requestType === 'Expenditure');
-      const totalAdvance = filteredWorkflowHistory.reduce((sum, row) => sum + row.advanceAmount, 0);
-      const totalSettlement = filteredWorkflowHistory.reduce((sum, row) => sum + row.settlementAmount, 0);
-      const outstandingAdvance = Math.max(0, toMoney(totalAdvance - totalSettlement));
-
       if (requestType === 'Advance') {
         if (hasExpenditure) {
           throw new Error('Expenditure already exists for this row. Create a new row for advance.');
@@ -2504,11 +2508,6 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
         }
         if (hasExpenditure) {
           throw new Error('Settlement cannot be created for an expenditure row.');
-        }
-        if (settlementTotal > outstandingAdvance) {
-          throw new Error(
-            `Settlement amount ${settlementTotal.toFixed(2)} exceeds outstanding advance ${outstandingAdvance.toFixed(2)}.`,
-          );
         }
       }
     }

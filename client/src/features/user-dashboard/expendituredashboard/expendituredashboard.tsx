@@ -168,12 +168,14 @@ const getWorkflowApprovalLabel = (workflowState: Record<string, unknown> | null 
       workflowState?.overallStatus ??
       "",
   );
+  const lastDecision = normalizeText(workflowState?.lastDecision ?? "").toLowerCase();
   const currentStage = normalizeText(
     workflowState?.currentStage ??
       workflowState?.workflowStage ??
       "",
   ).toLowerCase();
 
+  if (lastDecision === "resubmitted") return "Resubmitted";
   if (status === "approved" || status === "completed") return "Approved";
   if (status === "rejected") return "Rejected";
   if (status === "returned") return "Returned";
@@ -276,21 +278,25 @@ const ExpenditureDashboard: React.FC = () => {
 
   const normalizedFinanceIdQuery = financeIdQuery.trim().toLowerCase();
 
-  const filteredData = useMemo(() => {
-    if (!normalizedFinanceIdQuery) return data;
+  const filteredProposalCards = useMemo(() => {
+    if (!normalizedFinanceIdQuery) return proposalCards;
 
-    return data.filter((item) => {
+    return proposalCards.filter((card) => {
       const searchValues = [
-        String(item.proposalref ?? ""),
-        String(item.financeid ?? ""),
-        String(item.id ?? ""),
+        String(card.financeRequestId ?? ""),
+        String(card.proposalId ?? ""),
       ]
         .join(" ")
         .toLowerCase();
 
       return searchValues.includes(normalizedFinanceIdQuery);
     });
-  }, [data, normalizedFinanceIdQuery]);
+  }, [proposalCards, normalizedFinanceIdQuery]);
+
+  const filteredData = useMemo(() => {
+    const visibleFinanceIds = new Set(filteredProposalCards.map((card) => card.financeRequestId));
+    return data.filter((item) => visibleFinanceIds.has(String(item.financeid ?? "")));
+  }, [data, filteredProposalCards]);
 
   const formatAmount = (amount: number) =>
     `Rs ${Number(amount || 0).toLocaleString("en-IN")}`;
@@ -306,7 +312,6 @@ const ExpenditureDashboard: React.FC = () => {
       "in_progress",
       "in progress",
       "returned",
-      "rejected",
       "draft",
     ].includes(normalized);
   };
@@ -428,65 +433,70 @@ const ExpenditureDashboard: React.FC = () => {
   };
 
   const getRowActions = (row: WorkflowRow) => {
-  const isCompleted = isWorkflowRowCompleted(row);
+    const isCompleted = isWorkflowRowCompleted(row);
+    const hasAdvance1 = Boolean(row.advanceRequestId);
+    const hasAdvance2 = Boolean(row.advanceRequestId2);
+    const hasSettlement = Boolean(row.settlementRequestId);
+    const showAdvance2 = (hasAdvance1 || hasAdvance2) && !hasSettlement;
+    const showSettlement = hasAdvance1 || hasAdvance2 || hasSettlement;
 
-  if (isCompleted) {
-    return [
-      {
-        label: "Advance",
-        module: "Advance" as const,
-        hidden: !Boolean(row.advanceRequestId),
-        submitted: Boolean(row.advanceRequestId),
-      },
-      {
-        label: "Advance2",
-        module: "Advance2" as const,
-        hidden: !Boolean(row.advanceRequestId2),
-        submitted: Boolean(row.advanceRequestId2),
-      },
-      {
-        label: "Settlement",
-        module: "Settlement" as const,
-        hidden: !Boolean(row.settlementRequestId),
-        submitted: Boolean(row.settlementRequestId),
-      },
-      {
-        label: "Expenditure",
-        module: "Expenditure" as const,
-        hidden: !Boolean(row.expenditureRequestId),
-        submitted: Boolean(row.expenditureRequestId),
-      },
-    ];
-  }
+    if (isCompleted) {
+      return [
+        {
+          label: "Advance",
+          module: "Advance" as const,
+          hidden: !hasAdvance1,
+          submitted: hasAdvance1,
+        },
+        {
+          label: "Advance2",
+          module: "Advance2" as const,
+          hidden: !hasAdvance2 || hasSettlement,
+          submitted: hasAdvance2,
+        },
+        {
+          label: "Settlement",
+          module: "Settlement" as const,
+          hidden: !hasSettlement,
+          submitted: hasSettlement,
+        },
+        {
+          label: "Expenditure",
+          module: "Expenditure" as const,
+          hidden: !Boolean(row.expenditureRequestId),
+          submitted: Boolean(row.expenditureRequestId),
+        },
+      ];
+    }
 
-  if (row.primaryChoice === "Advance") {
-    return [
-      {
-        label: "Advance",
-        module: "Advance" as const,
-        hidden: false,
-        submitted: Boolean(row.advanceRequestId),
-      },
-      {
-        label: "Advance2",
-        module: "Advance2" as const,
-        hidden: !Boolean(row.advanceRequestId || row.advanceRequestId2),
-        submitted: Boolean(row.advanceRequestId2),
-      },
-      {
-        label: "Settlement",
-        module: "Settlement" as const,
-        hidden: !Boolean(row.advanceRequestId || row.settlementRequestId),
-        submitted: Boolean(row.settlementRequestId),
-      },
-      {
-        label: "Expenditure",
-        module: "Expenditure" as const,
-        hidden: true,
-        submitted: Boolean(row.expenditureRequestId),
-      },
-    ];
-  }
+    if (row.primaryChoice === "Advance") {
+      return [
+        {
+          label: "Advance",
+          module: "Advance" as const,
+          hidden: false,
+          submitted: hasAdvance1,
+        },
+        {
+          label: "Advance2",
+          module: "Advance2" as const,
+          hidden: !showAdvance2,
+          submitted: hasAdvance2,
+        },
+        {
+          label: "Settlement",
+          module: "Settlement" as const,
+          hidden: !showSettlement,
+          submitted: hasSettlement,
+        },
+        {
+          label: "Expenditure",
+          module: "Expenditure" as const,
+          hidden: true,
+          submitted: Boolean(row.expenditureRequestId),
+        },
+      ];
+    }
 
   if (row.primaryChoice === "Expenditure") {
     return [
@@ -522,20 +532,20 @@ const ExpenditureDashboard: React.FC = () => {
       {
         label: "Advance",
         module: "Advance" as const,
-        hidden: !Boolean(row.advanceRequestId),
-        submitted: Boolean(row.advanceRequestId),
+        hidden: !hasAdvance1,
+        submitted: hasAdvance1,
       },
       {
         label: "Advance2",
         module: "Advance2" as const,
-        hidden: !Boolean(row.advanceRequestId2),
-        submitted: Boolean(row.advanceRequestId2),
+        hidden: !showAdvance2,
+        submitted: hasAdvance2,
       },
       {
         label: "Settlement",
         module: "Settlement" as const,
         hidden: false,
-        submitted: Boolean(row.settlementRequestId),
+        submitted: hasSettlement,
       },
       {
         label: "Expenditure",
@@ -1033,28 +1043,32 @@ const ExpenditureDashboard: React.FC = () => {
                   className="expenditure-search-input"
                   value={financeIdQuery}
                   onChange={(e) => setFinanceIdQuery(e.target.value)}
-                  placeholder="Search finance ID..."
-                  aria-label="Search finance ID"
+                  placeholder="Search finance/proposal ID..."
+                  aria-label="Search finance/proposal ID"
                 />
               </div>
 
-              <select
-                className="expenditure-financial-year"
-                value={financialYear}
-                onChange={(e) => setFinancialYear(e.target.value)}
-              >
-                {fyOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              <div className="expenditure-financial-year-wrap">
+                <span className="expenditure-financial-year-label">Financial Year</span>
+                <select
+                  className="expenditure-financial-year"
+                  value={financialYear}
+                  onChange={(e) => setFinancialYear(e.target.value)}
+                  aria-label="Select financial year"
+                >
+                  {fyOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
           <div className="expenditure-body">
             <div className="expenditure-demo-wrap">
-              {proposalCards.map((card) => {
+              {filteredProposalCards.map((card) => {
                 const isCardOpen = openCardId === card.financeRequestId;
                 const cardExpenditureAmount = Number(card.expenditureAmount || 0);
                 const cardBalanceAmount = Math.max(Number(card.balanceAmount || 0), 0);
@@ -1127,11 +1141,15 @@ const ExpenditureDashboard: React.FC = () => {
                                 const actions = getRowActions(row);
                                 const isLastRow = rows[rows.length - 1]?.id === row.id;
                                 const showAdvanceAmount = row.advanceAmount > 0;
+                                const showAdvance2Amount =
+                                  row.advanceAmount2 > 0 && !Boolean(row.settlementRequestId);
                                 const showExpenditureAmount = row.expenditureAmount > 0;
                                 const showSettlementAmount = row.settlementAmount > 0;
                                 const isCompleted = isWorkflowRowCompleted(row);
                                 const isActionLocked = isWorkflowActionLocked(row);
                                 const hasProposal = hasSubmittedProposal(row);
+                                const isReturnedRow = normalizeStatus(row.latestWorkflowStatus) === "returned";
+                                const isRejectedRow = normalizeStatus(row.latestWorkflowStatus) === "rejected";
                                 const canEditRow =
                                   hasProposal &&
                                   !isActionLocked &&
@@ -1225,8 +1243,7 @@ const ExpenditureDashboard: React.FC = () => {
                                             </button>
                                           )}
 
-                                          {/* Show Advance2 if it has amount */}
-                                          {row.advanceAmount2 !== undefined && row.advanceAmount2 > 0 && (
+                                          {showAdvance2Amount && (
                                             <button
                                               type="button"
                                               className="expenditure-demo-row__amount-chip expenditure-demo-row__amount-chip--button"
@@ -1388,7 +1405,7 @@ const ExpenditureDashboard: React.FC = () => {
                                       </div>
 
                                       <div className="expenditure-demo-row__actions">
-                                        {isLastRow && canAddRow && (
+                                        {!isReturnedRow && !isRejectedRow && isLastRow && canAddRow && (
                                           <button
                                             type="button"
                                             className="expenditure-demo-row__icon-btn"
@@ -1401,35 +1418,37 @@ const ExpenditureDashboard: React.FC = () => {
                                         )}
 
                                         {/* Hide delete button after approval/completion/archive */}
-                                        <button
-                                          type="button"
-                                          className="expenditure-demo-row__icon-btn expenditure-demo-row__icon-btn--danger"
-                                          disabled={
-                                            isActionLocked ||
-                                            row.latestWorkflowStatus === "approved" ||
-                                            row.latestWorkflowStatus === "completed" ||
-                                            row.latestWorkflowStatus === "archived"
-                                          }
-                                          onClick={() => {
-                                            if (
+                                        {!isReturnedRow && !isRejectedRow && (
+                                          <button
+                                            type="button"
+                                            className="expenditure-demo-row__icon-btn expenditure-demo-row__icon-btn--danger"
+                                            disabled={
                                               isActionLocked ||
                                               row.latestWorkflowStatus === "approved" ||
                                               row.latestWorkflowStatus === "completed" ||
                                               row.latestWorkflowStatus === "archived"
-                                            ) {
-                                              return;
                                             }
-                                            deleteWorkflowRow(card.financeRequestId, row);
-                                          }}
-                                          title={
-                                            isActionLocked
-                                              ? "Delete is disabled while approval is in progress"
-                                              : "Delete row"
-                                          }
-                                          aria-label="Delete workflow row"
-                                        >
-                                          <Trash2 size={14} />
-                                        </button>
+                                            onClick={() => {
+                                              if (
+                                                isActionLocked ||
+                                                row.latestWorkflowStatus === "approved" ||
+                                                row.latestWorkflowStatus === "completed" ||
+                                                row.latestWorkflowStatus === "archived"
+                                              ) {
+                                                return;
+                                              }
+                                              deleteWorkflowRow(card.financeRequestId, row);
+                                            }}
+                                            title={
+                                              isActionLocked
+                                                ? "Delete is disabled while approval is in progress"
+                                                : "Delete row"
+                                            }
+                                            aria-label="Delete workflow row"
+                                          >
+                                            <Trash2 size={14} />
+                                          </button>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -1570,11 +1589,11 @@ const ExpenditureDashboard: React.FC = () => {
               <div className="expenditure-state">Loading expenditure requests...</div>
             )}
 
-            {!loading && filteredData.length === 0 && (
+            {!loading && filteredProposalCards.length === 0 && (
               <div className="expenditure-state expenditure-state--empty">
                 <div style={{ color: "#6b7280", fontSize: "15px", marginTop: "10px" }}>
                   {financeIdQuery.trim()
-                    ? `No expenditure requests found for finance ID "${financeIdQuery.trim()}".`
+                    ? `No expenditure requests found for "${financeIdQuery.trim()}".`
                     : `No expenditure requests found for FY ${financialYear}.`}
                 </div>
               </div>
