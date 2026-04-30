@@ -4645,6 +4645,21 @@ const FinanceApproval: React.FC = () => {
             </span>
           );
         };
+
+        const getPreviewDecisionLabel = (entry: any): string => {
+          const label = String(entry?.label || '').trim();
+          if (label !== 'Approved') return `${label} by`;
+
+          const stageToken = String(entry?.stage || '').toLowerCase();
+          const actorToken = String(entry?.actor || '').toLowerCase();
+          const emailToken = String(entry?.email || '').toLowerCase();
+          const isPrincipalEntry =
+            stageToken.includes('principal') ||
+            actorToken.includes('principal') ||
+            emailToken.includes('principal@');
+
+          return isPrincipalEntry ? 'Approved by' : 'Recommended by';
+        };
         const previewTimelineRowStyle: CSSProperties = {
           padding: '8px 10px',
           fontSize: '14px',
@@ -4918,7 +4933,7 @@ const FinanceApproval: React.FC = () => {
                           borderBottom: index === approvalSteps.length - 1 ? 'none' : '1px solid #000',
                         }}
                       >
-                        <span style={previewTimelineLabelStyle}>{entry.label} by</span>
+                        <span style={previewTimelineLabelStyle}>{getPreviewDecisionLabel(entry)}</span>
                         <span
                           style={{
                             ...previewTimelineValueStyle,
