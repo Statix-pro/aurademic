@@ -14,9 +14,21 @@ const safeParseJSON = (value, fallback = null) => {
 };
 
 const normalizeText = (value) => String(value || '').trim();
+const normalizeSubHeadForLookup = (value) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return '';
+  if (!normalized.includes('::')) return normalized;
+  const parts = normalized.split('::');
+  if (parts[0] === 'sub' && parts.length >= 3) {
+    return normalizeText(parts.slice(2).join('::'));
+  }
+  return normalizeText(parts[1]);
+};
 const FINANCE_ANNEXURE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'finance-annexures');
 const FINANCE_ANNEXURE_PUBLIC_PREFIX = '/uploads/finance-annexures/';
 const FINANCE_ANNEXURE_STORED_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
+const FINANCE_PRINCIPAL_DOC_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'finance-principal-documents');
+const FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX = '/uploads/finance-principal-documents/';
 const FINANCE_REQUEST_COLUMN_EXISTS_CACHE = new Map();
 const FINANCE_BUDGET_BREAKUP_COLUMN_EXISTS_CACHE = new Map();
 const FINANCE_INCOME_ROWS_COLUMN_EXISTS_CACHE = new Map();
@@ -123,6 +135,7 @@ const normalizeBeneficiaryTypeForStorage = (beneficiaryType) => {
   if (normalized === 'centre') return 'Centre';
   if (normalized === 'cell') return 'Cell';
   if (normalized === 'club') return 'Club';
+  if (normalized === 'section') return 'Section';
   if (normalized === 'institution') return 'Institution';
 
   return 'Institution';
@@ -239,6 +252,7 @@ const normalizeBudgetRows = (rows = []) => {
     const rowNo = index + 1;
     const budgetHead = normalizeText(row?.budget_head || row?.category);
     const subHead = normalizeText(row?.sub_head || row?.head);
+    const headOnlyMatch = Boolean(row?.head_only_match);
     const parsedAmount = Number(row?.amount);
     const hasAvailableSnapshot =
       row?.available_amount_snapshot !== undefined && row?.available_amount_snapshot !== null;
@@ -251,7 +265,7 @@ const normalizeBudgetRows = (rows = []) => {
       rowErrors.push(`Row ${rowNo}: budget head is required`);
     }
 
-    if (!subHead) {
+    if (!subHead && !headOnlyMatch) {
       rowErrors.push(`Row ${rowNo}: sub head is required`);
     }
 
@@ -273,7 +287,7 @@ const normalizeBudgetRows = (rows = []) => {
     normalizedRows.push({
       budget_head: budgetHead,
       sub_head: subHead,
-      head_only_match: Boolean(row?.head_only_match),
+      head_only_match: headOnlyMatch,
       amount: toMoney(parsedAmount),
       budget_line_id: toPositiveInt(row?.budget_line_id),
       budget_proposal_id: toPositiveInt(row?.budget_proposal_id),
@@ -291,17 +305,6 @@ const normalizeBudgetRows = (rows = []) => {
   }
 
   return normalizedRows;
-};
-
-const applyBudgetLookupOverrides = (rows = [], financeData = {}) => {
-  const primaryHead = normalizeText(financeData?.primary_head);
-  const eventSubHead = normalizeText(financeData?.event_sub_head);
-
-  return rows.map((row) => ({
-    ...row,
-    budget_head: primaryHead || row.budget_head,
-    sub_head: eventSubHead || row.sub_head,
-  }));
 };
 
 const normalizeIncomeRows = (rows = []) =>
@@ -361,6 +364,126 @@ const cleanupOrphanFinanceAnnexureFiles = async (storedNames = []) => {
   }
 };
 
+
+
+const normalizeFinancePrincipalDocument = (row = {}) => ({
+  id: toPositiveInt(row.id),
+  finance_id: toPositiveInt(row.finance_id),
+  original_name: normalizeText(row.original_name),
+  stored_name: normalizeText(row.stored_name),
+  file_path: normalizeText(row.file_path),
+  mime_type: normalizeText(row.mime_type),
+  file_size: Number.isFinite(Number(row.file_size)) ? Number(row.file_size) : null,
+  uploaded_at: row.created_at || null,
+});
+
+const getFinancePrincipalDocumentsByFinanceIds = async (financeIds = [], { tx = db } = {}) => {
+  const normalizedFinanceIds = Array.from(
+    new Set(
+      (Array.isArray(financeIds) ? financeIds : [])
+        .map((value) => toPositiveInt(value))
+        .filter(Boolean)
+    )
+  );
+
+  if (!normalizedFinanceIds.length) {
+    return new Map();
+  }
+
+
+
+  const placeholders = normalizedFinanceIds.map(() => '?').join(', ');
+  try {
+    const [rows] = await tx.query(
+      `SELECT id, finance_id, original_name, stored_name, file_path, mime_type, file_size, created_at
+         FROM finance_request_annexures
+        WHERE annexure_type = 'principal_approval'
+          AND finance_id IN (${placeholders})`,
+      normalizedFinanceIds
+    );
+
+    const map = new Map();
+    for (const row of rows || []) {
+      map.set(toPositiveInt(row.finance_id), normalizeFinancePrincipalDocument(row));
+    }
+    return map;
+  } catch (error) {
+    if (error?.code === 'ER_NO_SUCH_TABLE') {
+      return new Map();
+    }
+    throw error;
+  }
+};
+
+const getFinancePrincipalDocumentByFinanceId = async (financeId, { tx = db } = {}) => {
+  const normalizedFinanceId = toPositiveInt(financeId);
+  if (!normalizedFinanceId) {
+    return null;
+  }
+
+  const map = await getFinancePrincipalDocumentsByFinanceIds([normalizedFinanceId], { tx });
+  return map.get(normalizedFinanceId) || null;
+};
+
+const setFinancePrincipalDocument = async (financeId, document, { tx = db } = {}) => {
+  const normalizedFinanceId = toPositiveInt(financeId);
+  if (!normalizedFinanceId) {
+    return null;
+  }
+
+
+
+  await tx.query(
+    `DELETE FROM finance_request_annexures WHERE annexure_type = 'principal_approval' AND finance_id = ?`,
+    [normalizedFinanceId]
+  );
+
+  if (!document || !normalizeText(document.file_path)) {
+    return null;
+  }
+
+  const [result] = await tx.query(
+    `INSERT INTO finance_request_annexures
+       (finance_id, annexure_type, original_name, stored_name, file_path, mime_type, file_size)
+     VALUES (?, 'principal_approval', ?, ?, ?, ?, ?)`,
+    [
+      normalizedFinanceId,
+      normalizeText(document.original_name) || null,
+      normalizeText(document.stored_name) || null,
+      normalizeText(document.file_path),
+      normalizeText(document.mime_type) || null,
+      Number.isFinite(Number(document.file_size)) ? Number(document.file_size) : null,
+    ]
+  );
+
+  return {
+    id: toPositiveInt(result.insertId),
+    finance_id: normalizedFinanceId,
+    original_name: normalizeText(document.original_name) || null,
+    stored_name: normalizeText(document.stored_name) || null,
+    file_path: normalizeText(document.file_path),
+    mime_type: normalizeText(document.mime_type) || null,
+    file_size: Number.isFinite(Number(document.file_size)) ? Number(document.file_size) : null,
+    uploaded_at: new Date().toISOString(),
+  };
+};
+
+const deleteFinancePrincipalDocumentByFinanceId = async (financeId, { tx = db } = {}) => {
+  const normalizedFinanceId = toPositiveInt(financeId);
+  if (!normalizedFinanceId) {
+    return false;
+  }
+
+
+
+  const [result] = await tx.query(
+    `DELETE FROM finance_request_annexures WHERE annexure_type = 'principal_approval' AND finance_id = ?`,
+    [normalizedFinanceId]
+  );
+
+  return Number(result?.affectedRows || 0) > 0;
+};
+
 const getLegacyAnnexureFromRecord = (record = {}) => {
   const filePath = normalizeText(record?.annexure_file_path);
   const storedName = normalizeText(record?.annexure_storage_name);
@@ -393,48 +516,18 @@ const normalizeToken = (value) =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 
-const normalizeWords = (value) =>
-  normalizeText(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .split(' ')
-    .map((token) => token.trim())
-    .filter(Boolean);
+const normalizeStringForMatch = (value) =>
+  normalizeText(value).toLowerCase().trim();
 
 const isLooseTextMatch = (leftValue, rightValue) => {
-  const leftToken = normalizeToken(leftValue);
-  const rightToken = normalizeToken(rightValue);
+  const leftNormalized = normalizeStringForMatch(leftValue);
+  const rightNormalized = normalizeStringForMatch(rightValue);
 
-  if (!leftToken || !rightToken) {
+  if (!leftNormalized || !rightNormalized) {
     return false;
   }
 
-  if (leftToken === rightToken) {
-    return true;
-  }
-
-  if (leftToken.includes(rightToken) || rightToken.includes(leftToken)) {
-    return true;
-  }
-
-  const leftWords = new Set(normalizeWords(leftValue));
-  const rightWords = new Set(normalizeWords(rightValue));
-
-  if (!leftWords.size || !rightWords.size) {
-    return false;
-  }
-
-  let commonCount = 0;
-  for (const token of leftWords) {
-    if (rightWords.has(token)) {
-      commonCount += 1;
-    }
-  }
-
-  const unionSize = new Set([...leftWords, ...rightWords]).size;
-  const similarity = unionSize > 0 ? commonCount / unionSize : 0;
-
-  return commonCount >= 1 && similarity >= 0.5;
+  return leftNormalized === rightNormalized;
 };
 
 // Fallback only: preferred behavior is to pass head_only_match from frontend
@@ -798,7 +891,26 @@ const resolveBudgetAvailabilityScope = async (conn, scope = {}) => {
   const providedDepartmentId = toPositiveInt(scope?.departmentId || scope?.department_id);
   const providedEntityId = toPositiveInt(scope?.beneficiaryEntityId || scope?.beneficiary_entity_id);
 
-  if (!beneficiaryTypeToken || isIndividualBeneficiaryType(beneficiaryTypeToken)) {
+  if (!beneficiaryTypeToken) {
+    return {
+      mode: 'user',
+      beneficiaryType,
+      departmentId: null,
+      entityId: null,
+    };
+  }
+
+  if (isIndividualBeneficiaryType(beneficiaryTypeToken)) {
+    if (beneficiaryValue) {
+      return {
+        mode: 'individual',
+        beneficiaryType,
+        beneficiaryValue,
+        departmentId: null,
+        entityId: null,
+      };
+    }
+
     return {
       mode: 'user',
       beneficiaryType,
@@ -968,7 +1080,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   const normalizedUserId = toPositiveInt(userId);
   const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
   const normalizedBudgetHead = normalizeText(budgetHead);
-  const normalizedSubHead = normalizeText(subHead);
+  const normalizedSubHead = normalizeSubHeadForLookup(subHead);
   const normalizedPreferredBudgetLineId = toPositiveInt(preferredBudgetLineId);
   const normalizedExcludeFinanceId = toPositiveInt(excludeFinanceId);
   const applyHeadOnlyMatch = Boolean(headOnlyMatch) || shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead);
@@ -979,7 +1091,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
     beneficiaryEntityId,
   });
 
-  let ownerScopeSql = `
+  const userOwnerScopeSql = `
       (
         (? IS NOT NULL AND bp.user_id = ?)
         OR (? <> '' AND LOWER(TRIM(bp.user_email)) = ?)
@@ -994,7 +1106,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
             )
         )
       )`;
-  let ownerScopeParams = [
+  const userOwnerScopeParams = [
     normalizedUserId,
     normalizedUserId,
     normalizedUserEmail,
@@ -1004,6 +1116,8 @@ const resolveBudgetAvailabilityForUser = async (conn, {
     normalizedUserEmail,
     normalizedUserEmail,
   ];
+  let ownerScopeSql = userOwnerScopeSql;
+  let ownerScopeParams = [...userOwnerScopeParams];
 
   if (scope.mode === 'department') {
     ownerScopeSql = `bp.department_id = ? AND LOWER(TRIM(bp.beneficiary_type)) = 'department'`;
@@ -1016,6 +1130,32 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   } else if (scope.mode === 'institution') {
     ownerScopeSql = `LOWER(TRIM(bp.beneficiary_type)) = 'institution'`;
     ownerScopeParams = [];
+  } else if (scope.mode === 'individual') {
+    const scopeTypeToken = normalizeBeneficiaryTypeToken(scope?.beneficiaryType);
+    const hasScopedType = scopeTypeToken === 'faculty' || scopeTypeToken === 'staff';
+    const scopeValue = normalizeText(scope?.beneficiaryValue).toLowerCase();
+    const beneficiaryTypeSql = hasScopedType
+      ? `LOWER(TRIM(bp.beneficiary_type)) = ?`
+      : `LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff')`;
+
+    ownerScopeSql = `
+      (
+        ${beneficiaryTypeSql}
+        AND (
+          (? <> '' AND LOWER(TRIM(bp.beneficiary_value)) = ?)
+          OR (
+            (? <> '' AND (bp.beneficiary_value IS NULL OR TRIM(bp.beneficiary_value) = ''))
+            AND (${userOwnerScopeSql})
+          )
+        )
+      )`;
+    ownerScopeParams = [
+      ...(hasScopedType ? [scopeTypeToken] : []),
+      scopeValue,
+      scopeValue,
+      scopeValue,
+      ...userOwnerScopeParams,
+    ];
   }
 
   if (
@@ -1040,6 +1180,8 @@ const resolveBudgetAvailabilityForUser = async (conn, {
        bpl.sub_head,
        bp.proposal_ref,
        bp.fiscal_year,
+       bp.beneficiary_type,
+       bp.beneficiary_value,
        COALESCE(bpl.approved_line_total, bpl.line_total, 0) AS budget_line_amount,
        COALESCE(fblu.consumed_amount, 0) AS consumed_amount,
        COALESCE(frbr.reserved_amount, 0) AS reserved_amount,
@@ -1095,6 +1237,8 @@ const resolveBudgetAvailabilityForUser = async (conn, {
       budgetProposalId: toPositiveInt(row.budget_proposal_id),
       proposalRef: normalizeText(row.proposal_ref) || null,
       fiscalYear: row.fiscal_year ? Number(row.fiscal_year) : null,
+      proposalBeneficiaryType: normalizeText(row.beneficiary_type),
+      proposalBeneficiaryValue: normalizeText(row.beneficiary_value),
       budgetHead: normalizeText(row.budget_head),
       subHead: normalizeText(row.sub_head),
       budgetLineAmount: toMoney(row.budget_line_amount),
@@ -1142,19 +1286,29 @@ const enrichBudgetRowsWithBudgetRefs = async (
     beneficiaryValue = null,
     departmentId = null,
     beneficiaryEntityId = null,
+    lookupBudgetHead = null,
+    lookupSubHead = null,
   } = {}
 ) => {
   const enrichedRows = [];
   const requestedByBudgetLine = new Map();
+  const requestedByHead = new Map();
+  const normalizedLookupBudgetHead = normalizeText(lookupBudgetHead);
+  const normalizedLookupSubHead = normalizeSubHeadForLookup(lookupSubHead);
 
   for (const row of budgetRows) {
+    const effectiveLookupBudgetHead = row.budget_head || normalizedLookupBudgetHead;
+    const effectiveLookupSubHead = normalizeSubHeadForLookup(row.sub_head) || normalizedLookupSubHead;
+    const applyHeadOnlyMatch =
+      Boolean(row.head_only_match) || shouldUseHeadOnlyAvailabilityMatch(effectiveLookupBudgetHead);
+
     const availability = await resolveBudgetAvailabilityForUser(conn, {
       userId,
       userEmail,
-      budgetHead: row.budget_head,
-      subHead: row.sub_head,
+      budgetHead: effectiveLookupBudgetHead,
+      subHead: effectiveLookupSubHead,
       preferredBudgetLineId: row.budget_line_id,
-      headOnlyMatch: Boolean(row.head_only_match),
+      headOnlyMatch: applyHeadOnlyMatch,
       excludeFinanceId,
       beneficiaryType,
       beneficiaryValue,
@@ -1162,32 +1316,68 @@ const enrichBudgetRowsWithBudgetRefs = async (
       beneficiaryEntityId,
     });
 
+    const headReservationKey =
+      normalizeHeadLabelForMatch(effectiveLookupBudgetHead) || normalizeText(effectiveLookupBudgetHead).toLowerCase();
+    const alreadyRequestedForHead = toMoney(requestedByHead.get(headReservationKey) || 0);
+    const remainingHeadAfterLocalReservations = Math.max(0, availability.totalAvailable - alreadyRequestedForHead);
+
+    if (applyHeadOnlyMatch) {
+      if (!availability.matches.length || remainingHeadAfterLocalReservations <= 0) {
+        throw new Error(
+          `No approved budget allocation found for "${effectiveLookupBudgetHead}" in the selected beneficiary scope`
+        );
+      }
+
+      if (row.amount > remainingHeadAfterLocalReservations) {
+        throw new Error(
+          `Requested amount ${row.amount.toFixed(2)} exceeds remaining available amount ${remainingHeadAfterLocalReservations.toFixed(2)} for "${effectiveLookupBudgetHead}" after other rows in this request`
+        );
+      }
+
+      requestedByHead.set(headReservationKey, alreadyRequestedForHead + row.amount);
+      enrichedRows.push({
+        ...row,
+        budget_line_id: null,
+        budget_proposal_id: null,
+        available_amount_snapshot: remainingHeadAfterLocalReservations,
+      });
+      continue;
+    }
+
     const selected = availability.selected;
     if (!selected) {
       throw new Error(
-        `No approved budget allocation found for "${row.budget_head}" / "${row.sub_head}" in the selected beneficiary scope`
+        `No approved budget allocation found for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}" in the selected beneficiary scope`
       );
     }
 
     if (row.amount > selected.availableAmount) {
       throw new Error(
-        `Requested amount ${row.amount.toFixed(2)} exceeds available amount ${selected.availableAmount.toFixed(2)} for "${row.budget_head}" / "${row.sub_head}"`
+        `Requested amount ${row.amount.toFixed(2)} exceeds available amount ${selected.availableAmount.toFixed(2)} for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}"`
       );
     }
 
-    const alreadyRequested = toMoney(requestedByBudgetLine.get(selected.budgetLineId) || 0);
+    const selectedBudgetLineId = toPositiveInt(selected.budgetLineId);
+    if (!selectedBudgetLineId) {
+      throw new Error(
+        `No approved budget allocation found for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}" in the selected beneficiary scope`
+      );
+    }
+
+    const alreadyRequested = toMoney(requestedByBudgetLine.get(selectedBudgetLineId) || 0);
     const remainingAfterLocalReservations = Math.max(0, selected.availableAmount - alreadyRequested);
     if (row.amount > remainingAfterLocalReservations) {
       throw new Error(
-        `Requested amount ${row.amount.toFixed(2)} exceeds remaining available amount ${remainingAfterLocalReservations.toFixed(2)} for "${row.budget_head}" / "${row.sub_head}" after other rows in this request`
+        `Requested amount ${row.amount.toFixed(2)} exceeds remaining available amount ${remainingAfterLocalReservations.toFixed(2)} for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}" after other rows in this request`
       );
     }
-    requestedByBudgetLine.set(selected.budgetLineId, alreadyRequested + row.amount);
+    requestedByBudgetLine.set(selectedBudgetLineId, alreadyRequested + row.amount);
+    requestedByHead.set(headReservationKey, alreadyRequestedForHead + row.amount);
 
     enrichedRows.push({
       ...row,
-      budget_line_id: selected.budgetLineId,
-      budget_proposal_id: selected.budgetProposalId,
+      budget_line_id: selectedBudgetLineId,
+      budget_proposal_id: toPositiveInt(selected.budgetProposalId),
       available_amount_snapshot: remainingAfterLocalReservations,
     });
   }
@@ -1523,10 +1713,31 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
     'SELECT unplanned_budget_enabled, unplanned_budget_amount FROM finance_requests WHERE id = ? FOR UPDATE',
     [financeId]
   );
-  
+
   const financeRequest = financeRows[0] || {};
   const unplannedBudgetEnabled = Boolean(financeRequest.unplanned_budget_enabled);
   const unplannedBudgetAmount = toMoney(financeRequest.unplanned_budget_amount);
+  const [ownerRows] = await conn.query(
+    `SELECT
+       fr.created_by,
+       u.email AS created_by_email,
+       fr.beneficiary_type,
+       fr.beneficiary_value,
+       fr.department_id,
+       fr.beneficiary_entity_id
+     FROM finance_requests fr
+     LEFT JOIN users u ON u.id = fr.created_by
+     WHERE fr.id = ?
+     LIMIT 1`,
+    [financeId]
+  );
+  const ownerRecord = ownerRows[0] || {};
+  const ownerUserId = toPositiveInt(ownerRecord.created_by);
+  const ownerUserEmail = normalizeText(ownerRecord.created_by_email) || null;
+  const ownerDepartmentId = toPositiveInt(ownerRecord.department_id);
+  const ownerBeneficiaryEntityId = toPositiveInt(ownerRecord.beneficiary_entity_id);
+  const ownerBeneficiaryType = normalizeText(ownerRecord.beneficiary_type) || null;
+  const ownerBeneficiaryValue = normalizeText(ownerRecord.beneficiary_value) || null;
 
   const [rows] = await conn.query(
     `SELECT
@@ -1549,16 +1760,119 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
     const budgetLineId = toPositiveInt(row.budget_line_id);
     const requestedAmount = toMoney(row.amount);
 
-    if (!budgetLineId) {
-      throw new Error(
-        `Budget line mapping is missing for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`
-      );
-    }
-
     if (requestedAmount <= 0) {
       throw new Error(
         `Requested amount must be greater than 0 for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`
       );
+    }
+
+    if (!budgetLineId) {
+      const lookupBudgetHead = normalizeText(row.budget_head);
+      if (!lookupBudgetHead) {
+        throw new Error(
+          `Budget line mapping is missing for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`
+        );
+      }
+
+      const headLevelAvailability = await resolveBudgetAvailabilityForUser(conn, {
+        userId: ownerUserId,
+        userEmail: ownerUserEmail,
+        budgetHead: lookupBudgetHead,
+        subHead: normalizeSubHeadForLookup(row.sub_head),
+        headOnlyMatch: true,
+        excludeFinanceId: financeId,
+        beneficiaryType: ownerBeneficiaryType,
+        beneficiaryValue: ownerBeneficiaryValue,
+        departmentId: ownerDepartmentId,
+        beneficiaryEntityId: ownerBeneficiaryEntityId,
+      });
+
+      if (requestedAmount > headLevelAvailability.totalAvailable) {
+        throw new Error(
+          `Insufficient budget balance for "${lookupBudgetHead}". Requested ${requestedAmount.toFixed(2)}, available ${headLevelAvailability.totalAvailable.toFixed(2)}`
+        );
+      }
+
+      let remainingToConsume = requestedAmount;
+      for (const match of headLevelAvailability.matches) {
+        if (remainingToConsume <= 0) {
+          break;
+        }
+
+        const candidateBudgetLineId = toPositiveInt(match.budgetLineId);
+        if (!candidateBudgetLineId) {
+          continue;
+        }
+
+        await conn.query(
+          `INSERT IGNORE INTO finance_budget_line_usage (budget_line_id, consumed_amount)
+           VALUES (?, 0.00)`,
+          [candidateBudgetLineId]
+        );
+
+        const [usageRows] = await conn.query(
+          `SELECT consumed_amount
+           FROM finance_budget_line_usage
+           WHERE budget_line_id = ?
+           FOR UPDATE`,
+          [candidateBudgetLineId]
+        );
+
+        const consumedAmount = toMoney(usageRows?.[0]?.consumed_amount);
+        const lineBudgetAmount = toMoney(match.budgetLineAmount);
+        const availableOnLine = Math.max(0, lineBudgetAmount - consumedAmount);
+        if (availableOnLine <= 0) {
+          continue;
+        }
+
+        const consumeAmount = Math.min(remainingToConsume, availableOnLine);
+        const balanceAfter = consumedAmount + consumeAmount;
+
+        await conn.query(
+          `UPDATE finance_budget_line_usage
+           SET consumed_amount = ?, updated_at = CURRENT_TIMESTAMP
+           WHERE budget_line_id = ?`,
+          [balanceAfter, candidateBudgetLineId]
+        );
+
+        await conn.query(
+          `INSERT INTO finance_budget_usage_ledger
+           (finance_id, finance_budget_breakup_id, budget_line_id, operation, amount, balance_after, actor_user_id, remarks)
+           VALUES (?, ?, ?, 'consume', ?, ?, ?, ?)`,
+          [
+            financeId,
+            row.id,
+            candidateBudgetLineId,
+            consumeAmount,
+            balanceAfter,
+            toPositiveInt(actorUserId),
+            'Principal approval committed amount',
+          ]
+        );
+
+        remainingToConsume = toMoney(remainingToConsume - consumeAmount);
+      }
+
+      if (remainingToConsume > 0) {
+        throw new Error(
+          `Insufficient budget balance for "${lookupBudgetHead}". Requested ${requestedAmount.toFixed(2)}, available ${headLevelAvailability.totalAvailable.toFixed(2)}`
+        );
+      }
+
+      const remainingAfter = Math.max(0, headLevelAvailability.totalAvailable - requestedAmount);
+
+      await conn.query(
+        `UPDATE finance_budget_breakup
+         SET approved_amount = ?,
+             remaining_amount_snapshot = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [requestedAmount, remainingAfter, row.id]
+      );
+
+      approvedTotalAmount += requestedAmount;
+      totalRemainingAmount += remainingAfter;
+      continue;
     }
 
     const budgetLine = await getBudgetLineAvailabilityById(conn, budgetLineId);
@@ -1668,12 +1982,13 @@ const financeModel = {
 
       const workflowContext = await resolveFinanceWorkflowContext(connection, financeData);
       const normalizedBudgetRows = normalizeBudgetRows(Array.isArray(financeData.budget_rows) ? financeData.budget_rows : []);
-      const budgetLookupRows = applyBudgetLookupOverrides(normalizedBudgetRows, financeData);
-      const budgetRows = await enrichBudgetRowsWithBudgetRefs(connection, userId, userEmail, budgetLookupRows, {
+      const budgetRows = await enrichBudgetRowsWithBudgetRefs(connection, userId, userEmail, normalizedBudgetRows, {
         beneficiaryType: financeData.beneficiary_type,
         beneficiaryValue: financeData.beneficiary_value,
         departmentId: workflowContext.departmentId,
         beneficiaryEntityId: workflowContext.beneficiaryEntityId,
+        lookupBudgetHead: financeData.primary_head,
+        lookupSubHead: financeData.event_sub_head,
       });
       const incomeRows = normalizeIncomeRows(Array.isArray(financeData.income_rows) ? financeData.income_rows : []);
       const normalizedAnnexures = await normalizeFinanceAnnexures(financeData.annexures);
@@ -1870,6 +2185,8 @@ const financeModel = {
         employee_id: financeData.employee_id ?? existingRecord.employee_id,
         beneficiary_type: financeData.beneficiary_type ?? existingRecord.beneficiary_type,
         beneficiary_value: financeData.beneficiary_value ?? existingRecord.beneficiary_value,
+        primary_head: financeData.primary_head ?? existingRecord.primary_head,
+        event_sub_head: financeData.event_sub_head ?? existingRecord.event_sub_head,
       };
       const workflowContext = await resolveFinanceWorkflowContext(connection, mergedRecordForContext);
       const hasBudgetRowsInput = Object.prototype.hasOwnProperty.call(financeData, 'budget_rows');
@@ -1878,24 +2195,20 @@ const financeModel = {
       const normalizedBudgetRows = hasBudgetRowsInput
         ? normalizeBudgetRows(Array.isArray(financeData.budget_rows) ? financeData.budget_rows : [])
         : [];
-      const budgetLookupRows = hasBudgetRowsInput
-        ? applyBudgetLookupOverrides(normalizedBudgetRows, {
-          ...existingRecord,
-          ...financeData,
-        })
-        : [];
       const budgetRows = hasBudgetRowsInput
         ? await enrichBudgetRowsWithBudgetRefs(
           connection,
           toPositiveInt(existingRecord.created_by),
           normalizeText(existingRecord.created_by_email) || null,
-          budgetLookupRows,
+          normalizedBudgetRows,
           {
             excludeFinanceId: id,
             beneficiaryType: mergedRecordForContext.beneficiary_type,
             beneficiaryValue: mergedRecordForContext.beneficiary_value,
             departmentId: workflowContext.departmentId,
             beneficiaryEntityId: workflowContext.beneficiaryEntityId,
+            lookupBudgetHead: mergedRecordForContext.primary_head,
+            lookupSubHead: mergedRecordForContext.event_sub_head,
           }
         )
         : [];
@@ -2213,6 +2526,7 @@ const financeModel = {
       finance.level1_route_type = resolveFinanceLevel1RouteType(finance);
       const annexures = await getFinanceAnnexures(id);
       finance.annexures = annexures.length ? annexures : getLegacyAnnexureFromRecord(finance);
+      finance.principal_document = await getFinancePrincipalDocumentByFinanceId(id);
 
       return finance;
     } catch (error) {
@@ -2241,6 +2555,7 @@ const financeModel = {
       query += ' ORDER BY fr.created_at DESC';
 
       const [rows] = await db.query(query, params);
+      const principalDocuments = await getFinancePrincipalDocumentsByFinanceIds(rows.map((row) => row.id));
 
       return rows.map((row) => ({
         ...row,
@@ -2248,6 +2563,7 @@ const financeModel = {
         workflow_state: normalizeWorkflowState(row.workflow_state),
         level1_route_type: resolveFinanceLevel1RouteType(row),
         annexures: getLegacyAnnexureFromRecord(row),
+        principal_document: principalDocuments.get(toPositiveInt(row.id)) || null,
       }));
     } catch (error) {
       throw new Error(`Error listing finance requests: ${error.message}`);
@@ -2267,7 +2583,9 @@ const financeModel = {
            fr.beneficiary_type,
            fr.beneficiary_value,
            fr.department_id,
-           fr.beneficiary_entity_id
+           fr.beneficiary_entity_id,
+           fr.primary_head,
+           fr.event_sub_head
          FROM finance_requests fr
          LEFT JOIN users u ON u.id = fr.created_by
          WHERE fr.id = ?
@@ -2291,6 +2609,8 @@ const financeModel = {
           beneficiaryValue: ownerRows[0].beneficiary_value,
           departmentId: toPositiveInt(ownerRows[0].department_id),
           beneficiaryEntityId: toPositiveInt(ownerRows[0].beneficiary_entity_id),
+          lookupBudgetHead: ownerRows[0].primary_head,
+          lookupSubHead: ownerRows[0].event_sub_head,
         }
       );
       await replaceBudgetRows(connection, financeId, enrichedRows);
@@ -3130,6 +3450,7 @@ const financeModel = {
        LIMIT ? OFFSET ?`,
       [normalizedStage, ...whereParams, limit, offset]
     );
+    const principalDocuments = await getFinancePrincipalDocumentsByFinanceIds(rows.map((row) => row.id), { tx });
 
     return {
       items: rows.map((row) => ({
@@ -3137,6 +3458,7 @@ const financeModel = {
         enclosures: safeParseJSON(row.enclosures, []),
         workflow_state: normalizeWorkflowState(row.workflow_state),
         level1_route_type: resolveFinanceLevel1RouteType(row),
+        principal_document: principalDocuments.get(toPositiveInt(row.id)) || null,
       })),
       total,
       page,
@@ -3180,6 +3502,18 @@ const financeModel = {
     );
 
     return rows.length ? rows[0] : null;
+  },
+
+  async getPrincipalDocument(recordId) {
+    return getFinancePrincipalDocumentByFinanceId(recordId);
+  },
+
+  async setPrincipalDocument(recordId, document, { tx = db } = {}) {
+    return setFinancePrincipalDocument(recordId, document, { tx });
+  },
+
+  async deletePrincipalDocument(recordId, { tx = db } = {}) {
+    return deleteFinancePrincipalDocumentByFinanceId(recordId, { tx });
   },
 };
 

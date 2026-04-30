@@ -165,14 +165,15 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Software',
       'Membership & Subscriptions',
       'College Essentials',
-      'Printing & Stationery',
+      'Printing',
+      'Stationery',
       'Postal Expenses',
       'Local Conveyance',
     ],
   },
   {
     label: 'Events & Competitions',
-    options: ['Academic Events', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Event', 'Cultural & Celebrations', 'Sports', 'Competitions'],
+    options: ['Academic Events', 'Club Activities', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Event', 'Cultural & Celebrations', 'Sports', 'Competitions'],
   },
   {
     label: 'Meetings & Audits',
@@ -190,7 +191,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Staff Empowerment',
       'Student Empowerment',
       'Student Capacity Building',
-      'Accreditation Expenses',
+      'Ranking & Accreditation',
       'Examination Expenses',
     ],
   },
@@ -251,6 +252,8 @@ const ANNEXURE_TYPE_OPTIONS = [
   'Bills',
   'Pamphlet',
   'Email',
+  'Not Applicable',
+  'Others',
 ];
 const formatDateForInput = (value: unknown): string => {
   if (value === null || value === undefined || value === '') return '';
@@ -294,37 +297,56 @@ const CATEGORY_TYPE_OPTIONS = [
   'Institution',
 ];
 
+// 1. Shared HOAC Sub-Heads (for Events & Competitions, Meetings & Audits)
+// Used in the 'extra' top-level dropdown (eventSubHead) when a HOAC group is active.
 const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
   'Events & Competitions': [
-    'Remuneration',
-    'Travel',
-    'Accommodation',
-    'Memento & Gifts',
-    'Food & Refreshment',
     'A/V Arrangements',
-    'Stationary',
+    'Accessories',
+    'Accommodation',
+    'Auditing Charge',
+    'Bag',
+    'Consumables',
+    'Decorations',
+    'Driver Bata',
+    'Event Logistics',
+    'Food & Refreshment',
+    'Honorarium',
+    'Memento & Gifts',
+    'Miscellaneous',
     'Printing',
     'Prizes',
-    'Publication Charges',
     'Promotions',
-    'Decorations',
-    'Event Logistics',
+    'Publication Charges',
+    'Registration fee',
     'Registration Kit',
+    'Remuneration',
+    'Sitting Fees',
+    'Stationery',
     'T-Shirt',
-    'Bag',
+    'Travel',
     'Others',
   ],
   'Meetings & Audits': [
-    'Remuneration',
-    'Travel',
+    'Accessories',
     'Accommodation',
-    'Memento & Gifts',
+    'Auditing Charge',
+    'Driver Bata',
     'Food & Refreshment',
-    'Stationary',
+    'Honorarium',
+    'Memento & Gifts',
+    'Miscellaneous',
     'Printing',
+    'Registration fee',
+    'Remuneration',
+    'Sitting Fees',
+    'Stationery',
+    'Travel',
     'Others',
   ],
 };
+
+const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
 
 const flattenOptions = (options: Array<OptionType | { label: string; options: OptionType[] }>): OptionType[] =>
   options.flatMap((opt) => ('options' in opt ? opt.options : opt));
@@ -351,14 +373,20 @@ const HEAD_TO_GROUP: Record<string, string> = BUDGET_HEAD_GROUPS.reduce(
   {} as Record<string, string>
 );
 
-const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
-
 const getHoacGroupForHead = (head: string): string | undefined => {
-  if (!head) return undefined;
   if (HOAC_GROUPS.has(head)) return head;
   const mapped = HEAD_TO_GROUP[head];
   if (mapped && HOAC_GROUPS.has(mapped)) return mapped;
   return undefined;
+};
+
+const isHeadInSharedHoacGroup = (head: string): boolean =>
+  Boolean(getHoacGroupForHead(String(head || '').trim()));
+
+const shouldUseHeadOnlyAvailabilityMatch = (budgetHead: string, subHead: string): boolean => {
+  const normalizedHead = String(budgetHead || '').trim();
+  void subHead;
+  return Boolean(normalizedHead);
 };
 
 const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {
@@ -369,335 +397,445 @@ const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {
   'Guest Lecture': ['Industry', 'Academic'],
 };
 
+// 2. Specific Budget Sub-Heads (Head-specific mapping)
+// Used in the row-level budget table (subHead-${index}) to pick specific expenses for a head.
 const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
-
   'Civil Infrastructure': [
+    'Canopy',
     'Construction Works',
-    'Partition Works',
     'False Ceiling Works',
+    'Partition Works',
     'Plumbing Works',
-    'Canopy', 'Water Cooler'
+    'Water Cooler'
   ],
   'Electrical Infrastructure': [
+    'Air Conditioner',
+    'Battery',
     'Electrical Wiring',
+    'Generator',
     'Lights & Fans',
     'Lift Installation',
-    'Air Conditioner',
-    'UPS & Inverter',
-    'Battery', 'Generator'
+    'UPS & Inverter'
   ],
   'IT Infrastructure': [
-    'Hardwares',
-    'Softwares',
-    'Hard Disks',
-    'Monitors',
-    'Wi-fi Router',
-    'Network Materials',
-    'Laptops',
-    'Interactive Displays',
-    'Desktops Computers',
-    'CCTV Materials',
-    'Television',
-    'Projectors',
-    'Printers',
-    'Mobiles & Tablet',
-    'Mic & Speakers',
-    'Amplifiers',
     'A/V Equipment',
+    'Amplifiers',
+    'CCTV Materials',
+    'CMOS Battery',
+    'Desktops Computers',
+    'Hard Disks',
+    'Hardwares',
+    'Interactive Displays',
     'Intercom',
-    'Xerox Machine', 'Mouse', 'Keyboard', 'CMOS Battery'
+    'Keyboard',
+    'Laptops',
+    'Mic & Speakers',
+    'Mobiles & Tablet',
+    'Monitors',
+    'Mouse',
+    'Network Materials',
+    'Printers',
+    'Projectors',
+    'Softwares',
+    'Television',
+    'Wi-fi Router',
+    'Xerox Machine'
   ],
   'Furniture & Fixtures': [
     'Chair',
-    'Faculty Table',
     'Computer Table',
     'Discussion Table',
-    'Work Table',
+    'Faculty Table',
     'Wooden Cup Boards',
+    'Work Table'
   ],
-  Vehicles: ['Two Wheeler', 'Light Motor Vehicle', 'Heavy Motor Vehicle'],
+  Vehicles: ['Heavy Motor Vehicle', 'Light Motor Vehicle', 'Two Wheeler'],
   Equipment: [
-    'Lab Equipment',
     'Consultancy Equipment',
+    'Equipment Upgrade',
+    'Lab Equipment',
+    'Office Equipment',
     'Research Equipment',
-    'Equipment Upgrade', 'Sports Equipment', 'Office Equipment'
+    'Sports Equipment'
   ],
   'Accessories & Kits': [
+    'Drilling Machine',
+    'Drone Kit',
+    'Lab Accessories',
     'Power Tools',
     'Weighing Machine',
-    'Drilling Machine',
-    'Drone Kit', 'Lab Accessories', 'Others'
+    'Others'
   ],
   'Library': [
     'Books',
+    'Databases',
+    'E-Books',
+    'E-Journals',
     'Journals',
     'Magazines',
+    'Membership',
     'Newspapers',
-    'E-Journals',
-    'E-Books',
-    'Remote Access Tool',
-    'Plagiarism Detection Tool',
     'Non Books (CD etc.)',
-    'Databases',
-    'Membership'
+    'Plagiarism Detection Tool',
+    'Remote Access Tool'
   ],
 
-  'Maintenance Charges': ['Annual Maintenance Charges', 'Equipment Maintenance',
-    'Software Maintenance',
+  'Maintenance Charges': [
+    'AC Maintenance',
+    'Annual Maintenance Charges',
     'Building Maintenance',
     'Computer Maintenance',
     'Electrical Maintenance',
+    'Equipment Maintenance',
+    'Farm Maintenance',
     'Furniture Maintenance',
-    'Plumbing Maintenance',
-    'Vehicle Maintenance',
     'Garden Maintenance',
+    'General Repairs',
+    'Housekeeping Expenses',
     'Infrastructure Maintenance',
-    'AC Maintenance',
-    'UPS Maintenance',
     'Lift Maintenance',
+    'Office Maintenance',
+    'Painting',
+    'Playground Maintenance',
+    'Plumbing Maintenance',
     'Printer Maintenance',
-    'Painting', 'Playground Maintenance', 'Office Maintenance',
-    'Housekeeping Expenses', 'General Repairs'
+    'Software Maintenance',
+    'UPS Maintenance',
+    'Vehicle Maintenance',
+    'Toner Refill'
   ],
-  Spares: ['Printer Donors', 'SMPS', 'Chargers'],
+  Spares: ['Chargers', 'Printer Toner', 'SMPS'],
   'Annual Maintenance Charges': ['Equipment Maintenance', 'Software Maintenance'],
   Consumables: [
+    'Carpentary Items',
     'Chemicals',
-    'Glasswares',
-    'Plasticwares',
-    'Electrical Components',
-    'Electronic Components',
-    'Mechanical Components',
     'Construction Materials',
     'Cutting Tools',
-    'Oils & Lubricants',
+    'Electrical Components',
+    'Electronic Components',
+    'Glasswares',
+    'Mechanical Components',
     'Metals & Alloys',
-    'Carpentary Items',
-    'Others',
+    'Oils & Lubricants',
+    'Plasticwares',
+    'Others'
   ],
   Software: [
-    'Plagiarism',
-    'Grammer Check',
-    'Grievance',
-    'Programming',
-    'Modelling',
+    'AI Tools',
     'Analysis',
     'Antivirus',
     'Firewall',
     'Graphical Design',
-    'AI Tools',
-    'Others',
+    'Grammer Check',
+    'Grievance',
+    'Modelling',
+    'Plagiarism',
+    'Programming',
+    'Others'
   ],
   'Membership & Subscriptions': [
-    'Professional Body fees',
-    'Membership fees',
-    ' Annual Subscription Charges',
-    'E-Resources',
+    'Annual Subscription Charges',
     'Data Subscription Charges',
+    'E-Resources',
+    'Membership fees',
+    'Professional Body fees'
   ],
-  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Others'],
-  'Printing & Stationery': [
+  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Student Uniform', 'Others'],
+
+  'Printing': [
     'Banner',
-    'Pamphlet',
+    'Beach Flag',
+    'ID Card',
+    'Badge',
     'Brochure',
-    'Vinyl Boards',
+    'Binding',
+    'Reports',
+    'Magazines',
+    'News Letters',
+    'Calendar',
     'Certificates',
     'Diary',
-    'Calendar',
+    'Registers',
+    'Pamphlet',
+    'Vinyl Board',
+    'Sign Board',
+    'Letter Pad',
+    'Note Pad',
+    'Wiro Pad',
     'Visiting Card',
-    'Seal/ Stamp Pad',
-    'Pen/ Pencil/ Eraser',
-    'Stapler/ Punching Machine',
-    'Files/ Folders',
-    'Entry Registers',
-    'Print Sheets',
-    'Others',
+    'Others'
   ],
+
+  'Stationery': [
+    'Files/ Folders',
+    'Pen/ Pencil/ Eraser',
+    'Print Sheets',
+    'Seal/ Stamp Pad',
+    'Stapler/ Punching Machine',
+    'Grade Sheet',
+    'Answer Booklet',
+    'Others'
+  ],
+
   'Postal Expenses': [
+    'Courier Charges',
     'Frieght Charges',
     'Postal Charges',
-    'Courier Charges',
-    'Others',
+    'Others'
   ],
   'Local Conveyance': [
-    'Travel Expense',
-    'Food & Refreshment',
     'Beta',
-    'Others',
+    'Food & Refreshment',
+    'Travel Expense',
+    'Others'
   ],
-  'Conferences & Conclaves': ['National Conference', 'International Conference', 'Conclave', 'Convention', 'Networking Event', 'Industry Interaction', 'Consumables'],
-  'Association Activities': ['Association Function', 'Alumni Meeting', 'Alumni Interaction', 'Parents Meeting', 'Consumables'],
-  'Outreach Event': ['School Visit', 'Awareness Program', 'Campaigns', 'Mini Marathon', 'Education Fair', 'Rally', 'Consumables'],
-  'Cultural & Celebrations': ['Celebration Day', 'Festival Celebrations', 'Harmonicks', 'Hostel Day', 'Consumables'],
-  'Sports': ['Sports Meet', 'Sports Day', 'Consumables'],
-  'Competitions': ['Hackathons', 'Competitions', 'Club Activities', 'Project Expo', 'Ideathon', 'Start-up meet', 'Consumables'],
+  'Conferences & Conclaves': [
+    'Conclave',
+    'Consumables',
+    'Convention',
+    'Industry Interaction',
+    'International Conference',
+    'National Conference',
+    'Networking Event'
+  ],
+  'Association Activities': [
+    'Alumni Interaction',
+    'Alumni Meeting',
+    'Association Function',
+    'Parents Meeting'
+  ],
+  'Outreach Event': [
+    'Awareness Program',
+    'Campaigns',
+    'Crash Course',
+    'Education Fair',
+    'Mini Marathon',
+    'Rally',
+    'School Visit',
+    'Summer Internship'
+  ],
+  'Cultural & Celebrations': [
+    'Celebration Day',
+    'Festival Celebrations',
+    'Harmonicks',
+    'Hostel Day'
+  ],
+  'Sports': ['Sports Day', 'Sports Meet'],
 
-  'Institutional Governance Meetings': ['Governing Body Meeting', 'Research Advisory Board Meeting', 'Finance Committee Meeting', 'Result Passing Board (RPB) Meeting', 'Examination Committee Meeting'
-    , 'Placement Meeting'],
+  'Club Activities': [
+    'Flash Mob',
+    'Fun Events',
+    'Road show',
+    'Wall Painting'
+  ],
+  'Competitions': [
+    'Competitions',
+    'Hackathons',
+    'Ideathon',
+    'Project Expo',
+    'Start-up meet'
+  ],
 
-  'Academic Governance Meetings': ['Academic Council Meeting', 'Standing Committee Meeting',
-    'Board of Studies (Bos) Meeting', 'DAB Meeting'],
+  'Institutional Governance Meetings': [
+    'Examination Committee Meeting',
+    'Finance Committee Meeting',
+    'Governing Body Meeting',
+    'Placement Meeting',
+    'Research Advisory Board Meeting',
+    'Result Passing Board (RPB) Meeting'
+  ],
+
+  'Academic Governance Meetings': [
+    'Academic Council Meeting',
+    'Board of Studies (Bos) Meeting',
+    'DAB Meeting',
+    'Standing Committee Meeting'
+  ],
   'Institutional Audits': ['Academic Audit', 'Administrative Audit', 'Energy & Green Audit'],
   'Government Meetings': ['Government Meetings'],
   'Faculty Empowerment': [
-    'Registration fee',
-    'Travel Allowance',
-    'Food & Refreshment',
     'Accommodation',
     'Daily Allowance',
-    'Membership Fees',
+    'Faculty Welfare',
+    'Food & Refreshment',
     'Incentives',
     'Leadership Meet',
-    'Faculty Welfare', 'Medical Expenses'
+    'Medical Expenses',
+    'Membership Fees',
+    'Registration fee',
+    'Travel Allowance'
   ],
 
   'Academic Events': [
-    'Seminar',
-    'Webinar',
-    'Guest Lecture',
-    'Workshop',
-    'Hands-on Training',
-    'FDP (Faculty Development Programme)',
-    'STTP (Short-Term Training Programme)',
-    'MoU Inking',
-    'Industry Visit',
     'Expert Visit',
-    'Consumables'
+    'FDP (Faculty Development Programme)',
+    'Guest Lecture',
+    'Hands-on Training',
+    'Industry Visit',
+    'MoU Inking',
+    'Seminar',
+    'STTP (Short-Term Training Programme)',
+    'Webinar',
+    'Workshop'
   ],
 
   'College Events': [
     'Annual Day',
-    'Graduation Day',
-    'Student Induction Programme',
-    'Orientation Session',
     'Dakshaa',
-    'Science Day',
-    'Womens Day',
     'Founder Day',
-    'Consumables'
+    'Graduation Day',
+    'Orientation Session',
+    'Science Day',
+    'Student Induction Programme',
+    'Womens Day'
   ],
   'Staff Empowerment': [
-    'Registration fee',
-    'Travel Allowance',
-    'Food & Refreshment',
     'Accommodation',
     'Daily Allowance',
-    'Incentives',
-    'Staff Welfare', 'Medical Expenses'
-  ],
-  'Sudent Empowerment': [
-    'Registration fee',
-    'Travel Support',
     'Food & Refreshment',
-    'Accommodation',
-    'Certification Costs',
-    'Medical Expense',
     'Incentives',
-    'Prizes',
-    'Student Welfare',
-    'Student Uniform',
-  ],
-  'Student Capacity Building': [
-    'Skill Development Training',
-    'ApptitudeTraining',
-    'Higher Education Coaching',
-    'Competitive Exam Coaching',
-    'Placement Training',
-    'Placement Drives',
-    'One Credit Course',
-    'Value Added Course',
-    'Certification Programs',
-    'Internship',
-    'International Connect',
-    'Exposure Visit',
-    'Language Proficiency Courses',
-    'Others',
+    'Staff Welfare',
+    'Medical Expenses'
   ],
 
-  'Accreditation Expenses': [
+  'Student Empowerment': [
+    'Accommodation',
+    'Certification Costs',
+    'Food & Refreshment',
+    'Incentives',
+    'Medical Expense',
+    'Prizes',
+    'Registration fee',
+    'Student Welfare',
+    'Travel Support'
+  ],
+  'Student Capacity Building': [
+    'ApptitudeTraining',
+    'Certification Programs',
+    'Competitive Exam Coaching',
+    'Exposure Visit',
+    'Higher Education Coaching',
+    'Internship',
+    'International Connect',
+    'Language Proficiency Courses',
+    'One Credit Course',
+    'Placement Drives',
+    'Placement Training',
+    'Skill Development Training',
+    'Value Added Course',
+    'Others'
+  ],
+
+  'Ranking & Accreditation': [
     'NAAC Fees',
-    'NBA Fees',
     'NAAC Inspection',
+    'NBA Fees',
     'NBA Inspection',
+    'QS Ranking',
+    'SDG Ranking',
+    'Other Rankings'
   ],
   'Examination Expenses': [
-    'Autonomous Exam Remuneration', 'Online Exam Remuneration',
+    'Autonomous Exam Remuneration',
     'Government Exam Remuneration',
+    'Online Exam Remuneration',
+    'QP Setting Expenses',
+    'Degree Recommendation',
+    'CoE Staff Remuneration'
   ],
-  'Advertisement & Branding': ['News Paper Advertisement', 'Digital Promotion'],
+  'Advertisement & Branding': ['Digital Promotion', 'News Paper Advertisement'],
   'Public Relations': [
+    'Branding',
+    'Corporate Gift',
+    'CSR Activity',
     'Press & Media',
     'Promotions',
-    'Branding',
-    'Corporate Gift', 'Sponsorship',
-    'CSR Activity'
+    'Sponsorship'
   ],
-  Admissions: [
-    'Stalls',
-    'School Visits',
-    'Field Visits',
-    'Student Directory',
+  'Admissions': [
     'Consultant Charges',
+    'Field Visits',
+    'School Visits',
+    'Stalls',
+    'Student Directory'
   ],
   'Research & Development': [
-    'Seed Fund (Product Development)',
-    'Seed Fund (IPR Charges)',
-    'Seed Fund (Travel)',
-    'Institute Research Fellowship',
-    'Research Grant',
-    'Publication Support',
     'Consultancy',
-    'Research Cenre Renewal',
     'HI Contribution',
+    'Institute Research Fellowship',
+    'Publication Support',
+    'Research Cenre Renewal',
+    'Research Grant',
+    'Seed Fund (Consumables)',
+    'Seed Fund (IPR Charges)',
+    'Seed Fund (Product Development)',
+    'Seed Fund (Testing)',
+    'Seed Fund (Travel)'
   ],
   'Administrative Expenses': [
-    'AICTE Fees',
     'Affiliation Fees',
+    'AICTE Fees',
     'Anna University Fees',
-    'DOTE Fees',
-    'Consortium Fees',
-    'Inspection Expenses',
+    'Audit Fees',
     'Autonomous Charges',
-    'Insurance Charges',
-    'Stamp Charges', 'Audit Fees',
-    'Flag Day Expenses',
+    'Consortium Fees',
+    'DOTE Fees',
     'Fee Fixation Expenses',
-    'Scholarship Expenses',
+    'Flag Day Expenses',
+    'Inspection Expenses',
+    'Insurance Charges',
     'International Travel',
-    'Testing Charges', 'Legal Expenses'
+    'Legal Expenses',
+    'Office Expenses',
+    'Scholarship Expenses',
+    'Stamp Charges',
+    'Testing Charges'
   ],
-  'Licenses & Taxes': ['DTCP Approval', 'Water Tax', 'Road Tax', 'Property Tax', 'Building Tax', 'Spirit License', 'License Renewal'],
-  'Salary:': [
-    'Monthly Salary',
-    'Provident Fund',
+  'Licenses & Taxes': [
+    'Building Tax',
+    'DTCP Approval',
+    'License Renewal',
+    'Property Tax',
+    'Road Tax',
+    'Spirit License',
+    'Water Tax'
+  ],
+
+  'Salary': [
+    'Allowances',
     'Emoluments',
+    'ESI Scheme',
+    'Monthly Salary',
     'Professional Payments',
-    'Wages', 'ESI Scheme', 'Allowances'
+    'Provident Fund',
+    'Wages'
   ],
   'Bills & Payments': [
+    'Diesel Expenses',
     'Electricity Charges',
     'Internet Charges',
-    'Telephone Charges', 'Diesel Expenses'
+    'Telephone Charges'
   ],
   'Miscellaneous Expenses': [
     'Bank Charges',
     'Bank Interest',
-    'Loan Processing Charges',
-    'General Expenses',
-    'Sewage Treatment',
-    'Laundry Service',
-    'RO  Mineral Water',
-    'Pooja Expenses',
     'Fire Extinguisher',
     'First Aid Kit Expenses',
-    'Irrecovable Fee', 'Legal Expenses', 'Others'
+    'General Expenses',
+    'Irrecovable Fee',
+    'Laundry Service',
+    'Legal Expenses',
+    'Loan Processing Charges',
+    'Pooja Expenses',
+    'RO  Mineral Water',
+    'Sewage Treatment',
+    'Others'
   ],
 };
-
 const getSubHeadOptionsForHeadSearch = (budgetHead: string): string[] => {
-  const headGroup = HEAD_TO_GROUP[budgetHead];
-  if (headGroup && HOAC_GROUPS.has(headGroup) && HOAC_SUBHEAD_OPTIONS[headGroup]) {
-    return HOAC_SUBHEAD_OPTIONS[headGroup];
+  const hoacGroup = getHoacGroupForHead(budgetHead);
+  if (hoacGroup && HOAC_SUBHEAD_OPTIONS[hoacGroup]) {
+    return HOAC_SUBHEAD_OPTIONS[hoacGroup];
   }
   return SUB_HEAD_BY_BUDGET_HEAD[budgetHead] ?? [];
 };
@@ -1070,6 +1208,10 @@ const FinanceApproval: React.FC = () => {
   const [showUnplannedBudget, setShowUnplannedBudget] = useState<boolean>(false);
   const [unplannedBudgetAmount, setUnplannedBudgetAmount] = useState<string>('');
   const [unplannedBudgetDescription, setUnplannedBudgetDescription] = useState<string>('');
+  const [hasPrincipalDocument, setHasPrincipalDocument] = useState<boolean>(false);
+  const [principalApprovalPopupOpen, setPrincipalApprovalPopupOpen] = useState(false);
+  const [principalApprovalFile, setPrincipalApprovalFile] = useState<File | null>(null);
+  const [principalApprovalSubmitting, setPrincipalApprovalSubmitting] = useState(false);
   // State for dynamic subcategory options (Department, Centre, Cell, Club, Professional Body)
   const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
   const [annexureType, setAnnexureType] = useState<string>('');
@@ -1326,11 +1468,11 @@ const FinanceApproval: React.FC = () => {
 
       const annexureSummary = annexureFiles.length
         ? annexureFiles
-            .map((row) => {
-              const type = String(row.annexureType || '').trim();
-              return type || 'Unnamed File';
-            })
-            .join(', ')
+          .map((row) => {
+            const type = String(row.annexureType || '').trim();
+            return type || 'Unnamed File';
+          })
+          .join(', ')
         : 'Not Added';
 
       const skippedFiles = await generateAndDownloadFinancePdf({
@@ -1451,6 +1593,10 @@ const FinanceApproval: React.FC = () => {
     const effectiveHead = normalizeText(primaryHead) || normalizeText(row?.category);
     const effectiveSubHead =
       (extraDropdownVisible ? normalizeText(eventSubHead) : '') || normalizeText(row?.head);
+    const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(effectiveHead, effectiveSubHead);
+    if (headOnlyMatch) {
+      return `head:${effectiveHead}|mode:head-only`;
+    }
     return `head:${effectiveHead}|sub:${effectiveSubHead}`;
   };
 
@@ -1472,8 +1618,9 @@ const FinanceApproval: React.FC = () => {
     const normalizedHead = normalizeText(primaryHead) || normalizeText(budgetHead);
     const normalizedSubHead =
       (extraDropdownVisible ? normalizeText(eventSubHead) : '') || normalizeText(subHead);
+    const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(normalizedHead, normalizedSubHead);
 
-    if (!normalizedHead || !normalizedSubHead) {
+    if (!normalizedHead || (!headOnlyMatch && !normalizedSubHead)) {
       setBudgetLineMetaByRow((prev) => ({
         ...prev,
         [rowIndex]: {
@@ -1489,8 +1636,8 @@ const FinanceApproval: React.FC = () => {
       const response = await authenticityUtility.get('/finance-requests/budget-availability', {
         params: {
           budget_head: normalizedHead,
-          sub_head: normalizeSubHeadForDb(normalizedSubHead),
-          head_only_match: '0',
+          ...(normalizedSubHead ? { sub_head: normalizeSubHeadForDb(normalizedSubHead) } : {}),
+          head_only_match: headOnlyMatch ? '1' : '0',
           finance_id: isEditMode && id ? id : undefined,
           beneficiary_type: beneficiaryType || undefined,
           beneficiary_value: beneficiaryValue || undefined,
@@ -1508,13 +1655,21 @@ const FinanceApproval: React.FC = () => {
       };
 
       const selected = response?.data?.selected || null;
-      const availableAmount = Number(selected?.availableAmount ?? response?.data?.totalAvailable ?? 0);
+      const availableAmount = Number(
+        headOnlyMatch
+          ? (response?.data?.totalAvailable ?? selected?.availableAmount ?? 0)
+          : (selected?.availableAmount ?? response?.data?.totalAvailable ?? 0)
+      );
 
       setBudgetLineMetaByRow((prev) => ({
         ...prev,
         [rowIndex]: {
-          budgetLineId: selected?.budgetLineId ? Number(selected.budgetLineId) : null,
-          budgetProposalId: selected?.budgetProposalId ? Number(selected.budgetProposalId) : null,
+          budgetLineId: headOnlyMatch
+            ? null
+            : (selected?.budgetLineId ? Number(selected.budgetLineId) : null),
+          budgetProposalId: headOnlyMatch
+            ? null
+            : (selected?.budgetProposalId ? Number(selected.budgetProposalId) : null),
           availableAmount: Number.isFinite(availableAmount) ? availableAmount : 0,
         },
       }));
@@ -1544,7 +1699,14 @@ const FinanceApproval: React.FC = () => {
         },
       }));
     } else if (field === 'amount') {
-      let num = Number(value) || 0;
+      const raw = String(value ?? '').trim();
+      if (raw === '') {
+        updated[index][field] = '';
+        setBudgetRows(updated);
+        return;
+      }
+
+      let num = Number(raw) || 0;
       if (num > MAX_AMOUNT) num = MAX_AMOUNT;
       const remainingAmount = getRemainingAvailableForRow(index);
       if (num > remainingAmount) {
@@ -1558,8 +1720,9 @@ const FinanceApproval: React.FC = () => {
     } else {
       updated[index][field] = value;
       if (field === 'head') {
-        const selectedHead = updated[index].category;
-        fetchBudgetAvailability(index, selectedHead, normalizeSubHeadForDb(value));
+        // Reset entered amount when sub head changes so placeholder reflects fresh availability.
+        updated[index].amount = '';
+        fetchBudgetAvailability(index, normalizeText(primaryHead) || updated[index].category, normalizeSubHeadForDb(value));
       }
     }
     setBudgetRows(updated);
@@ -1581,8 +1744,10 @@ const FinanceApproval: React.FC = () => {
       return updated;
     });
 
-    if (selectedHead && selectedSubHead) {
-      fetchBudgetAvailability(index, selectedHead, normalizeSubHeadForDb(selectedSubHead));
+    const effectiveLookupHead = normalizeText(primaryHead) || selectedHead;
+    const canFetchWithHeadOnly = shouldUseHeadOnlyAvailabilityMatch(effectiveLookupHead, selectedSubHead);
+    if (effectiveLookupHead && (selectedSubHead || canFetchWithHeadOnly)) {
+      fetchBudgetAvailability(index, effectiveLookupHead, normalizeSubHeadForDb(selectedSubHead));
     } else {
       setBudgetLineMetaByRow((prev) => ({
         ...prev,
@@ -1594,6 +1759,8 @@ const FinanceApproval: React.FC = () => {
       }));
     }
   };
+
+  const availabilityFetchKeyByRowRef = useRef<Record<number, string>>({});
 
   const handleAddIncomeRow = () => {
     const lastIndex = incomeRows.length - 1;
@@ -1611,16 +1778,16 @@ const FinanceApproval: React.FC = () => {
   };
 
   const handleIncomeRowChange = (id: string, field: keyof IncomeRow, value: string) =>
-  setIncomeRows((prev) =>
-    prev.map((row) =>
-      row.id === id
-        ? {
+    setIncomeRows((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? {
             ...row,
             [field]: field === "amount" ? value.replace(/\D/g, "") : value,
           }
-        : row
-    )
-  );
+          : row
+      )
+    );
   const createAnnexureRowId = () => `annexure-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
 
   const handleAnnexureFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -1629,6 +1796,18 @@ const FinanceApproval: React.FC = () => {
 
     if (!String(annexureType || '').trim()) {
       showAlert('Please select annexure type before uploading files.', 'warning');
+      if (annexureFileInputRef.current) {
+        annexureFileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    const invalidFiles = files.filter(
+      (file) => file.type !== 'application/pdf' || file.size >= 2 * 1024 * 1024
+    );
+
+    if (invalidFiles.length > 0) {
+      showAlert('Only PDF files with a size less than 2MB are allowed.', 'warning');
       if (annexureFileInputRef.current) {
         annexureFileInputRef.current.value = '';
       }
@@ -1709,7 +1888,7 @@ const FinanceApproval: React.FC = () => {
     ...iconBtn,
     background: '#ffe6e6',
     alignItems: 'center',
-    color:'#dc3545'
+    color: '#dc3545'
   };
   const annexureUploadButtonStyle: CSSProperties = {
     display: 'inline-flex',
@@ -1754,13 +1933,10 @@ const FinanceApproval: React.FC = () => {
 
   const getBudgetRowMissingFields = (row: BudgetRow): string[] => {
     const missing: string[] = [];
+    const normalizedBudgetHead = normalizeText(row.category);
 
-    if (!hasFilledText(row.category)) {
+    if (!normalizedBudgetHead) {
       missing.push('Budget Head');
-    }
-
-    if (!hasFilledText(row.head)) {
-      missing.push('Sub Head');
     }
 
     if (!(Number(row.amount || 0) > 0)) {
@@ -1774,7 +1950,6 @@ const FinanceApproval: React.FC = () => {
     const row = budgetRows[index];
     if (!row) return false;
     if (!hasFilledText(primaryHead)) return false;
-    if (extraDropdownVisible && !hasFilledText(eventSubHead)) return false;
     return getBudgetRowMissingFields(row).length === 0;
   };
 
@@ -1782,9 +1957,6 @@ const FinanceApproval: React.FC = () => {
     const row = budgetRows[index];
     if (!hasFilledText(primaryHead)) {
       return 'Select Head of Accounts first';
-    }
-    if (extraDropdownVisible && !hasFilledText(eventSubHead)) {
-      return 'Select the sub head for Head of Accounts first';
     }
     if (!row) {
       return 'Fill the current budget row first';
@@ -1882,10 +2054,6 @@ const FinanceApproval: React.FC = () => {
       }
       if (!hasFilledText(primaryHead)) {
         showAlert('Please select Head of Accounts.', 'warning');
-        return;
-      }
-      if (extraDropdownVisible && !hasFilledText(eventSubHead)) {
-        showAlert('Please select the sub head for Head of Accounts.', 'warning');
         return;
       }
       if (showUnplannedBudget) {
@@ -2040,15 +2208,20 @@ const FinanceApproval: React.FC = () => {
         credit_status: primaryIncomeRow?.status || '',
         debit_status: debitStatus || null,
         partial_amount: primaryIncomeRow?.amount || null,
-        budget_rows: budgetRows.map((row, index) => ({
-          budget_head: normalizeText(primaryHead) || row.category,
-          sub_head: (extraDropdownVisible ? normalizeText(eventSubHead) : '') || row.head,
-          head_only_match: false,
-          amount: Number(row.amount || 0),
-          budget_line_id: budgetLineMetaByRow[index]?.budgetLineId || null,
-          budget_proposal_id: budgetLineMetaByRow[index]?.budgetProposalId || null,
-          available_amount_snapshot: budgetLineMetaByRow[index]?.availableAmount ?? null,
-        })),
+        budget_rows: budgetRows.map((row, index) => {
+          const normalizedBudgetHead = normalizeText(primaryHead) || normalizeText(row.category);
+          const normalizedSubHead = normalizeText(row.head);
+          const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead, normalizedSubHead);
+          return {
+            budget_head: normalizedBudgetHead,
+            sub_head: normalizedSubHead,
+            head_only_match: headOnlyMatch,
+            amount: Number(row.amount || 0),
+            budget_line_id: headOnlyMatch ? null : (budgetLineMetaByRow[index]?.budgetLineId || null),
+            budget_proposal_id: headOnlyMatch ? null : (budgetLineMetaByRow[index]?.budgetProposalId || null),
+            available_amount_snapshot: budgetLineMetaByRow[index]?.availableAmount ?? null,
+          };
+        }),
         income_rows: showIncomeSection ? incomeRows : [],
       };
 
@@ -2069,7 +2242,23 @@ const FinanceApproval: React.FC = () => {
         }
       }
 
-      navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard');
+      const responseId = isEditMode ? id : (result as any).data?.id;
+      const refNo = responseId ? `#F-${new Date().getFullYear()}-${String(responseId).padStart(4, '0')}` : '';
+
+      showAlert(
+        <div>
+          <div>{isEditMode ? 'Finance request updated successfully!' : 'Finance request submitted successfully!'}</div>
+          {refNo && <div style={{ marginTop: '8px', fontWeight: 'bold' }}>Reference No.: {refNo}</div>}
+        </div>,
+        'success',
+        'Success',
+        false,
+        'OK',
+        () => {
+          closeAlert();
+          navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard');
+        }
+      );
     } catch (error) {
       console.error('Finance submit error:', error);
       const apiMessage =
@@ -2092,6 +2281,12 @@ const FinanceApproval: React.FC = () => {
     }
 
     if (decision === 'approved' || decision === 'archived') {
+      if (decision === 'approved' && loadedCurrentStage === 'principal' && totalBudget > 10000 && !hasPrincipalDocument) {
+        setPrincipalApprovalFile(null);
+        setPrincipalApprovalPopupOpen(true);
+        return;
+      }
+
       const isArchivedAction = decision === 'archived';
       showAlert(
         isArchivedAction
@@ -2114,6 +2309,16 @@ const FinanceApproval: React.FC = () => {
 
   const executeWorkflowAction = async (decision: 'approved' | 'returned' | 'rejected' | 'archived', feedback?: string) => {
     if (!id) return;
+    if (
+      decision === 'approved'
+      && loadedCurrentStage === 'principal'
+      && totalBudget > 10000
+      && !hasPrincipalDocument
+    ) {
+      setPrincipalApprovalFile(null);
+      setPrincipalApprovalPopupOpen(true);
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -2163,7 +2368,54 @@ const FinanceApproval: React.FC = () => {
     setWfActionComment('');
   };
 
- const handleReset = (force = false): void => {
+  const uploadPrincipalDocument = async (file: File): Promise<boolean> => {
+    if (!id) return false;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      setIsLoading(true);
+      const response = await authenticityUtility.postFile(`/finance-requests/${id}/principal-document`, formData) as any;
+      if (response?.status !== 'success') {
+        showAlert(response?.message || 'Failed to upload principal document', 'error');
+        return false;
+      }
+      setHasPrincipalDocument(true);
+      return true;
+    } catch (error: any) {
+      showAlert(error?.response?.data?.message || error?.message || 'Failed to upload principal document', 'error');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const closePrincipalApprovalPopup = () => {
+    if (principalApprovalSubmitting) return;
+    setPrincipalApprovalPopupOpen(false);
+    setPrincipalApprovalFile(null);
+  };
+
+  const submitPrincipalApproval = async () => {
+    if (principalApprovalSubmitting) return;
+    if (!principalApprovalFile) {
+      showAlert('Please select a PDF document to upload before approving.', 'warning');
+      return;
+    }
+
+    setPrincipalApprovalSubmitting(true);
+    try {
+      const success = await uploadPrincipalDocument(principalApprovalFile);
+      if (success) {
+        await executeWorkflowAction('approved');
+        setPrincipalApprovalPopupOpen(false);
+        setPrincipalApprovalFile(null);
+      }
+    } finally {
+      setPrincipalApprovalSubmitting(false);
+    }
+  };
+
+  const handleReset = (force = false): void => {
     const performReset = () => {
       setApplicantName('');
       setDate('');
@@ -2257,6 +2509,7 @@ const FinanceApproval: React.FC = () => {
   const [categorySelections, setCategorySelections] = useState<string[]>([]);
 
   const [primaryHead, setPrimaryHead] = useState<string>('');
+  // eventSubHead: Shared sub-head for the entire request (appears for HOAC groups)
   const [eventSubHead, setEventSubHead] = useState<string>('');
   const MAX_AMOUNT = 999999999;
   const [selectedBudgetHeadForModal, setSelectedBudgetHeadForModal] = useState<string>('');
@@ -2280,46 +2533,46 @@ const FinanceApproval: React.FC = () => {
   const { user } = useAuth();
   const { id } = useParams<{ id?: string }>();
   const isEditMode = Boolean(id && location.pathname.includes('edit'));
-const isViewMode = Boolean(id && !isEditMode);
-const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
-const isApprovalMode = isViewMode && isAdminWorkflowContext;
+  const isViewMode = Boolean(id && !isEditMode);
+  const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
+  const isApprovalMode = isViewMode && isAdminWorkflowContext;
 
-const normalizedWorkflowStatus = String(
-  loadedWorkflowStatus || ''
-).toLowerCase();
-const hasDofApproval = statusUpdates.some((update: any) => {
-  const stage = String(update?.stage || update?.role || '').toLowerCase();
-  const decision = String(update?.decision || update?.status || '').toLowerCase();
-  return stage.includes('dof') && (decision === 'approved' || decision.includes('approved'));
-});
-const canDownloadPdf =
-  ['approved', 'completed'].includes(normalizedWorkflowStatus) ||
-  (isAdminWorkflowContext && totalBudget > 10000 && hasDofApproval);
+  const normalizedWorkflowStatus = String(
+    loadedWorkflowStatus || ''
+  ).toLowerCase();
+  const hasDofApproval = statusUpdates.some((update: any) => {
+    const stage = String(update?.stage || update?.role || '').toLowerCase();
+    const decision = String(update?.decision || update?.status || '').toLowerCase();
+    return stage.includes('dof') && (decision === 'approved' || decision.includes('approved'));
+  });
+  const canDownloadPdf =
+    ['approved', 'completed'].includes(normalizedWorkflowStatus) ||
+    (isAdminWorkflowContext && totalBudget > 10000 && hasDofApproval);
 
-const isSuperAdminUser = Boolean(user?.is_super_admin) || (
-  Array.isArray(user?.roles) &&
-  user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
-);
-
-const routeStateIsActionablePending = (location.state as any)?.isActionablePending;
-const hideWorkflowActionsForFinalStatus =
-  !isSuperAdminUser && (
-    routeStateIsActionablePending === false ||
-    normalizedWorkflowStatus.includes('approved') ||
-    normalizedWorkflowStatus.includes('returned') ||
-    normalizedWorkflowStatus.includes('completed') ||
-    normalizedWorkflowStatus.includes('rejected') ||
-    normalizedWorkflowStatus.includes('archived')
+  const isSuperAdminUser = Boolean(user?.is_super_admin || (user as any)?.isSuperAdmin) || (
+    Array.isArray(user?.roles) &&
+    user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
   );
 
-// Only allow the respective stage head to act (not super admin)
-const canActOnCurrentStage = (() => {
-  if (!isViewMode || !loadedCurrentStage) return false;
-  // Super admin cannot approve/reject — only the respective head can
-  if (isSuperAdminUser) return false;
-  const userPermissions = (user?.permissions || []).map(p => String(p).toLowerCase());
-  return userPermissions.includes(`finance.workflow.${loadedCurrentStage}`);
-})();
+  const routeStateIsActionablePending = (location.state as any)?.isActionablePending;
+  const hideWorkflowActionsForFinalStatus =
+    !isSuperAdminUser && (
+      routeStateIsActionablePending === false ||
+      normalizedWorkflowStatus.includes('approved') ||
+      normalizedWorkflowStatus.includes('returned') ||
+      normalizedWorkflowStatus.includes('completed') ||
+      normalizedWorkflowStatus.includes('rejected') ||
+      normalizedWorkflowStatus.includes('archived')
+    );
+
+  // Only allow the respective stage head to act (not super admin)
+  const canActOnCurrentStage = (() => {
+    if (!isViewMode || !loadedCurrentStage) return false;
+    // Super admin cannot approve/reject — only the respective head can
+    if (isSuperAdminUser) return false;
+    const userPermissions = (user?.permissions || []).map(p => String(p).toLowerCase());
+    return userPermissions.includes(`finance.workflow.${loadedCurrentStage}`);
+  })();
 
   // Tag auto-selection based on beneficiary type
   useEffect(() => {
@@ -2510,6 +2763,7 @@ const canActOnCurrentStage = (() => {
             }))
             : [createIncomeRow()]
         );
+        setHasPrincipalDocument(Boolean(record.principal_document && record.principal_document.file_path));
         setStatusUpdates(record.status_updates || []);
       } catch (error) {
         console.error('Failed to load finance request', error);
@@ -2649,19 +2903,57 @@ const canActOnCurrentStage = (() => {
     // on every render due function identity churn; guards above keep it safe.
   }, [autoDownloadPdf, canDownloadPdf, isLoading, showPreview]);
 
-  const activeHoacGroup = getHoacGroupForHead(primaryHead);
+  const activeHoacGroup = getHoacGroupForHead(primaryHead) || '';
   const extraDropdownVisible = Boolean(activeHoacGroup);
-  const hoacSubheadDropdownOptions = toOptions(
-    SUB_HEAD_BY_BUDGET_HEAD[primaryHead] ||
-    HOAC_SUBHEAD_OPTIONS[activeHoacGroup || ''] ||
-    []
-  );
+  const hoacSubheadDropdownOptions = useMemo(() => {
+    if (!activeHoacGroup) return [];
+    const budgetSubHeads = SUB_HEAD_BY_BUDGET_HEAD[primaryHead] || [];
+    if (primaryHead === 'Club Activities') {
+      return toOptions(budgetSubHeads);
+    }
+    const groupSubHeads = HOAC_SUBHEAD_OPTIONS[activeHoacGroup] || [];
+    const combined = Array.from(new Set([...budgetSubHeads, ...groupSubHeads]));
+    return toOptions(combined);
+  }, [primaryHead, activeHoacGroup]);
+  useEffect(() => {
+    const nextFetchKeys: Record<number, string> = {};
+    const normalizedBeneficiaryType = normalizeText(beneficiaryType);
+    const normalizedBeneficiaryValue = normalizeText(beneficiaryValue);
+    const normalizedFinanceId = isEditMode && id ? String(id) : '';
+
+    budgetRows.forEach((row, index) => {
+      const normalizedHead = normalizeText(primaryHead) || normalizeText(row.category);
+      const rowSubHead = normalizeText(row.head);
+      const effectiveSubHead = (extraDropdownVisible ? normalizeText(eventSubHead) : '') || rowSubHead;
+      const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(normalizedHead, effectiveSubHead);
+
+      if (!normalizedHead || (!headOnlyMatch && !effectiveSubHead)) {
+        return;
+      }
+
+      const fetchKey = [
+        normalizedHead,
+        effectiveSubHead,
+        headOnlyMatch ? '1' : '0',
+        normalizedBeneficiaryType,
+        normalizedBeneficiaryValue,
+        normalizedFinanceId,
+      ].join('|');
+      nextFetchKeys[index] = fetchKey;
+      if (availabilityFetchKeyByRowRef.current[index] === fetchKey) {
+        return;
+      }
+
+      fetchBudgetAvailability(index, normalizedHead, rowSubHead);
+    });
+
+    availabilityFetchKeyByRowRef.current = nextFetchKeys;
+  }, [budgetRows, primaryHead, eventSubHead, extraDropdownVisible, beneficiaryType, beneficiaryValue, isEditMode, id]);
   const firstBudgetRowAutoSyncRef = useRef<{ category: string; head: string }>({ category: '', head: '' });
   useEffect(() => {
     if (!primaryHead) return;
 
     const nextCategory = normalizeText(primaryHead);
-    const nextHead = normalizeText(eventSubHead);
 
     setBudgetRows((rows) => {
       if (rows.length === 0) return rows;
@@ -2679,16 +2971,16 @@ const canActOnCurrentStage = (() => {
 
       if (!shouldAutoFill) return rows;
 
-      const syncedHead = nextHead || '';
-      firstBudgetRowAutoSyncRef.current = { category: nextCategory, head: syncedHead };
+      // Only auto-sync the budget head (category); leave sub head for the
+      // user to pick from the HOAC sub-head options in the table dropdown.
+      firstBudgetRowAutoSyncRef.current = { category: nextCategory, head: firstRow.head || '' };
 
       return rows.map((row, index) =>
         index === 0
           ? {
-              ...row,
-              category: nextCategory,
-              head: syncedHead,
-            }
+            ...row,
+            category: nextCategory,
+          }
           : row
       );
     });
@@ -3260,6 +3552,7 @@ const canActOnCurrentStage = (() => {
 
                         <div style={{ flex: '1 1 180px', minWidth: '180px' }}>
                           <CustomDropdown
+                            // SHARED EVENT/MEETING SUB-HEAD DROPDOWN (Extra Dropdown)
                             name="eventSubHead"
                             options={hoacSubheadDropdownOptions}
                             value={getSelectedOption(eventSubHead, hoacSubheadDropdownOptions)}
@@ -3396,9 +3689,13 @@ const canActOnCurrentStage = (() => {
                         </td>
                         <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
                           <CustomDropdown
+                            // ROW-LEVEL BUDGET SUB-HEAD DROPDOWN
                             name={`subHead-${index}`}
                             options={getSubHeadDropdownOptions(row.category)}
-                            value={getSelectedOption(row.head, getSubHeadDropdownOptions(row.category))}
+                            value={
+                              getSelectedOption(row.head, getSubHeadDropdownOptions(row.category))
+                              || (row.head ? { value: row.head, label: getSubHeadDisplayText(row.head) } : null)
+                            }
                             onChange={(option) => {
                               const selected = option as OptionType | null;
                               handleBudgetChange(index, 'head', selected?.value ? String(selected.value) : '');
@@ -3464,7 +3761,7 @@ const canActOnCurrentStage = (() => {
                                   justifyContent: 'center',
                                   fontSize: '18px',
                                   transition: 'all 0.15s ease',
-                                  color:'#dc3545'
+                                  color: '#dc3545'
                                 }}
                                 title="Delete Row"
                                 onMouseEnter={(e) => {
@@ -3498,7 +3795,7 @@ const canActOnCurrentStage = (() => {
                                   fontSize: '18px',
                                   transition: 'all 0.15s ease',
                                   opacity: isBudgetRowReadyForAdd(index) ? 1 : 0.5,
-                                  color:'#0069ab'
+                                  color: '#0069ab'
                                 }}
                                 title={getBudgetAddTooltip(index)}
                                 onMouseEnter={(e) => {
@@ -3636,7 +3933,7 @@ const canActOnCurrentStage = (() => {
                 marginBottom: '20px',
                 boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
               }}
-             >
+            >
               <div className="row mt-3">
                 <div className="col-md-12">
                   <div className="form-group">
@@ -3688,7 +3985,7 @@ const canActOnCurrentStage = (() => {
                                   {/* First Row - Income Details */}
                                   <tr>
                                     <td style={incomeCellStyle}>{index + 1}</td>
-                                    
+
                                     <td style={incomeCellStyle}>
                                       <CustomDropdown
                                         name={`incomeSource-${row.id}`}
@@ -3706,8 +4003,8 @@ const canActOnCurrentStage = (() => {
                                         type="text"
                                         value={row.amount}
                                         onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                                                  handleIncomeRowChange(row.id, "amount", e.target.value.replace(/\D/g, ""))
-                                                }
+                                          handleIncomeRowChange(row.id, "amount", e.target.value.replace(/\D/g, ""))
+                                        }
                                         placeholder="₹  0"
                                         min="0"
                                         step="0"
@@ -3784,7 +4081,7 @@ const canActOnCurrentStage = (() => {
                                       textAlign: 'center',
                                       verticalAlign: 'middle',
                                       backgroundColor: '#fff',
-                                      }}>
+                                    }}>
                                       <div style={actionCell}>
                                         {(index > 0 || (index === 0 && incomeRows.length > 1)) && (
                                           <button
@@ -3805,7 +4102,7 @@ const canActOnCurrentStage = (() => {
                                           >
                                             ×
                                           </button>
-                                    )}
+                                        )}
                                         {isLastRow && (
                                           <button
                                             type="button"
@@ -3826,7 +4123,7 @@ const canActOnCurrentStage = (() => {
                                               justifyContent: 'center',
                                               fontSize: '18px',
                                               transition: 'all 0.15s ease',
-                                              color:'#0069ab',
+                                              color: '#0069ab',
                                               opacity: isIncomeRowReadyForAdd(row) ? 1 : 0.5,
                                             }}
                                             title={getIncomeAddTooltip(row, index)}
@@ -3983,7 +4280,7 @@ const canActOnCurrentStage = (() => {
               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
               border: '1px solid #e0e0e0',
             }}
-           >
+          >
             <div className="row mt-3">
               <div className="col-md-12">
                 <div className="form-group">
@@ -3996,7 +4293,7 @@ const canActOnCurrentStage = (() => {
                   <div className="row g-3">
                     <div className="col-md-6">
                       <div className="form-group mb-0">
-                        
+
                         <CustomDropdown
                           name="annexureType"
                           options={toOptions(ANNEXURE_TYPE_OPTIONS)}
@@ -4013,12 +4310,13 @@ const canActOnCurrentStage = (() => {
 
                     <div className="col-md-6">
                       <div className="form-group mb-0">
-                        
+
                         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
                           <input
                             ref={annexureFileInputRef}
                             id="annexure-file-input"
                             type="file"
+                            accept="application/pdf,.pdf"
                             multiple
                             style={{ display: 'none' }}
                             disabled={isViewMode}
@@ -4037,8 +4335,8 @@ const canActOnCurrentStage = (() => {
                               isViewMode
                                 ? 'View mode'
                                 : hasFilledText(annexureType)
-                                ? 'Choose annexure file'
-                                : 'Select annexure type before choosing files'
+                                  ? 'Choose annexure file'
+                                  : 'Select annexure type before choosing files'
                             }
                             onMouseEnter={(e) => {
                               if (!isViewMode && hasFilledText(annexureType)) {
@@ -4087,7 +4385,7 @@ const canActOnCurrentStage = (() => {
                                       padding: '2px',
                                     }}
                                     title="View uploaded document"
-                                    >
+                                  >
                                     <Eye size={18} />
                                   </button>
                                   {!isViewMode && (
@@ -4128,60 +4426,81 @@ const canActOnCurrentStage = (() => {
         </div>
       )}
 
-    <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0' }}>
-      <div
-        style={{
-          maxWidth: '100%',
-          margin: '0 auto',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '18px',
-        }}
-      >
-        {!showPreview && !isViewMode && (
-          <button
-            type="button"
-            onClick={handleSubmit}
-            style={{
-              backgroundColor: '#0069ab',
-              color: '#fff',
-              border: 'none',
-              padding: '12px 24px',
-              borderRadius: '12px',
-              fontSize: '0.95rem',
-              fontWeight: '500',
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              transition: 'all 0.3s ease',
-              minWidth: '140px',
-              opacity: isLoading ? 0.7 : 1,
-              whiteSpace: 'nowrap',
-            }}
-            disabled={isLoading}
-            onMouseEnter={(e) => {
-              if (!isLoading) e.currentTarget.style.backgroundColor = '#005492';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#0069ab';
-            }}
-          >
-            {isLoading ? 'Submitting...' : isEditMode ? 'Update Form' : 'Submit Form'}
-          </button>
-        )}
+      <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0' }}>
+        <div
+          style={{
+            maxWidth: '100%',
+            margin: '0 auto',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '18px',
+          }}
+        >
+          {!showPreview && !isViewMode && (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              style={{
+                backgroundColor: '#0069ab',
+                color: '#fff',
+                border: 'none',
+                padding: '12px 24px',
+                borderRadius: '12px',
+                fontSize: '0.95rem',
+                fontWeight: '500',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease',
+                minWidth: '140px',
+                opacity: isLoading ? 0.7 : 1,
+                whiteSpace: 'nowrap',
+              }}
+              disabled={isLoading}
+              onMouseEnter={(e) => {
+                if (!isLoading) e.currentTarget.style.backgroundColor = '#005492';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#0069ab';
+              }}
+            >
+              {isLoading ? 'Submitting...' : isEditMode ? 'Update Form' : 'Submit Form'}
+            </button>
+          )}
 
-        {(isApprovalMode || canActOnCurrentStage) && !hideWorkflowActionsForFinalStatus && !showPreview ? (
-          <div className="finance-workflow-actions">
-            {!isSuperAdminUser && canActOnCurrentStage && (
-              <>
-                <button
-                  type="button"
-                  className="finance-workflow-btn finance-workflow-btn--approve"
-                  onClick={() => handleWorkflowAction('approved')}
-                  disabled={isLoading}
-                >
-                  <CheckCircle2 size={18} />
-                  Approve
-                </button>
+          {(isApprovalMode || canActOnCurrentStage) && !hideWorkflowActionsForFinalStatus && !showPreview ? (
+            <div className="finance-workflow-actions">
+              {!isSuperAdminUser && canActOnCurrentStage && (
+                <>
+                  <button
+                    type="button"
+                    className="finance-workflow-btn finance-workflow-btn--approve"
+                    onClick={() => handleWorkflowAction('approved')}
+                    disabled={isLoading}
+                  >
+                    <CheckCircle2 size={18} />
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="finance-workflow-btn finance-workflow-btn--return"
+                    onClick={() => handleWorkflowAction('returned')}
+                    disabled={isLoading}
+                  >
+                    <RotateCcw size={18} />
+                    Return
+                  </button>
+                  <button
+                    type="button"
+                    className="finance-workflow-btn finance-workflow-btn--reject"
+                    onClick={() => handleWorkflowAction('rejected')}
+                    disabled={isLoading}
+                  >
+                    <XCircle size={18} />
+                    Reject
+                  </button>
+                </>
+              )}
+              {isSuperAdminUser && (
                 <button
                   type="button"
                   className="finance-workflow-btn finance-workflow-btn--return"
@@ -4191,130 +4510,109 @@ const canActOnCurrentStage = (() => {
                   <RotateCcw size={18} />
                   Return
                 </button>
-                <button
-                  type="button"
-                  className="finance-workflow-btn finance-workflow-btn--reject"
-                  onClick={() => handleWorkflowAction('rejected')}
-                  disabled={isLoading}
-                >
-                  <XCircle size={18} />
-                  Reject
-                </button>
-              </>
-            )}
-            {isSuperAdminUser && (
+              )}
               <button
                 type="button"
-                className="finance-workflow-btn finance-workflow-btn--return"
-                onClick={() => handleWorkflowAction('returned')}
+                className="finance-workflow-btn finance-workflow-btn--archive"
+                onClick={() => handleWorkflowAction('archived')}
                 disabled={isLoading}
               >
-                <RotateCcw size={18} />
-                Return
+                <Archive size={18} />
+                Archive
               </button>
-            )}
-            <button
-              type="button"
-              className="finance-workflow-btn finance-workflow-btn--archive"
-              onClick={() => handleWorkflowAction('archived')}
-              disabled={isLoading}
-            >
-              <Archive size={18} />
-              Archive
-            </button>
-          </div>
-        ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
-    </div>
 
       {showPreview && (() => {
         const getApprovalDetailUi = (stageKeys: string[]) => {
-  let lastResetIdx = -1;
+          let lastResetIdx = -1;
 
-  for (let i = statusUpdates.length - 1; i >= 0; i--) {
-    const dec = String(statusUpdates[i]?.decision || '').toLowerCase();
-    const stat = String(statusUpdates[i]?.status || '').toLowerCase();
+          for (let i = statusUpdates.length - 1; i >= 0; i--) {
+            const dec = String(statusUpdates[i]?.decision || '').toLowerCase();
+            const stat = String(statusUpdates[i]?.status || '').toLowerCase();
 
-    if (
-      dec === 'returned' ||
-      dec === 'rejected' ||
-      stat === 'returned' ||
-      stat === 'rejected' ||
-      dec === 'resubmitted' ||
-      dec.includes('resubmit')
-    ) {
-      lastResetIdx = i;
-      break;
-    }
-  }
+            if (
+              dec === 'returned' ||
+              dec === 'rejected' ||
+              stat === 'returned' ||
+              stat === 'rejected' ||
+              dec === 'resubmitted' ||
+              dec.includes('resubmit')
+            ) {
+              lastResetIdx = i;
+              break;
+            }
+          }
 
-  const currentFlowUpdates = statusUpdates.slice(lastResetIdx + 1);
+          const currentFlowUpdates = statusUpdates.slice(lastResetIdx + 1);
 
-  const approved = currentFlowUpdates.filter((u: any) => {
-    const stage = String(u?.stage || '').toLowerCase();
-    const decision = String(u?.decision || '').toLowerCase();
-    const status = String(u?.status || '').toLowerCase();
+          const approved = currentFlowUpdates.filter((u: any) => {
+            const stage = String(u?.stage || '').toLowerCase();
+            const decision = String(u?.decision || '').toLowerCase();
+            const status = String(u?.status || '').toLowerCase();
 
-    return (
-      stageKeys.includes(stage) &&
-      (decision === 'approved' || status === 'approved' || status.includes('approved'))
-    );
-  });
+            return (
+              stageKeys.includes(stage) &&
+              (decision === 'approved' || status === 'approved' || status.includes('approved'))
+            );
+          });
 
-  if (approved.length === 0) {
-    return { name: '', email: '', date: '' };
-  }
+          if (approved.length === 0) {
+            return { name: '', email: '', date: '' };
+          }
 
-  approved.sort((a: any, b: any) => {
-    const tA = new Date(a?.decidedat || a?.createdat || 0).getTime();
-    const tB = new Date(b?.decidedat || b?.createdat || 0).getTime();
-    return tB - tA;
-  });
+          approved.sort((a: any, b: any) => {
+            const tA = new Date(a?.decidedat || a?.createdat || 0).getTime();
+            const tB = new Date(b?.decidedat || b?.createdat || 0).getTime();
+            return tB - tA;
+          });
 
-  const latest = approved[0];
-  const dateStr = latest?.decidedat || latest?.createdat;
+          const latest = approved[0];
+          const dateStr = latest?.decidedat || latest?.createdat;
 
-  const formattedDate = dateStr
-    ? new Date(dateStr).toLocaleString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        hour12: true,
-      })
-    : '';
+          const formattedDate = dateStr
+            ? new Date(dateStr).toLocaleString('en-IN', {
+              timeZone: 'Asia/Kolkata',
+              hour12: true,
+            })
+            : '';
 
- return {
-  name: latest?.username || latest?.actorname || '',
-  email: latest?.email || latest?.actoremail || latest?.useremail || '',
-  date: formattedDate,
-};
-};
-const getSubmittedDetailUi = () => {
-  const approvalHistory = getWorkflowTimeline(statusUpdates, {
-    name: applicantName || '',
-    email: email || '',
-    date: submittedAt ? formatWorkflowTimestamp(submittedAt) : getCurrentWorkflowTimestamp(),
-  });
-  const submittedTimestamp = getSubmittedTimestamp(
-    approvalHistory,
-    submittedAt ? formatWorkflowTimestamp(submittedAt) : '',
-    !id
-  );
-  const submitted = approvalHistory.find((entry) => entry.label === 'Submitted');
+          return {
+            name: latest?.username || latest?.actorname || '',
+            email: latest?.email || latest?.actoremail || latest?.useremail || '',
+            date: formattedDate,
+          };
+        };
+        const getSubmittedDetailUi = () => {
+          const approvalHistory = getWorkflowTimeline(statusUpdates, {
+            name: applicantName || '',
+            email: email || '',
+            date: submittedAt ? formatWorkflowTimestamp(submittedAt) : getCurrentWorkflowTimestamp(),
+          });
+          const submittedTimestamp = getSubmittedTimestamp(
+            approvalHistory,
+            submittedAt ? formatWorkflowTimestamp(submittedAt) : '',
+            !id
+          );
+          const submitted = approvalHistory.find((entry) => entry.label === 'Submitted');
 
-  if (!submitted) {
-    return { name: applicantName || '', email: email || '', date: submittedTimestamp };
-  }
+          if (!submitted) {
+            return { name: applicantName || '', email: email || '', date: submittedTimestamp };
+          }
 
-  return {
-    name: submitted.actor || applicantName || '',
-    email: submitted.email || email || '',
-    date: submittedTimestamp || submitted.timestamp || '',
-  };
-};
+          return {
+            name: submitted.actor || applicantName || '',
+            email: submitted.email || email || '',
+            date: submittedTimestamp || submitted.timestamp || '',
+          };
+        };
 
         const submittedByUi = getSubmittedDetailUi();
-const level1ApprovalUi = getApprovalDetailUi(['level1', 'hod', 'coordinator', 'ithead']);
-const dofApprovalUi = getApprovalDetailUi(['dof']);
-const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
+        const level1ApprovalUi = getApprovalDetailUi(['level1', 'hod', 'coordinator', 'ithead']);
+        const dofApprovalUi = getApprovalDetailUi(['dof']);
+        const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
         const approvalHistory = getWorkflowTimeline(statusUpdates, {
           name: applicantName || '',
           email: email || '',
@@ -4326,46 +4624,46 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
         );
         const showSeniorApprovalRow = totalBudget > 10000;
 
-  const renderPersonLine = (name?: string, mail?: string, timestamp?: string) => {
-  const trimmedName = String(name || '').trim();
-  const trimmedMail = String(mail || '').trim();
-  const trimmedTime = String(timestamp || '').trim();
+        const renderPersonLine = (name?: string, mail?: string, timestamp?: string) => {
+          const trimmedName = String(name || '').trim();
+          const trimmedMail = String(mail || '').trim();
+          const trimmedTime = String(timestamp || '').trim();
 
-  const actorAlreadyHasMail =
-    trimmedMail.length > 0 &&
-    trimmedName.toLowerCase().includes(trimmedMail.toLowerCase());
+          const actorAlreadyHasMail =
+            trimmedMail.length > 0 &&
+            trimmedName.toLowerCase().includes(trimmedMail.toLowerCase());
 
-  const displayName = trimmedName || '-';
-  const displayMail = trimmedMail && !actorAlreadyHasMail ? ` (${trimmedMail})` : '';
-  const displayTime = trimmedTime ? ` on ${trimmedTime}` : '';
+          const displayName = trimmedName || '-';
+          const displayMail = trimmedMail && !actorAlreadyHasMail ? ` (${trimmedMail})` : '';
+          const displayTime = trimmedTime ? ` on ${trimmedTime}` : '';
 
-  return (
-    <span>
-      {displayName}
-      {displayMail}
-      {displayTime}
-    </span>
-  );
-};
-  const previewTimelineRowStyle: CSSProperties = {
-    padding: '8px 10px',
-    fontSize: '14px',
-    lineHeight: '1.45',
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '4px',
-    alignItems: 'baseline',
-  };
+          return (
+            <span>
+              {displayName}
+              {displayMail}
+              {displayTime}
+            </span>
+          );
+        };
+        const previewTimelineRowStyle: CSSProperties = {
+          padding: '8px 10px',
+          fontSize: '14px',
+          lineHeight: '1.45',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '4px',
+          alignItems: 'baseline',
+        };
 
-  const previewTimelineLabelStyle: CSSProperties = {
-    fontWeight: 600,
-    whiteSpace: 'nowrap',
-  };
+        const previewTimelineLabelStyle: CSSProperties = {
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+        };
 
-  const previewTimelineValueStyle: CSSProperties = {
-    flex: '1 1 auto',
-    minWidth: 0,
-  };
+        const previewTimelineValueStyle: CSSProperties = {
+          flex: '1 1 auto',
+          minWidth: 0,
+        };
         return (
           <div ref={componentRef} style={{
             position: 'relative',
@@ -4483,14 +4781,14 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                   {primaryHead || '\u00A0'}
                   {extraDropdownVisible && eventSubHead && ` - ${eventSubHead}`}
                 </td>
-                
+
                 <td style={{ padding: '8px 5.5px', border: '1px solid #000', fontSize: '14px', verticalAlign: 'middle', height: '42px' }}><strong>Annexure</strong></td>
-                <td  style={{ padding: '8px 5.5px', border: '1px solid #000', fontSize: '14px', verticalAlign: 'middle', height: '42px', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                <td style={{ padding: '8px 5.5px', border: '1px solid #000', fontSize: '14px', verticalAlign: 'middle', height: '42px', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
                   {getAnnexureSummary()}
                 </td>
-              
+
               </tr>
-              
+
               <tr>
                 <td colSpan={4} style={{ padding: '8px 6px', border: '1px solid #000', verticalAlign: 'top' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', marginTop: '4px', tableLayout: 'fixed' }}>
@@ -4511,7 +4809,7 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                     <tbody>
                       {budgetRows.map((row, index) => (
                         <tr key={index}>
-                          <td  style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
+                          <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
                           <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.category || '\u00A0'}</td>
                           <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{getSubHeadDisplayText(row.head) || '\u00A0'}</td>
                           <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>₹  {Number(row.amount || 0)}</td>
@@ -4519,8 +4817,8 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                       ))}
                       {hasUnplannedBudgetPreview && (
                         <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
-                         <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'left', fontWeight: 'bold' }}>Unplanned Budget:{unplannedBudgetDescription || '\u00A0'}</td>
-                         <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹  {Number(unplannedBudgetAmount || 0)}</td>
+                          <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'left', fontWeight: 'bold' }}>Unplanned Budget:{unplannedBudgetDescription || '\u00A0'}</td>
+                          <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹  {Number(unplannedBudgetAmount || 0)}</td>
                         </tr>
                       )}
                       <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
@@ -4540,17 +4838,17 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                 <td colSpan={4} style={{ padding: '6px 8px', border: '1px solid #000' }}>
                   {showIncomeSection ? (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', tableLayout: 'fixed' }}>
-                    <colgroup>
-                      <col style={{ width: '8%' }} />
-                      <col style={{ width: '25%' }} />
-                      <col style={{ width: '20%' }} />
-                      <col style={{ width: '15%' }} />
-                      <col style={{ width: '27%' }} />
-                    </colgroup>
+                      <colgroup>
+                        <col style={{ width: '8%' }} />
+                        <col style={{ width: '25%' }} />
+                        <col style={{ width: '20%' }} />
+                        <col style={{ width: '15%' }} />
+                        <col style={{ width: '27%' }} />
+                      </colgroup>
                       <thead>
                         <tr style={{ backgroundColor: '#f8f8f8' }}>
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>S.No</th>
-                          
+
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Income Source</th>
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Status</th>
                           <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Amount</th>
@@ -4561,15 +4859,15 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                         {incomeRows.map((row, index) => (
                           <React.Fragment key={row.id}>
                             <tr>
-                              <td rowSpan={2}style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
-                             
+                              <td rowSpan={2} style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
+
                               <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.incomeSource || ''}</td>
-                               <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{row.status || ''}</td>
+                              <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{row.status || ''}</td>
                               <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {row.amount ? ` ${row.amount}` : ''}</td>
                               <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.remarks || ''}</td>
                             </tr>
                             <tr>
-                              
+
                               <td colSpan={1} style={{ padding: '2.5px 4px', border: '1px solid #000', fontWeight: 'bold', backgroundColor: '#f8f8f8' }}>
                                 <strong>Contribution</strong>{row.contribution ? ` - ${row.contribution}` : ''}
                               </td>
@@ -4588,89 +4886,89 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                 </td>
               </tr>
               <tr>
-  <td colSpan={4} style={{ padding: '0', border: '1px solid #000' }}>
-    <div
-      style={{
-        ...previewTimelineRowStyle,
-        borderBottom: approvalSteps.length > 0 || showSeniorApprovalRow ? '1px solid #000' : 'none',
-      }}
-    >
-      <span style={previewTimelineLabelStyle}>Submitted by</span>
-      <span style={previewTimelineValueStyle}>
-        {renderPersonLine(submittedByUi.name, submittedByUi.email, submittedByUi.date)}
-      </span>
-    </div>
+                <td colSpan={4} style={{ padding: '0', border: '1px solid #000' }}>
+                  <div
+                    style={{
+                      ...previewTimelineRowStyle,
+                      borderBottom: approvalSteps.length > 0 || showSeniorApprovalRow ? '1px solid #000' : 'none',
+                    }}
+                  >
+                    <span style={previewTimelineLabelStyle}>Submitted by</span>
+                    <span style={previewTimelineValueStyle}>
+                      {renderPersonLine(submittedByUi.name, submittedByUi.email, submittedByUi.date)}
+                    </span>
+                  </div>
 
-    
 
-    {approvalSteps.map((entry, index) => {
-      const entryKey = String(entry.key || `${entry.label}-${index}`);
-      const hasExpandedDetails =
-        Boolean(entry.fullSubtitle) &&
-        entry.fullSubtitle !== entry.subtitle;
-      const detailText = hasExpandedDetails && expandedTimelineDetails[entryKey]
-        ? entry.fullSubtitle
-        : entry.subtitle;
 
-      return (
-        <div
-          key={entryKey}
-          style={{
-            ...previewTimelineRowStyle,
-            borderBottom: index === approvalSteps.length - 1 ? 'none' : '1px solid #000',
-          }}
-        >
-          <span style={previewTimelineLabelStyle}>{entry.label} by</span>
-          <span
-            style={{
-              ...previewTimelineValueStyle,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              gap: '4px',
-            }}
-          >
-            <span>
-              {renderPersonLine(entry.actor, entry.email, entry.timestamp)}
-            </span>
-            {detailText ? (
-              <span style={{ fontSize: '12px', color: '#495057', lineHeight: 1.4 }}>
-                {detailText}
-              </span>
-            ) : null}
-            {hasExpandedDetails ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setExpandedTimelineDetails((prev) => ({
-                    ...prev,
-                    [entryKey]: !prev[entryKey],
-                  }));
-                }}
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  color: '#0d6efd',
-                  padding: 0,
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                }}
-              >
-                {expandedTimelineDetails[entryKey] ? 'Show less' : 'Show full changes'}
-              </button>
-            ) : null}
-          </span>
-        </div>
-      );
-    })}
-    {approvalHistory.length === 0 ? (
-      <div style={previewTimelineRowStyle}>
-        No approval history available
-      </div>
-    ) : null}
-  </td>
-</tr>
+                  {approvalSteps.map((entry, index) => {
+                    const entryKey = String(entry.key || `${entry.label}-${index}`);
+                    const hasExpandedDetails =
+                      Boolean(entry.fullSubtitle) &&
+                      entry.fullSubtitle !== entry.subtitle;
+                    const detailText = hasExpandedDetails && expandedTimelineDetails[entryKey]
+                      ? entry.fullSubtitle
+                      : entry.subtitle;
+
+                    return (
+                      <div
+                        key={entryKey}
+                        style={{
+                          ...previewTimelineRowStyle,
+                          borderBottom: index === approvalSteps.length - 1 ? 'none' : '1px solid #000',
+                        }}
+                      >
+                        <span style={previewTimelineLabelStyle}>{entry.label} by</span>
+                        <span
+                          style={{
+                            ...previewTimelineValueStyle,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'flex-start',
+                            gap: '4px',
+                          }}
+                        >
+                          <span>
+                            {renderPersonLine(entry.actor, entry.email, entry.timestamp)}
+                          </span>
+                          {detailText ? (
+                            <span style={{ fontSize: '12px', color: '#495057', lineHeight: 1.4 }}>
+                              {detailText}
+                            </span>
+                          ) : null}
+                          {hasExpandedDetails ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExpandedTimelineDetails((prev) => ({
+                                  ...prev,
+                                  [entryKey]: !prev[entryKey],
+                                }));
+                              }}
+                              style={{
+                                border: 'none',
+                                background: 'transparent',
+                                color: '#0d6efd',
+                                padding: 0,
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {expandedTimelineDetails[entryKey] ? 'Show less' : 'Show full changes'}
+                            </button>
+                          ) : null}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {approvalHistory.length === 0 ? (
+                    <div style={previewTimelineRowStyle}>
+                      No approval history available
+                    </div>
+                  ) : null}
+                </td>
+              </tr>
             </table>
 
             {(isApprovalMode || canActOnCurrentStage) && !hideWorkflowActionsForFinalStatus ? (
@@ -4789,7 +5087,7 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
 
       <CustomModal
         show={wfActionPopupOpen}
-        onHide={wfActionSubmitting ? (() => {}) : closeWfActionPopup}
+        onHide={wfActionSubmitting ? (() => { }) : closeWfActionPopup}
         title={wfActionType === 'returned' ? 'Return Item - Comments' : 'Reject Item - Comments'}
         size="sm"
         centered
@@ -4843,10 +5141,61 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
         confirmText={alertConfig.confirmText}
         cancelText={alertConfig.cancelText}
       />
+      <CustomModal
+        show={principalApprovalPopupOpen}
+        onHide={closePrincipalApprovalPopup}
+        title="Principal Approval Form"
+        centered
+        backdrop={principalApprovalSubmitting ? "static" : true}
+        keyboard={!principalApprovalSubmitting}
+        hideCloseButton={principalApprovalSubmitting}
+        footer={
+          <div className="d-flex justify-content-end gap-2 w-100">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={closePrincipalApprovalPopup}
+              disabled={principalApprovalSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-success"
+              onClick={submitPrincipalApproval}
+              disabled={principalApprovalSubmitting || !principalApprovalFile}
+            >
+              {principalApprovalSubmitting ? "Submitting..." : "Approve and Submit"}
+            </button>
+          </div>
+        }
+      >
+        <div style={{ fontSize: 14, marginBottom: 15 }}>
+          Please upload the required annexure document before approving this request.
+        </div>
+        <div className="mb-3">
+          <label className="form-label fw-bold">Upload Principal Annexure (PDF)</label>
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            required
+            className="form-control"
+            disabled={principalApprovalSubmitting}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file && ((file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) || file.size >= 2 * 1024 * 1024)) {
+                showAlert('Only PDF files with a size less than 2MB are allowed.', 'error');
+                e.target.value = '';
+                setPrincipalApprovalFile(null);
+                return;
+              }
+              setPrincipalApprovalFile(file || null);
+            }}
+          />
+        </div>
+      </CustomModal>
     </div>
   );
 };
 
 export default FinanceApproval;
-
-
