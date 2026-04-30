@@ -80,15 +80,15 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Software',
       'Membership & Subscriptions',
       'College Essentials',
-      'Printing & Stationery',
+      'Printing',
+      'Stationery',
       'Postal Expenses',
       'Local Conveyance',
     ],
   },
   {
     label: 'Events & Competitions',
-    options: ['Academic Events', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Event', 'Cultural & Celebrations', 'Sports'
-      , 'Competitions'],
+    options: ['Academic Events', 'Club Activities', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Event', 'Cultural & Celebrations', 'Sports', 'Competitions'],
   },
   {
     label: 'Meetings & Audits',
@@ -99,7 +99,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
   {
     label: 'Academics',
     options: [
-      'Faculty Empowerment', 'Staff Empowerment', 'Student Empowerment', 'Student Capacity Building', 'Accreditation Expenses', 'Examination Expenses',
+      'Faculty Empowerment', 'Staff Empowerment', 'Student Empowerment', 'Student Capacity Building', 'Ranking & Accreditation', 'Examination Expenses',
     ],
   },
   {
@@ -121,327 +121,432 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
 
 const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   'Civil Infrastructure': [
+    'Canopy',
     'Construction Works',
-    'Partition Works',
     'False Ceiling Works',
+    'Partition Works',
     'Plumbing Works',
-    'Canopy', 'Water Cooler'
+    'Water Cooler'
   ],
   'Electrical Infrastructure': [
+    'Air Conditioner',
+    'Battery',
     'Electrical Wiring',
+    'Generator',
     'Lights & Fans',
     'Lift Installation',
-    'Air Conditioner',
-    'UPS & Inverter',
-    'Battery', 'Generator'
+    'UPS & Inverter'
   ],
   'IT Infrastructure': [
-    'Hardwares',
-    'Softwares',
-    'Hard Disks',
-    'Monitors',
-    'Wi-fi Router',
-    'Network Materials',
-    'Laptops',
-    'Interactive Displays',
-    'Desktops Computers',
-    'CCTV Materials',
-    'Television',
-    'Projectors',
-    'Printers',
-    'Mobiles & Tablet',
-    'Mic & Speakers',
-    'Amplifiers',
     'A/V Equipment',
+    'Amplifiers',
+    'CCTV Materials',
+    'CMOS Battery',
+    'Desktops Computers',
+    'Hard Disks',
+    'Hardwares',
+    'Interactive Displays',
     'Intercom',
-    'Xerox Machine', 'Mouse', 'Keyboard', 'CMOS Battery'
+    'Keyboard',
+    'Laptops',
+    'Mic & Speakers',
+    'Mobiles & Tablet',
+    'Monitors',
+    'Mouse',
+    'Network Materials',
+    'Printers',
+    'Projectors',
+    'Softwares',
+    'Television',
+    'Wi-fi Router',
+    'Xerox Machine'
   ],
   'Furniture & Fixtures': [
     'Chair',
-    'Faculty Table',
     'Computer Table',
     'Discussion Table',
-    'Work Table',
+    'Faculty Table',
     'Wooden Cup Boards',
+    'Work Table'
   ],
-  Vehicles: ['Two Wheeler', 'Light Motor Vehicle', 'Heavy Motor Vehicle'],
+  Vehicles: ['Heavy Motor Vehicle', 'Light Motor Vehicle', 'Two Wheeler'],
   Equipment: [
+    'Consultancy Equipment',
+    'Equipment Upgrade',
     'Lab Equipment',
     'Minor Equipment',
-    'Consultancy Equipment',
+    'Office Equipment',
     'Research Equipment',
-    'Equipment Upgrade', 'Sports Equipment', 'Office Equipment'
+    'Sports Equipment'
   ],
   'Accessories & Kits': [
+    'Drilling Machine',
+    'Drone Kit',
+    'Lab Accessories',
     'Power Tools',
     'Weighing Machine',
-    'Drilling Machine',
-    'Drone Kit', 'Lab Accessories', 'Others'
+    'Others'
   ],
   'Library': [
     'Books',
+    'Databases',
+    'E-Books',
+    'E-Journals',
     'Journals',
     'Magazines',
+    'Membership',
     'Newspapers',
-    'E-Journals',
-    'E-Books',
-    'Remote Access Tool',
-    'Plagiarism Detection Tool',
     'Non Books (CD etc.)',
-    'Databases',
-    'Membership'
+    'Plagiarism Detection Tool',
+    'Remote Access Tool'
   ],
 
-  'Maintenance Charges': ['Annual Maintenance Charges', 'Equipment Maintenance',
-    'Software Maintenance',
+  'Maintenance Charges': [
+    'AC Maintenance',
+    'Annual Maintenance Charges',
     'Building Maintenance',
     'Computer Maintenance',
     'Electrical Maintenance',
+    'Equipment Maintenance',
+    'Farm Maintenance',
     'Furniture Maintenance',
-    'Plumbing Maintenance',
-    'Vehicle Maintenance',
     'Garden Maintenance',
+    'General Repairs',
+    'Housekeeping Expenses',
     'Infrastructure Maintenance',
-    'AC Maintenance',
-    'UPS Maintenance',
     'Lift Maintenance',
+    'Office Maintenance',
+    'Painting',
+    'Playground Maintenance',
+    'Plumbing Maintenance',
     'Printer Maintenance',
-    'Painting', 'Playground Maintenance', 'Office Maintenance',
-    'Housekeeping Expenses', 'General Repairs'
+    'Software Maintenance',
+    'UPS Maintenance',
+    'Vehicle Maintenance',
+    'Toner Refill'
   ],
-  Spares: ['Printer Donors', 'SMPS', 'Chargers'],
+  Spares: ['Chargers', 'Printer Toner', 'SMPS'],
   'Annual Maintenance Charges': ['Equipment Maintenance', 'Software Maintenance'],
   Consumables: [
+    'Carpentary Items',
     'Chemicals',
-    'Glasswares',
-    'Plasticwares',
-    'Electrical Components',
-    'Electronic Components',
-    'Mechanical Components',
     'Construction Materials',
     'Cutting Tools',
-    'Oils & Lubricants',
+    'Electrical Components',
+    'Electronic Components',
+    'Glasswares',
+    'Mechanical Components',
     'Metals & Alloys',
-    'Carpentary Items',
-    'Others',
+    'Oils & Lubricants',
+    'Plasticwares',
+    'Others'
   ],
   Software: [
-    'Plagiarism',
-    'Grammer Check',
-    'Grievance',
-    'Programming',
-    'Modelling',
+    'AI Tools',
     'Analysis',
     'Antivirus',
     'Firewall',
     'Graphical Design',
-    'AI Tools',
-    'Others',
+    'Grammer Check',
+    'Grievance',
+    'Modelling',
+    'Plagiarism',
+    'Programming',
+    'Others'
   ],
   'Membership & Subscriptions': [
-    'Professional Body fees',
-    'Membership fees',
-    ' Annual Subscription Charges',
-    'E-Resources',
+    'Annual Subscription Charges',
     'Data Subscription Charges',
+    'E-Resources',
+    'Membership fees',
+    'Professional Body fees'
   ],
-  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Others'],
-  'Printing & Stationery': [
+  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Student Uniform', 'Others'],
+  'Printing': [
     'Banner',
-    'Pamphlet',
+    'Beach Flag',
+    'ID Card',
+    'Badge',
     'Brochure',
-    'Vinyl Boards',
+    'Binding',
+    'Reports',
+    'Magazines',
+    'News Letters',
+    'Calendar',
     'Certificates',
     'Diary',
-    'Calendar',
+    'Registers',
+    'Pamphlet',
+    'Vinyl Board',
+    'Sign Board',
+    'Letter Pad',
+    'Note Pad',
+    'Wiro Pad',
     'Visiting Card',
-    'Seal/ Stamp Pad',
-    'Pen/ Pencil/ Eraser',
-    'Stapler/ Punching Machine',
+    'Others'
+  ],
+  'Stationery': [
     'Files/ Folders',
-    'Entry Registers',
+    'Pen/ Pencil/ Eraser',
     'Print Sheets',
-    'Others',
+    'Seal/ Stamp Pad',
+    'Stapler/ Punching Machine',
+    'Grade Sheet',
+    'Answer Booklet',
+    'Others'
   ],
   'Postal Expenses': [
+    'Courier Charges',
     'Frieght Charges',
     'Postal Charges',
-    'Courier Charges',
-    'Others',
+    'Others'
   ],
   'Local Conveyance': [
-    'Travel Expense',
-    'Food & Refreshment',
     'Beta',
-    'Others',
+    'Food & Refreshment',
+    'Travel Expense',
+    'Others'
   ],
-  'Conferences & Conclaves': ['National Conference', 'International Conference', 'Conclave', 'Convention', 'Networking Event', 'Industry Interaction', 'Consumables'],
-  'Association Activities': ['Association Function', 'Alumni Meeting', 'Alumni Interaction', 'Parents Meeting', 'Consumables'],
-  'Outreach Event': ['School Visit', 'Awareness Program', 'Campaigns', 'Mini Marathon', 'Education Fair', 'Rally', 'Consumables'],
-  'Cultural & Celebrations': ['Celebration Day', 'Festival Celebrations', 'Harmonicks', 'Hostel Day', 'Consumables'],
-  'Sports': ['Sports Meet', 'Sports Day', 'Consumables'],
-  'Competitions': ['Hackathons', 'Competitions', 'Club Activities', 'Project Expo', 'Ideathon', 'Start-up meet', 'Consumables'],
+  'Conferences & Conclaves': [
+    'Conclave',
+    'Convention',
+    'Industry Interaction',
+    'International Conference',
+    'National Conference',
+    'Networking Event'
+  ],
+  'Association Activities': [
+    'Alumni Interaction',
+    'Alumni Meeting',
+    'Association Function',
+    'Parents Meeting'
+  ],
+  'Outreach Event': [
+    'Awareness Program',
+    'Campaigns',
+    'Crash Course',
+    'Education Fair',
+    'Mini Marathon',
+    'Rally',
+    'School Visit',
+    'Summer Internship'
+  ],
+  'Cultural & Celebrations': [
+    'Celebration Day',
+    'Festival Celebrations',
+    'Harmonicks',
+    'Hostel Day'
+  ],
+  'Sports': ['Sports Day', 'Sports Meet'],
+  'Club Activities': [
+    'Flash Mob',
+    'Fun Events',
+    'Road show',
+    'Wall Painting'
+  ],
+  'Competitions': [
+    'Competitions',
+    'Hackathons',
+    'Ideathon',
+    'Project Expo',
+    'Start-up meet'
+  ],
 
-  'Institutional Governance Meetings': ['Governing Body Meeting', 'Research Advisory Board Meeting', 'Finance Committee Meeting', 'Result Passing Board (RPB) Meeting', 'Examination Committee Meeting'
-    , 'Placement Meeting'],
+  'Institutional Governance Meetings': [
+    'Examination Committee Meeting',
+    'Finance Committee Meeting',
+    'Governing Body Meeting',
+    'Placement Meeting',
+    'Research Advisory Board Meeting',
+    'Result Passing Board (RPB) Meeting'
+  ],
 
-  'Academic Governance Meetings': ['Academic Council Meeting', 'Standing Committee Meeting',
-    'Board of Studies (Bos) Meeting', 'DAB Meeting'],
+  'Academic Governance Meetings': [
+    'Academic Council Meeting',
+    'Board of Studies (Bos) Meeting',
+    'DAB Meeting',
+    'Standing Committee Meeting'
+  ],
   'Institutional Audits': ['Academic Audit', 'Administrative Audit', 'Energy & Green Audit'],
   'Government Meetings': ['Government Meetings'],
 
   'Faculty Empowerment': [
-    'Registration fee',
-    'Travel Allowance',
-    'Food & Refreshment',
     'Accommodation',
     'Daily Allowance',
-    'Membership Fees',
+    'Faculty Welfare',
+    'Food & Refreshment',
     'Incentives',
     'Leadership Meet',
-    'Faculty Welfare', 'Medical Expenses'
+    'Medical Expenses',
+    'Membership Fees',
+    'Registration fee',
+    'Travel Allowance'
   ],
 
   'Academic Events': [
-    'Seminar',
-    'Webinar',
-    'Guest Lecture',
-    'Workshop',
-    'Hands-on Training',
-    'FDP (Faculty Development Programme)',
-    'STTP (Short-Term Training Programme)',
-    'MoU Inking',
-    'Industry Visit',
     'Expert Visit',
-    'Consumables'
+    'FDP (Faculty Development Programme)',
+    'Guest Lecture',
+    'Hands-on Training',
+    'Industry Visit',
+    'MoU Inking',
+    'Seminar',
+    'STTP (Short-Term Training Programme)',
+    'Webinar',
+    'Workshop'
   ],
 
   'College Events': [
     'Annual Day',
-    'Graduation Day',
-    'Student Induction Programme',
-    'Orientation Session',
     'Dakshaa',
-    'Science Day',
-    'Womens Day',
     'Founder Day',
-    'Consumables'
+    'Graduation Day',
+    'Orientation Session',
+    'Science Day',
+    'Student Induction Programme',
+    'Womens Day'
   ],
   'Staff Empowerment': [
-    'Registration fee',
-    'Travel Allowance',
-    'Food & Refreshment',
     'Accommodation',
     'Daily Allowance',
+    'Food & Refreshment',
     'Incentives',
-    'Staff Welfare', 'Medical Expenses'
+    'Medical Expenses',
+    'Registration fee',
+    'Staff Welfare',
+    'Travel Allowance'
   ],
   'Student Empowerment': [
-    'Registration fee',
-    'Travel Support',
-    'Food & Refreshment',
     'Accommodation',
     'Certification Costs',
-    'Medical Expense',
+    'Food & Refreshment',
     'Incentives',
+    'Medical Expense',
     'Prizes',
+    'Registration fee',
     'Student Welfare',
-    'Student Uniform',
+    'Travel Support'
   ],
   'Student Capacity Building': [
-    'Skill Development Training',
     'Aptitude Training',
-    'Higher Education Coaching',
-    'Competitive Exam Coaching',
-    'Placement Training',
-    'Placement Drives',
-    'One Credit Course',
-    'Value Added Course',
     'Certification Programs',
+    'Competitive Exam Coaching',
+    'Exposure Visit',
+    'Higher Education Coaching',
     'Internship',
     'International Connect',
-    'Exposure Visit',
     'Language Proficiency Courses',
-    'Others',
+    'One Credit Course',
+    'Placement Drives',
+    'Placement Training',
+    'Skill Development Training',
+    'Value Added Course',
+    'Others'
   ],
 
-  'Accreditation Expenses': [
+  'Ranking & Accreditation': [
     'NAAC Fees',
-    'NBA Fees',
     'NAAC Inspection',
+    'NBA Fees',
     'NBA Inspection',
+    'QS Ranking',
+    'SDG Ranking',
+    'Other Rankings'
   ],
   'Examination Expenses': [
-    'Autonomous Exam Remuneration', 'Online Exam Remuneration',
+    'Autonomous Exam Remuneration',
     'Government Exam Remuneration',
+    'Online Exam Remuneration',
+    'QP Setting Expenses',
+    'Degree Recommendation',
+    'CoE Staff Remuneration'
   ],
-  'Advertisement & Branding': ['News Paper Advertisement', 'Digital Promotion'],
+  'Advertisement & Branding': ['Digital Promotion', 'News Paper Advertisement'],
   'Public Relations': [
+    'Branding',
+    'Corporate Gift',
+    'CSR Activity',
     'Press & Media',
     'Promotions',
-    'Branding',
-    'Corporate Gift', 'Sponsorship',
-    'CSR Activity'
+    'Sponsorship'
   ],
   Admissions: [
-    'Stalls',
-    'School Visits',
-    'Field Visits',
-    'Student Directory',
     'Consultant Charges',
+    'Field Visits',
+    'School Visits',
+    'Stalls',
+    'Student Directory'
   ],
   'Research & Development': [
-    'Seed Fund (Product Development)',
-    'Seed Fund (IPR Charges)',
-    'Seed Fund (Travel)',
-    'Institute Research Fellowship',
-    'Research Grant',
-    'Publication Support',
     'Consultancy',
-    'Research Cenre Renewal',
     'HI Contribution',
+    'Institute Research Fellowship',
+    'Publication Support',
+    'Research Cenre Renewal',
+    'Research Grant',
+    'Seed Fund (Consumables)',
+    'Seed Fund (IPR Charges)',
+    'Seed Fund (Product Development)',
+    'Seed Fund (Testing)',
+    'Seed Fund (Travel)'
   ],
   'Administrative Expenses': [
-    'AICTE Fees',
     'Affiliation Fees',
+    'AICTE Fees',
     'Anna University Fees',
-    'DOTE Fees',
-    'Consortium Fees',
-    'Inspection Expenses',
+    'Audit Fees',
     'Autonomous Charges',
-    'Insurance Charges',
-    'Stamp Charges', 'Audit Fees',
-    'Flag Day Expenses',
+    'Consortium Fees',
+    'DOTE Fees',
     'Fee Fixation Expenses',
-    'Scholarship Expenses',
+    'Flag Day Expenses',
+    'Inspection Expenses',
+    'Insurance Charges',
     'International Travel',
-    'Testing Charges', 'Legal Expenses'
+    'Legal Expenses',
+    'Office Expenses',
+    'Scholarship Expenses',
+    'Stamp Charges',
+    'Testing Charges'
   ],
-  'Licenses & Taxes': ['DTCP Approval', 'Water Tax', 'Road Tax', 'Property Tax', 'Building Tax', 'Spirit License', 'License Renewal'],
-  'Salary:': [
-    'Monthly Salary',
-    'Provident Fund',
+  'Licenses & Taxes': [
+    'Building Tax',
+    'DTCP Approval',
+    'License Renewal',
+    'Property Tax',
+    'Road Tax',
+    'Spirit License',
+    'Water Tax'
+  ],
+  'Salary': [
+    'Allowances',
     'Emoluments',
+    'ESI Scheme',
+    'Monthly Salary',
     'Professional Payments',
-    'Wages', 'ESI Scheme', 'Allowances'
+    'Provident Fund',
+    'Wages'
   ],
   'Bills & Payments': [
+    'Diesel Expenses',
     'Electricity Charges',
     'Internet Charges',
-    'Telephone Charges', 'Diesel Expenses'
+    'Telephone Charges'
   ],
   'Miscellaneous Expenses': [
     'Bank Charges',
     'Bank Interest',
-    'Loan Processing Charges',
-    'General Expenses',
-    'Sewage Treatment',
-    'Laundry Service',
-    'RO  Mineral Water',
-    'Pooja Expenses',
     'Fire Extinguisher',
     'First Aid Kit Expenses',
-    'Irrecovable Fee', 'Legal Expenses', 'Others'
+    'General Expenses',
+    'Irrecovable Fee',
+    'Laundry Service',
+    'Legal Expenses',
+    'Loan Processing Charges',
+    'Pooja Expenses',
+    'RO  Mineral Water',
+    'Sewage Treatment',
+    'Others'
   ],
 };
 
@@ -537,7 +642,7 @@ const guidelineDeptData: Record<Exclude<GuidelineSectionId, "skill" | "events" |
   lab: ["Equipment", "Consumables", "Maintenance", "Calibration"],
   departmentEvents: ["Webinar", "Guest Lecture", "Hands-on Training", "Conclave", "Convention", "Networking Event", "Industry Interaction"],
   assoc: ["Association Function", "Alumni Meeting", "Alumni Interaction", "Parents Meeting"],
-  outreach: ["School Visit", "Awareness Program", "Campaigns", "Mini Marathon", "Education Fair", "Rally"],
+  outreach: ["School Visit", "Awareness Program", "Campaigns", "Crash Course", "Summer Internship", "Mini Marathon", "Education Fair", "Rally"],
   academics: ["DAB Meeting", "BoS Meeting", "Printing"],
   office: ["Stationary", "Test Notes", "Printing"],
   student: ["Skill Development Training", "Aptitude Training", "Higher Education Coaching", "Competitive Exam Coaching", "Placement Training", "Placement Drives", "One Credit Course", "Value Added Course", "Certification Programs", "Exposure Visit", "Language Proficiency Courses"],
@@ -763,7 +868,10 @@ const Budget: React.FC = () => {
   const [tagOptions, setTagOptions] = useState<SelectOption[]>([]);
   const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
   const { user } = useAuth();
-  const isSuperAdminUser = Boolean(user?.is_super_admin) || (
+  const isSuperAdminUser =
+    Boolean(user?.is_super_admin)
+    || Boolean((user as any)?.isSuperAdmin)
+    || (
     Array.isArray(user?.roles) &&
     user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
   );
