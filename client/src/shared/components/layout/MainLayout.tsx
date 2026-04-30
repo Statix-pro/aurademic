@@ -2,10 +2,25 @@ import { useState } from 'react';
 import Sidebar from './navbar/navbar';
 import { Outlet } from 'react-router-dom';
 import KSRCTLogo from '../../assets/images/ksrct_logo.png';
+import { useAuth } from '../../../contexts/AuthContext';
 import './MainLayout.css';
+
+const getNameInitial = (name?: string): string => {
+  if (!name) return 'U';
+  const salutations = ['dr.', 'mr.', 'mrs.', 'ms.', 'prof.', 'er.'];
+  const parts = name.trim().split(/\s+/);
+  const firstWord = parts[0].toLowerCase();
+  if (salutations.includes(firstWord) && parts.length > 1) {
+    return parts[1].charAt(0).toUpperCase();
+  }
+  return parts[0].charAt(0).toUpperCase();
+};
 
 const MainLayout = () => {
     const [collapsed, setCollapsed] = useState(true);
+    const { user } = useAuth();
+
+    const userInitial = getNameInitial(user?.name);
 
     return (
         <div className="app-layout">
@@ -17,6 +32,10 @@ const MainLayout = () => {
                     </button>
                     <img src={KSRCTLogo} alt="KSRCT" className="topbar-logo" />
                     <span className="topbar-title">K.S.RANGASAMY COLLEGE OF TECHNOLOGY</span>
+                </div>
+                <div className="topbar-right">
+                    <span className="topbar-welcome">Welcome, <strong>{user?.name || 'User'}</strong></span>
+                    <div className="topbar-avatar">{userInitial}</div>
                 </div>
             </header>
 
