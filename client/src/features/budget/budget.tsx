@@ -84,6 +84,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Stationery',
       'Postal Expenses',
       'Local Conveyance',
+      'Operational Expenses',
     ],
   },
   {
@@ -99,7 +100,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
   {
     label: 'Academics',
     options: [
-      'Faculty Empowerment', 'Staff Empowerment', 'Student Empowerment', 'Student Capacity Building', 'Ranking & Accreditation', 'Examination Expenses',
+      'Faculty Empowerment', 'Staff Empowerment', 'Student Empowerment', 'Student Capacity Building', 'Ranking & Accreditation', 'Examination Expenses', 'Awards & Recognition',
     ],
   },
   {
@@ -307,6 +308,14 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Travel Expense',
     'Others'
   ],
+  'Operational Expenses': [
+    'Water Bottle',
+    'Food & Refreshment',
+    'Pooja Expenses',
+    'Accessories',
+    'Legal stamp paper',
+    'Miscellaneous'
+  ],
   'Conferences & Conclaves': [
     'Conclave',
     'Convention',
@@ -461,6 +470,17 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Degree Recommendation',
     'CoE Staff Remuneration'
   ],
+  'Awards & Recognition': [
+    'Accommodation',
+    'Registration fee',
+    'Food & Refreshment',
+    'Driver Beta',
+    'Travel Allowance',
+    'Daily Allowance',
+    'Printing',
+    'Stationery',
+    'Others'
+  ],
   'Advertisement & Branding': ['Digital Promotion', 'News Paper Advertisement'],
   'Public Relations': [
     'Branding',
@@ -543,7 +563,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Laundry Service',
     'Legal Expenses',
     'Loan Processing Charges',
-    'Pooja Expenses',
     'RO  Mineral Water',
     'Sewage Treatment',
     'Others'
@@ -643,7 +662,7 @@ const guidelineDeptData: Record<Exclude<GuidelineSectionId, "skill" | "events" |
   departmentEvents: ["Webinar", "Guest Lecture", "Hands-on Training", "Conclave", "Convention", "Networking Event", "Industry Interaction"],
   assoc: ["Association Function", "Alumni Meeting", "Alumni Interaction", "Parents Meeting"],
   outreach: ["School Visit", "Awareness Program", "Campaigns", "Crash Course", "Summer Internship", "Mini Marathon", "Education Fair", "Rally"],
-  academics: ["DAB Meeting", "BoS Meeting", "Printing"],
+  academics: ["DAB Meeting", "BoS Meeting", "Printing", "Awards & Recognition"],
   office: ["Stationary", "Test Notes", "Printing"],
   student: ["Skill Development Training", "Aptitude Training", "Higher Education Coaching", "Competitive Exam Coaching", "Placement Training", "Placement Drives", "One Credit Course", "Value Added Course", "Certification Programs", "Exposure Visit", "Language Proficiency Courses"],
 };

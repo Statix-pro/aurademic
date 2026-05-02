@@ -228,6 +228,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Printing & Stationery',
       'Postal Expenses',
       'Local Conveyance',
+      'Operational Expenses',
     ],
   },
   {
@@ -247,6 +248,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Learning Resources',
       'Accreditation Expenses',
       'Professional Body Expenses',
+      'Awards & Recognition',
     ],
   },
   {
@@ -730,6 +732,15 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Others',
   ],
 
+  'Operational Expenses': [
+    'Water Bottle',
+    'Food & Refreshment',
+    'Pooja Expenses',
+    'Accessories',
+    'Legal stamp paper',
+    'Miscellaneous'
+  ],
+
   'Events & Competitions': [
     'Remuneration',
     'Travel',
@@ -796,6 +807,17 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Prizes',
     'Student Welfare',
     'Student Uniform',
+  ],
+  'Awards & Recognition': [
+    'Accommodation',
+    'Registration fee',
+    'Food & Refreshment',
+    'Driver Beta',
+    'Travel Allowance',
+    'Daily Allowance',
+    'Printing',
+    'Stationery',
+    'Others'
   ],
 
   'Student Capacity Building': [
@@ -903,7 +925,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'RO Mineral Water',
     'Audit Fees',
     'Office Expenses',
-    'Pooja Expenses',
     'Fire Extinguisher',
     'First Aid Kit Expenses',
   ],

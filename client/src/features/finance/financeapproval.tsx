@@ -169,6 +169,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Stationery',
       'Postal Expenses',
       'Local Conveyance',
+      'Operational Expenses',
     ],
   },
   {
@@ -193,6 +194,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Student Capacity Building',
       'Ranking & Accreditation',
       'Examination Expenses',
+      'Awards & Recognition',
     ],
   },
   {
@@ -589,6 +591,14 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Travel Expense',
     'Others'
   ],
+  'Operational Expenses': [
+    'Water Bottle',
+    'Food & Refreshment',
+    'Pooja Expenses',
+    'Accessories',
+    'Legal stamp paper',
+    'Miscellaneous'
+  ],
   'Conferences & Conclaves': [
     'Conclave',
     'Consumables',
@@ -743,6 +753,17 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Degree Recommendation',
     'CoE Staff Remuneration'
   ],
+  'Awards & Recognition': [
+    'Accommodation',
+    'Registration fee',
+    'Food & Refreshment',
+    'Driver Beta',
+    'Travel Allowance',
+    'Daily Allowance',
+    'Printing',
+    'Stationery',
+    'Others'
+  ],
   'Advertisement & Branding': ['Digital Promotion', 'News Paper Advertisement'],
   'Public Relations': [
     'Branding',
@@ -826,7 +847,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Laundry Service',
     'Legal Expenses',
     'Loan Processing Charges',
-    'Pooja Expenses',
     'RO  Mineral Water',
     'Sewage Treatment',
     'Others'
