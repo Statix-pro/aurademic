@@ -2041,6 +2041,70 @@ function collectUsageRowsForRequestType(requestType, { advanceRows, settlementRo
   return [...usageByLine.entries()].map(([budgetLineId, amount]) => ({ budgetLineId, amount }));
 }
 
+function getAmountForWorkflowRow(requestType, row = {}) {
+  if (requestType === 'Advance') {
+    return toMoney(row.advance || row.advance_amount);
+  }
+  if (requestType === 'Settlement') {
+    return toMoney(row.settlement || row.settlement_amount);
+  }
+  return toMoney(row.autoSum || row.auto_sum_amount || row.expenditure || row.expenditure_input);
+}
+
+function getRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows } = {}) {
+  if (requestType === 'Advance') return Array.isArray(advanceRows) ? advanceRows : [];
+  if (requestType === 'Settlement') return Array.isArray(settlementRows) ? settlementRows : [];
+  return Array.isArray(expenditureRows) ? expenditureRows : [];
+}
+
+async function assertWorkflowRowsHaveApprovedBudgetLines(
+  conn,
+  financeRequestId,
+  requestType,
+  { advanceRows, settlementRows, expenditureRows } = {},
+) {
+  const rows = getRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows });
+  const filledRows = rows
+    .map((row, index) => ({
+      rowNumber: index + 1,
+      budgetLineId: toPositiveInt(row.budgetLineId || row.budget_line_id),
+      amount: getAmountForWorkflowRow(requestType, row),
+    }))
+    .filter((row) => row.amount > 0);
+
+  if (!filledRows.length) return;
+
+  const missingBudgetLineRows = filledRows.filter((row) => !row.budgetLineId).map((row) => row.rowNumber);
+  if (missingBudgetLineRows.length) {
+    throw new Error(
+      `Please select a valid approved budget head and sub-head for row ${missingBudgetLineRows.join(', ')}`,
+    );
+  }
+
+  const uniqueLineIds = Array.from(new Set(filledRows.map((row) => row.budgetLineId).filter(Boolean)));
+  if (!uniqueLineIds.length) return;
+
+  const placeholders = uniqueLineIds.map(() => '?').join(', ');
+  const [linkedRows] = await conn.execute(
+    `SELECT DISTINCT budget_line_id
+       FROM finance_budget_breakup
+      WHERE finance_id = ?
+        AND budget_line_id IN (${placeholders})`,
+    [financeRequestId, ...uniqueLineIds],
+  );
+
+  const approvedLineIds = new Set(linkedRows.map((row) => toPositiveInt(row.budget_line_id)).filter(Boolean));
+  const invalidRows = filledRows
+    .filter((row) => row.budgetLineId && !approvedLineIds.has(row.budgetLineId))
+    .map((row) => row.rowNumber);
+
+  if (invalidRows.length) {
+    throw new Error(
+      `Please select a valid approved budget head and sub-head for row ${invalidRows.join(', ')}`,
+    );
+  }
+}
+
 async function applyBudgetUsageDelta(conn, usageRows = [], multiplier = 1) {
   for (const usageRow of usageRows) {
     const budgetLineId = toPositiveInt(usageRow.budgetLineId);
@@ -2215,6 +2279,11 @@ const incomeRows = Array.isArray(data.income_rows)
   : Array.isArray(data.incomerows)
     ? data.incomerows
     : [];
+    await assertWorkflowRowsHaveApprovedBudgetLines(conn, financeRequestId, requestType, {
+      advanceRows,
+      settlementRows,
+      expenditureRows,
+    });
     const workflowRowIdentity = resolveWorkflowRowIdentifiers(data);
     const sourceRequestId = toPositiveInt(data.source_request_id || data.sourceRequestId);
     const usageRows = collectUsageRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows });
@@ -2462,6 +2531,11 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       : Array.isArray(data.incomerows)
         ? data.incomerows
         : [];
+    await assertWorkflowRowsHaveApprovedBudgetLines(conn, financeRequestId, requestType, {
+      advanceRows,
+      settlementRows,
+      expenditureRows,
+    });
 
     const workflowRowIdentity = resolveWorkflowRowIdentifiers(data);
     const sourceRequestId = toPositiveInt(data.source_request_id || data.sourceRequestId);

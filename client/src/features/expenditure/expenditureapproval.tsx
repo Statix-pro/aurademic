@@ -107,7 +107,7 @@ interface BillFileRecord {
   mime_type?: string | null;
 }
 interface ApprovedBudgetOption {
-  budgetLineId: number;
+  budgetLineId: number | null;
   budgetProposalId: number | null;
   proposalRef: string;
   fiscalYear: number;
@@ -119,6 +119,34 @@ interface ApprovedBudgetOption {
   beneficiaryType: string;
   beneficiaryValue: string;
 }
+
+const normalizeBudgetToken = (value: unknown): string =>
+  String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+
+const normalizeApprovedBudgetOption = (row: any): ApprovedBudgetOption | null => {
+  if (!row || typeof row !== 'object') return null;
+
+  const head = String(row.head ?? row.budget_head ?? '').trim();
+  const subHead = String(row.subHead ?? row.sub_head ?? '').trim();
+  if (!head || !subHead) return null;
+
+  return {
+    budgetLineId: Number(row.budgetLineId ?? row.budget_line_id) || null,
+    budgetProposalId: Number(row.budgetProposalId ?? row.budget_proposal_id) || null,
+    proposalRef: String(row.proposalRef ?? row.proposal_ref ?? '').trim(),
+    fiscalYear: Number(row.fiscalYear ?? row.fiscal_year) || new Date().getFullYear(),
+    head,
+    subHead,
+    totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0) || 0,
+    usedAmount: Number(row.usedAmount ?? row.used_amount ?? 0) || 0,
+    remainingAmount: Number(row.remainingAmount ?? row.remaining_amount ?? 0) || 0,
+    beneficiaryType: String(row.beneficiaryType ?? row.beneficiary_type ?? '').trim(),
+    beneficiaryValue: String(row.beneficiaryValue ?? row.beneficiary_value ?? '').trim(),
+  };
+};
 interface AdvanceFormRow {
   id: string;
   budgetHead: string | number;
@@ -2201,7 +2229,10 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
         };
 
         if (!isCancelled && response.status === 'success') {
-          setApprovedBudgetOptions(Array.isArray(response.data) ? response.data : []);
+          const normalizedRows = (Array.isArray(response.data) ? response.data : [])
+            .map((row) => normalizeApprovedBudgetOption(row))
+            .filter((row): row is ApprovedBudgetOption => Boolean(row));
+          setApprovedBudgetOptions(normalizedRows);
         }
       } catch (error) {
         if (!isCancelled) {
@@ -2679,10 +2710,10 @@ const workflowRowRefFromState = (() => {
   };
 
   const getApprovedSubHeadOptionsForAdvance = (budgetHead: string | number): OptionType[] => {
-    const normalizedHead = String(budgetHead || '').trim().toLowerCase();
+    const normalizedHead = normalizeBudgetToken(budgetHead);
     if (!normalizedHead) return [];
     const approvedSubHeads: string[] = approvedBudgetOptions
-      .filter((budget) => budget.head.trim().toLowerCase() === normalizedHead)
+      .filter((budget) => normalizeBudgetToken(budget.head) === normalizedHead)
       .map((budget) => String(budget.subHead || '').trim())
       .filter(Boolean);
 
@@ -2696,13 +2727,13 @@ const workflowRowRefFromState = (() => {
   };
 
   const findApprovedBudgetOption = (budgetHead: string | number, subHead: string | number) => {
-    const normalizedHead = String(budgetHead || '').trim().toLowerCase();
-    const normalizedSubHead = String(subHead || '').trim().toLowerCase();
+    const normalizedHead = normalizeBudgetToken(budgetHead);
+    const normalizedSubHead = normalizeBudgetToken(subHead);
     if (!normalizedHead || !normalizedSubHead) return null;
 
     return approvedBudgetOptions.find((budget) =>
-      budget.head.trim().toLowerCase() === normalizedHead
-      && budget.subHead.trim().toLowerCase() === normalizedSubHead
+      normalizeBudgetToken(budget.head) === normalizedHead
+      && normalizeBudgetToken(budget.subHead) === normalizedSubHead
     ) || null;
   };
 
@@ -4044,6 +4075,30 @@ const getActiveTabTransactionAmount = (
   return totalExpenditureAmount;
 };
 
+const getWorkflowRowEnteredAmount = (
+  row: WorkflowFormRow | null | undefined,
+  tab: 'Advance' | 'Settlement' | 'Expenditure' | null,
+): number => {
+  if (!row || !tab) return 0;
+
+  if (tab === 'Advance') return parseAmountValue((row as AdvanceFormRow).advance ?? '');
+  if (tab === 'Settlement') return parseAmountValue((row as SettlementFormRow).settlement ?? '');
+  return parseAmountValue((row as ExpenditureFormRow).autoSum || (row as ExpenditureFormRow).expenditure || '');
+};
+
+const getInvalidWorkflowBudgetRowNumbers = (
+  rows: WorkflowFormRow[],
+  tab: 'Advance' | 'Settlement' | 'Expenditure',
+): number[] =>
+  rows
+    .map((row, index) => ({
+      rowNumber: index + 1,
+      amount: getWorkflowRowEnteredAmount(row, tab),
+      budgetLineId: parsePositiveIntLike(row?.budgetLineId),
+    }))
+    .filter((row) => row.amount > 0 && !row.budgetLineId)
+    .map((row) => row.rowNumber);
+
 const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
   if (!/^\d*\.?\d*$/.test(nextValue)) return;
 
@@ -4154,7 +4209,12 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     }
 
     const workflowRows = getRowsForActiveTab();
-    const selectedWorkflowRow = getSelectedWorkflowRow() || workflowRows.find((row) => parsePositiveIntLike(row.budgetLineId)) || workflowRows[0] || null;
+    const selectedWorkflowRow =
+      workflowRows.find((row) => getWorkflowRowEnteredAmount(row, activeTab) > 0)
+      || getSelectedWorkflowRow()
+      || workflowRows.find((row) => parsePositiveIntLike(row.budgetLineId))
+      || workflowRows[0]
+      || null;
     const selectedWorkflowBudgetLineId = parsePositiveIntLike(selectedWorkflowRow?.budgetLineId);
     const selectedWorkflowBudgetProposalId = parsePositiveIntLike(selectedWorkflowRow?.budgetProposalId);
 
@@ -4166,9 +4226,10 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       return;
     }
 
-    if (!selectedWorkflowBudgetLineId) {
+    const invalidBudgetRows = getInvalidWorkflowBudgetRowNumbers(workflowRows, activeTab);
+    if (invalidBudgetRows.length > 0) {
       showAlert(
-        'Please select a valid approved budget head and sub-head for this row before submitting.',
+        `Please select a valid approved budget line (head + sub-head) for row ${invalidBudgetRows.join(', ')} before submitting.`,
         'warning'
       );
       return;
@@ -6419,5 +6480,3 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
 };
 
 export default ExpenditureApproval;
-
-

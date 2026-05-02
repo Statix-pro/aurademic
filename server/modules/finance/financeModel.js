@@ -530,13 +530,6 @@ const isLooseTextMatch = (leftValue, rightValue) => {
   return leftNormalized === rightNormalized;
 };
 
-// Fallback only: preferred behavior is to pass head_only_match from frontend
-// using getHoacGroupForHead so future heads under these groups work automatically.
-const HEAD_ONLY_AVAILABILITY_GROUP_HEADS = new Set([
-  'events and competitions',
-  'meetings and audits',
-]);
-
 const normalizeHeadLabelForMatch = (value) =>
   normalizeText(value)
     .toLowerCase()
@@ -547,8 +540,7 @@ const normalizeHeadLabelForMatch = (value) =>
 
 const shouldUseHeadOnlyAvailabilityMatch = (budgetHead) => {
   const normalized = normalizeHeadLabelForMatch(budgetHead);
-  if (!normalized) return false;
-  return HEAD_ONLY_AVAILABILITY_GROUP_HEADS.has(normalized);
+  return Boolean(normalized);
 };
 
 const WORKFLOW_STATUS_SQL_EXPR = `
@@ -1334,13 +1326,51 @@ const enrichBudgetRowsWithBudgetRefs = async (
         );
       }
 
+      let remainingToAllocate = toMoney(row.amount);
+      const preferredBudgetLineId = toPositiveInt(row.budget_line_id);
+      const orderedMatches = [...availability.matches];
+
+      if (preferredBudgetLineId) {
+        orderedMatches.sort((a, b) => {
+          if (a.budgetLineId === preferredBudgetLineId) return -1;
+          if (b.budgetLineId === preferredBudgetLineId) return 1;
+          return 0;
+        });
+      }
+
+      for (const match of orderedMatches) {
+        if (remainingToAllocate <= 0) break;
+
+        const candidateBudgetLineId = toPositiveInt(match.budgetLineId);
+        if (!candidateBudgetLineId) continue;
+
+        const alreadyRequestedForLine = toMoney(requestedByBudgetLine.get(candidateBudgetLineId) || 0);
+        const remainingForLine = Math.max(0, toMoney(match.availableAmount) - alreadyRequestedForLine);
+        if (remainingForLine <= 0) continue;
+
+        const allocatedAmount = Math.min(remainingToAllocate, remainingForLine);
+        if (allocatedAmount <= 0) continue;
+
+        requestedByBudgetLine.set(candidateBudgetLineId, toMoney(alreadyRequestedForLine + allocatedAmount));
+        enrichedRows.push({
+          ...row,
+          sub_head: normalizeText(match.subHead) || row.sub_head,
+          amount: toMoney(allocatedAmount),
+          budget_line_id: candidateBudgetLineId,
+          budget_proposal_id: toPositiveInt(match.budgetProposalId),
+          available_amount_snapshot: remainingForLine,
+        });
+
+        remainingToAllocate = toMoney(remainingToAllocate - allocatedAmount);
+      }
+
+      if (remainingToAllocate > 0) {
+        throw new Error(
+          `Unable to map full amount ${row.amount.toFixed(2)} to approved budget lines for "${effectiveLookupBudgetHead}". Remaining ${remainingToAllocate.toFixed(2)} is unmapped.`
+        );
+      }
+
       requestedByHead.set(headReservationKey, alreadyRequestedForHead + row.amount);
-      enrichedRows.push({
-        ...row,
-        budget_line_id: null,
-        budget_proposal_id: null,
-        available_amount_snapshot: remainingHeadAfterLocalReservations,
-      });
       continue;
     }
 
@@ -1382,7 +1412,10 @@ const enrichBudgetRowsWithBudgetRefs = async (
     });
   }
 
-  return enrichedRows;
+  return enrichedRows.map((row, index) => ({
+    ...row,
+    sort_order: index,
+  }));
 };
 
 const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
