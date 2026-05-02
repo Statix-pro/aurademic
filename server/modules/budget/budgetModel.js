@@ -9,6 +9,7 @@ import {
   LEVEL1_ASSIGNMENT_STATUS as SHARED_LEVEL1_ASSIGNMENT_STATUS,
   WORKFLOW_STAGES as SHARED_WORKFLOW_STAGES,
   normalizeText as sharedNormalizeText,
+  normalizeEntityName as sharedNormalizeEntityName,
   normalizeBeneficiaryType as sharedNormalizeBeneficiaryType,
   normalizeEntityTypeCode as sharedNormalizeEntityTypeCode,
   normalizeBudgetRole as sharedNormalizeBudgetRole,
@@ -37,6 +38,7 @@ const LEVEL1_ROUTE_TYPE = SHARED_LEVEL1_ROUTE_TYPE;
 const LEVEL1_ASSIGNMENT_STATUS = SHARED_LEVEL1_ASSIGNMENT_STATUS;
 const WORKFLOW_STAGES = SHARED_WORKFLOW_STAGES;
 const normalizeText = sharedNormalizeText;
+const normalizeEntityName = sharedNormalizeEntityName;
 const parsePositiveAmount = sharedParsePositiveAmount;
 
 export const normalizeBeneficiaryType = (beneficiaryType) => sharedNormalizeBeneficiaryType(beneficiaryType);
@@ -469,23 +471,25 @@ async function resolveBeneficiaryEntity(conn, beneficiaryType, beneficiaryValue,
   }
 
   const [rows] = await conn.execute(
-    `SELECT me.id
+    `SELECT me.id, me.name
        FROM master_entities me
        JOIN master_entity_types met ON me.entity_type_id = met.id
        WHERE me.is_active = 1
-         AND met.code = ?
-        AND LOWER(TRIM(me.name)) = LOWER(TRIM(?))
-       LIMIT 1`,
-    [entityTypeCode, normalizedBeneficiaryValue]
+         AND met.code = ?`,
+    [entityTypeCode]
   );
 
-  if (!rows.length) {
-    throw new Error(`Invalid beneficiary_value for ${beneficiaryType}: ${normalizedBeneficiaryValue} `);
+  const matchedEntity = rows.find(row => 
+    normalizeEntityName(row.name) === normalizeEntityName(normalizedBeneficiaryValue)
+  );
+
+  if (!matchedEntity) {
+    throw new Error(`Invalid beneficiary_value for ${beneficiaryType}: ${normalizedBeneficiaryValue}. Please use the official unit name.`);
   }
 
   return {
     entityTypeCode,
-    beneficiaryEntityId: Number(rows[0].id),
+    beneficiaryEntityId: Number(matchedEntity.id),
   };
 }
 
