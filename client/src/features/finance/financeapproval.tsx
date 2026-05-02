@@ -1740,8 +1740,6 @@ const FinanceApproval: React.FC = () => {
     } else {
       updated[index][field] = value;
       if (field === 'head') {
-        // Reset entered amount when sub head changes so placeholder reflects fresh availability.
-        updated[index].amount = '';
         fetchBudgetAvailability(index, normalizeText(primaryHead) || updated[index].category, normalizeSubHeadForDb(value));
       }
     }
@@ -1755,11 +1753,15 @@ const FinanceApproval: React.FC = () => {
 
     setBudgetRows((prev) => {
       const updated = [...prev];
+      const previousHead = normalizeText(updated[index]?.category);
       updated[index] = {
         ...updated[index],
         category: selectedHead,
         head: selectedSubHead,
-        amount: selectedHead ? '' : updated[index].amount,
+        amount:
+          selectedHead && selectedHead !== previousHead
+            ? ''
+            : updated[index].amount,
       };
       return updated;
     });
@@ -1813,6 +1815,14 @@ const FinanceApproval: React.FC = () => {
   const handleAnnexureFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
+
+    if (String(annexureType || '').trim() === 'Not Applicable') {
+      showAlert('File upload is disabled when Annexure Type is "Not Applicable".', 'warning');
+      if (annexureFileInputRef.current) {
+        annexureFileInputRef.current.value = '';
+      }
+      return;
+    }
 
     if (!String(annexureType || '').trim()) {
       showAlert('Please select annexure type before uploading files.', 'warning');
@@ -2017,9 +2027,10 @@ const FinanceApproval: React.FC = () => {
 
   const getAnnexureRowMissingFields = (row: AnnexureFileRow): string[] => {
     const missing: string[] = [];
+    const isNotApplicable = String(row.annexureType || '').trim() === 'Not Applicable';
 
     if (!hasFilledText(row.annexureType)) missing.push('Annexure Type');
-    if (!hasFilledText(row.originalName) && !hasFilledText(row.storedName) && !hasFilledText(row.filePath)) {
+    if (!isNotApplicable && !hasFilledText(row.originalName) && !hasFilledText(row.storedName) && !hasFilledText(row.filePath)) {
       missing.push('File');
     }
 
@@ -2119,7 +2130,9 @@ const FinanceApproval: React.FC = () => {
         }
       }
 
-      if (annexureFiles.length === 0) {
+      const isAnnexureNotApplicable = String(annexureType || '').trim() === 'Not Applicable';
+
+      if (!isAnnexureNotApplicable && annexureFiles.length === 0) {
         showAlert('Please add at least one annexure.', 'warning');
         return;
       }
@@ -2502,6 +2515,7 @@ const FinanceApproval: React.FC = () => {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(true);
   const [beneficiaryType, setBeneficiaryType] = useState<string>('');
   const [beneficiaryValue, setBeneficiaryValue] = useState<string>('');
   // Get subcategory options from the loaded data (dynamic from API) - SAME AS BUDGET.TSX
@@ -2855,6 +2869,10 @@ const FinanceApproval: React.FC = () => {
     };
   }, [id, applicantName, isExternalApplicant]);
 
+  useEffect(() => {
+    setIsApplicantCardOpen(!id);
+  }, [id]);
+
   const handleBeneficiarySearch = async (query: string) => {
     setBeneficiarySearchQuery(query);
     try {
@@ -2927,13 +2945,12 @@ const FinanceApproval: React.FC = () => {
   const extraDropdownVisible = Boolean(activeHoacGroup);
   const hoacSubheadDropdownOptions = useMemo(() => {
     if (!activeHoacGroup) return [];
-    const budgetSubHeads = SUB_HEAD_BY_BUDGET_HEAD[primaryHead] || [];
-    if (primaryHead === 'Club Activities') {
-      return toOptions(budgetSubHeads);
+    const firstLevelSubHeads = SUB_HEAD_BY_BUDGET_HEAD[primaryHead] || [];
+    if (firstLevelSubHeads.length > 0) {
+      return toOptions(firstLevelSubHeads);
     }
     const groupSubHeads = HOAC_SUBHEAD_OPTIONS[activeHoacGroup] || [];
-    const combined = Array.from(new Set([...budgetSubHeads, ...groupSubHeads]));
-    return toOptions(combined);
+    return toOptions(groupSubHeads);
   }, [primaryHead, activeHoacGroup]);
   useEffect(() => {
     const nextFetchKeys: Record<number, string> = {};
@@ -3025,6 +3042,96 @@ const FinanceApproval: React.FC = () => {
               borderRadius: '18px',
               boxShadow: '0 8px 24px rgba(0, 0, 0, 0.06)',
             }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  padding: '0 0 15px 0',
+                  borderBottom: '1px solid #e0e0e0',
+                }}
+                onClick={() => setIsApplicantCardOpen((prev) => !prev)}
+              >
+                <h5 style={{ margin: 0, fontSize: '16px', color: '#0069ab', fontWeight: 600 }}>
+                  Applicant Details
+                </h5>
+                <svg
+                  width="12"
+                  height="8"
+                  viewBox="0 0 12 8"
+                  style={{
+                    transform: isApplicantCardOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.3s ease',
+                  }}
+                >
+                  <polyline
+                    points="1.5,1.5 6,5.5 10.5,1.5"
+                    stroke="#0069ab"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                </svg>
+              </div>
+
+              <div style={{ paddingTop: '20px' }}>
+              {!isApplicantCardOpen && (
+                <div className="row">
+                  <div className="col-md-7">
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: 600, display: 'block' }}>
+                        Applicant Name
+                      </label>
+                      <input
+                        type="text"
+                        value={applicantName}
+                        disabled
+                        readOnly
+                        style={{
+                          borderRadius: '12px',
+                          border: '1px solid #e0e0e0',
+                          padding: '10px 15px',
+                          fontSize: '0.95rem',
+                          width: '100%',
+                          fontFamily: 'inherit',
+                          backgroundColor: '#fcfdff',
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setIsApplicantCardOpen(true)}
+                      />
+                    </div>
+                  </div>
+                  <div className="col-md-5">
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: 600, display: 'block' }}>
+                        Date
+                      </label>
+                      <input
+                        type="date"
+                        value={date}
+                        disabled
+                        readOnly
+                        style={{
+                          borderRadius: '12px',
+                          border: '1px solid #e0e0e0',
+                          padding: '10px 15px',
+                          fontSize: '0.95rem',
+                          width: '100%',
+                          fontFamily: 'inherit',
+                          backgroundColor: '#fcfdff',
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setIsApplicantCardOpen(true)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {isApplicantCardOpen && !isViewMode && (
+                <>
               <div className="row mb-3" style={{ marginBottom: '15px' }}>
                 <div className="col-md-7">
                   <div className="form-group" style={{ position: 'relative' }}>
@@ -3303,6 +3410,9 @@ const FinanceApproval: React.FC = () => {
                     />
                   </div>
                 </div>
+              </div>
+                </>
+              )}
               </div>
             </div>
 
@@ -4339,27 +4449,33 @@ const FinanceApproval: React.FC = () => {
                             accept="application/pdf,.pdf"
                             multiple
                             style={{ display: 'none' }}
-                            disabled={isViewMode}
+                            disabled={isViewMode || String(annexureType || '').trim() === 'Not Applicable'}
                             onChange={handleAnnexureFileChange}
                           />
                           <button
                             type="button"
-                            onClick={() => annexureFileInputRef.current?.click()}
+                            onClick={() => {
+                              if (!isViewMode && String(annexureType || '').trim() !== 'Not Applicable' && hasFilledText(annexureType)) {
+                                annexureFileInputRef.current?.click();
+                              }
+                            }}
                             style={{
                               ...annexureUploadButtonStyle,
-                              opacity: (!isViewMode && hasFilledText(annexureType)) ? 1 : 0.55,
-                              cursor: (!isViewMode && hasFilledText(annexureType)) ? 'pointer' : 'not-allowed',
+                              opacity: (!isViewMode && hasFilledText(annexureType) && String(annexureType || '').trim() !== 'Not Applicable') ? 1 : 0.55,
+                              cursor: (!isViewMode && hasFilledText(annexureType) && String(annexureType || '').trim() !== 'Not Applicable') ? 'pointer' : 'not-allowed',
                             }}
-                            disabled={isViewMode || !hasFilledText(annexureType)}
+                            disabled={isViewMode || !hasFilledText(annexureType) || String(annexureType || '').trim() === 'Not Applicable'}
                             title={
                               isViewMode
                                 ? 'View mode'
+                                : String(annexureType || '').trim() === 'Not Applicable'
+                                  ? 'Upload disabled for Not Applicable'
                                 : hasFilledText(annexureType)
                                   ? 'Choose annexure file'
                                   : 'Select annexure type before choosing files'
                             }
                             onMouseEnter={(e) => {
-                              if (!isViewMode && hasFilledText(annexureType)) {
+                              if (!isViewMode && hasFilledText(annexureType) && String(annexureType || '').trim() !== 'Not Applicable') {
                                 (e.currentTarget as HTMLButtonElement).style.background = '#005c95';
                               }
                             }}

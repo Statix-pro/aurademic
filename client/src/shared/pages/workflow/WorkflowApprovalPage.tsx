@@ -1641,22 +1641,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
   }, [secondaryFilter, secondaryFilterOptions]);
 
-  const statusStats = useMemo(() => {
-    const stats = { total: amountScopedRows.length, pending: 0, approved: 0, returned: 0, rejected: 0, archived: 0 };
-    for (const row of amountScopedRows) {
-      const category = resolveStatusCategory(row);
-      stats[category] += 1;
-    }
-    return stats;
-  }, [amountScopedRows, resolveStatusCategory]);
-
-  const filteredRows = useMemo(() => {
+  const searchScopedRows = useMemo(() => {
     let filtered = amountScopedRows;
 
-    if (statusFilter !== 'total') {
-      filtered = filtered.filter(record => resolveStatusCategory(record) === statusFilter);
-    }
-    
     if (searchTerm.trim()) {
       const query = searchTerm.trim().toLowerCase();
       filtered = filtered.filter((record) => {
@@ -1674,9 +1661,26 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         return searchable.includes(query);
       });
     }
-    
+
     return filtered;
-  }, [amountScopedRows, searchTerm, statusFilter, resolveStatusCategory]);
+  }, [amountScopedRows, searchTerm]);
+
+  const statusStats = useMemo(() => {
+    const stats = { total: searchScopedRows.length, pending: 0, approved: 0, returned: 0, rejected: 0, archived: 0 };
+    for (const row of searchScopedRows) {
+      const category = resolveStatusCategory(row);
+      stats[category] += 1;
+    }
+    return stats;
+  }, [searchScopedRows, resolveStatusCategory]);
+
+  const filteredRows = useMemo(() => {
+    if (statusFilter === 'total') {
+      return searchScopedRows;
+    }
+
+    return searchScopedRows.filter((record) => resolveStatusCategory(record) === statusFilter);
+  }, [searchScopedRows, statusFilter, resolveStatusCategory]);
 
   const totalPages = Math.max(1, Math.ceil((totalRows || 0) / (limit || 20)));
 
