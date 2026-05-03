@@ -1060,10 +1060,24 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     const token = String(record.workflow_status || record.status || '').toLowerCase();
     const currentStage = getRecordCurrentStage(record);
     const activeStageKey = String(activeStage || '').toLowerCase();
+    const pendingEntryStatusByStage: Record<string, string[]> = {
+      dof: ['level1_approved', 'hod_approved', 'coordinator_approved', 'ithead_approved'],
+      principal: ['dof_approved'],
+      chairman: ['principal_approved'],
+    };
 
     if (token.includes('archived') || token.includes('archive')) return 'archived';
-    if (token.includes('rejected') || workflowDecision === 'rejected') return 'rejected';
-    if (token.includes('returned') || token.includes('return') || workflowDecision === 'returned') return 'returned';
+
+    // Stage-owned decisions must take precedence in stage tabs (especially chairman),
+    // so stale historical decisions from earlier stages do not pollute KPI cards.
+    if (stageDecision.includes('rejected')) return 'rejected';
+    if (stageDecision.includes('returned') || stageDecision.includes('return')) return 'returned';
+    if (stageDecision.includes('approved')) return 'approved';
+
+    if (!activeStageKey) {
+      if (token.includes('rejected') || workflowDecision === 'rejected') return 'rejected';
+      if (token.includes('returned') || token.includes('return') || workflowDecision === 'returned') return 'returned';
+    }
 
     if (currentStage && activeStageKey && currentStage === activeStageKey) {
       return 'pending';
@@ -1084,6 +1098,14 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     if (workflowDecision === 'resubmitted') return 'pending';
 
+    if (
+      activeStageKey &&
+      pendingEntryStatusByStage[activeStageKey]?.includes(token) &&
+      !stageDecision.includes('approved')
+    ) {
+      return 'pending';
+    }
+
     if (token.includes('completed')) return 'approved';
 
     if (token === 'approved' || token === 'principal_approved' || token === 'chairman_approved') return 'approved';
@@ -1091,10 +1113,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     if (token.includes('approved') && currentStage) return 'pending';
 
     if (token.includes('approved')) return 'approved';
-
-    if (stageDecision.includes('rejected')) return 'rejected';
-    if (stageDecision.includes('returned') || stageDecision.includes('return')) return 'returned';
-    if (stageDecision.includes('approved')) return 'approved';
 
     if (isApprovedForCurrentStage(record)) return 'approved';
     
