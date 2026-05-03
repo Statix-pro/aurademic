@@ -2885,7 +2885,7 @@ const financeModel = {
       }
 
       const previousState = normalizeWorkflowState(rows[0].workflow_state) || {
-        flow: ['level1', 'dof', 'principal'],
+        flow: ['level1', 'dof', 'principal', 'chairman'],
         status: 'in_progress',
         currentStage: 'level1',
         isEditableByApplicant: false,
@@ -2906,7 +2906,7 @@ const financeModel = {
         ...previousState,
         flow: Array.isArray(previousState.flow) && previousState.flow.length
           ? previousState.flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
-          : ['level1', 'dof', 'principal'],
+          : ['level1', 'dof', 'principal', 'chairman'],
         status: 'deleted',
         currentStage: 'deleted',
         isEditableByApplicant: false,
@@ -3249,7 +3249,7 @@ const financeModel = {
 
     const flow = Array.isArray(previousState.flow) && previousState.flow.length
       ? previousState.flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
-      : ['level1', 'dof', 'principal'];
+      : ['level1', 'dof', 'principal', 'chairman'];
     const fallbackStage =
       normalizeText(stageHint).toLowerCase() ||
       normalizeText(previousState.currentStage).toLowerCase() ||
@@ -3547,6 +3547,36 @@ const financeModel = {
 
   async deletePrincipalDocument(recordId, { tx = db } = {}) {
     return deleteFinancePrincipalDocumentByFinanceId(recordId, { tx });
+  },
+
+  async updateWorkflowStageRemark(recordId, stage, remark, { tx = db } = {}) {
+    const normalizedRecordId = toPositiveInt(recordId);
+    const normalizedStage = normalizeText(stage).toLowerCase();
+    const normalizedRemark = normalizeText(remark);
+
+    if (!normalizedRecordId || !normalizedRemark) {
+      return false;
+    }
+
+    const stageColumnMap = {
+      dof: 'director_comment',
+      principal: 'principal_comment',
+      chairman: 'chairman_comment',
+    };
+
+    const targetColumn = stageColumnMap[normalizedStage];
+    if (!targetColumn) {
+      return false;
+    }
+
+    await tx.query(
+      `UPDATE finance_requests
+          SET ${targetColumn} = ?
+        WHERE id = ?`,
+      [normalizedRemark, normalizedRecordId]
+    );
+
+    return true;
   },
 };
 

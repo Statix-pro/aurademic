@@ -843,8 +843,9 @@ const financeController = {
   async approveFinanceWorkflow(req, res) {
     try {
       const financeId = toPositiveInt(req.params.id);
-      const { decision, feedback } = req.body || {};
+      const { decision, feedback, stageRemark } = req.body || {};
       const normalizedDecision = normalizeText(decision).toLowerCase();
+      const normalizedStageRemark = normalizeText(stageRemark);
       const actor = normalizeActor(req);
 
       if (!financeId) {
@@ -870,6 +871,13 @@ const financeController = {
         finance.workflow_state?.currentStage || finance.workflow_stage
       ).toLowerCase();
       const isTerminalWorkflow = ['completed', 'rejected', 'archived'].includes(workflowStatus);
+      const canPersistStageRemark =
+        ['dof', 'principal', 'chairman'].includes(currentStage) &&
+        hasFinanceStagePermission(req, currentStage);
+
+      if (normalizedStageRemark && canPersistStageRemark) {
+        await financeModel.updateWorkflowStageRemark(financeId, currentStage, normalizedStageRemark);
+      }
 
       if (
         normalizedDecision === 'approved'
@@ -891,7 +899,14 @@ const financeController = {
             decision: 'returned',
             feedback,
             actor,
-            stageHint: normalizeText(finance.workflow_stage).toLowerCase() || 'principal',
+            stageHint:
+              normalizeText(finance.workflow_stage).toLowerCase() ||
+              normalizeText(
+                Array.isArray(finance.workflow_state?.flow)
+                  ? finance.workflow_state.flow[finance.workflow_state.flow.length - 1]
+                  : ''
+              ).toLowerCase() ||
+              'principal',
           }
         );
       } else {
@@ -995,7 +1010,14 @@ const financeController = {
             decision: 'archived',
             feedback: normalizeText(req.body?.feedback) || null,
             actor,
-            stageHint: normalizeText(finance.workflow_stage).toLowerCase() || 'principal',
+            stageHint:
+              normalizeText(finance.workflow_stage).toLowerCase() ||
+              normalizeText(
+                Array.isArray(finance.workflow_state?.flow)
+                  ? finance.workflow_state.flow[finance.workflow_state.flow.length - 1]
+                  : ''
+              ).toLowerCase() ||
+              'principal',
           }
         );
 

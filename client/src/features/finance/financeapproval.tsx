@@ -1201,6 +1201,7 @@ const FinanceApproval: React.FC = () => {
   const [principalPriority, setPrincipalPriority] = useState<string>('');
   const [chairmanComments, setChairmanComments] = useState<string>('');
   const [chairmanStatus, setChairmanStatus] = useState<string>('');
+  const [stageRemarkInput, setStageRemarkInput] = useState<string>('');
   const [showPreview, setShowPreview] = useState<boolean>(false);
   const [autoDownloadPdf, setAutoDownloadPdf] = useState<boolean>(false);
   const [submittedAt, setSubmittedAt] = useState<string>('');
@@ -2361,6 +2362,7 @@ const FinanceApproval: React.FC = () => {
         : await authenticityUtility.patch(`/finance-requests/${id}/approval`, {
           decision,
           feedback,
+          stageRemark: normalizeText(stageRemarkInput) || undefined,
         })) as { status?: string; success?: boolean; message?: string; data?: { message?: string } };
 
       if (response?.status !== 'success' && response?.success !== true) {
@@ -2607,6 +2609,8 @@ const FinanceApproval: React.FC = () => {
     const userPermissions = (user?.permissions || []).map(p => String(p).toLowerCase());
     return userPermissions.includes(`finance.workflow.${loadedCurrentStage}`);
   })();
+  const canEditStageRemark =
+    canActOnCurrentStage && ['dof', 'principal', 'chairman'].includes(loadedCurrentStage);
 
   // Tag auto-selection based on beneficiary type
   useEffect(() => {
@@ -2660,8 +2664,12 @@ const FinanceApproval: React.FC = () => {
         }
 
         const record = response.data;
+        const currentStageFromRecord = String(
+          record.workflow_state?.currentStage || record.workflow_stage || ''
+        ).toLowerCase();
         const budgetRowsFromApi = Array.isArray(record.budget) ? record.budget : [];
         const incomeRowsFromApi = Array.isArray(record.income_rows) ? record.income_rows : [];
+        const statusUpdatesFromApi = Array.isArray(record.status_updates) ? record.status_updates : [];
 
         const resolvedApplicantName = String(record.applicant_name || '').trim();
         setApplicantName(resolvedApplicantName);
@@ -2758,6 +2766,21 @@ const FinanceApproval: React.FC = () => {
         }
         setLoadedWorkflowStatus(String(record.workflow_state?.status || record.workflow_status || record.overall_status || '').toLowerCase());
         setLoadedCurrentStage(String(record.workflow_state?.currentStage || record.workflow_stage || '').toLowerCase());
+        setDirectorComments(String(record.director_comment || ''));
+        setDirectorStatus(String(record.director_status || '').toLowerCase());
+        setPrincipalComments(String(record.principal_comment || ''));
+        setPrincipalStatus(String(record.principal_status || '').toLowerCase());
+        setChairmanComments(String(record.chairman_comment || ''));
+        setChairmanStatus(String(record.chairman_status || '').toLowerCase());
+        if (currentStageFromRecord === 'dof') {
+          setStageRemarkInput(String(record.director_comment || ''));
+        } else if (currentStageFromRecord === 'principal') {
+          setStageRemarkInput(String(record.principal_comment || ''));
+        } else if (currentStageFromRecord === 'chairman') {
+          setStageRemarkInput(String(record.chairman_comment || ''));
+        } else {
+          setStageRemarkInput('');
+        }
         setCategorySelections(
           String(record.beneficiary_value || '')
             .split(',')
@@ -2798,7 +2821,7 @@ const FinanceApproval: React.FC = () => {
             : [createIncomeRow()]
         );
         setHasPrincipalDocument(Boolean(record.principal_document && record.principal_document.file_path));
-        setStatusUpdates(record.status_updates || []);
+        setStatusUpdates(statusUpdatesFromApi);
       } catch (error) {
         console.error('Failed to load finance request', error);
       } finally {
@@ -3026,6 +3049,22 @@ const FinanceApproval: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [expandedHead, setExpandedHead] = useState<string>('');
   const [activeSubHead, setActiveSubHead] = useState<string>('');
+  const stageRemarksForDisplay = [
+    { label: 'DOF', status: directorStatus, remarks: directorComments },
+    { label: 'Principal', status: principalStatus, remarks: principalComments },
+    { label: 'Chairman', status: chairmanStatus, remarks: chairmanComments },
+  ].filter((entry) => {
+    const labelToStageMap: Record<string, string> = {
+      dof: 'dof',
+      principal: 'principal',
+      chairman: 'chairman',
+    };
+    const entryStage = labelToStageMap[String(entry.label || '').toLowerCase()] || '';
+    if (canEditStageRemark && entryStage === loadedCurrentStage) {
+      return true;
+    }
+    return hasFilledText(entry.status) || hasFilledText(entry.remarks);
+  });
 
   return (
     <div className="finance-approval-body" style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}>
@@ -4573,6 +4612,60 @@ const FinanceApproval: React.FC = () => {
             gap: '18px',
           }}
         >
+          {!showPreview && stageRemarksForDisplay.length > 0 && (
+            <div
+              style={{
+                backgroundColor: '#fff',
+                padding: '24px',
+                borderRadius: '18px',
+                width: '100%',
+                maxWidth: '1200px',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+              }}
+            >
+              <h5 style={{ margin: '0 0 16px', fontSize: '16px', color: '#0069ab', fontWeight: 600 }}>
+                Workflow Remarks
+              </h5>
+              <div className="row g-3">
+                {stageRemarksForDisplay.map((entry) => (
+                  <div className="col-md-4" key={entry.label}>
+                    <label style={{ fontSize: '13px', color: '#495057', marginBottom: '8px', fontWeight: 600, display: 'block' }}>
+                      {entry.label}{hasFilledText(entry.status) ? ` (${entry.status})` : ''}
+                    </label>
+                    {(() => {
+                      const entryStage = String(entry.label || '').toLowerCase();
+                      const isCurrentStageEditable = canEditStageRemark && loadedCurrentStage === entryStage;
+                      return (
+                    <textarea
+                      value={isCurrentStageEditable ? stageRemarkInput : (entry.remarks || '')}
+                      readOnly={!isCurrentStageEditable}
+                      onChange={(event) => {
+                        if (isCurrentStageEditable) {
+                          setStageRemarkInput(event.target.value);
+                        }
+                      }}
+                      rows={3}
+                      placeholder={isCurrentStageEditable ? `Enter ${entry.label} remarks (optional)` : `No ${entry.label} remarks`}
+                      style={{
+                        borderRadius: '10px',
+                        border: '1px solid #e0e0e0',
+                        padding: '10px 12px',
+                        fontSize: '0.9rem',
+                        width: '100%',
+                        fontFamily: 'inherit',
+                        backgroundColor: '#fcfdff',
+                        resize: isCurrentStageEditable ? 'vertical' : 'none',
+                        color: '#495057',
+                      }}
+                    />
+                      );
+                    })()}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {!showPreview && !isViewMode && (
             <button
               type="button"

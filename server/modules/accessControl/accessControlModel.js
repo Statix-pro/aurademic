@@ -1,6 +1,12 @@
 import db from '../../config/connection.js';
 
 const SUPER_ADMIN_ROLE_CODE = 'super_admin';
+const BASE_USER_ROLE_CODE = 'user';
+const BASE_USER_ROLE_NAME = 'User';
+const BASE_USER_ROLE_DESCRIPTION = 'Base role assigned to all authenticated users';
+const CHAIRMAN_ROLE_CODE = 'chairman';
+const CHAIRMAN_ROLE_NAME = 'Chairman';
+const CHAIRMAN_ROLE_DESCRIPTION = 'Finance chairman-stage approver role';
 
 const LEGACY_ADMIN_PERMISSION_KEYS = [
   'admin_dashboard.read',
@@ -17,6 +23,7 @@ const LEGACY_ADMIN_PERMISSION_KEYS = [
   'finance.workflow.level1',
   'finance.workflow.dof',
   'finance.workflow.principal',
+  'finance.workflow.chairman',
   'access_control.read',
   'access_control.manage',
 ];
@@ -153,6 +160,13 @@ const SYSTEM_PERMISSION_SEED = [
     action_key: 'principal',
     permission_key: 'finance.workflow.principal',
     description: 'Process finance Principal-stage approvals',
+    is_system: true,
+  },
+  {
+    module_key: 'finance_workflow',
+    action_key: 'chairman',
+    permission_key: 'finance.workflow.chairman',
+    description: 'Process finance Chairman-stage approvals',
     is_system: true,
   },
   {
@@ -327,6 +341,73 @@ const ensureSystemPermissionSeed = async (connection = db) => {
   }
 };
 
+const ensureBaseUserRoleSeed = async (connection = db) => {
+  await connection.query(
+    `
+      INSERT INTO roles (
+        role_code,
+        role_name,
+        description,
+        is_system,
+        is_admin_role
+      )
+      VALUES (?, ?, ?, 1, 0)
+      ON DUPLICATE KEY UPDATE
+        role_name = VALUES(role_name),
+        description = VALUES(description)
+    `,
+    [BASE_USER_ROLE_CODE, BASE_USER_ROLE_NAME, BASE_USER_ROLE_DESCRIPTION]
+  );
+};
+
+const ensureChairmanRoleSeed = async (connection = db) => {
+  await connection.query(
+    `
+      INSERT INTO roles (
+        role_code,
+        role_name,
+        description,
+        is_system,
+        is_admin_role
+      )
+      VALUES (?, ?, ?, 1, 1)
+      ON DUPLICATE KEY UPDATE
+        role_name = VALUES(role_name),
+        description = VALUES(description),
+        is_admin_role = VALUES(is_admin_role)
+    `,
+    [CHAIRMAN_ROLE_CODE, CHAIRMAN_ROLE_NAME, CHAIRMAN_ROLE_DESCRIPTION]
+  );
+};
+
+const ensureUserBaseRoleAssignment = async (userId, connection = db, assignedBy = null) => {
+  const parsedUserId = Number(userId);
+  if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+    return false;
+  }
+
+  await ensureBaseUserRoleSeed(connection);
+
+  const [roleRows] = await connection.query(
+    'SELECT id FROM roles WHERE role_code = ? LIMIT 1',
+    [BASE_USER_ROLE_CODE]
+  );
+
+  if (!roleRows.length) {
+    return false;
+  }
+
+  await connection.query(
+    `
+      INSERT IGNORE INTO user_roles (user_id, role_id, assigned_by)
+      VALUES (?, ?, ?)
+    `,
+    [parsedUserId, roleRows[0].id, assignedBy]
+  );
+
+  return true;
+};
+
 const getEmptyAuthorizationSnapshot = () => ({
   roles: [],
   permissions: [],
@@ -403,6 +484,17 @@ const validatePermissionPayload = ({
 };
 
 const accessControlModel = {
+  async ensureUserHasBaseRole(userId, assignedBy = null) {
+    try {
+      return await ensureUserBaseRoleAssignment(userId, db, assignedBy);
+    } catch (error) {
+      if (isMissingRbacTableError(error)) {
+        return false;
+      }
+      throw error;
+    }
+  },
+
   async getUserAuthorizationSnapshot(userId) {
     const parsedUserId = Number(userId);
 
@@ -425,6 +517,8 @@ const accessControlModel = {
       : [];
 
     try {
+      await ensureUserBaseRoleAssignment(parsedUserId, db, null);
+
       // Get roles from both global (user_roles) and contextual (user_entity_roles) assignments
       const [roleRows] = await db.query(
         `
@@ -493,6 +587,7 @@ const accessControlModel = {
 
   async getAllPermissions() {
     try {
+      await ensureChairmanRoleSeed();
       await ensureSystemPermissionSeed();
 
       const [rows] = await db.query(
@@ -699,6 +794,8 @@ const accessControlModel = {
 
   async getRolesWithPermissions() {
     try {
+      await ensureChairmanRoleSeed();
+
       const [rows] = await db.query(
         `
           SELECT
@@ -1220,7 +1317,7 @@ const accessControlModel = {
       throw makeRbacError('Invalid user id', 400);
     }
 
-    const uniqueRoleCodes = uniqueStringArray(roleCodes);
+    const uniqueRoleCodes = uniqueStringArray([...(Array.isArray(roleCodes) ? roleCodes : []), BASE_USER_ROLE_CODE]);
     const connection = await db.getConnection();
 
     try {
@@ -1234,6 +1331,9 @@ const accessControlModel = {
       if (!userRows.length) {
         throw makeRbacError('User not found', 404);
       }
+
+      await ensureBaseUserRoleSeed(connection);
+      await ensureChairmanRoleSeed(connection);
 
       let roleRows = [];
 

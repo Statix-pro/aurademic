@@ -144,7 +144,7 @@ const isAdminOrWorkflowRole = (user?: User | null) => {
   }
 
   const normalizedRoles = normalizeRoleCodes(user);
-  const workflowRoles = ['admin', 'hod', 'coordinator', 'dof', 'principal', 'entity_approver'];
+  const workflowRoles = ['admin', 'hod', 'coordinator', 'dof', 'principal', 'chairman', 'entity_approver'];
   
   return normalizedRoles.some((role) => workflowRoles.includes(role.toLowerCase()));
 };
