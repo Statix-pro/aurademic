@@ -2315,12 +2315,6 @@ const FinanceApproval: React.FC = () => {
     }
 
     if (decision === 'approved' || decision === 'archived') {
-      if (decision === 'approved' && loadedCurrentStage === 'principal' && totalBudget > 10000 && !hasPrincipalDocument) {
-        setPrincipalApprovalFile(null);
-        setPrincipalApprovalPopupOpen(true);
-        return;
-      }
-
       const isArchivedAction = decision === 'archived';
       showAlert(
         isArchivedAction
@@ -2343,16 +2337,6 @@ const FinanceApproval: React.FC = () => {
 
   const executeWorkflowAction = async (decision: 'approved' | 'returned' | 'rejected' | 'archived', feedback?: string) => {
     if (!id) return;
-    if (
-      decision === 'approved'
-      && loadedCurrentStage === 'principal'
-      && totalBudget > 10000
-      && !hasPrincipalDocument
-    ) {
-      setPrincipalApprovalFile(null);
-      setPrincipalApprovalPopupOpen(true);
-      return;
-    }
 
     try {
       setIsLoading(true);

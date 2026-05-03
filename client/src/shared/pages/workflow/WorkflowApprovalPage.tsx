@@ -601,8 +601,8 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       status === 'completed'
     );
   }, []);
-  const isPrincipalDocumentFeatureVisible = useCallback((record: Record<string, any>) => {
-    return getWorkflowProposedAmount(record) > 10000;
+  const isPrincipalDocumentFeatureVisible = useCallback((_record: Record<string, any>) => {
+    return false;
   }, []);
   const canShowPrincipalDocumentAction = useCallback((record: Record<string, any>) => {
     return isPrincipalDocumentFeatureVisible(record);

@@ -879,19 +879,6 @@ const financeController = {
         await financeModel.updateWorkflowStageRemark(financeId, currentStage, normalizedStageRemark);
       }
 
-      if (
-        normalizedDecision === 'approved'
-        && currentStage === 'principal'
-        && isEligibleForPrincipalDocument(finance)
-        && !finance?.principal_document?.file_path
-      ) {
-        return res.status(409).json({
-          status: 'error',
-          message: 'Principal annexure PDF is required before principal approval.',
-          code: 'FINANCE_PRINCIPAL_DOCUMENT_REQUIRED',
-        });
-      }
-
       if (actor.isSuperAdmin && normalizedDecision === 'returned' && isTerminalWorkflow) {
         result = await financeModel.forceWorkflowTransition(
           financeId,
