@@ -346,7 +346,7 @@ const assertDecisionPermission = ({ moduleKey, currentStage, actor }) => {
     return;
   }
 
-  // Role-based access (hod / coordinator / dof / principal)
+  // Role-based access (hod / coordinator / dof / principal / chairman)
   if (canAccessStageByRole({ moduleKey: normalizedModuleKey, actor, stageKey: normalizedStageKey })) {
     return;
   }
@@ -473,6 +473,11 @@ const canAccessStageByRole = ({ moduleKey, actor = {}, stageKey = '' }) => {
     return roles.includes('principal');
   }
 
+  if (normalizedStage === 'chairman') {
+    const roles = getNormalizedActorRoles(actor);
+    return normalizedModuleKey === 'finance' && roles.includes('chairman');
+  }
+
   return normalizedModuleKey === 'expenditure'
     ? canAccessExpenditureStageByRole(actor, normalizedStage)
     : false;
@@ -491,23 +496,34 @@ export async function startWorkflow({ moduleKey, recordId, metadata = {} }) {
       throw new WorkflowError('Record not found', 404, 'WORKFLOW_RECORD_NOT_FOUND');
     }
 
-    const entityTypeCode = await resolveEntityTypeCodeFromContext(conn, context);
-
-    const flow = await resolveFlowConfig(conn, {
-      moduleKey,
-      beneficiaryType: context.beneficiaryType,
-      entityTypeCode,
-    });
-
-    const initialState = buildInitialState(flow, {
-      submittedTotalBudget: Number(context.totalBudget || 0),
-    });
     const normalizedMeta = await validateAdapterModuleMeta({
       moduleConfig,
       normalizedMeta: validateWorkflowMeta(metadata),
       operation: 'start',
       recordId,
       context,
+    });
+
+    const entityTypeCode = await resolveEntityTypeCodeFromContext(conn, context);
+    const adapterFlowResolver = moduleConfig?.adapter?.resolveStartFlow;
+    const adapterResolvedFlow =
+      typeof adapterFlowResolver === 'function'
+        ? adapterFlowResolver({
+            context,
+            metadata: normalizedMeta,
+          })
+        : null;
+
+    const flow = Array.isArray(adapterResolvedFlow) && adapterResolvedFlow.length > 0
+      ? validateFlowArray(adapterResolvedFlow, { field: 'workflow adapter start flow' })
+      : await resolveFlowConfig(conn, {
+          moduleKey,
+          beneficiaryType: context.beneficiaryType,
+          entityTypeCode,
+        });
+
+    const initialState = buildInitialState(flow, {
+      submittedTotalBudget: Number(context.totalBudget || 0),
     });
 
     const financeMeta = normalizedMeta?.moduleMeta?.financeMeta;

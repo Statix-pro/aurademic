@@ -92,6 +92,7 @@ const resolvePreferredStageByRoles = (roles: string[], permitted: string[]) => {
 
   if (roles.includes('dof') && permittedSet.has('dof')) return 'dof';
   if (roles.includes('principal') && permittedSet.has('principal')) return 'principal';
+  if (roles.includes('chairman') && permittedSet.has('chairman')) return 'chairman';
   if ((roles.includes('hod') || roles.includes('coordinator') || roles.includes('entity_approver')) && permittedSet.has('level1')) {
     return 'level1';
   }
@@ -120,6 +121,11 @@ const resolvePreferredTabKey = (
   if (normalizedRoles.includes('principal')) {
     const principalTab = pickByStage('principal');
     if (principalTab) return principalTab.key;
+  }
+
+  if (normalizedRoles.includes('chairman')) {
+    const chairmanTab = pickByStage('chairman');
+    if (chairmanTab) return chairmanTab.key;
   }
 
   if (normalizedRoles.some((role) => ['hod', 'coordinator', 'entity_approver'].includes(role))) {
@@ -736,6 +742,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const permissions = getNormalizedUserPermissions(user);
 
   if (meta?.isSuperAdmin || roles.includes('super_admin')) {
+    if (config.moduleKey === 'finance') {
+      return ['level1', 'dof', 'principal', 'chairman'];
+    }
     return ['level1', 'dof', 'principal'];
   }
 
@@ -750,6 +759,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }
   if (roles.includes('principal')) {
     fallback.add('principal');
+  }
+  if (roles.includes('chairman')) {
+    fallback.add('chairman');
   }
 
   // Permission‑based access:
@@ -770,6 +782,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }
   if (hasPermissionForStage('principal')) {
     fallback.add('principal');
+  }
+  if (hasPermissionForStage('chairman')) {
+    fallback.add('chairman');
   }
 
   return Array.from(fallback);
@@ -955,7 +970,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
 
     const status = String(record.workflow_status || record.status || '').trim().toLowerCase();
-    if (['level1', 'hod', 'coordinator', 'ithead', 'dof', 'principal'].includes(status)) {
+    if (['level1', 'hod', 'coordinator', 'ithead', 'dof', 'principal', 'chairman'].includes(status)) {
       return status;
     }
 
@@ -1020,12 +1035,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       const currentStage = activeStage?.toLowerCase() || '';
       
       const approvedStatusMap: Record<string, string[]> = {
-        level1: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed', 'approved'],
-        hod: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed', 'approved'],
-        coordinator: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed', 'approved'],
-        ithead: ['ithead_approved', 'dof_approved', 'principal_approved', 'completed', 'approved'],
-        dof: ['dof_approved', 'principal_approved', 'completed', 'approved'],
-        principal: ['principal_approved', 'completed', 'approved'],
+        level1: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'chairman_approved', 'completed', 'approved'],
+        hod: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'chairman_approved', 'completed', 'approved'],
+        coordinator: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'chairman_approved', 'completed', 'approved'],
+        ithead: ['ithead_approved', 'dof_approved', 'principal_approved', 'chairman_approved', 'completed', 'approved'],
+        dof: ['dof_approved', 'principal_approved', 'chairman_approved', 'completed', 'approved'],
+        principal: ['principal_approved', 'chairman_approved', 'completed', 'approved'],
+        chairman: ['chairman_approved', 'completed', 'approved'],
       };
       
       const approvedStates = approvedStatusMap[currentStage] || ['completed', 'approved'];
@@ -1070,7 +1086,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     if (token.includes('completed')) return 'approved';
 
-    if (token === 'approved' || token === 'principal_approved') return 'approved';
+    if (token === 'approved' || token === 'principal_approved' || token === 'chairman_approved') return 'approved';
 
     if (token.includes('approved') && currentStage) return 'pending';
 
@@ -1523,6 +1539,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       if (status === 'ithead_approved') return 'Approved IT Head';
       if (status === 'dof_approved') return 'Approved DoF';
       if (status === 'principal_approved') return 'Approved Principal';
+      if (status === 'chairman_approved') return 'Approved Chairman';
       if (status === 'completed') return 'Completed';
       if (status === 'approved') return 'Approved';
       return 'Approved';
@@ -1556,6 +1573,30 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     resolveStatusCategory,
     stageTabs,
   ]);
+
+  const getDofPrincipalIndicator = useCallback((record: Record<string, any>) => {
+    if (config.moduleKey !== 'finance') return null;
+    if (String(activeStage || '').toLowerCase() !== 'dof') return null;
+
+    const currentStage = String(getRecordCurrentStage(record) || '').toLowerCase();
+    const status = String(record.workflow_status || record.status || '').toLowerCase();
+    const workflowStatus = String(record.workflow_state?.status || '').toLowerCase();
+    const combinedStatus = `${status} ${workflowStatus}`;
+    const isPrincipalAccepted =
+      currentStage === 'chairman' ||
+      currentStage === 'completed' ||
+      combinedStatus.includes('principal_approved') ||
+      combinedStatus.includes('chairman_approved') ||
+      combinedStatus.includes('completed') ||
+      combinedStatus === 'approved';
+
+    return {
+      label: isPrincipalAccepted ? 'Principal Accepted' : 'Principal Pending',
+      className: isPrincipalAccepted
+        ? 'fw-principal-indicator fw-principal-indicator--accepted'
+        : 'fw-principal-indicator fw-principal-indicator--pending',
+    };
+  }, [activeStage, config.moduleKey, getRecordCurrentStage]);
 
   function resolveFinanceLevel1Role(record: Record<string, any>): 'hod' | 'coordinator' {
     const routeType = String(record.level1_route_type || record.level1RouteType || '').trim().toLowerCase();
@@ -2377,6 +2418,15 @@ const proposalFilteredRows = useMemo(() => {
                                 <span className={getStatusClass(statusCategory)}>
                                   {getDisplayStatus(record)}
                                 </span>
+                                {(() => {
+                                  const principalIndicator = getDofPrincipalIndicator(record);
+                                  if (!principalIndicator) return null;
+                                  return (
+                                    <span className={principalIndicator.className}>
+                                      {principalIndicator.label}
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               <div className="fw-actions-row">
                                 {isSuperAdminView ? (

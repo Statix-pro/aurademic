@@ -161,6 +161,8 @@ const authModel = {
         );
       }
 
+      await accessControlModel.ensureUserHasBaseRole(user.id);
+
       const authorization =
         await accessControlModel.getUserAuthorizationSnapshot(user.id);
       const computedIsAdmin = authorization.isAdmin || Boolean(user.is_admin);

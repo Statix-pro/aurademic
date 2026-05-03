@@ -23,6 +23,7 @@ export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfi
       level1: 'Level-1',
       dof: 'DoF',
       principal: 'Principal',
+      chairman: 'Chairman',
     },
     getTimelineEndpoint: (id) => `/finance-requests/${id}/status-updates`,
     getViewRoute: (id) => `/finance/${id}?admin=true`,
