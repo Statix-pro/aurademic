@@ -1005,27 +1005,18 @@ const ExpenditureDashboard: React.FC = () => {
       setLoading(false);
     }
   };
+useEffect(() => {
+  const state = location.state as DashboardReturnState | null;
 
-  useEffect(() => {
-    fetchDashboard();
-  }, [financialYear]);
+  const financeId = normalizeText(state?.financeRequestId ?? "");
 
-  useEffect(() => {
-    const state = location.state as DashboardReturnState | null;
-    if (!state) return;
-
-    const financeId = normalizeText(
-      state.financeRequestId ?? ""
-    );
-
-    if (!financeId) {
-      navigate("/expenditurecard", { replace: true, state: null });
-      return;
-    }
-
+  if (financeId) {
     fetchDashboard(financeId);
     navigate("/expenditurecard", { replace: true, state: null });
-  }, [location.state, navigate]);
+  } else {
+    fetchDashboard();
+  }
+}, [location.state, financialYear, navigate]);
   return (
     <section className="expenditure-page">
       <div className="expenditure-container">

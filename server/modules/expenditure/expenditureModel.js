@@ -13,6 +13,43 @@ import { normalizeBeneficiaryType, beneficiaryTypeToEntityTypeCode } from '../sh
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 const normalizeText = (v) => String(v || '').trim();
+const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
+
+const isBeneficiaryOrgValue = (value) => BENEFICIARY_ORG_OPTIONS.includes(normalizeText(value));
+
+const resolveCanonicalPayeeName = (payeeName, accountName) => {
+  const normalizedPayeeName = normalizeText(payeeName);
+  const normalizedAccountName = normalizeText(accountName);
+
+  if (normalizedPayeeName && !isBeneficiaryOrgValue(normalizedPayeeName)) {
+    return normalizedPayeeName;
+  }
+
+  return normalizedAccountName || normalizedPayeeName;
+};
+
+const resolveCanonicalBeneficiaryOrg = (beneficiaryOrg, legacyPayeeName) => {
+  const normalizedBeneficiaryOrg = normalizeText(beneficiaryOrg);
+  if (normalizedBeneficiaryOrg) {
+    return normalizedBeneficiaryOrg;
+  }
+
+  const normalizedLegacyPayeeName = normalizeText(legacyPayeeName);
+  return isBeneficiaryOrgValue(normalizedLegacyPayeeName) ? normalizedLegacyPayeeName : '';
+};
+
+const normalizePayeeRecord = (row) => {
+  if (!row) return row;
+
+  const canonicalPayeeName = resolveCanonicalPayeeName(row.payee_name, row.account_name);
+
+  return {
+    ...row,
+    payee_name: canonicalPayeeName,
+    account_name: canonicalPayeeName || null,
+    beneficiary_org: resolveCanonicalBeneficiaryOrg(row.beneficiary_org, row.payee_name) || null,
+  };
+};
 
 const toPositiveInt = (v) => {
   const n = Number.parseInt(v, 10);
@@ -629,12 +666,7 @@ async function insertExpenditureRef(conn, expenditureId, requestDate) {
     }
 
     try {
-      await conn.execute(
-        `INSERT IGNORE INTO expenditure_request_refs
-           (ref_year, ref_sequence, expenditure_request_id, request_ref)
-         VALUES (?, 0, NULL, NULL)`,
-        [year],
-      );
+     
 
       const [[{ cur }]] = await conn.execute(
         `SELECT COALESCE(MAX(ref_sequence), 0) AS cur
@@ -877,7 +909,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
          LIMIT ${limitNum} OFFSET ${offsetNum}`,
         [ifscCandidate, normalizedAccountCandidate],
       );
-      if (exactPayees.length) return exactPayees;
+      if (exactPayees.length) return exactPayees.map(normalizePayeeRecord);
 
       const [exactPayeeRows] = await db.execute(
         `SELECT
@@ -917,7 +949,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
          LIMIT ${limitNum} OFFSET ${offsetNum}`,
         [ifscCandidate, normalizedAccountCandidate],
       );
-      if (exactPayeeRows.length) return exactPayeeRows;
+      if (exactPayeeRows.length) return exactPayeeRows.map(normalizePayeeRecord);
     }
   }
 
@@ -968,7 +1000,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
     [...searchTerms.map((term) => `%${term}%`)],
   );
 
-  if (payeeRowResults.length) return payeeRowResults;
+  if (payeeRowResults.length) return payeeRowResults.map(normalizePayeeRecord);
 
   const payeeTermClauses = searchTerms.length
     ? searchTerms.map(() => `${payeeSearchableColumns} LIKE ?`).join(' AND ')
@@ -981,14 +1013,14 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
       ORDER BY ep.payee_name ASC LIMIT ${limitNum} OFFSET ${offsetNum}`,
     [...searchTerms.map((term) => `%${term}%`)],
   );
-  return rows;
+  return rows.map(normalizePayeeRecord);
 }
 
 export async function getPayeeById(id) {
   const [rows] = await db.execute(
     'SELECT * FROM expenditure_payees WHERE id = ? LIMIT 1', [id],
   );
-  return rows[0] || null;
+  return normalizePayeeRecord(rows[0] || null);
 }
 
 export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
@@ -1219,11 +1251,18 @@ export async function getFinanceRequestContext(financeRequestId) {
 export async function upsertPayee(payeeData, userId, conn = db) {
   const accountNo = normalizeText(payeeData.account_no);
   const ifsc      = normalizeText(payeeData.ifsc).toUpperCase();
+  const canonicalPayeeName = resolveCanonicalPayeeName(
+    payeeData.payee_name,
+    payeeData.account_name,
+  );
   const beneficiaryType = normalizeText(payeeData.beneficiary_type).toLowerCase() === 'organization'
     ? 'organization'
     : 'individual';
-  const beneficiaryOrgRaw = normalizeText(payeeData.beneficiary_org);
-  const beneficiaryOrg = ['KSRCT', 'KSREI', 'External'].includes(beneficiaryOrgRaw)
+  const beneficiaryOrgRaw = resolveCanonicalBeneficiaryOrg(
+    payeeData.beneficiary_org,
+    payeeData.payee_name,
+  );
+  const beneficiaryOrg = BENEFICIARY_ORG_OPTIONS.includes(beneficiaryOrgRaw)
     ? beneficiaryOrgRaw
     : null;
   if (!accountNo || !ifsc) throw new Error('account_no and ifsc are required');
@@ -1253,8 +1292,8 @@ export async function upsertPayee(payeeData, userId, conn = db) {
               updated_at   = CURRENT_TIMESTAMP
         WHERE id = ?`,
       [
-        payeeData.payee_name   || null,
-        payeeData.account_name || null,
+        canonicalPayeeName     || null,
+        canonicalPayeeName     || null,
         payeeData.pan_number   || null,
         payeeData.account_type || null,
         payeeData.bank_name    || null,
@@ -1280,8 +1319,8 @@ export async function upsertPayee(payeeData, userId, conn = db) {
         pan_number, gstin, tds_details, tds_section, created_by)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      normalizeText(payeeData.payee_name),
-      payeeData.account_name  || null,
+      canonicalPayeeName,
+      canonicalPayeeName || null,
       accountNo,
       payeeData.account_type  || null,
       normalizeText(payeeData.bank_name),
@@ -1688,13 +1727,24 @@ export async function createExpenditure(data, userId) {
       ? [
         {
           payee_id: toPositiveInt(data.payee_id),
-          payee_name: normalizeText(paymentDetails.payee_name || data.payee_name) || null,
+          payee_name: resolveCanonicalPayeeName(
+            paymentDetails.payee_name || data.payee_name,
+            paymentDetails.account_name,
+          ) || null,
           bank_name: normalizeText(paymentDetails.bank_name) || null,
           account_no: normalizeText(paymentDetails.account_no) || null,
           ifsc: normalizeText(paymentDetails.ifsc).toUpperCase() || null,
           branch_name: normalizeText(paymentDetails.branch_name) || null,
           amount,
           mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
+          account_name: resolveCanonicalPayeeName(
+            paymentDetails.payee_name || data.payee_name,
+            paymentDetails.account_name,
+          ) || null,
+          beneficiary_org: resolveCanonicalBeneficiaryOrg(
+            paymentDetails.beneficiary_org || data.beneficiary_org,
+            paymentDetails.payee_name || data.payee_name,
+          ) || null,
         },
       ]
       : [],
@@ -1762,7 +1812,9 @@ async function insertPayeeRows(conn, expenditureId, rows = [], userId = null) {
   let sortOrder = 0;
   for (const row of validRows) {
     const existingPayeeId = toPositiveInt(row.payeeId || row.payee_id);
-    const payeeName = sanitizeRowValue(row.payeeName || row.payee_name);
+    const payeeName = sanitizeRowValue(
+      resolveCanonicalPayeeName(row.payeeName || row.payee_name, row.accountName || row.account_name),
+    );
     const bankName = sanitizeRowValue(row.bankName || row.bank_name);
     const accountNo = sanitizeRowValue(row.accountNo || row.account_no);
     const ifsc = sanitizeRowValue(row.ifsc);
@@ -1770,11 +1822,13 @@ async function insertPayeeRows(conn, expenditureId, rows = [], userId = null) {
     const url = sanitizeRowValue(row.url);
     const amount = toMoney(row.amount);
     const mode = sanitizeRowValue(row.mode);
-    const accountName = sanitizeRowValue(row.accountName || row.account_name);
+    const accountName = payeeName;
     const panNumber = sanitizeRowValue(row.panNumber || row.pan_number);
     const accountType = sanitizeRowValue(row.accountType || row.account_type);
     const beneficiaryType = sanitizeRowValue(row.beneficiaryType || row.beneficiary_type) || 'individual';
-    const beneficiaryOrg = sanitizeRowValue(row.beneficiaryOrg || row.beneficiary_org);
+    const beneficiaryOrg = sanitizeRowValue(
+      resolveCanonicalBeneficiaryOrg(row.beneficiaryOrg || row.beneficiary_org, row.payeeName || row.payee_name),
+    );
     const organizationType = sanitizeRowValue(row.organizationType || row.organization_type);
     const msme = sanitizeRowValue(row.msme);
     const gstin = sanitizeRowValue(row.gstin);
@@ -2145,18 +2199,18 @@ async function getRemainingBudgetByLine(conn, financeRequestId, budgetLineIds = 
 
   const placeholders = normalizedBudgetLineIds.map(() => '?').join(', ');
   const [budgetRows] = await conn.execute(
-    `SELECT
-       fbb.budget_line_id,
-       ${FINANCE_BREAKUP_APPROVED_BASE_SQL} AS approved_amount,
-       0 AS used_amount,
-       ${FINANCE_BREAKUP_APPROVED_BASE_SQL} AS remaining_amount
-     FROM finance_budget_breakup fbb
-     LEFT JOIN budget_proposal_lines bpl ON bpl.id = fbb.budget_line_id
-     WHERE fbb.finance_id = ?
-       AND fbb.budget_line_id IN (${placeholders})`,
-    [normalizedFinanceRequestId, ...normalizedBudgetLineIds],
-  );
-
+  `SELECT
+     fbb.budget_line_id,
+     ${FINANCE_BREAKUP_APPROVED_BASE_SQL} AS approved_amount,
+     0 AS used_amount,
+     ${FINANCE_BREAKUP_APPROVED_BASE_SQL} AS remaining_amount
+   FROM finance_budget_breakup fbb
+   LEFT JOIN budget_proposal_lines bpl ON bpl.id = fbb.budget_line_id
+   WHERE fbb.finance_id = ?
+     AND fbb.budget_line_id IN (${placeholders})
+   FOR UPDATE`,
+  [normalizedFinanceRequestId, ...normalizedBudgetLineIds],
+);
   return new Map(
     budgetRows.map((row) => [
       toPositiveInt(row.budget_line_id),
@@ -2834,7 +2888,7 @@ export async function getExpenditureDetails(id) {
 
   return {
     income_rows,
-    payee_rows,
+    payee_rows: payee_rows.map(normalizePayeeRecord),
     advance_rows,
     settlement_rows,
     expenditure_rows,
@@ -2919,9 +2973,9 @@ export async function listExpenditures({
  */
 export async function updateExpenditure(id, data, actor = null) {
   const ALLOWED = [
-    'description', 'payment_debit_account', 'payment_mode',
-    'payment_ref_no', 'payment_date', 'payment_status', 'overall_status',
-  ];
+  'description', 'payment_debit_account', 'payment_mode',
+  'payment_ref_no', 'payment_date', 'payment_status',
+];
 
   const update = Object.fromEntries(
     Object.entries(data)
@@ -2963,19 +3017,25 @@ export async function updateExpenditure(id, data, actor = null) {
  * Delete an expenditure request and release the reserved budget.
  * Only allowed when overall_status = 'pending'.
  */
-export async function deleteExpenditure(id) {
+export async function deleteExpenditure(id, options = {}) {
+  const { isSuperAdmin = false } = options;
+
   return withTransaction(async (conn) => {
     const [[row]] = await conn.execute(
       `SELECT id, request_type, overall_status
          FROM expenditure_requests WHERE id = ? LIMIT 1 FOR UPDATE`,
       [id],
     );
-    if (!row) throw new Error('Expenditure request not found');
-    if (normalizeText(row.overall_status).toLowerCase() !== 'pending') {
+
+    if (!row) {
+      throw new Error('Expenditure request not found');
+    }
+    if (!isSuperAdmin && normalizeText(row.overall_status).toLowerCase() !== 'pending') {
       throw new Error('Only pending requests can be deleted');
     }
 
     await conn.execute('DELETE FROM expenditure_requests WHERE id = ?', [id]);
+
     return true;
   });
 }
