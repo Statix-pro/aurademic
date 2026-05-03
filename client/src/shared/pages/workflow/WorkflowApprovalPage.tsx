@@ -2557,9 +2557,9 @@ const proposalFilteredRows = useMemo(() => {
                                       handleArchiveToggle(record);
                                     }}
                                     disabled={
-                                      archivingIds.has(recordId) ||
-                                      (isSuperAdminView && !isActionablePending)
-                                    }
+  archivingIds.has(recordId) ||
+  (isSuperAdminView && !isActionablePending && resolveStatusCategory(record) !== 'archived')
+}
                                   >
                                     <Archive size={18} />
                                   </button>

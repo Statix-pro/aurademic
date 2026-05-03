@@ -654,14 +654,14 @@
 }
 
 .payee-row-btn {
-  width: 38px;
-  height: 38px;
+  width: 30px;
+  height: 30px;
   border: none;
   border-radius: 50%;
   padding: 0;
-  background: #eaf3ff;
-  color: #7d9cc3;
-  font-size: 20px;
+  background: #f5f6f8;
+  color: #000000;
+  font-size: 14px;
   line-height: 1;
   font-weight: 500;
   cursor: pointer;
@@ -672,18 +672,18 @@
 }
 
 .payee-row-btn:hover {
-  background: #ddeaff;
+  background: #eceef2;
   transform: translateY(-1px);
 }
 
 .payee-row-btn-delete {
-  background: #fce8ea;
-  color: #de8b95;
+  background: #ffe6e6;
+  color: #000000;
   order: 1;
 }
 
 .payee-row-btn-delete:hover {
-  background: #f9dce0;
+  background: #ffdede;
 }
 
 .payee-row-btn:not(.payee-row-btn-delete) {
@@ -1613,8 +1613,10 @@
   }
 
   .payee-status-card-fields {
-    grid-template-columns: 1fr;
-  }
+  display: flex;
+  flex-direction: column;
+  gap: 24px; 
+}
 
   .payee-footer-input-wrap {
     grid-template-columns: 1fr;
@@ -2121,29 +2123,30 @@
 }
 
 /* Bigger dropdown, NO BORDER */
-.hoac-primary-row CustomDropdown,
-.hoac-sub-row CustomDropdown,
-.hoac-form-group [class*="CustomDropdown"] {
+.hoac-primary-row .custom-input-group,
+.hoac-sub-row .custom-input-group,
+.hoac-form-group .custom-input-group {
   min-height: 48px !important;
   height: 48px !important;
-  padding: 0 20px !important;     /* More horizontal padding */
+  padding: 0 20px !important;
   font-size: 14px !important;
-  border: none !important;        /* NO BORDER */
-  background: #fafbfc !important; /* Light clean background */
-  border-radius: 12px !important; /* Rounded corners */
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; /* Subtle shadow */
+  border: none !important;
+  background: #fafbfc !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
 }
 
-.hoac-primary-row CustomDropdown:hover,
-.hoac-sub-row CustomDropdown:hover {
-  background: #f0f4f8 !important; /* Hover state */
+.hoac-primary-row .custom-input-group:hover,
+.hoac-sub-row .custom-input-group:hover {
+  background: #f0f4f8 !important;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
 }
 
-.hoac-primary-row CustomDropdown:focus-within,
-.hoac-sub-row CustomDropdown:focus {
+.hoac-primary-row .custom-input-group:focus-within,
+.hoac-sub-row .custom-input-group:focus-within {
   background: #fff !important;
-  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15), 0 2px 8px rgba(0,0,0,0.12) !important;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15),
+              0 2px 8px rgba(0,0,0,0.12) !important;
   outline: none !important;
 }
 
@@ -2328,14 +2331,14 @@
   background-color: #e9ecef;
 }
 
-.expenditure-submit-buttons {
+.expenditure-approval-body .expenditure-submit-buttons {
   display: flex;
   justify-content: center;
   margin-top: 30px;
   padding-bottom: 20px;
 }
 
-.btn-submit {
+.expenditure-approval-body .btn-submit {
   background-color: #0069ab;
   color: white;
   border: none;
@@ -2347,7 +2350,7 @@
   transition: all 0.2s;
 }
 
-.btn-submit:hover {
+.expenditure-approval-body .btn-submit:hover {
   background-color: #005492;
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(0, 105, 171, 0.3);

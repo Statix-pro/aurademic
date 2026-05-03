@@ -6,6 +6,7 @@ import expenditureController from './expenditureController.js';
 import * as expenditureModel from './expenditureModel.js';
 import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
 
+
 const router = express.Router();
 const expenditureUploadRoot = path.join(process.cwd(), 'uploads', 'expenditure');
 
@@ -41,23 +42,24 @@ const expenditureUpload = multer({
     },
   }),
   fileFilter: (req, file, cb) => {
-    if (file.fieldname !== 'bulk_neft_file') {
-      cb(null, true);
-      return;
-    }
-
-    const extension = path.extname(file.originalname || '').toLowerCase();
+  const extension = path.extname(file.originalname || '').toLowerCase();
+  if (file.fieldname === 'bulk_neft_file') {
     if (extension === '.xlsx' || extension === '.xls') {
-      cb(null, true);
-      return;
+      return cb(null, true);
+    }
+    return cb(new Error('Bulk NEFT upload only accepts .xlsx or .xls files'));
+  }
+  if (file.fieldname === 'bill_files') {
+    const allowed = ['.pdf', '.png', '.jpg', '.jpeg'];
+
+    if (allowed.includes(extension)) {
+      return cb(null, true);
     }
 
-    cb(new Error('Bulk NEFT upload only accepts .xlsx or .xls files'));
-  },
-  limits: {
-    fileSize: 15 * 1024 * 1024,
-    files: 21,
-  },
+    return cb(new Error('Bill files only accept .pdf, .png, .jpg, .jpeg'));
+  }
+  return cb(new Error('Invalid file field'));
+},
 });
 
 const EXPENDITURE_WORKFLOW_PERMISSIONS = [
@@ -83,28 +85,34 @@ const canAccessExpenditureWorkflowForAdmins = (req, res, next) => {
 
 const canDelete = async (req, res, next) => {
   try {
-    const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-    const hasWorkflowPermission = permissions.some((permission) =>
-      String(permission || '').trim().startsWith('expenditure.workflow.')
-    );
+    const isSuperAdmin = Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin);
 
-    if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || hasWorkflowPermission) return next();
+    if (isSuperAdmin) return next();
 
     const id = Number.parseInt(req.params.id, 10);
     const userId = Number.parseInt(req.user?.id, 10);
 
     if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(userId) || userId <= 0) {
-      return next();
+      return next(); // revert to old behavior (not fail-closed)
     }
 
     const owner = await expenditureModel.getExpenditureOwner(id);
-    if (!owner) return next();
 
-    if (Number.parseInt(owner.created_by, 10) === userId) return next();
+    if (!owner) return next(); // revert
 
-    return res.status(403).json({ status: 'error', message: 'Insufficient permissions' });
+    if (Number.parseInt(owner.created_by, 10) === userId) {
+      return next();
+    }
+
+    return res.status(403).json({
+      status: 'error',
+      message: 'Insufficient permissions',
+    });
   } catch {
-    return res.status(500).json({ status: 'error', message: 'Failed to validate permissions' });
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to validate permissions',
+    });
   }
 };
 
@@ -139,21 +147,16 @@ router.get('/:id/timeline', expenditureController.getExpenditureWorkflowTimeline
 router.post(
   '/',
   expenditureUpload.fields([
-    { name: 'bulkneftfile', maxCount: 1 },
     { name: 'bulk_neft_file', maxCount: 1 },
-    { name: 'billfiles', maxCount: 20 },
     { name: 'bill_files', maxCount: 20 },
   ]),
   expenditureController.createExpenditureRequest,
 );
 
-router.post('/advance', expenditureController.createAdvance);
-router.put(
+router.post('/advance', expenditureController.createAdvance);router.put(
   '/:id',
   expenditureUpload.fields([
-    { name: 'bulkneftfile', maxCount: 1 },
     { name: 'bulk_neft_file', maxCount: 1 },
-    { name: 'billfiles', maxCount: 20 },
     { name: 'bill_files', maxCount: 20 },
   ]),
   expenditureController.updateExpenditure,

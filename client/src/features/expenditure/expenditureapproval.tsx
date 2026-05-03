@@ -1087,6 +1087,37 @@ const createPayeeRow = (): PayeeRow => ({
   tdsSection: '',
 });
 
+const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'] as const;
+
+const normalizePayeeText = (value: unknown): string => String(value ?? '').trim();
+
+const isBeneficiaryOrgValue = (value: unknown): boolean =>
+  BENEFICIARY_ORG_OPTIONS.some((option) => option === normalizePayeeText(value));
+
+const resolveCanonicalPayeeName = (payeeName: unknown, accountName: unknown): string => {
+  const normalizedPayeeName = normalizePayeeText(payeeName);
+  const normalizedAccountName = normalizePayeeText(accountName);
+
+  if (normalizedPayeeName && !isBeneficiaryOrgValue(normalizedPayeeName)) {
+    return normalizedPayeeName;
+  }
+
+  return normalizedAccountName || normalizedPayeeName;
+};
+
+const resolveCanonicalBeneficiaryOrg = (
+  beneficiaryOrg: unknown,
+  legacyPayeeName?: unknown,
+): string => {
+  const normalizedBeneficiaryOrg = normalizePayeeText(beneficiaryOrg);
+  if (normalizedBeneficiaryOrg) {
+    return normalizedBeneficiaryOrg;
+  }
+
+  const normalizedLegacyPayeeName = normalizePayeeText(legacyPayeeName);
+  return isBeneficiaryOrgValue(normalizedLegacyPayeeName) ? normalizedLegacyPayeeName : '';
+};
+
 const createAdvanceRow = (): AdvanceFormRow => ({
   id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
   budgetHead: '',
@@ -1440,14 +1471,16 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
 
   
   const handleModalSubmit = async () => {
-    if (!newPayeeName || !newAccountNo || !newIfsc || !newBankName || !newBranchName) {
-      showAlert('Please enter beneficiary name, account number, IFSC, bank name and branch name', 'warning');
+    const canonicalPayeeName = resolveCanonicalPayeeName('', newAccountName);
+
+    if (!canonicalPayeeName || !newAccountNo || !newIfsc || !newBankName || !newBranchName) {
+      showAlert('Please enter accountant name, account number, IFSC, bank name and branch name', 'warning');
       return;
     }
 
     const payeeToAdd: PayeeRow = {
       id: crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      payeeName: newPayeeName,
+      payeeName: canonicalPayeeName,
       bankName: newBankName,
       accountNo: newAccountNo,
       ifsc: newIfsc.toUpperCase(),
@@ -1455,9 +1488,10 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
       url: '',
       amount: '',
       mode: '',
-      accountName: newAccountName,
+      accountName: canonicalPayeeName,
       accountType: newAccountType,
       beneficiaryType,
+      beneficiaryOrg: resolveCanonicalBeneficiaryOrg('', newPayeeName),
       ...(beneficiaryType === 'individual' && { panNumber: newPanNumber }),
       ...(beneficiaryType === 'organization' && {
         organizationType: orgType,
@@ -1559,7 +1593,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
               <div style={{ display: 'flex', alignItems: 'center' }}>
                 <label style={{ width: '170px' }}>Beneficiary</label>
                 <div style={{ flex: 1, display: 'flex', gap: '24px' }}>
-                  {['KSRCT', 'KSREI', 'External'].map(opt => (
+                  {BENEFICIARY_ORG_OPTIONS.map(opt => (
                     <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#5f6f85', fontWeight: 500 }}>
                       <input type="radio" name="beneficiaryInd" value={opt} checked={newPayeeName === opt} onChange={() => setNewPayeeName(opt)} style={{ accentColor: '#8aa9c6' }} />
                       <span style={{ color: '#5f6f85' }}>{opt}</span>
@@ -1568,8 +1602,8 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '170px' }}>Account Name</label>
-                <input className="payee-modal-field-input" type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff' }} value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Enter account name" />
+                <label style={{ width: '170px' }}>Accountant Name</label>
+                <input className="payee-modal-field-input" type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff' }} value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Enter accountant name" />
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
                 <label style={{ width: '170px' }}>PAN Number</label>
@@ -1584,7 +1618,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
               <div style={{ display: 'flex', alignItems: 'center' }}>
                 <label style={{ width: '170px' }}>Beneficiary</label>
                 <div style={{ flex: 1, display: 'flex', gap: '24px' }}>
-                  {['KSRCT', 'KSREI', 'External'].map(opt => (
+                  {BENEFICIARY_ORG_OPTIONS.map(opt => (
                     <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#5f6f85', fontWeight: 500 }}>
                       <input type="radio" name="beneficiaryOrg" value={opt} checked={newPayeeName === opt} onChange={() => setNewPayeeName(opt)} style={{ accentColor: '#8aa9c6' }} />
                       <span style={{ color: '#5f6f85' }}>{opt}</span>
@@ -1593,8 +1627,8 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ width: '170px' }}>Account Name</label>
-                <input className="payee-modal-field-input" type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Enter organization name" />
+                <label style={{ width: '170px' }}>Accountant Name</label>
+                <input className="payee-modal-field-input" type="text" style={{ flex: 1, height: '48px', padding: '0 16px', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Enter accountant name" />
               </div>
                <div style={{ display: 'flex', alignItems: 'center' }}>
   <label style={{ width: '170px' }}>Organization Type</label>
@@ -1929,6 +1963,7 @@ const ExpenditureApproval: React.FC = () => {
   const bulkNeftInputRef = useRef<HTMLInputElement>(null);
   const [bulkNeftFile, setBulkNeftFile] = useState<File | null>(null);
   const [uploadedPayeeBills, setUploadedPayeeBills] = useState<File[]>([]);
+  const [uploadedPaymentProofs, setUploadedPaymentProofs] = useState<File[]>([]);
   const [existingPayeeBills, setExistingPayeeBills] = useState<BillFileRecord[]>([]);
   const [remarks, setRemarks] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -2120,9 +2155,22 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
 
         const mapPayeeRows = Array.isArray(record.payee_rows)
           ? record.payee_rows.map((row: any, index: number) => ({
+              ...(() => {
+                const canonicalPayeeName = resolveCanonicalPayeeName(
+                  row?.payee_name,
+                  row?.account_name,
+                );
+                return {
+                  payeeName: canonicalPayeeName,
+                  accountName: canonicalPayeeName,
+                  beneficiaryOrg: resolveCanonicalBeneficiaryOrg(
+                    row?.beneficiary_org,
+                    row?.payee_name,
+                  ),
+                };
+              })(),
               id: `${submittedRequestIdFromState}-payee-${index}`,
               payeeId: row?.payee_id ?? null,
-              payeeName: String(row?.payee_name || ''),
               bankName: String(row?.bank_name || ''),
               accountNo: String(row?.account_no || ''),
               ifsc: String(row?.ifsc || ''),
@@ -2130,11 +2178,9 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
               url: String(row?.url || ''),
               amount: String(row?.amount || ''),
               mode: String(row?.mode || ''),
-              accountName: String(row?.account_name || ''),
               panNumber: String(row?.pan_number || ''),
               accountType: String(row?.account_type || ''),
               beneficiaryType: String(row?.beneficiary_type || 'individual'),
-              beneficiaryOrg: String(row?.beneficiary_org || ''),
               organizationType: String(row?.organization_type || ''),
               msme: String(row?.msme || ''),
               gstin: String(row?.gstin || ''),
@@ -2516,25 +2562,29 @@ const workflowRowRefFromState = (() => {
         return normalizedParts.every((part) => haystack.includes(part));
       })
       .slice(0, 8)
-      .map((row, index) => ({
-        id: Number(`9${index + 1}`),
-        payee_id: row.payeeId ?? null,
-        payee_name: row.payeeName,
-        account_name: row.accountName || null,
-        pan_number: row.panNumber || null,
-        account_no: row.accountNo,
-        account_type: row.accountType || null,
-        bank_name: row.bankName,
-        branch_name: row.branchName,
-        ifsc: row.ifsc,
-        beneficiary_type: row.beneficiaryType || 'individual',
-        beneficiary_org: row.beneficiaryOrg || null,
-        organization_type: row.organizationType || null,
-        msme: row.msme || null,
-        gstin: row.gstin || null,
-        tds_details: row.tdsDetails || null,
-        tds_section: row.tdsSection || null,
-      }));
+      .map((row, index) => {
+        const canonicalPayeeName = resolveCanonicalPayeeName(row.payeeName, row.accountName);
+
+        return {
+          id: Number(`9${index + 1}`),
+          payee_id: row.payeeId ?? null,
+          payee_name: canonicalPayeeName,
+          account_name: canonicalPayeeName || null,
+          pan_number: row.panNumber || null,
+          account_no: row.accountNo,
+          account_type: row.accountType || null,
+          bank_name: row.bankName,
+          branch_name: row.branchName,
+          ifsc: row.ifsc,
+          beneficiary_type: row.beneficiaryType || 'individual',
+          beneficiary_org: resolveCanonicalBeneficiaryOrg(row.beneficiaryOrg, row.payeeName) || null,
+          organization_type: row.organizationType || null,
+          msme: row.msme || null,
+          gstin: row.gstin || null,
+          tds_details: row.tdsDetails || null,
+          tds_section: row.tdsSection || null,
+        };
+      });
   };
 
   const fetchPayeeSuggestions = async (rowId: string, query: string) => {
@@ -2562,11 +2612,14 @@ const workflowRowRefFromState = (() => {
       const remoteMatches = Array.isArray(response.data) ? response.data : [];
       const mergedMatches = [...localMatches];
       const seenKeys = new Set(
-        localMatches.map((payee) => `${payee.account_no || ''}|${String(payee.ifsc || '').toUpperCase()}|${payee.payee_name || ''}`)
+        localMatches.map(
+          (payee) =>
+            `${payee.account_no || ''}|${String(payee.ifsc || '').toUpperCase()}|${resolveCanonicalPayeeName(payee.payee_name, payee.account_name)}`,
+        )
       );
 
       remoteMatches.forEach((payee) => {
-        const key = `${payee.account_no || ''}|${String(payee.ifsc || '').toUpperCase()}|${payee.payee_name || ''}`;
+        const key = `${payee.account_no || ''}|${String(payee.ifsc || '').toUpperCase()}|${resolveCanonicalPayeeName(payee.payee_name, payee.account_name)}`;
         if (!seenKeys.has(key)) {
           seenKeys.add(key);
           mergedMatches.push(payee);
@@ -2923,21 +2976,29 @@ const workflowRowRefFromState = (() => {
   };
 
   const applyPayeeLookupSelection = (rowId: string, payee: PayeeLookupResult) => {
+    const canonicalPayeeName = resolveCanonicalPayeeName(
+      payee.payee_name,
+      payee.account_name,
+    );
+
     updatePayeeRow(rowId, (row) => ({
       ...row,
       payeeId: payee.payee_id ?? payee.id ?? row.payeeId ?? null,
-      payeeName: String(payee.payee_name || '').trim() || row.payeeName,
+      payeeName: canonicalPayeeName || row.payeeName,
       accountNo: String(payee.account_no || '').trim() || row.accountNo,
       bankName: String(payee.bank_name || '').trim() || row.bankName,
       ifsc: String(payee.ifsc || '').trim().toUpperCase() || row.ifsc,
       branchName: String(payee.branch_name || '').trim() || row.branchName,
-      accountName: String(payee.account_name || '').trim() || row.accountName,
+      accountName: canonicalPayeeName || row.accountName,
       panNumber: String(payee.pan_number || '').trim() || row.panNumber,
       accountType: String(payee.account_type || '').trim() || row.accountType,
       beneficiaryType: String(payee.beneficiary_type || '').trim().toLowerCase() === 'organization'
         ? 'organization'
         : 'individual',
-      beneficiaryOrg: String(payee.beneficiary_org || '').trim(),
+      beneficiaryOrg: resolveCanonicalBeneficiaryOrg(
+        payee.beneficiary_org,
+        payee.payee_name,
+      ),
       organizationType: String(payee.organization_type || '').trim(),
       msme: String(payee.msme || '').trim(),
       gstin: String(payee.gstin || '').trim(),
@@ -2968,7 +3029,7 @@ const workflowRowRefFromState = (() => {
               }}
             >
               <div className="payee-search-item-name">
-                {payee.payee_name || 'Unnamed payee'}
+                {resolveCanonicalPayeeName(payee.payee_name, payee.account_name) || 'Unnamed payee'}
               </div>
               <div className="payee-search-item-sub">
                 {[
@@ -2991,6 +3052,13 @@ const workflowRowRefFromState = (() => {
     if (e.target.files) {
       const files = Array.from(e.target.files);
       setUploadedPayeeBills(prev => [...prev, ...files]);
+    }
+  };
+
+  const handlePaymentProofUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setUploadedPaymentProofs((prev) => [...prev, ...files]);
     }
   };
 
@@ -3272,8 +3340,9 @@ advanceRows.forEach((row) => {
 
 for (const [, group] of groupedAdvanceUsage) {
   if (group.used > group.budget) {
-    window.alert(
-      `Total entered advance ₹ ${group.used.toLocaleString("en-IN")} exceeds available balance ₹ ${group.budget.toLocaleString("en-IN")} for one of the selected budget lines.`
+    showAlert(
+      `Total entered advance ₹ ${group.used.toLocaleString("en-IN")} exceeds available balance ₹ ${group.budget.toLocaleString("en-IN")} for one of the selected budget lines.`,
+      'warning'
     );
     return;
   }
@@ -3333,8 +3402,9 @@ const getExpenditureRowAvailableBalance = (rowId: string | number) => {
   const allowedBalance = getAdvanceRowAvailableBalance(rowId);
 
   if (numericValue > allowedBalance) {
-    window.alert(
-      `Entered amount exceeds available balance. Maximum allowed is ₹ ${allowedBalance.toLocaleString("en-IN")}.`
+    showAlert(
+      `Entered amount exceeds available balance. Maximum allowed is ₹ ${allowedBalance.toLocaleString("en-IN")}.`,
+      'warning'
     );
     return;
   }
@@ -3376,8 +3446,9 @@ const getExpenditureRowAvailableBalance = (rowId: string | number) => {
   const allowedBalance = getExpenditureRowAvailableBalance(rowId);
 
   if (evaluatedAmount > allowedBalance) {
-    window.alert(
-      `Entered expenditure exceeds available balance. Maximum allowed is ₹ ${allowedBalance.toLocaleString("en-IN")}.`
+    showAlert(
+      `Entered expenditure exceeds available balance. Maximum allowed is ₹ ${allowedBalance.toLocaleString("en-IN")}.`,
+      'warning'
     );
     return;
   }
@@ -3415,8 +3486,9 @@ expenditureSubRows.forEach((row) => {
 
 for (const [, group] of groupedExpenditureUsage) {
   if (group.used > group.budget) {
-    window.alert(
-      `Total expenditure ₹ ${group.used.toLocaleString("en-IN")} exceeds available balance ₹ ${group.budget.toLocaleString("en-IN")} for one of the selected budget lines.`
+    showAlert(
+      `Total expenditure ₹ ${group.used.toLocaleString("en-IN")} exceeds available balance ₹ ${group.budget.toLocaleString("en-IN")} for one of the selected budget lines.`,
+      'warning'
     );
     return;
   }
@@ -3547,24 +3619,24 @@ for (const [, group] of groupedExpenditureUsage) {
   };
 
   const iconBtn: CSSProperties = {
-    width: '38px',
-    height: '38px',
+    width: '28px',
+    height: '28px',
     borderRadius: '50%',
     border: 'none',
-    background: '#eaf3ff',
-    color: '#7d9cc3',
+    background: '#f5f6f8',
+    color: '#000000',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '16px',
-    transition: 'all 0.3s ease',
+    fontSize: '12px',
+    transition: 'background-color 0.3s ease',
   };
 
   const deleteIconBtn: CSSProperties = {
     ...iconBtn,
-    background: '#fce8ea',
-    color: '#de8b95',
+    background: '#ffe6e6',
+    color: '#000000',
     alignItems: 'center'
   };
 
@@ -3759,7 +3831,7 @@ for (const [, group] of groupedExpenditureUsage) {
                         <div className="payee-field-wrap">
                           <input
                             className="payee-field"
-                            placeholder="Payee Name"
+                            placeholder="Accountant Name"
                             value={row.payeeName}
                             onChange={(e) => {
                               handlePayeeLookupInputChange(row.id, 'payeeName', e.target.value);
@@ -3891,7 +3963,7 @@ for (const [, group] of groupedExpenditureUsage) {
                             cursor: (!row.payeeName || !row.accountNo || !row.bankName || !row.ifsc || !row.branchName || !row.amount || !row.mode) ? 'not-allowed' : 'pointer'
                           }}
                         >
-                          <Plus size={20} />
+                          <Plus size={14} strokeWidth={2.5} />
                         </button>
                       )}
                       {payeeRows.length > 1 && (
@@ -3900,7 +3972,7 @@ for (const [, group] of groupedExpenditureUsage) {
                           onClick={(e) => { e.preventDefault(); removePayeeRow(row.id); }}
                           title="Delete Row"
                         >
-                          <X size={20} />
+                          <X size={14} strokeWidth={2.5} />
                         </button>
                       )}
                     </div>
@@ -4288,27 +4360,31 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
     const primaryIncomeRow = showIncomeSection ? incomeRows[0] : undefined;
 
-    const normalizedPayeeRows = payeeRows.map((row) => ({
-      payee_id: row.payeeId ?? null,
-      payee_name: row.payeeName?.trim() || '',
-      bank_name: row.bankName?.trim() || '',
-      account_no: row.accountNo?.trim() || '',
-      ifsc: row.ifsc?.trim().toUpperCase() || '',
-      branch_name: row.branchName?.trim() || '',
-      url: row.url?.trim() || '',
-      amount: row.amount?.trim() || '',
-      mode: row.mode?.trim() || '',
-      account_name: row.accountName?.trim() || '',
-      pan_number: row.panNumber?.trim() || '',
-      account_type: row.accountType?.trim() || '',
-      beneficiary_type: row.beneficiaryType || 'individual',
-      beneficiary_org: row.beneficiaryOrg?.trim() || '',
-      organization_type: row.organizationType?.trim() || '',
-      msme: row.msme?.trim() || '',
-      gstin: row.gstin?.trim() || '',
-      tds_details: row.tdsDetails?.trim() || '',
-      tds_section: row.tdsSection?.trim() || '',
-    }));
+    const normalizedPayeeRows = payeeRows.map((row) => {
+      const canonicalPayeeName = resolveCanonicalPayeeName(row.payeeName, row.accountName);
+
+      return {
+        payee_id: row.payeeId ?? null,
+        payee_name: canonicalPayeeName,
+        bank_name: row.bankName?.trim() || '',
+        account_no: row.accountNo?.trim() || '',
+        ifsc: row.ifsc?.trim().toUpperCase() || '',
+        branch_name: row.branchName?.trim() || '',
+        url: row.url?.trim() || '',
+        amount: row.amount?.trim() || '',
+        mode: row.mode?.trim() || '',
+        account_name: canonicalPayeeName,
+        pan_number: row.panNumber?.trim() || '',
+        account_type: row.accountType?.trim() || '',
+        beneficiary_type: row.beneficiaryType || 'individual',
+        beneficiary_org: resolveCanonicalBeneficiaryOrg(row.beneficiaryOrg, row.payeeName),
+        organization_type: row.organizationType?.trim() || '',
+        msme: row.msme?.trim() || '',
+        gstin: row.gstin?.trim() || '',
+        tds_details: row.tdsDetails?.trim() || '',
+        tds_section: row.tdsSection?.trim() || '',
+      };
+    });
 
     const selectedAdvanceRows =
       activeTab === 'Advance'
@@ -5008,9 +5084,11 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
   
   const handleAddPayee = async (payee: PayeeRow) => {
     try {
+      const canonicalPayeeName = resolveCanonicalPayeeName(payee.payeeName, payee.accountName);
+
       const response = await authenticityUtility.post('/expenditure/payees', {
-        payee_name: payee.payeeName,
-        account_name: payee.accountName || null,
+        payee_name: canonicalPayeeName,
+        account_name: canonicalPayeeName || null,
         pan_number: payee.panNumber || null,
         account_no: payee.accountNo,
         account_type: payee.accountType || null,
@@ -5018,7 +5096,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         branch_name: payee.branchName,
         ifsc: payee.ifsc,
         beneficiary_type: payee.beneficiaryType || 'individual',
-        beneficiary_org: payee.beneficiaryOrg || null,
+        beneficiary_org: resolveCanonicalBeneficiaryOrg(payee.beneficiaryOrg, payee.payeeName) || null,
         organization_type: payee.organizationType || null,
         msme: payee.msme || null,
         gstin: payee.gstin || null,
@@ -5032,11 +5110,15 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
       }
 
       const savedPayee = response.data;
+      const savedCanonicalPayeeName = resolveCanonicalPayeeName(
+        savedPayee.payee_name,
+        savedPayee.account_name,
+      );
       const nextPayeeRow: PayeeRow = {
         ...payee,
         payeeId: savedPayee.id ?? payee.payeeId ?? null,
-        payeeName: String(savedPayee.payee_name || payee.payeeName).trim(),
-        accountName: String(savedPayee.account_name || payee.accountName || '').trim(),
+        payeeName: savedCanonicalPayeeName || canonicalPayeeName,
+        accountName: savedCanonicalPayeeName || canonicalPayeeName,
         panNumber: String(savedPayee.pan_number || payee.panNumber || '').trim(),
         accountNo: String(savedPayee.account_no || payee.accountNo).trim(),
         accountType: String(savedPayee.account_type || payee.accountType || '').trim(),
@@ -5046,7 +5128,10 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         beneficiaryType: String(savedPayee.beneficiary_type || payee.beneficiaryType || 'individual').trim().toLowerCase() === 'organization'
           ? 'organization'
           : 'individual',
-        beneficiaryOrg: String(savedPayee.beneficiary_org || payee.beneficiaryOrg || '').trim(),
+        beneficiaryOrg: resolveCanonicalBeneficiaryOrg(
+          savedPayee.beneficiary_org,
+          savedPayee.payee_name || payee.payeeName,
+        ),
         organizationType: String(savedPayee.organization_type || payee.organizationType || '').trim(),
         msme: String(savedPayee.msme || payee.msme || '').trim(),
         gstin: String(savedPayee.gstin || payee.gstin || '').trim(),
@@ -5661,206 +5746,64 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             }}>
               <h6 style={{ fontWeight: 600, color: '#0a2540', marginBottom: '24px' }}>Advance</h6>
             <div style={{ overflowX: 'visible' }}>
-              <table style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                backgroundColor: '#fff',
-                border: '1px solid #e0e0e0',
-                tableLayout: 'fixed'
-              }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff', border: '1px solid #e0e0e0', tableLayout: 'fixed' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#f0f6ff' }}>
-                    <th style={{ width: '5%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>S.No</th>
-                    <th style={{ width: '22%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget Head</th>
-                    <th style={{ width: '22%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Sub Head</th>
-                    <th style={{ width: '12%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget</th>
-                    <th style={{ width: '12%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Pre Advance</th>
-                    <th style={{ width: '12%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Advance</th>
-                    <th style={{ width: '15%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Action</th>
+                    <th style={{ width: '6%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>S.No</th>
+                    <th style={{ width: '35%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget Head</th>
+                    <th style={{ width: '35%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Sub Head</th>
+                    <th style={{ width: '14%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget</th>
+                    <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {advanceRows.map((row, idx) => (
-                    <tr key={row.id} style={{ borderBottom: '1px solid #e0e0e0' }}>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', verticalAlign: 'middle', color: '#495057' }}>{idx + 1}</td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
-                        <CustomDropdown
-                          className="mb-0"
-                          options={getApprovedBudgetHeadsForAdvance()}
-                          value={getSelectedOption(row.budgetHead, getApprovedBudgetHeadsForAdvance())}
-                          onChange={(option) => {
-                            const val = String((option as OptionType)?.value || '');
-                            handleAdvanceBudgetHeadChange(row.id, val);
-                          }}
-                          placeholder={isApprovedBudgetLoading ? "Loading..." : "Select Head"}
-                        />
-                      </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
-                        <CustomDropdown
-                          className="mb-0"
-                          options={getApprovedSubHeadOptionsForAdvance(row.budgetHead)}
-                          value={getSelectedOption(row.subHead, getApprovedSubHeadOptionsForAdvance(row.budgetHead))}
-                          onChange={async (option) => {
-                            const val = String((option as OptionType)?.value || '');
-                            await handleAdvanceSubHeadChange(row.id, val);
-                          }}
-                          placeholder="Select Sub Head"
-                          isDisabled={!row.budgetHead}
-                        />
-                      </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
-                        <input
-                          type="text"
-                          placeholder="<Fetch>"
-                          value={`Rs ${getAdvanceRowAvailableBalance(row.id).toLocaleString("en-IN")}`}
-                          readOnly
-                          style={{
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '12px',
-                            padding: '10px 15px',
-                            fontSize: '0.95rem',
-                            width: '100%',
-                            height: '45px',
-                            boxSizing: 'border-box',
-                            fontFamily: 'inherit',
-                            backgroundColor: '#f8f9fa',
-                            color: '#6c757d',
-                            textAlign: 'center',
-                            outline: 'none',
-                            cursor: 'not-allowed'
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
-                        <input
-                          type="text"
-                          placeholder="₹ 0"
-                          value={row.preAdvance}
-                          readOnly
-                          style={{
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '12px',
-                            padding: '10px 15px',
-                            fontSize: '0.95rem',
-                            width: '100%',
-                            height: '45px',
-                            boxSizing: 'border-box',
-                            fontFamily: 'inherit',
-                            backgroundColor: '#f8f9fa',
-                            color: '#6c757d',
-                            outline: 'none',
-                            textAlign: 'center',
-                            cursor: 'not-allowed'
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
-                        <input
-                          type="text"
-                          placeholder={`₹ ${getAdvanceRowAvailableBalance(row.id).toLocaleString("en-IN")}`}
-                          value={row.advance}
-                          onChange={(e) => handleAdvanceAmountChange(row.id, e.target.value)}
-                          style={{
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '12px',
-                            padding: '10px 15px',
-                            fontSize: '0.95rem',
-                            width: '100%',
-                            height: '45px',
-                            boxSizing: 'border-box',
-                            fontFamily: 'inherit',
-                            backgroundColor: '#fcfdff',
-                            color: '#000',
-                            outline: 'none',
-                            textAlign: 'center'
-                          }}
-                          onFocus={(e) => {
-                            e.currentTarget.style.borderColor = '#0069ab';
-                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                          }}
-                          onBlur={(e) => {
-                            e.currentTarget.style.borderColor = '#e0e0e0';
-                            e.currentTarget.style.boxShadow = 'none';
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
-                          {advanceRows.length > 1 && (
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                removeAdvanceRow(row.id);
-                              }}
-                              style={deleteIconBtn}
-                              title="Delete Row"
-                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f9dce0')}
-                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fce8ea')}
-                            >
-                              <X size={20} />
-                            </button>
-                          )}
-                          {idx === advanceRows.length - 1 && (() => {
-                            const isFilled = row.budgetHead && row.subHead && row.budget !== '' && row.preAdvance !== '' && row.advance !== '';
-                            return (
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  addAdvanceRow();
-                                }}
-                                disabled={!isFilled}
-                                style={{
-                                  ...iconBtn,
-                                  opacity: isFilled ? 1 : 0.5,
-                                  cursor: isFilled ? 'pointer' : 'not-allowed'
-                                }}
-                                title="Add Row"
-                                onMouseEnter={(e) => {
-                                  if (isFilled) e.currentTarget.style.backgroundColor = '#ddeaff';
-                                }}
-                                onMouseLeave={(e) => {
-                                  if (isFilled) e.currentTarget.style.backgroundColor = '#eaf3ff';
-                                }}
-                              >
-                                <Plus size={16} />
-                              </button>
-                            );
-                          })()}
-                        </div>
-                      </td>
-                    </tr>
+                    <Fragment key={row.id}>
+                      <tr>
+                        <td rowSpan={2} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', verticalAlign: 'middle', color: '#495057' }}>{idx + 1}</td>
+                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                          <CustomDropdown className="mb-0" options={getApprovedBudgetHeadsForAdvance()} value={getSelectedOption(row.budgetHead, getApprovedBudgetHeadsForAdvance())} onChange={(option) => { const val = String((option as OptionType)?.value || ''); handleAdvanceBudgetHeadChange(row.id, val); }} placeholder={isApprovedBudgetLoading ? "Loading..." : "Select Head"} />
+                        </td>
+                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                          <CustomDropdown className="mb-0" options={getApprovedSubHeadOptionsForAdvance(row.budgetHead)} value={getSelectedOption(row.subHead, getApprovedSubHeadOptionsForAdvance(row.budgetHead))} onChange={async (option) => { const val = String((option as OptionType)?.value || ''); await handleAdvanceSubHeadChange(row.id, val); }} placeholder="Select Sub Head" isDisabled={!row.budgetHead} />
+                        </td>
+                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                          <input type="text" value={`₹ ${getAdvanceRowAvailableBalance(row.id).toLocaleString("en-IN")}`} readOnly style={{ border: '1px solid #d7dee7', borderRadius: '12px', padding: '10px 15px', fontSize: '0.95rem', width: '100%', height: '45px', backgroundColor: '#f3f5f7', color: '#51627d', textAlign: 'center', outline: 'none' }} />
+                        </td>
+                        <td rowSpan={2} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                            {advanceRows.length > 1 && (<button onClick={(e) => { e.preventDefault(); removeAdvanceRow(row.id); }} style={deleteIconBtn} title="Delete Row"><X size={14} strokeWidth={2.5} /></button>)}
+                            {idx === advanceRows.length - 1 && (() => { const isFilled = row.budgetHead && row.subHead && row.advance !== ''; return (<button onClick={(e) => { e.preventDefault(); addAdvanceRow(); }} disabled={!isFilled} style={{ ...iconBtn, opacity: isFilled ? 1 : 0.5, cursor: isFilled ? 'pointer' : 'not-allowed' }} title="Add Row"><Plus size={14} strokeWidth={2.5} /></button>); })()}
+                          </div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '12px 16px', border: '1px solid #e0e0e0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ minWidth: '110px', color: '#364152', fontSize: '1rem', fontWeight: 500 }}>Pre Advance</span>
+                            <input type="text" value={row.preAdvance ? `₹ ${row.preAdvance}` : '₹ 0'} readOnly style={{ border: '1px solid #d7dee7', borderRadius: '12px', padding: '10px 15px', fontSize: '0.95rem', width: '100%', height: '45px', backgroundColor: '#f3f5f7', color: '#51627d', textAlign: 'center', outline: 'none' }} />
+                          </div>
+                        </td>
+                        <td colSpan={2} style={{ padding: '12px 16px', border: '1px solid #e0e0e0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ minWidth: '72px', color: '#364152', fontSize: '1rem', fontWeight: 500 }}>Advance</span>
+                            <input type="text" placeholder="₹ 0" value={row.advance} onChange={(e) => handleAdvanceAmountChange(row.id, e.target.value)} style={{ border: '1px solid #d7dee7', borderRadius: '12px', padding: '10px 15px', fontSize: '0.95rem', width: '100%', height: '45px', backgroundColor: '#f8fbff', color: '#2a3f5e', textAlign: 'center', outline: 'none' }} />
+                          </div>
+                        </td>
+                      </tr>
+                    </Fragment>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr style={{ backgroundColor: '#f0f6ff' }}>
-                    <td colSpan={5} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>
-                      Total Advance
+                    <td colSpan={5} style={{ padding: '16px 20px', border: '1px solid #e0e0e0', textAlign: 'right', fontWeight: '700', color: '#0069ab', fontSize: '1.05rem' }}>
+                      Total Advance: ₹ {totalAdvanceAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
-                      &#8377; {totalAdvanceAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ border: '1px solid #e0e0e0' }}></td>
                   </tr>
                 </tfoot>
               </table>
 
-              <div
-                style={{
-                  marginTop: "10px",
-                  padding: "10px 14px",
-                  borderRadius: "10px",
-                  backgroundColor: "#f0f6ff",
-                  border: "1px solid #cfe2ff",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "0.9rem",
-                  color: "#0b3d75",
-                  textAlign: "center",
-                  width: "100%",
-                }}
-              >
+              <div style={{ marginTop: "10px", padding: "10px 14px", borderRadius: "10px", backgroundColor: "#f0f6ff", border: "1px solid #cfe2ff", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", fontSize: "0.9rem", color: "#0b3d75", textAlign: "center", width: "100%" }}>
                 <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
                 <span style={{ fontWeight: 600 }}>{numberToIndianWords(totalAdvanceAmount)}</span>
               </div>
@@ -5995,10 +5938,10 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                               }}
                               style={deleteIconBtn}
                               title="Delete Row"
-                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f9dce0')}
-                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fce8ea')}
+                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#ffdede')}
+                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ffe6e6')}
                             >
-                              <X size={20} />
+                              <X size={14} strokeWidth={2.5} />
                             </button>
                           )}
                           {idx === settlementRows.length - 1 && (() => {
@@ -6017,13 +5960,13 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                                 }}
                                 title="Add Row"
                                 onMouseEnter={(e) => {
-                                  if (isFilled) e.currentTarget.style.backgroundColor = '#ddeaff';
+                                  if (isFilled) e.currentTarget.style.backgroundColor = '#eceef2';
                                 }}
                                 onMouseLeave={(e) => {
-                                  if (isFilled) e.currentTarget.style.backgroundColor = '#eaf3ff';
+                                  if (isFilled) e.currentTarget.style.backgroundColor = '#f5f6f8';
                                 }}
                               >
-                                <Plus size={16} />
+                                <Plus size={14} strokeWidth={2.5} />
                               </button>
                             );
                           })()}
@@ -6184,15 +6127,15 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                           height: '38px',
                           borderRadius: '50%',
                           border: 'none',
-                          background: '#fce8ea',
-                          color: '#de8b95',
+                          background: '#ffe6e6',
+                          color: '#000000',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center'
                         }}
                       >
-                        <X size={18} />
+                        <X size={14} strokeWidth={2.5} />
                       </button>
                     )}
                     {idx === expenditureSubRows.length - 1 && (
@@ -6208,8 +6151,8 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                           height: '38px',
                           borderRadius: '50%',
                           border: 'none',
-                          background: '#eaf3ff',
-                          color: '#7d9cc3',
+                          background: '#f5f6f8',
+                          color: '#000000',
                           cursor: (!row.budgetHead || !row.subHead || !row.expenditure) ? 'not-allowed' : 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -6217,7 +6160,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                           opacity: (!row.budgetHead || !row.subHead || !row.expenditure) ? 0.5 : 1
                         }}
                       >
-                        <Plus size={18} />
+                        <Plus size={14} strokeWidth={2.5} />
                       </button>
                     )}
                   </div>
@@ -6380,13 +6323,13 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
               type="file"
               className="payee-upload-input"
               multiple
-              onChange={handlePayeeBillUpload}
+              onChange={handlePaymentProofUpload}
             />
           </label>
         )}
-        {uploadedPayeeBills.length > 0 && (
+        {uploadedPaymentProofs.length > 0 && (
           <div style={{ fontSize: '11px', color: '#2c7a4d', marginTop: '4px', textAlign: 'center' }}>
-            {uploadedPayeeBills.length} file(s)
+            {uploadedPaymentProofs.length} file(s)
           </div>
         )}
       </div>

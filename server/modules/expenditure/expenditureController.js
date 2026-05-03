@@ -18,6 +18,18 @@ const SAMPLE_BULK_NEFT_TEMPLATE_PATH = path.join(
 const BULK_NEFT_TEMPLATE_DOWNLOAD_NAME = 'bulk-neft-template.xls';
 
 const normalizeText = (value) => String(value || '').trim();
+const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
+
+const resolveCanonicalPayeeName = (payeeName, accountName) => {
+  const normalizedPayeeName = normalizeText(payeeName);
+  const normalizedAccountName = normalizeText(accountName);
+
+  if (normalizedPayeeName && !BENEFICIARY_ORG_OPTIONS.includes(normalizedPayeeName)) {
+    return normalizedPayeeName;
+  }
+
+  return normalizedAccountName || normalizedPayeeName;
+};
 
 const toPositiveInt = (value) => {
   const parsed = Number.parseInt(value, 10);
@@ -483,17 +495,25 @@ const expenditureController = {
   async createPayee(req, res) {
     try {
       const userId = toPositiveInt(req.user?.id);
-      const { payee_name, account_no, ifsc, bank_name, branch_name } = req.body || {};
+      const { payee_name, account_name, account_no, ifsc, bank_name, branch_name } = req.body || {};
+      const canonicalPayeeName = resolveCanonicalPayeeName(payee_name, account_name);
 
-      if (!payee_name || !account_no || !ifsc || !bank_name || !branch_name) {
+      if (!canonicalPayeeName || !account_no || !ifsc || !bank_name || !branch_name) {
         return sendError(
           res,
           400,
-          'payee_name, account_no, ifsc, bank_name and branch_name are required',
+          'accountant name, account_no, ifsc, bank_name and branch_name are required',
         );
       }
 
-      const payeeId = await expenditureModel.upsertPayee(req.body, userId);
+      const payeeId = await expenditureModel.upsertPayee(
+        {
+          ...req.body,
+          payee_name: canonicalPayeeName,
+          account_name: canonicalPayeeName,
+        },
+        userId,
+      );
       const payee = await expenditureModel.getPayeeById(payeeId);
 
       return res.status(201).json({
@@ -568,19 +588,15 @@ const expenditureController = {
           'Invalid request type. Expected Advance, Settlement, or Expenditure.',
         );
       }
+const uploads = {
+  billFiles: Array.isArray(req.files?.bill_files)
+    ? req.files.bill_files
+    : [],
 
-      const uploads = {
-        billFiles: Array.isArray(req.files?.billfiles)
-          ? req.files.billfiles
-          : Array.isArray(req.files?.bill_files)
-            ? req.files.bill_files
-            : [],
-        bulkNeftFile: Array.isArray(req.files?.bulkneftfile)
-          ? req.files.bulkneftfile[0]
-          : Array.isArray(req.files?.bulk_neft_file)
-            ? req.files.bulk_neft_file[0]
-            : null,
-      };
+  bulkNeftFile: Array.isArray(req.files?.bulk_neft_file)
+    ? req.files.bulk_neft_file[0]
+    : null,
+};
 
       const result = await expenditureModel.createExpenditureRequest(payload, userId, uploads);
 
@@ -599,9 +615,10 @@ const expenditureController = {
         });
       } catch (workflowError) {
         try {
+          await expenditureModel.revertBudgetUsage(result.expenditureId);
           await expenditureModel.hardDeleteExpenditureRequest(result.expenditureId);
         } catch (cleanupError) {
-          console.error('Failed to clean up expenditure request after workflow start failure', cleanupError);
+         console.error('Failed to fully clean up expenditure request after workflow failure',cleanupError);
         }
         throw workflowError;
       }
@@ -640,10 +657,10 @@ const expenditureController = {
         page,
         limit,
       } = req.query;
-
+      const mineFlag = !(mine === 'false' || mine === '0');
       const result = await expenditureModel.listExpenditures({
         userId,
-        mine: mine === 'true' || mine === '1',
+        mine: mineFlag,
         status: normalizeText(status) || null,
         budgetLineId: toPositiveInt(budget_line_id),
         requestType: normalizeText(request_type) || null,
@@ -720,9 +737,7 @@ const expenditureController = {
 
       const hasProposalPayload = Boolean(
         req.body?.payload ||
-        req.files?.billfiles ||
         req.files?.bill_files ||
-        req.files?.bulkneftfile ||
         req.files?.bulk_neft_file ||
         req.body?.workflowrequesttype ||
         req.body?.workflow_request_type ||
@@ -755,18 +770,15 @@ const expenditureController = {
           );
         }
 
-        const uploads = {
-          billFiles: Array.isArray(req.files?.billfiles)
-            ? req.files.billfiles
-            : Array.isArray(req.files?.bill_files)
-              ? req.files.bill_files
-              : [],
-          bulkNeftFile: Array.isArray(req.files?.bulkneftfile)
-            ? req.files.bulkneftfile[0]
-            : Array.isArray(req.files?.bulk_neft_file)
-              ? req.files.bulk_neft_file[0]
-              : null,
-        };
+       const uploads = {
+  billFiles: Array.isArray(req.files?.bill_files)
+    ? req.files.bill_files
+    : [],
+
+  bulkNeftFile: Array.isArray(req.files?.bulk_neft_file)
+    ? req.files.bulk_neft_file[0]
+    : null,
+};
 
         const result = await expenditureModel.updateExpenditureRequest(id, payload, userId, uploads);
 
@@ -816,7 +828,7 @@ const expenditureController = {
         return sendError(res, 409, 'This request can only be deleted before Level-1 approval');
       }
 
-      await expenditureModel.deleteExpenditure(id);
+      await expenditureModel.deleteExpenditure(id, { isSuperAdmin });
       return res.json({ status: 'success', message: 'Expenditure request deleted' });
     } catch (err) {
       if (normalizeText(err.message).toLowerCase().includes('only pending')) return sendError(res, 409, err.message);
