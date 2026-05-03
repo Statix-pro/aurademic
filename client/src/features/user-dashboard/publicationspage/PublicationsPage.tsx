@@ -344,19 +344,24 @@ const PublicationsPage: React.FC = () => {
                 Authors:
               </span>
               <span style={{ fontSize: '0.95rem', color: '#393939' }}>
-                {journal.authors?.split(', ').map((author, index) => (
-                  <span key={index}>
-                    {index > 0 && ', '}
-                    {author.endsWith('*') ? (
-                      <>
-                        {author.slice(0, -1)}
-                        <span style={{ color: 'red', fontWeight: 'bold' }}>*</span>
-                      </>
-                    ) : (
-                      author
-                    )}
-                  </span>
-                ))}
+                {journal.authors?.split(', ').map((author, index) => {
+                  let displayName = author;
+                  let hasStar = false;
+
+                  // Check for first author asterisk
+                  if (displayName.endsWith('*')) {
+                    hasStar = true;
+                    displayName = displayName.slice(0, -1);
+                  }
+
+                  return (
+                    <span key={index}>
+                      {index > 0 && ', '}
+                      {displayName}
+                      {hasStar && <span style={{ color: 'red', fontWeight: 'bold' }}>*</span>}
+                    </span>
+                  );
+                })}
               </span>
             </div>
 

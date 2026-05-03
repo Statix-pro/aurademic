@@ -264,12 +264,13 @@ const adminModel = {
         `
                 SELECT 
                     j.*,
+                    COALESCE(j.admin_approval_status, 'pending') as admin_approval_status,
                     jo.journal_name,
                     jo.publisher,
                     jo.print_issn,
                     jo.online_issn,
                     jo.website,
-                    er.status as edit_request_status,
+                    COALESCE(er.status, 'none') as edit_request_status,
                     er.created_at as edit_request_date,
                     er.user_id as edit_request_user_id,
                     GROUP_CONCAT(DISTINCT 

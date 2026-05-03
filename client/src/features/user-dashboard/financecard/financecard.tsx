@@ -191,7 +191,7 @@ const FinanceCard: React.FC = () => {
     const normalizedStatus = getNormalizedStatus(item);
     const workflowStatus = getWorkflowStatus(item);
     const currentStage = getCurrentStage(item) || workflowStatus;
-    const stages = ['hod', 'dof', 'principal'];
+    const stages = ['hod', 'dof', 'principal', 'chairman'];
     const stageIndex = stages.indexOf(stage);
     const currentIndex = stages.indexOf(currentStage);
 
@@ -274,7 +274,8 @@ const FinanceCard: React.FC = () => {
     return amount > 10000 && (
       workflowStatus === 'approved' ||
       workflowStatus === 'completed' ||
-      workflowStatus === 'principal_approved'
+      workflowStatus === 'principal_approved' ||
+      workflowStatus === 'chairman_approved'
     );
   };
 
@@ -438,6 +439,7 @@ const FinanceCard: React.FC = () => {
     if (stageToken === 'dof') return 'DoF';
     if (stageToken === 'ithead') return 'IT Head';
     if (stageToken === 'principal') return 'Principal';
+    if (stageToken === 'chairman') return 'Chairman';
     if (stageToken === 'archived') return 'Archive';
     return formatLabel(stage);
   };
@@ -1143,7 +1145,7 @@ const FinanceCard: React.FC = () => {
                             </button>
                             {isStatusExpanded && (
                               <div className="finance-status-detail-line">
-                                {['hod', 'dof', 'principal'].map((stage, stageIndex, array) => {
+                                {['hod', 'dof', 'principal', 'chairman'].map((stage, stageIndex, array) => {
                                   const stageState = getFinanceTimelineState(item, stage);
                                   return (
                                     <React.Fragment key={stage}>

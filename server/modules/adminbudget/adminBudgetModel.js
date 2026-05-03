@@ -181,6 +181,14 @@ async function applyBudgetAnnualDeltaByProposalId(proposalId, conn, direction = 
   const beneficiaryTypeForEntity = normalizeBeneficiaryType(proposal.beneficiary_type);
   const entityTypeCode = beneficiaryTypeToEntityTypeCode(beneficiaryTypeForEntity);
 
+  // Future-proof alignment: For Entities (Centres/Cells/Clubs), we ALWAYS roll up 
+  // into a single row for that entity (department_id = NULL) so the summary 
+  // dashboard labels them correctly by Unit Name instead of Submitter's Dept.
+  let resolvedSummaryDepartmentId = departmentId;
+  if (isEntityBeneficiaryType(beneficiaryTypeForEntity) || entityTypeCode === 'INSTITUTION') {
+    resolvedSummaryDepartmentId = null;
+  }
+
   if (!beneficiaryEntityId && isEntityBeneficiaryType(beneficiaryTypeForEntity) && entityTypeCode) {
     const normalizedBeneficiaryValue = normalizeText(proposal.beneficiary_value);
 
@@ -249,7 +257,7 @@ async function applyBudgetAnnualDeltaByProposalId(proposalId, conn, direction = 
       additionalDelta,
       fiscalYear,
       beneficiaryType,
-      departmentId,
+      resolvedSummaryDepartmentId,
       beneficiaryEntityId,
     ]
   );
@@ -274,7 +282,7 @@ async function applyBudgetAnnualDeltaByProposalId(proposalId, conn, direction = 
         fiscalYear,
         beneficiaryType,
         beneficiaryEntityId,
-        departmentId,
+        resolvedSummaryDepartmentId,
         beneficiaryEntityId,
         amount,
         amount,
@@ -295,7 +303,7 @@ async function applyBudgetAnnualDeltaByProposalId(proposalId, conn, direction = 
           AND COALESCE(entity_id, beneficiary_entity_id) <=> ?
           AND annual_total_amount <= 0
           AND approved_total_amount <= 0`,
-      [fiscalYear, beneficiaryType, departmentId, beneficiaryEntityId]
+      [fiscalYear, beneficiaryType, resolvedSummaryDepartmentId, beneficiaryEntityId]
     );
   }
 }
@@ -1799,12 +1807,16 @@ export async function getConsolidatedData({
 
   if (normalizeText(beneficiaryValue)) {
     const val = normalizeText(beneficiaryValue);
+    
+    // To filter ONLY by Beneficiary (not by who submitted it), 
+    // we match against beneficiary_value (for Depts/Faculty) 
+    // or me.name (for Entities like Clubs/Centres).
+    // We remove md.name because that represents the submitter's department.
     where.push(`(
       LOWER(TRIM(bp.beneficiary_value)) = LOWER(TRIM(?))
-      OR LOWER(TRIM(md.name)) = LOWER(TRIM(?))
       OR LOWER(TRIM(me.name)) = LOWER(TRIM(?))
     )`);
-    params.push(val, val, val);
+    params.push(val, val);
   }
 
   if (normalizeText(q)) {
@@ -1813,7 +1825,6 @@ export async function getConsolidatedData({
     where.push(`(
       bp.proposal_ref LIKE ?
       OR bp.beneficiary_value LIKE ?
-      OR md.name LIKE ?
       OR me.name LIKE ?
       OR ${hasApplicantNameColumn ? "bp.applicant_name LIKE ?" : "1=0"}
       OR applicant_emp.first_name LIKE ?
@@ -1821,7 +1832,6 @@ export async function getConsolidatedData({
       OR CONCAT(applicant_emp.first_name, ' ', COALESCE(applicant_emp.last_name, '')) LIKE ?
     )`);
     params.push(
-        searchPattern, 
         searchPattern, 
         searchPattern, 
         searchPattern, 

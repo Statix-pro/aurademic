@@ -66,6 +66,17 @@ export const MUTABLE_ENTITY_TYPES = Object.freeze(new Set(['CENTRE', 'CELL', 'CL
 
 export const normalizeText = (value) => String(value || '').trim();
 
+/**
+ * Robustly normalizes entity names to handle common mismatches
+ * like '&' vs 'and', double spaces, etc.
+ */
+export const normalizeEntityName = (name) => {
+    return normalizeText(name)
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
 export const normalizeBeneficiaryType = (beneficiaryType) => {
     const normalized = normalizeText(beneficiaryType);
 

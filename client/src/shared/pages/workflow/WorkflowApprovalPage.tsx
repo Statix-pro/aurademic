@@ -81,6 +81,116 @@ const FINANCE_COORDINATOR_BENEFICIARY_OPTIONS = [
   'Institution',
 ];
 
+const resolvePreferredStageByRoles = (roles: string[], permitted: string[]) => {
+  const permittedSet = new Set(permitted.map((stage) => String(stage || '').trim().toLowerCase()));
+  if (!permittedSet.size) return '';
+
+  if (roles.includes('super_admin')) {
+    if (permittedSet.has('level1')) return 'level1';
+    return permitted[0] || '';
+  }
+
+  if (roles.includes('dof') && permittedSet.has('dof')) return 'dof';
+  if (roles.includes('principal') && permittedSet.has('principal')) return 'principal';
+  if (roles.includes('chairman') && permittedSet.has('chairman')) return 'chairman';
+  if ((roles.includes('hod') || roles.includes('coordinator') || roles.includes('entity_approver')) && permittedSet.has('level1')) {
+    return 'level1';
+  }
+
+  return permitted[0] || '';
+};
+
+const resolvePreferredTabKey = (
+  tabs: WorkflowStageTab[],
+  roles: string[],
+  fallbackStage = ''
+) => {
+  if (!tabs.length) return '';
+
+  const normalizedRoles = roles.map((role) => String(role || '').trim().toLowerCase());
+  const normalizedFallbackStage = String(fallbackStage || '').trim().toLowerCase();
+
+  const pickByStage = (stage: string) =>
+    tabs.find((tab) => String(tab.stage || '').trim().toLowerCase() === stage) || null;
+
+  if (normalizedRoles.includes('dof')) {
+    const dofTab = pickByStage('dof');
+    if (dofTab) return dofTab.key;
+  }
+
+  if (normalizedRoles.includes('principal')) {
+    const principalTab = pickByStage('principal');
+    if (principalTab) return principalTab.key;
+  }
+
+  if (normalizedRoles.includes('chairman')) {
+    const chairmanTab = pickByStage('chairman');
+    if (chairmanTab) return chairmanTab.key;
+  }
+
+  if (normalizedRoles.some((role) => ['hod', 'coordinator', 'entity_approver'].includes(role))) {
+    const level1Tab = pickByStage('level1');
+    if (level1Tab) return level1Tab.key;
+  }
+
+  if (normalizedFallbackStage) {
+    const fallbackTab = pickByStage(normalizedFallbackStage);
+    if (fallbackTab) return fallbackTab.key;
+  }
+
+  return tabs[0].key;
+};
+
+const getNormalizedUserRoles = (user: any): string[] => {
+  const extractRoleToken = (value: any): string => {
+    if (typeof value === 'string') return value.trim();
+    if (value && typeof value === 'object') {
+      const candidates = [value.role, value.role_code, value.roleCode, value.code, value.name, value.value];
+      for (const candidate of candidates) {
+        const normalized = String(candidate || '').trim();
+        if (normalized) return normalized;
+      }
+    }
+    return '';
+  };
+
+  const roleTokens: string[] = [];
+  if (Array.isArray(user?.roles)) {
+    roleTokens.push(...user.roles.map((role: any) => extractRoleToken(role)).filter(Boolean));
+  } else if (user?.roles) {
+    roleTokens.push(extractRoleToken(user.roles));
+  }
+  if (user?.role) {
+    roleTokens.push(extractRoleToken(user.role));
+  }
+  return Array.from(new Set(roleTokens.map((role) => role.toLowerCase()).filter(Boolean)));
+};
+
+const getNormalizedUserPermissions = (user: any): string[] => {
+  const extractPermissionToken = (value: any): string => {
+    if (typeof value === 'string') return value.trim();
+    if (value && typeof value === 'object') {
+      const candidates = [value.permission, value.permission_key, value.permissionKey, value.code, value.name, value.value];
+      for (const candidate of candidates) {
+        const normalized = String(candidate || '').trim();
+        if (normalized) return normalized;
+      }
+    }
+    return '';
+  };
+
+  const permissionTokens: string[] = [];
+  if (Array.isArray(user?.permissions)) {
+    permissionTokens.push(...user.permissions.map((permission: any) => extractPermissionToken(permission)).filter(Boolean));
+  } else if (user?.permissions) {
+    permissionTokens.push(extractPermissionToken(user.permissions));
+  }
+  if (user?.permission) {
+    permissionTokens.push(extractPermissionToken(user.permission));
+  }
+  return Array.from(new Set(permissionTokens.map((permission) => permission.toLowerCase()).filter(Boolean)));
+};
+
 const getSecondaryFilterValue = (record: Record<string, any>, beneficiaryType: string) => {
   const normalizedType = String(beneficiaryType || '').trim().toLowerCase();
 
@@ -375,6 +485,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [deleteId, setDeleteId] = useState<number | string | null>(null);
   const [deleteRef, setDeleteRef] = useState<string>('');
   const [deleteCountdown, setDeleteCountdown] = useState<number>(5);
+  const [proposalTypeFilter, setProposalTypeFilter] = useState<'all' | 'advance' | 'expenditure' | 'settlement'>('all');
 
   const closeAlert = useCallback(() => {
     setAlertConfig((prev) => ({
@@ -490,8 +601,8 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       status === 'completed'
     );
   }, []);
-  const isPrincipalDocumentFeatureVisible = useCallback((record: Record<string, any>) => {
-    return getWorkflowProposedAmount(record) > 10000;
+  const isPrincipalDocumentFeatureVisible = useCallback((_record: Record<string, any>) => {
+    return false;
   }, []);
   const canShowPrincipalDocumentAction = useCallback((record: Record<string, any>) => {
     return isPrincipalDocumentFeatureVisible(record);
@@ -623,14 +734,71 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [amountFilter, setAmountFilter] = useState<FinanceAmountFilter>('');
   const [activeStageTabKey, setActiveStageTabKey] = useState<string>('');
 
-  const permittedStages = useMemo(() => meta?.permittedStages || [], [meta]);
+  const permittedStages = useMemo(() => {
+  const fromMeta = Array.isArray(meta?.permittedStages) ? meta.permittedStages : [];
+  if (fromMeta.length > 0) return fromMeta;
+
+  const roles = getNormalizedUserRoles(user);
+  const permissions = getNormalizedUserPermissions(user);
+
+  if (meta?.isSuperAdmin || roles.includes('super_admin')) {
+    if (config.moduleKey === 'finance') {
+      return ['level1', 'dof', 'principal', 'chairman'];
+    }
+    return ['level1', 'dof', 'principal'];
+  }
+
+  const fallback = new Set<string>();
+
+  // Role‑based access (module‑agnostic)
+  if (roles.some((role) => ['hod', 'coordinator', 'entity_approver'].includes(role))) {
+    fallback.add('level1');
+  }
+  if (roles.includes('dof')) {
+    fallback.add('dof');
+  }
+  if (roles.includes('principal')) {
+    fallback.add('principal');
+  }
+  if (roles.includes('chairman')) {
+    fallback.add('chairman');
+  }
+
+  // Permission‑based access:
+  // For expenditure, also accept finance.workflow.* permissions
+  const permissionModuleKeys =
+    config.moduleKey === 'expenditure' ? ['expenditure', 'finance'] : [config.moduleKey];
+
+  const hasPermissionForStage = (stageKey: string) =>
+    permissionModuleKeys.some((mk) =>
+      permissions.includes(`${mk}.workflow.${stageKey}`)
+    );
+
+  if (hasPermissionForStage('level1')) {
+    fallback.add('level1');
+  }
+  if (hasPermissionForStage('dof')) {
+    fallback.add('dof');
+  }
+  if (hasPermissionForStage('principal')) {
+    fallback.add('principal');
+  }
+  if (hasPermissionForStage('chairman')) {
+    fallback.add('chairman');
+  }
+
+  return Array.from(fallback);
+}, [config.moduleKey, meta?.isSuperAdmin, meta?.permittedStages, user]);
+  
+  const enableLevel1RoleTabs = Boolean(config.enableLevel1RoleTabs);
+  const enableSuperAdminAllProposals = Boolean(config.enableSuperAdminAllProposals);
+  const enableSecondaryFilter = Boolean(config.enableSecondaryFilter);
 
   const stageTabs = useMemo<WorkflowStageTab[]>(() => {
-    const roleTokens = Array.isArray(user?.roles) ? user.roles : [];
-    const normalizedRoles = roleTokens.map((role) => String(role || '').trim().toLowerCase());
+    const normalizedRoles = getNormalizedUserRoles(user);
     const tabs: WorkflowStageTab[] = permittedStages.flatMap<WorkflowStageTab>((stage) => {
       const normalizedStage = String(stage || '').trim().toLowerCase();
-      if (config.moduleKey === 'finance' && normalizedStage === 'level1') {
+      if (enableLevel1RoleTabs && normalizedStage === 'level1') {
         if (meta?.isSuperAdmin) {
           return [
             { key: 'level1-hod', stage: 'level1', label: 'HOD', level1Role: 'hod' as const },
@@ -666,9 +834,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       ];
     });
 
-    if (config.moduleKey === 'finance' && meta?.isSuperAdmin && permittedStages.length > 0) {
+    if (enableSuperAdminAllProposals && meta?.isSuperAdmin && permittedStages.length > 0) {
       tabs.push({
-        key: 'finance-all-proposals',
+        key: `${config.moduleKey}-all-proposals`,
         stage: tabs[0]?.stage || String(permittedStages[0] || '').trim().toLowerCase() || 'level1',
         label: 'All Proposals',
         showAllProposals: true,
@@ -676,7 +844,15 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
 
     return tabs;
-  }, [config.moduleKey, config.stageLabels, meta?.isSuperAdmin, permittedStages, user?.roles]);
+  }, [
+    config.moduleKey,
+    config.stageLabels,
+    enableLevel1RoleTabs,
+    enableSuperAdminAllProposals,
+    meta?.isSuperAdmin,
+    permittedStages,
+    user,
+  ]);
 
   const activeWorkflowTab = useMemo(
     () => stageTabs.find((tab) => tab.key === activeStageTabKey) || null,
@@ -705,7 +881,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }, [meta?.availableBeneficiaryTypes]);
 
   const filteredBeneficiaryOptions = useMemo(() => {
-    if (config.moduleKey !== 'finance') {
+    if (!enableLevel1RoleTabs) {
       return beneficiaryOptionsFromMeta;
     }
 
@@ -720,7 +896,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
 
     return beneficiaryOptionsFromMeta;
-  }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryOptionsFromMeta, config.moduleKey]);
+  }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryOptionsFromMeta, enableLevel1RoleTabs]);
 
   const getRecordId = useCallback(
     (record: Record<string, any>) => {
@@ -755,17 +931,21 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     [config]
   );
 
-  const getFinanceRoute = useCallback(
+  const getRecordRoute = useCallback(
     (recordId: number | string, mode: 'view' | 'edit' = 'view') => {
-      if (config.moduleKey === 'finance') {
-        return mode === 'edit'
-          ? `/finance/${recordId}/edit?admin=true`
-          : `/finance/${recordId}?admin=true`;
+      if (mode === 'edit') {
+        if (config.getEditRoute) {
+          return config.getEditRoute(recordId);
+        }
+
+        return `/${config.moduleKey}/${recordId}/edit`;
       }
 
-      return mode === 'edit'
-        ? `${config.apiBasePath}/${recordId}/edit`
-        : `${config.apiBasePath}/${recordId}`;
+      if (config.getViewRoute) {
+        return config.getViewRoute(recordId);
+      }
+
+      return `/${config.moduleKey}/${recordId}`;
     },
     [config]
   );
@@ -778,7 +958,23 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }, []);
 
   const getRecordCurrentStage = useCallback((record: Record<string, any>) => {
-    return String(record.workflow_state?.currentStage || record.workflow_stage || '').toLowerCase();
+    const fromState =
+      record.workflow_state?.currentStage ||
+      record.workflow_state?.stage ||
+      record.workflow_state?.current_stage;
+    const fromRecord = record.workflow_stage || record.currentStage || record.current_stage;
+    const normalized = String(fromState || fromRecord || '').trim().toLowerCase();
+
+    if (normalized) {
+      return normalized;
+    }
+
+    const status = String(record.workflow_status || record.status || '').trim().toLowerCase();
+    if (['level1', 'hod', 'coordinator', 'ithead', 'dof', 'principal', 'chairman'].includes(status)) {
+      return status;
+    }
+
+    return '';
   }, []);
 
   const getRecordStageDecision = useCallback((record: Record<string, any>) => {
@@ -796,19 +992,56 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     return String(record.workflow_state?.lastDecision || record.lastDecision || '').toLowerCase();
   }, []);
 
-  // Enhanced approved status detection for current stage
+  const applyWorkflowDecisionLocally = useCallback(
+    (recordId: number | string, decision: WorkflowDecision, nextStage?: string | null) => {
+      const normalizedNextStage = String(nextStage || '').trim().toLowerCase();
+      setRows((prev) =>
+        prev.map((row) => {
+          const currentId = getRecordId(row);
+          if (String(currentId) !== String(recordId)) return row;
+
+          const currentWorkflowState =
+            row.workflow_state && typeof row.workflow_state === 'object' && !Array.isArray(row.workflow_state)
+              ? row.workflow_state
+              : {};
+
+          const nextStatus =
+            decision === 'approved'
+              ? (normalizedNextStage ? 'in_progress' : 'completed')
+              : decision;
+
+          return {
+            ...row,
+            workflow_state: {
+              ...currentWorkflowState,
+              currentStage: normalizedNextStage || currentWorkflowState.currentStage || null,
+              status: nextStatus,
+              lastDecision: decision,
+              updatedAt: new Date().toISOString(),
+            },
+            workflow_stage: normalizedNextStage || row.workflow_stage,
+            workflow_status: nextStatus,
+            workflow_stage_decision: decision,
+          };
+        })
+      );
+    },
+    [getRecordId]
+  );
+
   const isApprovedForCurrentStage = useCallback(
     (record: Record<string, any>) => {
       const status = String(record.workflow_status || record.status || '').toLowerCase();
       const currentStage = activeStage?.toLowerCase() || '';
       
       const approvedStatusMap: Record<string, string[]> = {
-        level1: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed', 'approved'],
-        hod: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed', 'approved'],
-        coordinator: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed', 'approved'],
-        ithead: ['ithead_approved', 'dof_approved', 'principal_approved', 'completed', 'approved'],
-        dof: ['dof_approved', 'principal_approved', 'completed', 'approved'],
-        principal: ['principal_approved', 'completed', 'approved'],
+        level1: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'chairman_approved', 'completed', 'approved'],
+        hod: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'chairman_approved', 'completed', 'approved'],
+        coordinator: ['level1_approved', 'hod_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'chairman_approved', 'completed', 'approved'],
+        ithead: ['ithead_approved', 'dof_approved', 'principal_approved', 'chairman_approved', 'completed', 'approved'],
+        dof: ['dof_approved', 'principal_approved', 'chairman_approved', 'completed', 'approved'],
+        principal: ['principal_approved', 'chairman_approved', 'completed', 'approved'],
+        chairman: ['chairman_approved', 'completed', 'approved'],
       };
       
       const approvedStates = approvedStatusMap[currentStage] || ['completed', 'approved'];
@@ -827,10 +1060,28 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     const token = String(record.workflow_status || record.status || '').toLowerCase();
     const currentStage = getRecordCurrentStage(record);
     const activeStageKey = String(activeStage || '').toLowerCase();
+    const pendingEntryStatusByStage: Record<string, string[]> = {
+      dof: ['level1_approved', 'hod_approved', 'coordinator_approved', 'ithead_approved'],
+      principal: ['dof_approved'],
+      chairman: ['principal_approved'],
+    };
 
     if (token.includes('archived') || token.includes('archive')) return 'archived';
-    if (token.includes('rejected') || workflowDecision === 'rejected') return 'rejected';
-    if (token.includes('returned') || token.includes('return') || workflowDecision === 'returned') return 'returned';
+
+    // Stage-owned decisions must take precedence in stage tabs (especially chairman),
+    // so stale historical decisions from earlier stages do not pollute KPI cards.
+    if (stageDecision.includes('rejected')) return 'rejected';
+    if (stageDecision.includes('returned') || stageDecision.includes('return')) return 'returned';
+    if (stageDecision.includes('approved')) return 'approved';
+
+    if (!activeStageKey) {
+      if (token.includes('rejected') || workflowDecision === 'rejected') return 'rejected';
+      if (token.includes('returned') || token.includes('return') || workflowDecision === 'returned') return 'returned';
+    }
+
+    if (currentStage && activeStageKey && currentStage === activeStageKey) {
+      return 'pending';
+    }
 
     // For requests actively in-progress, treat as pending to prevent stale
     // historical stage decisions (e.g. old "approved"/"returned" from a previous
@@ -847,11 +1098,21 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     if (workflowDecision === 'resubmitted') return 'pending';
 
-    if (token.includes('completed') || token.includes('approved')) return 'approved';
+    if (
+      activeStageKey &&
+      pendingEntryStatusByStage[activeStageKey]?.includes(token) &&
+      !stageDecision.includes('approved')
+    ) {
+      return 'pending';
+    }
 
-    if (stageDecision.includes('rejected')) return 'rejected';
-    if (stageDecision.includes('returned') || stageDecision.includes('return')) return 'returned';
-    if (stageDecision.includes('approved')) return 'approved';
+    if (token.includes('completed')) return 'approved';
+
+    if (token === 'approved' || token === 'principal_approved' || token === 'chairman_approved') return 'approved';
+
+    if (token.includes('approved') && currentStage) return 'pending';
+
+    if (token.includes('approved')) return 'approved';
 
     if (isApprovedForCurrentStage(record)) return 'approved';
     
@@ -875,14 +1136,22 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     if (response?.data) {
       const payload: WorkflowMeta = response.data;
       setMeta(payload);
-      const initialStage = Array.isArray(payload.permittedStages) ? payload.permittedStages[0] : '';
+      const normalizedRoles = getNormalizedUserRoles(user);
+      const permitted = Array.isArray(payload.permittedStages) ? payload.permittedStages : [];
+      const initialStage = resolvePreferredStageByRoles(normalizedRoles, permitted);
       setActiveStage((prev) => prev || initialStage || '');
+      if (!initialStage) {
+        setLoading(false);
+      }
       return;
     }
 
     setMeta(null);
     setActiveStage('');
-  }, [getMetaEndpoint]);
+    setRows([]);
+    setTotalRows(0);
+    setLoading(false);
+  }, [getMetaEndpoint, user]);
 
   const loadQueue = useCallback(
     async (stage: string, requestedPage = 1) => {
@@ -900,7 +1169,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         const isAllProposalsTab = Boolean(activeTab?.showAllProposals);
         const normalizedStage = String(stage || '').toLowerCase();
         const level1RoleFilter =
-          config.moduleKey === 'finance' &&
+          enableLevel1RoleTabs &&
           normalizedStage === 'level1' &&
           activeTab?.level1Role
             ? activeTab.level1Role
@@ -948,7 +1217,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       isVisibleInWorkflowList,
       limit,
       mapQueueResponse,
-      config.moduleKey,
+      enableLevel1RoleTabs,
       fiscalYear,
       beneficiaryFilter,
       amountFilter,
@@ -961,11 +1230,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     async (nextStage: string | null | undefined) => {
       const normalizedNextStage = String(nextStage || '').toLowerCase();
       if (!normalizedNextStage) {
-        return;
+        return false;
       }
 
       if (permittedStages.length > 0 && !permittedStages.includes(normalizedNextStage)) {
-        return;
+        return false;
       }
 
       const matchingTabs = stageTabs.filter((tab) => tab.stage === normalizedNextStage);
@@ -980,6 +1249,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       setActiveStage(normalizedNextStage);
       setPage(1);
       await loadQueue(normalizedNextStage, 1);
+      return true;
     },
     [activeStageTabKey, loadQueue, permittedStages, stageTabs]
   );
@@ -988,7 +1258,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     setLogLoading(true);
     setLogRef(ref);
     setLogPopupOpen(true);
-    if (config.moduleKey === 'finance') {
+    if (enableLevel1RoleTabs) {
       const routeType = String(record?.level1_route_type || record?.level1RouteType || '').trim().toLowerCase();
       setLogLevel1Role(routeType === 'entity_contact' ? 'coordinator' : 'hod');
     } else {
@@ -1004,7 +1274,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     } finally {
       setLogLoading(false);
     }
-  }, [config.moduleKey, getTimelineEndpoint, mapTimelineResponse]);
+  }, [enableLevel1RoleTabs, getTimelineEndpoint, mapTimelineResponse]);
 
   useEffect(() => {
     loadMeta().catch((metaError: any) => {
@@ -1043,10 +1313,12 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     const activeTab = stageTabs.find((tab) => tab.key === activeStageTabKey);
     if (!activeTab) {
-      const firstTab = stageTabs[0];
-      setActiveStageTabKey(firstTab.key);
-      if (firstTab.stage !== activeStage) {
-        setActiveStage(firstTab.stage);
+      const normalizedRoles = getNormalizedUserRoles(user);
+      const preferredTabKey = resolvePreferredTabKey(stageTabs, normalizedRoles, activeStage);
+      const preferredTab = stageTabs.find((tab) => tab.key === preferredTabKey) || stageTabs[0];
+      setActiveStageTabKey(preferredTab.key);
+      if (preferredTab.stage !== activeStage) {
+        setActiveStage(preferredTab.stage);
       }
       return;
     }
@@ -1054,7 +1326,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     if (activeTab.stage !== activeStage) {
       setActiveStage(activeTab.stage);
     }
-  }, [activeStage, activeStageTabKey, stageTabs]);
+  }, [activeStage, activeStageTabKey, stageTabs, user]);
 
   useEffect(() => {
     if (!filteredBeneficiaryOptions.includes(beneficiaryFilter)) {
@@ -1093,10 +1365,27 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         decision: 'approved',
       });
 
-      if (response?.status === 'success' || response?.success || response?.data?.success) {
-        await loadQueue(activeStage, page);
-        return;
-      }
+	      if (response?.status === 'success' || response?.success || response?.data?.success) {
+	        const nextStage = String(
+	          response?.data?.currentState?.currentStage ||
+	          response?.data?.currentState?.stage ||
+	          response?.data?.workflow_state?.currentStage ||
+	          ''
+	        ).toLowerCase();
+
+          applyWorkflowDecisionLocally(recordId, 'approved', nextStage);
+
+	        if (nextStage && nextStage !== activeStage) {
+	          setStatusFilter('pending');
+	          const switched = await switchToWorkflowStage(nextStage);
+            if (!switched) {
+              await loadQueue(activeStage, page);
+            }
+	        } else {
+	          await loadQueue(activeStage, page);
+	        }
+	        return;
+	      }
 
       showAlert(response?.message || response?.data?.message || 'Failed to approve', 'error');
     } catch (approvalError: any) {
@@ -1219,11 +1508,28 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         feedback: comment,
       });
 
-      if (response?.status === 'success' || response?.success || response?.data?.success) {
-        closeActionPopup();
-        await loadQueue(activeStage, page);
-        return;
-      } else {
+	      if (response?.status === 'success' || response?.success || response?.data?.success) {
+	        closeActionPopup();
+	        const nextStage = String(
+	          response?.data?.currentState?.currentStage ||
+	          response?.data?.currentState?.stage ||
+	          response?.data?.workflow_state?.currentStage ||
+	          ''
+	        ).toLowerCase();
+
+          applyWorkflowDecisionLocally(actionId, actionType === "return" ? "returned" : "rejected", nextStage);
+
+	        if (nextStage && nextStage !== activeStage) {
+	          setStatusFilter('pending');
+	          const switched = await switchToWorkflowStage(nextStage);
+            if (!switched) {
+              await loadQueue(activeStage, page);
+            }
+	        } else {
+	          await loadQueue(activeStage, page);
+	        }
+	        return;
+	      } else {
        showAlert(response?.message || response?.data?.message || `Failed to ${actionType}`, 'error');
       }
     } catch (approvalError: any) {
@@ -1251,13 +1557,14 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       if (status === 'ithead_approved') return 'Approved IT Head';
       if (status === 'dof_approved') return 'Approved DoF';
       if (status === 'principal_approved') return 'Approved Principal';
+      if (status === 'chairman_approved') return 'Approved Chairman';
       if (status === 'completed') return 'Completed';
       if (status === 'approved') return 'Approved';
       return 'Approved';
     }
 
     const activeTab = stageTabs.find((tab) => tab.key === activeStageTabKey) || null;
-    if (config.moduleKey === 'finance') {
+    if (enableLevel1RoleTabs) {
       const currentStageToken = String(getRecordCurrentStage(record) || '').toLowerCase();
       if (currentStageToken === 'level1') {
         if (activeStage === 'level1' && activeTab?.level1Role) {
@@ -1276,7 +1583,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }, [
     activeStage,
     activeStageTabKey,
-    config.moduleKey,
+    enableLevel1RoleTabs,
     config.stageLabels,
     getRecordCurrentStage,
     getRecordStageDecision,
@@ -1285,6 +1592,30 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     stageTabs,
   ]);
 
+  const getDofPrincipalIndicator = useCallback((record: Record<string, any>) => {
+    if (config.moduleKey !== 'finance') return null;
+    if (String(activeStage || '').toLowerCase() !== 'dof') return null;
+
+    const currentStage = String(getRecordCurrentStage(record) || '').toLowerCase();
+    const status = String(record.workflow_status || record.status || '').toLowerCase();
+    const workflowStatus = String(record.workflow_state?.status || '').toLowerCase();
+    const combinedStatus = `${status} ${workflowStatus}`;
+    const isPrincipalAccepted =
+      currentStage === 'chairman' ||
+      currentStage === 'completed' ||
+      combinedStatus.includes('principal_approved') ||
+      combinedStatus.includes('chairman_approved') ||
+      combinedStatus.includes('completed') ||
+      combinedStatus === 'approved';
+
+    return {
+      label: isPrincipalAccepted ? 'Principal Accepted' : 'Principal Pending',
+      className: isPrincipalAccepted
+        ? 'fw-principal-indicator fw-principal-indicator--accepted'
+        : 'fw-principal-indicator fw-principal-indicator--pending',
+    };
+  }, [activeStage, config.moduleKey, getRecordCurrentStage]);
+
   function resolveFinanceLevel1Role(record: Record<string, any>): 'hod' | 'coordinator' {
     const routeType = String(record.level1_route_type || record.level1RouteType || '').trim().toLowerCase();
     if (routeType === 'entity_contact') {
@@ -1292,16 +1623,16 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
     return 'hod';
   }
-
+ 
   const stageScopedRows = useMemo(() => {
     const activeLevel1Role = activeWorkflowTab?.level1Role || null;
 
     let filtered = rows;
-    if (config.moduleKey === 'finance' && activeStage === 'level1' && activeLevel1Role) {
+    if (enableLevel1RoleTabs && activeStage === 'level1' && activeLevel1Role) {
       filtered = filtered.filter((record) => resolveFinanceLevel1Role(record) === activeLevel1Role);
     }
 
-    if (config.moduleKey === 'finance' && beneficiaryFilter !== 'All Beneficiary') {
+    if (enableSecondaryFilter && beneficiaryFilter !== 'All Beneficiary') {
       const normalizedBeneficiaryFilter = beneficiaryFilter.toLowerCase();
       filtered = filtered.filter((record) => {
         const itemBeneficiaryType = String(record.beneficiary_type || record.beneficiaryType || '').toLowerCase();
@@ -1310,10 +1641,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
 
     return filtered;
-  }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryFilter, config.moduleKey, rows]);
+  }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryFilter, enableLevel1RoleTabs, enableSecondaryFilter, rows]);
 
   const secondaryFilterOptions = useMemo(() => {
-    if (config.moduleKey !== 'finance') {
+    if (!enableSecondaryFilter) {
       return [];
     }
 
@@ -1325,7 +1656,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       }
     }
     return Array.from(values).sort((a, b) => a.localeCompare(b, 'en-IN'));
-  }, [beneficiaryFilter, config.moduleKey, stageScopedRows]);
+  }, [beneficiaryFilter, enableSecondaryFilter, stageScopedRows]);
 
   const secondaryFilterLabel = useMemo(
     () => getSecondaryFilterLabel(beneficiaryFilter),
@@ -1337,7 +1668,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   );
 
   const secondaryScopedRows = useMemo(() => {
-    if (config.moduleKey !== 'finance' || !secondaryFilter) {
+    if (!enableSecondaryFilter || !secondaryFilter) {
       return stageScopedRows;
     }
 
@@ -1345,7 +1676,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     return stageScopedRows.filter((record) => {
       return getSecondaryFilterValue(record, beneficiaryFilter).toLowerCase() === expected;
     });
-  }, [beneficiaryFilter, config.moduleKey, secondaryFilter, stageScopedRows]);
+  }, [beneficiaryFilter, enableSecondaryFilter, secondaryFilter, stageScopedRows]);
 
   const amountScopedRows = useMemo(() => {
     if (config.moduleKey !== 'finance' || !amountFilter) {
@@ -1369,22 +1700,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
   }, [secondaryFilter, secondaryFilterOptions]);
 
-  const statusStats = useMemo(() => {
-    const stats = { total: amountScopedRows.length, pending: 0, approved: 0, returned: 0, rejected: 0, archived: 0 };
-    for (const row of amountScopedRows) {
-      const category = resolveStatusCategory(row);
-      stats[category] += 1;
-    }
-    return stats;
-  }, [amountScopedRows, resolveStatusCategory]);
-
-  const filteredRows = useMemo(() => {
+  const searchScopedRows = useMemo(() => {
     let filtered = amountScopedRows;
 
-    if (statusFilter !== 'total') {
-      filtered = filtered.filter(record => resolveStatusCategory(record) === statusFilter);
-    }
-    
     if (searchTerm.trim()) {
       const query = searchTerm.trim().toLowerCase();
       filtered = filtered.filter((record) => {
@@ -1402,9 +1720,26 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         return searchable.includes(query);
       });
     }
-    
+
     return filtered;
-  }, [amountScopedRows, searchTerm, statusFilter, resolveStatusCategory]);
+  }, [amountScopedRows, searchTerm]);
+
+  const statusStats = useMemo(() => {
+    const stats = { total: searchScopedRows.length, pending: 0, approved: 0, returned: 0, rejected: 0, archived: 0 };
+    for (const row of searchScopedRows) {
+      const category = resolveStatusCategory(row);
+      stats[category] += 1;
+    }
+    return stats;
+  }, [searchScopedRows, resolveStatusCategory]);
+
+  const filteredRows = useMemo(() => {
+    if (statusFilter === 'total') {
+      return searchScopedRows;
+    }
+
+    return searchScopedRows.filter((record) => resolveStatusCategory(record) === statusFilter);
+  }, [searchScopedRows, statusFilter, resolveStatusCategory]);
 
   const totalPages = Math.max(1, Math.ceil((totalRows || 0) / (limit || 20)));
 
@@ -1427,7 +1762,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const getTimelineStageLabel = useCallback((entry: WorkflowTimelineItem) => {
     const stageToken = String(entry?.stage || '').trim().toLowerCase();
 
-    if (config.moduleKey === 'finance' && stageToken === 'level1') {
+    if (enableLevel1RoleTabs && stageToken === 'level1') {
       const actorRoleToken = String(entry?.actorRole || '').trim().toLowerCase();
       if (actorRoleToken === 'coordinator' || actorRoleToken === 'entity_approver') {
         return 'Coordinator';
@@ -1444,7 +1779,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
 
     return formatStageLabel(entry.stage, config.stageLabels);
-  }, [config.moduleKey, config.stageLabels, logLevel1Role]);
+  }, [config.stageLabels, enableLevel1RoleTabs, logLevel1Role]);
 
   const closeLogPopup = () => {
     setLogPopupOpen(false);
@@ -1516,7 +1851,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
   const handlePdfPreviewClick = useCallback(
     (recordId: number | string, isActionablePending?: boolean) => {
-      navigate(getFinanceRoute(recordId, 'view'), {
+      navigate(getRecordRoute(recordId, 'view'), {
         state: {
           openPreview: true,
           autoDownloadPdf: false,
@@ -1524,7 +1859,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         },
       });
     },
-    [getFinanceRoute, navigate]
+    [getRecordRoute, navigate]
   );
 
   const handlePrincipalDocumentDownload = useCallback((record: Record<string, any>) => {
@@ -1556,7 +1891,79 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       column.key !== 'workflow_stage'
     );
   }, [config.columns]);
+const getProposalType = (record: any) => {
+  const rawType = String(
+    record?.proposal_type ||
+    record?.request_type ||
+    record?.expenditure_type ||
+    record?.type ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
 
+  if (rawType.includes('advance 2') || rawType.includes('advance2')) {
+    return 'advance2';
+  }
+
+  if (rawType.includes('advance')) {
+    return 'advance1';
+  }
+
+  if (rawType.includes('settlement')) {
+    return 'settlement';
+  }
+
+  if (rawType.includes('expenditure')) {
+    return 'expenditure';
+  }
+
+  return 'unknown';
+};
+
+const getProposalBadge = (record: any) => {
+  const type = getProposalType(record);
+
+  switch (type) {
+    case 'advance1':
+    case 'advance2':
+      return { label: 'A', className: 'fw-proposal-badge fw-proposal-badge--advance' };
+    case 'expenditure':
+      return { label: 'E', className: 'fw-proposal-badge fw-proposal-badge--expenditure' };
+    case 'settlement':
+      return { label: 'S', className: 'fw-proposal-badge fw-proposal-badge--settlement' };
+    default:
+      return { label: '', className: '' };
+  }
+};
+
+const proposalFilteredRows = useMemo(() => {
+  if (config.moduleKey !== 'expenditure') {
+    return filteredRows;
+  }
+
+  if (proposalTypeFilter === 'all') {
+    return filteredRows;
+  }
+
+  return filteredRows.filter((record) => {
+    const type = getProposalType(record);
+
+    if (proposalTypeFilter === 'advance') {
+      return type === 'advance1' || type === 'advance2';
+    }
+
+    if (proposalTypeFilter === 'expenditure') {
+      return type === 'expenditure';
+    }
+
+    if (proposalTypeFilter === 'settlement') {
+      return type === 'settlement';
+    }
+
+    return true;
+  });
+}, [filteredRows, config.moduleKey, proposalTypeFilter]);
   return (
     <>
       <input
@@ -1594,7 +2001,41 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                 ))}
               </div>
             )}
+            {config.moduleKey === 'expenditure' && (
+              <div className="fw-proposal-filter-bar">
+                <button
+                  type="button"
+                  className={`fw-proposal-filter-btn ${proposalTypeFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => setProposalTypeFilter('all')}
+                >
+                  All
+                </button>
 
+                <button
+                  type="button"
+                  className={`fw-proposal-filter-btn fw-proposal-filter-btn--advance ${proposalTypeFilter === 'advance' ? 'active' : ''}`}
+                  onClick={() => setProposalTypeFilter('advance')}
+                >
+                  A
+                </button>
+
+                <button
+                  type="button"
+                  className={`fw-proposal-filter-btn fw-proposal-filter-btn--expenditure ${proposalTypeFilter === 'expenditure' ? 'active' : ''}`}
+                  onClick={() => setProposalTypeFilter('expenditure')}
+                >
+                  E
+                </button>
+
+                <button
+                  type="button"
+                  className={`fw-proposal-filter-btn fw-proposal-filter-btn--settlement ${proposalTypeFilter === 'settlement' ? 'active' : ''}`}
+                  onClick={() => setProposalTypeFilter('settlement')}
+                >
+                  S
+                </button>
+              </div>
+            )}
             <div className="fw-header-actions">
               {config.moduleKey === 'finance' && (
                 <div className="fw-amount-filters" role="group" aria-label="Amount filter shortcuts">
@@ -1654,7 +2095,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                 ))}
               </select>
 
-              {config.moduleKey === 'finance' && (
+              {enableSecondaryFilter && (
                 <select
                   className="fw-control"
                   value={secondaryFilter}
@@ -1753,12 +2194,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             ) : (
               <>
                 <div className="fw-cards-container">
-                  {filteredRows.map((record, rowIndex) => {
+                  {proposalFilteredRows.map((record, rowIndex) => {
                     const recordId = getRecordId(record) ?? `row-${rowIndex}`;
                     const timelineKey = String(recordId);
                     const statusCategory = resolveStatusCategory(record);
                     const recordCurrentStage = getRecordCurrentStage(record);
-                    const isSuperAdminDeleteMode = isSuperAdminView;
+                    const isSuperAdminDeleteMode =
+                      Boolean(config.enableSuperAdminDelete) && isSuperAdminView;
                     const isPending = statusCategory === 'pending' && recordCurrentStage === activeStage.toLowerCase();
                     const isActionablePending =
                       isPending ||
@@ -1771,9 +2213,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                     const isSuperAdminReturnAllowed =
                       isSuperAdminDeleteMode &&
                       ['pending', 'approved', 'rejected', 'archived'].includes(statusCategory);
-                    const proposedAmount = getWorkflowProposedAmount(record);
-                    const approvedAmount = record.approved_total_amount || record.approved_amount || null;
-                    const showApprovedAmount = approvedAmount !== null && approvedAmount !== undefined && approvedAmount !== 0;
+                    const proposedAmount = record.total_amount || record.total_budget || record.amount || 0;
+                    const rawApprovedAmount = Number(record.approved_total_amount ?? record.approved_amount ?? 0);
+                    const approvedAmount =
+                      isApproved && rawApprovedAmount <= 0
+                        ? proposedAmount
+                        : rawApprovedAmount;
+                    const showApprovedAmount = isApproved || approvedAmount > 0;
                     const proposalRef = getRecordProposalRef(record);
                     const principalDocument = getWorkflowPrincipalDocument(record);
                     const principalDocumentUrl = getWorkflowPrincipalDocumentUrl(record);
@@ -1795,23 +2241,42 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                           className={`fw-item fw-item--clickable ${archivingIds.has(recordId) ? 'fw-item--archiving' : ''}`}
                           role="button"
                           tabIndex={0}
-                          onClick={() => navigate(getFinanceRoute(recordId, 'view'), { state: { isActionablePending } })}
+                          onClick={() => navigate(getRecordRoute(recordId, 'view'), { state: { isActionablePending } })}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault();
-                              navigate(getFinanceRoute(recordId, 'view'), { state: { isActionablePending } });
+                              navigate(getRecordRoute(recordId, 'view'), { state: { isActionablePending } });
                             }
                           }}
                         >
                           <div className="fw-topbar">
                             <div className="fw-topbar-left">
-                              <span className="fw-id">{proposalRef}</span>
-                              <h5 className="fw-name">
-                                {record.applicant_name || record.user_name || record.faculty_name || 'Unknown'}
-                              </h5>
-                              {/* Tag Pill - Display based on beneficiary type */}
-                              {tag && tag.trim() !== '' && (
-                                <span className="fw-tag-pill">{tag}</span>
+                              {config.moduleKey === 'expenditure' ? (
+                                <>
+                                  <h5 className="fw-name">
+                                    {record.applicant_name || record.user_name || record.faculty_name || 'Unknown'}
+                                  </h5>
+                                  {tag && tag.trim() !== '' && (
+                                    <span className="fw-tag-pill">{tag}</span>
+                                  )}
+                                  {(() => {
+                                    const badge = getProposalBadge(record);
+                                    return badge.label ? (
+                                      <span className={badge.className}>{badge.label}</span>
+                                    ) : null;
+                                  })()}
+                                  <span className="fw-id">{proposalRef}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="fw-id">{proposalRef}</span>
+                                  <h5 className="fw-name">
+                                    {record.applicant_name || record.user_name || record.faculty_name || 'Unknown'}
+                                  </h5>
+                                  {tag && tag.trim() !== '' && (
+                                    <span className="fw-tag-pill">{tag}</span>
+                                  )}
+                                </>
                               )}
                             </div>
 
@@ -1853,7 +2318,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                 title="View"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(getFinanceRoute(recordId, 'view'), { state: { isActionablePending } });
+                                  navigate(getRecordRoute(recordId, 'view'), { state: { isActionablePending } });
                                 }}
                               >
                                 <Eye size={16} />
@@ -1865,7 +2330,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (!isApproved || (isSuperAdminView && config.moduleKey === 'finance')) {
-                                    navigate(getFinanceRoute(recordId, 'edit'));
+                                    navigate(getRecordRoute(recordId, 'edit'));
                                   }
                                 }}
                                 disabled={isApproved && !(isSuperAdminView && config.moduleKey === 'finance')}
@@ -1953,7 +2418,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                 </>
                               )}
 
-                              {config.moduleKey === 'finance' && (
+                              {Boolean(config.enablePdfPreview) && (
                                 <button
                                   type="button"
                                   className="fw-action-btn fw-action-btn--download"
@@ -1971,6 +2436,15 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                 <span className={getStatusClass(statusCategory)}>
                                   {getDisplayStatus(record)}
                                 </span>
+                                {(() => {
+                                  const principalIndicator = getDofPrincipalIndicator(record);
+                                  if (!principalIndicator) return null;
+                                  return (
+                                    <span className={principalIndicator.className}>
+                                      {principalIndicator.label}
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               <div className="fw-actions-row">
                                 {isSuperAdminView ? (
@@ -2083,9 +2557,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                       handleArchiveToggle(record);
                                     }}
                                     disabled={
-                                      archivingIds.has(recordId) ||
-                                      (isSuperAdminView && config.moduleKey !== 'finance' && !isActionablePending)
-                                    }
+  archivingIds.has(recordId) ||
+  (isSuperAdminView && !isActionablePending && resolveStatusCategory(record) !== 'archived')
+}
                                   >
                                     <Archive size={18} />
                                   </button>
@@ -2202,7 +2676,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             </div>
             <h4 style={{ margin: "0 0 8px 0", color: "#333" }}>Confirm Deletion</h4>
             <p style={{ margin: "0 0 16px 0", color: "#666", fontSize: "14px" }}>
-              Are you sure you want to permanently delete finance request <strong>{deleteRef}</strong>? This
+              Are you sure you want to permanently delete {config.deleteEntityLabel || 'this request'} <strong>{deleteRef}</strong>? This
               action cannot be undone.
             </p>
 

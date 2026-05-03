@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, ChangeEvent, useRef } from "react";
 import authenticityUtility from "../../shared/utils/authenticityUtility";
-import { Pencil, Trash2, Eye, Check, X, Settings } from "lucide-react";
+import { Pencil, Trash2, Eye, Check, X, Settings, MoreVertical, History } from "lucide-react";
 import { Modal, Button, Dropdown } from "react-bootstrap";
 
 import "./admindashboard.css";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
+import { useLocation } from "react-router-dom";
 import JournalManagement from "./formManagement/JournalFormOptions";
 import ProjectFormOptions from "./formManagement/ProjectFormOptions";
 import JournalStatusUpdates from "./components/JournalStatusUpdates";
@@ -16,6 +17,7 @@ interface ColumnConfigItem {
   order: number;
   label: string;
   group: string;
+  hideFromConfig?: boolean;
 }
 
 interface ColumnConfig {
@@ -41,12 +43,13 @@ interface Journal {
   title: string;
   journal_name?: string;
   publication_status?: string;
-  admin_approval_status?: string;
   admin_approval_comment?: string | null;
+  created_at?: string;
   submission_date?: string;
   author_names?: string[];
   index_names?: string[];
   edit_request_status?: string;
+  status?: string;
   [key: string]: unknown;
 }
 
@@ -90,7 +93,7 @@ interface EditRequestActionsProps {
   itemId: number;
 }
 
-type TabType = 'projects' | 'journals' | 'journal-requests' | 'project-requests' | 'journal-status-updates';
+type TabType = 'projects' | 'journals' | 'journal-requests' | 'project-requests' | 'journal-status-updates' | 'journal-management' | 'project-management';
 
 const defaultColumnConfig: ColumnConfig = {
   projects: {
@@ -98,8 +101,8 @@ const defaultColumnConfig: ColumnConfig = {
     project_category: { show: true, order: 1, label: "Category", group: "Essential" },
     agency: { show: true, order: 2, label: "Agency", group: "Essential" },
     scheme: { show: true, order: 3, label: "Scheme", group: "Essential" },
-    submission_status: { show: true, order: 4, label: "Status", group: "Essential" },
-    date_of_submission: { show: true, order: 5, label: "Submission Date", group: "Essential" },
+    submission_status: { show: true, order: 98, label: "Status", group: "Essential", hideFromConfig: true },
+    date_of_submission: { show: false, order: 5, label: "Submission Date", group: "Details" },
     project_type: { show: false, order: 6, label: "Project Type", group: "Details" },
     project_duration: { show: false, order: 7, label: "Duration", group: "Details" },
     sanctioned_amount: { show: false, order: 9, label: "Sanctioned Amount (₹)", group: "Financial" },
@@ -108,14 +111,13 @@ const defaultColumnConfig: ColumnConfig = {
     investigators: { show: false, order: 13, label: "Investigators", group: "Team" },
     collaborating_institute: { show: false, order: 14, label: "Collaborating Institute", group: "Team" },
     edit_request_status: { show: true, order: 18, label: "Edit Request", group: "Essential" },
-    actions: { show: true, order: 19, label: "Actions", group: "Essential" },
+    actions: { show: true, order: 99, label: "Actions", group: "Essential", hideFromConfig: true },
   },
   journals: {
     title: { show: true, order: 0, label: "Title", group: "Essential" },
     journal_name: { show: true, order: 1, label: "Journal Name", group: "Essential" },
-    publication_status: { show: true, order: 2, label: "Status", group: "Essential" },
-    submission_approval_status: { show: true, order: 3, label: "Submission Approval", group: "Essential" },
-    submission_date: { show: true, order: 4, label: "Submission Date", group: "Essential" },
+    management_workflow: { show: true, order: 98, label: "Workflow", group: "Essential", hideFromConfig: true },
+    submission_date: { show: false, order: 4, label: "Submission Date", group: "Details" },
     author_names: { show: true, order: 5, label: "Authors", group: "Details" },
     volume: { show: false, order: 6, label: "Volume", group: "Details" },
     issue: { show: false, order: 7, label: "Issue", group: "Details" },
@@ -124,10 +126,230 @@ const defaultColumnConfig: ColumnConfig = {
     publication_date: { show: false, order: 10, label: "Publication Date", group: "Timeline" },
     publisher: { show: false, order: 11, label: "Publisher", group: "Details" },
     index_names: { show: true, order: 12, label: "Indexing", group: "Metrics" },
-    edit_request_status: { show: true, order: 17, label: "Edit Request", group: "Essential" },
-    status_updates: { show: true, order: 18, label: "Status Updates", group: "Essential" },
-    actions: { show: true, order: 19, label: "Actions", group: "Essential" },
   },
+};
+
+interface JournalWorkflowCellProps {
+  item: Journal;
+  onViewDetails: (id: number) => void;
+  onDelete: (id: number) => void;
+  onSubmissionApproval: (id: number, status: "approved" | "rejected") => void;
+  onEditRequestStatus: (id: number, status: string) => void;
+  onViewStatusUpdates: (id: number) => void;
+}
+
+const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
+  item,
+  onViewDetails,
+  onDelete,
+  onSubmissionApproval,
+  onEditRequestStatus,
+  onViewStatusUpdates
+}) => {
+  const getBadgeDetails = () => {
+    const normalizeStatusToken = (value: unknown) =>
+      String(value || "")
+        .trim()
+        .toLowerCase();
+
+    let variant = 'secondary';
+    const statusVal = String(item.status || '');
+    const pubStatusVal = String((item.publication_status as string) || '');
+    let label = statusVal || pubStatusVal || 'Unknown';
+    let subText: React.ReactNode = null;
+    let dateText: string = '';
+    let pendingActions: string[] = [];
+    const adminApprovalStatus = normalizeStatusToken(item.admin_approval_status);
+    const editRequestStatus = normalizeStatusToken(item.edit_request_status);
+
+    const dateVal = (item.created_at as string) || (item.submission_date as string);
+    const dateFormatted = dateVal ? new Date(dateVal).toLocaleDateString() : '';
+
+    const isSubmissionPending = !adminApprovalStatus || adminApprovalStatus === "pending";
+    const isSubmissionRejected = adminApprovalStatus === "rejected";
+    const isSubmissionApproved = adminApprovalStatus === "approved";
+    const rejectedAtRaw = String((item.admin_rejected_at as string) || '').trim();
+    const updatedAtRaw = String((item.updated_at as string) || '').trim();
+    const rejectedAtMs = rejectedAtRaw ? new Date(rejectedAtRaw).getTime() : 0;
+    const updatedAtMs = updatedAtRaw ? new Date(updatedAtRaw).getTime() : 0;
+    const isResubmittedAfterRejection = Boolean(
+      rejectedAtMs &&
+      updatedAtMs &&
+      !Number.isNaN(rejectedAtMs) &&
+      !Number.isNaN(updatedAtMs) &&
+      updatedAtMs > rejectedAtMs
+    );
+    const effectivePendingState = isSubmissionPending || (isSubmissionRejected && isResubmittedAfterRejection);
+
+    if (effectivePendingState) pendingActions.push('submission');
+    if (editRequestStatus === "pending") pendingActions.push('edit');
+
+    // 1. Rejected state takes precedence
+    if (isSubmissionRejected && !isResubmittedAfterRejection) {
+      variant = "danger";
+      label = "Rejected";
+      const reason = String(item.admin_approval_comment || '').trim();
+      subText = reason
+        ? <span className="text-danger" style={{ fontSize: '0.75rem', maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block' }}>REASON: {reason}</span>
+        : null;
+    }
+    // 2. Pending Actions take precedence over approved/published statuses
+    else if (effectivePendingState) {
+      variant = "warning";
+      label = "Pending Approval";
+      if (pendingActions.length > 1) {
+        subText = <span className="text-danger fw-bold" style={{ fontSize: '0.75rem' }}>MULTIPLE ACTIONS REQ.</span>;
+      } else if (isResubmittedAfterRejection) {
+        subText = <span className="workflow-subtext-resubmitted">Resubmitted</span>;
+      } else {
+        subText = <span className="text-danger fw-bold" style={{ fontSize: '0.75rem' }}>REQ. APPROVAL</span>;
+      }
+    }
+    else if (editRequestStatus === "pending") {
+      variant = "warning";
+      label = "Edit Requested";
+      subText = <span className="text-danger fw-bold" style={{ fontSize: '0.75rem' }}>REQ. REVIEW</span>;
+    }
+    // 3. Approved state, check publication lifecycle pipeline
+    else if (isSubmissionApproved) {
+      // The API returns 'status' from journals (j.status), but to be safe we check 'publication_status' too
+      const pubStatus = normalizeStatusToken(pubStatusVal || statusVal);
+
+      if (pubStatus === 'published' || pubStatus === 'accepted') {
+        variant = "success";
+        label = pubStatus.charAt(0).toUpperCase() + pubStatus.slice(1);
+        subText = <span className="text-muted" style={{ fontSize: '0.75rem' }}>Processed</span>;
+        dateText = dateFormatted;
+      } else if (pubStatus === 'under review' || pubStatus === 'peer_review' || pubStatus === 'peer review') {
+        variant = "warning";
+        label = "Peer Review";
+        subText = <span className="text-muted" style={{ fontSize: '0.75rem' }}>In Progress</span>;
+        dateText = dateFormatted;
+      } else if (pubStatus === 'archived') {
+        variant = "primary";
+        label = "Archived";
+        subText = <span className="text-muted" style={{ fontSize: '0.75rem' }}>Legacy Status</span>;
+        dateText = dateFormatted;
+      } else if (pubStatus === 'rejected') {
+        variant = "danger";
+        label = "Rejected";
+        dateText = dateFormatted;
+      } else if (pubStatus === 'waiting' || pubStatus === '') {
+        // Submission was approved by Admin, but hasn't entered 'Published/Peer Review' yet 
+        variant = "info";
+        label = "Approved";
+        subText = <span className="text-muted" style={{ fontSize: '0.75rem' }}>Awaiting Publication</span>;
+        dateText = dateFormatted;
+      } else {
+        variant = "secondary";
+        label = pubStatus ? pubStatus.charAt(0).toUpperCase() + pubStatus.slice(1) : "Unknown";
+        dateText = dateFormatted;
+      }
+    } else {
+      // Catch-all for any other unhandled states
+      variant = "secondary";
+      label = statusVal || pubStatusVal || "Unknown";
+      dateText = dateFormatted;
+    }
+
+    return { variant, label, subText, dateText, pendingActions, isResubmittedAfterRejection };
+  };
+
+  const { variant, label, subText, dateText, pendingActions, isResubmittedAfterRejection } = getBadgeDetails();
+  const hasSubmissionAction = pendingActions.includes('submission');
+  const showStatusSummary = !hasSubmissionAction;
+
+  return (
+    <div className="workflow-cell d-flex justify-content-between align-items-center w-100" style={{ minWidth: '220px' }}>
+      <div className="workflow-status-block d-flex flex-column align-items-start h-100 justify-content-center" style={{ minWidth: '150px' }}>
+        {showStatusSummary && (
+          <>
+            <span className={`workflow-badge fw-medium px-2 py-1 rounded-pill d-inline-flex align-items-center workflow-badge-${variant}`}>
+              <span className={`workflow-badge-dot rounded-circle me-1 bg-${variant}`} style={{ width: '8px', height: '8px' }}></span>
+              <span style={{ fontSize: '0.8rem' }}>{label}</span>
+            </span>
+            {subText && <div className="workflow-subtext mt-1 lh-1">{subText}</div>}
+          </>
+        )}
+        {(pendingActions.includes('submission') || pendingActions.includes('edit')) && (
+          <div className="workflow-inline-actions mt-2">
+            {pendingActions.includes('submission') && (
+              <div className="workflow-action-card workflow-action-card--submission">
+                <span className="workflow-action-title">
+                  {isResubmittedAfterRejection ? 'Resubmitted' : 'Submitted'}
+                </span>
+                <div className="workflow-action-buttons">
+                  <button
+                    type="button"
+                    className="workflow-action-btn workflow-action-btn--approve"
+                    onClick={() => onSubmissionApproval(item.id, "approved")}
+                    title="Approve Submission"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="workflow-action-btn workflow-action-btn--reject"
+                    onClick={() => onSubmissionApproval(item.id, "rejected")}
+                    title="Reject Submission"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+            {pendingActions.includes('edit') && (
+              <div className="workflow-action-card workflow-action-card--edit">
+                <span className="workflow-action-title">Edit Req</span>
+                <div className="workflow-action-buttons">
+                  <button
+                    type="button"
+                    className="workflow-action-btn workflow-action-btn--approve"
+                    onClick={() => onEditRequestStatus(item.id, "approved")}
+                    title="Approve Edit Request"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="workflow-action-btn workflow-action-btn--reject"
+                    onClick={() => onEditRequestStatus(item.id, "rejected")}
+                    title="Reject Edit Request"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="workflow-right-side d-flex flex-column align-items-end gap-1">
+        <div className="workflow-actions d-flex align-items-center gap-1">
+        <div className="d-flex align-items-center ml-auto">
+          <button type="button" className="btn btn-sm btn-light border-0 text-secondary bg-transparent p-1" onClick={() => onViewDetails(item.id)} title="View Publication Details">
+            <Eye size={16} />
+          </button>
+          <button type="button" className="btn btn-sm btn-light border-0 text-secondary bg-transparent p-1" onClick={() => onViewStatusUpdates(item.id)} title="View Status Updates">
+            <History size={16} />
+          </button>
+          <button type="button" className="btn btn-sm btn-light border-0 text-secondary bg-transparent p-1" title="Edit">
+            <Pencil size={16} />
+          </button>
+          <button type="button" className="btn btn-sm btn-light border-0 text-danger bg-transparent p-1" onClick={() => onDelete(item.id)} title="Delete Journal Item">
+            <Trash2 size={16} />
+          </button>
+        </div>
+        </div>
+        {dateText && (
+          <div className="workflow-date mt-n1 text-end">
+             Submitted: {dateText}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 const EditRequestActions: React.FC<EditRequestActionsProps> = ({ status, onUpdateStatus }) => {
@@ -157,7 +379,18 @@ const EditRequestActions: React.FC<EditRequestActionsProps> = ({ status, onUpdat
 };
 
 const Dashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>("projects");
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<TabType>("journals");
+
+  // Handle URL pathname for initial tab selection and subsequent changes
+  useEffect(() => {
+    const path = location.pathname;
+    if (path === '/project-dashboard') {
+      setActiveTab('projects');
+    } else if (path === '/publication-dashboard' || path === '/admin-dashboard') {
+      setActiveTab('journals');
+    }
+  }, [location.pathname]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [journals, setJournals] = useState<Journal[]>([]);
   const [journalRequests, setJournalRequests] = useState<JournalRequest[]>([]);
@@ -216,7 +449,46 @@ const Dashboard: React.FC = () => {
     const savedConfig = localStorage.getItem("columnConfig");
     if (savedConfig) {
       try {
-        return JSON.parse(savedConfig);
+        const parsed = JSON.parse(savedConfig);
+        // Force reset the config for journals if the new 'management_workflow' column is missing 
+        // to ensure the user gets the updated layout.
+        if (parsed?.journals && !parsed.journals.management_workflow) {
+          return { ...parsed, journals: defaultColumnConfig.journals };
+        }
+
+        // Hide submission_date column as it's now integrated under action buttons
+        if (parsed?.journals?.submission_date) {
+          parsed.journals.submission_date.show = false;
+          parsed.journals.submission_date.group = "Details";
+        }
+
+        // Force hide and reposition constant columns for existing users
+        if (parsed?.journals?.management_workflow) {
+          parsed.journals.management_workflow.hideFromConfig = true;
+          parsed.journals.management_workflow.order = 98;
+          parsed.journals.management_workflow.show = true;
+        }
+        if (parsed?.journals?.actions) {
+          parsed.journals.actions.hideFromConfig = true;
+          parsed.journals.actions.order = 99;
+          parsed.journals.actions.show = true;
+        }
+        if (parsed?.projects?.submission_status) {
+          parsed.projects.submission_status.hideFromConfig = true;
+          parsed.projects.submission_status.order = 98;
+          parsed.projects.submission_status.show = true;
+        }
+        if (parsed?.projects?.actions) {
+          parsed.projects.actions.hideFromConfig = true;
+          parsed.projects.actions.order = 99;
+          parsed.projects.actions.show = true;
+        }
+        if (parsed?.projects?.date_of_submission) {
+          parsed.projects.date_of_submission.group = "Details";
+          parsed.projects.date_of_submission.show = false;
+        }
+        
+        return parsed;
       } catch (e) {
         console.error("Error parsing columnConfig from localStorage", e);
       }
@@ -244,6 +516,11 @@ const Dashboard: React.FC = () => {
         endpoint = "/admin/project-requests";
       } else if (activeTab === "journal-status-updates") {
         endpoint = "/admin/journal-status-updates";
+      }
+
+      if (!endpoint) {
+        setLoading(false);
+        return;
       }
 
       const response = await authenticityUtility.get(endpoint, {
@@ -586,8 +863,12 @@ const Dashboard: React.FC = () => {
 
     switch (column.key) {
       case "status":
-      case "publication_status":
-        return (projectItem.status as string) || (projectItem.publication_status as string) || "-";
+      case "publication_status": {
+        const status = (projectItem.status as string) || (projectItem.publication_status as string) || "-";
+        if (status === "-" || !status) return "-";
+        const statusClass = status.toLowerCase().replace(/\s+/g, '_');
+        return <span className={`badge ${statusClass}`}>{status}</span>;
+      }
 
       case "submission_date":
       case "date_of_submission":
@@ -610,29 +891,29 @@ const Dashboard: React.FC = () => {
                   : "Pending"}
             </span>
             <div className="submission-approval-actions">
-              {approvalStatus !== "approved" && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-success"
-                  onClick={() =>
-                    handleJournalSubmissionApproval(item.id, "approved")
-                  }
-                  title="Approve submission"
-                >
-                  <Check size={14} />
-                </button>
-              )}
-              {approvalStatus !== "rejected" && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-danger"
-                  onClick={() =>
-                    handleJournalSubmissionApproval(item.id, "rejected")
-                  }
-                  title="Reject submission"
-                >
-                  <X size={14} />
-                </button>
+              {approvalStatus === "pending" && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-success"
+                    onClick={() =>
+                      handleJournalSubmissionApproval(item.id, "approved")
+                    }
+                    title="Approve submission"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    onClick={() =>
+                      handleJournalSubmissionApproval(item.id, "rejected")
+                    }
+                    title="Reject submission"
+                  >
+                    <X size={14} />
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -725,6 +1006,21 @@ const Dashboard: React.FC = () => {
           />
         );
 
+      case "management_workflow":
+        return (
+          <JournalWorkflowCell
+            item={journalItem}
+            onViewDetails={handleViewDetails}
+            onDelete={handleDelete}
+            onSubmissionApproval={handleJournalSubmissionApproval}
+            onEditRequestStatus={handleEditRequestStatus}
+            onViewStatusUpdates={(id) => {
+              setSelectedJournalForStatus(id);
+              setShowStatusDetailsModal(true);
+            }}
+          />
+        );
+
       case "status_updates":
         return (
           <Button
@@ -813,7 +1109,7 @@ const Dashboard: React.FC = () => {
       return null;
     }
 
-    const columns = Object.entries(columnConfig[tabKey]);
+    const columns = Object.entries(columnConfig[tabKey]).filter(([_, config]) => !config.hideFromConfig);
 
     const groupedColumns = columns.reduce((acc, [key, config]) => {
       const group = config.group || "Other";
@@ -825,56 +1121,43 @@ const Dashboard: React.FC = () => {
     const groupOrder = ["Essential", ...Object.keys(groupedColumns).filter((g) => g !== "Essential").sort((a, b) => a.localeCompare(b))];
 
     return (
-      <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
+      <div ref={dropdownRef} className="position-relative d-inline-block">
         <button
-          className="btn btn-primary dropdown-toggle"
+          className="column-toggle-button"
           type="button"
           onClick={() => setIsColumnDropdownOpen(!isColumnDropdownOpen)}
         >
-          <Settings size={16} className="me-2" /> Configure Columns
+          <Settings size={18} />
+          <span>Configure Columns</span>
         </button>
         {isColumnDropdownOpen && (
-          <div
-            className="dropdown-menu show p-2"
-            style={{
-              position: 'absolute',
-              top: '100%',
-              right: 0,
-              minWidth: '100%',
-              width: 'max-content',
-              maxHeight: '70vh',
-              overflowY: 'auto',
-              zIndex: 1050
-            }}
-          >
+          <div className="column-config-dropdown shadow-lg border">
             {groupOrder.map((group) => (
-              <div key={group}>
-                {group !== "Essential" && (
-                  <hr className="dropdown-divider my-2" />
-                )}
-                <h6 className="dropdown-header fw-bold text-dark mb-2">{group}</h6>
-                {groupedColumns[group]?.sort((a, b) => a[1].order - b[1].order).map(([key, config]) => (
-                  <div key={key} className="dropdown-item-text">
-                    <div className="form-check">
-                      <input
-                        type="checkbox"
-                        className="form-check-input"
-                        id={`column-toggle-${key}`}
-                        checked={config.show}
-                        onChange={() => toggleColumn(key)}
-                        disabled={group === "Essential"}
-                      />
-                      <label
-                        className={`form-check-label user-select-none ${group === "Essential" ? "text-muted" : ""}`}
-                        htmlFor={`column-toggle-${key}`}
-                        style={{ cursor: group === "Essential" ? "default" : "pointer" }}
-                        title={group === "Essential" ? "Essential columns cannot be hidden" : ""}
-                      >
-                        {config.label}
-                      </label>
+              <div key={group} className="mb-3">
+                <h6 className="column-group-title">{group}</h6>
+                <div className="row g-2">
+                  {groupedColumns[group]?.sort((a, b) => a[1].order - b[1].order).map(([key, config]) => (
+                    <div key={key} className="col-6">
+                      <div className="form-check py-1">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          id={`column-toggle-${key}`}
+                          checked={config.show}
+                          onChange={() => toggleColumn(key)}
+                          disabled={group === "Essential"}
+                        />
+                        <label
+                          className={`form-check-label user-select-none small ms-1 ${group === "Essential" ? "text-muted opacity-75" : ""}`}
+                          htmlFor={`column-toggle-${key}`}
+                          style={{ cursor: group === "Essential" ? "default" : "pointer" }}
+                        >
+                          {config.label}
+                        </label>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -886,7 +1169,13 @@ const Dashboard: React.FC = () => {
   const renderTable = () => {
     const items = activeTab === "projects" ? projects : journals;
     if (!items || items.length === 0) {
-      return <div className="text-center p-3">No {activeTab} found</div>;
+      return (
+        <div className="loading py-5">
+          <div className="text-center">
+            <p className="mb-0">No {activeTab} found</p>
+          </div>
+        </div>
+      );
     }
 
     const visibleColumns = getVisibleColumns();
@@ -894,10 +1183,10 @@ const Dashboard: React.FC = () => {
     return (
       <div className="table-responsive">
         <DragDropContext onDragEnd={handleColumnReorder}>
-          <table className="table table-striped">
+          <table className="table">
             <Droppable droppableId="table-header" direction="horizontal">
               {(provided) => (
-                <thead className="table-dark" ref={provided.innerRef} {...provided.droppableProps}>
+                <thead ref={provided.innerRef} {...provided.droppableProps}>
                   <tr>
                     {visibleColumns.map((column, index) => (
                       <Draggable key={column.key} draggableId={column.key} index={index}>
@@ -908,13 +1197,13 @@ const Dashboard: React.FC = () => {
                             {...provided.dragHandleProps}
                             style={{
                               ...provided.draggableProps.style,
-                              ...darkHeaderCellStyle,
+                              opacity: snapshot.isDragging ? 0.8 : 1,
                               cursor: snapshot.isDragging ? "grabbing" : "grab",
-                              padding: "12px 16px",
-                              userSelect: "none",
                             }}
                           >
-                            {column.label}
+                            <div className="d-flex align-items-center gap-2">
+                              {column.label}
+                            </div>
                           </th>
                         )}
                       </Draggable>
@@ -935,7 +1224,11 @@ const Dashboard: React.FC = () => {
     const totalPages = Math.ceil(totalItems / itemsPerPage);
     const pages: JSX.Element[] = [];
 
-    for (let i = 1; i <= totalPages; i++) {
+    // Simple visible pages logic
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, startPage + 4);
+
+    for (let i = startPage; i <= endPage; i++) {
       pages.push(
         <li key={i} className={`page-item ${currentPage === i ? "active" : ""}`}>
           <button className="page-link" onClick={() => setCurrentPage(i)}>{i}</button>
@@ -944,34 +1237,57 @@ const Dashboard: React.FC = () => {
     }
 
     return (
-      <div className="d-flex justify-content-between align-items-center mt-3">
-        <select
-          className="form-select w-auto"
-          value={itemsPerPage}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-            setItemsPerPage(Number(e.target.value));
-            setCurrentPage(1);
-          }}
-        >
-          <option value="5">5 per page</option>
-          <option value="10">10 per page</option>
-          <option value="20">20 per page</option>
-          <option value="50">50 per page</option>
-          <option value="100">100 per page</option>
-        </select>
-        <ul className="pagination mb-0">
-          <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-            <button className="page-link" onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
-              Previous
-            </button>
-          </li>
-          {pages}
-          <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
-            <button className="page-link" onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
-              Next
-            </button>
-          </li>
-        </ul>
+      <div className="adminbudget-pagination">
+        <div className="adminbudget-pagination-left">
+          <div className="adminbudget-rows-control">
+            <label htmlFor="adminbudget-rows-per-page" className="adminbudget-rows-label">
+              Rows per page
+            </label>
+            <select
+              id="adminbudget-rows-per-page"
+              className="adminbudget-rows-select"
+              value={itemsPerPage}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+            >
+              {[10, 20, 50].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <span className="adminbudget-pagecount">
+            {totalItems === 0
+              ? "0-0 of 0"
+              : `${(currentPage - 1) * itemsPerPage + 1}-${Math.min(currentPage * itemsPerPage, totalItems)} of ${totalItems}`}
+          </span>
+        </div>
+
+        <div className="adminbudget-pagination-right">
+          <button
+            className="adminbudget-pagebtn"
+            disabled={currentPage <= 1}
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          >
+            Previous
+          </button>
+
+          <span className="adminbudget-pageinfo">
+            Page {currentPage} of {totalPages}
+          </span>
+
+          <button
+            className="adminbudget-pagebtn"
+            disabled={currentPage >= totalPages}
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Next
+          </button>
+        </div>
       </div>
     );
   };
@@ -1178,7 +1494,8 @@ const Dashboard: React.FC = () => {
             <div className="col-md-6">
               <p><strong>Impact Factor:</strong> {(journal.impact_factor as string) || "N/A"}</p>
               <p><strong>Indexes:</strong> {journal.index_names ? journal.index_names.join(", ") : "N/A"}</p>
-              <p><strong>Print:</strong> {(journal.print_issn as string) || "N/A"} <strong> Online: </strong> {(journal.online_issn as string) || "N/A"}</p>
+              <p><strong>Print:</strong> {(journal.print_issn as string) || "N/A"}</p>
+              <p><strong>Online:</strong> {(journal.online_issn as string) || "N/A"}</p>
             </div>
           </div>
         </div>
@@ -1237,6 +1554,11 @@ const Dashboard: React.FC = () => {
             {(journal.file_path as string) && (
               <div className="col-md-4 mb-2">
                 <a href={getFileUrl(journal.file_path as string)} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm w-100">View Document</a>
+              </div>
+            )}
+            {!(journal.file_path as string) && (
+              <div className="col-12">
+                <p className="text-muted mb-0">No documents attached.</p>
               </div>
             )}
           </div>
@@ -1347,43 +1669,59 @@ const Dashboard: React.FC = () => {
   return (
     <div>
 
-      <div className="dashboard-container">
-        <div className="tab-buttons">
-          <div className={`tab-button ${activeTab === "projects" ? "active" : ""}`} onClick={() => { setActiveTab("projects"); setCurrentPage(1); }}>Projects</div>
-          <div className={`tab-button ${activeTab === "journals" ? "active" : ""}`} onClick={() => { setActiveTab("journals"); setCurrentPage(1); }}>Journals</div>
-          <div className={`tab-button ${activeTab === "journal-requests" ? "active" : ""}`} onClick={() => { setActiveTab("journal-requests"); setCurrentPage(1); }}>Journal Requests</div>
-          <div className={`tab-button ${activeTab === "project-requests" ? "active" : ""}`} onClick={() => { setActiveTab("project-requests"); setCurrentPage(1); }}>Project Requests</div>
-          <div className={`tab-button ${activeTab === "journal-status-updates" ? "active" : ""}`} onClick={() => { setActiveTab("journal-status-updates"); setCurrentPage(1); }}>Journal Status Updates</div>
+      <div className="publication-approval-dashboard">
+        <div className="w-100 max-w-1400">
+          <div className="tab-buttons">
+            {location.pathname === '/project-dashboard' ? (
+              <>
+                <div className={`tab-button ${activeTab === "projects" ? "active" : ""}`} onClick={() => { setActiveTab("projects"); setCurrentPage(1); }}>Projects</div>
+                <div className={`tab-button ${activeTab === "project-requests" ? "active" : ""}`} onClick={() => { setActiveTab("project-requests"); setCurrentPage(1); }}>Project Requests</div>
+                <div className={`tab-button ${activeTab === "project-management" ? "active" : ""}`} onClick={() => { setActiveTab("project-management"); setCurrentPage(1); }}>Project Management</div>
+              </>
+            ) : (
+              <>
+                <div className={`tab-button ${activeTab === "journals" ? "active" : ""}`} onClick={() => { setActiveTab("journals"); setCurrentPage(1); }}>Publications</div>
+                <div className={`tab-button ${activeTab === "journal-requests" ? "active" : ""}`} onClick={() => { setActiveTab("journal-requests"); setCurrentPage(1); }}>Publication Requests</div>
+                <div className={`tab-button ${activeTab === "journal-status-updates" ? "active" : ""}`} onClick={() => { setActiveTab("journal-status-updates"); setCurrentPage(1); }}>Publication Status Updates</div>
+                <div className={`tab-button ${activeTab === "journal-management" ? "active" : ""}`} onClick={() => { setActiveTab("journal-management"); setCurrentPage(1); }}>Publication Management</div>
+              </>
+            )}
+          </div>
         </div>
 
         {loading ? (
-          <div className="loading">Loading...</div>
+          <div className="loading">
+            <div className="spinner-border spinner-border-sm me-2" role="status"></div>
+            Loading Dashboard...
+          </div>
         ) : error ? (
           <div className="error-message">{error}</div>
         ) : (
-          <>
+          <div className="w-100 max-w-1400">
             {(activeTab === "projects" || activeTab === "journals") && (
               <>
-                <div className="d-flex justify-content-end mb-3" style={{ width: '90%' }}>
+                <div className="d-flex justify-content-end mb-4 pe-4">
                   {renderColumnToggleDropdown()}
                 </div>
                 <div className="table-container">
                   {renderTable()}
-                  {renderPagination()}
+                  <div className="table-footer">
+                    {renderPagination()}
+                  </div>
                 </div>
-                {activeTab === "journals" && <div className="journal-management-container"><JournalManagement /></div>}
-                {activeTab === "projects" && <div className="project-management-container"><ProjectFormOptions /></div>}
               </>
             )}
             {activeTab === "journal-requests" && <div className="table-container">{renderJournalRequestsTable()}</div>}
             {activeTab === "project-requests" && <div className="table-container">{renderProjectRequestsTable()}</div>}
             {activeTab === "journal-status-updates" && <div className="table-container"><JournalStatusUpdates /></div>}
-          </>
+            {activeTab === "journal-management" && <div className="table-container"><JournalManagement /></div>}
+            {activeTab === "project-management" && <div className="table-container"><ProjectFormOptions /></div>}
+          </div>
         )}
 
         <Modal show={showModal} onHide={() => setShowModal(false)} size="lg" className="details-modal">
           <Modal.Header closeButton>
-            <Modal.Title>{activeTab === "projects" ? "Project Details" : "Journal Details"}</Modal.Title>
+            <Modal.Title>{activeTab === "projects" ? "Project Details" : "Publication Details"}</Modal.Title>
           </Modal.Header>
           <Modal.Body className="modal-body-scroll">
             {activeTab === "projects" ? renderProjectDetails() : renderJournalDetails()}
