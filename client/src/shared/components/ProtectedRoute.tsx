@@ -7,6 +7,7 @@ import {
   canAccessFinanceWorkflow,
   canAccessModuleWorkflow,
   canManageAccessControl,
+  canAccessExpenditureWorkflow,
 } from "../utils/permissionUtils";
 
 interface RouteProps {
@@ -94,6 +95,20 @@ export const ModuleWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
 
   if (!user || !moduleKey || !canAccessModuleWorkflow(user, moduleKey)) {
     return <Navigate to="/home" />;
+  }
+
+  return <>{children}</>;
+};
+
+export const ExpenditureApprovalRoute: React.FC<RouteProps> = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user || !canAccessExpenditureWorkflow(user)) {
+    return <Navigate to="/workflow/expenditure" />;
   }
 
   return <>{children}</>;

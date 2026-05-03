@@ -169,6 +169,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Stationery',
       'Postal Expenses',
       'Local Conveyance',
+      'Operational Expenses',
     ],
   },
   {
@@ -193,6 +194,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Student Capacity Building',
       'Ranking & Accreditation',
       'Examination Expenses',
+      'Awards & Recognition',
     ],
   },
   {
@@ -589,6 +591,14 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Travel Expense',
     'Others'
   ],
+  'Operational Expenses': [
+    'Water Bottle',
+    'Food & Refreshment',
+    'Pooja Expenses',
+    'Accessories',
+    'Legal stamp paper',
+    'Miscellaneous'
+  ],
   'Conferences & Conclaves': [
     'Conclave',
     'Consumables',
@@ -743,6 +753,17 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Degree Recommendation',
     'CoE Staff Remuneration'
   ],
+  'Awards & Recognition': [
+    'Accommodation',
+    'Registration fee',
+    'Food & Refreshment',
+    'Driver Beta',
+    'Travel Allowance',
+    'Daily Allowance',
+    'Printing',
+    'Stationery',
+    'Others'
+  ],
   'Advertisement & Branding': ['Digital Promotion', 'News Paper Advertisement'],
   'Public Relations': [
     'Branding',
@@ -826,7 +847,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Laundry Service',
     'Legal Expenses',
     'Loan Processing Charges',
-    'Pooja Expenses',
     'RO  Mineral Water',
     'Sewage Treatment',
     'Others'
@@ -1181,6 +1201,7 @@ const FinanceApproval: React.FC = () => {
   const [principalPriority, setPrincipalPriority] = useState<string>('');
   const [chairmanComments, setChairmanComments] = useState<string>('');
   const [chairmanStatus, setChairmanStatus] = useState<string>('');
+  const [stageRemarkInput, setStageRemarkInput] = useState<string>('');
   const [showPreview, setShowPreview] = useState<boolean>(false);
   const [autoDownloadPdf, setAutoDownloadPdf] = useState<boolean>(false);
   const [submittedAt, setSubmittedAt] = useState<string>('');
@@ -1720,8 +1741,6 @@ const FinanceApproval: React.FC = () => {
     } else {
       updated[index][field] = value;
       if (field === 'head') {
-        // Reset entered amount when sub head changes so placeholder reflects fresh availability.
-        updated[index].amount = '';
         fetchBudgetAvailability(index, normalizeText(primaryHead) || updated[index].category, normalizeSubHeadForDb(value));
       }
     }
@@ -1735,11 +1754,15 @@ const FinanceApproval: React.FC = () => {
 
     setBudgetRows((prev) => {
       const updated = [...prev];
+      const previousHead = normalizeText(updated[index]?.category);
       updated[index] = {
         ...updated[index],
         category: selectedHead,
         head: selectedSubHead,
-        amount: selectedHead ? '' : updated[index].amount,
+        amount:
+          selectedHead && selectedHead !== previousHead
+            ? ''
+            : updated[index].amount,
       };
       return updated;
     });
@@ -1793,6 +1816,14 @@ const FinanceApproval: React.FC = () => {
   const handleAnnexureFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
+
+    if (String(annexureType || '').trim() === 'Not Applicable') {
+      showAlert('File upload is disabled when Annexure Type is "Not Applicable".', 'warning');
+      if (annexureFileInputRef.current) {
+        annexureFileInputRef.current.value = '';
+      }
+      return;
+    }
 
     if (!String(annexureType || '').trim()) {
       showAlert('Please select annexure type before uploading files.', 'warning');
@@ -1997,9 +2028,10 @@ const FinanceApproval: React.FC = () => {
 
   const getAnnexureRowMissingFields = (row: AnnexureFileRow): string[] => {
     const missing: string[] = [];
+    const isNotApplicable = String(row.annexureType || '').trim() === 'Not Applicable';
 
     if (!hasFilledText(row.annexureType)) missing.push('Annexure Type');
-    if (!hasFilledText(row.originalName) && !hasFilledText(row.storedName) && !hasFilledText(row.filePath)) {
+    if (!isNotApplicable && !hasFilledText(row.originalName) && !hasFilledText(row.storedName) && !hasFilledText(row.filePath)) {
       missing.push('File');
     }
 
@@ -2099,7 +2131,9 @@ const FinanceApproval: React.FC = () => {
         }
       }
 
-      if (annexureFiles.length === 0) {
+      const isAnnexureNotApplicable = String(annexureType || '').trim() === 'Not Applicable';
+
+      if (!isAnnexureNotApplicable && annexureFiles.length === 0) {
         showAlert('Please add at least one annexure.', 'warning');
         return;
       }
@@ -2281,12 +2315,6 @@ const FinanceApproval: React.FC = () => {
     }
 
     if (decision === 'approved' || decision === 'archived') {
-      if (decision === 'approved' && loadedCurrentStage === 'principal' && totalBudget > 10000 && !hasPrincipalDocument) {
-        setPrincipalApprovalFile(null);
-        setPrincipalApprovalPopupOpen(true);
-        return;
-      }
-
       const isArchivedAction = decision === 'archived';
       showAlert(
         isArchivedAction
@@ -2309,16 +2337,6 @@ const FinanceApproval: React.FC = () => {
 
   const executeWorkflowAction = async (decision: 'approved' | 'returned' | 'rejected' | 'archived', feedback?: string) => {
     if (!id) return;
-    if (
-      decision === 'approved'
-      && loadedCurrentStage === 'principal'
-      && totalBudget > 10000
-      && !hasPrincipalDocument
-    ) {
-      setPrincipalApprovalFile(null);
-      setPrincipalApprovalPopupOpen(true);
-      return;
-    }
 
     try {
       setIsLoading(true);
@@ -2328,6 +2346,7 @@ const FinanceApproval: React.FC = () => {
         : await authenticityUtility.patch(`/finance-requests/${id}/approval`, {
           decision,
           feedback,
+          stageRemark: normalizeText(stageRemarkInput) || undefined,
         })) as { status?: string; success?: boolean; message?: string; data?: { message?: string } };
 
       if (response?.status !== 'success' && response?.success !== true) {
@@ -2482,6 +2501,7 @@ const FinanceApproval: React.FC = () => {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(true);
   const [beneficiaryType, setBeneficiaryType] = useState<string>('');
   const [beneficiaryValue, setBeneficiaryValue] = useState<string>('');
   // Get subcategory options from the loaded data (dynamic from API) - SAME AS BUDGET.TSX
@@ -2573,6 +2593,8 @@ const FinanceApproval: React.FC = () => {
     const userPermissions = (user?.permissions || []).map(p => String(p).toLowerCase());
     return userPermissions.includes(`finance.workflow.${loadedCurrentStage}`);
   })();
+  const canEditStageRemark =
+    canActOnCurrentStage && ['dof', 'principal', 'chairman'].includes(loadedCurrentStage);
 
   // Tag auto-selection based on beneficiary type
   useEffect(() => {
@@ -2626,8 +2648,12 @@ const FinanceApproval: React.FC = () => {
         }
 
         const record = response.data;
+        const currentStageFromRecord = String(
+          record.workflow_state?.currentStage || record.workflow_stage || ''
+        ).toLowerCase();
         const budgetRowsFromApi = Array.isArray(record.budget) ? record.budget : [];
         const incomeRowsFromApi = Array.isArray(record.income_rows) ? record.income_rows : [];
+        const statusUpdatesFromApi = Array.isArray(record.status_updates) ? record.status_updates : [];
 
         const resolvedApplicantName = String(record.applicant_name || '').trim();
         setApplicantName(resolvedApplicantName);
@@ -2724,6 +2750,21 @@ const FinanceApproval: React.FC = () => {
         }
         setLoadedWorkflowStatus(String(record.workflow_state?.status || record.workflow_status || record.overall_status || '').toLowerCase());
         setLoadedCurrentStage(String(record.workflow_state?.currentStage || record.workflow_stage || '').toLowerCase());
+        setDirectorComments(String(record.director_comment || ''));
+        setDirectorStatus(String(record.director_status || '').toLowerCase());
+        setPrincipalComments(String(record.principal_comment || ''));
+        setPrincipalStatus(String(record.principal_status || '').toLowerCase());
+        setChairmanComments(String(record.chairman_comment || ''));
+        setChairmanStatus(String(record.chairman_status || '').toLowerCase());
+        if (currentStageFromRecord === 'dof') {
+          setStageRemarkInput(String(record.director_comment || ''));
+        } else if (currentStageFromRecord === 'principal') {
+          setStageRemarkInput(String(record.principal_comment || ''));
+        } else if (currentStageFromRecord === 'chairman') {
+          setStageRemarkInput(String(record.chairman_comment || ''));
+        } else {
+          setStageRemarkInput('');
+        }
         setCategorySelections(
           String(record.beneficiary_value || '')
             .split(',')
@@ -2764,7 +2805,7 @@ const FinanceApproval: React.FC = () => {
             : [createIncomeRow()]
         );
         setHasPrincipalDocument(Boolean(record.principal_document && record.principal_document.file_path));
-        setStatusUpdates(record.status_updates || []);
+        setStatusUpdates(statusUpdatesFromApi);
       } catch (error) {
         console.error('Failed to load finance request', error);
       } finally {
@@ -2834,6 +2875,10 @@ const FinanceApproval: React.FC = () => {
       cancelled = true;
     };
   }, [id, applicantName, isExternalApplicant]);
+
+  useEffect(() => {
+    setIsApplicantCardOpen(!id);
+  }, [id]);
 
   const handleBeneficiarySearch = async (query: string) => {
     setBeneficiarySearchQuery(query);
@@ -2907,13 +2952,12 @@ const FinanceApproval: React.FC = () => {
   const extraDropdownVisible = Boolean(activeHoacGroup);
   const hoacSubheadDropdownOptions = useMemo(() => {
     if (!activeHoacGroup) return [];
-    const budgetSubHeads = SUB_HEAD_BY_BUDGET_HEAD[primaryHead] || [];
-    if (primaryHead === 'Club Activities') {
-      return toOptions(budgetSubHeads);
+    const firstLevelSubHeads = SUB_HEAD_BY_BUDGET_HEAD[primaryHead] || [];
+    if (firstLevelSubHeads.length > 0) {
+      return toOptions(firstLevelSubHeads);
     }
     const groupSubHeads = HOAC_SUBHEAD_OPTIONS[activeHoacGroup] || [];
-    const combined = Array.from(new Set([...budgetSubHeads, ...groupSubHeads]));
-    return toOptions(combined);
+    return toOptions(groupSubHeads);
   }, [primaryHead, activeHoacGroup]);
   useEffect(() => {
     const nextFetchKeys: Record<number, string> = {};
@@ -2989,6 +3033,22 @@ const FinanceApproval: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [expandedHead, setExpandedHead] = useState<string>('');
   const [activeSubHead, setActiveSubHead] = useState<string>('');
+  const stageRemarksForDisplay = [
+    { label: 'DOF', status: directorStatus, remarks: directorComments },
+    { label: 'Principal', status: principalStatus, remarks: principalComments },
+    { label: 'Chairman', status: chairmanStatus, remarks: chairmanComments },
+  ].filter((entry) => {
+    const labelToStageMap: Record<string, string> = {
+      dof: 'dof',
+      principal: 'principal',
+      chairman: 'chairman',
+    };
+    const entryStage = labelToStageMap[String(entry.label || '').toLowerCase()] || '';
+    if (canEditStageRemark && entryStage === loadedCurrentStage) {
+      return true;
+    }
+    return hasFilledText(entry.status) || hasFilledText(entry.remarks);
+  });
 
   return (
     <div className="finance-approval-body" style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}>
@@ -3005,6 +3065,96 @@ const FinanceApproval: React.FC = () => {
               borderRadius: '18px',
               boxShadow: '0 8px 24px rgba(0, 0, 0, 0.06)',
             }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  padding: '0 0 15px 0',
+                  borderBottom: '1px solid #e0e0e0',
+                }}
+                onClick={() => setIsApplicantCardOpen((prev) => !prev)}
+              >
+                <h5 style={{ margin: 0, fontSize: '16px', color: '#0069ab', fontWeight: 600 }}>
+                  Applicant Details
+                </h5>
+                <svg
+                  width="12"
+                  height="8"
+                  viewBox="0 0 12 8"
+                  style={{
+                    transform: isApplicantCardOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.3s ease',
+                  }}
+                >
+                  <polyline
+                    points="1.5,1.5 6,5.5 10.5,1.5"
+                    stroke="#0069ab"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                </svg>
+              </div>
+
+              <div style={{ paddingTop: '20px' }}>
+              {!isApplicantCardOpen && (
+                <div className="row">
+                  <div className="col-md-7">
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: 600, display: 'block' }}>
+                        Applicant Name
+                      </label>
+                      <input
+                        type="text"
+                        value={applicantName}
+                        disabled
+                        readOnly
+                        style={{
+                          borderRadius: '12px',
+                          border: '1px solid #e0e0e0',
+                          padding: '10px 15px',
+                          fontSize: '0.95rem',
+                          width: '100%',
+                          fontFamily: 'inherit',
+                          backgroundColor: '#fcfdff',
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setIsApplicantCardOpen(true)}
+                      />
+                    </div>
+                  </div>
+                  <div className="col-md-5">
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: 600, display: 'block' }}>
+                        Date
+                      </label>
+                      <input
+                        type="date"
+                        value={date}
+                        disabled
+                        readOnly
+                        style={{
+                          borderRadius: '12px',
+                          border: '1px solid #e0e0e0',
+                          padding: '10px 15px',
+                          fontSize: '0.95rem',
+                          width: '100%',
+                          fontFamily: 'inherit',
+                          backgroundColor: '#fcfdff',
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setIsApplicantCardOpen(true)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {isApplicantCardOpen && !isViewMode && (
+                <>
               <div className="row mb-3" style={{ marginBottom: '15px' }}>
                 <div className="col-md-7">
                   <div className="form-group" style={{ position: 'relative' }}>
@@ -3283,6 +3433,9 @@ const FinanceApproval: React.FC = () => {
                     />
                   </div>
                 </div>
+              </div>
+                </>
+              )}
               </div>
             </div>
 
@@ -4319,27 +4472,33 @@ const FinanceApproval: React.FC = () => {
                             accept="application/pdf,.pdf"
                             multiple
                             style={{ display: 'none' }}
-                            disabled={isViewMode}
+                            disabled={isViewMode || String(annexureType || '').trim() === 'Not Applicable'}
                             onChange={handleAnnexureFileChange}
                           />
                           <button
                             type="button"
-                            onClick={() => annexureFileInputRef.current?.click()}
+                            onClick={() => {
+                              if (!isViewMode && String(annexureType || '').trim() !== 'Not Applicable' && hasFilledText(annexureType)) {
+                                annexureFileInputRef.current?.click();
+                              }
+                            }}
                             style={{
                               ...annexureUploadButtonStyle,
-                              opacity: (!isViewMode && hasFilledText(annexureType)) ? 1 : 0.55,
-                              cursor: (!isViewMode && hasFilledText(annexureType)) ? 'pointer' : 'not-allowed',
+                              opacity: (!isViewMode && hasFilledText(annexureType) && String(annexureType || '').trim() !== 'Not Applicable') ? 1 : 0.55,
+                              cursor: (!isViewMode && hasFilledText(annexureType) && String(annexureType || '').trim() !== 'Not Applicable') ? 'pointer' : 'not-allowed',
                             }}
-                            disabled={isViewMode || !hasFilledText(annexureType)}
+                            disabled={isViewMode || !hasFilledText(annexureType) || String(annexureType || '').trim() === 'Not Applicable'}
                             title={
                               isViewMode
                                 ? 'View mode'
+                                : String(annexureType || '').trim() === 'Not Applicable'
+                                  ? 'Upload disabled for Not Applicable'
                                 : hasFilledText(annexureType)
                                   ? 'Choose annexure file'
                                   : 'Select annexure type before choosing files'
                             }
                             onMouseEnter={(e) => {
-                              if (!isViewMode && hasFilledText(annexureType)) {
+                              if (!isViewMode && hasFilledText(annexureType) && String(annexureType || '').trim() !== 'Not Applicable') {
                                 (e.currentTarget as HTMLButtonElement).style.background = '#005c95';
                               }
                             }}
@@ -4437,6 +4596,60 @@ const FinanceApproval: React.FC = () => {
             gap: '18px',
           }}
         >
+          {!showPreview && stageRemarksForDisplay.length > 0 && (
+            <div
+              style={{
+                backgroundColor: '#fff',
+                padding: '24px',
+                borderRadius: '18px',
+                width: '100%',
+                maxWidth: '1200px',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+              }}
+            >
+              <h5 style={{ margin: '0 0 16px', fontSize: '16px', color: '#0069ab', fontWeight: 600 }}>
+                Workflow Remarks
+              </h5>
+              <div className="row g-3">
+                {stageRemarksForDisplay.map((entry) => (
+                  <div className="col-md-4" key={entry.label}>
+                    <label style={{ fontSize: '13px', color: '#495057', marginBottom: '8px', fontWeight: 600, display: 'block' }}>
+                      {entry.label}{hasFilledText(entry.status) ? ` (${entry.status})` : ''}
+                    </label>
+                    {(() => {
+                      const entryStage = String(entry.label || '').toLowerCase();
+                      const isCurrentStageEditable = canEditStageRemark && loadedCurrentStage === entryStage;
+                      return (
+                    <textarea
+                      value={isCurrentStageEditable ? stageRemarkInput : (entry.remarks || '')}
+                      readOnly={!isCurrentStageEditable}
+                      onChange={(event) => {
+                        if (isCurrentStageEditable) {
+                          setStageRemarkInput(event.target.value);
+                        }
+                      }}
+                      rows={3}
+                      placeholder={isCurrentStageEditable ? `Enter ${entry.label} remarks (optional)` : `No ${entry.label} remarks`}
+                      style={{
+                        borderRadius: '10px',
+                        border: '1px solid #e0e0e0',
+                        padding: '10px 12px',
+                        fontSize: '0.9rem',
+                        width: '100%',
+                        fontFamily: 'inherit',
+                        backgroundColor: '#fcfdff',
+                        resize: isCurrentStageEditable ? 'vertical' : 'none',
+                        color: '#495057',
+                      }}
+                    />
+                      );
+                    })()}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {!showPreview && !isViewMode && (
             <button
               type="button"
@@ -4644,6 +4857,21 @@ const FinanceApproval: React.FC = () => {
               {displayTime}
             </span>
           );
+        };
+
+        const getPreviewDecisionLabel = (entry: any): string => {
+          const label = String(entry?.label || '').trim();
+          if (label !== 'Approved') return `${label} by`;
+
+          const stageToken = String(entry?.stage || '').toLowerCase();
+          const actorToken = String(entry?.actor || '').toLowerCase();
+          const emailToken = String(entry?.email || '').toLowerCase();
+          const isPrincipalEntry =
+            stageToken.includes('principal') ||
+            actorToken.includes('principal') ||
+            emailToken.includes('principal@');
+
+          return isPrincipalEntry ? 'Approved by' : 'Recommended by';
         };
         const previewTimelineRowStyle: CSSProperties = {
           padding: '8px 10px',
@@ -4918,7 +5146,7 @@ const FinanceApproval: React.FC = () => {
                           borderBottom: index === approvalSteps.length - 1 ? 'none' : '1px solid #000',
                         }}
                       >
-                        <span style={previewTimelineLabelStyle}>{entry.label} by</span>
+                        <span style={previewTimelineLabelStyle}>{getPreviewDecisionLabel(entry)}</span>
                         <span
                           style={{
                             ...previewTimelineValueStyle,

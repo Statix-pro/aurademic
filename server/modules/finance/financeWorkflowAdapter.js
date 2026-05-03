@@ -4,6 +4,8 @@ import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
 const ALLOWED_META_KEYS = new Set(['trigger', 'route', 'amountBand', 'financeMeta']);
 const ALLOWED_AMOUNT_BANDS = new Set(['lte_10k', 'gt_10k']);
+const FINANCE_FLOW_LTE_10K = Object.freeze(['level1', 'dof', 'principal']);
+const FINANCE_FLOW_GT_10K = Object.freeze(['level1', 'dof', 'principal', 'chairman']);
 
 const financeWorkflowAdapter = {
   async getRecordContext(recordId, options = {}) {
@@ -83,6 +85,13 @@ const financeWorkflowAdapter = {
     }
 
     return sanitized;
+  },
+
+  resolveStartFlow({ metadata }) {
+    const amountBand = String(metadata?.moduleMeta?.amountBand || '').toLowerCase();
+    return amountBand === 'gt_10k'
+      ? [...FINANCE_FLOW_GT_10K]
+      : [...FINANCE_FLOW_LTE_10K];
   },
 };
 

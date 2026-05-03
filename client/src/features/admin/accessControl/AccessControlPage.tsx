@@ -943,13 +943,10 @@ const AccessControlPage: React.FC = () => {
                     return currentUsers.map((accessUser) => {
                       const draftRoleCodes = userRoleDrafts[accessUser.id] || [];
                       const draftEntityRoles = userEntityRoleDrafts[accessUser.id] || [];
-
-                      // Pre-compute summaries for the collapsed view
                       const allRoles = [
                         ...accessUser.roles.map(r => ({ ...r, type: 'global' })),
                         ...(accessUser.entity_roles || []).map(r => ({ ...r, type: 'context' }))
-                      ];
-
+                      ].filter((r) => String(r.role_code || '').toLowerCase() !== 'user');
                       const visibleRoles = allRoles.slice(0, 2);
                       const remainingCount = allRoles.length - 2;
 

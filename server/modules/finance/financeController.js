@@ -172,15 +172,33 @@ const isSuperAdminRequest = (req) => {
   return roles.some((role) => normalizeText(role).toLowerCase() === 'super_admin');
 };
 
-const normalizeActor = (req) => ({
-  id: req.user?.id,
-  userId: req.user?.id,
-  email: req.user?.email,
-  role: Array.isArray(req.user?.roles) ? req.user.roles[0] : null,
-  roles: Array.isArray(req.user?.roles) ? req.user.roles : [],
-  permissions: Array.isArray(req.user?.permissions) ? req.user.permissions : [],
-  isSuperAdmin: isSuperAdminRequest(req),
-});
+const normalizeActor = (req) => {
+  const roles = Array.isArray(req.user?.roles)
+    ? req.user.roles
+    : normalizeText(req.user?.roles)
+      ? [normalizeText(req.user?.roles)]
+      : normalizeText(req.user?.role)
+        ? [normalizeText(req.user?.role)]
+        : [];
+
+  const role = normalizeText(req.user?.role) || roles[0] || null;
+
+  const permissions = Array.isArray(req.user?.permissions)
+    ? req.user.permissions
+    : normalizeText(req.user?.permissions)
+      ? [normalizeText(req.user?.permissions)]
+      : [];
+
+  return {
+    id: req.user?.id,
+    userId: req.user?.id,
+    email: req.user?.email,
+    role,
+    roles,
+    permissions,
+    isSuperAdmin: isSuperAdminRequest(req),
+  };
+};
 
 const resolveFinanceLevel1QueueRole = (req) => {
   const normalizedRoles = Array.isArray(req.user?.roles)
@@ -825,8 +843,9 @@ const financeController = {
   async approveFinanceWorkflow(req, res) {
     try {
       const financeId = toPositiveInt(req.params.id);
-      const { decision, feedback } = req.body || {};
+      const { decision, feedback, stageRemark } = req.body || {};
       const normalizedDecision = normalizeText(decision).toLowerCase();
+      const normalizedStageRemark = normalizeText(stageRemark);
       const actor = normalizeActor(req);
 
       if (!financeId) {
@@ -852,18 +871,12 @@ const financeController = {
         finance.workflow_state?.currentStage || finance.workflow_stage
       ).toLowerCase();
       const isTerminalWorkflow = ['completed', 'rejected', 'archived'].includes(workflowStatus);
+      const canPersistStageRemark =
+        ['dof', 'principal', 'chairman'].includes(currentStage) &&
+        hasFinanceStagePermission(req, currentStage);
 
-      if (
-        normalizedDecision === 'approved'
-        && currentStage === 'principal'
-        && isEligibleForPrincipalDocument(finance)
-        && !finance?.principal_document?.file_path
-      ) {
-        return res.status(409).json({
-          status: 'error',
-          message: 'Principal annexure PDF is required before principal approval.',
-          code: 'FINANCE_PRINCIPAL_DOCUMENT_REQUIRED',
-        });
+      if (normalizedStageRemark && canPersistStageRemark) {
+        await financeModel.updateWorkflowStageRemark(financeId, currentStage, normalizedStageRemark);
       }
 
       if (actor.isSuperAdmin && normalizedDecision === 'returned' && isTerminalWorkflow) {
@@ -873,7 +886,14 @@ const financeController = {
             decision: 'returned',
             feedback,
             actor,
-            stageHint: normalizeText(finance.workflow_stage).toLowerCase() || 'principal',
+            stageHint:
+              normalizeText(finance.workflow_stage).toLowerCase() ||
+              normalizeText(
+                Array.isArray(finance.workflow_state?.flow)
+                  ? finance.workflow_state.flow[finance.workflow_state.flow.length - 1]
+                  : ''
+              ).toLowerCase() ||
+              'principal',
           }
         );
       } else {
@@ -977,7 +997,14 @@ const financeController = {
             decision: 'archived',
             feedback: normalizeText(req.body?.feedback) || null,
             actor,
-            stageHint: normalizeText(finance.workflow_stage).toLowerCase() || 'principal',
+            stageHint:
+              normalizeText(finance.workflow_stage).toLowerCase() ||
+              normalizeText(
+                Array.isArray(finance.workflow_state?.flow)
+                  ? finance.workflow_state.flow[finance.workflow_state.flow.length - 1]
+                  : ''
+              ).toLowerCase() ||
+              'principal',
           }
         );
 

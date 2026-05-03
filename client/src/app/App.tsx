@@ -1,6 +1,5 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Home from '../features/home/home';
 import Login from '../features/auth/login/login';
 import EventPage from '../features/events/components/EventPage';
 import Journalform from '../features/journals/journalform';
@@ -17,6 +16,7 @@ import {
   FinanceWorkflowRoute,
   ModuleWorkflowRoute,
   SuperAdminRoute,
+  ExpenditureApprovalRoute,
 } from '../shared/components/ProtectedRoute';
 
 import { MsalProvider } from '../shared/components/MsalProvider';
@@ -32,7 +32,8 @@ import Storybook from '../features/storybook/Storybook';
 import FinanceApproval from '../features/finance/financeapproval';
 
 import FinanceCard from '../features/user-dashboard/financecard/financecard';
-//import ExpenditureApproval from '../features/expenditure/expenditure';
+import ExpenditureApproval from '../features/expenditure/expenditureapproval';
+import ExpenditureDashboard from '../features/user-dashboard/expendituredashboard/expendituredashboard';
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
 import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
 import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
@@ -66,7 +67,6 @@ function App() {
                   {/* USER ROUTES */}
                   <Route path="/events" element={<ProtectedRoute><EventDashboard /></ProtectedRoute>} />
                   <Route path="/event/:eventId" element={<ProtectedRoute><EventPage /></ProtectedRoute>} />
-                  <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
                   <Route path="/project" element={<ProtectedRoute><Projectform /></ProtectedRoute>} />
                   <Route path="/project/:id" element={<ProtectedRoute><Projectform /></ProtectedRoute>} />
                   <Route path="/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
@@ -96,14 +96,17 @@ function App() {
                   <Route path="/budget/:id/edit" element={<ProtectedRoute><Budget /></ProtectedRoute>} />
 
                   {/* EXPENDITURE */}
-                  <Route path="/expenditure" element={<ProtectedRoute><UnderConstruction pageName="Expenditure" /></ProtectedRoute>} />
-                  {/*  <Route path="/expenditure/new" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
+                  {/* <Route path="/expenditure" element={<ProtectedRoute><UnderConstruction pageName="Expenditure" /></ProtectedRoute>} /> */}
+                  <Route path="/expenditurecard" element={<ProtectedRoute><ExpenditureDashboard /></ProtectedRoute>} />
+                   <Route path="/expenditure/new" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
                  <Route path="/expenditure/:id" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
                   <Route path="/expenditure/:id/edit" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />
-                  <Route path="/expenditure/approval" element={<ProtectedRoute><ExpenditureApproval /></ProtectedRoute>} />*/}
+                  <Route path="/expenditure/approval" element={<ExpenditureApprovalRoute><ExpenditureApproval /></ExpenditureApprovalRoute>} />
 
                   {/* ADMIN */}
                   <Route path="/admin-dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
+                  <Route path="/publication-dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
+                  <Route path="/project-dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
                   <Route path="/admin/journals" element={<AdminRoute><JournalManagement /></AdminRoute>} />
                   <Route path="/admin/form-management/project-options" element={<AdminRoute><ProjectFormOptions /></AdminRoute>} />
                   <Route path="/access-control" element={<SuperAdminRoute><AccessControlPage /></SuperAdminRoute>} />
@@ -120,7 +123,7 @@ function App() {
                   <Route path="/eventdashboard" element={<ProtectedRoute><EventDashboard /></ProtectedRoute>} />
                   <Route path="/event-entry" element={<ProtectedRoute><EventEntry /></ProtectedRoute>} />
                   <Route path="/storybook" element={<Storybook />} />
-                  <Route path="/" element={<Navigate to="/home" />} />
+                  <Route path="/" element={<Navigate to="/dashboard" />} />
 
                   {/* UNDER CONSTRUCTION */}
                   <Route path="/vehicle-booking" element={<ProtectedRoute><UnderConstruction pageName="Vehicle Booking" /></ProtectedRoute>} />
@@ -129,6 +132,8 @@ function App() {
                   <Route path="/kpi" element={<ProtectedRoute><UnderConstruction pageName="KPI Dashboard" /></ProtectedRoute>} />
                   <Route path="/task" element={<ProtectedRoute><UnderConstruction pageName="Task Management" /></ProtectedRoute>} />
                   <Route path="/reports" element={<ProtectedRoute><UnderConstruction pageName="Reports" /></ProtectedRoute>} />
+                  <Route path="/reports/finance" element={<ProtectedRoute><UnderConstruction pageName="Finance Reports" /></ProtectedRoute>} />
+                  <Route path="/reports/expenditure" element={<ProtectedRoute><UnderConstruction pageName="Expenditure Reports" /></ProtectedRoute>} />
                   <Route path="/fellowship" element={<ProtectedRoute><UnderConstruction pageName="Fellowship" /></ProtectedRoute>} />
                   <Route path="/patent" element={<ProtectedRoute><UnderConstruction pageName="Patent" /></ProtectedRoute>} />
 

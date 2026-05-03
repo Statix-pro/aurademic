@@ -959,75 +959,26 @@ select.adminbudget-control {
 }
 
 /* Keep your existing color classes - just add size tweaks */
-.adminbudget-stats-card.total {
-  color: #5d6b8a;
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.adminbudget-stats-card.total .adminbudget-stats-icon {
-  background: #0069ab;
-  color: #eef2f7;
-}
-
-.adminbudget-stats-card.returned {
-  color: #5d6b8a;
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.adminbudget-stats-card.returned .adminbudget-stats-icon {
-  background: #0069ab;
-  color: #eef2f7;
-}
-
-
-
-.adminbudget-stats-card.pending {
-  color: #5d6b8a;
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.adminbudget-stats-card.pending .adminbudget-stats-icon {
-  background: #0069ab;
-  color: #eef2f7;
-}
-
-
-
-.adminbudget-stats-card.rejected {
-  color: #5d6b8a;
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.adminbudget-stats-card.rejected .adminbudget-stats-icon {
-  background: #0069ab;
-  color: #eef2f7;
-}
-
-
-.adminbudget-stats-card.approved {
-  color: #5d6b8a;
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.adminbudget-stats-card.approved .adminbudget-stats-icon {
-  background: #0069ab;
-  color: #eef2f7;
-}
-
+.adminbudget-stats-card.total,
+.adminbudget-stats-card.returned,
+.adminbudget-stats-card.pending,
+.adminbudget-stats-card.rejected,
+.adminbudget-stats-card.approved,
 .adminbudget-stats-card.archived {
-  color: #5d6b8a;
+  background: #ffffff !important;
+  color: #475569 !important; /* Unified slate text color */
   font-weight: 500;
   font-size: 14px;
 }
 
+.adminbudget-stats-card.total .adminbudget-stats-icon,
+.adminbudget-stats-card.returned .adminbudget-stats-icon,
+.adminbudget-stats-card.pending .adminbudget-stats-icon,
+.adminbudget-stats-card.rejected .adminbudget-stats-icon,
+.adminbudget-stats-card.approved .adminbudget-stats-icon,
 .adminbudget-stats-card.archived .adminbudget-stats-icon {
-  background: #0069ab;
-  color: #eef2f7;
+  background: #0069ab !important;
+  color: #eef2f7 !important;
 }
 
 
