@@ -258,6 +258,7 @@ const isDomainValidationError = (message = '') =>
   [
     'not found',
     'not yet approved',
+    'not approved',
     'exceeds',
     'required',
     'Invalid request type',
@@ -518,11 +519,58 @@ const expenditureController = {
 
       return res.status(201).json({
         status: 'success',
-        message: 'Payee saved successfully',
+        message: 'Payee request submitted for DoF approval',
         data: payee,
       });
     } catch (err) {
       return handleError(res, err, 'Error creating payee');
+    }
+  },
+
+  async listPendingPayees(req, res) {
+    try {
+      const { search = '', limit = 20, offset = 0 } = req.query;
+      const payees = await expenditureModel.listPendingPayees({
+        search,
+        limit: Number(limit) || 20,
+        offset: Number(offset) || 0,
+      });
+      return res.json({ status: 'success', data: payees });
+    } catch (err) {
+      return handleError(res, err, 'Error listing pending payees');
+    }
+  },
+
+  async approvePayee(req, res) {
+    try {
+      const payeeId = toPositiveInt(req.params.id);
+      const userId = toPositiveInt(req.user?.id);
+      const decision = normalizeText(req.body?.decision).toLowerCase();
+      const rejectionReason = normalizeText(req.body?.rejection_reason);
+
+      if (!payeeId) return sendError(res, 400, 'Invalid payee ID');
+      if (!['approved', 'rejected'].includes(decision)) {
+        return sendError(res, 400, 'decision must be approved or rejected');
+      }
+      if (decision === 'rejected' && !rejectionReason) {
+        return sendError(res, 400, 'rejection_reason is required when rejecting a payee');
+      }
+
+      const updatedPayee = await expenditureModel.approveOrRejectPayee(
+        payeeId,
+        {
+          decision,
+          actorUserId: userId,
+          rejectionReason,
+        },
+      );
+      return res.json({
+        status: 'success',
+        message: decision === 'approved' ? 'Payee approved successfully' : 'Payee rejected successfully',
+        data: updatedPayee,
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error approving/rejecting payee');
     }
   },
 

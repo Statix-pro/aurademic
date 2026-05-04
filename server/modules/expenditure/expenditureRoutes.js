@@ -65,8 +65,25 @@ const expenditureUpload = multer({
 const EXPENDITURE_WORKFLOW_PERMISSIONS = [
   'expenditure.workflow.*',
 ];
+const EXPENDITURE_DOF_PERMISSIONS = ['expenditure.workflow.dof'];
 
 const canAccessExpenditureWorkflow = permissionMiddleware(EXPENDITURE_WORKFLOW_PERMISSIONS);
+const canAccessExpenditureDofQueue = permissionMiddleware(EXPENDITURE_DOF_PERMISSIONS);
+const canAccessPayeeApprovalQueue = (req, res, next) => {
+  const roles = Array.isArray(req.user?.roles)
+    ? req.user.roles
+    : (req.user?.roles ? [req.user.roles] : (req.user?.role ? [req.user.role] : []));
+  const normalizedRoles = roles.map((role) => String(role || '').trim().toLowerCase());
+  const hasQueueRole = normalizedRoles.some((role) =>
+    ['dof', 'admin', 'super_admin'].includes(role)
+  );
+
+  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin || req.user?.is_admin || req.user?.isAdmin) || hasQueueRole) {
+    return next();
+  }
+
+  return canAccessExpenditureDofQueue(req, res, next);
+};
 const canAccessExpenditureWorkflowForAdmins = (req, res, next) => {
   const roles = Array.isArray(req.user?.roles)
     ? req.user.roles
@@ -131,6 +148,8 @@ router.get('/advance-summary', expenditureController.getAdvanceSummary);
 
 router.get('/payees', expenditureController.listPayees);
 router.post('/payees', expenditureController.createPayee);
+router.get('/payees/pending', canAccessPayeeApprovalQueue, expenditureController.listPendingPayees);
+router.patch('/payees/:id/approval', canAccessPayeeApprovalQueue, expenditureController.approvePayee);
 router.get('/payees/:id', expenditureController.getPayee);
 
 router.get('/', expenditureController.listExpenditures);

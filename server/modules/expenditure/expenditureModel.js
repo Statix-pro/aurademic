@@ -903,6 +903,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
            updated_at
          FROM expenditure_payees
          WHERE is_active = 1
+           AND LOWER(TRIM(COALESCE(approval_status, 'approved'))) = 'approved'
            AND UPPER(TRIM(COALESCE(ifsc, ''))) = ?
            AND ${accountCompareSql} = ?
          ORDER BY updated_at DESC, id DESC
@@ -934,6 +935,10 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
            epr.created_at,
            epr.updated_at
          FROM expenditure_payee_rows epr
+         INNER JOIN expenditure_payees ep
+           ON ep.id = epr.payee_id
+          AND ep.is_active = 1
+          AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = 'approved'
          INNER JOIN (
            SELECT MAX(id) AS id
              FROM expenditure_payee_rows
@@ -980,6 +985,10 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
        epr.created_at,
        epr.updated_at
      FROM expenditure_payee_rows epr
+     INNER JOIN expenditure_payees ep
+       ON ep.id = epr.payee_id
+      AND ep.is_active = 1
+      AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = 'approved'
      INNER JOIN (
        SELECT MAX(id) AS id
          FROM expenditure_payee_rows
@@ -1009,6 +1018,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
   const [rows] = await db.execute(
     `SELECT * FROM expenditure_payees ep
       WHERE ep.is_active = 1
+        AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = 'approved'
         AND ${payeeTermClauses}
       ORDER BY ep.payee_name ASC LIMIT ${limitNum} OFFSET ${offsetNum}`,
     [...searchTerms.map((term) => `%${term}%`)],
@@ -1021,6 +1031,104 @@ export async function getPayeeById(id) {
     'SELECT * FROM expenditure_payees WHERE id = ? LIMIT 1', [id],
   );
   return normalizePayeeRecord(rows[0] || null);
+}
+
+export async function listPendingPayees({ search = '', limit = 20, offset = 0 } = {}) {
+  const q = normalizeText(search);
+  const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
+  const offsetNum = Math.max(Number(offset) || 0, 0);
+  const terms = q
+    .split(/\s+/)
+    .map((term) => normalizeText(term).toLowerCase())
+    .filter(Boolean)
+    .slice(0, 8);
+  const termSql = terms.length
+    ? terms.map(() => `
+      LOWER(CONCAT_WS(' ',
+        COALESCE(ep.payee_name, ''),
+        COALESCE(ep.account_no, ''),
+        COALESCE(ep.ifsc, ''),
+        COALESCE(ep.bank_name, ''),
+        COALESCE(ep.branch_name, '')
+      )) LIKE ?`).join(' AND ')
+    : '1 = 1';
+
+  const [rows] = await db.execute(
+    `SELECT ep.*
+     FROM expenditure_payees ep
+     WHERE ep.is_active = 1
+       AND LOWER(TRIM(COALESCE(ep.approval_status, 'pending'))) = 'pending'
+       AND ${termSql}
+     ORDER BY ep.updated_at DESC, ep.id DESC
+     LIMIT ${limitNum} OFFSET ${offsetNum}`,
+    terms.map((term) => `%${term}%`),
+  );
+  return rows.map(normalizePayeeRecord);
+}
+
+export async function approveOrRejectPayee(
+  payeeId,
+  { decision = 'approved', actorUserId = null, rejectionReason = null } = {},
+  conn = db,
+) {
+  const id = toPositiveInt(payeeId);
+  if (!id) throw new Error('Invalid payee ID');
+  const normalizedDecision = normalizeText(decision).toLowerCase();
+  if (!['approved', 'rejected'].includes(normalizedDecision)) {
+    throw new Error('Decision must be approved or rejected');
+  }
+
+  const [existingRows] = await conn.execute(
+    `SELECT id, approval_status
+       FROM expenditure_payees
+      WHERE id = ?
+      LIMIT 1`,
+    [id],
+  );
+  if (!existingRows.length) throw new Error('Payee not found');
+
+  const currentStatus = normalizeText(existingRows[0].approval_status).toLowerCase() || 'pending';
+  if (currentStatus !== 'pending') {
+    throw new Error(`Only pending payees can be ${normalizedDecision}`);
+  }
+
+  const actorId = toPositiveInt(actorUserId);
+  await conn.execute(
+    `UPDATE expenditure_payees
+        SET approval_status = ?,
+            approved_by = ?,
+            approved_at = CURRENT_TIMESTAMP,
+            rejection_reason = ?,
+            is_active = ?
+      WHERE id = ?`,
+    [
+      normalizedDecision,
+      actorId,
+      normalizedDecision === 'rejected' ? normalizeText(rejectionReason) || null : null,
+      normalizedDecision === 'approved' ? 1 : 0,
+      id,
+    ],
+  );
+
+  return getPayeeById(id);
+}
+
+export async function assertPayeeApproved(payeeId, conn = db) {
+  const id = toPositiveInt(payeeId);
+  if (!id) throw new Error('Invalid payee ID');
+
+  const [rows] = await conn.execute(
+    `SELECT id
+       FROM expenditure_payees
+      WHERE id = ?
+        AND is_active = 1
+        AND LOWER(TRIM(COALESCE(approval_status, 'pending'))) = 'approved'
+      LIMIT 1`,
+    [id],
+  );
+  if (!rows.length) {
+    throw new Error('Selected payee is not approved yet. Please use an approved payee.');
+  }
 }
 
 export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
@@ -1288,6 +1396,12 @@ export async function upsertPayee(payeeData, userId, conn = db) {
               gstin        = COALESCE(?, gstin),
               tds_details  = COALESCE(?, tds_details),
               tds_section  = COALESCE(?, tds_section),
+              approval_status = 'pending',
+              requested_by = ?,
+              requested_at = CURRENT_TIMESTAMP,
+              approved_by = NULL,
+              approved_at = NULL,
+              rejection_reason = NULL,
               is_active    = 1,
               updated_at   = CURRENT_TIMESTAMP
         WHERE id = ?`,
@@ -1305,6 +1419,7 @@ export async function upsertPayee(payeeData, userId, conn = db) {
         payeeData.gstin        || null,
         payeeData.tds_details  || null,
         payeeData.tds_section  || null,
+        toPositiveInt(userId),
         existing[0].id,
       ],
     );
@@ -1316,8 +1431,9 @@ export async function upsertPayee(payeeData, userId, conn = db) {
        (payee_name, account_name, account_no, account_type,
         bank_name, branch_name, ifsc, beneficiary_type,
         beneficiary_org, organization_type, msme,
-        pan_number, gstin, tds_details, tds_section, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        pan_number, gstin, tds_details, tds_section, created_by,
+        approval_status, requested_by, requested_at, approved_by, approved_at, rejection_reason)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, NULL, NULL, NULL)`,
     [
       canonicalPayeeName,
       canonicalPayeeName || null,
@@ -1335,6 +1451,8 @@ export async function upsertPayee(payeeData, userId, conn = db) {
       payeeData.tds_details || null,
       payeeData.tds_section || null,
       userId || null,
+      'pending',
+      toPositiveInt(userId),
     ],
   );
   return result.insertId;
@@ -1555,20 +1673,10 @@ async function createExpenditureLegacy(data, userId) {
     // ── 2. Resolve payee ────────────────────────────────────────────────────
     let payeeId = toPositiveInt(data.payee_id);
     if (!payeeId && data.payment_details) {
-      payeeId = await upsertPayee(
-        {
-          payee_name:   data.payment_details.payee_name   || data.purpose || 'Unknown',
-          account_no:   data.payment_details.account_no,
-          ifsc:         data.payment_details.ifsc,
-          bank_name:    data.payment_details.bank_name,
-          branch_name:  data.payment_details.branch_name  || '',
-          account_name: data.payment_details.account_name || null,
-          account_type: data.payment_details.account_type || null,
-          pan_number:   data.payment_details.pan_number   || null,
-        },
-        userId,
-        conn,
-      );
+      throw new Error('New payees must be approved by DoF before they can be used in expenditure.');
+    }
+    if (payeeId) {
+      await assertPayeeApproved(payeeId, conn);
     }
 
     // ── 3. Pre-advance (first time = 0, subsequent = prior total) ──────────
@@ -1838,27 +1946,10 @@ async function insertPayeeRows(conn, expenditureId, rows = [], userId = null) {
 
     let payeeId = existingPayeeId || null;
     if (!payeeId && accountNo && ifsc) {
-      payeeId = await upsertPayee(
-        {
-          payee_name: payeeName,
-          bank_name: bankName,
-          account_no: accountNo,
-          ifsc,
-          branch_name: branchName,
-          account_name: accountName,
-          pan_number: panNumber,
-          account_type: accountType,
-          beneficiary_type: beneficiaryType,
-          beneficiary_org: beneficiaryOrg,
-          organization_type: organizationType,
-          msme,
-          gstin,
-          tds_details: tdsDetails,
-          tds_section: tdsSection,
-        },
-        userId,
-        conn,
-      );
+      throw new Error('Payee must be selected from approved suggestions. New payees require DoF approval.');
+    }
+    if (payeeId) {
+      await assertPayeeApproved(payeeId, conn);
     }
 
     await conn.execute(

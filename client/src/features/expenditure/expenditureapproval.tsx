@@ -73,6 +73,9 @@ interface PayeeLookupResult {
   gstin?: string | null;
   tds_details?: string | null;
   tds_section?: string | null;
+  approval_status?: string | null;
+  rejection_reason?: string | null;
+  requested_at?: string | null;
 }
 type PayeeLookupField = 'payeeName' | 'accountNo' | 'bankName' | 'ifsc' | 'branchName';
 interface FinanceRequestContext {
@@ -2399,6 +2402,7 @@ const workflowRowRefFromState = (() => {
 
     loadTagOptions();
   }, []);
+
 
   const addAdvanceRow = () => setAdvanceRows([...advanceRows, createAdvanceRow()]);
   const removeAdvanceRow = (id: string) => setAdvanceRows(advanceRows.filter(r => r.id !== id));
@@ -5104,63 +5108,17 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         tds_section: payee.tdsSection || null,
       }) as { status: string; message?: string; data?: PayeeLookupResult };
 
-      if (response.status !== 'success' || !response.data) {
-        showAlert(response.message || 'Unable to save payee', 'error');
+      if (response.status !== 'success') {
+        showAlert(response.message || 'Unable to send payee for approval', 'error');
         return;
       }
 
-      const savedPayee = response.data;
-      const savedCanonicalPayeeName = resolveCanonicalPayeeName(
-        savedPayee.payee_name,
-        savedPayee.account_name,
-      );
-      const nextPayeeRow: PayeeRow = {
-        ...payee,
-        payeeId: savedPayee.id ?? payee.payeeId ?? null,
-        payeeName: savedCanonicalPayeeName || canonicalPayeeName,
-        accountName: savedCanonicalPayeeName || canonicalPayeeName,
-        panNumber: String(savedPayee.pan_number || payee.panNumber || '').trim(),
-        accountNo: String(savedPayee.account_no || payee.accountNo).trim(),
-        accountType: String(savedPayee.account_type || payee.accountType || '').trim(),
-        bankName: String(savedPayee.bank_name || payee.bankName).trim(),
-        branchName: String(savedPayee.branch_name || payee.branchName).trim(),
-        ifsc: String(savedPayee.ifsc || payee.ifsc).trim().toUpperCase(),
-        beneficiaryType: String(savedPayee.beneficiary_type || payee.beneficiaryType || 'individual').trim().toLowerCase() === 'organization'
-          ? 'organization'
-          : 'individual',
-        beneficiaryOrg: resolveCanonicalBeneficiaryOrg(
-          savedPayee.beneficiary_org,
-          savedPayee.payee_name || payee.payeeName,
-        ),
-        organizationType: String(savedPayee.organization_type || payee.organizationType || '').trim(),
-        msme: String(savedPayee.msme || payee.msme || '').trim(),
-        gstin: String(savedPayee.gstin || payee.gstin || '').trim(),
-        tdsDetails: String(savedPayee.tds_details || payee.tdsDetails || '').trim(),
-        tdsSection: String(savedPayee.tds_section || payee.tdsSection || '').trim(),
-      };
-
-      setPayeeRows((prev) => {
-        const hasOnlyEmptyStarterRow = prev.length === 1
-          && !prev[0]?.payeeName
-          && !prev[0]?.accountNo
-          && !prev[0]?.bankName
-          && !prev[0]?.ifsc
-          && !prev[0]?.branchName
-          && !prev[0]?.amount
-          && !prev[0]?.mode;
-
-        if (hasOnlyEmptyStarterRow) {
-          return [{ ...prev[0], ...nextPayeeRow, id: prev[0].id }];
-        }
-
-        return [...prev, nextPayeeRow];
-      });
-
       setShowAddPayeeModal(false);
-      showAlert('Payee saved successfully', 'success');
+      showAlert(response.message || 'Payee request submitted for DoF approval.', 'success');
+
     } catch (error) {
       console.error('Failed to save payee:', error);
-      showAlert('Unable to save payee right now', 'error');
+      showAlert('Unable to send payee for approval right now', 'error');
     }
   };
 
