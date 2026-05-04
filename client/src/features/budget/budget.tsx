@@ -287,13 +287,24 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Others'
   ],
   'Stationery': [
+    'Adhesive Gum',
+    'Answer Booklet',
+    'Chalk Box',
+    'Clips/ Pins',
+    'Cloth Covers',
+    'Duster',
     'Files/ Folders',
+    'Grade Sheet',
+    'Highlighter',
+    'Marker Pen',
+    'Office Covers',
     'Pen/ Pencil/ Eraser',
+    'Plastic Tray',
     'Print Sheets',
+    'Scissor/ Knife',
     'Seal/ Stamp Pad',
     'Stapler/ Punching Machine',
-    'Grade Sheet',
-    'Answer Booklet',
+    'Sticky Notes',
     'Others'
   ],
   'Postal Expenses': [
@@ -663,7 +674,7 @@ const guidelineDeptData: Record<Exclude<GuidelineSectionId, "skill" | "events" |
   assoc: ["Association Function", "Alumni Meeting", "Alumni Interaction", "Parents Meeting"],
   outreach: ["School Visit", "Awareness Program", "Campaigns", "Crash Course", "Summer Internship", "Mini Marathon", "Education Fair", "Rally"],
   academics: ["DAB Meeting", "BoS Meeting", "Printing", "Awards & Recognition"],
-  office: ["Stationary", "Test Notes", "Printing"],
+  office: ["Stationery", "Test Notes", "Printing"],
   student: ["Skill Development Training", "Aptitude Training", "Higher Education Coaching", "Competitive Exam Coaching", "Placement Training", "Placement Drives", "One Credit Course", "Value Added Course", "Certification Programs", "Exposure Visit", "Language Proficiency Courses"],
 };
 
@@ -1384,6 +1395,9 @@ const Budget: React.FC = () => {
         throw new Error(result.message || 'Submission failed on server');
       }
 
+      const isDirectDoFApproval =
+        !isEditMode && String(result.data?.currentStage || '').toLowerCase() === 'completed';
+
       showAlert(
         isPrivilegedReviewer
           ? 'Budget updated successfully!'
@@ -1391,7 +1405,7 @@ const Budget: React.FC = () => {
             ? `Budget updated successfully!`
             : (
               <>
-                Budget submitted successfully!
+                {isDirectDoFApproval ? 'Budget approved successfully!' : 'Budget submitted successfully!'}
                 <br />
                 Reference No.: <strong>{result.data.proposalRef}</strong>
               </>

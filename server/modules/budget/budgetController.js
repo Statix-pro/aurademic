@@ -359,6 +359,8 @@ export async function create(req, res) {
       budget_tag: normalizeText(payload.budget_tag),
       employee_id: payload.employee_id || userId,
       department: resolvedDepartment,
+    }, {
+      submitterRole: resolveAccessRoleFromPermissions(req),
     });
 
     return res.status(201).json({
@@ -370,7 +372,9 @@ export async function create(req, res) {
         fiscalYear: result.fyYear,
         approvalFlow: result.approvalFlow,
         initialStage: result.initialStage,
+        currentStage: result.currentStage,
         requiresLevel1: result.requiresLevel1,
+        isDirectDoFSubmission: result.isDirectDoFSubmission,
         departmentId: result.departmentId,
         beneficiaryEntityId: result.beneficiaryEntityId,
       },

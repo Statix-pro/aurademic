@@ -397,6 +397,19 @@ const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {
   Seminar: ['National', 'International'],
   Conference: ['National', 'International'],
   'Guest Lecture': ['Industry', 'Academic'],
+  Stationery: [
+    'Adhesive Gum',
+    'Chalk Box',
+    'Clips/ Pins',
+    'Cloth Covers',
+    'Duster',
+    'Highlighter',
+    'Marker Pen',
+    'Office Covers',
+    'Plastic Tray',
+    'Scissor/ Knife',
+    'Sticky Notes'
+  ],
 };
 
 // 2. Specific Budget Sub-Heads (Head-specific mapping)
@@ -569,13 +582,24 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   ],
 
   'Stationery': [
+    'Adhesive Gum',
+    'Answer Booklet',
+    'Chalk Box',
+    'Clips/ Pins',
+    'Cloth Covers',
+    'Duster',
     'Files/ Folders',
+    'Grade Sheet',
+    'Highlighter',
+    'Marker Pen',
+    'Office Covers',
     'Pen/ Pencil/ Eraser',
+    'Plastic Tray',
     'Print Sheets',
+    'Scissor/ Knife',
     'Seal/ Stamp Pad',
     'Stapler/ Punching Machine',
-    'Grade Sheet',
-    'Answer Booklet',
+    'Sticky Notes',
     'Others'
   ],
 
@@ -1237,6 +1261,7 @@ const FinanceApproval: React.FC = () => {
   const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
   const [annexureType, setAnnexureType] = useState<string>('');
   const [annexureFiles, setAnnexureFiles] = useState<AnnexureFileRow[]>([]);
+  const [eventSubHeadError, setEventSubHeadError] = useState<string>('');
   const annexureFileInputRef = useRef<HTMLInputElement>(null);
   const annexureFilesRef = useRef<AnnexureFileRow[]>([]);
 
@@ -2086,6 +2111,11 @@ const FinanceApproval: React.FC = () => {
       }
       if (!hasFilledText(primaryHead)) {
         showAlert('Please select Head of Accounts.', 'warning');
+        return;
+      }
+      if (extraDropdownVisible && !hasFilledText(eventSubHead)) {
+        setEventSubHeadError('Please select Sub Head.');
+        showAlert('Please select Sub Head.', 'warning');
         return;
       }
       if (showUnplannedBudget) {
@@ -3698,6 +3728,7 @@ const FinanceApproval: React.FC = () => {
                               const selected = option as OptionType | null;
                               setPrimaryHead(selected?.value ? String(selected.value) : '');
                               setEventSubHead('');
+                              setEventSubHeadError('');
                             }}
                             placeholder="Select Primary Head"
                           />
@@ -3712,8 +3743,10 @@ const FinanceApproval: React.FC = () => {
                             onChange={(option) => {
                               const selected = option as OptionType | null;
                               setEventSubHead(selected?.value ? String(selected.value) : '');
+                              setEventSubHeadError('');
                             }}
                             placeholder="Select Sub Head"
+                            error={eventSubHeadError}
                           />
                         </div>
 
@@ -3745,6 +3778,7 @@ const FinanceApproval: React.FC = () => {
                               const selected = option as OptionType | null;
                               setPrimaryHead(selected?.value ? String(selected.value) : '');
                               setEventSubHead('');
+                              setEventSubHeadError('');
                             }}
                             placeholder="Select Primary Head"
                           />
