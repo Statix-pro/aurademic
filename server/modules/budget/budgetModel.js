@@ -499,7 +499,7 @@ export async function resolveApprovalFlow(beneficiaryType, entityTypeCode = null
 }
 
 
-export async function create(payload) {
+export async function create(payload, options = {}) {
   return withTransaction(async (conn) => {
     const calculatedTotal = (payload.lines || []).reduce((sum, line) => {
       const amount = Number(line.unit_amount) || 0;
@@ -567,7 +567,11 @@ export async function create(payload) {
       const flow = await resolveApprovalFlow(payload.beneficiary_type, entityTypeCode, conn, {
         budgetTag: payload.budget_tag,
       });
+      const normalizedSubmitterRole = normalizeText(options?.submitterRole).toLowerCase();
+      const isDirectDoFSubmission = normalizedSubmitterRole === 'dof';
       const initialStage = flow.requiresLevel1 ? 'level1' : flow.requiresDof ? 'dof' : 'principal';
+      const createdStatus = isDirectDoFSubmission ? 'completed' : 'submitted';
+      const createdCurrentStage = isDirectDoFSubmission ? 'completed' : initialStage;
       const approvalFlowString = formatApprovalFlowString(flow);
       const level1Route = resolveLevel1Route({
         ...payload,
@@ -613,7 +617,8 @@ export async function create(payload) {
         calculatedTotal,
         calculatedTotal,
         approvalFlowString,
-        initialStage,
+        createdStatus,
+        createdCurrentStage,
       ];
       if (hasApplicantNameColumn) {
         createParams.push(payload.applicant_name || null);
@@ -644,7 +649,7 @@ export async function create(payload) {
             status,
             current_stage${applicantNameInsertColumn}${budgetTagInsertColumn}${budgetWindowInsertColumn},
             created_at
-          ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?${applicantNameInsertValue}${budgetTagInsertValue}${budgetWindowInsertValue}, NOW())`,
+          ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${applicantNameInsertValue}${budgetTagInsertValue}${budgetWindowInsertValue}, NOW())`,
         createParams
       );
 
@@ -672,6 +677,33 @@ export async function create(payload) {
         }
       }
 
+      if (isDirectDoFSubmission) {
+        const approverUserId = Number.isInteger(Number(payload.user_id))
+          ? Number(payload.user_id)
+          : Number.isInteger(Number(payload.employee_id))
+            ? Number(payload.employee_id)
+            : 0;
+        const approverEmail = normalizeText(payload.user_email) || '';
+
+        await conn.execute(
+          `INSERT INTO budget_proposal_approvals(
+              budget_proposal_id, role, approver_user_id, approver_email,
+              decision, feedback, allows_edit, decided_at
+            ) VALUES(?, 'dof', ?, ?, 'approved', 'Directly approved by DoF on submission', 0, NOW())`,
+          [proposalId, approverUserId, approverEmail]
+        );
+
+        if (flow.requiresPrincipal) {
+          await conn.execute(
+            `INSERT INTO budget_proposal_approvals(
+                budget_proposal_id, role, approver_user_id, approver_email,
+                decision, feedback, allows_edit, decided_at
+              ) VALUES(?, 'principal', ?, ?, 'approved', 'Auto-approved after DoF clearance', 0, NOW())`,
+            [proposalId, approverUserId, 'system-auto@ksrct.ac.in']
+          );
+        }
+      }
+
       return {
         proposalId,
         proposalRef,
@@ -681,6 +713,9 @@ export async function create(payload) {
         approvalFlow: approvalFlowString,
         departmentId,
         beneficiaryEntityId,
+        status: createdStatus,
+        currentStage: createdCurrentStage,
+        isDirectDoFSubmission,
         level1RouteType: level1Route.routeType,
         level1AssigneeEmail: level1EntityAssignee?.email || null,
         level1AssignmentStatus,
