@@ -365,6 +365,7 @@ const financeController = {
             moduleMeta: {
               trigger: 'create_finance_request',
               amountBand,
+              beneficiaryType: normalizeText(data.beneficiary_type) || null,
               financeMeta,
             },
           },
@@ -513,6 +514,7 @@ const financeController = {
           moduleMeta: {
             trigger: 'applicant_resubmit',
             amountBand: Number(finance.total_budget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+            beneficiaryType: normalizeText(finance.beneficiary_type) || null,
             financeMeta,
           },
         },

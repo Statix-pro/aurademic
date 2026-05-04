@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Briefcase, CheckCircle2, Clock, XCircle, Eye, Info, Edit2, Archive, Trash2, FileText, Upload, Download ,RotateCcw } from 'lucide-react';
+import { Briefcase, CheckCircle2, Clock, XCircle, Eye, Info, Edit2, Archive, Trash2, FileText, Upload, Download ,RotateCcw, CreditCard } from 'lucide-react';
+import PendingPayeeApprovals from './PendingPayeeApprovals';
 import { useNavigate } from 'react-router-dom';
 import authenticityUtility from '../../utils/authenticityUtility';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -421,6 +422,16 @@ interface WorkflowApprovalPageProps {
   config: WorkflowApprovalModuleConfig;
 }
 
+interface PendingPayeeRecord {
+  id: number;
+  payee_name?: string;
+  account_name?: string | null;
+  account_no?: string;
+  ifsc?: string;
+  bank_name?: string;
+  branch_name?: string;
+}
+
 interface WorkflowStageTab {
   key: string;
   stage: string;
@@ -456,6 +467,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'total' | 'pending' | 'approved' | 'returned' | 'rejected' | 'archived'>('pending');
+  const [viewMode, setViewMode] = useState<'workflow' | 'payees'>('workflow');
   const [actingRecordId, setActingRecordId] = useState<number | string | null>(null);
   const [logPopupOpen, setLogPopupOpen] = useState(false);
   const [logEntries, setLogEntries] = useState<WorkflowTimelineItem[]>([]);
@@ -486,6 +498,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [deleteRef, setDeleteRef] = useState<string>('');
   const [deleteCountdown, setDeleteCountdown] = useState<number>(5);
   const [proposalTypeFilter, setProposalTypeFilter] = useState<'all' | 'advance' | 'expenditure' | 'settlement'>('all');
+  const [pendingPayees, setPendingPayees] = useState<PendingPayeeRecord[]>([]);
+  const [pendingPayeesLoading, setPendingPayeesLoading] = useState<boolean>(false);
+  const [pendingPayeeActingId, setPendingPayeeActingId] = useState<number | null>(null);
 
   const closeAlert = useCallback(() => {
     setAlertConfig((prev) => ({
@@ -1068,8 +1083,15 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     if (token.includes('archived') || token.includes('archive')) return 'archived';
 
-    // Stage-owned decisions must take precedence in stage tabs (especially chairman),
-    // so stale historical decisions from earlier stages do not pollute KPI cards.
+    if (currentStage && activeStageKey && currentStage === activeStageKey) {
+      return 'pending';
+    }
+
+    if (workflowDecision === 'resubmitted') {
+      return 'pending';
+    }
+
+    // Stage-owned decisions should drive KPIs for historical actions at this stage.
     if (stageDecision.includes('rejected')) return 'rejected';
     if (stageDecision.includes('returned') || stageDecision.includes('return')) return 'returned';
     if (stageDecision.includes('approved')) return 'approved';
@@ -1077,10 +1099,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     if (!activeStageKey) {
       if (token.includes('rejected') || workflowDecision === 'rejected') return 'rejected';
       if (token.includes('returned') || token.includes('return') || workflowDecision === 'returned') return 'returned';
-    }
-
-    if (currentStage && activeStageKey && currentStage === activeStageKey) {
-      return 'pending';
     }
 
     // For requests actively in-progress, treat as pending to prevent stale
@@ -1096,8 +1114,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       }
     }
 
-    if (workflowDecision === 'resubmitted') return 'pending';
-
     if (
       activeStageKey &&
       pendingEntryStatusByStage[activeStageKey]?.includes(token) &&
@@ -1110,7 +1126,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     if (token === 'approved' || token === 'principal_approved' || token === 'chairman_approved') return 'approved';
 
-    if (token.includes('approved') && currentStage) return 'pending';
+    if (token.includes('approved') && currentStage) {
+      if (currentStage === activeStageKey) {
+        return 'pending';
+      }
+
+      return isApprovedForCurrentStage(record) ? 'approved' : 'pending';
+    }
 
     if (token.includes('approved')) return 'approved';
 
@@ -1342,6 +1364,65 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   useEffect(() => {
     setPage(1);
   }, [activeStage, fiscalYear, beneficiaryFilter, searchTerm, secondaryFilter]);
+
+  const showExpenditurePayeePanel = useMemo(() => {
+    return config.moduleKey === 'expenditure' && (String(activeStage || '').toLowerCase() === 'dof' || isSuperAdminView);
+  }, [activeStage, config.moduleKey, isSuperAdminView]);
+
+  const loadPendingPayees = useCallback(async () => {
+    if (!showExpenditurePayeePanel) return;
+    setPendingPayeesLoading(true);
+    try {
+      const response = await authenticityUtility.get(`${config.apiBasePath}/payees/pending`, {
+        params: { limit: 100 },
+      }) as { status?: string; data?: PendingPayeeRecord[] };
+
+      if (response?.status === 'success') {
+        setPendingPayees(Array.isArray(response.data) ? response.data : []);
+      } else {
+        setPendingPayees([]);
+      }
+    } catch {
+      setPendingPayees([]);
+    } finally {
+      setPendingPayeesLoading(false);
+    }
+  }, [config.apiBasePath, showExpenditurePayeePanel]);
+
+  useEffect(() => {
+    loadPendingPayees().catch(() => {});
+  }, [loadPendingPayees]);
+
+  const onPayeeDecision = useCallback(async (payeeId: number, decision: 'approved' | 'rejected') => {
+    let rejectionReason = '';
+    if (decision === 'rejected') {
+      rejectionReason = window.prompt('Enter rejection reason')?.trim() || '';
+      if (!rejectionReason) {
+        showAlert('Rejection reason is required.', 'warning');
+        return;
+      }
+    }
+
+    setPendingPayeeActingId(payeeId);
+    try {
+      const response = await authenticityUtility.patch(`${config.apiBasePath}/payees/${payeeId}/approval`, {
+        decision,
+        rejection_reason: rejectionReason || null,
+      }) as { status?: string; message?: string };
+
+      if (response?.status === 'success') {
+        setPendingPayees((prev) => prev.filter((row) => Number(row.id) !== Number(payeeId)));
+        showAlert(response.message || `Payee ${decision} successfully.`, 'success');
+        return;
+      }
+
+      showAlert(response?.message || 'Unable to update payee status.', 'error');
+    } catch (error: any) {
+      showAlert(error?.response?.data?.message || error?.message || 'Unable to update payee status.', 'error');
+    } finally {
+      setPendingPayeeActingId(null);
+    }
+  }, [config.apiBasePath, showAlert]);
 
   const performApproval = useCallback(async (recordId: number | string) => {
     const record = rows.find((r) => getRecordId(r) === recordId);
@@ -1595,6 +1676,8 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const getDofPrincipalIndicator = useCallback((record: Record<string, any>) => {
     if (config.moduleKey !== 'finance') return null;
     if (String(activeStage || '').toLowerCase() !== 'dof') return null;
+    const statusCategory = resolveStatusCategory(record);
+    if (statusCategory === 'returned' || statusCategory === 'rejected') return null;
 
     const currentStage = String(getRecordCurrentStage(record) || '').toLowerCase();
     const status = String(record.workflow_status || record.status || '').toLowerCase();
@@ -1614,7 +1697,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         ? 'fw-principal-indicator fw-principal-indicator--accepted'
         : 'fw-principal-indicator fw-principal-indicator--pending',
     };
-  }, [activeStage, config.moduleKey, getRecordCurrentStage]);
+  }, [activeStage, config.moduleKey, getRecordCurrentStage, resolveStatusCategory]);
 
   function resolveFinanceLevel1Role(record: Record<string, any>): 'hod' | 'coordinator' {
     const routeType = String(record.level1_route_type || record.level1RouteType || '').trim().toLowerCase();
@@ -1977,7 +2060,30 @@ const proposalFilteredRows = useMemo(() => {
       <div className="fw-container">
         <div className="fw-card">
           <div className="fw-header">
-            <h5 className="fw-title">{config.title}</h5>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+              <h5 className="fw-title" style={{ margin: 0 }}>{config.title}</h5>
+              {showExpenditurePayeePanel && (
+                <div className="fw-view-tabs" style={{ display: 'flex', background: '#f1f5f9', padding: '4px', borderRadius: '8px' }}>
+                  <button 
+                    type="button"
+                    onClick={() => setViewMode('workflow')}
+                    style={{ padding: '6px 12px', border: 'none', background: viewMode === 'workflow' ? '#fff' : 'transparent', borderRadius: '6px', fontWeight: 600, color: viewMode === 'workflow' ? '#0f172a' : '#64748b', boxShadow: viewMode === 'workflow' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}
+                  >
+                    Requests
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setViewMode('payees')}
+                    style={{ padding: '6px 12px', border: 'none', background: viewMode === 'payees' ? '#fff' : 'transparent', borderRadius: '6px', fontWeight: 600, color: viewMode === 'payees' ? '#0f172a' : '#64748b', boxShadow: viewMode === 'payees' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    Payees
+                    {pendingPayees.length > 0 && (
+                      <span style={{ background: '#ef4444', color: '#fff', fontSize: '0.75rem', padding: '2px 6px', borderRadius: '10px', minWidth: '20px', textAlign: 'center' }}>{pendingPayees.length}</span>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
 
             {stageTabs.length > 0 && (
               <div className="fw-role-tabs" role="tablist">
@@ -2036,8 +2142,9 @@ const proposalFilteredRows = useMemo(() => {
                 </button>
               </div>
             )}
-            <div className="fw-header-actions">
-              {config.moduleKey === 'finance' && (
+            {viewMode === 'workflow' && (
+              <div className="fw-header-actions">
+                {config.moduleKey === 'finance' && (
                 <div className="fw-amount-filters" role="group" aria-label="Amount filter shortcuts">
                   <button
                     type="button"
@@ -2119,71 +2226,87 @@ const proposalFilteredRows = useMemo(() => {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+            )}
           </div>
 
-          <div className="fw-stats">
-            <div
-              className={`fw-stats-card total ${statusFilter === 'total' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('total')}
-            >
-              <span className="fw-stats-icon"><Briefcase size={18} /></span>
-              <div className="fw-stats-text">
-                <span className="fw-stats-label">Total</span>
-                <span className="fw-stats-number">{statusStats.total}</span>
+          {viewMode === 'workflow' && (
+            <div className="fw-stats">
+              <div
+                className={`fw-stats-card total ${statusFilter === 'total' ? 'active' : ''}`}
+                onClick={() => setStatusFilter('total')}
+              >
+                <span className="fw-stats-icon"><Briefcase size={18} /></span>
+                <div className="fw-stats-text">
+                  <span className="fw-stats-label">Total</span>
+                  <span className="fw-stats-number">{statusStats.total}</span>
+                </div>
+              </div>
+              <div
+                className={`fw-stats-card pending ${statusFilter === 'pending' ? 'active' : ''}`}
+                onClick={() => setStatusFilter('pending')}
+              >
+                <span className="fw-stats-icon"><Clock size={18} /></span>
+                <div className="fw-stats-text">
+                  <span className="fw-stats-label">Pending</span>
+                  <span className="fw-stats-number">{statusStats.pending}</span>
+                </div>
+              </div>
+              <div
+                className={`fw-stats-card returned ${statusFilter === 'returned' ? 'active' : ''}`}
+                onClick={() => setStatusFilter('returned')}
+              >
+                <span className="fw-stats-icon"><RotateCcw size={18} /></span>
+                <div className="fw-stats-text">
+                  <span className="fw-stats-label">Return</span>
+                  <span className="fw-stats-number">{statusStats.returned}</span>
+                </div>
+              </div>
+              <div
+                className={`fw-stats-card rejected ${statusFilter === 'rejected' ? 'active' : ''}`}
+                onClick={() => setStatusFilter('rejected')}
+              >
+                <span className="fw-stats-icon"><XCircle size={18} /></span>
+                <div className="fw-stats-text">
+                  <span className="fw-stats-label">Reject</span>
+                  <span className="fw-stats-number">{statusStats.rejected}</span>
+                </div>
+              </div>
+              <div
+                className={`fw-stats-card approved ${statusFilter === 'approved' ? 'active' : ''}`}
+                onClick={() => setStatusFilter('approved')}
+              >
+                <span className="fw-stats-icon"><CheckCircle2 size={18} /></span>
+                <div className="fw-stats-text">
+                  <span className="fw-stats-label">Approved</span>
+                  <span className="fw-stats-number">{statusStats.approved}</span>
+                </div>
+              </div>
+              <div
+                className={`fw-stats-card archived ${statusFilter === 'archived' ? 'active' : ''}`}
+                onClick={() => setStatusFilter('archived')}
+              >
+                <span className="fw-stats-icon"><Archive size={18} /></span>
+                <div className="fw-stats-text">
+                  <span className="fw-stats-label">Archive</span>
+                  <span className="fw-stats-number">{statusStats.archived}</span>
+                </div>
               </div>
             </div>
-            <div
-              className={`fw-stats-card pending ${statusFilter === 'pending' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('pending')}
-            >
-              <span className="fw-stats-icon"><Clock size={18} /></span>
-              <div className="fw-stats-text">
-                <span className="fw-stats-label">Pending</span>
-                <span className="fw-stats-number">{statusStats.pending}</span>
-              </div>
-            </div>
-            <div
-              className={`fw-stats-card returned ${statusFilter === 'returned' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('returned')}
-            >
-              <span className="fw-stats-icon"><RotateCcw size={18} /></span>
-              <div className="fw-stats-text">
-                <span className="fw-stats-label">Return</span>
-                <span className="fw-stats-number">{statusStats.returned}</span>
-              </div>
-            </div>
-            <div
-              className={`fw-stats-card rejected ${statusFilter === 'rejected' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('rejected')}
-            >
-              <span className="fw-stats-icon"><XCircle size={18} /></span>
-              <div className="fw-stats-text">
-                <span className="fw-stats-label">Reject</span>
-                <span className="fw-stats-number">{statusStats.rejected}</span>
-              </div>
-            </div>
-            <div
-              className={`fw-stats-card approved ${statusFilter === 'approved' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('approved')}
-            >
-              <span className="fw-stats-icon"><CheckCircle2 size={18} /></span>
-              <div className="fw-stats-text">
-                <span className="fw-stats-label">Approved</span>
-                <span className="fw-stats-number">{statusStats.approved}</span>
-              </div>
-            </div>
-            <div
-              className={`fw-stats-card archived ${statusFilter === 'archived' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('archived')}
-            >
-              <span className="fw-stats-icon"><Archive size={18} /></span>
-              <div className="fw-stats-text">
-                <span className="fw-stats-label">Archive</span>
-                <span className="fw-stats-number">{statusStats.archived}</span>
-              </div>
-            </div>
-          </div>
+          )}
 
+          {viewMode === 'payees' ? (
+            <div className="fw-payee-panel" style={{ margin: '10px 0 24px', padding: '0 24px' }}>
+              <div className="fw-payee-panel-title" style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1f2a44', marginBottom: '16px' }}>
+                Pending Payee Approvals
+              </div>
+              <PendingPayeeApprovals 
+                pendingPayees={pendingPayees}
+                pendingPayeesLoading={pendingPayeesLoading}
+                onPayeeDecision={onPayeeDecision}
+                pendingPayeeActingId={pendingPayeeActingId}
+              />
+            </div>
+          ) : (
           <div className="fw-body">
             {error && <div className="fw-state">{error}</div>}
 
@@ -2630,7 +2753,8 @@ const proposalFilteredRows = useMemo(() => {
                 </div>
               </>
             )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
       {deletePopupOpen && (

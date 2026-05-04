@@ -3543,7 +3543,7 @@ const FinanceApproval: React.FC = () => {
                         {/* Institution */}
                         {beneficiaryType === 'Institution' && (
                           <div className="form-group">
-                            <label style={{ fontSize: 14, color: '#495057', marginBottom: '25px', fontWeight: 600, display: 'block' }}>Institution</label>
+                            <label style={{ fontSize: 14, color: '#495057', marginBottom: '8px', fontWeight: 600, display: 'block' }}>Institution</label>
                             <input type="text" value="K.S.Rangasamy College of Technology" readOnly
                               style={{ borderRadius: 12, border: '1px solid #e0e0e0', padding: '10px 15px', fontSize: '0.95rem', width: '100%', backgroundColor: '#e9ecef', color: '#495057', cursor: 'not-allowed', outline: 'none' }} />
                           </div>
