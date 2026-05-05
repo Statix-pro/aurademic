@@ -466,11 +466,12 @@ const expenditureController = {
 
   async listPayees(req, res) {
     try {
-      const { search = '', limit = 20, offset = 0 } = req.query;
+      const { search = '', limit = 20, offset = 0, status = 'approved' } = req.query;
       const payees = await expenditureModel.listPayees({
         search,
         limit: Number(limit) || 20,
         offset: Number(offset) || 0,
+        status,
       });
 
       return res.json({ status: 'success', data: payees });
@@ -527,6 +528,49 @@ const expenditureController = {
     }
   },
 
+  async updatePayee(req, res) {
+    try {
+      const payeeId = toPositiveInt(req.params.id);
+      const { payee_name, account_name, account_no, ifsc, bank_name, branch_name } = req.body || {};
+      const canonicalPayeeName = resolveCanonicalPayeeName(payee_name, account_name);
+
+      if (!payeeId) return sendError(res, 400, 'Invalid payee ID');
+      if (!canonicalPayeeName || !account_no || !ifsc || !bank_name || !branch_name) {
+        return sendError(
+          res,
+          400,
+          'payee_name, account_no, ifsc, bank_name and branch_name are required',
+        );
+      }
+
+      const payee = await expenditureModel.updatePendingPayee(
+        payeeId,
+        {
+          ...req.body,
+          payee_name: canonicalPayeeName,
+          account_name: canonicalPayeeName,
+        },
+      );
+
+      return res.json({
+        status: 'success',
+        message: 'Payee updated successfully',
+        data: payee,
+      });
+    } catch (err) {
+      if (err.message === 'Payee not found') return sendError(res, 404, err.message);
+      if (
+        err.message === 'Only pending payees can be edited'
+        || err.message === 'Another payee already exists with the same account number and IFSC'
+        || err.message === 'Invalid payee ID'
+        || err.message === 'payee_name, account_no, ifsc, bank_name and branch_name are required'
+      ) {
+        return sendError(res, 400, err.message);
+      }
+      return handleError(res, err, 'Error updating payee');
+    }
+  },
+
   async listPendingPayees(req, res) {
     try {
       const { search = '', limit = 20, offset = 0 } = req.query;
@@ -571,6 +615,24 @@ const expenditureController = {
       });
     } catch (err) {
       return handleError(res, err, 'Error approving/rejecting payee');
+    }
+  },
+
+  async deletePayee(req, res) {
+    try {
+      const payeeId = toPositiveInt(req.params.id);
+      if (!payeeId) return sendError(res, 400, 'Invalid payee ID');
+
+      await expenditureModel.softDeletePayee(payeeId);
+      return res.json({
+        status: 'success',
+        message: 'Payee deleted successfully',
+      });
+    } catch (err) {
+      if (err.message === 'Payee not found' || err.message === 'Invalid payee ID') {
+        return sendError(res, 400, err.message);
+      }
+      return handleError(res, err, 'Error deleting payee');
     }
   },
 

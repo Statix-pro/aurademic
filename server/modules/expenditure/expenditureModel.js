@@ -816,8 +816,11 @@ export async function getAdvanceSummary({
 
 // ─── Payee master ─────────────────────────────────────────────────────────────
 
-export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
+export async function listPayees({ search = '', limit = 20, offset = 0, status = 'approved' } = {}) {
   const q = normalizeText(search);
+  const normalizedStatus = normalizeText(status).toLowerCase() || 'approved';
+  const allowedStatuses = new Set(['all', 'pending', 'approved', 'rejected']);
+  const effectiveStatus = allowedStatuses.has(normalizedStatus) ? normalizedStatus : 'approved';
   const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
   const offsetNum = Math.max(Number(offset) || 0, 0);
   const searchTerms = q
@@ -869,6 +872,10 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
     ))
   `;
 
+  const approvalFilterSql = effectiveStatus === 'all'
+    ? ''
+    : ` AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = '${effectiveStatus}'`;
+
   if (searchTerms.length >= 2) {
     const ifscCandidate = searchTerms[searchTerms.length - 1].toUpperCase();
     const rawAccountCandidate = q
@@ -898,12 +905,16 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
            gstin,
            tds_details,
            tds_section,
+           approval_status,
+           rejection_reason,
+           requested_at,
+           approved_at,
            is_active,
            created_at,
            updated_at
          FROM expenditure_payees
          WHERE is_active = 1
-           AND LOWER(TRIM(COALESCE(approval_status, 'approved'))) = 'approved'
+           ${effectiveStatus === 'all' ? '' : `AND LOWER(TRIM(COALESCE(approval_status, 'approved'))) = '${effectiveStatus}'`}
            AND UPPER(TRIM(COALESCE(ifsc, ''))) = ?
            AND ${accountCompareSql} = ?
          ORDER BY updated_at DESC, id DESC
@@ -931,6 +942,10 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
            epr.gstin,
            epr.tds_details,
            epr.tds_section,
+           ep.approval_status,
+           ep.rejection_reason,
+           ep.requested_at,
+           ep.approved_at,
            1 AS is_active,
            epr.created_at,
            epr.updated_at
@@ -938,7 +953,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
          INNER JOIN expenditure_payees ep
            ON ep.id = epr.payee_id
           AND ep.is_active = 1
-          AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = 'approved'
+          ${effectiveStatus === 'all' ? '' : `AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = '${effectiveStatus}'`}
          INNER JOIN (
            SELECT MAX(id) AS id
              FROM expenditure_payee_rows
@@ -981,6 +996,10 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
        epr.gstin,
        epr.tds_details,
        epr.tds_section,
+       ep.approval_status,
+       ep.rejection_reason,
+       ep.requested_at,
+       ep.approved_at,
        1 AS is_active,
        epr.created_at,
        epr.updated_at
@@ -988,7 +1007,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
      INNER JOIN expenditure_payees ep
        ON ep.id = epr.payee_id
       AND ep.is_active = 1
-      AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = 'approved'
+      ${effectiveStatus === 'all' ? '' : `AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = '${effectiveStatus}'`}
      INNER JOIN (
        SELECT MAX(id) AS id
          FROM expenditure_payee_rows
@@ -1018,7 +1037,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
   const [rows] = await db.execute(
     `SELECT * FROM expenditure_payees ep
       WHERE ep.is_active = 1
-        AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = 'approved'
+        ${effectiveStatus === 'all' ? '1 = 1' : `LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = '${effectiveStatus}'`}
         AND ${payeeTermClauses}
       ORDER BY ep.payee_name ASC LIMIT ${limitNum} OFFSET ${offsetNum}`,
     [...searchTerms.map((term) => `%${term}%`)],
@@ -1111,6 +1130,131 @@ export async function approveOrRejectPayee(
   );
 
   return getPayeeById(id);
+}
+
+export async function updatePendingPayee(
+  payeeId,
+  payeeData = {},
+  conn = db,
+) {
+  const id = toPositiveInt(payeeId);
+  if (!id) throw new Error('Invalid payee ID');
+
+  const accountNo = normalizeText(payeeData.account_no);
+  const ifsc = normalizeText(payeeData.ifsc).toUpperCase();
+  const canonicalPayeeName = resolveCanonicalPayeeName(
+    payeeData.payee_name,
+    payeeData.account_name,
+  );
+  const beneficiaryType = normalizeText(payeeData.beneficiary_type).toLowerCase() === 'organization'
+    ? 'organization'
+    : 'individual';
+  const beneficiaryOrgRaw = resolveCanonicalBeneficiaryOrg(
+    payeeData.beneficiary_org,
+    payeeData.payee_name,
+  );
+  const beneficiaryOrg = BENEFICIARY_ORG_OPTIONS.includes(beneficiaryOrgRaw)
+    ? beneficiaryOrgRaw
+    : null;
+
+  if (!canonicalPayeeName || !accountNo || !ifsc || !normalizeText(payeeData.bank_name) || !normalizeText(payeeData.branch_name)) {
+    throw new Error('payee_name, account_no, ifsc, bank_name and branch_name are required');
+  }
+
+  const [existingRows] = await conn.execute(
+    `SELECT id, approval_status
+       FROM expenditure_payees
+      WHERE id = ?
+      LIMIT 1`,
+    [id],
+  );
+  if (!existingRows.length) throw new Error('Payee not found');
+
+  const currentStatus = normalizeText(existingRows[0].approval_status).toLowerCase() || 'pending';
+  if (currentStatus !== 'pending') {
+    throw new Error('Only pending payees can be edited');
+  }
+
+  const [duplicateRows] = await conn.execute(
+    `SELECT id
+       FROM expenditure_payees
+      WHERE account_no = ?
+        AND ifsc = ?
+        AND id <> ?
+      LIMIT 1`,
+    [accountNo, ifsc, id],
+  );
+  if (duplicateRows.length) {
+    throw new Error('Another payee already exists with the same account number and IFSC');
+  }
+
+  await conn.execute(
+    `UPDATE expenditure_payees
+        SET payee_name = ?,
+            account_name = ?,
+            pan_number = ?,
+            account_no = ?,
+            account_type = ?,
+            bank_name = ?,
+            branch_name = ?,
+            ifsc = ?,
+            beneficiary_type = ?,
+            beneficiary_org = ?,
+            organization_type = ?,
+            msme = ?,
+            gstin = ?,
+            tds_details = ?,
+            tds_section = ?,
+            rejection_reason = NULL,
+            updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`,
+    [
+      canonicalPayeeName,
+      canonicalPayeeName,
+      normalizeText(payeeData.pan_number) || null,
+      accountNo,
+      normalizeText(payeeData.account_type) || null,
+      normalizeText(payeeData.bank_name),
+      normalizeText(payeeData.branch_name),
+      ifsc,
+      beneficiaryType,
+      beneficiaryOrg,
+      normalizeText(payeeData.organization_type) || null,
+      normalizeText(payeeData.msme) || null,
+      normalizeText(payeeData.gstin) || null,
+      normalizeText(payeeData.tds_details) || null,
+      normalizeText(payeeData.tds_section) || null,
+      id,
+    ],
+  );
+
+  return getPayeeById(id);
+}
+
+export async function softDeletePayee(payeeId, conn = db) {
+  const id = toPositiveInt(payeeId);
+  if (!id) throw new Error('Invalid payee ID');
+
+  const [rows] = await conn.execute(
+    `SELECT id
+       FROM expenditure_payees
+      WHERE id = ?
+        AND is_active = 1
+      LIMIT 1`,
+    [id],
+  );
+
+  if (!rows.length) throw new Error('Payee not found');
+
+  await conn.execute(
+    `UPDATE expenditure_payees
+        SET is_active = 0,
+            updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`,
+    [id],
+  );
+
+  return true;
 }
 
 export async function assertPayeeApproved(payeeId, conn = db) {

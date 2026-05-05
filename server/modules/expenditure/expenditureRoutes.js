@@ -75,10 +75,10 @@ const canAccessPayeeApprovalQueue = (req, res, next) => {
     : (req.user?.roles ? [req.user.roles] : (req.user?.role ? [req.user.role] : []));
   const normalizedRoles = roles.map((role) => String(role || '').trim().toLowerCase());
   const hasQueueRole = normalizedRoles.some((role) =>
-    ['dof', 'admin', 'super_admin'].includes(role)
+    ['dof', 'super_admin'].includes(role)
   );
 
-  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin || req.user?.is_admin || req.user?.isAdmin) || hasQueueRole) {
+  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || hasQueueRole) {
     return next();
   }
 
@@ -149,7 +149,9 @@ router.get('/advance-summary', expenditureController.getAdvanceSummary);
 router.get('/payees', expenditureController.listPayees);
 router.post('/payees', expenditureController.createPayee);
 router.get('/payees/pending', canAccessPayeeApprovalQueue, expenditureController.listPendingPayees);
+router.patch('/payees/:id', canAccessPayeeApprovalQueue, expenditureController.updatePayee);
 router.patch('/payees/:id/approval', canAccessPayeeApprovalQueue, expenditureController.approvePayee);
+router.delete('/payees/:id', canAccessPayeeApprovalQueue, expenditureController.deletePayee);
 router.get('/payees/:id', expenditureController.getPayee);
 
 router.get('/', expenditureController.listExpenditures);

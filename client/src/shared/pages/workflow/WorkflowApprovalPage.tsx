@@ -426,10 +426,23 @@ interface PendingPayeeRecord {
   id: number;
   payee_name?: string;
   account_name?: string | null;
+  pan_number?: string | null;
   account_no?: string;
+  account_type?: string | null;
   ifsc?: string;
   bank_name?: string;
   branch_name?: string;
+  beneficiary_type?: string | null;
+  beneficiary_org?: string | null;
+  organization_type?: string | null;
+  msme?: string | null;
+  gstin?: string | null;
+  tds_details?: string | null;
+  tds_section?: string | null;
+  approval_status?: string | null;
+  rejection_reason?: string | null;
+  approved_at?: string | null;
+  requested_at?: string | null;
 }
 
 interface WorkflowStageTab {
@@ -501,6 +514,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [pendingPayees, setPendingPayees] = useState<PendingPayeeRecord[]>([]);
   const [pendingPayeesLoading, setPendingPayeesLoading] = useState<boolean>(false);
   const [pendingPayeeActingId, setPendingPayeeActingId] = useState<number | null>(null);
+  const [pendingPayeeEditingId, setPendingPayeeEditingId] = useState<number | null>(null);
 
   const closeAlert = useCallback(() => {
     setAlertConfig((prev) => ({
@@ -1373,8 +1387,8 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     if (!showExpenditurePayeePanel) return;
     setPendingPayeesLoading(true);
     try {
-      const response = await authenticityUtility.get(`${config.apiBasePath}/payees/pending`, {
-        params: { limit: 100 },
+      const response = await authenticityUtility.get(`${config.apiBasePath}/payees`, {
+        params: { status: 'all', limit: 200 },
       }) as { status?: string; data?: PendingPayeeRecord[] };
 
       if (response?.status === 'success') {
@@ -1399,7 +1413,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       rejectionReason = window.prompt('Enter rejection reason')?.trim() || '';
       if (!rejectionReason) {
         showAlert('Rejection reason is required.', 'warning');
-        return;
+        return false;
       }
     }
 
@@ -1411,17 +1425,85 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       }) as { status?: string; message?: string };
 
       if (response?.status === 'success') {
-        setPendingPayees((prev) => prev.filter((row) => Number(row.id) !== Number(payeeId)));
+        setPendingPayees((prev) =>
+          prev.map((row) =>
+            Number(row.id) === Number(payeeId)
+              ? {
+                  ...row,
+                  approval_status: decision,
+                  rejection_reason: decision === 'rejected' ? rejectionReason : null,
+                  approved_at: decision === 'approved' ? new Date().toISOString() : row.approved_at,
+                }
+              : row,
+          ),
+        );
         showAlert(response.message || `Payee ${decision} successfully.`, 'success');
-        return;
+        return true;
       }
 
       showAlert(response?.message || 'Unable to update payee status.', 'error');
+      return false;
     } catch (error: any) {
       showAlert(error?.response?.data?.message || error?.message || 'Unable to update payee status.', 'error');
+      return false;
     } finally {
       setPendingPayeeActingId(null);
     }
+  }, [config.apiBasePath, showAlert]);
+
+  const onPayeeEdit = useCallback(async (payeeId: number, payload: PendingPayeeRecord) => {
+    setPendingPayeeEditingId(payeeId);
+    try {
+      const response = await authenticityUtility.patch(`${config.apiBasePath}/payees/${payeeId}`, payload) as {
+        status?: string;
+        message?: string;
+        data?: PendingPayeeRecord;
+      };
+
+      if (response?.status === 'success' && response.data) {
+        setPendingPayees((prev) =>
+          prev.map((row) => (Number(row.id) === Number(payeeId) ? { ...row, ...response.data } : row)),
+        );
+        return true;
+      }
+
+      showAlert(response?.message || 'Unable to update payee.', 'error');
+      return false;
+    } catch (error: any) {
+      showAlert(error?.response?.data?.message || error?.message || 'Unable to update payee.', 'error');
+      return false;
+    } finally {
+      setPendingPayeeEditingId(null);
+    }
+  }, [config.apiBasePath, showAlert]);
+
+  const onPayeeDelete = useCallback(async (payeeId: number) => {
+    showAlert(
+      'Delete this payee from the management list?',
+      'warning',
+      'Confirm Delete',
+      async () => {
+        try {
+          const response = await authenticityUtility.delete(`${config.apiBasePath}/payees/${payeeId}`) as {
+            status?: string;
+            message?: string;
+          };
+
+          if (response?.status === 'success') {
+            setPendingPayees((prev) => prev.filter((row) => Number(row.id) !== Number(payeeId)));
+            return;
+          }
+
+          showAlert(response?.message || 'Unable to delete payee.', 'error');
+        } catch (error: any) {
+          showAlert(error?.response?.data?.message || error?.message || 'Unable to delete payee.', 'error');
+        }
+      },
+      true,
+      'Delete',
+      'Cancel'
+    );
+    return false;
   }, [config.apiBasePath, showAlert]);
 
   const performApproval = useCallback(async (recordId: number | string) => {
@@ -2077,8 +2159,10 @@ const proposalFilteredRows = useMemo(() => {
                     style={{ padding: '6px 12px', border: 'none', background: viewMode === 'payees' ? '#fff' : 'transparent', borderRadius: '6px', fontWeight: 600, color: viewMode === 'payees' ? '#0f172a' : '#64748b', boxShadow: viewMode === 'payees' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '6px' }}
                   >
                     Payees
-                    {pendingPayees.length > 0 && (
-                      <span style={{ background: '#ef4444', color: '#fff', fontSize: '0.75rem', padding: '2px 6px', borderRadius: '10px', minWidth: '20px', textAlign: 'center' }}>{pendingPayees.length}</span>
+                    {pendingPayees.filter((payee) => String(payee.approval_status || 'pending').trim().toLowerCase() === 'pending').length > 0 && (
+                      <span style={{ background: '#ef4444', color: '#fff', fontSize: '0.75rem', padding: '2px 6px', borderRadius: '10px', minWidth: '20px', textAlign: 'center' }}>
+                        {pendingPayees.filter((payee) => String(payee.approval_status || 'pending').trim().toLowerCase() === 'pending').length}
+                      </span>
                     )}
                   </button>
                 </div>
@@ -2296,14 +2380,15 @@ const proposalFilteredRows = useMemo(() => {
 
           {viewMode === 'payees' ? (
             <div className="fw-payee-panel" style={{ margin: '10px 0 24px', padding: '0 24px' }}>
-              <div className="fw-payee-panel-title" style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1f2a44', marginBottom: '16px' }}>
-                Pending Payee Approvals
-              </div>
               <PendingPayeeApprovals 
                 pendingPayees={pendingPayees}
                 pendingPayeesLoading={pendingPayeesLoading}
                 onPayeeDecision={onPayeeDecision}
                 pendingPayeeActingId={pendingPayeeActingId}
+                onPayeeEdit={onPayeeEdit}
+                pendingPayeeEditingId={pendingPayeeEditingId}
+                apiBasePath={config.apiBasePath}
+                onPayeeDelete={onPayeeDelete}
               />
             </div>
           ) : (
