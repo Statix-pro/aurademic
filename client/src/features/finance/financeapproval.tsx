@@ -324,7 +324,6 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
     'Registration Kit',
     'Remuneration',
     'Sitting Fees',
-    'Stationery',
     'T-Shirt',
     'Travel',
     'Others',
@@ -342,7 +341,6 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
     'Registration fee',
     'Remuneration',
     'Sitting Fees',
-    'Stationery',
     'Travel',
     'Others',
   ],
@@ -402,6 +400,7 @@ const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {
     'Chalk Box',
     'Clips/ Pins',
     'Cloth Covers',
+    'Combined Items',
     'Duster',
     'Highlighter',
     'Marker Pen',
@@ -558,26 +557,27 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Student Uniform', 'Others'],
 
   'Printing': [
+    'Badge',
     'Banner',
     'Beach Flag',
-    'ID Card',
-    'Badge',
-    'Brochure',
     'Binding',
-    'Reports',
-    'Magazines',
-    'News Letters',
+    'Brochure',
     'Calendar',
     'Certificates',
+    'Combined Items',
     'Diary',
-    'Registers',
-    'Pamphlet',
-    'Vinyl Board',
-    'Sign Board',
+    'ID Card',
     'Letter Pad',
+    'Magazines',
+    'News Letters',
     'Note Pad',
-    'Wiro Pad',
+    'Pamphlet',
+    'Registers',
+    'Reports',
+    'Sign Board',
+    'Vinyl Board',
     'Visiting Card',
+    'Wiro Pad',
     'Others'
   ],
 
@@ -587,6 +587,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Chalk Box',
     'Clips/ Pins',
     'Cloth Covers',
+    'Combined Items',
     'Duster',
     'Files/ Folders',
     'Grade Sheet',
@@ -3130,342 +3131,342 @@ const FinanceApproval: React.FC = () => {
               </div>
 
               <div style={{ paddingTop: '20px' }}>
-              {!isApplicantCardOpen && (
-                <div className="row">
-                  <div className="col-md-7">
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: 600, display: 'block' }}>
-                        Applicant Name
-                      </label>
-                      <input
-                        type="text"
-                        value={applicantName}
-                        disabled
-                        readOnly
-                        style={{
-                          borderRadius: '12px',
-                          border: '1px solid #e0e0e0',
-                          padding: '10px 15px',
-                          fontSize: '0.95rem',
-                          width: '100%',
-                          fontFamily: 'inherit',
-                          backgroundColor: '#fcfdff',
-                          cursor: 'pointer',
-                        }}
-                        onClick={() => setIsApplicantCardOpen(true)}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-5">
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: 600, display: 'block' }}>
-                        Date
-                      </label>
-                      <input
-                        type="date"
-                        value={date}
-                        disabled
-                        readOnly
-                        style={{
-                          borderRadius: '12px',
-                          border: '1px solid #e0e0e0',
-                          padding: '10px 15px',
-                          fontSize: '0.95rem',
-                          width: '100%',
-                          fontFamily: 'inherit',
-                          backgroundColor: '#fcfdff',
-                          cursor: 'pointer',
-                        }}
-                        onClick={() => setIsApplicantCardOpen(true)}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {isApplicantCardOpen && !isViewMode && (
-                <>
-              <div className="row mb-3" style={{ marginBottom: '15px' }}>
-                <div className="col-md-7">
-                  <div className="form-group" style={{ position: 'relative' }}>
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-                      Applicant Name
-                      {isExternalApplicant && <span style={{ fontSize: '12px', color: '#6c757d', marginLeft: '8px' }}>(External)</span>}
-                    </label>
-                    <CustomInput
-                      name="applicantName"
-                      type="text"
-                      value={isViewMode ? applicantName : (isExternalApplicant ? applicantName : applicantSearchQuery)}
-                      onChange={(value) => {
-                        if (isExternalApplicant) {
-                          setApplicantName(value);
-                        } else {
-                          handleApplicantSearch(value);
-                        }
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                        if (!isExternalApplicant && !showApplicantDropdown) {
-                          handleApplicantSearch(applicantSearchQuery);
-                        }
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                        setTimeout(() => setShowApplicantDropdown(false), 200);
-                      }}
-                      placeholder={isExternalApplicant ? "Enter external applicant name" : "Search employee by name or ERP ID"}
-                    />
-                    {showApplicantDropdown && applicantSearchResults.length > 0 && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        backgroundColor: '#fff',
-                        border: '1px solid #e0e0e0',
-                        borderRadius: '12px',
-                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                        zIndex: 1000,
-                        maxHeight: '250px',
-                        overflowY: 'auto',
-                        marginTop: '4px'
-                      }}>
-                        <div
-                          onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
+                {!isApplicantCardOpen && (
+                  <div className="row">
+                    <div className="col-md-7">
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: 600, display: 'block' }}>
+                          Applicant Name
+                        </label>
+                        <input
+                          type="text"
+                          value={applicantName}
+                          disabled
+                          readOnly
                           style={{
+                            borderRadius: '12px',
+                            border: '1px solid #e0e0e0',
                             padding: '10px 15px',
+                            fontSize: '0.95rem',
+                            width: '100%',
+                            fontFamily: 'inherit',
+                            backgroundColor: '#fcfdff',
                             cursor: 'pointer',
-                            backgroundColor: '#f8f9fa',
-                            color: '#0069ab',
-                            fontWeight: '600',
-                            borderBottom: '2px solid #e0e0e0'
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                        >
-                          + Add External Applicant
-                        </div>
-                        {applicantSearchResults.map((emp) => (
-                          <div
-                            key={emp.employee_id}
-                            onMouseDown={(e) => { e.preventDefault(); handleSelectApplicant(emp); }}
-                            style={{
-                              padding: '10px 15px',
-                              cursor: 'pointer',
-                              borderBottom: '1px solid #f0f0f0',
-                              transition: 'background-color 0.2s'
+                          onClick={() => setIsApplicantCardOpen(true)}
+                        />
+                      </div>
+                    </div>
+                    <div className="col-md-5">
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: 600, display: 'block' }}>
+                          Date
+                        </label>
+                        <input
+                          type="date"
+                          value={date}
+                          disabled
+                          readOnly
+                          style={{
+                            borderRadius: '12px',
+                            border: '1px solid #e0e0e0',
+                            padding: '10px 15px',
+                            fontSize: '0.95rem',
+                            width: '100%',
+                            fontFamily: 'inherit',
+                            backgroundColor: '#fcfdff',
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => setIsApplicantCardOpen(true)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isApplicantCardOpen && !isViewMode && (
+                  <>
+                    <div className="row mb-3" style={{ marginBottom: '15px' }}>
+                      <div className="col-md-7">
+                        <div className="form-group" style={{ position: 'relative' }}>
+                          <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                            Applicant Name
+                            {isExternalApplicant && <span style={{ fontSize: '12px', color: '#6c757d', marginLeft: '8px' }}>(External)</span>}
+                          </label>
+                          <CustomInput
+                            name="applicantName"
+                            type="text"
+                            value={isViewMode ? applicantName : (isExternalApplicant ? applicantName : applicantSearchQuery)}
+                            onChange={(value) => {
+                              if (isExternalApplicant) {
+                                setApplicantName(value);
+                              } else {
+                                handleApplicantSearch(value);
+                              }
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
-                          >
-                            <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
-                            <div style={{ fontSize: '12px', color: '#6c757d' }}>
-                              {emp.designation} | {emp.department}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                              if (!isExternalApplicant && !showApplicantDropdown) {
+                                handleApplicantSearch(applicantSearchQuery);
+                              }
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                              setTimeout(() => setShowApplicantDropdown(false), 200);
+                            }}
+                            placeholder={isExternalApplicant ? "Enter external applicant name" : "Search employee by name or ERP ID"}
+                          />
+                          {showApplicantDropdown && applicantSearchResults.length > 0 && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              backgroundColor: '#fff',
+                              border: '1px solid #e0e0e0',
+                              borderRadius: '12px',
+                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                              zIndex: 1000,
+                              maxHeight: '250px',
+                              overflowY: 'auto',
+                              marginTop: '4px'
+                            }}>
+                              <div
+                                onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
+                                style={{
+                                  padding: '10px 15px',
+                                  cursor: 'pointer',
+                                  backgroundColor: '#f8f9fa',
+                                  color: '#0069ab',
+                                  fontWeight: '600',
+                                  borderBottom: '2px solid #e0e0e0'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                              >
+                                + Add External Applicant
+                              </div>
+                              {applicantSearchResults.map((emp) => (
+                                <div
+                                  key={emp.employee_id}
+                                  onMouseDown={(e) => { e.preventDefault(); handleSelectApplicant(emp); }}
+                                  style={{
+                                    padding: '10px 15px',
+                                    cursor: 'pointer',
+                                    borderBottom: '1px solid #f0f0f0',
+                                    transition: 'background-color 0.2s'
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
+                                >
+                                  <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
+                                  <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                                    {emp.designation} | {emp.department}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {showApplicantDropdown && applicantSearchQuery.length >= 2 && applicantSearchResults.length === 0 && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        backgroundColor: '#fff',
-                        border: '1px solid #e0e0e0',
-                        borderRadius: '12px',
-                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                        zIndex: 1000,
-                        marginTop: '4px'
-                      }}>
-                        <div style={{ padding: '10px 15px', color: '#6c757d' }}>No employees found</div>
-                        <div
-                          onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
-                          style={{
-                            padding: '10px 15px',
-                            cursor: 'pointer',
-                            backgroundColor: '#f8f9fa',
-                            color: '#0069ab',
-                            fontWeight: '600',
-                            borderTop: '1px solid #e0e0e0'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                        >
-                          + Add External Applicant
+                          )}
+                          {showApplicantDropdown && applicantSearchQuery.length >= 2 && applicantSearchResults.length === 0 && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              backgroundColor: '#fff',
+                              border: '1px solid #e0e0e0',
+                              borderRadius: '12px',
+                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                              zIndex: 1000,
+                              marginTop: '4px'
+                            }}>
+                              <div style={{ padding: '10px 15px', color: '#6c757d' }}>No employees found</div>
+                              <div
+                                onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
+                                style={{
+                                  padding: '10px 15px',
+                                  cursor: 'pointer',
+                                  backgroundColor: '#f8f9fa',
+                                  color: '#0069ab',
+                                  fontWeight: '600',
+                                  borderTop: '1px solid #e0e0e0'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                              >
+                                + Add External Applicant
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    )}
-                  </div>
-                </div>
-                <div className="col-md-5">
-                  <div className="form-group">
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-                      Date
-                    </label>
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setDate(e.target.value)}
-                      style={{
-                        borderRadius: '12px',
-                        border: '1px solid #e0e0e0',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
-                        width: '100%',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#fcfdff',
-                        transition: 'all 0.3s ease',
-                        outline: 'none'
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
+                      <div className="col-md-5">
+                        <div className="form-group">
+                          <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                            Date
+                          </label>
+                          <input
+                            type="date"
+                            value={date}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => setDate(e.target.value)}
+                            style={{
+                              borderRadius: '12px',
+                              border: '1px solid #e0e0e0',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              transition: 'all 0.3s ease',
+                              outline: 'none'
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="row md-3" style={{ marginBottom: '15px' }}>
-                <div className="col-md-7">
-                  <div className="form-group">
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Department</label>
-                    <input
-                      type="text"
-                      value={department}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setDepartment(e.target.value)}
-                      style={{
-                        borderRadius: '12px',
-                        border: '1px solid #e0e0e0',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
-                        width: '100%',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#fcfdff',
-                        transition: 'all 0.3s ease',
-                        outline: 'none'
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                      placeholder="Department name"
-                    />
-                  </div>
-                </div>
-                <div className="col-md-5">
-                  <div className="form-group">
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Designation</label>
-                    <input
-                      type="text"
-                      value={designation}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setDesignation(e.target.value)}
-                      style={{
-                        borderRadius: '12px',
-                        border: '1px solid #e0e0e0',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
-                        width: '100%',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#fcfdff',
-                        transition: 'all 0.3s ease',
-                        outline: 'none'
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                      placeholder="e.g., Manager, Staff"
-                    />
-                  </div>
-                </div>
-              </div>
+                    <div className="row md-3" style={{ marginBottom: '15px' }}>
+                      <div className="col-md-7">
+                        <div className="form-group">
+                          <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Department</label>
+                          <input
+                            type="text"
+                            value={department}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => setDepartment(e.target.value)}
+                            style={{
+                              borderRadius: '12px',
+                              border: '1px solid #e0e0e0',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              transition: 'all 0.3s ease',
+                              outline: 'none'
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                            placeholder="Department name"
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-5">
+                        <div className="form-group">
+                          <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Designation</label>
+                          <input
+                            type="text"
+                            value={designation}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => setDesignation(e.target.value)}
+                            style={{
+                              borderRadius: '12px',
+                              border: '1px solid #e0e0e0',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              transition: 'all 0.3s ease',
+                              outline: 'none'
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                            placeholder="e.g., Manager, Staff"
+                          />
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="row mb-3" style={{ marginBottom: '15px' }}>
-                <div className="col-md-7">
-                  <div className="form-group">
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      style={{
-                        borderRadius: '12px',
-                        border: '1px solid #e0e0e0',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
-                        width: '100%',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#fcfdff',
-                        transition: 'all 0.3s ease',
-                        outline: 'none'
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                      placeholder="example@email.com"
-                    />
-                  </div>
-                </div>
-                <div className="col-md-5">
-                  <div className="form-group">
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '6px', fontWeight: '600', display: 'block' }}>Mobile</label>
-                    <input
-                      type="tel"
-                      value={mobile}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setMobile(e.target.value)}
-                      style={{
-                        borderRadius: '12px',
-                        border: '1px solid #e0e0e0',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
-                        width: '100%',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#fcfdff',
-                        transition: 'all 0.3s ease',
-                        outline: 'none'
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                      placeholder="10 digit mobile"
-                      pattern="[0-9]{10}"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-                </>
-              )}
+                    <div className="row mb-3" style={{ marginBottom: '15px' }}>
+                      <div className="col-md-7">
+                        <div className="form-group">
+                          <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                            Email
+                          </label>
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            style={{
+                              borderRadius: '12px',
+                              border: '1px solid #e0e0e0',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              transition: 'all 0.3s ease',
+                              outline: 'none'
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                            placeholder="example@email.com"
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-5">
+                        <div className="form-group">
+                          <label style={{ fontSize: '14px', color: '#495057', marginBottom: '6px', fontWeight: '600', display: 'block' }}>Mobile</label>
+                          <input
+                            type="tel"
+                            value={mobile}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => setMobile(e.target.value)}
+                            style={{
+                              borderRadius: '12px',
+                              border: '1px solid #e0e0e0',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              transition: 'all 0.3s ease',
+                              outline: 'none'
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                            placeholder="10 digit mobile"
+                            pattern="[0-9]{10}"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -4527,9 +4528,9 @@ const FinanceApproval: React.FC = () => {
                                 ? 'View mode'
                                 : String(annexureType || '').trim() === 'Not Applicable'
                                   ? 'Upload disabled for Not Applicable'
-                                : hasFilledText(annexureType)
-                                  ? 'Choose annexure file'
-                                  : 'Select annexure type before choosing files'
+                                  : hasFilledText(annexureType)
+                                    ? 'Choose annexure file'
+                                    : 'Select annexure type before choosing files'
                             }
                             onMouseEnter={(e) => {
                               if (!isViewMode && hasFilledText(annexureType) && String(annexureType || '').trim() !== 'Not Applicable') {
@@ -4654,28 +4655,28 @@ const FinanceApproval: React.FC = () => {
                       const entryStage = String(entry.label || '').toLowerCase();
                       const isCurrentStageEditable = canEditStageRemark && loadedCurrentStage === entryStage;
                       return (
-                    <textarea
-                      value={isCurrentStageEditable ? stageRemarkInput : (entry.remarks || '')}
-                      readOnly={!isCurrentStageEditable}
-                      onChange={(event) => {
-                        if (isCurrentStageEditable) {
-                          setStageRemarkInput(event.target.value);
-                        }
-                      }}
-                      rows={3}
-                      placeholder={isCurrentStageEditable ? `Enter ${entry.label} remarks (optional)` : `No ${entry.label} remarks`}
-                      style={{
-                        borderRadius: '10px',
-                        border: '1px solid #e0e0e0',
-                        padding: '10px 12px',
-                        fontSize: '0.9rem',
-                        width: '100%',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#fcfdff',
-                        resize: isCurrentStageEditable ? 'vertical' : 'none',
-                        color: '#495057',
-                      }}
-                    />
+                        <textarea
+                          value={isCurrentStageEditable ? stageRemarkInput : (entry.remarks || '')}
+                          readOnly={!isCurrentStageEditable}
+                          onChange={(event) => {
+                            if (isCurrentStageEditable) {
+                              setStageRemarkInput(event.target.value);
+                            }
+                          }}
+                          rows={3}
+                          placeholder={isCurrentStageEditable ? `Enter ${entry.label} remarks (optional)` : `No ${entry.label} remarks`}
+                          style={{
+                            borderRadius: '10px',
+                            border: '1px solid #e0e0e0',
+                            padding: '10px 12px',
+                            fontSize: '0.9rem',
+                            width: '100%',
+                            fontFamily: 'inherit',
+                            backgroundColor: '#fcfdff',
+                            resize: isCurrentStageEditable ? 'vertical' : 'none',
+                            color: '#495057',
+                          }}
+                        />
                       );
                     })()}
                   </div>

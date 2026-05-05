@@ -1354,7 +1354,7 @@ const enrichBudgetRowsWithBudgetRefs = async (
         requestedByBudgetLine.set(candidateBudgetLineId, toMoney(alreadyRequestedForLine + allocatedAmount));
         enrichedRows.push({
           ...row,
-          sub_head: normalizeText(match.subHead) || row.sub_head,
+          sub_head: row.sub_head,
           amount: toMoney(allocatedAmount),
           budget_line_id: candidateBudgetLineId,
           budget_proposal_id: toPositiveInt(match.budgetProposalId),

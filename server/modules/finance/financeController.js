@@ -428,7 +428,7 @@ const financeController = {
         workflowStatus === 'submitted' ||
         currentStage === 'level1';
 
-      if (isCreator && !isApplicantEditable) {
+      if (isCreator && !isWorkflowEditor && !isApplicantEditable) {
         return res.status(403).json({
           status: 'error',
           message: 'This request is not editable in current workflow state',
@@ -1404,7 +1404,7 @@ const financeController = {
       savedFilePath = finalPath;
 
       const previousDocument = await financeModel.getPrincipalDocument(financeId);
-      
+
       const connection = await db.getConnection();
       try {
         await connection.beginTransaction();

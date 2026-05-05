@@ -11,6 +11,7 @@ const FINANCE_WORKFLOW_PERMISSIONS = [
 ];
 
 const canAccessFinanceWorkflow = permissionMiddleware(FINANCE_WORKFLOW_PERMISSIONS);
+const refreshFinanceAuthorization = permissionMiddleware([]);
 
 const canDeleteFinanceRequest = async (req, res, next) => {
   try {
@@ -86,6 +87,6 @@ router.get('/:id/budget', financeController.getBudgetBreakup);
 
 // Request CRUD
 router.get('/:id', financeController.getFinanceRequest);
-router.put('/:id', financeController.updateFinanceRequest);
+router.put('/:id', refreshFinanceAuthorization, financeController.updateFinanceRequest);
 
 export default router;
