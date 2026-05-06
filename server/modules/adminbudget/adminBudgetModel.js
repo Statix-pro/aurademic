@@ -639,13 +639,19 @@ export async function updateApprovedAmounts(
     throw new Error('Proposal not found');
   }
 
+  const isSuperAdminEditor = normalizeText(editorRole).toLowerCase() === 'super_admin';
   const normalizedCurrentStatus = normalizeText(proposal.status).toLowerCase();
-  const isTerminalStatus =
-    ['archived', 'archive', 'completed'].includes(normalizedCurrentStatus)
-    || normalizedCurrentStatus.includes('rejected')
+  const isArchivedStatus = ['archived', 'archive'].includes(normalizedCurrentStatus);
+  const isCompletedStatus = normalizedCurrentStatus === 'completed';
+  const isRejectedOrReturnedStatus =
+    normalizedCurrentStatus.includes('rejected')
     || normalizedCurrentStatus.includes('returned');
+  const isBlockedStatus =
+    isArchivedStatus
+    || isRejectedOrReturnedStatus
+    || (isCompletedStatus && !isSuperAdminEditor);
 
-  if (isTerminalStatus) {
+  if (isBlockedStatus) {
     throw new Error(`Proposal cannot be processed from status: ${proposal.status}`);
   }
 

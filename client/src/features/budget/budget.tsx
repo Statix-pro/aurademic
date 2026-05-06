@@ -85,6 +85,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Postal Expenses',
       'Local Conveyance',
       'Operational Expenses',
+      'Official Visits',
     ],
   },
   {
@@ -289,6 +290,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   ],
   'Stationery': [
     'Adhesive Gum',
+    'Adhesive Tape',
     'Answer Booklet',
     'Chalk Box',
     'Clips/ Pins',
@@ -303,8 +305,10 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Pen/ Pencil/ Eraser',
     'Plastic Tray',
     'Print Sheets',
+    'Rubber Band',
+    'Rubber Stamp',
     'Scissor/ Knife',
-    'Seal/ Stamp Pad',
+    'Stamp Pad/ Ink',
     'Stapler/ Punching Machine',
     'Sticky Notes',
     'Others'
@@ -579,6 +583,15 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'RO  Mineral Water',
     'Sewage Treatment',
     'Others'
+  ],
+  'Official Visits': [
+    'Registration fees',
+    'Travel',
+    'Accommodation',
+    'Food & Refreshment',
+    'Local Conveyance',
+    'Printing & Stationery',
+    'Miscellaneous'
   ],
 };
 
