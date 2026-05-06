@@ -37,6 +37,14 @@ export interface WorkflowQueueResult<TRecord extends Record<string, any> = Recor
   total: number;
   page: number;
   limit: number;
+  statusCounts?: {
+    total: number;
+    pending: number;
+    approved: number;
+    returned: number;
+    rejected: number;
+    archived: number;
+  };
 }
 
 export interface WorkflowApprovalModuleConfig<TRecord extends Record<string, any> = Record<string, any>> {

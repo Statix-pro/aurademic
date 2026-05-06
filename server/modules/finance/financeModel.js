@@ -323,7 +323,7 @@ const normalizeFinanceAnnexures = (rows = []) =>
     .map((row, index) => {
       const originalName = normalizeText(row?.original_name || row?.originalName || row?.annexure_file_name);
       const storedName = normalizeText(row?.stored_name || row?.storedName || row?.annexure_storage_name) || originalName;
-      return {
+    return {
         annexure_type: normalizeText(row?.annexure_type || row?.annexureType),
         original_name: originalName,
         stored_name: storedName,
@@ -1597,6 +1597,94 @@ const getFinanceAnnexures = async (financeId, { tx = db } = {}) => {
   } catch (error) {
     if (error?.code === 'ER_NO_SUCH_TABLE') {
       return [];
+    }
+    throw error;
+  }
+};
+
+const getFinanceAnnexuresByFinanceIds = async (financeIds = [], { tx = db } = {}) => {
+  const normalizedFinanceIds = Array.from(
+    new Set(
+      (Array.isArray(financeIds) ? financeIds : [])
+        .map((value) => toPositiveInt(value))
+        .filter(Boolean)
+    )
+  );
+
+  if (!normalizedFinanceIds.length) {
+    return new Map();
+  }
+
+  const placeholders = normalizedFinanceIds.map(() => '?').join(', ');
+  let selectSql = `SELECT
+         id,
+         finance_id,
+         annexure_type,
+         original_name,
+         stored_name,
+         file_path,
+         mime_type,
+         file_size,
+         sort_order,
+         created_at
+       FROM finance_request_annexures
+       WHERE finance_id IN (${placeholders})
+         AND (annexure_type IS NULL OR annexure_type <> 'principal_approval')
+       ORDER BY sort_order ASC, id ASC`;
+
+  try {
+    let rows;
+    try {
+      [rows] = await tx.query(selectSql, normalizedFinanceIds);
+    } catch (error) {
+      if (error?.code !== 'ER_BAD_FIELD_ERROR') {
+        throw error;
+      }
+      selectSql = `SELECT
+           id,
+           finance_request_id AS finance_id,
+           annexure_type,
+           original_name,
+           stored_name,
+           file_path,
+           mime_type,
+           file_size,
+           sort_order,
+           created_at
+         FROM finance_request_annexures
+         WHERE finance_request_id IN (${placeholders})
+           AND (annexure_type IS NULL OR annexure_type <> 'principal_approval')
+         ORDER BY sort_order ASC, id ASC`;
+      [rows] = await tx.query(selectSql, normalizedFinanceIds);
+    }
+
+    const map = new Map();
+    for (const row of rows || []) {
+      const financeId = toPositiveInt(row.finance_id);
+      if (!financeId) {
+        continue;
+      }
+      const normalizedRow = {
+        id: toPositiveInt(row.id),
+        finance_id: financeId,
+        annexure_type: normalizeText(row.annexure_type),
+        original_name: normalizeText(row.original_name),
+        stored_name: normalizeText(row.stored_name),
+        file_path: normalizeText(row.file_path),
+        mime_type: normalizeText(row.mime_type),
+        file_size: Number.isFinite(Number(row.file_size)) ? Number(row.file_size) : null,
+        sort_order: Number.isFinite(Number(row.sort_order)) ? Number(row.sort_order) : 0,
+        created_at: row.created_at || null,
+      };
+      if (!map.has(financeId)) {
+        map.set(financeId, []);
+      }
+      map.get(financeId).push(normalizedRow);
+    }
+    return map;
+  } catch (error) {
+    if (error?.code === 'ER_NO_SUCH_TABLE') {
+      return new Map();
     }
     throw error;
   }
@@ -3400,6 +3488,10 @@ const financeModel = {
     const workflowStatus = normalizeText(filters.workflowStatus).toLowerCase() || 'in_progress';
     const isSuperAdmin = Boolean(filters.isSuperAdmin);
     const level1Role = normalizeText(filters.level1Role).toLowerCase();
+    const requestedStatusCategory = normalizeText(filters.statusCategory).toLowerCase();
+    const statusCategoryFilter = ['pending', 'approved', 'returned', 'rejected', 'archived'].includes(requestedStatusCategory)
+      ? requestedStatusCategory
+      : '';
 
     const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
     const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
@@ -3464,16 +3556,119 @@ const financeModel = {
       }
     }
 
-    const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+    const baseWhereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
     const [countRows] = await tx.query(
       `SELECT COUNT(*) AS total
          FROM finance_requests fr
-         ${whereClause}`,
+         ${baseWhereClause}`,
       whereParams
     );
 
     const total = Number(countRows?.[0]?.total || 0);
+
+    const [statusCountRows] = await tx.query(
+      `SELECT
+         COUNT(*) AS total,
+         SUM(CASE WHEN status_category = 'pending' THEN 1 ELSE 0 END) AS pending,
+         SUM(CASE WHEN status_category = 'approved' THEN 1 ELSE 0 END) AS approved,
+         SUM(CASE WHEN status_category = 'returned' THEN 1 ELSE 0 END) AS returned,
+         SUM(CASE WHEN status_category = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+         SUM(CASE WHEN status_category = 'archived' THEN 1 ELSE 0 END) AS archived
+       FROM (
+         SELECT
+           CASE
+             WHEN combined_status LIKE '%archive%' THEN 'archived'
+             WHEN combined_status LIKE '%rejected%' THEN 'rejected'
+             WHEN combined_status LIKE '%returned%' OR combined_status LIKE '%return%' THEN 'returned'
+             WHEN workflow_stage = ? AND workflow_status = 'in_progress' THEN 'pending'
+             WHEN workflow_stage_decision LIKE '%approved%' OR combined_status LIKE '%approved%' OR combined_status LIKE '%completed%' THEN 'approved'
+             ELSE 'pending'
+           END AS status_category
+         FROM (
+           SELECT
+             ${WORKFLOW_STATUS_SQL_EXPR} AS workflow_status,
+             ${WORKFLOW_STAGE_SQL_EXPR} AS workflow_stage,
+             COALESCE((
+               SELECT LOWER(TRIM(wa.decision))
+                 FROM workflow_actions wa
+                WHERE wa.module_key = 'finance'
+                  AND wa.record_id = fr.id
+                  AND LOWER(TRIM(wa.stage)) = ?
+                ORDER BY wa.decided_at DESC, wa.id DESC
+                LIMIT 1
+             ), '') AS workflow_stage_decision,
+             LOWER(CONCAT_WS(' ',
+               ${WORKFLOW_STATUS_SQL_EXPR},
+               ${WORKFLOW_STAGE_SQL_EXPR},
+               COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.lastDecision')), '')
+             )) AS combined_status
+           FROM finance_requests fr
+           ${baseWhereClause}
+         ) scoped_status
+       ) categorized_status`,
+      [normalizedStage, normalizedStage, ...whereParams]
+    );
+
+    const statusCounts = {
+      total: Number(statusCountRows?.[0]?.total || 0),
+      pending: Number(statusCountRows?.[0]?.pending || 0),
+      approved: Number(statusCountRows?.[0]?.approved || 0),
+      returned: Number(statusCountRows?.[0]?.returned || 0),
+      rejected: Number(statusCountRows?.[0]?.rejected || 0),
+      archived: Number(statusCountRows?.[0]?.archived || 0),
+    };
+
+    if (statusCategoryFilter) {
+      whereParts.push(
+        `(CASE
+          WHEN LOWER(CONCAT_WS(' ',
+            ${WORKFLOW_STATUS_SQL_EXPR},
+            ${WORKFLOW_STAGE_SQL_EXPR},
+            COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.lastDecision')), '')
+          )) LIKE '%archive%' THEN 'archived'
+          WHEN LOWER(CONCAT_WS(' ',
+            ${WORKFLOW_STATUS_SQL_EXPR},
+            ${WORKFLOW_STAGE_SQL_EXPR},
+            COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.lastDecision')), '')
+          )) LIKE '%rejected%' THEN 'rejected'
+          WHEN LOWER(CONCAT_WS(' ',
+            ${WORKFLOW_STATUS_SQL_EXPR},
+            ${WORKFLOW_STAGE_SQL_EXPR},
+            COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.lastDecision')), '')
+          )) LIKE '%returned%' OR LOWER(CONCAT_WS(' ',
+            ${WORKFLOW_STATUS_SQL_EXPR},
+            ${WORKFLOW_STAGE_SQL_EXPR},
+            COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.lastDecision')), '')
+          )) LIKE '%return%' THEN 'returned'
+          WHEN ${WORKFLOW_STAGE_SQL_EXPR} = ? AND ${WORKFLOW_STATUS_SQL_EXPR} = 'in_progress' THEN 'pending'
+          WHEN COALESCE((
+            SELECT LOWER(TRIM(wa.decision))
+              FROM workflow_actions wa
+             WHERE wa.module_key = 'finance'
+               AND wa.record_id = fr.id
+               AND LOWER(TRIM(wa.stage)) = ?
+             ORDER BY wa.decided_at DESC, wa.id DESC
+             LIMIT 1
+          ), '') LIKE '%approved%' OR LOWER(CONCAT_WS(' ',
+            ${WORKFLOW_STATUS_SQL_EXPR},
+            ${WORKFLOW_STAGE_SQL_EXPR},
+            COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.lastDecision')), '')
+          )) LIKE '%approved%' OR LOWER(CONCAT_WS(' ',
+            ${WORKFLOW_STATUS_SQL_EXPR},
+            ${WORKFLOW_STAGE_SQL_EXPR},
+            COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.lastDecision')), '')
+          )) LIKE '%completed%' THEN 'approved'
+          ELSE 'pending'
+        END) = ?`
+      );
+      whereParams.push(normalizedStage, normalizedStage, statusCategoryFilter);
+    }
+
+    const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+    const filteredTotal = statusCategoryFilter
+      ? Number(statusCounts[statusCategoryFilter] || 0)
+      : total;
 
     const financeSelectSql = await getFinanceSelectSql({ tx });
     const [rows] = await tx.query(
@@ -3483,17 +3678,21 @@ const financeModel = {
        LIMIT ? OFFSET ?`,
       [normalizedStage, ...whereParams, limit, offset]
     );
-    const principalDocuments = await getFinancePrincipalDocumentsByFinanceIds(rows.map((row) => row.id), { tx });
+    const financeIds = rows.map((row) => row.id);
+    const principalDocuments = await getFinancePrincipalDocumentsByFinanceIds(financeIds, { tx });
+    const annexuresByFinanceId = await getFinanceAnnexuresByFinanceIds(financeIds, { tx });
 
-    return {
+      return {
       items: rows.map((row) => ({
         ...row,
         enclosures: safeParseJSON(row.enclosures, []),
         workflow_state: normalizeWorkflowState(row.workflow_state),
         level1_route_type: resolveFinanceLevel1RouteType(row),
+        annexures: annexuresByFinanceId.get(toPositiveInt(row.id)) || getLegacyAnnexureFromRecord(row),
         principal_document: principalDocuments.get(toPositiveInt(row.id)) || null,
       })),
-      total,
+      total: filteredTotal,
+      statusCounts,
       page,
       limit,
     };

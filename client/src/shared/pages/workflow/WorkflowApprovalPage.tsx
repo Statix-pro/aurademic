@@ -66,11 +66,6 @@ const formatStageLabel = (stage: string, labels: Record<string, string> = {}) =>
     .join(' ');
 };
 
-const FINANCE_LEVEL1_PENDING_LABELS = {
-  coordinator: 'Pending Coordinator',
-  hod: 'Pending HOD',
-} as const;
-
 const FINANCE_HOD_BENEFICIARY_OPTIONS = ['All Beneficiary', 'Faculty', 'Staff', 'Department'];
 const FINANCE_COORDINATOR_BENEFICIARY_OPTIONS = [
   'All Beneficiary',
@@ -267,12 +262,59 @@ const getWorkflowPrincipalDocumentUrl = (record: Record<string, any>) => {
   return `${authenticityUtility.getBaseURL()}${filePath}`;
 };
 
+const getWorkflowAnnexures = (record: Record<string, any>) => {
+  const rows = Array.isArray(record?.annexures) ? record.annexures : [];
+  const annexures = rows
+    .filter((row: Record<string, any>) => String(row?.annexure_type || row?.annexureType || '').trim().toLowerCase() !== 'principal_approval')
+    .filter((row: Record<string, any>) => String(row?.file_path || row?.filePath || '').trim());
+
+  if (annexures.length) {
+    return annexures;
+  }
+
+  const filePath = String(record?.annexure_file_path || '').trim();
+  const storedName = String(record?.annexure_storage_name || '').trim();
+  const originalName = String(record?.annexure_file_name || '').trim();
+  if (!filePath || (!storedName && !originalName)) {
+    return [];
+  }
+
+  return [{
+    annexure_type: record?.annexure_type || '',
+    original_name: originalName || storedName,
+    stored_name: storedName || originalName,
+    file_path: filePath,
+    mime_type: record?.annexure_mime_type || '',
+    file_size: record?.annexure_file_size || null,
+  }];
+};
+
+const getWorkflowAnnexureUrl = (annexure: Record<string, any> | null | undefined) => {
+  const filePath = String(annexure?.file_path || annexure?.filePath || '').trim();
+  if (!filePath) return '';
+  if (filePath.startsWith('http://') || filePath.startsWith('https://') || filePath.startsWith('blob:')) {
+    return filePath;
+  }
+  return `${authenticityUtility.getBaseURL()}${filePath}`;
+};
+
+const getWorkflowAnnexureTitle = (annexure: Record<string, any> | null | undefined) => {
+  return String(
+    annexure?.original_name ||
+    annexure?.originalName ||
+    annexure?.stored_name ||
+    annexure?.storedName ||
+    'Annexure'
+  ).trim();
+};
+
 
 const defaultQueueMapper = (response: any): WorkflowQueueResult => ({
   items: Array.isArray(response?.data) ? response.data : [],
   total: Number(response?.pagination?.total || 0),
   page: Number(response?.pagination?.page || 1),
   limit: Number(response?.pagination?.limit || 20),
+  statusCounts: response?.pagination?.statusCounts,
 });
 
 const defaultTimelineMapper = (response: any): WorkflowTimelineItem[] =>
@@ -474,6 +516,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [activeStage, setActiveStage] = useState<string>('');
   const [rows, setRows] = useState<Record<string, any>[]>([]);
   const [totalRows, setTotalRows] = useState<number>(0);
+  const [queueStatusCounts, setQueueStatusCounts] = useState<WorkflowQueueResult['statusCounts']>(undefined);
   const [page, setPage] = useState<number>(1);
   const [limit, setLimit] = useState<number>(config.queueDefaultLimit || 20);
   const [loading, setLoading] = useState<boolean>(true);
@@ -1196,6 +1239,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       if (!stage) {
         setRows([]);
         setTotalRows(0);
+        setQueueStatusCounts(undefined);
         return;
       }
 
@@ -1218,6 +1262,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             page: requestedPage,
             limit,
             workflowStatus: 'all',
+            ...(statusFilter !== 'total' ? { statusCategory: statusFilter } : {}),
             fiscalYear,
             ...(level1RoleFilter ? { level1Role: level1RoleFilter } : {}),
             ...(beneficiaryFilter !== 'All Beneficiary' ? { beneficiaryType: beneficiaryFilter } : {}),
@@ -1234,6 +1279,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         }
 
         setRows(items);
+        setQueueStatusCounts(mapped.statusCounts);
         const nextLimit = Number(mapped.limit || limit || config.queueDefaultLimit || 20);
         const normalizedMappedPage = Math.max(Number(mapped.page || requestedPage || 1), 1);
         const normalizedMappedTotal = Math.max(Number(mapped.total || 0), 0);
@@ -1244,6 +1290,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       } catch (queueError: any) {
         setRows([]);
         setTotalRows(0);
+        setQueueStatusCounts(undefined);
         setError(queueError?.response?.data?.message || queueError?.message || 'Failed to load queue');
       } finally {
         setLoading(false);
@@ -1260,6 +1307,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       beneficiaryFilter,
       amountFilter,
       searchTerm,
+      statusFilter,
       stageTabs,
     ]
   );
@@ -1327,7 +1375,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       setError(queueError?.response?.data?.message || queueError?.message || 'Failed to load queue');
       setLoading(false);
     });
-  }, [activeStage, loadQueue, page, fiscalYear, beneficiaryFilter, searchTerm]);
+  }, [activeStage, loadQueue, page, fiscalYear, beneficiaryFilter, searchTerm, statusFilter]);
 
   useEffect(() => {
     if (!deletePopupOpen || deleteCountdown <= 0) {
@@ -1728,33 +1776,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       return 'Approved';
     }
 
-    const activeTab = stageTabs.find((tab) => tab.key === activeStageTabKey) || null;
-    if (enableLevel1RoleTabs) {
-      const currentStageToken = String(getRecordCurrentStage(record) || '').toLowerCase();
-      if (currentStageToken === 'level1') {
-        if (activeStage === 'level1' && activeTab?.level1Role) {
-          return FINANCE_LEVEL1_PENDING_LABELS[activeTab.level1Role];
-        }
-        const level1Role = resolveFinanceLevel1Role(record);
-        return FINANCE_LEVEL1_PENDING_LABELS[level1Role];
-      }
-      if (currentStageToken) {
-        return `Pending ${formatStageLabel(currentStageToken, config.stageLabels)}`;
-      }
-    }
-
-    const stage = formatStageLabel(String(record.workflow_stage || ''), config.stageLabels);
-    return `Pending ${stage}`;
+    return 'Pending';
   }, [
-    activeStage,
-    activeStageTabKey,
-    enableLevel1RoleTabs,
-    config.stageLabels,
-    getRecordCurrentStage,
     getRecordStageDecision,
     getRecordWorkflowDecision,
     resolveStatusCategory,
-    stageTabs,
   ]);
 
   const getDofPrincipalIndicator = useCallback((record: Record<string, any>) => {
@@ -1904,13 +1930,39 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }, [amountScopedRows, searchTerm]);
 
   const statusStats = useMemo(() => {
+    if (
+      queueStatusCounts &&
+      !searchTerm.trim() &&
+      !amountFilter &&
+      (!enableSecondaryFilter || beneficiaryFilter === 'All Beneficiary') &&
+      !secondaryFilter
+    ) {
+      return {
+        total: Number(queueStatusCounts.total || 0),
+        pending: Number(queueStatusCounts.pending || 0),
+        approved: Number(queueStatusCounts.approved || 0),
+        returned: Number(queueStatusCounts.returned || 0),
+        rejected: Number(queueStatusCounts.rejected || 0),
+        archived: Number(queueStatusCounts.archived || 0),
+      };
+    }
+
     const stats = { total: searchScopedRows.length, pending: 0, approved: 0, returned: 0, rejected: 0, archived: 0 };
     for (const row of searchScopedRows) {
       const category = resolveStatusCategory(row);
       stats[category] += 1;
     }
     return stats;
-  }, [searchScopedRows, resolveStatusCategory]);
+  }, [
+    amountFilter,
+    beneficiaryFilter,
+    enableSecondaryFilter,
+    queueStatusCounts,
+    searchScopedRows,
+    searchTerm,
+    secondaryFilter,
+    resolveStatusCategory,
+  ]);
 
   const filteredRows = useMemo(() => {
     if (statusFilter === 'total') {
@@ -2055,6 +2107,12 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
+  }, []);
+
+  const handleAnnexureView = useCallback((annexure: Record<string, any>) => {
+    const url = getWorkflowAnnexureUrl(annexure);
+    if (!url) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
   }, []);
 
   const filteredColumns = useMemo(() => {
@@ -2331,7 +2389,10 @@ const proposalFilteredRows = useMemo(() => {
             <div className="fw-stats">
               <div
                 className={`fw-stats-card total ${statusFilter === 'total' ? 'active' : ''}`}
-                onClick={() => setStatusFilter('total')}
+                onClick={() => {
+                  setStatusFilter('total');
+                  setPage(1);
+                }}
               >
                 <span className="fw-stats-icon"><Briefcase size={18} /></span>
                 <div className="fw-stats-text">
@@ -2341,7 +2402,10 @@ const proposalFilteredRows = useMemo(() => {
               </div>
               <div
                 className={`fw-stats-card pending ${statusFilter === 'pending' ? 'active' : ''}`}
-                onClick={() => setStatusFilter('pending')}
+                onClick={() => {
+                  setStatusFilter('pending');
+                  setPage(1);
+                }}
               >
                 <span className="fw-stats-icon"><Clock size={18} /></span>
                 <div className="fw-stats-text">
@@ -2351,7 +2415,10 @@ const proposalFilteredRows = useMemo(() => {
               </div>
               <div
                 className={`fw-stats-card returned ${statusFilter === 'returned' ? 'active' : ''}`}
-                onClick={() => setStatusFilter('returned')}
+                onClick={() => {
+                  setStatusFilter('returned');
+                  setPage(1);
+                }}
               >
                 <span className="fw-stats-icon"><RotateCcw size={18} /></span>
                 <div className="fw-stats-text">
@@ -2361,7 +2428,10 @@ const proposalFilteredRows = useMemo(() => {
               </div>
               <div
                 className={`fw-stats-card rejected ${statusFilter === 'rejected' ? 'active' : ''}`}
-                onClick={() => setStatusFilter('rejected')}
+                onClick={() => {
+                  setStatusFilter('rejected');
+                  setPage(1);
+                }}
               >
                 <span className="fw-stats-icon"><XCircle size={18} /></span>
                 <div className="fw-stats-text">
@@ -2371,7 +2441,10 @@ const proposalFilteredRows = useMemo(() => {
               </div>
               <div
                 className={`fw-stats-card approved ${statusFilter === 'approved' ? 'active' : ''}`}
-                onClick={() => setStatusFilter('approved')}
+                onClick={() => {
+                  setStatusFilter('approved');
+                  setPage(1);
+                }}
               >
                 <span className="fw-stats-icon"><CheckCircle2 size={18} /></span>
                 <div className="fw-stats-text">
@@ -2381,7 +2454,10 @@ const proposalFilteredRows = useMemo(() => {
               </div>
               <div
                 className={`fw-stats-card archived ${statusFilter === 'archived' ? 'active' : ''}`}
-                onClick={() => setStatusFilter('archived')}
+                onClick={() => {
+                  setStatusFilter('archived');
+                  setPage(1);
+                }}
               >
                 <span className="fw-stats-icon"><Archive size={18} /></span>
                 <div className="fw-stats-text">
@@ -2452,6 +2528,13 @@ const proposalFilteredRows = useMemo(() => {
                     ).trim();
                     const showPrincipalDocumentAction = canShowPrincipalDocumentAction(record);
                     const principalDocumentActionBusy = principalDocumentBusyId === recordId;
+                    const primaryAnnexure = getWorkflowAnnexures(record)[0] || null;
+                    const annexureUrl = getWorkflowAnnexureUrl(primaryAnnexure);
+                    const annexureTitle = getWorkflowAnnexureTitle(primaryAnnexure);
+                    const showPrincipalAnnexureAction =
+                      config.moduleKey === 'finance' &&
+                      String(activeStage || '').toLowerCase() === 'principal' &&
+                      Boolean(annexureUrl);
                     
                     // Get tag based on beneficiary type
                     const beneficiaryType = record.beneficiary_type || record.beneficiaryType || '';
@@ -2638,6 +2721,21 @@ const proposalFilteredRows = useMemo(() => {
                                     <Trash2 size={18} />
                                   </button>
                                 </>
+                              )}
+
+                              {showPrincipalAnnexureAction && primaryAnnexure && (
+                                <button
+                                  type="button"
+                                  className="fw-action-btn fw-action-btn--download"
+                                  title={`View Annexure: ${annexureTitle}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAnnexureView(primaryAnnexure);
+                                  }}
+                                  style={{ background: '#eaf6ff', color: '#075985' }}
+                                >
+                                  <FileText size={18} />
+                                </button>
                               )}
 
                               {Boolean(config.enablePdfPreview) && (

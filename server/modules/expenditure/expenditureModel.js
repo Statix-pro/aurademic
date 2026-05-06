@@ -3710,6 +3710,10 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
   const workflowStatus = normalizeText(filters.workflowStatus).toLowerCase() || 'in_progress';
   const isSuperAdmin = Boolean(filters.isSuperAdmin);
   const level1Role = normalizeText(filters.level1Role).toLowerCase();
+  const requestedStatusCategory = normalizeText(filters.statusCategory).toLowerCase();
+  const statusCategoryFilter = ['pending', 'approved', 'returned', 'rejected', 'archived'].includes(requestedStatusCategory)
+    ? requestedStatusCategory
+    : '';
   const isAllStage = normalizedStage === 'all';
 
   const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
@@ -3783,15 +3787,118 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
     }
   }
 
-  const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+  const baseWhereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
   const [countRows] = await tx.query(
     `SELECT COUNT(*) AS total
        FROM expenditure_requests er
-       ${whereClause}`,
+       ${baseWhereClause}`,
     whereParams
   );
   const total = Number(countRows?.[0]?.total || 0);
+
+  const [statusCountRows] = await tx.query(
+    `SELECT
+       COUNT(*) AS total,
+       SUM(CASE WHEN status_category = 'pending' THEN 1 ELSE 0 END) AS pending,
+       SUM(CASE WHEN status_category = 'approved' THEN 1 ELSE 0 END) AS approved,
+       SUM(CASE WHEN status_category = 'returned' THEN 1 ELSE 0 END) AS returned,
+       SUM(CASE WHEN status_category = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+       SUM(CASE WHEN status_category = 'archived' THEN 1 ELSE 0 END) AS archived
+     FROM (
+       SELECT
+         CASE
+           WHEN combined_status LIKE '%archive%' THEN 'archived'
+           WHEN combined_status LIKE '%rejected%' THEN 'rejected'
+           WHEN combined_status LIKE '%returned%' OR combined_status LIKE '%return%' THEN 'returned'
+           WHEN workflow_stage = ? AND workflow_status = 'in_progress' THEN 'pending'
+           WHEN workflow_stage_decision LIKE '%approved%' OR combined_status LIKE '%approved%' OR combined_status LIKE '%completed%' THEN 'approved'
+           ELSE 'pending'
+         END AS status_category
+       FROM (
+         SELECT
+           ${WORKFLOW_STATUS_SQL_EXPR} AS workflow_status,
+           ${WORKFLOW_STAGE_SQL_EXPR} AS workflow_stage,
+           COALESCE((
+             SELECT LOWER(TRIM(wa.decision))
+               FROM workflow_actions wa
+              WHERE wa.module_key = 'expenditure'
+                AND wa.record_id = er.id
+                AND (? = 'all' OR LOWER(TRIM(wa.stage)) = ?)
+              ORDER BY wa.decided_at DESC, wa.id DESC
+              LIMIT 1
+           ), '') AS workflow_stage_decision,
+           LOWER(CONCAT_WS(' ',
+             ${WORKFLOW_STATUS_SQL_EXPR},
+             ${WORKFLOW_STAGE_SQL_EXPR},
+             COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+           )) AS combined_status
+         FROM expenditure_requests er
+         ${baseWhereClause}
+       ) scoped_status
+     ) categorized_status`,
+    [normalizedStage, normalizedStage, normalizedStage, ...whereParams]
+  );
+
+  const statusCounts = {
+    total: Number(statusCountRows?.[0]?.total || 0),
+    pending: Number(statusCountRows?.[0]?.pending || 0),
+    approved: Number(statusCountRows?.[0]?.approved || 0),
+    returned: Number(statusCountRows?.[0]?.returned || 0),
+    rejected: Number(statusCountRows?.[0]?.rejected || 0),
+    archived: Number(statusCountRows?.[0]?.archived || 0),
+  };
+
+  if (statusCategoryFilter) {
+    whereParts.push(
+      `(CASE
+        WHEN LOWER(CONCAT_WS(' ',
+          ${WORKFLOW_STATUS_SQL_EXPR},
+          ${WORKFLOW_STAGE_SQL_EXPR},
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+        )) LIKE '%archive%' THEN 'archived'
+        WHEN LOWER(CONCAT_WS(' ',
+          ${WORKFLOW_STATUS_SQL_EXPR},
+          ${WORKFLOW_STAGE_SQL_EXPR},
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+        )) LIKE '%rejected%' THEN 'rejected'
+        WHEN LOWER(CONCAT_WS(' ',
+          ${WORKFLOW_STATUS_SQL_EXPR},
+          ${WORKFLOW_STAGE_SQL_EXPR},
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+        )) LIKE '%returned%' OR LOWER(CONCAT_WS(' ',
+          ${WORKFLOW_STATUS_SQL_EXPR},
+          ${WORKFLOW_STAGE_SQL_EXPR},
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+        )) LIKE '%return%' THEN 'returned'
+        WHEN ${WORKFLOW_STAGE_SQL_EXPR} = ? AND ${WORKFLOW_STATUS_SQL_EXPR} = 'in_progress' THEN 'pending'
+        WHEN COALESCE((
+          SELECT LOWER(TRIM(wa.decision))
+            FROM workflow_actions wa
+           WHERE wa.module_key = 'expenditure'
+             AND wa.record_id = er.id
+             AND (? = 'all' OR LOWER(TRIM(wa.stage)) = ?)
+           ORDER BY wa.decided_at DESC, wa.id DESC
+           LIMIT 1
+        ), '') LIKE '%approved%' OR LOWER(CONCAT_WS(' ',
+          ${WORKFLOW_STATUS_SQL_EXPR},
+          ${WORKFLOW_STAGE_SQL_EXPR},
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+        )) LIKE '%approved%' OR LOWER(CONCAT_WS(' ',
+          ${WORKFLOW_STATUS_SQL_EXPR},
+          ${WORKFLOW_STAGE_SQL_EXPR},
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+        )) LIKE '%completed%' THEN 'approved'
+        ELSE 'pending'
+      END) = ?`
+    );
+    whereParams.push(normalizedStage, normalizedStage, normalizedStage, statusCategoryFilter);
+  }
+
+  const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+  const filteredTotal = statusCategoryFilter
+    ? Number(statusCounts[statusCategoryFilter] || 0)
+    : total;
 
   const [rows] = await tx.query(
     `SELECT
@@ -3840,7 +3947,8 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
       workflow_state: normalizeWorkflowState(row.workflow_state),
       level1_route_type: resolveExpenditureLevel1RouteType(row),
     })),
-    total,
+    total: filteredTotal,
+    statusCounts,
     page,
     limit,
   };

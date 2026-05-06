@@ -1052,7 +1052,7 @@ const financeController = {
   async getFinanceQueue(req, res) {
     try {
       const stage = normalizeText(req.params.stage).toLowerCase();
-      const { page, limit, workflowStatus, level1Role } = req.query;
+      const { page, limit, workflowStatus, statusCategory, level1Role } = req.query;
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
       const effectiveLevel1Role = stage === 'level1'
         ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
@@ -1068,6 +1068,7 @@ const financeController = {
           page,
           limit,
           workflowStatus,
+          statusCategory,
           level1Role: effectiveLevel1Role,
         },
       });
@@ -1079,6 +1080,7 @@ const financeController = {
           total: queue.total,
           page: queue.page,
           limit: queue.limit,
+          statusCounts: queue.statusCounts,
         },
       });
     } catch (error) {
