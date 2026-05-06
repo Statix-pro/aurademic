@@ -587,8 +587,15 @@ const resolveBillFileUrl = (file: BillFileRecord) => {
 const getSelectedOption = (
   value: string | number,
   options: Array<OptionType | { label: string; options: OptionType[] }>
-): OptionType | null =>
-  flattenOptions(options).find((opt) => String(opt.value) === String(value)) ?? null;
+): OptionType | null => {
+  const normalizedValue = String(value ?? '').trim();
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const matched = flattenOptions(options).find((opt) => String(opt.value) === normalizedValue);
+  return matched ?? { value: normalizedValue, label: normalizedValue };
+};
 
 const PRIMARY_HEAD_OPTIONS: Array<{ label: string; options: OptionType[] }> =
   BUDGET_HEAD_GROUPS.map((group) => ({
