@@ -271,6 +271,29 @@ const isDomainValidationError = (message = '') =>
     (fragment) => message.includes(fragment),
   );
 
+const getNormalizedUserRoles = (req) => {
+  return [
+    ...new Set(
+      [
+        ...(Array.isArray(req.user?.roles) ? req.user.roles : [req.user?.roles]),
+        req.user?.role,
+      ]
+        .map((role) => normalizeText(role).toLowerCase())
+        .filter(Boolean)
+    ),
+  ];
+};
+
+const getNormalizedUserPermissions = (req) => {
+  return [
+    ...new Set(
+      (Array.isArray(req.user?.permissions) ? req.user.permissions : [req.user?.permissions])
+        .map((permission) => normalizeText(permission).toLowerCase())
+        .filter(Boolean)
+    ),
+  ];
+};
+
 const resolveBulkNeftTemplatePath = () => {
   if (fs.existsSync(BULK_NEFT_TEMPLATE_PATH)) return BULK_NEFT_TEMPLATE_PATH;
   if (fs.existsSync(SAMPLE_BULK_NEFT_TEMPLATE_PATH)) return SAMPLE_BULK_NEFT_TEMPLATE_PATH;
@@ -279,14 +302,12 @@ const resolveBulkNeftTemplatePath = () => {
 
 const isSuperAdminRequest = (req) =>
   Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)
-  || (Array.isArray(req.user?.roles)
-    ? req.user.roles.some((role) => normalizeText(role).toLowerCase() === 'super_admin')
-    : false);
+  || getNormalizedUserRoles(req).includes('super_admin');
 
 const hasAnyExpenditureWorkflowPermission = (req) => {
-  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+  const permissions = getNormalizedUserPermissions(req);
   return permissions.some((permission) =>
-    normalizeText(permission).toLowerCase().startsWith('expenditure.workflow.')
+    permission.startsWith('expenditure.workflow.') || permission.startsWith('finance.workflow.')
   );
 };
 
@@ -295,15 +316,13 @@ const hasExpenditureStagePermission = (req, stage) => {
   if (!normalizedStage) return false;
   if (isSuperAdminRequest(req)) return true;
 
-  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  const normalizedPermissions = permissions.map((permission) => normalizeText(permission).toLowerCase());
-  return normalizedPermissions.includes(`expenditure.workflow.${normalizedStage}`);
+  const normalizedPermissions = getNormalizedUserPermissions(req);
+  return normalizedPermissions.includes(`expenditure.workflow.${normalizedStage}`)
+    || normalizedPermissions.includes(`finance.workflow.${normalizedStage}`);
 };
 
 const canAccessExpenditureByRole = (req) => {
-  const normalizedRoles = Array.isArray(req.user?.roles)
-    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
-    : [];
+  const normalizedRoles = getNormalizedUserRoles(req);
 
   if (!normalizedRoles.length) {
     return false;
@@ -323,9 +342,7 @@ const canAccessExpenditureByRole = (req) => {
 };
 
 const resolveExpenditureLevel1QueueRole = (req) => {
-  const normalizedRoles = Array.isArray(req.user?.roles)
-    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
-    : [];
+  const normalizedRoles = getNormalizedUserRoles(req);
 
   const hasCoordinatorRole = normalizedRoles.includes('coordinator') || normalizedRoles.includes('entity_approver');
   const hasHodRole = normalizedRoles.includes('hod');

@@ -4,7 +4,11 @@ import multer from 'multer';
 import path from 'path';
 import expenditureController from './expenditureController.js';
 import * as expenditureModel from './expenditureModel.js';
-import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
+import {
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  permissionMiddleware,
+} from '../../middleware/authMiddleware.js';
 
 
 const router = express.Router();
@@ -64,8 +68,9 @@ const expenditureUpload = multer({
 
 const EXPENDITURE_WORKFLOW_PERMISSIONS = [
   'expenditure.workflow.*',
+  'finance.workflow.*',
 ];
-const EXPENDITURE_DOF_PERMISSIONS = ['expenditure.workflow.dof'];
+const EXPENDITURE_DOF_PERMISSIONS = ['expenditure.workflow.dof', 'finance.workflow.dof'];
 
 const canAccessExpenditureWorkflow = permissionMiddleware(EXPENDITURE_WORKFLOW_PERMISSIONS);
 const canAccessExpenditureDofQueue = permissionMiddleware(EXPENDITURE_DOF_PERMISSIONS);
@@ -160,10 +165,10 @@ router.get('/queue/:stage', canAccessExpenditureWorkflowForAdmins, expenditureCo
 router.patch('/:id/approval', canAccessExpenditureWorkflowForAdmins, expenditureController.approveExpenditureWorkflow);
 router.patch('/:id/archive-toggle', canAccessExpenditureWorkflowForAdmins, expenditureController.toggleArchiveStatus);
 router.post('/:id/resubmit', expenditureController.resubmitExpenditureRequest);
-router.get('/:id/status-updates', expenditureController.getStatusUpdates);
+router.get('/:id/status-updates', authorizationSnapshotMiddleware, expenditureController.getStatusUpdates);
 
-router.get('/:id', expenditureController.getExpenditure);
-router.get('/:id/timeline', expenditureController.getExpenditureWorkflowTimeline);
+router.get('/:id', authorizationSnapshotMiddleware, expenditureController.getExpenditure);
+router.get('/:id/timeline', authorizationSnapshotMiddleware, expenditureController.getExpenditureWorkflowTimeline);
 
 router.post(
   '/',
@@ -174,8 +179,10 @@ router.post(
   expenditureController.createExpenditureRequest,
 );
 
-router.post('/advance', expenditureController.createAdvance);router.put(
+router.post('/advance', expenditureController.createAdvance);
+router.put(
   '/:id',
+  authorizationSnapshotMiddleware,
   expenditureUpload.fields([
     { name: 'bulk_neft_file', maxCount: 1 },
     { name: 'bill_files', maxCount: 20 },

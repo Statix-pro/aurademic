@@ -872,9 +872,21 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
     ))
   `;
 
-  const approvalFilterSql = effectiveStatus === 'all'
-    ? ''
-    : ` AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = '${effectiveStatus}'`;
+  const payeeTermClauses = searchTerms.length
+    ? searchTerms.map(() => `${payeeSearchableColumns} LIKE ?`).join(' AND ')
+    : '1 = 1';
+
+  if (effectiveStatus === 'all') {
+    const [rows] = await db.execute(
+      `SELECT * FROM expenditure_payees ep
+        WHERE ep.is_active = 1
+          AND ${payeeTermClauses}
+        ORDER BY ep.updated_at DESC, ep.id DESC
+        LIMIT ${limitNum} OFFSET ${offsetNum}`,
+      [...searchTerms.map((term) => `%${term}%`)],
+    );
+    return rows.map(normalizePayeeRecord);
+  }
 
   if (searchTerms.length >= 2) {
     const ifscCandidate = searchTerms[searchTerms.length - 1].toUpperCase();
@@ -1029,10 +1041,6 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
   );
 
   if (payeeRowResults.length) return payeeRowResults.map(normalizePayeeRecord);
-
-  const payeeTermClauses = searchTerms.length
-    ? searchTerms.map(() => `${payeeSearchableColumns} LIKE ?`).join(' AND ')
-    : '1 = 1';
 
   const [rows] = await db.execute(
     `SELECT * FROM expenditure_payees ep
