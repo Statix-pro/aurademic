@@ -1037,7 +1037,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
   const [rows] = await db.execute(
     `SELECT * FROM expenditure_payees ep
       WHERE ep.is_active = 1
-        ${effectiveStatus === 'all' ? '1 = 1' : `LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = '${effectiveStatus}'`}
+        ${effectiveStatus === 'all' ? '' : `AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = '${effectiveStatus}'`}
         AND ${payeeTermClauses}
       ORDER BY ep.payee_name ASC LIMIT ${limitNum} OFFSET ${offsetNum}`,
     [...searchTerms.map((term) => `%${term}%`)],
