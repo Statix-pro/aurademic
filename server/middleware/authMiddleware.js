@@ -170,6 +170,24 @@ const ensureLatestUserAuthorization = async (req, res) => {
   return req.user;
 };
 
+export const authorizationSnapshotMiddleware = async (req, res, next) => {
+  try {
+    const user = await ensureLatestUserAuthorization(req, res);
+
+    if (!user) {
+      return;
+    }
+
+    return next();
+  } catch (error) {
+    console.error('Authorization snapshot refresh error:', error);
+
+    return res.status(500).json({
+      message: 'Failed to validate permissions',
+    });
+  }
+};
+
 export const authMiddleware = (req, res, next) => {
   try {
     const decoded = decodeTokenFromRequest(req, res);

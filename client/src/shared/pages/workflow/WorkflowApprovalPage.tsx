@@ -1096,6 +1096,8 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     };
 
     if (token.includes('archived') || token.includes('archive')) return 'archived';
+    if (token.includes('rejected') || workflowDecision === 'rejected') return 'rejected';
+    if (token.includes('returned') || token.includes('return') || workflowDecision === 'returned') return 'returned';
 
     if (currentStage && activeStageKey && currentStage === activeStageKey) {
       return 'pending';
@@ -1765,6 +1767,18 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     const status = String(record.workflow_status || record.status || '').toLowerCase();
     const workflowStatus = String(record.workflow_state?.status || '').toLowerCase();
     const combinedStatus = `${status} ${workflowStatus}`;
+    const hasPassedDof =
+      currentStage === 'principal' ||
+      currentStage === 'chairman' ||
+      currentStage === 'completed' ||
+      combinedStatus.includes('dof_approved') ||
+      combinedStatus.includes('principal_approved') ||
+      combinedStatus.includes('chairman_approved') ||
+      combinedStatus.includes('completed') ||
+      combinedStatus === 'approved';
+
+    if (!hasPassedDof) return null;
+
     const isPrincipalAccepted =
       currentStage === 'chairman' ||
       currentStage === 'completed' ||
