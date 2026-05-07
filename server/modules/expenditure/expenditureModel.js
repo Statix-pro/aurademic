@@ -3787,6 +3787,31 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
     }
   }
 
+  const priorTerminalStageByDashboard = {
+    principal: 'dof',
+    chairman: 'principal',
+  };
+  const priorTerminalStage = priorTerminalStageByDashboard[normalizedStage];
+  if (priorTerminalStage) {
+    whereParts.push(
+      `NOT EXISTS (
+        SELECT 1
+          FROM workflow_actions latest_terminal
+         WHERE latest_terminal.id = (
+           SELECT wa_latest.id
+             FROM workflow_actions wa_latest
+            WHERE wa_latest.module_key = 'expenditure'
+              AND wa_latest.record_id = er.id
+            ORDER BY wa_latest.decided_at DESC, wa_latest.id DESC
+            LIMIT 1
+         )
+           AND LOWER(TRIM(latest_terminal.stage)) = ?
+           AND latest_terminal.decision IN ('returned', 'rejected')
+      )`
+    );
+    whereParams.push(priorTerminalStage);
+  }
+
   const baseWhereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
   const [countRows] = await tx.query(

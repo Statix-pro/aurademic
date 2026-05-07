@@ -1783,16 +1783,25 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     resolveStatusCategory,
   ]);
 
-  const getDofPrincipalIndicator = useCallback((record: Record<string, any>) => {
+  const getFinanceProgressIndicators = useCallback((record: Record<string, any>) => {
     if (config.moduleKey !== 'finance') return null;
-    if (String(activeStage || '').toLowerCase() !== 'dof') return null;
+    const activeStageKey = String(activeStage || '').toLowerCase();
+    if (!['dof', 'principal'].includes(activeStageKey)) return null;
     const statusCategory = resolveStatusCategory(record);
     if (statusCategory === 'returned' || statusCategory === 'rejected') return null;
 
     const currentStage = String(getRecordCurrentStage(record) || '').toLowerCase();
     const status = String(record.workflow_status || record.status || '').toLowerCase();
     const workflowStatus = String(record.workflow_state?.status || '').toLowerCase();
-    const combinedStatus = `${status} ${workflowStatus}`;
+    const lastDecision = String(record.workflow_state?.lastDecision || '').toLowerCase();
+    const combinedStatus = `${status} ${workflowStatus} ${lastDecision}`;
+    const flow = Array.isArray(record.workflow_state?.flow)
+      ? record.workflow_state.flow.map((stage: unknown) => String(stage || '').toLowerCase())
+      : [];
+    const hasChairmanStage =
+      flow.includes('chairman') ||
+      currentStage === 'chairman' ||
+      combinedStatus.includes('chairman_approved');
     const hasPassedDof =
       currentStage === 'principal' ||
       currentStage === 'chairman' ||
@@ -1805,20 +1814,36 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     if (!hasPassedDof) return null;
 
-    const isPrincipalAccepted =
+    const isPrincipalApproved =
       currentStage === 'chairman' ||
       currentStage === 'completed' ||
       combinedStatus.includes('principal_approved') ||
       combinedStatus.includes('chairman_approved') ||
       combinedStatus.includes('completed') ||
       combinedStatus === 'approved';
+    const isChairmanApproved =
+      currentStage === 'completed' ||
+      combinedStatus.includes('chairman_approved') ||
+      combinedStatus.includes('completed') ||
+      combinedStatus === 'approved';
 
-    return {
-      label: isPrincipalAccepted ? 'Principal Accepted' : 'Principal Pending',
-      className: isPrincipalAccepted
+    if (hasChairmanStage && isPrincipalApproved) {
+      return [{
+        label: isChairmanApproved ? 'Chairman Approved' : 'Chairman Pending',
+        className: isChairmanApproved
+          ? 'fw-principal-indicator fw-principal-indicator--accepted'
+          : 'fw-principal-indicator fw-principal-indicator--pending',
+      }];
+    }
+
+    if (activeStageKey !== 'dof') return null;
+
+    return [{
+      label: isPrincipalApproved ? 'Principal Approved' : 'Principal Pending',
+      className: isPrincipalApproved
         ? 'fw-principal-indicator fw-principal-indicator--accepted'
         : 'fw-principal-indicator fw-principal-indicator--pending',
-    };
+    }];
   }, [activeStage, config.moduleKey, getRecordCurrentStage, resolveStatusCategory]);
 
   function resolveFinanceLevel1Role(record: Record<string, any>): 'hod' | 'coordinator' {
@@ -2531,9 +2556,8 @@ const proposalFilteredRows = useMemo(() => {
                     const primaryAnnexure = getWorkflowAnnexures(record)[0] || null;
                     const annexureUrl = getWorkflowAnnexureUrl(primaryAnnexure);
                     const annexureTitle = getWorkflowAnnexureTitle(primaryAnnexure);
-                    const showPrincipalAnnexureAction =
+                    const showWorkflowAnnexureAction =
                       config.moduleKey === 'finance' &&
-                      String(activeStage || '').toLowerCase() === 'principal' &&
                       Boolean(annexureUrl);
                     
                     // Get tag based on beneficiary type
@@ -2723,7 +2747,7 @@ const proposalFilteredRows = useMemo(() => {
                                 </>
                               )}
 
-                              {showPrincipalAnnexureAction && primaryAnnexure && (
+                              {showWorkflowAnnexureAction && primaryAnnexure && (
                                 <button
                                   type="button"
                                   className="fw-action-btn fw-action-btn--download"
@@ -2757,12 +2781,16 @@ const proposalFilteredRows = useMemo(() => {
                                   {getDisplayStatus(record)}
                                 </span>
                                 {(() => {
-                                  const principalIndicator = getDofPrincipalIndicator(record);
-                                  if (!principalIndicator) return null;
+                                  const financeIndicators = getFinanceProgressIndicators(record);
+                                  if (!financeIndicators) return null;
                                   return (
-                                    <span className={principalIndicator.className}>
-                                      {principalIndicator.label}
-                                    </span>
+                                    <>
+                                      {financeIndicators.map((indicator) => (
+                                        <span key={indicator.label} className={indicator.className}>
+                                          {indicator.label}
+                                        </span>
+                                      ))}
+                                    </>
                                   );
                                 })()}
                               </div>

@@ -325,6 +325,7 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
     'Registration Kit',
     'Remuneration',
     'Sitting Fees',
+    'Stationery',
     'T-Shirt',
     'Travel',
     'Others',
@@ -342,6 +343,7 @@ const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
     'Registration fee',
     'Remuneration',
     'Sitting Fees',
+    'Stationery',
     'Travel',
     'Others',
   ],
@@ -396,24 +398,6 @@ const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {
   Seminar: ['National', 'International'],
   Conference: ['National', 'International'],
   'Guest Lecture': ['Industry', 'Academic'],
-  Stationery: [
-    'Adhesive Gum',
-    'Adhesive Tape',
-    'Chalk Box',
-    'Clips/ Pins',
-    'Cloth Covers',
-    'Combined Items',
-    'Duster',
-    'Highlighter',
-    'Marker Pen',
-    'Office Covers',
-    'Plastic Tray',
-    'Rubber Band',
-    'Rubber Stamp',
-    'Scissor/ Knife',
-    'Stamp Pad/ Ink',
-    'Sticky Notes'
-  ],
 };
 
 // 2. Specific Budget Sub-Heads (Head-specific mapping)
