@@ -252,7 +252,7 @@ const normalizeBudgetRows = (rows = []) => {
     const rowNo = index + 1;
     const budgetHead = normalizeText(row?.budget_head || row?.category);
     const subHead = normalizeText(row?.sub_head || row?.head);
-    const headOnlyMatch = Boolean(row?.head_only_match);
+    const headOnlyMatch = Boolean(row?.head_only_match) && !subHead;
     const parsedAmount = Number(row?.amount);
     const hasAvailableSnapshot =
       row?.available_amount_snapshot !== undefined && row?.available_amount_snapshot !== null;
@@ -538,9 +538,10 @@ const normalizeHeadLabelForMatch = (value) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-const shouldUseHeadOnlyAvailabilityMatch = (budgetHead) => {
+const shouldUseHeadOnlyAvailabilityMatch = (budgetHead, subHead = '') => {
   const normalized = normalizeHeadLabelForMatch(budgetHead);
-  return Boolean(normalized);
+  const normalizedSubHead = normalizeSubHeadForLookup(subHead);
+  return Boolean(normalized && !normalizedSubHead);
 };
 
 const WORKFLOW_STATUS_SQL_EXPR = `
@@ -1075,7 +1076,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   const normalizedSubHead = normalizeSubHeadForLookup(subHead);
   const normalizedPreferredBudgetLineId = toPositiveInt(preferredBudgetLineId);
   const normalizedExcludeFinanceId = toPositiveInt(excludeFinanceId);
-  const applyHeadOnlyMatch = Boolean(headOnlyMatch) || shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead);
+  const applyHeadOnlyMatch = Boolean(headOnlyMatch) || shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead, normalizedSubHead);
   const scope = await resolveBudgetAvailabilityScope(conn, {
     beneficiaryType,
     beneficiaryValue,
@@ -1292,7 +1293,7 @@ const enrichBudgetRowsWithBudgetRefs = async (
     const effectiveLookupBudgetHead = row.budget_head || normalizedLookupBudgetHead;
     const effectiveLookupSubHead = normalizeSubHeadForLookup(row.sub_head) || normalizedLookupSubHead;
     const applyHeadOnlyMatch =
-      Boolean(row.head_only_match) || shouldUseHeadOnlyAvailabilityMatch(effectiveLookupBudgetHead);
+      Boolean(row.head_only_match) || shouldUseHeadOnlyAvailabilityMatch(effectiveLookupBudgetHead, effectiveLookupSubHead);
 
     const availability = await resolveBudgetAvailabilityForUser(conn, {
       userId,

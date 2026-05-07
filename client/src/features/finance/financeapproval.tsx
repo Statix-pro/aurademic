@@ -388,8 +388,8 @@ const isHeadInSharedHoacGroup = (head: string): boolean =>
 
 const shouldUseHeadOnlyAvailabilityMatch = (budgetHead: string, subHead: string): boolean => {
   const normalizedHead = String(budgetHead || '').trim();
-  void subHead;
-  return Boolean(normalizedHead);
+  const normalizedSubHead = String(subHead || '').trim();
+  return Boolean(normalizedHead && !normalizedSubHead);
 };
 
 const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {
@@ -1783,15 +1783,10 @@ const FinanceApproval: React.FC = () => {
 
     setBudgetRows((prev) => {
       const updated = [...prev];
-      const previousHead = normalizeText(updated[index]?.category);
       updated[index] = {
         ...updated[index],
         category: selectedHead,
         head: selectedSubHead,
-        amount:
-          selectedHead && selectedHead !== previousHead
-            ? ''
-            : updated[index].amount,
       };
       return updated;
     });
