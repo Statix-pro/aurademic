@@ -137,6 +137,13 @@ export const formatApprovalFlowString = ({ requiresLevel1, requiresIthead, requi
     return stages.length > 0 ? stages.join('_') : 'dof_principal';
 };
 
+export const getInitialApprovalStage = ({ requiresLevel1, requiresIthead, requiresDof }) => {
+    if (requiresLevel1) return 'level1';
+    if (requiresIthead) return 'ithead';
+    if (requiresDof) return 'dof';
+    return 'principal';
+};
+
 export const getCurrentFinancialYear = () => {
     const now = new Date();
     const month = now.getMonth() + 1;

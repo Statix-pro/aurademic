@@ -3658,7 +3658,10 @@ const financeModel = {
              WHEN combined_status LIKE '%archive%' THEN 'archived'
              WHEN combined_status LIKE '%rejected%' THEN 'rejected'
              WHEN combined_status LIKE '%returned%' OR combined_status LIKE '%return%' THEN 'returned'
-             WHEN (? = 'all' OR workflow_stage = ?) AND workflow_status = 'in_progress' THEN 'pending'
+             WHEN (? = 'all' OR workflow_stage = ?)
+               AND workflow_stage IN ('level1', 'dof', 'principal', 'chairman')
+               AND workflow_status NOT IN ('completed', 'rejected', 'returned', 'archived', 'deleted')
+               THEN 'pending'
              WHEN workflow_stage_decision LIKE '%approved%' OR combined_status LIKE '%approved%' OR combined_status LIKE '%completed%' THEN 'approved'
              ELSE CASE WHEN ? = 'all' THEN 'pending' ELSE 'other' END
            END AS status_category
@@ -3718,7 +3721,10 @@ const financeModel = {
             ${WORKFLOW_STAGE_SQL_EXPR},
             COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.lastDecision')), '')
           )) LIKE '%return%' THEN 'returned'
-          WHEN (? = 'all' OR ${WORKFLOW_STAGE_SQL_EXPR} = ?) AND ${WORKFLOW_STATUS_SQL_EXPR} = 'in_progress' THEN 'pending'
+          WHEN (? = 'all' OR ${WORKFLOW_STAGE_SQL_EXPR} = ?)
+            AND ${WORKFLOW_STAGE_SQL_EXPR} IN ('level1', 'dof', 'principal', 'chairman')
+            AND ${WORKFLOW_STATUS_SQL_EXPR} NOT IN ('completed', 'rejected', 'returned', 'archived', 'deleted')
+            THEN 'pending'
           WHEN COALESCE((
             SELECT LOWER(TRIM(wa.decision))
               FROM workflow_actions wa
