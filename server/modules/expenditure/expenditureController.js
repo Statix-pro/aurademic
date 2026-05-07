@@ -1005,7 +1005,7 @@ const uploads = {
   async getExpenditureQueue(req, res) {
     try {
       const stage = normalizeText(req.params.stage).toLowerCase();
-      const { page, limit, workflowStatus, statusCategory, level1Role } = req.query;
+      const { page, limit, workflowStatus, statusCategory, level1Role, q, allProposals } = req.query;
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
       const effectiveLevel1Role = stage === 'level1'
         ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
@@ -1023,6 +1023,8 @@ const uploads = {
           workflowStatus,
           statusCategory,
           level1Role: effectiveLevel1Role,
+          q,
+          allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
         },
       });
 
