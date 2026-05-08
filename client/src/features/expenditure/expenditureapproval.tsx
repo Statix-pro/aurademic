@@ -78,6 +78,32 @@ interface PayeeLookupResult {
   requested_at?: string | null;
 }
 type PayeeLookupField = 'payeeName' | 'accountNo' | 'bankName' | 'ifsc' | 'branchName';
+
+const getSubmitErrorMessage = (error: unknown): string => {
+  const candidate = error as {
+    response?: {
+      data?: unknown;
+    };
+    message?: string;
+  };
+  const responseData = candidate.response?.data;
+
+  if (typeof responseData === 'string' && responseData.trim()) {
+    return responseData.trim();
+  }
+
+  if (responseData && typeof responseData === 'object') {
+    const data = responseData as { message?: unknown; error?: unknown };
+    if (typeof data.message === 'string' && data.message.trim()) return data.message.trim();
+    if (typeof data.error === 'string' && data.error.trim()) return data.error.trim();
+  }
+
+  if (typeof candidate.message === 'string' && candidate.message.trim()) {
+    return candidate.message.trim();
+  }
+
+  return 'Something went wrong while submitting';
+};
 interface FinanceRequestContext {
   finance_request_id: number;
   employee_id?: number | null;
@@ -2535,32 +2561,35 @@ const workflowRowRefFromState = (() => {
   const findExpenditureBudgetExceededRow = (
     rows: ExpenditureFormRow[],
   ): { rowNumber: number; budgetLimit: number } | null => {
-    const cumulativeAmountsByBudgetLine = new Map<number, number>();
+    const budgetLimitsByHead = new Map<string, number>();
+
+    for (const row of rows) {
+      const budgetLimit = getRowBudgetLimit(row.budget);
+      const headKey = normalizeBudgetToken(row.budgetHead);
+
+      if (!headKey || budgetLimit === null) continue;
+
+      budgetLimitsByHead.set(
+        headKey,
+        Number(((budgetLimitsByHead.get(headKey) || 0) + budgetLimit).toFixed(2)),
+      );
+    }
+
+    const cumulativeAmountsByHead = new Map<string, number>();
 
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index];
-      const budgetLimit = getRowBudgetLimit(row.budget);
+      const headKey = normalizeBudgetToken(row.budgetHead);
+      const budgetLimit = headKey ? budgetLimitsByHead.get(headKey) ?? null : getRowBudgetLimit(row.budget);
       const requestedAmount = parseAmountValue(row.autoSum || row.expenditure);
 
       if (budgetLimit === null || requestedAmount <= 0) continue;
 
-      const budgetLineId = parsePositiveIntLike(row.budgetLineId);
-
-      if (!budgetLineId) {
-        if (requestedAmount > budgetLimit) {
-          return {
-            rowNumber: index + 1,
-            budgetLimit,
-          };
-        }
-        continue;
-      }
-
       const nextCumulativeAmount = Number(
-        ((cumulativeAmountsByBudgetLine.get(budgetLineId) || 0) + requestedAmount).toFixed(2),
+        ((cumulativeAmountsByHead.get(headKey || `row-${index}`) || 0) + requestedAmount).toFixed(2),
       );
 
-      cumulativeAmountsByBudgetLine.set(budgetLineId, nextCumulativeAmount);
+      cumulativeAmountsByHead.set(headKey || `row-${index}`, nextCumulativeAmount);
 
       if (nextCumulativeAmount > budgetLimit) {
         return {
@@ -3886,22 +3915,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     return;
   } catch (error) {
     console.error('Expenditure submit error:', error);
-    const apiError = error as {
-      response?: {
-        data?: {
-          message?: string;
-          error?: string;
-        };
-      };
-      message?: string;
-    };
-    const errorMessage =
-      apiError.response?.data?.message ||
-      apiError.response?.data?.error ||
-      apiError.message ||
-      'Something went wrong while submitting';
-
-    showAlert(errorMessage, 'error');
+    showAlert(getSubmitErrorMessage(error), 'error');
   }
 };
 

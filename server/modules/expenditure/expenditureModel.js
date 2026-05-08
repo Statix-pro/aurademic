@@ -583,9 +583,14 @@ async function getCumulativeAdvanceSummary(connOrDb, {
   };
 }
 
-async function getFinanceRequestBudgetUsageByLine(connOrDb, { financeRequestId, budgetLineIds = [] } = {}) {
+async function getFinanceRequestBudgetUsageByLine(connOrDb, {
+  financeRequestId,
+  budgetLineIds = [],
+  excludeExpenditureId = null,
+} = {}) {
   const financeId = toPositiveInt(financeRequestId);
   if (!financeId) return new Map();
+  const excludedRequestId = toPositiveInt(excludeExpenditureId);
 
   const normalizedBudgetLineIds = Array.from(
     new Set((Array.isArray(budgetLineIds) ? budgetLineIds : []).map((id) => toPositiveInt(id)).filter(Boolean)),
@@ -607,6 +612,7 @@ async function getFinanceRequestBudgetUsageByLine(connOrDb, { financeRequestId, 
        FROM expenditure_advance_rows ar
        JOIN expenditure_requests er ON er.id = ar.expenditure_id
        WHERE er.finance_request_id = ?
+         AND (? IS NULL OR er.id <> ?)
          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
 
        UNION ALL
@@ -617,14 +623,15 @@ async function getFinanceRequestBudgetUsageByLine(connOrDb, { financeRequestId, 
        FROM expenditure_line_rows lr
        JOIN expenditure_requests er ON er.id = lr.expenditure_id
        WHERE er.finance_request_id = ?
+         AND (? IS NULL OR er.id <> ?)
          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
 
-     ) AS usage_rows
+    ) AS usage_rows
      ${lineFilterSql}
      GROUP BY usage_rows.budget_line_id`,
     normalizedBudgetLineIds.length
-      ? [financeId, financeId, ...normalizedBudgetLineIds]
-      : [financeId, financeId],
+      ? [financeId, excludedRequestId, excludedRequestId, financeId, excludedRequestId, excludedRequestId, ...normalizedBudgetLineIds]
+      : [financeId, excludedRequestId, excludedRequestId, financeId, excludedRequestId, excludedRequestId],
   );
 
   return new Map(
@@ -2354,6 +2361,14 @@ function getRowsForRequestType(requestType, { advanceRows, settlementRows, expen
   return Array.isArray(expenditureRows) ? expenditureRows : [];
 }
 
+const normalizeBudgetHeadKey = (value) =>
+  normalizeText(value)
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 async function assertWorkflowRowsHaveApprovedBudgetLines(
   conn,
   financeRequestId,
@@ -2402,6 +2417,95 @@ async function assertWorkflowRowsHaveApprovedBudgetLines(
   }
 }
 
+async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows = [], {
+  excludeExpenditureId = null,
+} = {}) {
+  const normalizedFinanceRequestId = toPositiveInt(financeRequestId);
+  const filledRows = (Array.isArray(expenditureRows) ? expenditureRows : [])
+    .map((row, index) => ({
+      rowNumber: index + 1,
+      budgetHead: normalizeText(row.budgetHead || row.budget_head),
+      headKey: normalizeBudgetHeadKey(row.budgetHead || row.budget_head),
+      amount: getAmountForWorkflowRow('Expenditure', row),
+    }))
+    .filter((row) => row.amount > 0);
+
+  if (!normalizedFinanceRequestId || !filledRows.length) return;
+
+  const missingHeadRows = filledRows.filter((row) => !row.headKey).map((row) => row.rowNumber);
+  if (missingHeadRows.length) {
+    throw new Error(
+      `Please select a valid approved budget head for row ${missingHeadRows.join(', ')}`,
+    );
+  }
+
+  const requestedByHead = new Map();
+  for (const row of filledRows) {
+    requestedByHead.set(row.headKey, toMoney((requestedByHead.get(row.headKey) || 0) + row.amount));
+  }
+
+  const [approvedRows] = await conn.execute(
+    `SELECT
+       fbb.budget_line_id,
+       COALESCE(NULLIF(TRIM(fbb.budget_head), ''), bpl.budget_head, '') AS budget_head,
+       ${FINANCE_BREAKUP_APPROVED_BASE_SQL} AS approved_amount
+     FROM finance_budget_breakup fbb
+     LEFT JOIN budget_proposal_lines bpl ON bpl.id = fbb.budget_line_id
+     WHERE fbb.finance_id = ?
+     FOR UPDATE`,
+    [normalizedFinanceRequestId],
+  );
+
+  const approvedByHead = new Map();
+  const lineIdsByHead = new Map();
+
+  for (const row of approvedRows) {
+    const headKey = normalizeBudgetHeadKey(row.budget_head);
+    if (!headKey || !requestedByHead.has(headKey)) continue;
+
+    approvedByHead.set(headKey, toMoney((approvedByHead.get(headKey) || 0) + toMoney(row.approved_amount)));
+
+    const lineId = toPositiveInt(row.budget_line_id);
+    if (lineId) {
+      if (!lineIdsByHead.has(headKey)) {
+        lineIdsByHead.set(headKey, new Set());
+      }
+      lineIdsByHead.get(headKey).add(lineId);
+    }
+  }
+
+  const usageByLineId = await getFinanceRequestBudgetUsageByLine(conn, {
+    financeRequestId: normalizedFinanceRequestId,
+    budgetLineIds: Array.from(
+      new Set(Array.from(lineIdsByHead.values()).flatMap((lineIds) => Array.from(lineIds))),
+    ),
+    excludeExpenditureId,
+  });
+
+  for (const [headKey, requestedAmount] of requestedByHead.entries()) {
+    const approvedAmount = toMoney(approvedByHead.get(headKey));
+    const usedAmount = Array.from(lineIdsByHead.get(headKey) || []).reduce(
+      (sum, lineId) => toMoney(sum + toMoney(usageByLineId.get(lineId))),
+      0,
+    );
+    const remainingAmount = toMoney(Math.max(0, approvedAmount - usedAmount));
+
+    if (approvedAmount <= 0) {
+      const rowNumbers = filledRows.filter((row) => row.headKey === headKey).map((row) => row.rowNumber);
+      throw new Error(
+        `Please select a valid approved budget head for row ${rowNumbers.join(', ')}`,
+      );
+    }
+
+    if (requestedAmount > remainingAmount) {
+      const firstRow = filledRows.find((row) => row.headKey === headKey);
+      throw new Error(
+        `Requested expenditure ${requestedAmount.toFixed(2)} exceeds remaining budget ${remainingAmount.toFixed(2)} for "${firstRow?.budgetHead || headKey}"`,
+      );
+    }
+  }
+}
+
 async function applyBudgetUsageDelta(conn, usageRows = [], multiplier = 1) {
   for (const usageRow of usageRows) {
     const budgetLineId = toPositiveInt(usageRow.budgetLineId);
@@ -2425,7 +2529,9 @@ async function applyBudgetUsageDelta(conn, usageRows = [], multiplier = 1) {
   }
 }
 
-async function getRemainingBudgetByLine(conn, financeRequestId, budgetLineIds = []) {
+async function getRemainingBudgetByLine(conn, financeRequestId, budgetLineIds = [], {
+  excludeExpenditureId = null,
+} = {}) {
   const normalizedFinanceRequestId = toPositiveInt(financeRequestId);
   const normalizedBudgetLineIds = Array.from(
     new Set((Array.isArray(budgetLineIds) ? budgetLineIds : []).map((id) => toPositiveInt(id)).filter(Boolean)),
@@ -2438,19 +2544,21 @@ async function getRemainingBudgetByLine(conn, financeRequestId, budgetLineIds = 
   const usageByLineId = await getFinanceRequestBudgetUsageByLine(conn, {
     financeRequestId: normalizedFinanceRequestId,
     budgetLineIds: normalizedBudgetLineIds,
+    excludeExpenditureId,
   });
 
   const placeholders = normalizedBudgetLineIds.map(() => '?').join(', ');
   const [budgetRows] = await conn.execute(
   `SELECT
      fbb.budget_line_id,
-     ${FINANCE_BREAKUP_APPROVED_BASE_SQL} AS approved_amount,
+     SUM(${FINANCE_BREAKUP_APPROVED_BASE_SQL}) AS approved_amount,
      0 AS used_amount,
-     ${FINANCE_BREAKUP_APPROVED_BASE_SQL} AS remaining_amount
+     SUM(${FINANCE_BREAKUP_APPROVED_BASE_SQL}) AS remaining_amount
    FROM finance_budget_breakup fbb
    LEFT JOIN budget_proposal_lines bpl ON bpl.id = fbb.budget_line_id
    WHERE fbb.finance_id = ?
      AND fbb.budget_line_id IN (${placeholders})
+   GROUP BY fbb.budget_line_id
    FOR UPDATE`,
   [normalizedFinanceRequestId, ...normalizedBudgetLineIds],
 );
@@ -2603,7 +2711,9 @@ const incomeRows = Array.isArray(data.income_rows)
       requestedExpenditure: expenditureTotal,
     });
 
-    if (usageRows.length) {
+    if (requestType === 'Expenditure') {
+      await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows);
+    } else if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,
         financeRequestId,
@@ -2883,11 +2993,16 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       }
     }
 
-    if (usageRows.length) {
+    if (requestType === 'Expenditure') {
+      await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows, {
+        excludeExpenditureId: normalizedExpenditureId,
+      });
+    } else if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,
         financeRequestId,
         usageRows.map((row) => row.budgetLineId),
+        { excludeExpenditureId: normalizedExpenditureId },
       );
 
       for (const usageRow of usageRows) {
@@ -2909,7 +3024,9 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     const budgetSnapshotsByLine = buildBudgetSnapshotsByLine(
       requestType,
       usageRows,
-      await getRemainingBudgetByLine(conn, financeRequestId, usageRows.map((row) => row.budgetLineId)),
+      await getRemainingBudgetByLine(conn, financeRequestId, usageRows.map((row) => row.budgetLineId), {
+        excludeExpenditureId: normalizedExpenditureId,
+      }),
     );
 
     const normalizeSqlDate = (value) => {
