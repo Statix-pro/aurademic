@@ -130,6 +130,9 @@ const resolveActor = (req) => {
 const sendError = (res, status, message) =>
   res.status(status).json({ status: 'error', message });
 
+const unwrapTransactionMessage = (message = '') =>
+  normalizeText(message).replace(/^Transaction failed:\s*/i, '');
+
 const handleError = (res, err, fallback) => {
   if (err instanceof WorkflowError) {
     return res.status(err.statusCode || 400).json({
@@ -259,6 +262,8 @@ const isDomainValidationError = (message = '') =>
     'not found',
     'not yet approved',
     'not approved',
+    'Payee must be selected from approved suggestions',
+    'New payees require DoF approval',
     'exceeds',
     'required',
     'Invalid request type',
@@ -267,9 +272,14 @@ const isDomainValidationError = (message = '') =>
     'cannot be created',
     'outstanding advance',
     'Create a new row',
-  ].some(
-    (fragment) => message.includes(fragment),
-  );
+  ].some((fragment) => unwrapTransactionMessage(message).includes(fragment));
+
+const sendDomainValidationError = (res, err) => {
+  const message = unwrapTransactionMessage(err?.message);
+  if (!isDomainValidationError(message)) return false;
+  sendError(res, 400, message);
+  return true;
+};
 
 const getNormalizedUserRoles = (req) => {
   return [
@@ -691,7 +701,7 @@ const expenditureController = {
         data: result,
       });
     } catch (err) {
-      if (isDomainValidationError(err.message)) return sendError(res, 400, err.message);
+      if (sendDomainValidationError(res, err)) return;
       return handleError(res, err, 'Error submitting advance request');
     }
   },
@@ -756,7 +766,7 @@ const uploads = {
         data: result,
       });
     } catch (err) {
-      if (isDomainValidationError(err.message)) return sendError(res, 400, err.message);
+      if (sendDomainValidationError(res, err)) return;
       return handleError(res, err, 'Error submitting expenditure request');
     }
   },
@@ -924,6 +934,7 @@ const uploads = {
         data: { affectedRows: result.affectedRows },
       });
     } catch (err) {
+      if (sendDomainValidationError(res, err)) return;
       return handleError(res, err, 'Error updating expenditure request');
     }
   },
