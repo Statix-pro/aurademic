@@ -31,6 +31,32 @@ interface SelectOption {
   label: string;
 }
 
+const getFinanceSubmitErrorMessage = (error: unknown): string => {
+  const candidate = error as {
+    response?: {
+      data?: unknown;
+    };
+    message?: string;
+  };
+  const responseData = candidate.response?.data;
+
+  if (typeof responseData === 'string' && responseData.trim()) {
+    return responseData.trim();
+  }
+
+  if (responseData && typeof responseData === 'object') {
+    const data = responseData as { message?: unknown; error?: unknown };
+    if (typeof data.message === 'string' && data.message.trim()) return data.message.trim();
+    if (typeof data.error === 'string' && data.error.trim()) return data.error.trim();
+  }
+
+  if (typeof candidate.message === 'string' && candidate.message.trim()) {
+    return candidate.message.trim();
+  }
+
+  return 'Something went wrong while submitting';
+};
+
 interface BudgetRow {
   category: string;
   head: string;
@@ -175,7 +201,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
   },
   {
     label: 'Events & Competitions',
-    options: ['Academic Events', 'Club Activities', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Event', 'Cultural & Celebrations', 'Sports', 'Competitions'],
+    options: ['Academic Events', 'Club Activities', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Events', 'Cultural & Celebrations', 'Sports', 'Competitions'],
   },
   {
     label: 'Meetings & Audits',
@@ -195,7 +221,6 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Student Capacity Building',
       'Ranking & Accreditation',
       'Examination Expenses',
-      'Awards & Recognition',
     ],
   },
   {
@@ -632,7 +657,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Association Function',
     'Parents Meeting'
   ],
-  'Outreach Event': [
+  'Outreach Events': [
     'Awareness Program',
     'Campaigns',
     'Crash Course',
@@ -640,7 +665,9 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Mini Marathon',
     'Rally',
     'School Visit',
-    'Summer Internship'
+    'Summer Internship',
+    'Grama Saba Meet',
+    'Orientation Session'
   ],
   'Cultural & Celebrations': [
     'Celebration Day',
@@ -651,18 +678,24 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   'Sports': ['Sports Day', 'Sports Meet'],
 
   'Club Activities': [
-    'Competitions',
     'Flash Mob',
     'Fun Events',
     'Road show',
     'Wall Painting'
   ],
   'Competitions': [
-    'Competitions',
-    'Hackathons',
-    'Ideathon',
-    'Project Expo',
-    'Start-up meet'
+    'Innovation & Startup Competitions',
+    'Academic Competitions',
+    'Technical Competitions',
+    'Cultural Competitions',
+    'Creative Competitions',
+    'Literary Competitions',
+    'Sports Competitions',
+    'Management Competitions',
+    'Online Competitions',
+    'General Competitions',
+    'Project Exhibition',
+    'Science Exhibition'
   ],
 
   'Institutional Governance Meetings': [
@@ -772,17 +805,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Degree Recommendation',
     'CoE Staff Remuneration'
   ],
-  'Awards & Recognition': [
-    'Accommodation',
-    'Registration fee',
-    'Food & Refreshment',
-    'Driver Beta',
-    'Travel Allowance',
-    'Daily Allowance',
-    'Printing',
-    'Stationery',
-    'Others'
-  ],
+
   'Advertisement & Branding': ['Digital Promotion', 'News Paper Advertisement'],
   'Public Relations': [
     'Branding',
@@ -829,7 +852,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Office Expenses',
     'Scholarship Expenses',
     'Stamp Charges',
-    'Testing Charges'
+    'Testing Charges',
+    'Awards & Recognitions'
   ],
   'Licenses & Taxes': [
     'Building Tax',
@@ -2324,11 +2348,7 @@ const FinanceApproval: React.FC = () => {
       );
     } catch (error) {
       console.error('Finance submit error:', error);
-      const apiMessage =
-        (error as any)?.response?.data?.message ||
-        (error as any)?.response?.data?.error ||
-        (error as any)?.message;
-      showAlert(apiMessage ? String(apiMessage) : 'Something went wrong while submitting', 'error');
+      showAlert(getFinanceSubmitErrorMessage(error), 'error');
     }
   };
 

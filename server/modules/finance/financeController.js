@@ -269,6 +269,9 @@ const isHandledFinanceDomainError = (error) => {
   ].some((token) => message.includes(token));
 };
 
+const unwrapFinanceModelError = (message = '') =>
+  normalizeText(message).replace(/^Error (creating|updating) finance request:\s*/i, '');
+
 const handleWorkflowError = (res, error, fallbackMessage) => {
   if (error instanceof WorkflowError) {
     return res.status(error.statusCode || 400).json({
@@ -279,9 +282,10 @@ const handleWorkflowError = (res, error, fallbackMessage) => {
   }
 
   if (isHandledFinanceDomainError(error)) {
+    const message = unwrapFinanceModelError(error?.message);
     return res.status(409).json({
       status: 'error',
-      message: error.message || 'Finance request cannot be processed due to budget validation',
+      message: message || 'Finance request cannot be processed due to budget validation',
       code: 'FINANCE_BUDGET_VALIDATION_FAILED',
     });
   }

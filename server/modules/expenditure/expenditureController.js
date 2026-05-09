@@ -855,6 +855,20 @@ const uploads = {
       const workflowStatus = normalizeText(workflowState?.status || record.workflow_status || record.overall_status).toLowerCase();
       const currentStage = normalizeText(workflowState?.currentStage || record.workflow_stage).toLowerCase();
       const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(workflowStatus);
+      const requestBody = req.body || {};
+      const paymentUpdateKeys = new Set([
+        'payment_status',
+        'payment_date',
+        'payment_ref_no',
+        'payment_mode',
+        'payment_debit_account',
+      ]);
+      const bodyKeys = Object.keys(requestBody).filter((key) => requestBody[key] !== undefined);
+      const isPaymentOnlyUpdate =
+        bodyKeys.length > 0 && bodyKeys.every((key) => paymentUpdateKeys.has(key));
+      const isFinalApprovedWorkflow =
+        ['approved', 'completed'].includes(workflowStatus) ||
+        normalizeText(record.overall_status).toLowerCase() === 'approved';
 
       if (!isOwner && !isWorkflowEditor) return sendError(res, 403, 'Access denied');
 
@@ -864,7 +878,11 @@ const uploads = {
         workflowStatus === 'submitted' ||
         currentStage === 'level1';
 
-      if (isOwner && !isApplicantEditable) {
+      if (
+        isOwner &&
+        !isApplicantEditable &&
+        !(isPaymentOnlyUpdate && isFinalApprovedWorkflow)
+      ) {
         return sendError(res, 403, 'This request is not editable in current workflow state');
       }
 
@@ -1100,14 +1118,37 @@ const uploads = {
             },
           },
         });
+
+        const reachedPrincipalAfterDofApproval =
+          result?.stage === 'dof' &&
+          result?.decision === 'approved' &&
+          normalizeText(result?.currentState?.currentStage).toLowerCase() === 'principal';
+
+        if (reachedPrincipalAfterDofApproval) {
+          const autoPrincipalResult = await expenditureModel.autoApprovePrincipalWorkflowStage(
+            expenditureId,
+            { actor }
+          );
+
+          if (autoPrincipalResult?.autoApproved) {
+            result = {
+              ...result,
+              currentState: autoPrincipalResult.currentState,
+              autoApprovedStages: ['principal'],
+            };
+          }
+        }
       }
 
       return res.status(200).json({
         status: 'success',
-        message: `Workflow ${result.decision} at stage ${result.stage}`,
+        message: result.autoApprovedStages?.includes('principal')
+          ? 'Workflow approved at stage dof; principal auto-approved'
+          : `Workflow ${result.decision} at stage ${result.stage}`,
         data: {
           previousState: result.previousState,
           currentState: result.currentState,
+          autoApprovedStages: result.autoApprovedStages || [],
         },
       });
     } catch (err) {
