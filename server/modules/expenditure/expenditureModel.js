@@ -3652,6 +3652,116 @@ export async function updateExpenditureWorkflowSnapshot(recordId, newState, { tx
   return Number(result?.affectedRows || 0) > 0;
 }
 
+export async function autoApprovePrincipalWorkflowStage(recordId, {
+  actor = {},
+  feedback = 'Auto-approved after DoF clearance',
+} = {}, { tx = null } = {}) {
+  if (!tx) {
+    return withTransaction((conn) =>
+      autoApprovePrincipalWorkflowStage(recordId, { actor, feedback }, { tx: conn })
+    );
+  }
+
+  const normalizedRecordId = toPositiveInt(recordId);
+  if (!normalizedRecordId) {
+    throw new Error('Invalid expenditure request ID');
+  }
+
+  const [rows] = await tx.query(
+    `SELECT workflow_state
+       FROM expenditure_requests
+      WHERE id = ?
+      FOR UPDATE`,
+    [normalizedRecordId]
+  );
+
+  if (!rows.length) {
+    throw new Error('Expenditure request not found');
+  }
+
+  const previousState = normalizeWorkflowState(rows[0].workflow_state);
+  if (!previousState) {
+    throw new Error('Workflow state not found');
+  }
+
+  const flow = Array.isArray(previousState.flow)
+    ? previousState.flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
+    : [];
+  const currentStage = normalizeText(previousState.currentStage).toLowerCase();
+  const principalIndex = flow.indexOf('principal');
+
+  if (
+    currentStage !== 'principal' ||
+    previousState.status !== 'in_progress' ||
+    principalIndex < 0
+  ) {
+    return {
+      autoApproved: false,
+      previousState,
+      currentState: previousState,
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const nextStage = flow[principalIndex + 1] || null;
+  const nextState = {
+    ...previousState,
+    flow,
+    currentStage: nextStage,
+    status: nextStage ? 'in_progress' : 'completed',
+    isEditableByApplicant: false,
+    resolvedAt: nextStage ? null : nowIso,
+    lastDecision: 'approved',
+    lastFeedback: normalizeText(feedback) || null,
+    updatedAt: nowIso,
+  };
+
+  const actorUserId = toPositiveInt(actor?.userId || actor?.id);
+
+  await tx.query(
+    `INSERT INTO workflow_actions (
+        module_key,
+        record_id,
+        stage,
+        decision,
+        feedback,
+        actor_user_id,
+        actor_email,
+        actor_role,
+        snapshot_before,
+        meta
+      ) VALUES (?, ?, 'principal', 'approved', ?, ?, ?, 'principal', ?, ?)`,
+    [
+      'expenditure',
+      normalizedRecordId,
+      nextState.lastFeedback,
+      actorUserId,
+      'system-auto@ksrct.ac.in',
+      JSON.stringify(previousState),
+      JSON.stringify({
+        origin: 'system',
+        requestId: null,
+        moduleMetaVersion: 1,
+        moduleMeta: {
+          trigger: 'auto_principal_approval_after_dof',
+          route: 'PATCH /api/expenditure-requests/:id/approval',
+        },
+      }),
+    ]
+  );
+
+  const updated = await updateExpenditureWorkflowSnapshot(normalizedRecordId, nextState, { tx });
+  if (!updated) {
+    throw new Error('Failed to update workflow snapshot');
+  }
+
+  return {
+    autoApproved: true,
+    previousState,
+    currentState: nextState,
+  };
+}
+
 export async function forceWorkflowTransition(recordId, {
   decision,
   feedback = null,

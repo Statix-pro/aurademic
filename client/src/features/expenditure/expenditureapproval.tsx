@@ -1227,6 +1227,7 @@ const ExpenditureApproval: React.FC = () => {
   const isReadOnlyView =
     Boolean(routeId) &&
     (isReadOnlyNavigation || (!launchModuleFromState && !location.pathname.endsWith('/edit')));
+  const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
   const dashboardRowIdFromState = (() => {
     const state = location.state as {
       dashboardRowId?: unknown;
@@ -1289,6 +1290,7 @@ const ExpenditureApproval: React.FC = () => {
     financeRequestIdFromState,
   );
   const [isReturnedWorkflowRequest, setIsReturnedWorkflowRequest] = useState<boolean>(false);
+  const [loadedWorkflowStatus, setLoadedWorkflowStatus] = useState<string>('');
   const [financeApprovedAmount, setFinanceApprovedAmount] = useState<number>(financeApprovedAmountFromState);
   useEffect(() => {
     setResolvedFinanceRequestId(financeRequestIdFromState);
@@ -1331,13 +1333,19 @@ const ExpenditureApproval: React.FC = () => {
   const [uploadedPayeeBills, setUploadedPayeeBills] = useState<File[]>([]);
   const [uploadedPaymentProofs, setUploadedPaymentProofs] = useState<File[]>([]);
   const [existingPayeeBills, setExistingPayeeBills] = useState<BillFileRecord[]>([]);
-  const [remarks, setRemarks] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [isExternalApplicant, setIsExternalApplicant] = useState<boolean>(false);
   const [applicantSearchQuery, setApplicantSearchQuery] = useState<string>('');
   const [applicantSearchResults, setApplicantSearchResults] = useState<Array<{ employee_id: number; name: string; designation: string; department: string; email: string; mobile: string; employee_type: string }>>([]);
   const [showApplicantDropdown, setShowApplicantDropdown] = useState<boolean>(false);
+  const isFinalApprovedWorkflow = ['approved', 'completed'].includes(loadedWorkflowStatus);
+  const canEditPaymentStatus = Boolean(
+    submittedRequestIdFromState &&
+      isReadOnlyView &&
+      !isAdminWorkflowContext &&
+      isFinalApprovedWorkflow
+  );
   const componentRef = useRef<HTMLDivElement>(null);
   const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(true);
 
@@ -1433,6 +1441,7 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
     if (!submittedRequestIdFromState) {
       setExistingPayeeBills([]);
       setIsReturnedWorkflowRequest(false);
+      setLoadedWorkflowStatus('');
       return;
     }
 
@@ -1476,6 +1485,7 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
             '',
         ).toLowerCase();
         setIsReturnedWorkflowRequest(workflowStatus === 'returned');
+        setLoadedWorkflowStatus(workflowStatus);
         const toRowId = (suffix: string, index: number) => `${submittedRequestIdFromState}-${suffix}-${index}`;
 
         const mapAdvanceRows = Array.isArray(record.advance_rows)
@@ -1609,6 +1619,7 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
         if (!isCancelled) {
           console.error('Failed to load submitted expenditure request:', error);
           setIsReturnedWorkflowRequest(false);
+          setLoadedWorkflowStatus('');
         }
       }
     };
@@ -3940,6 +3951,33 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     await performSubmit();
   };
 
+  const handlePaymentStatusUpdate = async (): Promise<void> => {
+    if (!submittedRequestIdFromState || !canEditPaymentStatus) {
+      showAlert('Payment status can be updated only after final approval.', 'warning');
+      return;
+    }
+
+    try {
+      const response = await authenticityUtility.put(`/expenditure/${submittedRequestIdFromState}`, {
+        payment_status: paymentDetails.status || 'Pending',
+        payment_date: paymentDetails.date || null,
+        payment_ref_no: paymentDetails.refNo || null,
+        payment_mode: paymentDetails.mode || null,
+        payment_debit_account: paymentDetails.debitAccount || null,
+      }) as { status?: string; message?: string };
+
+      if (response.status !== 'success') {
+        showAlert(response.message || 'Unable to update payment status', 'error');
+        return;
+      }
+
+      showAlert(response.message || 'Payment status updated successfully', 'success');
+    } catch (error) {
+      console.error('Payment status update error:', error);
+      showAlert(getSubmitErrorMessage(error), 'error');
+    }
+  };
+
   const handleReset = (force = false): void => {
     const performReset = () => {
       setApplicantName('');
@@ -5200,6 +5238,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             setPaymentDetails({ ...paymentDetails, status: String((opt as OptionType)?.value || '') })
           }
           placeholder="Status"
+          isDisabled={!canEditPaymentStatus}
         />
       </div>
 
@@ -5210,13 +5249,14 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           className="payee-field"
           value={paymentDetails.date}
           onChange={(e) => setPaymentDetails({ ...paymentDetails, date: e.target.value })}
+          disabled={!canEditPaymentStatus}
           style={{ width: '100%' }}
         />
       </div>
 
       {/* 3. Bills Uploaded Button */}
       <div className="payee-status-col payee-status-col-bills">
-        {!isReadOnlyView && (
+        {canEditPaymentStatus && (
           <label
             className="payee-upload-label payee-status-upload-label"
             style={{
@@ -5236,6 +5276,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
               type="file"
               className="payee-upload-input"
               multiple
+              disabled={!canEditPaymentStatus}
               onChange={handlePaymentProofUpload}
             />
           </label>
@@ -5254,15 +5295,17 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             type="text"
             className="payee-field payee-status-comment-input"
             placeholder="Transaction number"
-            value={remarks}
-            onChange={(e) => setRemarks(e.target.value)}
+            value={paymentDetails.refNo}
+            onChange={(e) => setPaymentDetails({ ...paymentDetails, refNo: e.target.value })}
+            disabled={!canEditPaymentStatus}
             style={{ width: '100%' }}
           />
           <button
             type="button"
-            onClick={() => setRemarks((prev) => prev.trim())}
+            onClick={() => setPaymentDetails((prev) => ({ ...prev, refNo: prev.refNo.trim() }))}
             className="payee-comment-tick-btn"
             aria-label="Confirm comment"
+            disabled={!canEditPaymentStatus}
           >
             <CheckCircle2 size={20} strokeWidth={2.2} />
           </button>
@@ -5283,6 +5326,16 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           </button>
         </div>
       )}
+          {canEditPaymentStatus && (
+            <div className="expenditure-submit-buttons">
+              <button
+                className="btn-submit"
+                onClick={(e) => { e.preventDefault(); handlePaymentStatusUpdate(); }}
+              >
+                Update Payment Status
+              </button>
+            </div>
+          )}
 
           <AlertModal
             show={alertConfig.show}
