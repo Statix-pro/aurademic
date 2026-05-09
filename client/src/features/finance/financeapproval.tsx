@@ -31,27 +31,49 @@ interface SelectOption {
   label: string;
 }
 
+const FINANCE_CONFLICT_MESSAGE =
+  'Finance request conflicts with approved budget allocation. Please check the budget head amounts and available balance.';
+
+const normalizeErrorMessage = (value: unknown): string =>
+  typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+
+const isGenericConflictMessage = (message: string): boolean => {
+  const normalized = message.toLowerCase();
+  return normalized.includes('page was not displayed') && normalized.includes('conflict');
+};
+
 const getFinanceSubmitErrorMessage = (error: unknown): string => {
   const candidate = error as {
     response?: {
       data?: unknown;
+      status?: number;
     };
     message?: string;
   };
   const responseData = candidate.response?.data;
+  const statusCode = candidate.response?.status;
 
-  if (typeof responseData === 'string' && responseData.trim()) {
-    return responseData.trim();
+  if (typeof responseData === 'string') {
+    const message = normalizeErrorMessage(responseData);
+    if (message) return isGenericConflictMessage(message) ? FINANCE_CONFLICT_MESSAGE : message;
   }
 
   if (responseData && typeof responseData === 'object') {
     const data = responseData as { message?: unknown; error?: unknown };
-    if (typeof data.message === 'string' && data.message.trim()) return data.message.trim();
-    if (typeof data.error === 'string' && data.error.trim()) return data.error.trim();
+    const message = normalizeErrorMessage(data.message);
+    if (message) return isGenericConflictMessage(message) ? FINANCE_CONFLICT_MESSAGE : message;
+
+    const errorMessage = normalizeErrorMessage(data.error);
+    if (errorMessage) return isGenericConflictMessage(errorMessage) ? FINANCE_CONFLICT_MESSAGE : errorMessage;
   }
 
-  if (typeof candidate.message === 'string' && candidate.message.trim()) {
-    return candidate.message.trim();
+  const fallbackMessage = normalizeErrorMessage(candidate.message);
+  if (fallbackMessage) {
+    return isGenericConflictMessage(fallbackMessage) ? FINANCE_CONFLICT_MESSAGE : fallbackMessage;
+  }
+
+  if (statusCode === 409) {
+    return FINANCE_CONFLICT_MESSAGE;
   }
 
   return 'Something went wrong while submitting';
@@ -408,13 +430,9 @@ const getHoacGroupForHead = (head: string): string | undefined => {
   return undefined;
 };
 
-const isHeadInSharedHoacGroup = (head: string): boolean =>
-  Boolean(getHoacGroupForHead(String(head || '').trim()));
-
-const shouldUseHeadOnlyAvailabilityMatch = (budgetHead: string, subHead: string): boolean => {
+const shouldUseHeadOnlyAvailabilityMatch = (budgetHead: string, _subHead: string): boolean => {
   const normalizedHead = String(budgetHead || '').trim();
-  const normalizedSubHead = String(subHead || '').trim();
-  return Boolean(normalizedHead && !normalizedSubHead);
+  return Boolean(normalizedHead);
 };
 
 const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {

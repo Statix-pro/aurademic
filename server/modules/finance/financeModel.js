@@ -240,6 +240,19 @@ const normalizeEntityTypeCode = (typeCode) => {
   return normalized || null;
 };
 
+const normalizeHeadLabelForMatch = (value) =>
+  normalizeText(value)
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const shouldUseHeadOnlyAvailabilityMatch = (budgetHead, _subHead = '') => {
+  const normalized = normalizeHeadLabelForMatch(budgetHead);
+  return Boolean(normalized);
+};
+
 const normalizeBudgetRows = (rows = []) => {
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error('At least one budget breakup row is required');
@@ -252,7 +265,7 @@ const normalizeBudgetRows = (rows = []) => {
     const rowNo = index + 1;
     const budgetHead = normalizeText(row?.budget_head || row?.category);
     const subHead = normalizeText(row?.sub_head || row?.head);
-    const headOnlyMatch = Boolean(row?.head_only_match) && !subHead;
+    const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(budgetHead, subHead);
     const parsedAmount = Number(row?.amount);
     const hasAvailableSnapshot =
       row?.available_amount_snapshot !== undefined && row?.available_amount_snapshot !== null;
@@ -528,20 +541,6 @@ const isLooseTextMatch = (leftValue, rightValue) => {
   }
 
   return leftNormalized === rightNormalized;
-};
-
-const normalizeHeadLabelForMatch = (value) =>
-  normalizeText(value)
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const shouldUseHeadOnlyAvailabilityMatch = (budgetHead, subHead = '') => {
-  const normalized = normalizeHeadLabelForMatch(budgetHead);
-  const normalizedSubHead = normalizeSubHeadForLookup(subHead);
-  return Boolean(normalized && !normalizedSubHead);
 };
 
 const WORKFLOW_STATUS_SQL_EXPR = `
