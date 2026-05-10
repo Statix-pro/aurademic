@@ -973,3 +973,151 @@
   background: #e6f7ea;
   color: #2f8a57;
 }
+
+.fw-stats-card.all {
+  color: #5d6b8a;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.fw-stats-card.all .fw-stats-icon {
+  background: #0069ab;
+  color: #eef2f7;
+}
+
+.fw-payee-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.fw-payee-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fw-payee-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1f2a44;
+}
+
+.fw-payee-topsearch {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fw-payee-search,
+.fw-payee-header-search {
+  position: relative;
+  width: 320px;
+  max-width: 320px;
+}
+
+.fw-payee-search-icon,
+.fw-payee-header-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+}
+
+.fw-payee-search-input,
+.fw-payee-header-search-input {
+  width: 100%;
+  min-width: 100%;
+  padding-left: 36px;
+}
+
+.fw-payee-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.fw-payee-stats-card {
+  width: 100%;
+  min-height: 96px;
+  height: auto;
+  border-radius: 12px;
+  text-align: left;
+  padding: 14px 16px;
+}
+
+.fw-payee-stats-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  width: 100%;
+}
+
+.fw-payee-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fw-payee-count {
+  font-size: 0.95rem;
+  color: #475569;
+  font-weight: 600;
+}
+
+.fw-payee-filter-buttons {
+  display: none;
+}
+
+.fw-payee-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.1);
+  border-color: rgba(0, 105, 171, 0.3);
+}
+
+.fw-payee-empty {
+  padding: 4rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #64748b;
+  border: 1px dashed #cbd5e1;
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.fw-payee-empty-icon {
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.fw-payee-empty-title {
+  margin: 0;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.fw-payee-empty-copy {
+  margin: 0.5rem 0 0;
+}
+
+.fw-payee-state-compact {
+  padding: 2rem 0;
+}
+
+@media (max-width: 900px) {
+  .fw-payee-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fw-payee-search,
+  .fw-payee-header-search {
+    width: 100%;
+    max-width: none;
+  }
+}

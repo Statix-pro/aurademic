@@ -36,6 +36,9 @@ interface PendingPayeeApprovalsProps {
   pendingPayeeEditingId: number | null;
   apiBasePath: string;
   onPayeeDelete: (id: number) => Promise<boolean> | boolean;
+  searchTerm?: string;
+  onSearchTermChange?: (value: string) => void;
+  showTopSearch?: boolean;
 }
 
 type PayeeModalMode = 'view' | 'edit';
@@ -447,8 +450,8 @@ const PayeeDetailModal: React.FC<{
               <button
                 type="button"
                 onClick={() => setMode('edit')}
-                disabled={busy || !isPending || !effectivePayee}
-                style={{ border: '1px solid #2563eb', background: '#eff6ff', color: '#2563eb', borderRadius: '10px', padding: '10px 16px', cursor: busy || !isPending ? 'not-allowed' : 'pointer', opacity: busy || !isPending ? 0.7 : 1 }}
+                disabled={busy || !effectivePayee}
+                style={{ border: '1px solid #2563eb', background: '#eff6ff', color: '#2563eb', borderRadius: '10px', padding: '10px 16px', cursor: busy || !effectivePayee ? 'not-allowed' : 'pointer', opacity: busy || !effectivePayee ? 0.7 : 1 }}
               >
                 Edit
               </button>
@@ -532,10 +535,18 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
   pendingPayeeEditingId,
   apiBasePath,
   onPayeeDelete,
+  searchTerm: externalSearchTerm,
+  onSearchTermChange,
+  showTopSearch = true,
 }) => {
   const [selectedPayeeId, setSelectedPayeeId] = useState<number | null>(null);
   const [selectedMode, setSelectedMode] = useState<PayeeModalMode>('view');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [internalSearchTerm, setInternalSearchTerm] = useState('');
+  const searchTerm = externalSearchTerm ?? internalSearchTerm;
+  const setSearchTerm = (value: string) => {
+    if (onSearchTermChange) onSearchTermChange(value);
+    else setInternalSearchTerm(value);
+  };
   const [statusFilter, setStatusFilter] = useState<PayeeFilterStatus>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
@@ -604,37 +615,41 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
   }, [currentPage, totalPages]);
 
   if (pendingPayeesLoading) {
-    return <div className="fw-state" style={{ padding: '2rem 0' }}>Loading payees...</div>;
+    return <div className="fw-state fw-payee-state-compact">Loading payees...</div>;
   }
 
   if (pendingPayees.length === 0) {
     return (
-      <div className="fw-state" style={{ padding: '4rem 0', display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#64748b', border: '1px dashed #cbd5e1', borderRadius: '18px', background: '#f8fafc' }}>
-        <CreditCard size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
-        <h4 style={{ margin: 0, fontWeight: 700, color: '#1e293b' }}>No payees found</h4>
-        <p style={{ margin: '0.5rem 0 0' }}>There are no active payees available in this management view.</p>
+      <div className="fw-state fw-payee-empty">
+        <CreditCard size={48} className="fw-payee-empty-icon" />
+        <h4 className="fw-payee-empty-title">No payees found</h4>
+        <p className="fw-payee-empty-copy">There are no active payees available in this management view.</p>
       </div>
     );
   }
 
   return (
     <>
-      <div style={{ display: 'grid', gap: '16px', padding: '4px 0 0' }}>
-        <div style={{ display: 'grid', gap: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-            <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1f2a44' }}>Payee Management</div>
-            <div style={{ position: 'relative', width: '100%', maxWidth: '460px' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#64748b' }} />
+      <div className="fw-payee-panel">
+        {showTopSearch && (
+          <div className="fw-payee-topsearch">
+            <div className="fw-payee-search">
+              <Search size={16} className="fw-payee-search-icon" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search payee..."
-                style={{ ...inputStyle, minHeight: '40px', paddingLeft: '36px', background: '#fff' }}
+                className="fw-control fw-payee-search-input"
               />
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '10px' }}>
+        )}
+        <div style={{ display: 'grid', gap: '14px' }}>
+          <div className="fw-payee-head">
+            <div className="fw-payee-title">Payee Management</div>
+          </div>
+          <div className="fw-payee-stats">
           {[
             { key: 'all', label: 'All', value: statusCounts.all, icon: CreditCard, tone: '#1d4ed8', bg: '#eff6ff' },
             { key: 'pending', label: 'Pending', value: statusCounts.pending, icon: Clock3, tone: '#b45309', bg: '#fff7ed' },
@@ -644,73 +659,41 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
             const Icon = item.icon;
             const active = statusFilter === item.key;
             return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setStatusFilter(item.key as PayeeFilterStatus)}
-                style={{
-                  border: active ? `1px solid ${item.tone}` : '1px solid #e2e8f0',
-                  background: active ? item.bg : '#fff',
-                  borderRadius: '10px',
-                  minHeight: '86px',
-                  padding: '10px 12px',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  boxShadow: active ? '0 8px 24px rgba(15, 23, 42, 0.08)' : 'none',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
-                  <div>
-                    <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>{item.label}</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>{item.value}</div>
-                  </div>
-                  <div style={{ width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: item.bg, color: item.tone }}>
-                    <Icon size={22} />
-                  </div>
-                </div>
-              </button>
+	              <button
+	                key={item.key}
+	                type="button"
+	                onClick={() => setStatusFilter(item.key as PayeeFilterStatus)}
+	                className={`fw-stats-card fw-payee-stats-card ${item.key} ${active ? 'active' : ''}`}
+	              >
+	                <div className="fw-payee-stats-row">
+	                  <div className="fw-stats-icon">
+	                    <Icon size={22} />
+	                  </div>
+	                  <div className="fw-stats-text">
+	                    <div className="fw-stats-label">{item.label}</div>
+	                    <div className="fw-stats-number">{item.value}</div>
+	                  </div>
+	                </div>
+	              </button>
             );
           })}
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ fontSize: '0.95rem', color: '#475569', fontWeight: 600 }}>
-            {statusFilter === 'all' ? 'All payees' : `${formatToken(statusFilter)} payees`} · {filteredPayees.length} record{filteredPayees.length === 1 ? '' : 's'}
-          </div>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {(['all', 'pending', 'approved', 'rejected'] as PayeeFilterStatus[]).map((status) => {
-              const active = statusFilter === status;
-              return (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => setStatusFilter(status)}
-                  style={{
-                    border: active ? '1px solid #2563eb' : '1px solid #cbd5e1',
-                    background: active ? '#eff6ff' : '#fff',
-                    color: active ? '#2563eb' : '#475569',
-                    borderRadius: '999px',
-                    padding: '8px 14px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {formatToken(status)}
-                </button>
-              );
-            })}
+        <div className="fw-payee-toolbar">
+          <div className="fw-payee-count">
+            {statusFilter === 'all' ? 'All payees' : `${formatToken(statusFilter)} payees`} - {filteredPayees.length} record{filteredPayees.length === 1 ? '' : 's'}
           </div>
         </div>
 
         {filteredPayees.length === 0 ? (
-          <div className="fw-state" style={{ padding: '4rem 0', display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#64748b', border: '1px dashed #cbd5e1', borderRadius: '18px', background: '#f8fafc' }}>
-            <CreditCard size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
-            <h4 style={{ margin: 0, fontWeight: 700, color: '#1e293b' }}>No matching payees</h4>
-            <p style={{ margin: '0.5rem 0 0' }}>Try another search or status filter.</p>
+          <div className="fw-state fw-payee-empty">
+            <CreditCard size={48} className="fw-payee-empty-icon" />
+            <h4 className="fw-payee-empty-title">No matching payees</h4>
+            <p className="fw-payee-empty-copy">Try another search or status filter.</p>
           </div>
         ) : (
-        <div className="fw-payee-list" style={{ display: 'grid', gap: '16px' }}>
+        <div className="fw-cards-container fw-payee-list">
         {paginatedPayees.map((payee) => {
           const payeeName = normalizePayeeName(payee) || 'Unnamed payee';
           const busy = pendingPayeeActingId === Number(payee.id);
@@ -726,6 +709,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
           return (
             <div
               key={`pending-payee-${payee.id}`}
+              className="fw-item fw-payee-item"
               style={{
                 background: '#ffffff',
                 border: '1px solid #e2e8f0',
@@ -795,7 +779,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                 </button>
                 <button
                   type="button"
-                  disabled={busy || editing || !isPending}
+                  disabled={busy || editing}
                   onClick={() => {
                     setSelectedMode('edit');
                     setSelectedPayeeId(Number(payee.id));
@@ -805,7 +789,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                   style={{
                     width: '44px', height: '44px', borderRadius: '10px',
                     border: '1px solid #2563eb', background: '#eff6ff', color: '#2563eb', fontWeight: 600,
-                    cursor: busy || editing || !isPending ? 'not-allowed' : 'pointer', opacity: busy || editing || !isPending ? 0.7 : 1, transition: 'all 0.2s ease',
+                    cursor: busy || editing ? 'not-allowed' : 'pointer', opacity: busy || editing ? 0.7 : 1, transition: 'all 0.2s ease',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}
                 >
