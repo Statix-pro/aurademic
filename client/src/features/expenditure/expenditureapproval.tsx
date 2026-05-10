@@ -73,9 +73,6 @@ interface PayeeLookupResult {
   gstin?: string | null;
   tds_details?: string | null;
   tds_section?: string | null;
-  approval_status?: string | null;
-  rejection_reason?: string | null;
-  requested_at?: string | null;
 }
 type PayeeLookupField = 'payeeName' | 'accountNo' | 'bankName' | 'ifsc' | 'branchName';
 interface FinanceRequestContext {
@@ -91,8 +88,10 @@ interface FinanceRequestContext {
   description?: string;
   beneficiary_type?: string;
   beneficiary_value?: string;
+  finance_tag?: string;
   primary_head?: string;
   event_sub_head?: string;
+  budget_tag?: string;
   approved_amount?: number;
 }
 interface WorkflowStateSnapshot {
@@ -128,6 +127,16 @@ const normalizeBudgetToken = (value: unknown): string =>
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase();
+
+const normalizeDateForInput = (value: string | null | undefined): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const ymd = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ymd) return `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+};
 
 const normalizeApprovedBudgetOption = (row: any): ApprovedBudgetOption | null => {
   if (!row || typeof row !== 'object') return null;
@@ -180,6 +189,127 @@ interface ExpenditureFormRow {
   budgetLineId?: number | null;
   budgetProposalId?: number | null;
 }
+interface BudgetHeadGroup {
+  label: string;
+  options: string[];
+}
+
+const SUBCATEGORY_OPTIONS: Record<string, string[]> = {
+  Faculty_Team: [
+    "Project Team",
+    "Event Organizing Team",
+    "Research Team",
+    "Question Paper Setting Team",
+  ],
+  Student_Team: ["Computer Science and Engineering",
+    "Electronics and Communication Engineering",
+    "Mechanical Engineering",
+    "Civil Engineering",
+    "Information Technology",
+  ],
+  Department: [
+    "Computer Science and Engineering",
+    "Electronics and Communication Engineering",
+    "Mechanical Engineering",
+    "Civil Engineering",
+    "Information Technology",
+  ],
+  Centre: [
+    "Centre for Research",
+    "Centre for Innovation",
+    "Centre for Industry Collaboration",
+  ],
+  Cell: [
+    "Placement Cell",
+    "Entrepreneurship Development Cell",
+    "Women Empowerment Cell",
+    "Alumni Cell",
+  ],
+  Club: [
+    "Coding Club",
+    "Robotics Club",
+    "Cultural Club",
+    "Sports Club",
+  ],
+};
+
+const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
+  {
+    label: 'Non-Recurring',
+    options: [
+      'Civil Infrastructure',
+      'Electrical Infrastructure',
+      'IT Infrastructure',
+      'Furniture & Fixtures',
+      'Vehicles',
+      'Equipment',
+      'Accessories & Kits',
+    ],
+  },
+  {
+    label: 'Recurring',
+    options: [],
+  },
+  {
+    label: 'Maintenance & Spares',
+    options: [
+      'Maintenance Charges',
+      'Spares',
+      'Annual Maintenance Charges',
+    ],
+  },
+  {
+    label: 'Operational',
+    options: [
+      'Consumables',
+      'Software',
+      'Membership & Subscriptions',
+      'Student Essentials',
+      'Printing & Stationery',
+      'Postal Expenses',
+      'Local Conveyance',
+      'Operational Expenses',
+    ],
+  },
+  {
+    label: 'Events & Engagement',
+    options: [
+      'Events & Competitions',
+      'Meetings & Audits',
+    ],
+  },
+  {
+    label: 'Academics',
+    options: [
+      'Faculty Empowerment',
+      'Staff Empowerment',
+      'Student Empowerment',
+      'Student Capacity Building',
+      'Learning Resources',
+      'Accreditation Expenses',
+      'Professional Body Expenses',
+      'Awards & Recognition',
+    ],
+  },
+  {
+    label: 'Branding & Outreach',
+    options: [
+      'Advertisement & Branding',
+      'Public Relations',
+      'Admissions',
+    ],
+  },
+  {
+    label: 'General',
+    options: [
+      'Research & Development',
+      'Administrative Expenses',
+      'Salary',
+      'Bills & Payments',
+      'Miscellaneous Expenses',
+    ],
+  },
+];
 const INCOME_SOURCE_OPTIONS = [
   'Government Funding',
   'Registration Fees',
@@ -230,9 +360,185 @@ const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
   Section: 'SECTION',
   'Professional Body': 'PROFESSIONAL_BODY',
 };
+const FALLBACK_SUBCATEGORY_OPTIONS: Record<string, string[]> = {
+  Department: [
+    'Computer Science and Engineering',
+    'Electronics and Communication Engineering',
+    'Mechanical Engineering',
+    'Civil Engineering',
+    'Information Technology',
+  ],
+  Centre: [
+    'Centre for Research',
+    'Centre for Innovation',
+    'Centre for Industry Collaboration',
+  ],
+  Cell: [
+    'Placement Cell',
+    'Entrepreneurship Development Cell',
+    'Women Empowerment Cell',
+    'Alumni Cell',
+  ],
+  Club: [
+    'Coding Club',
+    'Robotics Club',
+    'Cultural Club',
+    'Sports Club',
+  ],
+  Section: [
+    'Section A',
+    'Section B',
+    'Section C',
+  ],
+  'Professional Body': [
+    'American Society of Mechanical Engineers (Student Chapter)',
+    'Computer Society of India',
+    'Erode Salaram Foundation',
+    'Local Library Authority, Erode & Namakkal',
+    'Society for the Advancement of Library and Information Science',
+    'The Indian Institute of Welding',
+    'The Indian Society of Heating, Refrigerating and Air Conditioning',
+  ],
+};
+const FALLBACK_TAG_OPTIONS: SelectOption[] = [
+  { value: 'Laboratory', label: 'Laboratory' },
+  { value: 'Association', label: 'Association' },
+  { value: 'Skilling', label: 'Skilling' },
+  { value: 'Research', label: 'Research' },
+  { value: 'Outreach', label: 'Outreach' },
+  { value: 'Office', label: 'Office' },
+  { value: 'Academics', label: 'Academics' },
+  { value: 'Essentials', label: 'Essentials' },
+  { value: 'Events', label: 'Events' },
+  { value: 'Innovation', label: 'Innovation' },
+  { value: 'Start-up', label: 'Start-up' },
+  { value: 'Entrepreneurship', label: 'Entrepreneurship' },
+];
 const PAYMENT_MODE_OPTIONS = ['NEFT', 'RTGS', 'IMPS', 'Cheque', 'Cash', 'G-Pay', 'PhonePe', 'Internal Transfer'];
 const PAYMENT_STATUS_OPTIONS = ['Paid', 'Pending', 'Processing', 'Cancelled'];
 const BULK_NEFT_TEMPLATE_VERSION = '2026-04-11';
+const EVENT_SUBHEAD_GROUPS: Record<string, Array<{ label: string; options: OptionType[] }>> = {
+  'Events & Competitions': [
+    {
+      label: 'Academic & Professional Development',
+      options: toOptions([
+        'Seminar',
+        'Webinar',
+        'Guest Lecture',
+        'Workshop',
+        'Hands-on Training',
+        'FDP (Faculty Development Programme)',
+        'STTP (Short-Term Training Programme)',
+      ]),
+    },
+    {
+      label: 'Conferences & Conclaves',
+      options: toOptions([
+        'National Conference',
+        'International Conference',
+        'Conclave',
+        'Convention',
+      ]),
+    },
+    {
+      label: 'Industry & Networking',
+      options: toOptions([
+        'Industry Visit',
+        'Expert Visit',
+        'Networking Event',
+        'Industry Interaction',
+        'MoU Signing',
+      ]),
+    },
+    {
+      label: 'Association & Institutional Activities',
+      options: toOptions([
+        'Association Function',
+        'Alumni Meeting',
+        'Alumni Interaction',
+        'Parents Meeting',
+      ]),
+    },
+    {
+      label: 'Outreach Event',
+      options: toOptions([
+        'School Visit',
+        'Awareness Program',
+        'Campaigns',
+        'Mini Marathon',
+      ]),
+    },
+    {
+      label: 'Competitions & Innovation',
+      options: toOptions([
+        'Hackathons',
+        'Competitions',
+        'Club Activities',
+        'Project Expo',
+        'Ideathon',
+        'Start-up meet',
+        'Mentoring Sessions',
+      ]),
+    },
+    {
+      label: 'Cultural & Celebrations',
+      options: toOptions([
+        'Annual Day',
+        'Sports Day',
+        'Graduation Day',
+        'Science Day',
+        'Womens Day',
+        'Celebration Day',
+        'Festival Celebrations',
+        'Dakshaa',
+        'Harmonicks',
+      ]),
+    },
+    {
+      label: 'Sports & Student Engagement',
+      options: toOptions([
+        'Sports Meet',
+        'Sports Day (Engagement)',
+        'Camp',
+        'Rally',
+        'Student Induction Programme',
+        'Orientation Session',
+      ]),
+    },
+  ],
+  'Meetings & Audits': [
+    {
+      label: 'Institutional Governance',
+      options: toOptions([
+        'Governing Body Meeting',
+        'Research Advisory Board Meeting',
+        'Finance Committee Meeting',
+        'Result Passing Board Meeting',
+        'Examination Committee Meeting',
+        'Placement Meeting',
+        'Network Meeting',
+      ]),
+    },
+    {
+      label: 'Academic Governance',
+      options: toOptions([
+        'Academic Council Meeting',
+        'Standing Committee Meeting',
+        'Board of Studies Meeting',
+        'DAB Meeting',
+      ]),
+    },
+    {
+      label: 'Audits',
+      options: toOptions([
+        'Academic Audit',
+        'Administrative Audit',
+        'Energy & Green Audit',
+        'Government Meetings',
+      ]),
+    },
+  ],
+};
 
 const flattenOptions = (options: Array<OptionType | { label: string; options: OptionType[] }>): OptionType[] =>
   options.flatMap((opt) => ('options' in opt ? opt.options : opt));
@@ -276,6 +582,20 @@ const resolveTagValue = (value: unknown, options: SelectOption[]) => {
   return matched?.value || normalized;
 };
 
+const extractTagCandidate = (source: Record<string, unknown> | null | undefined): string => {
+  if (!source || typeof source !== 'object') return '';
+  const candidate =
+    source.budget_tag ??
+    source.budgetTag ??
+    source.budgettag ??
+    source.finance_tag ??
+    source.financeTag ??
+    source.tag_name ??
+    source.tag ??
+    '';
+  return String(candidate ?? '').trim();
+};
+
 const resolveBillFileUrl = (file: BillFileRecord) => {
   const rawUrl = String(file.file_url ?? file.download_url ?? file.file_path ?? '').trim();
   if (!rawUrl) return '';
@@ -288,14 +608,380 @@ const resolveBillFileUrl = (file: BillFileRecord) => {
 const getSelectedOption = (
   value: string | number,
   options: Array<OptionType | { label: string; options: OptionType[] }>
-): OptionType | null => {
-  const normalizedValue = String(value ?? '').trim();
-  if (!normalizedValue) {
-    return null;
-  }
+): OptionType | null =>
+  flattenOptions(options).find((opt) => String(opt.value) === String(value)) ?? null;
 
-  const matched = flattenOptions(options).find((opt) => String(opt.value) === normalizedValue);
-  return matched ?? { value: normalizedValue, label: normalizedValue };
+const PRIMARY_HEAD_OPTIONS: Array<{ label: string; options: OptionType[] }> =
+  BUDGET_HEAD_GROUPS.map((group) => ({
+    label: group.label,
+    options: toOptions(group.options),
+  }));
+const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
+
+  'Civil Infrastructure': [
+    'Construction Works',
+    'Partition Works',
+    'False Ceiling Works',
+    'Plumbing Works',
+    'Canopy',
+  ],
+
+  'Electrical Infrastructure': [
+    'Electrical Wiring',
+    'Lights & Fans',
+    'Lift Installation',
+    'Air Conditioner',
+    'UPS Inverter',
+    'Battery',
+  ],
+
+  'IT Infrastructure': [
+    'Hardwares',
+    'Softwares',
+    'Hard Disks',
+    'Monitors',
+    'Wi-fi Router',
+    'Network Materials',
+    'Laptops',
+    'Interactive Displays',
+    'Desktops',
+    'CCTV Materials',
+    'Television',
+    'Projectors',
+    'Printers',
+    'Mobiles & Tablet',
+    'Mic & Speakers',
+    'Amplifiers',
+    'A/V Equipment',
+    'Intercom',
+    'Xerox Machine',
+  ],
+
+  'Furniture & Fixtures': [
+    'Chair',
+    'Faculty Table',
+    'Computer Table',
+    'Discussion Table',
+    'Work Table',
+    'Wooden Cup Boards',
+  ],
+
+  Vehicles: [
+    'Two Wheeler',
+    'Light Motor Vehicle',
+    'Heavy Motor Vehicle',
+  ],
+
+  Equipment: [
+    'Lab Equipment',
+    'Consultancy Equipment',
+    'Research Equipment',
+    'Equipment Upgrade',
+  ],
+
+  'Accessories & Kits': [
+    'Power Tools',
+    'Weighing Machine',
+    'Drilling Machine',
+    'Drone Kit',
+  ],
+
+  'Maintenance Charges': [
+    'Building Maintenance',
+    'Computer Maintenance',
+    'Electrical Maintenance',
+    'Furniture Maintenance',
+    'Plumbing Maintenance',
+    'Vehicle Maintenance',
+    'Garden Maintenance',
+    'Equipment Maintenance',
+    'Infrastructure Maintenance',
+    'AC Maintenance',
+    'UPS Maintenance',
+    'Lift Maintenance',
+    'Printer Maintenance',
+    'Painting',
+  ],
+
+  Spares: ['Printer Donors', 'SMPS', 'Chargers'],
+
+  'Annual Maintenance Charges': [
+    'Equipment Maintenance',
+    'Software Maintenance',
+  ],
+
+
+  Consumables: [
+    'Chemicals',
+    'Glasswares',
+    'Plasticwares',
+    'Electrical Components',
+    'Electronic Components',
+    'Mechanical Components',
+    'Construction Materials',
+    'Cutting Tools',
+    'Oils & Lubricants',
+    'Metals & Alloys',
+    'Carpentary Items',
+    'Others',
+  ],
+
+  Software: [
+    'Plagiarism',
+    'Grammer Check',
+    'Grievance',
+    'Programming',
+    'Modelling',
+    'Analysis',
+    'Antivirus',
+    'Firewall',
+    'Graphical Design',
+    'AI Tools',
+    'Others',
+  ],
+
+  'Membership & Subscriptions': [
+    'Professional Body fees',
+    'Membership fees',
+    'Annual Membership fee',
+    'Journals',
+    'Magazines',
+    'Newspaper',
+    'DELNET',
+    'E-Resources',
+    'Data Subscription Charges',
+  ],
+
+  'Student Essentials': ['Note Books', 'Log Books', 'ID Card', 'Others'],
+
+  'Printing & Stationery': [
+    'Banner',
+    'Pamphlet',
+    'Brochure',
+    'Vinyl Boards',
+    'Certificates',
+    'Diary',
+    'Calendar',
+    'Visitng Card',
+    'Seal/ Stamp Pad',
+    'Pen/ Pencil/ Eraser',
+    'Stapler/ Punching Machine',
+    'Files/ Folders',
+    'Entry Registers',
+    'Print Sheets',
+    'Others',
+  ],
+
+  'Postal Expenses': [
+    'Frieght Charges',
+    'Postal Charges',
+    'Courier Charges',
+    'Others',
+  ],
+
+  'Local Conveyance': [
+    'Travel Expense',
+    'Food & Refreshment',
+    'Beta',
+    'Others',
+  ],
+
+  'Operational Expenses': [
+    'Water Bottle',
+    'Food & Refreshment',
+    'Pooja Expenses',
+    'Accessories',
+    'Legal stamp paper',
+    'Miscellaneous'
+  ],
+
+  'Events & Competitions': [
+    'Remuneration',
+    'Travel',
+    'Accommodation',
+    'Memento & Gifts',
+    'Food & Refreshment',
+    'A/V Arrangements',
+    'Stationary',
+    'Printing',
+    'Prizes',
+    'Publication Charges',
+    'Promotions',
+    'Decorations',
+    'Event Logistics',
+    'Registration Kit',
+    'Give away',
+    'T-Shirt',
+    'Bag',
+    'Consumables',
+    'Others',
+],
+
+  'Meetings & Audits': [
+    'Remuneration',
+    'Travel',
+    'Accommodation',
+    'Memento & Gifts',
+    'Food & Refreshment',
+    'Stationary',
+    'Printing',
+    'Others',
+  ],
+
+  'Faculty Empowerment': [
+    'Registration fee',
+    'Travel Allowance',
+    'Food & Refreshment',
+    'Accommodation',
+    'Daily Allowance',
+    'Membership Fees',
+    'Incentives',
+    'Leadership Meet',
+    'Faculty Welfare',
+  ],
+
+  'Staff Empowerment': [
+    'Registration fee',
+    'Travel Allowance',
+    'Food & Refreshment',
+    'Accommodation',
+    'Daily Allowance',
+    'Incentives',
+    'Staff Welfare',
+  ],
+
+  'Student Empowerment': [
+    'Registration fee',
+    'Travel Support',
+    'Food & Refreshment',
+    'Accommodation',
+    'Certification Costs',
+    'Medical Expense',
+    'Incentives',
+    'Prizes',
+    'Student Welfare',
+    'Student Uniform',
+  ],
+  'Awards & Recognition': [
+    'Accommodation',
+    'Registration fee',
+    'Food & Refreshment',
+    'Driver Beta',
+    'Travel Allowance',
+    'Daily Allowance',
+    'Printing',
+    'Stationery',
+    'Others'
+  ],
+
+  'Student Capacity Building': [
+    'Skill Development Training',
+    'ApptitudeTraining',
+    'Higher Education Coaching',
+    'Competitive Exam Coaching',
+    'Placement Training',
+    'Placement Drives',
+    'One Credit Course',
+    'Value Added Course',
+    'Certification Programs',
+    'Internship',
+    'International Connect',
+    'Exposure Visit',
+    'Language Proficiency Courses',
+    'Others',
+  ],
+
+  'Learning Resources': ['Text Books', 'E-Resources'],
+
+  'Accreditation Expenses': [
+    'NAAC Fees',
+    'NBA Fees',
+    'NAAC Inspection',
+    'NBA Inspection',
+  ],
+
+  'Advertisement & Branding': [
+    'News Paper Advertisement',
+    'Digital Promotion',
+  ],
+
+  'Public Relations': ['Press & Media', 'Promotions', 'Branding', 'Corporate Gift'],
+
+  Admissions: [
+    'Stalls',
+    'School Visits',
+    'Field Visits',
+    'Student Directory',
+    'Consultant Charges',
+  ],
+
+
+  'Research & Development': [
+    'Seed Fund (Product Development)',
+    'Seed Fund (IPR Charges)',
+    'Seed Fund (Travel)',
+    'Institute Research Fellowship',
+    'Research Grant',
+    'Publication Support',
+    'Consultancy',
+    'Research Cenre Renewal',
+    'HI Contribution',
+  ],
+
+  'Administrative Expenses': [
+    'AICTE Fees',
+    'Affiliation Fees',
+    'Anna University Fees',
+    'DOTE Fees',
+    'Consortium Fees',
+    'Inspection Expenses',
+    'Autonomous Charges',
+    'DTCP Approval',
+    'Licenses & Taxes',
+    'Spirit License',
+    'License Renewal',
+    'Insurance Charges',
+    'Water Charges',
+    'Stamp Charges',
+    'Flag Day Expenses',
+    'Fee Fixation Expenses',
+    'Scholarship Expenses',
+    'International Travel',
+    'Testing Charges',
+  ],
+
+  Salary: [
+    'Monthly Salary',
+    'Provident Fund',
+    'Emoluments',
+    'Professional Payments',
+    'Wages',
+  ],
+
+  'Bills & Payments': [
+    'Electricity Charges',
+    'Internet Charges',
+    'Telephone Charges',
+  ],
+
+  'Miscellaneous Expenses': [
+    'Bank Charges',
+    'Bank Interest',
+    'Loan Processing Charges',
+    'Generator & Fuel',
+    'Guest House',
+    'Fire Extinguisher',
+    'General Expenses',
+    'Sewage Treatment',
+    'Farm Expenses',
+    'Laundry Service',
+    'House Keeping',
+    'RO Mineral Water',
+    'Audit Fees',
+    'Office Expenses',
+    'Fire Extinguisher',
+    'First Aid Kit Expenses',
+  ],
 };
 
 const BUDGET_SELECT_STYLES = {
@@ -809,7 +1495,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
     'Credit Agricole CIB India',
   ];
 
-  
+
   const handleModalSubmit = async () => {
     const canonicalPayeeName = resolveCanonicalPayeeName('', newAccountName);
 
@@ -845,12 +1531,12 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
 
     await onAddPayee(payeeToAdd);
   };
-  
+
 
   if (!show) return null;
 
   return (
-    <div 
+    <div
       style={{
         position: 'fixed',
         top: 0,
@@ -871,7 +1557,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
         }
       }}
     >
-      <div 
+      <div
         style={{
           backgroundColor: '#ffffff',
           borderRadius: '28px',
@@ -887,20 +1573,20 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <button 
-          onClick={onClose} 
-          style={{ 
-            position: 'absolute', 
-            top: '16px', 
-            right: '16px', 
-            background: 'none', 
-            border: 'none', 
-            cursor: 'pointer', 
-            color: '#6c757d', 
-            padding: '0', 
-            margin: '0', 
-            fontSize: '20px', 
-            zIndex: 10, 
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#6c757d',
+            padding: '0',
+            margin: '0',
+            fontSize: '20px',
+            zIndex: 10,
             lineHeight: 1,
             transition: 'color 0.2s'
           }}
@@ -913,14 +1599,14 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
         <div style={{ padding: '22px 42px 30px' }}>
           {/* Toggle Buttons */}
           <div className="payee-modal-toggle">
-            <button 
-              onClick={() => handleToggle('individual')} 
+            <button
+              onClick={() => handleToggle('individual')}
               className={`payee-modal-toggle-btn ${beneficiaryType === 'individual' ? 'active' : ''}`}
             >
               Individual
             </button>
-            <button 
-              onClick={() => handleToggle('organization')} 
+            <button
+              onClick={() => handleToggle('organization')}
               className={`payee-modal-toggle-btn ${beneficiaryType === 'organization' ? 'active' : ''}`}
             >
               Organization
@@ -1144,18 +1830,18 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({ show, onClose, onAddPayee
             </div>
           </div>
 
-          <button 
-            onClick={handleModalSubmit} 
-            style={{ 
-              width: '100%', 
-              height: '52px', 
-              backgroundColor: '#0069ab', 
-              color: '#ffffff', 
-              border: 'none', 
-              borderRadius: '16px', 
-              fontSize: '1rem', 
-              fontWeight: 600, 
-              marginTop: '32px', 
+          <button
+            onClick={handleModalSubmit}
+            style={{
+              width: '100%',
+              height: '52px',
+              backgroundColor: '#0069ab',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '16px',
+              fontSize: '1rem',
+              fontWeight: 600,
+              marginTop: '32px',
               cursor: 'pointer',
               transition: 'background-color 0.2s'
             }}
@@ -1182,7 +1868,7 @@ const ExpenditureApproval: React.FC = () => {
 
     return normalizeWorkflowModule(state?.activeTab) ?? normalizeWorkflowModule(state?.submittedModule);
   })();
-  
+
   // Check if this is Advance2
   const isAdvance2 = (() => {
     const state = location.state as {
@@ -1254,10 +1940,19 @@ const ExpenditureApproval: React.FC = () => {
     const state = location.state as {
       financeProposal?: {
         totalAmount?: unknown;
+        tag?: unknown;
       };
     } | null;
 
     return Number.parseFloat(String(state?.financeProposal?.totalAmount ?? '0')) || 0;
+  })();
+  const financeTagFromState = (() => {
+    const state = location.state as {
+      financeProposal?: {
+        tag?: unknown;
+      };
+    } | null;
+    return String(state?.financeProposal?.tag ?? '').trim();
   })();
   const [resolvedFinanceRequestId, setResolvedFinanceRequestId] = useState<number | null>(
     financeRequestIdFromState,
@@ -1324,6 +2019,8 @@ const ExpenditureApproval: React.FC = () => {
   const [categorySelections, setCategorySelections] = useState<string[]>([]);
   const [primaryHead, setPrimaryHead] = useState<string>('');
   const [eventSubHead, setEventSubHead] = useState<string>('');
+  const [showBudgetHeadModal, setShowBudgetHeadModal] = useState<boolean>(false);
+  const [selectedBudgetHeadForModal, setSelectedBudgetHeadForModal] = useState<string>('');
   const [beneficiarySearchQuery, setBeneficiarySearchQuery] = useState<string>('');
   const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<Array<{
     employeeid: number; name: string; designation: string; department: string;
@@ -1336,7 +2033,8 @@ const ExpenditureApproval: React.FC = () => {
   const [approvedBudgetOptions, setApprovedBudgetOptions] = useState<ApprovedBudgetOption[]>([]);
   const [isApprovedBudgetLoading, setIsApprovedBudgetLoading] = useState(false);
   const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
-  const [tagOptions, setTagOptions] = useState<SelectOption[]>([]);
+  const [tagOptions, setTagOptions] = useState<SelectOption[]>(FALLBACK_TAG_OPTIONS);
+  const [pendingPrefillTag, setPendingPrefillTag] = useState<string>(financeTagFromState);
   const [showDebitAccountDropdown, setShowDebitAccountDropdown] = useState(false);
   const payeeLookupTimeoutRef = useRef<number | null>(null);
   const payeeLookupRequestRef = useRef(0);
@@ -1379,16 +2077,31 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
         setEventSubHead((prev) => prev || financeContext.event_sub_head || '');
         setCategoryType((prev) => prev || nextCategoryType);
         setCategoryItem((prev) => prev || financeContext.beneficiary_value || '');
-        setSelectedTag((prev) =>
-          prev ||
-          resolveTagValue(
-            (financeContext as FinanceRequestContext & Record<string, unknown>).budget_tag ??
-              (financeContext as FinanceRequestContext & Record<string, unknown>).budgetTag ??
-              (financeContext as FinanceRequestContext & Record<string, unknown>).tag ??
-              '',
-            tagOptions,
-          ),
+        const financeContextTagRaw = extractTagCandidate(
+          financeContext as FinanceRequestContext & Record<string, unknown>
         );
+        let resolvedPrefillTag = resolveTagValue(financeContextTagRaw, tagOptions);
+
+        // Fallback: if finance-context doesn't include tag, fetch finance request details.
+        if (!resolvedPrefillTag && resolvedFinanceRequestId) {
+          try {
+            const financeDetailResp = await authenticityUtility.get(`/finance-requests/${resolvedFinanceRequestId}`) as any;
+            const payload = financeDetailResp?.data ?? {};
+            const candidate =
+              extractTagCandidate(payload) ||
+              extractTagCandidate(payload?.master as Record<string, unknown> | undefined) ||
+              extractTagCandidate(payload?.record as Record<string, unknown> | undefined);
+            resolvedPrefillTag = resolveTagValue(candidate, tagOptions);
+          } catch (tagFallbackError) {
+            console.error('Failed to fetch finance tag fallback:', tagFallbackError);
+          }
+        }
+
+        const nextTag = resolvedPrefillTag || financeContextTagRaw || financeTagFromState || '';
+        setSelectedTag((prev) => prev || nextTag);
+        if (nextTag) {
+          setPendingPrefillTag(nextTag);
+        }
       } catch (error) {
         if (!isCancelled) {
           console.error('Failed to load finance context for expenditure form:', error);
@@ -1402,6 +2115,14 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
       isCancelled = true;
     };
   }, [resolvedFinanceRequestId]);
+
+  useEffect(() => {
+    if (!pendingPrefillTag) return;
+    setSelectedTag((prev) => {
+      if (prev && String(prev).trim()) return prev;
+      return resolveTagValue(pendingPrefillTag, tagOptions);
+    });
+  }, [pendingPrefillTag, tagOptions]);
 
   useEffect(() => {
     if (!submittedRequestIdFromState) {
@@ -1533,12 +2254,12 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
         setDepartment(String(record.department || ''));
         setEmail(String(record.email || ''));
         setMobile(String(record.mobile || ''));
-        setDate(String(record.request_date || new Date().toISOString().split('T')[0]));
+        setDate(normalizeDateForInput(String(record.request_date || '')) || new Date().toISOString().split('T')[0]);
         setDescription(String(record.description || ''));
         setCategoryType(String(record.beneficiary_type || ''));
         setCategoryItem(String(record.beneficiary_value || ''));
-        setSelectedTag(
-          resolveTagValue(
+        {
+          const recordTag = resolveTagValue(
             record.budget_tag ??
               record.budgettag ??
               record.budgetTag ??
@@ -1547,8 +2268,9 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
               record.financeTag ??
               '',
             tagOptions,
-          ),
-        );
+          );
+          setSelectedTag((prev) => prev || recordTag);
+        }
         setPrimaryHead(String(record.primary_head || ''));
         setEventSubHead(String(record.event_sub_head || ''));
         setIsBudgetProposed(String(record.is_budget_proposed || ''));
@@ -1695,7 +2417,8 @@ const workflowRowRefFromState = (() => {
             nextOptions[beneficiaryKey] = toOptionList(rows);
           } catch (fallbackError) {
             console.error(`Failed to fetch options for ${beneficiaryKey}:`, fallbackError);
-            nextOptions[beneficiaryKey] = [];
+            nextOptions[beneficiaryKey] =
+              FALLBACK_SUBCATEGORY_OPTIONS[beneficiaryKey]?.map((opt) => ({ value: opt, label: opt })) || [];
           }
         }
       }
@@ -1716,7 +2439,7 @@ const workflowRowRefFromState = (() => {
     const loadTagOptions = async () => {
       try {
         const response = await authenticityUtility.get('/finance-requests/tags') as any;
-        if (response?.success && Array.isArray(response?.data)) {
+        if ((response?.status === 'success' || response?.success === true) && Array.isArray(response?.data)) {
           const options = response.data
             .map((row: any) => ({
               value: String(row?.tag_name || '').trim(),
@@ -1724,19 +2447,18 @@ const workflowRowRefFromState = (() => {
             }))
             .filter((opt: SelectOption) => opt.value.length > 0);
 
-          setTagOptions(options);
+          setTagOptions(options.length > 0 ? options : FALLBACK_TAG_OPTIONS);
         } else {
-          setTagOptions([]);
+          setTagOptions(FALLBACK_TAG_OPTIONS);
         }
       } catch (error) {
         console.error('Failed to load budget tags', error);
-        setTagOptions([]);
+        setTagOptions(FALLBACK_TAG_OPTIONS);
       }
     };
 
     loadTagOptions();
   }, []);
-
 
   const addAdvanceRow = () => setAdvanceRows([...advanceRows, createAdvanceRow()]);
   const removeAdvanceRow = (id: string) => setAdvanceRows(advanceRows.filter(r => r.id !== id));
@@ -1765,7 +2487,7 @@ const workflowRowRefFromState = (() => {
 
   const addExpenditureRow = () => setExpenditureSubRows([...expenditureSubRows, createExpenditureRow()]);
   const removeExpenditureRow = (id: string) => setExpenditureSubRows(expenditureSubRows.filter(r => r.id !== id));
- 
+
    const formatDMY = (value: string | Date | null | undefined) => {
      if (!value) return "";
      const d = new Date(value);
@@ -1775,7 +2497,7 @@ const workflowRowRefFromState = (() => {
      const year = d.getFullYear();
      return `${day}.${month}.${year}`;
    };
- 
+
    const numberToIndianWords = (num: number): string => {
      if (num === 0) return "Zero rupees only";
      const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
@@ -1801,18 +2523,20 @@ const workflowRowRefFromState = (() => {
    };
 
    const MAX_AMOUNT = 999999999;
- 
+
    const getSubcategoryLabel = (category: string) => {
      if (!category) return "Sub category";
      return category;
    };
- 
+
   const isMultipleSelect = (type: string) => type === 'Faculty' || type === 'Staff';
 
   const subcategoryOptions: OptionType[] = subcategoryOptionsByType[categoryType] || [];
   const subcategoryList: string[] = subcategoryOptions.map((option) => String(option.value));
    const hasSubcategories = subcategoryList.length > 0;
- 
+
+   const extraDropdownVisible = primaryHead === 'Events & Competitions' || primaryHead === 'Meetings & Audits';
+
   const addPayeeRow = () => setPayeeRows([...payeeRows, createPayeeRow()]);
   const removePayeeRow = (id: string) => setPayeeRows(prev => prev.length > 1 ? prev.filter(r => r.id !== id) : prev);
 
@@ -1826,7 +2550,9 @@ const workflowRowRefFromState = (() => {
 
   useEffect(() => {
     if (!categoryType?.trim()) {
-      setSelectedTag('');
+      if (!pendingPrefillTag && !financeTagFromState) {
+        setSelectedTag('');
+      }
       return;
     }
 
@@ -1840,7 +2566,10 @@ const workflowRowRefFromState = (() => {
       }
 
       if (categoryType === 'Department') {
-        return '';
+        if (pendingPrefillTag || financeTagFromState) {
+          return pendingPrefillTag || financeTagFromState || '';
+        }
+        return String(tagOptions?.[0]?.value || '');
       }
 
       if (
@@ -1856,7 +2585,7 @@ const workflowRowRefFromState = (() => {
 
       return '';
     });
-  }, [categoryType]);
+  }, [categoryType, pendingPrefillTag, financeTagFromState, tagOptions]);
 
   const updatePayeeRow = (rowId: string, updater: (row: PayeeRow) => PayeeRow) => {
     setPayeeRows((prev) => prev.map((row) => (row.id === rowId ? updater(row) : row)));
@@ -2085,10 +2814,17 @@ const workflowRowRefFromState = (() => {
   };
 
   const getApprovedBudgetHeadsForAdvance = (): OptionType[] => {
-    return Array.from(new Set(approvedBudgetOptions
+    const approvedHeads: string[] = approvedBudgetOptions
       .map((budget) => String(budget.head || '').trim())
-      .filter(Boolean)))
-      .map((head) => ({ value: head, label: head }));
+      .filter(Boolean);
+
+    if (approvedHeads.length > 0) {
+      return Array.from(new Set(approvedHeads))
+        .map((head) => ({ value: head, label: head }));
+    }
+
+    return PRIMARY_HEAD_OPTIONS.flatMap((group) => group.options)
+      .map((option) => ({ value: String(option.value), label: String(option.label) }));
   };
 
   const getApprovedSubHeadOptionsForAdvance = (budgetHead: string | number): OptionType[] => {
@@ -2099,7 +2835,12 @@ const workflowRowRefFromState = (() => {
       .map((budget) => String(budget.subHead || '').trim())
       .filter(Boolean);
 
-    return Array.from(new Set(approvedSubHeads))
+    if (approvedSubHeads.length > 0) {
+      return Array.from(new Set(approvedSubHeads))
+        .map((subHead) => ({ value: subHead, label: subHead }));
+    }
+
+    return (SUB_HEAD_BY_BUDGET_HEAD[String(budgetHead)] || [])
       .map((subHead) => ({ value: String(subHead), label: String(subHead) }));
   };
 
@@ -2859,6 +3600,8 @@ for (const [, group] of groupedExpenditureUsage) {
     setShowApplicantDropdown(false);
   };
 
+  const getSubHeadOptions = (budgetHead: string | number): string[] =>
+    SUB_HEAD_BY_BUDGET_HEAD[String(budgetHead)] ?? [];
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
     pageStyle: `
@@ -2867,12 +3610,12 @@ for (const [, group] of groupedExpenditureUsage) {
     size: A4;
     margin: 15mm;
   }
-  
+
   .preview-footer {
     position: running(footer);
     bottom: 0;
   }
-  
+
   .preview-content {
     page-break-after: avoid;
   }
@@ -2982,7 +3725,7 @@ for (const [, group] of groupedExpenditureUsage) {
     padding: '8px',
     border: '1px solid #e0e0e0',
     textAlign: 'center',
-    
+
   };
   const incomeSubRowLabelStyle: CSSProperties = {
     padding: '8px',
@@ -3239,7 +3982,7 @@ for (const [, group] of groupedExpenditureUsage) {
                           setPayeeRows(updated);
                         }}
                         placeholder="Mode"
-                        
+
                       />
                     </div>
                     {((row.tdsDetails && row.tdsDetails !== 'Yes' && row.tdsDetails !== 'No')
@@ -3733,8 +4476,8 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       dashboard_row_id: dashboardRowIdFromState,
       source_request_id: sourceRequestIdFromState,
       workflowrowref:
-        workflowRowRefFromState ?? 
-        rowReferenceIdFromState ?? 
+        workflowRowRefFromState ??
+        rowReferenceIdFromState ??
         dashboardRowIdFromState ??
         null,
 
@@ -3749,6 +4492,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       beneficiarytype: categoryType,
       beneficiaryvalue: categoryItem,
       beneficiaryentityid: beneficiaryEmployeeId,
+      budget_tag: selectedTag,
       budgettag: selectedTag,
       primaryhead: primaryHead,
       eventsubhead: eventSubHead,
@@ -3935,7 +4679,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       setEmail('');
       setDepartment('');
       setDescription('');
-      
+
        setCategoryType('');
       setCategoryItem('');
       setBeneficiaryEmployeeId(null);
@@ -3993,6 +4737,11 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 // Tag
 const [selectedTag, setSelectedTag] = useState<string>('');
 useEffect(() => {
+  if (!financeTagFromState) return;
+  setSelectedTag((prev) => prev || resolveTagValue(financeTagFromState, tagOptions));
+}, [financeTagFromState, tagOptions]);
+
+useEffect(() => {
   if (!selectedTag) return;
 
   const resolvedTag = resolveTagValue(selectedTag, tagOptions);
@@ -4027,6 +4776,383 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
   setShowBeneficiaryDropdown(false);
 };
 
+  const BudgetHeadModal = () => {
+    if (!showBudgetHeadModal || !selectedBudgetHeadForModal) return null;
+
+    const subHeads = SUB_HEAD_BY_BUDGET_HEAD[selectedBudgetHeadForModal] || [];
+
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+      }}>
+        <div style={{
+          backgroundColor: '#fff',
+          borderRadius: '16px',
+          padding: '30px',
+          maxWidth: '600px',
+          maxHeight: '80vh',
+          overflowY: 'auto',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          border: '2px solid #0069ab',
+        }}>
+          {/* Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '20px',
+            borderBottom: '2px solid #0069ab',
+            paddingBottom: '15px',
+          }}>
+            <h2 style={{
+              margin: 0,
+              color: '#0069ab',
+              fontSize: '20px',
+              fontWeight: 'bold',
+            }}>
+              {selectedBudgetHeadForModal}
+            </h2>
+
+          </div>
+
+          {/* SubHeads List */}
+          <div style={{ marginTop: '15px' }}>
+            <h3 style={{
+              color: '#495057',
+              fontSize: '16px',
+              marginBottom: '12px',
+              fontWeight: '600',
+            }}>
+              Sub-Heads ({subHeads.length}):
+            </h3>
+
+            <ul style={{
+              listStyle: 'none',
+              padding: 0,
+              margin: 0,
+            }}>
+              {subHeads.map((subHead, index) => (
+                <li
+                  key={index}
+                  style={{
+                    padding: '10px 12px',
+                    marginBottom: '8px',
+                    backgroundColor: index % 2 === 0 ? '#f8f9fa' : '#fff',
+                    borderLeft: '4px solid #0069ab',
+                    borderRadius: '6px',
+                    color: '#333',
+                    fontSize: '14px',
+                    transition: 'all 0.2s ease',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLLIElement).style.backgroundColor = '#e9ecef';
+                    (e.currentTarget as HTMLLIElement).style.paddingLeft = '16px';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLLIElement).style.backgroundColor = index % 2 === 0 ? '#f8f9fa' : '#fff';
+                    (e.currentTarget as HTMLLIElement).style.paddingLeft = '12px';
+                  }}
+                >
+                  {subHead}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Footer */}
+          <div style={{
+            marginTop: '20px',
+            paddingTop: '15px',
+            borderTop: '1px solid #e0e0e0',
+            display: 'flex',
+            justifyContent: 'flex-end',
+          }}>
+            <button
+              onClick={() => setShowBudgetHeadModal(false)}
+              style={{
+                backgroundColor: '#0069ab',
+                color: '#fff',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                transition: 'all 0.3s ease',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#005492';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#0069ab';
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+
+
+  const [showSearchModal, setShowSearchModal] = useState<boolean>(false);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [expandedHead, setExpandedHead] = useState<string>('');
+  const [activeSubHead, setActiveSubHead] = useState<string>('');
+  const SearchBudgetModal = () => {
+    if (!showSearchModal) return null;
+    const query = searchTerm.trim().toLowerCase();
+    const allData = BUDGET_HEAD_GROUPS.flatMap((g) =>
+      g.options.map((head) => ({
+        head,
+        subheads: SUB_HEAD_BY_BUDGET_HEAD[head] || [],
+      }))
+    );
+
+    const filteredData = allData
+      .filter(({ head, subheads }) => {
+        if (!query) return true;
+        return (
+          head.toLowerCase().includes(query) ||
+          subheads.some((sub) => sub.toLowerCase().includes(query))
+        );
+      })
+      .sort((a, b) => {
+        if (!query) return 0;
+        const aScore = a.head.toLowerCase().includes(query) ? 0 : 1;
+        const bScore = b.head.toLowerCase().includes(query) ? 0 : 1;
+        return aScore - bScore;
+      });
+    useEffect(() => {
+      if (!expandedHead) return;
+
+      const headBlock = document.querySelector(`[data-head="${expandedHead}"]`);
+      if (!headBlock) return;
+      let targetSub = activeSubHead;
+      if (!targetSub && query) {
+        const item = filteredData.find((x) => x.head === expandedHead);
+        const match = item?.subheads.find((s) => s.toLowerCase().includes(query));
+        if (match) targetSub = match;
+      }
+
+      if (!targetSub) return;
+      setTimeout(() => {
+        const el = headBlock.querySelector(`[data-subhead="${targetSub}"]`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 0);
+    }, [expandedHead, activeSubHead, query]);
+
+
+    return (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 10000,
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setShowSearchModal(false);
+        }}
+       >
+        <div
+          style={{
+            backgroundColor: "#fff",
+            borderRadius: "16px",
+            padding: "30px",
+            maxWidth: "700px",
+            maxHeight: "80vh",
+            overflowY: "auto",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+            border: "2px solid #0069ab",
+          }}
+        >
+          {/* Header */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "20px",
+            }}
+          >
+            <h2
+              style={{
+                margin: 0,
+                color: "#0069ab",
+                fontSize: "20px",
+                fontWeight: "bold",
+              }}
+            >
+              Search Budget Heads & Subheads
+            </h2>
+
+            <button
+              onClick={() => setShowSearchModal(false)}
+              style={{
+                fontSize: "24px",
+                cursor: "pointer",
+                background: "none",
+                border: "none",
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Search Bar */}
+          <CustomInput
+            name="searchTerm"
+            type="text"
+            value={searchTerm}
+            onChange={(value) => {
+              setSearchTerm(value);
+              setActiveSubHead("");
+            }}
+            autoFocus={true}
+            onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
+            placeholder="Type head or subhead"
+            onFocus={(e) => (e.currentTarget.style.borderColor = "#0069ab")}
+            onBlur={(e) => (e.currentTarget.style.borderColor = "#e0e0e0")}
+          />
+
+          {/* Results */}
+          <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+            {filteredData.length > 0 ? (
+              filteredData.map(({ head, subheads }) => {
+                const isExpanded = expandedHead === head;
+                const firstMatched =
+                  query && subheads.find((s) => s.toLowerCase().includes(query));
+
+                return (
+                  <div
+                    key={head}
+                    data-head={head}
+                    style={{
+                      padding: "16px",
+                      marginBottom: "12px",
+                      borderRadius: "12px",
+                      backgroundColor: "#f8f9fa",
+                      borderLeft: "4px solid #0069ab",
+                    }}
+                  >
+                    {/* Top row: head text selects+closes, caret toggles expand */}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "12px",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      {/* Click head name => setPrimaryHead + close (no Select button) */}
+                      <div
+                        style={{ cursor: "pointer", fontWeight: "bold", fontSize: "16px" }}
+                        title="Click to use this Head"
+                        onClick={() => {
+                          setPrimaryHead(head);
+                          setShowSearchModal(false);
+                        }}
+                      >
+                        {head}
+                      </div>
+
+                      {/* Caret => expand/collapse only */}
+                      <div
+                        style={{ cursor: "pointer", fontSize: "14px", color: "#666" }}
+                        title="Expand / collapse subheads"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedHead(isExpanded ? "" : head);
+                          setActiveSubHead(""); // allow jump-to-match on expand
+                        }}
+                      >
+                        {subheads.length} subheads {isExpanded ? "▼" : "▶"}
+                      </div>
+                    </div>
+
+                    {/* Preview line */}
+                    <div style={{ fontSize: "14px", color: "#666" }}>
+                      {subheads.slice(0, 3).join(", ")}
+                      {subheads.length > 3 && !isExpanded && "..."}
+                    </div>
+
+                    {/* Expanded list */}
+                    {isExpanded && (
+                      <div
+                        style={{
+                          marginTop: "12px",
+                          maxHeight: "170px",
+                          overflowY: "auto",
+                          borderTop: "1px solid #e0e0e0",
+                          paddingTop: "12px",
+                        }}
+                      >
+                        {subheads.map((subhead, idx) => {
+                          const isHit =
+                            (!!query && subhead.toLowerCase().includes(query)) ||
+                            subhead === activeSubHead ||
+                            subhead === firstMatched;
+
+                          return (
+                            <div
+                              key={idx}
+                              data-subhead={subhead}
+                              style={{
+                                padding: "8px 10px",
+                                marginBottom: "6px",
+                                backgroundColor: isHit ? "#e3f2fd" : "white",
+                                borderRadius: "6px",
+                                fontSize: "13px",
+                                borderLeft: isHit ? "3px solid #0069ab" : "3px solid #28a745",
+                                cursor: "pointer",
+                              }}
+                              title="Click to jump here (no dragging)"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPrimaryHead(head); // Set the main category
+                                setEventSubHead(subhead); // Fill the sub-head field
+                                setShowSearchModal(false); // Close the modal
+                              }}
+                            >
+                              {subhead}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
+                No matches for "{searchTerm}"
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const handleAddPayee = async (payee: PayeeRow) => {
     try {
       const canonicalPayeeName = resolveCanonicalPayeeName(payee.payeeName, payee.accountName);
@@ -4049,17 +5175,63 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         tds_section: payee.tdsSection || null,
       }) as { status: string; message?: string; data?: PayeeLookupResult };
 
-      if (response.status !== 'success') {
-        showAlert(response.message || 'Unable to send payee for approval', 'error');
+      if (response.status !== 'success' || !response.data) {
+        showAlert(response.message || 'Unable to save payee', 'error');
         return;
       }
 
-      setShowAddPayeeModal(false);
-      showAlert(response.message || 'Payee request submitted for DoF approval.', 'success');
+      const savedPayee = response.data;
+      const savedCanonicalPayeeName = resolveCanonicalPayeeName(
+        savedPayee.payee_name,
+        savedPayee.account_name,
+      );
+      const nextPayeeRow: PayeeRow = {
+        ...payee,
+        payeeId: savedPayee.id ?? payee.payeeId ?? null,
+        payeeName: savedCanonicalPayeeName || canonicalPayeeName,
+        accountName: savedCanonicalPayeeName || canonicalPayeeName,
+        panNumber: String(savedPayee.pan_number || payee.panNumber || '').trim(),
+        accountNo: String(savedPayee.account_no || payee.accountNo).trim(),
+        accountType: String(savedPayee.account_type || payee.accountType || '').trim(),
+        bankName: String(savedPayee.bank_name || payee.bankName).trim(),
+        branchName: String(savedPayee.branch_name || payee.branchName).trim(),
+        ifsc: String(savedPayee.ifsc || payee.ifsc).trim().toUpperCase(),
+        beneficiaryType: String(savedPayee.beneficiary_type || payee.beneficiaryType || 'individual').trim().toLowerCase() === 'organization'
+          ? 'organization'
+          : 'individual',
+        beneficiaryOrg: resolveCanonicalBeneficiaryOrg(
+          savedPayee.beneficiary_org,
+          savedPayee.payee_name || payee.payeeName,
+        ),
+        organizationType: String(savedPayee.organization_type || payee.organizationType || '').trim(),
+        msme: String(savedPayee.msme || payee.msme || '').trim(),
+        gstin: String(savedPayee.gstin || payee.gstin || '').trim(),
+        tdsDetails: String(savedPayee.tds_details || payee.tdsDetails || '').trim(),
+        tdsSection: String(savedPayee.tds_section || payee.tdsSection || '').trim(),
+      };
 
+      setPayeeRows((prev) => {
+        const hasOnlyEmptyStarterRow = prev.length === 1
+          && !prev[0]?.payeeName
+          && !prev[0]?.accountNo
+          && !prev[0]?.bankName
+          && !prev[0]?.ifsc
+          && !prev[0]?.branchName
+          && !prev[0]?.amount
+          && !prev[0]?.mode;
+
+        if (hasOnlyEmptyStarterRow) {
+          return [{ ...prev[0], ...nextPayeeRow, id: prev[0].id }];
+        }
+
+        return [...prev, nextPayeeRow];
+      });
+
+      setShowAddPayeeModal(false);
+      showAlert('Payee saved successfully', 'success');
     } catch (error) {
       console.error('Failed to save payee:', error);
-      showAlert('Unable to send payee for approval right now', 'error');
+      showAlert('Unable to save payee right now', 'error');
     }
   };
 
@@ -4075,7 +5247,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
     >
 
 
-      
+
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
           <div className="ea-applicantCard">
 
@@ -4459,7 +5631,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                           <div className="col-md-3">
                               <div className="form-group">
                                  <label style={{ fontSize: 14, color: '#3b4f73', marginBottom: 8, fontWeight: 600, display: 'block' }}>
-                                      Beneficiary 
+                                      Beneficiary
                                       </label>
                                   <CustomDropdown
         name="categoryType"
@@ -4480,7 +5652,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           else setCategoryItem('');
         }}
         placeholder="Select"
-      
+
       />
     </div>
   </div>
@@ -4593,7 +5765,7 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             setSelectedTag(selected?.value ? String(selected.value) : '');
           }}
           placeholder="Select Tag"
-          
+
         />
       </div>
     )}
@@ -5295,8 +6467,8 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           />
         </div>
         )
-     
-         
+
+
           <div style={{
             position: 'absolute',
             bottom: '2mm',
@@ -5313,11 +6485,11 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             zIndex: 100,
           }}>
           </div>
-        
-    
+
+
 
      </div>
-    
+
   );
 };
 

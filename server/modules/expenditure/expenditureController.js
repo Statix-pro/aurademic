@@ -258,7 +258,6 @@ const isDomainValidationError = (message = '') =>
   [
     'not found',
     'not yet approved',
-    'not approved',
     'exceeds',
     'required',
     'Invalid request type',
@@ -271,29 +270,6 @@ const isDomainValidationError = (message = '') =>
     (fragment) => message.includes(fragment),
   );
 
-const getNormalizedUserRoles = (req) => {
-  return [
-    ...new Set(
-      [
-        ...(Array.isArray(req.user?.roles) ? req.user.roles : [req.user?.roles]),
-        req.user?.role,
-      ]
-        .map((role) => normalizeText(role).toLowerCase())
-        .filter(Boolean)
-    ),
-  ];
-};
-
-const getNormalizedUserPermissions = (req) => {
-  return [
-    ...new Set(
-      (Array.isArray(req.user?.permissions) ? req.user.permissions : [req.user?.permissions])
-        .map((permission) => normalizeText(permission).toLowerCase())
-        .filter(Boolean)
-    ),
-  ];
-};
-
 const resolveBulkNeftTemplatePath = () => {
   if (fs.existsSync(BULK_NEFT_TEMPLATE_PATH)) return BULK_NEFT_TEMPLATE_PATH;
   if (fs.existsSync(SAMPLE_BULK_NEFT_TEMPLATE_PATH)) return SAMPLE_BULK_NEFT_TEMPLATE_PATH;
@@ -302,12 +278,14 @@ const resolveBulkNeftTemplatePath = () => {
 
 const isSuperAdminRequest = (req) =>
   Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)
-  || getNormalizedUserRoles(req).includes('super_admin');
+  || (Array.isArray(req.user?.roles)
+    ? req.user.roles.some((role) => normalizeText(role).toLowerCase() === 'super_admin')
+    : false);
 
 const hasAnyExpenditureWorkflowPermission = (req) => {
-  const permissions = getNormalizedUserPermissions(req);
+  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
   return permissions.some((permission) =>
-    permission.startsWith('expenditure.workflow.') || permission.startsWith('finance.workflow.')
+    normalizeText(permission).toLowerCase().startsWith('expenditure.workflow.')
   );
 };
 
@@ -316,13 +294,15 @@ const hasExpenditureStagePermission = (req, stage) => {
   if (!normalizedStage) return false;
   if (isSuperAdminRequest(req)) return true;
 
-  const normalizedPermissions = getNormalizedUserPermissions(req);
-  return normalizedPermissions.includes(`expenditure.workflow.${normalizedStage}`)
-    || normalizedPermissions.includes(`finance.workflow.${normalizedStage}`);
+  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+  const normalizedPermissions = permissions.map((permission) => normalizeText(permission).toLowerCase());
+  return normalizedPermissions.includes(`expenditure.workflow.${normalizedStage}`);
 };
 
 const canAccessExpenditureByRole = (req) => {
-  const normalizedRoles = getNormalizedUserRoles(req);
+  const normalizedRoles = Array.isArray(req.user?.roles)
+    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
+    : [];
 
   if (!normalizedRoles.length) {
     return false;
@@ -342,7 +322,9 @@ const canAccessExpenditureByRole = (req) => {
 };
 
 const resolveExpenditureLevel1QueueRole = (req) => {
-  const normalizedRoles = getNormalizedUserRoles(req);
+  const normalizedRoles = Array.isArray(req.user?.roles)
+    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
+    : [];
 
   const hasCoordinatorRole = normalizedRoles.includes('coordinator') || normalizedRoles.includes('entity_approver');
   const hasHodRole = normalizedRoles.includes('hod');
@@ -483,12 +465,11 @@ const expenditureController = {
 
   async listPayees(req, res) {
     try {
-      const { search = '', limit = 20, offset = 0, status = 'approved' } = req.query;
+      const { search = '', limit = 20, offset = 0 } = req.query;
       const payees = await expenditureModel.listPayees({
         search,
         limit: Number(limit) || 20,
         offset: Number(offset) || 0,
-        status,
       });
 
       return res.json({ status: 'success', data: payees });
@@ -508,6 +489,71 @@ const expenditureController = {
       return res.json({ status: 'success', data: payee });
     } catch (err) {
       return handleError(res, err, 'Error fetching payee');
+    }
+  },
+
+  async updatePayee(req, res) {
+    try {
+      const id = toPositiveInt(req.params.id);
+      if (!id) return sendError(res, 400, 'Invalid payee ID');
+
+      const updated = await expenditureModel.updatePayeeById(id, req.body || {});
+      if (!updated) return sendError(res, 404, 'Payee not found');
+
+      const payee = await expenditureModel.getPayeeById(id);
+      return res.json({
+        status: 'success',
+        message: 'Payee updated successfully',
+        data: payee,
+      });
+    } catch (err) {
+      const message = normalizeText(err.message);
+      if (message.includes('required') || message.includes('Invalid')) {
+        return sendError(res, 400, message);
+      }
+      return handleError(res, err, 'Error updating payee');
+    }
+  },
+
+  async updatePayeeApproval(req, res) {
+    try {
+      const id = toPositiveInt(req.params.id);
+      if (!id) return sendError(res, 400, 'Invalid payee ID');
+
+      const decision = normalizeText(req.body?.decision).toLowerCase();
+      const rejectionReason = normalizeText(req.body?.rejection_reason);
+      const updated = await expenditureModel.updatePayeeApproval(id, {
+        decision,
+        rejectionReason,
+        userId: toPositiveInt(req.user?.id),
+      });
+
+      if (!updated) return sendError(res, 404, 'Payee not found');
+
+      return res.json({
+        status: 'success',
+        message: `Payee ${decision} successfully`,
+      });
+    } catch (err) {
+      const message = normalizeText(err.message);
+      if (message.includes('required') || message.includes('Invalid') || message.includes('Unsupported')) {
+        return sendError(res, 400, message);
+      }
+      return handleError(res, err, 'Error updating payee approval');
+    }
+  },
+
+  async deletePayee(req, res) {
+    try {
+      const id = toPositiveInt(req.params.id);
+      if (!id) return sendError(res, 400, 'Invalid payee ID');
+
+      const deleted = await expenditureModel.deletePayeeById(id);
+      if (!deleted) return sendError(res, 404, 'Payee not found');
+
+      return res.json({ status: 'success', message: 'Payee deleted successfully' });
+    } catch (err) {
+      return handleError(res, err, 'Error deleting payee');
     }
   },
 
@@ -537,119 +583,11 @@ const expenditureController = {
 
       return res.status(201).json({
         status: 'success',
-        message: 'Payee request submitted for DoF approval',
+        message: 'Payee saved successfully',
         data: payee,
       });
     } catch (err) {
       return handleError(res, err, 'Error creating payee');
-    }
-  },
-
-  async updatePayee(req, res) {
-    try {
-      const payeeId = toPositiveInt(req.params.id);
-      const { payee_name, account_name, account_no, ifsc, bank_name, branch_name } = req.body || {};
-      const canonicalPayeeName = resolveCanonicalPayeeName(payee_name, account_name);
-
-      if (!payeeId) return sendError(res, 400, 'Invalid payee ID');
-      if (!canonicalPayeeName || !account_no || !ifsc || !bank_name || !branch_name) {
-        return sendError(
-          res,
-          400,
-          'payee_name, account_no, ifsc, bank_name and branch_name are required',
-        );
-      }
-
-      const payee = await expenditureModel.updatePendingPayee(
-        payeeId,
-        {
-          ...req.body,
-          payee_name: canonicalPayeeName,
-          account_name: canonicalPayeeName,
-        },
-      );
-
-      return res.json({
-        status: 'success',
-        message: 'Payee updated successfully',
-        data: payee,
-      });
-    } catch (err) {
-      if (err.message === 'Payee not found') return sendError(res, 404, err.message);
-      if (
-        err.message === 'Only pending payees can be edited'
-        || err.message === 'Another payee already exists with the same account number and IFSC'
-        || err.message === 'Invalid payee ID'
-        || err.message === 'payee_name, account_no, ifsc, bank_name and branch_name are required'
-      ) {
-        return sendError(res, 400, err.message);
-      }
-      return handleError(res, err, 'Error updating payee');
-    }
-  },
-
-  async listPendingPayees(req, res) {
-    try {
-      const { search = '', limit = 20, offset = 0 } = req.query;
-      const payees = await expenditureModel.listPendingPayees({
-        search,
-        limit: Number(limit) || 20,
-        offset: Number(offset) || 0,
-      });
-      return res.json({ status: 'success', data: payees });
-    } catch (err) {
-      return handleError(res, err, 'Error listing pending payees');
-    }
-  },
-
-  async approvePayee(req, res) {
-    try {
-      const payeeId = toPositiveInt(req.params.id);
-      const userId = toPositiveInt(req.user?.id);
-      const decision = normalizeText(req.body?.decision).toLowerCase();
-      const rejectionReason = normalizeText(req.body?.rejection_reason);
-
-      if (!payeeId) return sendError(res, 400, 'Invalid payee ID');
-      if (!['approved', 'rejected'].includes(decision)) {
-        return sendError(res, 400, 'decision must be approved or rejected');
-      }
-      if (decision === 'rejected' && !rejectionReason) {
-        return sendError(res, 400, 'rejection_reason is required when rejecting a payee');
-      }
-
-      const updatedPayee = await expenditureModel.approveOrRejectPayee(
-        payeeId,
-        {
-          decision,
-          actorUserId: userId,
-          rejectionReason,
-        },
-      );
-      return res.json({
-        status: 'success',
-        message: decision === 'approved' ? 'Payee approved successfully' : 'Payee rejected successfully',
-        data: updatedPayee,
-      });
-    } catch (err) {
-      return handleError(res, err, 'Error approving/rejecting payee');
-    }
-  },
-
-  async deletePayee(req, res) {
-    try {
-      const payeeId = toPositiveInt(req.params.id);
-      if (!payeeId) return sendError(res, 400, 'Invalid payee ID');
-
-      await expenditureModel.softDeletePayee(payeeId);
-      return res.json({
-        status: 'success',
-        message: 'Payee deleted successfully',
-      });
-    } catch (err) {
-      if (err.message === 'Payee not found' || err.message === 'Invalid payee ID') {
-        return sendError(res, 400, err.message);
-      }
-      return handleError(res, err, 'Error deleting payee');
     }
   },
 
@@ -1005,7 +943,7 @@ const uploads = {
   async getExpenditureQueue(req, res) {
     try {
       const stage = normalizeText(req.params.stage).toLowerCase();
-      const { page, limit, workflowStatus, statusCategory, level1Role } = req.query;
+      const { page, limit, workflowStatus, level1Role } = req.query;
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
       const effectiveLevel1Role = stage === 'level1'
         ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
@@ -1021,7 +959,6 @@ const uploads = {
           page,
           limit,
           workflowStatus,
-          statusCategory,
           level1Role: effectiveLevel1Role,
         },
       });
@@ -1033,7 +970,6 @@ const uploads = {
           total: queue.total,
           page: queue.page,
           limit: queue.limit,
-          statusCounts: queue.statusCounts,
         },
       });
     } catch (err) {
