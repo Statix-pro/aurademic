@@ -65,6 +65,83 @@ const authController = {
       });
     }
   },
+
+  async microsoftLogin(req, res) {
+    try {
+      const { accessToken } = req.body;
+
+      if (!accessToken) {
+        return res.status(400).json({
+          error: 'Missing credentials',
+          details: 'No Microsoft access token provided in request',
+        });
+      }
+
+      // Verify token by calling Microsoft Graph
+      let graphProfile;
+      try {
+        const graphResponse = await fetch(
+          'https://graph.microsoft.com/v1.0/me',
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+
+        if (!graphResponse.ok) {
+          const errorText = await graphResponse.text();
+          throw new Error(
+            `Graph API responded ${graphResponse.status}: ${errorText}`
+          );
+        }
+
+        graphProfile = await graphResponse.json();
+      } catch (verifyError) {
+        console.error('Microsoft token verification failed:', verifyError);
+        return res.status(401).json({
+          error: 'Invalid token',
+          details: verifyError.message,
+        });
+      }
+
+      const email = graphProfile.mail || graphProfile.userPrincipalName;
+      const name = graphProfile.displayName;
+      const microsoftId = graphProfile.id;
+
+      if (!email) {
+        return res.status(400).json({
+          error: 'Invalid Microsoft profile',
+          details: 'No email found on Microsoft account',
+        });
+      }
+
+      const user = await authModel.findOrCreateUser({
+        email,
+        name,
+        picture: null,
+        microsoftId,
+      });
+
+      const token = jwt.sign(
+        {
+          userId: user.id,
+          email: user.email,
+          isAdmin: user.is_admin,
+          isSuperAdmin: user.is_super_admin,
+          roles: user.roles || [],
+          permissions: user.permissions || [],
+          microsoftId,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      return res.json({ token, user });
+    } catch (error) {
+      console.error('Microsoft authentication error:', error);
+      return res.status(500).json({
+        error: 'Authentication failed',
+        details: error.message,
+      });
+    }
+  },
 };
 
 export default authController;
