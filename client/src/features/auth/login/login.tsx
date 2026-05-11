@@ -109,32 +109,46 @@ const Login: React.FC = () => {
   const handleMicrosoftLogin = async () => {
     setIsLoading(true);
     setError('');
+    setDebugInfo(null);
+
     try {
-      const response = await instance.loginPopup(loginRequest);
+      const msalResponse = await instance.loginPopup(loginRequest);
 
-      if (response && response.account) {
-        const user: User = {
-          id: response.account.localAccountId,
-          email: response.account.username,
-          name: response.account.name || undefined,
-          picture: undefined,
-          is_admin: false,
-          is_super_admin: false,
-          roles: [],
-          permissions: [],
-        };
-
-        localStorage.setItem('user', JSON.stringify(user));
-        if (response.accessToken) {
-          localStorage.setItem('token', response.accessToken);
-        }
-
-        setUser(user);
-        window.location.replace('/publications');
+      if (!msalResponse?.accessToken) {
+        throw new Error('No access token received from Microsoft');
       }
-    } catch (err) {
+
+      const response = await authenticityUtility.post('/auth/microsoft', {
+        accessToken: msalResponse.accessToken,
+      }) as AuthResponse;
+
+      if (
+        !response?.token ||
+        !response?.user ||
+        typeof response.user !== 'object'
+      ) {
+        console.error('Invalid server response:', response);
+        throw new Error('Invalid server response - missing token or user data');
+      }
+
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('user', JSON.stringify(response.user));
+
+      setUser(response.user);
+      window.location.replace('/publications');
+    } catch (err: unknown) {
       console.error('Microsoft login failed:', err);
-      setError('Failed to connect with Microsoft. Please try again.');
+      const error = err as { response?: { data?: { details?: string } }; message?: string };
+      setError(
+        error.response?.data?.details ||
+          error.message ||
+          'Failed to connect with Microsoft. Please try again.'
+      );
+      setDebugInfo({
+        timestamp: new Date().toISOString(),
+        errorDetails: String(err),
+        responseData: error.response?.data,
+      });
     } finally {
       setIsLoading(false);
     }
