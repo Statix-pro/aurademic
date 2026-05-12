@@ -99,22 +99,35 @@ const filterEntriesForCurrentCycle = (entries, record) => {
   });
 };
 
-const resolveActor = (req) => {
+const getNormalizedUserRoles = (req) => {
   const roles = Array.isArray(req.user?.roles)
     ? req.user.roles
     : normalizeText(req.user?.roles)
       ? [normalizeText(req.user?.roles)]
-      : normalizeText(req.user?.role)
-        ? [normalizeText(req.user?.role)]
-        : [];
+      : [];
+  const role = normalizeText(req.user?.role);
+  return [...roles, role]
+    .map((entry) => normalizeText(entry).toLowerCase())
+    .filter(Boolean);
+};
 
-  const role = normalizeText(req.user?.role) || roles[0] || null;
-
+const getNormalizedUserPermissions = (req) => {
   const permissions = Array.isArray(req.user?.permissions)
     ? req.user.permissions
     : normalizeText(req.user?.permissions)
       ? [normalizeText(req.user?.permissions)]
       : [];
+  return permissions
+    .map((entry) => normalizeText(entry).toLowerCase())
+    .filter(Boolean);
+};
+
+const resolveActor = (req) => {
+  const roles = getNormalizedUserRoles(req);
+
+  const role = normalizeText(req.user?.role) || roles[0] || null;
+
+  const permissions = getNormalizedUserPermissions(req);
 
   return {
     id: req.user?.id,
@@ -123,7 +136,8 @@ const resolveActor = (req) => {
     role,
     roles,
     permissions,
-    isSuperAdmin: Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin),
+    isSuperAdmin: Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)
+      || roles.includes('super_admin'),
   };
 };
 
@@ -278,15 +292,11 @@ const resolveBulkNeftTemplatePath = () => {
 
 const isSuperAdminRequest = (req) =>
   Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)
-  || (Array.isArray(req.user?.roles)
-    ? req.user.roles.some((role) => normalizeText(role).toLowerCase() === 'super_admin')
-    : false);
+  || getNormalizedUserRoles(req).includes('super_admin');
 
 const hasAnyExpenditureWorkflowPermission = (req) => {
-  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  return permissions.some((permission) =>
-    normalizeText(permission).toLowerCase().startsWith('expenditure.workflow.')
-  );
+  const permissions = getNormalizedUserPermissions(req);
+  return permissions.some((permission) => permission.startsWith('expenditure.workflow.'));
 };
 
 const hasExpenditureStagePermission = (req, stage) => {
@@ -294,15 +304,12 @@ const hasExpenditureStagePermission = (req, stage) => {
   if (!normalizedStage) return false;
   if (isSuperAdminRequest(req)) return true;
 
-  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  const normalizedPermissions = permissions.map((permission) => normalizeText(permission).toLowerCase());
-  return normalizedPermissions.includes(`expenditure.workflow.${normalizedStage}`);
+  const permissions = getNormalizedUserPermissions(req);
+  return permissions.includes(`expenditure.workflow.${normalizedStage}`);
 };
 
 const canAccessExpenditureByRole = (req) => {
-  const normalizedRoles = Array.isArray(req.user?.roles)
-    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
-    : [];
+  const normalizedRoles = getNormalizedUserRoles(req);
 
   if (!normalizedRoles.length) {
     return false;
@@ -322,9 +329,7 @@ const canAccessExpenditureByRole = (req) => {
 };
 
 const resolveExpenditureLevel1QueueRole = (req) => {
-  const normalizedRoles = Array.isArray(req.user?.roles)
-    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
-    : [];
+  const normalizedRoles = getNormalizedUserRoles(req);
 
   const hasCoordinatorRole = normalizedRoles.includes('coordinator') || normalizedRoles.includes('entity_approver');
   const hasHodRole = normalizedRoles.includes('hod');
