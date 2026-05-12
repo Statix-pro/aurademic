@@ -29,6 +29,16 @@ interface ExpenditureItem {
 
 type WorkflowModule = "Advance" | "Settlement" | "Expenditure";
 
+interface ExpenditureDialogConfig {
+  show: boolean;
+  title: string;
+  message: React.ReactNode;
+  variant?: "info" | "warning" | "danger";
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm?: () => void | Promise<void>;
+}
+
 interface DashboardReturnState {
   dashboardRowId?: string;
   rowReferenceId?: string;
@@ -422,6 +432,11 @@ const ExpenditureDashboard: React.FC = () => {
   const [selectedBeneficiary, setSelectedBeneficiary] = useState<string>("all");
   const [proposalCards, setProposalCards] = useState<ExpenditureProposalCard[]>([]);
   const [cardRows, setCardRows] = useState<Record<string, WorkflowRow[]>>({});
+  const [dialogConfig, setDialogConfig] = useState<ExpenditureDialogConfig>({
+    show: false,
+    title: "",
+    message: "",
+  });
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -526,6 +541,23 @@ const ExpenditureDashboard: React.FC = () => {
 
   const formatAmount = (amount: number) =>
     `Rs ${Number(amount || 0).toLocaleString("en-IN")}`;
+
+  const closeDialog = () => {
+    setDialogConfig((prev) => ({
+      ...prev,
+      show: false,
+      onConfirm: undefined,
+    }));
+  };
+
+  const showDialog = (config: Omit<ExpenditureDialogConfig, "show">) => {
+    setDialogConfig({
+      show: true,
+      variant: "info",
+      confirmText: "OK",
+      ...config,
+    });
+  };
 
   const isApprovedStatus = (status?: string | null) =>
     ["approved", "completed", "principal_approved"].includes(normalizeStatus(status));
@@ -667,7 +699,7 @@ const ExpenditureDashboard: React.FC = () => {
     const hasAdvance1 = Boolean(row.advanceRequestId);
     const hasAdvance2 = Boolean(row.advanceRequestId2);
     const hasSettlement = Boolean(row.settlementRequestId);
-    const showAdvance2 = (hasAdvance1 || hasAdvance2) && !hasSettlement;
+    const showAdvance2 = hasAdvance2 || (hasAdvance1 && !hasSettlement);
     const showSettlement = hasAdvance1 || hasAdvance2 || hasSettlement;
 
     if (isCompleted) {
@@ -681,7 +713,7 @@ const ExpenditureDashboard: React.FC = () => {
         {
           label: "Interim Advance",
           module: "Advance2" as const,
-          hidden: !hasAdvance2 || hasSettlement,
+          hidden: !hasAdvance2,
           submitted: hasAdvance2,
         },
         {
@@ -1182,7 +1214,11 @@ const ExpenditureDashboard: React.FC = () => {
     const cardBalanceAmount = Math.max(Number(sourceCard?.balanceAmount || 0), 0);
 
     if (cardBalanceAmount <= 0) {
-      window.alert('No remaining balance is available for this proposal.');
+      showDialog({
+        title: "No Balance Available",
+        message: "No remaining balance is available for this proposal.",
+        variant: "warning",
+      });
       return;
     }
 
@@ -1223,29 +1259,37 @@ const ExpenditureDashboard: React.FC = () => {
   const deleteExpenditureRequest = async (requestId: number) => {
     if (!Number.isFinite(requestId) || requestId <= 0) return;
 
-    const confirmed = window.confirm(
-      "Delete this pending expenditure request? This will reverse the reserved amount."
-    );
-    if (!confirmed) return;
+    showDialog({
+      title: "Delete Request",
+      message: "Delete this pending expenditure request? This will reverse the reserved amount.",
+      variant: "danger",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          const result = await authenticityUtility.delete(`/expenditure/${requestId}`) as {
+            status?: string;
+            message?: string;
+          };
 
-    try {
-      setLoading(true);
-      const result = await authenticityUtility.delete(`/expenditure/${requestId}`) as {
-        status?: string;
-        message?: string;
-      };
+          if (result?.status !== "success") {
+            throw new Error(result?.message || "Failed to delete expenditure request");
+          }
 
-      if (result?.status !== "success") {
-        throw new Error(result?.message || "Failed to delete expenditure request");
-      }
-
-      await fetchDashboard(openCardId);
-    } catch (error) {
-      console.error("Failed to delete expenditure request:", error);
-      window.alert("Unable to delete this request. Only pending requests can be deleted.");
-    } finally {
-      setLoading(false);
-    }
+          await fetchDashboard(openCardId);
+        } catch (error) {
+          console.error("Failed to delete expenditure request:", error);
+          showDialog({
+            title: "Delete Failed",
+            message: "Unable to delete this request. Only pending requests can be deleted.",
+            variant: "danger",
+          });
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
   };
 
   const fetchDashboard = async (preferredOpenCardId?: string | null) => {
@@ -1551,7 +1595,11 @@ useEffect(() => {
                                               }`}
                                               onClick={() =>
                                                 gateMessage
-                                                  ? window.alert(gateMessage)
+                                                  ? showDialog({
+                                                      title: "Action Not Available",
+                                                      message: gateMessage,
+                                                      variant: "warning",
+                                                    })
                                                   : handleModuleLaunch(
                                                       row,
                                                       option.module,
@@ -1940,6 +1988,64 @@ useEffect(() => {
           </div>
         </div>
       </div>
+
+      {dialogConfig.show && (
+        <div
+          className="expenditure-dialog-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeDialog();
+            }
+          }}
+        >
+          <div
+            className={`expenditure-dialog expenditure-dialog--${dialogConfig.variant ?? "info"}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="expenditure-dialog-title"
+          >
+            <div className="expenditure-dialog__header">
+              <h6 id="expenditure-dialog-title" className="expenditure-dialog__title">
+                {dialogConfig.title}
+              </h6>
+              <button
+                type="button"
+                className="expenditure-dialog__close"
+                onClick={closeDialog}
+                aria-label="Close dialog"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            <div className="expenditure-dialog__body">{dialogConfig.message}</div>
+
+            <div className="expenditure-dialog__actions">
+              {dialogConfig.cancelText && (
+                <button
+                  type="button"
+                  className="expenditure-dialog__btn expenditure-dialog__btn--secondary"
+                  onClick={closeDialog}
+                >
+                  {dialogConfig.cancelText}
+                </button>
+              )}
+              <button
+                type="button"
+                className="expenditure-dialog__btn expenditure-dialog__btn--primary"
+                onClick={async () => {
+                  const onConfirm = dialogConfig.onConfirm;
+                  closeDialog();
+                  await onConfirm?.();
+                }}
+              >
+                {dialogConfig.confirmText ?? "OK"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };
