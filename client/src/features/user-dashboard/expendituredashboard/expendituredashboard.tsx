@@ -132,6 +132,9 @@ const getRunningFYStart = () => {
 };
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
+const normalizeSearchText = (value: unknown) => normalizeText(value).toLowerCase();
+const normalizeCompactSearchText = (value: unknown) =>
+  normalizeSearchText(value).replace(/[^a-z0-9]/g, "");
 
 const normalizeModule = (value: unknown): WorkflowModule | null => {
   const text = normalizeText(value).toLowerCase();
@@ -270,16 +273,37 @@ const normalizeFinanceRequestRefBase = (value: unknown, financeRequestId: unknow
   return `#F-${fallbackYear}-${fallbackSequence || "0000"}`;
 };
 
+const getFinanceRefSequence = (financeBaseRef: string) => {
+  const structuredMatch = normalizeText(financeBaseRef).match(/^#?F[-_]\d{4}[-_](\d+)$/i);
+  return structuredMatch?.[1]?.padStart(4, "0") ?? "";
+};
+
+const getWorkflowRowLetter = (sequence: number) => {
+  const normalized = Math.max(Number(sequence) || 1, 1);
+  let index = normalized;
+  let label = "";
+
+  while (index > 0) {
+    index -= 1;
+    label = String.fromCharCode(65 + (index % 26)) + label;
+    index = Math.floor(index / 26);
+  }
+
+  return label;
+};
+
 const buildWorkflowRequestRef = (
   financeBaseRef: string,
-  code: "A1" | "A2" | "S" | "E",
-  sequence: number,
-  digits: number
-) => `${financeBaseRef}-${code}${String(sequence).padStart(digits, "0")}`;
+  rowSequence: number,
+  stepSequence: number
+) => `${financeBaseRef}-${getWorkflowRowLetter(rowSequence)}${stepSequence}`;
 
 const getWorkflowRequestDisplayCode = (value: unknown) => {
   const ref = normalizeText(value);
   if (!ref) return "";
+
+  const rowStepCode = ref.match(/([A-Z]+\d+)$/i)?.[1];
+  if (rowStepCode) return rowStepCode.toUpperCase();
 
   const matchedCode = ref.match(/(A\d{3}|S\d{3}|E\d{3})$/i)?.[1];
   if (matchedCode) return matchedCode.toUpperCase();
@@ -344,14 +368,25 @@ const buildWorkflowRequestRefMap = (
         requestId,
         buildWorkflowRequestRef(
           financeBaseRef,
-          advanceIndex === 0 ? "A1" : "A2",
           rowSequence,
-          2
+          advanceIndex + 1
         )
       );
     });
 
-    rowRequests.forEach((request) => {
+    const nonAdvanceRows = rowRequests
+      .filter((request) => {
+        const module = normalizeModule(request.request_type);
+        return Boolean(module && module !== "Advance");
+      })
+      .sort((left, right) => {
+        const leftTime = new Date(left.createdat || 0).getTime();
+        const rightTime = new Date(right.createdat || 0).getTime();
+        if (leftTime !== rightTime) return leftTime - rightTime;
+        return left.id - right.id;
+      });
+
+    nonAdvanceRows.forEach((request, nonAdvanceIndex) => {
       const requestId = Number(request.id);
       const module = normalizeModule(request.request_type);
       if (!Number.isFinite(requestId) || requestId <= 0 || !module || module === "Advance") {
@@ -362,9 +397,8 @@ const buildWorkflowRequestRefMap = (
         requestId,
         buildWorkflowRequestRef(
           financeBaseRef,
-          module === "Settlement" ? "S" : "E",
           rowSequence,
-          3
+          advanceRows.length + nonAdvanceIndex + 1
         )
       );
     });
@@ -445,19 +479,45 @@ const ExpenditureDashboard: React.FC = () => {
         return true;
       }
 
+      const rows = cardRows[card.financeRequestId] ?? [];
+      const financeBaseRef = normalizeFinanceRequestRefBase(card.proposalId, card.financeRequestId);
+      const financeSequence = getFinanceRefSequence(financeBaseRef);
+      const workflowSearchValues = rows.flatMap((row) => {
+        const refs = [
+          row.advanceRequestRef,
+          row.advanceRequestRef2,
+          row.expenditureRequestRef,
+          row.settlementRequestRef,
+        ].filter(Boolean);
+
+        return refs.flatMap((ref) => {
+          const displayCode = getWorkflowRequestDisplayCode(ref);
+          return [
+            ref,
+            displayCode,
+            financeSequence && displayCode ? `${financeSequence}${displayCode}` : "",
+          ];
+        });
+      });
+
       const searchValues = [
         String(card.financeRequestId ?? ""),
         String(card.proposalId ?? ""),
         String(card.applicantName ?? ""),
         String(card.beneficiaryName ?? ""),
         String(card.tag ?? ""),
+        ...workflowSearchValues,
       ]
         .join(" ")
         .toLowerCase();
 
-      return searchValues.includes(normalizedFinanceIdQuery);
+      const compactSearchValues = normalizeCompactSearchText(searchValues);
+      const compactQuery = normalizeCompactSearchText(normalizedFinanceIdQuery);
+
+      return searchValues.includes(normalizedFinanceIdQuery) ||
+        Boolean(compactQuery && compactSearchValues.includes(compactQuery));
     });
-  }, [data, proposalCards, normalizedFinanceIdQuery, selectedBeneficiary]);
+  }, [cardRows, data, proposalCards, normalizedFinanceIdQuery, selectedBeneficiary]);
 
   const filteredData = useMemo(() => {
     const visibleFinanceIds = new Set(filteredProposalCards.map((card) => card.financeRequestId));

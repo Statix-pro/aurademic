@@ -1031,27 +1031,34 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
 
       const [exactPayeeRows] = await db.execute(
         `SELECT
-           epr.id,
-           epr.payee_id,
-           epr.payee_name,
-           epr.account_name,
-           epr.pan_number,
-           epr.account_no,
-           epr.account_type,
-           epr.bank_name,
-           epr.branch_name,
-           UPPER(TRIM(COALESCE(epr.ifsc, ''))) AS ifsc,
-           epr.beneficiary_type,
-           epr.beneficiary_org,
-           epr.organization_type,
-           epr.msme,
-           epr.gstin,
-           epr.tds_details,
-           epr.tds_section,
-           1 AS is_active,
-           epr.created_at,
-           epr.updated_at
+           ep.id,
+           ep.id AS payee_id,
+           COALESCE(NULLIF(TRIM(epr.payee_name), ''), ep.payee_name) AS payee_name,
+           COALESCE(NULLIF(TRIM(epr.account_name), ''), ep.account_name) AS account_name,
+           COALESCE(NULLIF(TRIM(epr.pan_number), ''), ep.pan_number) AS pan_number,
+           COALESCE(NULLIF(TRIM(epr.account_no), ''), ep.account_no) AS account_no,
+           COALESCE(NULLIF(TRIM(epr.account_type), ''), ep.account_type) AS account_type,
+           COALESCE(NULLIF(TRIM(epr.bank_name), ''), ep.bank_name) AS bank_name,
+           COALESCE(NULLIF(TRIM(epr.branch_name), ''), ep.branch_name) AS branch_name,
+           UPPER(TRIM(COALESCE(NULLIF(TRIM(epr.ifsc), ''), ep.ifsc, ''))) AS ifsc,
+           COALESCE(NULLIF(TRIM(epr.beneficiary_type), ''), ep.beneficiary_type) AS beneficiary_type,
+           COALESCE(NULLIF(TRIM(epr.beneficiary_org), ''), ep.beneficiary_org) AS beneficiary_org,
+           COALESCE(NULLIF(TRIM(epr.organization_type), ''), ep.organization_type) AS organization_type,
+           COALESCE(NULLIF(TRIM(epr.msme), ''), ep.msme) AS msme,
+           COALESCE(NULLIF(TRIM(epr.gstin), ''), ep.gstin) AS gstin,
+           COALESCE(NULLIF(TRIM(epr.tds_details), ''), ep.tds_details) AS tds_details,
+           COALESCE(NULLIF(TRIM(epr.tds_section), ''), ep.tds_section) AS tds_section,
+           ep.is_active,
+           ep.approval_status,
+           ep.rejection_reason,
+           ep.requested_at,
+           ep.approved_at,
+           ep.created_at,
+           ep.updated_at
          FROM expenditure_payee_rows epr
+         INNER JOIN expenditure_payees ep
+                 ON ep.id = epr.payee_id
+                AND ep.is_active = 1
          INNER JOIN (
            SELECT MAX(id) AS id
              FROM expenditure_payee_rows
@@ -1071,33 +1078,54 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
     }
   }
 
+  const payeeTermClauses = searchTerms.length
+    ? searchTerms.map(() => `${payeeSearchableColumns} LIKE ?`).join(' AND ')
+    : '1 = 1';
+
+  const [rows] = await db.execute(
+    `SELECT * FROM expenditure_payees ep
+      WHERE ep.is_active = 1
+        AND ${payeeTermClauses}
+      ORDER BY ep.payee_name ASC LIMIT ${limitNum} OFFSET ${offsetNum}`,
+    [...searchTerms.map((term) => `%${term}%`)],
+  );
+
+  if (rows.length) return rows.map(normalizePayeeRecord);
+
   const termClauses = searchTerms.length
     ? searchTerms.map(() => `${payeeRowSearchableColumns} LIKE ?`).join(' AND ')
     : '1 = 1';
 
   const [payeeRowResults] = await db.execute(
     `SELECT
-       epr.id,
-       epr.payee_id,
-       epr.payee_name,
-       epr.account_name,
-       epr.pan_number,
-       epr.account_no,
-       epr.account_type,
-       epr.bank_name,
-       epr.branch_name,
-       UPPER(TRIM(COALESCE(epr.ifsc, ''))) AS ifsc,
-       epr.beneficiary_type,
-       epr.beneficiary_org,
-       epr.organization_type,
-       epr.msme,
-       epr.gstin,
-       epr.tds_details,
-       epr.tds_section,
-       1 AS is_active,
-       epr.created_at,
-       epr.updated_at
+       ep.id,
+       ep.id AS payee_id,
+       COALESCE(NULLIF(TRIM(epr.payee_name), ''), ep.payee_name) AS payee_name,
+       COALESCE(NULLIF(TRIM(epr.account_name), ''), ep.account_name) AS account_name,
+       COALESCE(NULLIF(TRIM(epr.pan_number), ''), ep.pan_number) AS pan_number,
+       COALESCE(NULLIF(TRIM(epr.account_no), ''), ep.account_no) AS account_no,
+       COALESCE(NULLIF(TRIM(epr.account_type), ''), ep.account_type) AS account_type,
+       COALESCE(NULLIF(TRIM(epr.bank_name), ''), ep.bank_name) AS bank_name,
+       COALESCE(NULLIF(TRIM(epr.branch_name), ''), ep.branch_name) AS branch_name,
+       UPPER(TRIM(COALESCE(NULLIF(TRIM(epr.ifsc), ''), ep.ifsc, ''))) AS ifsc,
+       COALESCE(NULLIF(TRIM(epr.beneficiary_type), ''), ep.beneficiary_type) AS beneficiary_type,
+       COALESCE(NULLIF(TRIM(epr.beneficiary_org), ''), ep.beneficiary_org) AS beneficiary_org,
+       COALESCE(NULLIF(TRIM(epr.organization_type), ''), ep.organization_type) AS organization_type,
+       COALESCE(NULLIF(TRIM(epr.msme), ''), ep.msme) AS msme,
+       COALESCE(NULLIF(TRIM(epr.gstin), ''), ep.gstin) AS gstin,
+       COALESCE(NULLIF(TRIM(epr.tds_details), ''), ep.tds_details) AS tds_details,
+       COALESCE(NULLIF(TRIM(epr.tds_section), ''), ep.tds_section) AS tds_section,
+       ep.is_active,
+       ep.approval_status,
+       ep.rejection_reason,
+       ep.requested_at,
+       ep.approved_at,
+       ep.created_at,
+       ep.updated_at
      FROM expenditure_payee_rows epr
+     INNER JOIN expenditure_payees ep
+             ON ep.id = epr.payee_id
+            AND ep.is_active = 1
      INNER JOIN (
        SELECT MAX(id) AS id
          FROM expenditure_payee_rows
@@ -1118,20 +1146,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
     [...searchTerms.map((term) => `%${term}%`)],
   );
 
-  if (payeeRowResults.length) return payeeRowResults.map(normalizePayeeRecord);
-
-  const payeeTermClauses = searchTerms.length
-    ? searchTerms.map(() => `${payeeSearchableColumns} LIKE ?`).join(' AND ')
-    : '1 = 1';
-
-  const [rows] = await db.execute(
-    `SELECT * FROM expenditure_payees ep
-      WHERE ep.is_active = 1
-        AND ${payeeTermClauses}
-      ORDER BY ep.payee_name ASC LIMIT ${limitNum} OFFSET ${offsetNum}`,
-    [...searchTerms.map((term) => `%${term}%`)],
-  );
-  return rows.map(normalizePayeeRecord);
+  return payeeRowResults.map(normalizePayeeRecord);
 }
 
 export async function getPayeeById(id) {
@@ -3917,4 +3932,13 @@ export async function hardDeleteExpenditureRequest(id) {
   if (!expenditureId) return false;
   const [result] = await db.execute('DELETE FROM expenditure_requests WHERE id = ?', [expenditureId]);
   return result.affectedRows > 0;
+}
+
+export async function revertBudgetUsage(id) {
+  const expenditureId = toPositiveInt(id);
+  if (!expenditureId) return false;
+
+  // createExpenditureRequest does not currently reserve finance_budget_line_usage.
+  // Keep this cleanup hook non-destructive so workflow-start failures only remove the draft request.
+  return true;
 }
