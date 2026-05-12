@@ -16,6 +16,7 @@ interface ExpenditureItem {
   id: number;
   financeid?: number;
   proposalref?: string;
+  requestref?: string;
   applicantname: string;
   beneficiarytype: string;
   primaryhead: string;
@@ -154,19 +155,19 @@ const normalizeModule = (value: unknown): WorkflowModule | null => {
   return null;
 };
 
-  const normalizeStatus = (value: unknown) => normalizeText(value).toLowerCase() || "pending";
+const normalizeStatus = (value: unknown) => normalizeText(value).toLowerCase() || "pending";
 
 const parseWorkflowState = (value: unknown): Record<string, unknown> | null => {
-    if (!value) return null;
-    if (typeof value === "object" && !Array.isArray(value)) {
-      return value as Record<string, unknown>;
-    }
+  if (!value) return null;
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
 
-    try {
-      const parsed = JSON.parse(String(value));
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
-    } catch {
-      return null;
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
   }
 };
 
@@ -174,9 +175,9 @@ const getRequestWorkflowStatus = (req: ExpenditureItem) => {
   const workflowState = parseWorkflowState(req.workflow_state);
   return normalizeStatus(
     workflowState?.status ??
-      workflowState?.workflowStatus ??
-      workflowState?.overallStatus ??
-      req.overallstatus,
+    workflowState?.workflowStatus ??
+    workflowState?.overallStatus ??
+    req.overallstatus,
   );
 };
 
@@ -185,15 +186,15 @@ const getRequestWorkflowState = (req: ExpenditureItem) => parseWorkflowState(req
 const getWorkflowApprovalLabel = (workflowState: Record<string, unknown> | null | undefined) => {
   const status = normalizeStatus(
     workflowState?.status ??
-      workflowState?.workflowStatus ??
-      workflowState?.overallStatus ??
-      "",
+    workflowState?.workflowStatus ??
+    workflowState?.overallStatus ??
+    "",
   );
   const lastDecision = normalizeText(workflowState?.lastDecision ?? "").toLowerCase();
   const currentStage = normalizeText(
     workflowState?.currentStage ??
-      workflowState?.workflowStage ??
-      "",
+    workflowState?.workflowStage ??
+    "",
   ).toLowerCase();
 
   if (lastDecision === "resubmitted") return "Resubmitted";
@@ -221,14 +222,14 @@ const getWorkflowApprovalStageState = (
 ) => {
   const status = normalizeStatus(
     workflowState?.status ??
-      workflowState?.workflowStatus ??
-      workflowState?.overallStatus ??
-      "",
+    workflowState?.workflowStatus ??
+    workflowState?.overallStatus ??
+    "",
   );
   const currentStage = normalizeText(
     workflowState?.currentStage ??
-      workflowState?.workflowStage ??
-      "",
+    workflowState?.workflowStage ??
+    "",
   ).toLowerCase();
   const normalizedCurrentStage =
     currentStage === "level1" ? "hod" : currentStage;
@@ -244,16 +245,16 @@ const getWorkflowApprovalStageState = (
 };
 
 const getRowKey = (req: ExpenditureItem) => {
-    const state = parseWorkflowState(req.workflow_state);
-    const direct = normalizeText(
-      state?.dashboardRowId ??
-      state?.workflowrowref ??
-      state?.rowReferenceId ??
-      state?.rowIndex ??
-      ""
-    );
+  const state = parseWorkflowState(req.workflow_state);
+  const direct = normalizeText(
+    state?.dashboardRowId ??
+    state?.workflowrowref ??
+    state?.rowReferenceId ??
+    state?.rowIndex ??
+    ""
+  );
 
-    if (direct) return direct;
+  if (direct) return direct;
   return `finance-${normalizeText(req.financeid ?? "")}-request-${normalizeText(req.id ?? "")}`;
 };
 
@@ -288,26 +289,6 @@ const getFinanceRefSequence = (financeBaseRef: string) => {
   return structuredMatch?.[1]?.padStart(4, "0") ?? "";
 };
 
-const getWorkflowRowLetter = (sequence: number) => {
-  const normalized = Math.max(Number(sequence) || 1, 1);
-  let index = normalized;
-  let label = "";
-
-  while (index > 0) {
-    index -= 1;
-    label = String.fromCharCode(65 + (index % 26)) + label;
-    index = Math.floor(index / 26);
-  }
-
-  return label;
-};
-
-const buildWorkflowRequestRef = (
-  financeBaseRef: string,
-  rowSequence: number,
-  stepSequence: number
-) => `${financeBaseRef}-${getWorkflowRowLetter(rowSequence)}${stepSequence}`;
-
 const getWorkflowRequestDisplayCode = (value: unknown) => {
   const ref = normalizeText(value);
   if (!ref) return "";
@@ -322,96 +303,15 @@ const getWorkflowRequestDisplayCode = (value: unknown) => {
   return trailingSegment.toUpperCase();
 };
 
-const buildWorkflowRequestRefMap = (
-  financeBaseRef: string,
-  requests: ExpenditureItem[]
-) => {
+const buildWorkflowRequestRefMap = (requests: ExpenditureItem[]) => {
   const refs = new Map<number, string>();
-  const rowsByKey = new Map<string, ExpenditureItem[]>();
 
   requests.forEach((request) => {
-    const rowKey = getRowKey(request);
-    const bucket = rowsByKey.get(rowKey) ?? [];
-    bucket.push(request);
-    rowsByKey.set(rowKey, bucket);
-  });
-
-  const orderedRowGroups = Array.from(rowsByKey.entries()).sort(([leftKey, leftRows], [rightKey, rightRows]) => {
-    const leftRowIndex =
-      leftRows
-        .map((row) => getWorkflowStateRowIndex(row.workflow_state))
-        .find((value): value is number => Boolean(value)) ?? Number.MAX_SAFE_INTEGER;
-    const rightRowIndex =
-      rightRows
-        .map((row) => getWorkflowStateRowIndex(row.workflow_state))
-        .find((value): value is number => Boolean(value)) ?? Number.MAX_SAFE_INTEGER;
-
-    if (leftRowIndex !== rightRowIndex) return leftRowIndex - rightRowIndex;
-
-    const leftTime = Math.min(...leftRows.map((row) => new Date(row.createdat || 0).getTime()));
-    const rightTime = Math.min(...rightRows.map((row) => new Date(row.createdat || 0).getTime()));
-    if (leftTime !== rightTime) return leftTime - rightTime;
-
-    return leftKey.localeCompare(rightKey);
-  });
-
-  orderedRowGroups.forEach(([, rowRequests], groupIndex) => {
-    const rowSequence =
-      rowRequests
-        .map((row) => getWorkflowStateRowIndex(row.workflow_state))
-        .find((value): value is number => Boolean(value)) ?? (groupIndex + 1);
-
-    const advanceRows = rowRequests
-      .filter((request) => normalizeModule(request.request_type) === "Advance")
-      .sort((left, right) => {
-        const leftTime = new Date(left.createdat || 0).getTime();
-        const rightTime = new Date(right.createdat || 0).getTime();
-        if (leftTime !== rightTime) return leftTime - rightTime;
-        return left.id - right.id;
-      });
-
-    advanceRows.forEach((request, advanceIndex) => {
-      const requestId = Number(request.id);
-      if (!Number.isFinite(requestId) || requestId <= 0) return;
-
-      refs.set(
-        requestId,
-        buildWorkflowRequestRef(
-          financeBaseRef,
-          rowSequence,
-          advanceIndex + 1
-        )
-      );
-    });
-
-    const nonAdvanceRows = rowRequests
-      .filter((request) => {
-        const module = normalizeModule(request.request_type);
-        return Boolean(module && module !== "Advance");
-      })
-      .sort((left, right) => {
-        const leftTime = new Date(left.createdat || 0).getTime();
-        const rightTime = new Date(right.createdat || 0).getTime();
-        if (leftTime !== rightTime) return leftTime - rightTime;
-        return left.id - right.id;
-      });
-
-    nonAdvanceRows.forEach((request, nonAdvanceIndex) => {
-      const requestId = Number(request.id);
-      const module = normalizeModule(request.request_type);
-      if (!Number.isFinite(requestId) || requestId <= 0 || !module || module === "Advance") {
-        return;
-      }
-
-      refs.set(
-        requestId,
-        buildWorkflowRequestRef(
-          financeBaseRef,
-          rowSequence,
-          advanceRows.length + nonAdvanceIndex + 1
-        )
-      );
-    });
+    const requestId = Number(request.id);
+    const backendRequestRef = normalizeText(request.requestref);
+    if (Number.isFinite(requestId) && requestId > 0 && backendRequestRef) {
+      refs.set(requestId, backendRequestRef);
+    }
   });
 
   return refs;
@@ -480,10 +380,10 @@ const ExpenditureDashboard: React.FC = () => {
       selectedBeneficiary === "all"
         ? null
         : new Set(
-            data
-              .filter((item) => String(item.beneficiarytype || "").trim() === selectedBeneficiary)
-              .map((item) => String(item.financeid ?? ""))
-          );
+          data
+            .filter((item) => String(item.beneficiarytype || "").trim() === selectedBeneficiary)
+            .map((item) => String(item.financeid ?? ""))
+        );
 
     return proposalCards.filter((card) => {
       if (financeIdsByBeneficiary && !financeIdsByBeneficiary.has(card.financeRequestId)) {
@@ -540,7 +440,7 @@ const ExpenditureDashboard: React.FC = () => {
   }, [data, filteredProposalCards]);
 
   const formatAmount = (amount: number) =>
-    `Rs ${Number(amount || 0).toLocaleString("en-IN")}`;
+    `₹${Number(amount || 0).toLocaleString("en-IN")}`;
 
   const closeDialog = () => {
     setDialogConfig((prev) => ({
@@ -631,7 +531,7 @@ const ExpenditureDashboard: React.FC = () => {
     module: WorkflowModule | "Advance2",
     card: ExpenditureProposalCard,
     options?: { forceNew?: boolean; mode?: "create" | "edit" | "view" }
-   ) => {
+  ) => {
     const targetRow = row;
 
     // Handle interim advance specifically
@@ -644,18 +544,18 @@ const ExpenditureDashboard: React.FC = () => {
           ? targetRow.advanceRef2 ?? `${targetRow.advanceRef}-2`
           : targetRow.advanceRef
         : targetModule === "Expenditure"
-        ? targetRow.expenditureRef
-        : targetRow.settlementRef;
+          ? targetRow.expenditureRef
+          : targetRow.settlementRef;
 
     const requestId = options?.forceNew
       ? null
       : targetModule === "Advance"
-      ? isAdvance2
-        ? targetRow.advanceRequestId2
-        : targetRow.advanceRequestId
-      : targetModule === "Expenditure"
-      ? targetRow.expenditureRequestId
-      : targetRow.settlementRequestId;
+        ? isAdvance2
+          ? targetRow.advanceRequestId2
+          : targetRow.advanceRequestId
+        : targetModule === "Expenditure"
+          ? targetRow.expenditureRequestId
+          : targetRow.settlementRequestId;
 
     const targetRequestId = requestId ?? null;
     const launchMode =
@@ -669,8 +569,8 @@ const ExpenditureDashboard: React.FC = () => {
       launchMode === "edit" && targetRequestId
         ? `/expenditure/${targetRequestId}/edit`
         : targetRequestId
-        ? `/expenditure/${targetRequestId}`
-        : "/expenditure/new";
+          ? `/expenditure/${targetRequestId}`
+          : "/expenditure/new";
 
     navigate(route, {
       state: {
@@ -760,12 +660,69 @@ const ExpenditureDashboard: React.FC = () => {
       ];
     }
 
-  if (row.primaryChoice === "Expenditure") {
+    if (row.primaryChoice === "Expenditure") {
+      return [
+        {
+          label: "Initial Advance",
+          module: "Advance" as const,
+          hidden: true,
+          submitted: false,
+        },
+        {
+          label: "Interim Advance",
+          module: "Advance2" as const,
+          hidden: true,
+          submitted: false,
+        },
+        {
+          label: "Settlement",
+          module: "Settlement" as const,
+          hidden: true,
+          submitted: false,
+        },
+        {
+          label: "Expenditure",
+          module: "Expenditure" as const,
+          hidden: false,
+          submitted: Boolean(row.expenditureRequestId) || row.expenditureAmount > 0,
+        },
+      ];
+    }
+
+    if (row.primaryChoice === "Settlement") {
+      return [
+        {
+          label: "Initial Advance",
+          module: "Advance" as const,
+          hidden: !hasAdvance1,
+          submitted: hasAdvance1,
+        },
+        {
+          label: "Interim Advance",
+          module: "Advance2" as const,
+          hidden: !showAdvance2,
+          submitted: hasAdvance2,
+        },
+        {
+          label: "Settlement",
+          module: "Settlement" as const,
+          hidden: false,
+          submitted: hasSettlement,
+        },
+        {
+          label: "Expenditure",
+          module: "Expenditure" as const,
+          hidden: true,
+          submitted: false,
+        },
+      ];
+    }
+
     return [
       {
         label: "Initial Advance",
         module: "Advance" as const,
-        hidden: true,
+        hidden: false,
         submitted: false,
       },
       {
@@ -784,67 +741,10 @@ const ExpenditureDashboard: React.FC = () => {
         label: "Expenditure",
         module: "Expenditure" as const,
         hidden: false,
-        submitted: Boolean(row.expenditureRequestId) || row.expenditureAmount > 0,
-      },
-    ];
-  }
-
-  if (row.primaryChoice === "Settlement") {
-    return [
-      {
-        label: "Initial Advance",
-        module: "Advance" as const,
-        hidden: !hasAdvance1,
-        submitted: hasAdvance1,
-      },
-      {
-        label: "Interim Advance",
-        module: "Advance2" as const,
-        hidden: !showAdvance2,
-        submitted: hasAdvance2,
-      },
-      {
-        label: "Settlement",
-        module: "Settlement" as const,
-        hidden: false,
-        submitted: hasSettlement,
-      },
-      {
-        label: "Expenditure",
-        module: "Expenditure" as const,
-        hidden: true,
         submitted: false,
       },
     ];
-  }
-
-  return [
-    {
-      label: "Initial Advance",
-      module: "Advance" as const,
-      hidden: false,
-      submitted: false,
-    },
-    {
-      label: "Interim Advance",
-      module: "Advance2" as const,
-      hidden: true,
-      submitted: false,
-    },
-    {
-      label: "Settlement",
-      module: "Settlement" as const,
-      hidden: true,
-      submitted: false,
-    },
-    {
-      label: "Expenditure",
-      module: "Expenditure" as const,
-      hidden: false,
-      submitted: false,
-    },
-  ];
-};
+  };
 
   const getWorkflowOptionRequestRef = (
     row: WorkflowRow,
@@ -954,30 +854,30 @@ const ExpenditureDashboard: React.FC = () => {
     return currentStage === "dof" || currentStage === "principal";
   };
 
- const getWorkflowGateMessage = (
-  row: WorkflowRow,
-  module: WorkflowModule | "Advance2"
-) => {
-  const advanceApproved = isApprovedStatus(row.advanceStatus);
+  const getWorkflowGateMessage = (
+    row: WorkflowRow,
+    module: WorkflowModule | "Advance2"
+  ) => {
+    const advanceApproved = isApprovedStatus(row.advanceStatus);
 
-  if (module === "Advance2" && !advanceApproved) {
-    return "Interim Advance can be filled only after Initial Advance is completely approved.";
-  }
+    if (module === "Advance2" && !advanceApproved) {
+      return "Interim Advance can be filled only after Initial Advance is completely approved.";
+    }
 
-  if (module === "Settlement" && !advanceApproved) {
-    return "Settlement can be filled only after Initial Advance is completely approved.";
-  }
+    if (module === "Settlement" && !advanceApproved) {
+      return "Settlement can be filled only after Initial Advance is completely approved.";
+    }
 
-  return null;
-};
+    return null;
+  };
 
   const hasSubmittedProposal = (row: WorkflowRow) =>
     Boolean(
       row.latestRequestId ||
-        row.advanceRequestId ||
-        row.advanceRequestId2 ||
-        row.expenditureRequestId ||
-        row.settlementRequestId
+      row.advanceRequestId ||
+      row.advanceRequestId2 ||
+      row.expenditureRequestId ||
+      row.settlementRequestId
     );
 
   const getRowWorkflowLabel = (row: WorkflowRow) => {
@@ -996,14 +896,10 @@ const ExpenditureDashboard: React.FC = () => {
 
     cards.forEach((card) => {
       const financeId = normalizeText(card.financeRequestId);
-      const financeBaseRef = normalizeFinanceRequestRefBase(
-        card.proposalId,
-        card.financeRequestId
-      );
       const related = requests.filter(
         (req) => String(req.financeid ?? "") === financeId
       );
-      const requestRefsById = buildWorkflowRequestRefMap(financeBaseRef, related);
+      const requestRefsById = buildWorkflowRequestRefMap(related);
       const rowsByKey = new Map<string, ExpenditureItem[]>();
       related.forEach((req) => {
         const key = getRowKey(req);
@@ -1156,12 +1052,12 @@ const ExpenditureDashboard: React.FC = () => {
             ? latestWorkflowStatus === "approved"
               ? 3
               : latestWorkflowStatus === "rejected"
-              ? 0
-              : latestWorkflowCurrentStage === "principal"
-              ? 3
-              : latestWorkflowCurrentStage === "dof"
-              ? 2
-              : 1
+                ? 0
+                : latestWorkflowCurrentStage === "principal"
+                  ? 3
+                  : latestWorkflowCurrentStage === "dof"
+                    ? 2
+                    : 1
             : 0,
         };
       });
@@ -1311,8 +1207,8 @@ const ExpenditureDashboard: React.FC = () => {
       const apiData = Array.isArray(payload?.data)
         ? payload.data
         : Array.isArray(payload?.requests)
-        ? payload.requests
-        : [];
+          ? payload.requests
+          : [];
 
       const apiCards = Array.isArray(payload?.cards) ? payload.cards : [];
 
@@ -1320,6 +1216,7 @@ const ExpenditureDashboard: React.FC = () => {
         id: Number(item.id),
         financeid: Number(item.financeid ?? item.finance_id ?? 0),
         proposalref: String(item.proposalref ?? item.proposal_ref ?? ""),
+        requestref: String(item.requestref ?? item.request_ref ?? ""),
         applicantname: String(item.applicantname ?? item.applicant_name ?? ""),
         beneficiarytype: String(item.beneficiarytype ?? item.beneficiary_type ?? ""),
         primaryhead: String(item.primaryhead ?? item.primary_head ?? ""),
@@ -1360,18 +1257,18 @@ const ExpenditureDashboard: React.FC = () => {
       setLoading(false);
     }
   };
-useEffect(() => {
-  const state = location.state as DashboardReturnState | null;
+  useEffect(() => {
+    const state = location.state as DashboardReturnState | null;
 
-  const financeId = normalizeText(state?.financeRequestId ?? "");
+    const financeId = normalizeText(state?.financeRequestId ?? "");
 
-  if (financeId) {
-    fetchDashboard(financeId);
-    navigate("/expenditurecard", { replace: true, state: null });
-  } else {
-    fetchDashboard();
-  }
-}, [location.state, financialYear, navigate]);
+    if (financeId) {
+      fetchDashboard(financeId);
+      navigate("/expenditurecard", { replace: true, state: null });
+    } else {
+      fetchDashboard();
+    }
+  }, [location.state, financialYear, navigate]);
   return (
     <section className="expenditure-page">
       <div className="expenditure-container">
@@ -1464,9 +1361,8 @@ useEffect(() => {
 
                           return (
                             <div
-                              className={`expenditure-demo-trigger__id ${
-                                isCompact ? "expenditure-demo-trigger__id--compact" : ""
-                              }`}
+                              className={`expenditure-demo-trigger__id ${isCompact ? "expenditure-demo-trigger__id--compact" : ""
+                                }`}
                             >
                               {isCompact ? shortToken : proposalText}
                             </div>
@@ -1509,9 +1405,8 @@ useEffect(() => {
 
                       <ChevronDown
                         size={20}
-                        className={`expenditure-demo-trigger__arrow ${
-                          isCardOpen ? "open" : ""
-                        }`}
+                        className={`expenditure-demo-trigger__arrow ${isCardOpen ? "open" : ""
+                          }`}
                       />
                     </button>
 
@@ -1541,11 +1436,10 @@ useEffect(() => {
                                 return (
                                   <div
                                     key={row.id}
-                                    className={`expenditure-demo-row ${
-                                      isCompleted
-                                        ? "expenditure-demo-row--completed"
-                                        : ""
-                                    }`}
+                                    className={`expenditure-demo-row ${isCompleted
+                                      ? "expenditure-demo-row--completed"
+                                      : ""
+                                      }`}
                                   >
                                     <div className="expenditure-demo-row__header">
                                       <div className="expenditure-demo-row__left">
@@ -1569,38 +1463,33 @@ useEffect(() => {
                                             const isConstructionOption = option.label
                                               ?.toLowerCase()
                                               .includes("construction");
-                                            
+
                                             return (
-                                            <button
-                                              key={`${row.id}-${option.label}`}
-                                              type="button"
-                                              className={`expenditure-demo-option ${
-                                                option.submitted ? "submitted" : ""
-                                              } ${
-                                                gateMessage ? "disabled" : ""
-                                              } ${
-                                                showOptionDetails
-                                                  ? "expenditure-demo-option--detailed"
-                                                  : ""
-                                              } ${
-                                                row.primaryChoice === option.module ||
-                                                (option.module === "Settlement" &&
-                                                  row.settlementAmount > 0)
-                                                  ? "chosen"
-                                                  : ""
-                                              } ${
-                                                isConstructionOption && !showOptionDetails
-                                                  ? "expenditure-demo-option--construction"
-                                                  : ""
-                                              }`}
-                                              onClick={() =>
-                                                gateMessage
-                                                  ? showDialog({
+                                              <button
+                                                key={`${row.id}-${option.label}`}
+                                                type="button"
+                                                className={`expenditure-demo-option ${option.submitted ? "submitted" : ""
+                                                  } ${gateMessage ? "disabled" : ""
+                                                  } ${showOptionDetails
+                                                    ? "expenditure-demo-option--detailed"
+                                                    : ""
+                                                  } ${row.primaryChoice === option.module ||
+                                                    (option.module === "Settlement" &&
+                                                      row.settlementAmount > 0)
+                                                    ? "chosen"
+                                                    : ""
+                                                  } ${isConstructionOption && !showOptionDetails
+                                                    ? "expenditure-demo-option--construction"
+                                                    : ""
+                                                  }`}
+                                                onClick={() =>
+                                                  gateMessage
+                                                    ? showDialog({
                                                       title: "Action Not Available",
                                                       message: gateMessage,
                                                       variant: "warning",
                                                     })
-                                                  : handleModuleLaunch(
+                                                    : handleModuleLaunch(
                                                       row,
                                                       option.module,
                                                       card,
@@ -1618,67 +1507,65 @@ useEffect(() => {
                                                           !Boolean(row.advanceRequestId2),
                                                       }
                                                     )
-                                              }
-                                              title={gateMessage || undefined}
-                                            >
-                                              {showOptionDetails && (
-                                                <span className="expenditure-demo-option__detail-grid">
-                                                  <span
-                                                    className="expenditure-demo-option__detail-box expenditure-demo-option__detail-box--ref"
-                                                    title={optionRequestRef || undefined}
-                                                    aria-label={
-                                                      optionRequestRef
-                                                        ? `Reference Request ID: ${optionRequestRef}`
-                                                        : "Reference Request ID unavailable"
-                                                    }
-                                                  >
-                                                    <strong className="expenditure-demo-option__detail-ref-value">
-                                                      {optionRequestCode || "-"}
-                                                    </strong>
-                                                  </span>
-                                                    <span className="expenditure-demo-option__detail-box expenditure-demo-option__detail-box--amount">
-                                                    <span className="expenditure-demo-option__detail-module">
-                                                      {option.label}
-                                                    </span>
-                                                    {optionAmount > 0 && (
-                                                      <strong className="expenditure-demo-option__detail-amount-value">
-                                                        {formatAmount(optionAmount)}
+                                                }
+                                                title={gateMessage || undefined}
+                                              >
+                                                {showOptionDetails && (
+                                                  <span className="expenditure-demo-option__detail-grid">
+                                                    <span
+                                                      className="expenditure-demo-option__detail-box expenditure-demo-option__detail-box--ref"
+                                                      title={optionRequestRef || undefined}
+                                                      aria-label={
+                                                        optionRequestRef
+                                                          ? `Reference Request ID: ${optionRequestRef}`
+                                                          : "Reference Request ID unavailable"
+                                                      }
+                                                    >
+                                                      <strong className="expenditure-demo-option__detail-ref-value">
+                                                        {optionRequestCode || "-"}
                                                       </strong>
-                                                    )}
+                                                    </span>
+                                                    <span className="expenditure-demo-option__detail-box expenditure-demo-option__detail-box--amount">
+                                                      <span className="expenditure-demo-option__detail-module">
+                                                        {option.label}
+                                                      </span>
+                                                      {optionAmount > 0 && (
+                                                        <strong className="expenditure-demo-option__detail-amount-value">
+                                                          {formatAmount(optionAmount)}
+                                                        </strong>
+                                                      )}
+                                                    </span>
                                                   </span>
-                                                </span>
-                                              )}
-                                              {!showOptionDetails && (
-                                                <span
-                                                  className={`expenditure-demo-option__label ${
-                                                    option.label
+                                                )}
+                                                {!showOptionDetails && (
+                                                  <span
+                                                    className={`expenditure-demo-option__label ${option.label
                                                       ?.toLowerCase()
                                                       .includes("construction")
                                                       ? "expenditure-demo-option__label--construction"
                                                       : ""
-                                                  }`}
-                                                >
-                                                  {option.label}
-                                                </span>
-                                              )}
-                                            </button>
-                                          )})}
+                                                      }`}
+                                                  >
+                                                    {option.label}
+                                                  </span>
+                                                )}
+                                              </button>
+                                            )
+                                          })}
                                         </div>
                                       </div>
 
                                       <div className="expenditure-demo-row__status">
                                         <div
-                                          className={`expenditure-demo-row__subhead ${
-                                            rowDisplaySubHead
-                                              ? ""
-                                              : "expenditure-demo-row__subhead--empty"
-                                          } ${
-                                            rowDisplaySubHead
+                                          className={`expenditure-demo-row__subhead ${rowDisplaySubHead
+                                            ? ""
+                                            : "expenditure-demo-row__subhead--empty"
+                                            } ${rowDisplaySubHead
                                               ?.toLowerCase()
                                               .includes("construction")
                                               ? "expenditure-demo-row__subhead--construction"
                                               : ""
-                                          }`}
+                                            }`}
                                           title={rowDisplaySubHead || "Sub head not selected"}
                                         >
                                           <strong className="expenditure-demo-row__subhead-value">
@@ -1731,13 +1618,11 @@ useEffect(() => {
                                           return (
                                             <button
                                               type="button"
-                                              className={`expenditure-status-pill ${
-                                                getStatusPillToneClass(rowStatusLabel)
-                                              } ${
-                                                showWorkflowStatusDetail[row.id]
+                                              className={`expenditure-status-pill ${getStatusPillToneClass(rowStatusLabel)
+                                                } ${showWorkflowStatusDetail[row.id]
                                                   ? "expenditure-status-pill--active"
                                                   : ""
-                                              }`}
+                                                }`}
                                               onClick={() =>
                                                 setShowWorkflowStatusDetail((prev) => ({
                                                   ...prev,
@@ -1881,7 +1766,7 @@ useEffect(() => {
 
                         <div className="expenditure-request-cardright">
                           <div className="expenditure-request-cardamount">
-                            Rs {Number(item.amount || 0).toLocaleString("en-IN")}
+                            ₹{Number(item.amount || 0).toLocaleString("en-IN")}
                           </div>
 
                           <div className="expenditure-request-cardactions">
@@ -1922,11 +1807,9 @@ useEffect(() => {
 
                           <button
                             type="button"
-                            className={`expenditure-status-pill ${
-                              getStatusPillToneClass(statusLabel)
-                            } ${
-                              isExpanded ? "expenditure-status-pill--active" : ""
-                            }`}
+                            className={`expenditure-status-pill ${getStatusPillToneClass(statusLabel)
+                              } ${isExpanded ? "expenditure-status-pill--active" : ""
+                              }`}
                             onClick={() =>
                               setShowRequestStatusDetail((prev) => ({
                                 ...prev,
@@ -1984,7 +1867,7 @@ useEffect(() => {
               </div>
             )}
 
-            
+
           </div>
         </div>
       </div>

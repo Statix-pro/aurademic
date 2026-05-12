@@ -63,8 +63,6 @@ const toMoney = (v) => {
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
 };
 
-const escapeRegExp = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 const normalizeFinanceRequestRefBase = (requestRef, { financeRequestId = null, requestDate = null } = {}) => {
   const normalizedRef = normalizeText(requestRef);
   const structuredMatch = normalizedRef.match(/^#?F[-_](\d{4})[-_](\d+)$/i);
@@ -702,35 +700,39 @@ async function getFinanceRequestRefBase(conn, financeRequestId, requestDate) {
   });
 }
 
+function getWorkflowRowLetter(sequence) {
+  const normalized = Math.max(toPositiveInt(sequence) || 1, 1);
+  let index = normalized;
+  let label = '';
+
+  while (index > 0) {
+    index -= 1;
+    label = String.fromCharCode(65 + (index % 26)) + label;
+    index = Math.floor(index / 26);
+  }
+
+  return label;
+}
+
 function resolveExpenditureRefMeta(requestType, workflowRowHistory = [], rowIndex = null) {
   const normalizedRowIndex = toPositiveInt(rowIndex);
+  const rowLetter = getWorkflowRowLetter(normalizedRowIndex || 1);
+  const priorAdvanceCount = workflowRowHistory.filter((row) => row.requestType === 'Advance').length;
+  let stepSequence = 1;
 
   if (requestType === 'Advance') {
-    const priorAdvanceCount = workflowRowHistory.filter((row) => row.requestType === 'Advance').length;
-    return {
-      code: priorAdvanceCount >= 1 ? 'A2' : 'A1',
-      digits: 2,
-      sequence: normalizedRowIndex,
-    };
+    stepSequence = priorAdvanceCount >= 1 ? 2 : 1;
+  } else if (requestType === 'Settlement') {
+    stepSequence = priorAdvanceCount >= 2 ? 3 : 2;
+  } else if (requestType === 'Expenditure') {
+    stepSequence = 1;
+  } else {
+    throw new Error(`Unsupported expenditure request type for ref generation: ${requestType || 'unknown'}`);
   }
 
-  if (requestType === 'Settlement') {
-    return {
-      code: 'S',
-      digits: 3,
-      sequence: normalizedRowIndex,
-    };
-  }
-
-  if (requestType === 'Expenditure') {
-    return {
-      code: 'E',
-      digits: 3,
-      sequence: normalizedRowIndex,
-    };
-  }
-
-  throw new Error(`Unsupported expenditure request type for ref generation: ${requestType || 'unknown'}`);
+  return {
+    suffix: `${rowLetter}${stepSequence}`,
+  };
 }
 
 async function insertExpenditureRef(
@@ -749,9 +751,7 @@ async function insertExpenditureRef(
       ? new Date(requestDate).getFullYear()
       : new Date().getFullYear();
     const normalizedFinanceRequestId = toPositiveInt(financeRequestId);
-    const lockName = normalizedFinanceRequestId
-      ? `expenditure_ref_finance_${normalizedFinanceRequestId}`
-      : `expenditure_ref_fy_${year}`;
+    const lockName = `expenditure_ref_fy_${year}`;
     const [[{ acquired }]] = await conn.execute(
       'SELECT GET_LOCK(?, 15) AS acquired', [lockName],
     );
@@ -767,41 +767,26 @@ async function insertExpenditureRef(
         normalizedFinanceRequestId,
         requestDate,
       );
-      const { code, digits, sequence: indexedSequence } = resolveExpenditureRefMeta(
+      const { suffix } = resolveExpenditureRefMeta(
         requestType,
         workflowRowHistory,
         rowIndex,
       );
-      const refPrefix = `${financeRefBase}-${code}`;
-      let sequence = indexedSequence;
+      const ref = `${financeRefBase}-${suffix}`;
 
-      if (!sequence) {
-        const refPattern = new RegExp(`^${escapeRegExp(refPrefix)}(\\d+)$`, 'i');
-
-        const [existingRows] = await conn.execute(
-          `SELECT err.request_ref
-             FROM expenditure_request_refs err
-             JOIN expenditure_requests er ON er.id = err.expenditure_request_id
-            WHERE er.finance_request_id = ?
-              AND err.request_ref LIKE ?`,
-          [normalizedFinanceRequestId, `${refPrefix}%`],
-        );
-
-        sequence =
-          existingRows.reduce((max, row) => {
-            const match = normalizeText(row?.request_ref).match(refPattern);
-            const parsedValue = match ? Number.parseInt(match[1], 10) : 0;
-            return Number.isFinite(parsedValue) ? Math.max(max, parsedValue) : max;
-          }, 0) + 1;
-      }
-
-      const ref = `${refPrefix}${String(sequence).padStart(digits, '0')}`;
+      const [[sequenceRow]] = await conn.execute(
+        `SELECT COALESCE(MAX(ref_sequence), 0) + 1 AS next_sequence
+           FROM expenditure_request_refs
+          WHERE ref_year = ?`,
+        [year],
+      );
+      const storageSequence = Number(sequenceRow?.next_sequence || 1);
 
       await conn.execute(
         `REPLACE INTO expenditure_request_refs
            (expenditure_request_id, ref_year, ref_sequence, request_ref)
          VALUES (?, ?, ?, ?)`,
-        [expenditureId, year, sequence, ref],
+        [expenditureId, year, storageSequence, ref],
       );
 
       return ref;
@@ -1362,10 +1347,11 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
 
   const [requestRows] = await db.execute(
       `SELECT
-         er.id,
-         er.finance_request_id AS finance_id,
-         COALESCE(frr.request_ref, CONCAT('#F-', er.finance_request_id)) AS proposal_ref,
-         COALESCE(
+       er.id,
+       er.finance_request_id AS finance_id,
+       COALESCE(frr.request_ref, CONCAT('#F-', er.finance_request_id)) AS proposal_ref,
+       COALESCE(err.request_ref, '') AS request_ref,
+       COALESCE(
            NULLIF(TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))), ''),
            NULLIF(TRIM(er.applicant_name), ''),
            'Unknown Applicant'
@@ -1381,6 +1367,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        FROM expenditure_requests er
        LEFT JOIN master_employees emp ON emp.id = er.employee_id
        LEFT JOIN finance_request_refs frr ON frr.finance_request_id = er.finance_request_id
+       LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
        LEFT JOIN (
          SELECT
            ranked.expenditure_id,
@@ -1452,6 +1439,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
       id: toPositiveInt(row.id),
       finance_id: toPositiveInt(row.finance_id),
       proposal_ref: normalizeText(row.proposal_ref),
+      request_ref: normalizeText(row.request_ref),
       applicant_name: normalizeText(row.applicant_name),
       beneficiary_type: normalizeText(row.beneficiary_type),
       primary_head: normalizeText(row.primary_head),
