@@ -1133,6 +1133,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     const token = String(record.workflow_status || record.status || '').toLowerCase();
     const currentStage = getRecordCurrentStage(record);
     const activeStageKey = String(activeStage || '').toLowerCase();
+    const isAllProposalsTab = Boolean(activeWorkflowTab?.showAllProposals);
     const pendingEntryStatusByStage: Record<string, string[]> = {
       dof: ['level1_approved', 'hod_approved', 'coordinator_approved', 'ithead_approved'],
       principal: ['dof_approved'],
@@ -1142,6 +1143,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     if (token.includes('archived') || token.includes('archive')) return 'archived';
     if (token.includes('rejected') || workflowDecision === 'rejected') return 'rejected';
     if (token.includes('returned') || token.includes('return') || workflowDecision === 'returned') return 'returned';
+    if (isAllProposalsTab && token === 'in_progress' && currentStage) return 'pending';
 
     if (currentStage && activeStageKey && currentStage === activeStageKey) {
       return 'pending';
@@ -1199,7 +1201,14 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     if (isApprovedForCurrentStage(record)) return 'approved';
     
     return 'pending';
-  }, [activeStage, getRecordCurrentStage, getRecordStageDecision, getRecordWorkflowDecision, isApprovedForCurrentStage]);
+  }, [
+    activeStage,
+    activeWorkflowTab?.showAllProposals,
+    getRecordCurrentStage,
+    getRecordStageDecision,
+    getRecordWorkflowDecision,
+    isApprovedForCurrentStage,
+  ]);
 
   const isVisibleInWorkflowList = useCallback(
     (record: Record<string, any>, stage: string) => {
@@ -1266,6 +1275,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             ...(statusFilter !== 'total' ? { statusCategory: statusFilter } : {}),
             fiscalYear,
             ...(level1RoleFilter ? { level1Role: level1RoleFilter } : {}),
+            ...(isAllProposalsTab ? { allProposals: true } : {}),
             ...(beneficiaryFilter !== 'All Beneficiary' ? { beneficiaryType: beneficiaryFilter } : {}),
             ...(searchTerm ? { q: searchTerm } : {}),
             ...(amountFilter ? { amountBand: amountFilter } : {}),
@@ -1777,8 +1787,28 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       return 'Approved';
     }
 
+    if (
+      ['finance', 'expenditure'].includes(config.moduleKey) &&
+      activeWorkflowTab?.showAllProposals &&
+      category === 'pending'
+    ) {
+      const currentStage = getRecordCurrentStage(record);
+      if (currentStage === 'level1') {
+        return resolveFinanceLevel1Role(record) === 'coordinator'
+          ? 'Pending Coordinator'
+          : 'Pending HOD';
+      }
+      if (currentStage) {
+        return `Pending ${formatStageLabel(currentStage, config.stageLabels)}`;
+      }
+    }
+
     return 'Pending';
   }, [
+    activeWorkflowTab?.showAllProposals,
+    config.moduleKey,
+    config.stageLabels,
+    getRecordCurrentStage,
     getRecordStageDecision,
     getRecordWorkflowDecision,
     resolveStatusCategory,
@@ -1982,6 +2012,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }, [
     amountFilter,
     beneficiaryFilter,
+    config.moduleKey,
     enableSecondaryFilter,
     queueStatusCounts,
     searchScopedRows,
@@ -2278,6 +2309,9 @@ const proposalFilteredRows = useMemo(() => {
                       setActiveStageTabKey(tab.key);
                       if (activeStage !== tab.stage) {
                         setActiveStage(tab.stage);
+                      }
+                      if (tab.showAllProposals) {
+                        setStatusFilter('total');
                       }
                       setPage(1);
                     }}

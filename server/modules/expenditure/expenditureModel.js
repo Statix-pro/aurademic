@@ -601,9 +601,14 @@ async function getCumulativeAdvanceSummary(connOrDb, {
   };
 }
 
-async function getFinanceRequestBudgetUsageByLine(connOrDb, { financeRequestId, budgetLineIds = [] } = {}) {
+async function getFinanceRequestBudgetUsageByLine(connOrDb, {
+  financeRequestId,
+  budgetLineIds = [],
+  excludeExpenditureId = null,
+} = {}) {
   const financeId = toPositiveInt(financeRequestId);
   if (!financeId) return new Map();
+  const excludedRequestId = toPositiveInt(excludeExpenditureId);
 
   const normalizedBudgetLineIds = Array.from(
     new Set((Array.isArray(budgetLineIds) ? budgetLineIds : []).map((id) => toPositiveInt(id)).filter(Boolean)),
@@ -625,6 +630,7 @@ async function getFinanceRequestBudgetUsageByLine(connOrDb, { financeRequestId, 
        FROM expenditure_advance_rows ar
        JOIN expenditure_requests er ON er.id = ar.expenditure_id
        WHERE er.finance_request_id = ?
+         AND (? IS NULL OR er.id <> ?)
          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
 
        UNION ALL
@@ -635,14 +641,15 @@ async function getFinanceRequestBudgetUsageByLine(connOrDb, { financeRequestId, 
        FROM expenditure_line_rows lr
        JOIN expenditure_requests er ON er.id = lr.expenditure_id
        WHERE er.finance_request_id = ?
+         AND (? IS NULL OR er.id <> ?)
          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
 
-     ) AS usage_rows
+    ) AS usage_rows
      ${lineFilterSql}
      GROUP BY usage_rows.budget_line_id`,
     normalizedBudgetLineIds.length
-      ? [financeId, financeId, ...normalizedBudgetLineIds]
-      : [financeId, financeId],
+      ? [financeId, excludedRequestId, excludedRequestId, financeId, excludedRequestId, excludedRequestId, ...normalizedBudgetLineIds]
+      : [financeId, excludedRequestId, excludedRequestId, financeId, excludedRequestId, excludedRequestId],
   );
 
   return new Map(
@@ -2395,6 +2402,14 @@ function getRowsForRequestType(requestType, { advanceRows, settlementRows, expen
   return Array.isArray(expenditureRows) ? expenditureRows : [];
 }
 
+const normalizeBudgetHeadKey = (value) =>
+  normalizeText(value)
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 async function assertWorkflowRowsHaveApprovedBudgetLines(
   conn,
   financeRequestId,
@@ -2443,6 +2458,95 @@ async function assertWorkflowRowsHaveApprovedBudgetLines(
   }
 }
 
+async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows = [], {
+  excludeExpenditureId = null,
+} = {}) {
+  const normalizedFinanceRequestId = toPositiveInt(financeRequestId);
+  const filledRows = (Array.isArray(expenditureRows) ? expenditureRows : [])
+    .map((row, index) => ({
+      rowNumber: index + 1,
+      budgetHead: normalizeText(row.budgetHead || row.budget_head),
+      headKey: normalizeBudgetHeadKey(row.budgetHead || row.budget_head),
+      amount: getAmountForWorkflowRow('Expenditure', row),
+    }))
+    .filter((row) => row.amount > 0);
+
+  if (!normalizedFinanceRequestId || !filledRows.length) return;
+
+  const missingHeadRows = filledRows.filter((row) => !row.headKey).map((row) => row.rowNumber);
+  if (missingHeadRows.length) {
+    throw new Error(
+      `Please select a valid approved budget head for row ${missingHeadRows.join(', ')}`,
+    );
+  }
+
+  const requestedByHead = new Map();
+  for (const row of filledRows) {
+    requestedByHead.set(row.headKey, toMoney((requestedByHead.get(row.headKey) || 0) + row.amount));
+  }
+
+  const [approvedRows] = await conn.execute(
+    `SELECT
+       fbb.budget_line_id,
+       COALESCE(NULLIF(TRIM(fbb.budget_head), ''), bpl.budget_head, '') AS budget_head,
+       ${FINANCE_BREAKUP_APPROVED_BASE_SQL} AS approved_amount
+     FROM finance_budget_breakup fbb
+     LEFT JOIN budget_proposal_lines bpl ON bpl.id = fbb.budget_line_id
+     WHERE fbb.finance_id = ?
+     FOR UPDATE`,
+    [normalizedFinanceRequestId],
+  );
+
+  const approvedByHead = new Map();
+  const lineIdsByHead = new Map();
+
+  for (const row of approvedRows) {
+    const headKey = normalizeBudgetHeadKey(row.budget_head);
+    if (!headKey || !requestedByHead.has(headKey)) continue;
+
+    approvedByHead.set(headKey, toMoney((approvedByHead.get(headKey) || 0) + toMoney(row.approved_amount)));
+
+    const lineId = toPositiveInt(row.budget_line_id);
+    if (lineId) {
+      if (!lineIdsByHead.has(headKey)) {
+        lineIdsByHead.set(headKey, new Set());
+      }
+      lineIdsByHead.get(headKey).add(lineId);
+    }
+  }
+
+  const usageByLineId = await getFinanceRequestBudgetUsageByLine(conn, {
+    financeRequestId: normalizedFinanceRequestId,
+    budgetLineIds: Array.from(
+      new Set(Array.from(lineIdsByHead.values()).flatMap((lineIds) => Array.from(lineIds))),
+    ),
+    excludeExpenditureId,
+  });
+
+  for (const [headKey, requestedAmount] of requestedByHead.entries()) {
+    const approvedAmount = toMoney(approvedByHead.get(headKey));
+    const usedAmount = Array.from(lineIdsByHead.get(headKey) || []).reduce(
+      (sum, lineId) => toMoney(sum + toMoney(usageByLineId.get(lineId))),
+      0,
+    );
+    const remainingAmount = toMoney(Math.max(0, approvedAmount - usedAmount));
+
+    if (approvedAmount <= 0) {
+      const rowNumbers = filledRows.filter((row) => row.headKey === headKey).map((row) => row.rowNumber);
+      throw new Error(
+        `Please select a valid approved budget head for row ${rowNumbers.join(', ')}`,
+      );
+    }
+
+    if (requestedAmount > remainingAmount) {
+      const firstRow = filledRows.find((row) => row.headKey === headKey);
+      throw new Error(
+        `Requested expenditure ${requestedAmount.toFixed(2)} exceeds remaining budget ${remainingAmount.toFixed(2)} for "${firstRow?.budgetHead || headKey}"`,
+      );
+    }
+  }
+}
+
 async function applyBudgetUsageDelta(conn, usageRows = [], multiplier = 1) {
   for (const usageRow of usageRows) {
     const budgetLineId = toPositiveInt(usageRow.budgetLineId);
@@ -2466,7 +2570,9 @@ async function applyBudgetUsageDelta(conn, usageRows = [], multiplier = 1) {
   }
 }
 
-async function getRemainingBudgetByLine(conn, financeRequestId, budgetLineIds = []) {
+async function getRemainingBudgetByLine(conn, financeRequestId, budgetLineIds = [], {
+  excludeExpenditureId = null,
+} = {}) {
   const normalizedFinanceRequestId = toPositiveInt(financeRequestId);
   const normalizedBudgetLineIds = Array.from(
     new Set((Array.isArray(budgetLineIds) ? budgetLineIds : []).map((id) => toPositiveInt(id)).filter(Boolean)),
@@ -2479,19 +2585,21 @@ async function getRemainingBudgetByLine(conn, financeRequestId, budgetLineIds = 
   const usageByLineId = await getFinanceRequestBudgetUsageByLine(conn, {
     financeRequestId: normalizedFinanceRequestId,
     budgetLineIds: normalizedBudgetLineIds,
+    excludeExpenditureId,
   });
 
   const placeholders = normalizedBudgetLineIds.map(() => '?').join(', ');
   const [budgetRows] = await conn.execute(
   `SELECT
      fbb.budget_line_id,
-     ${FINANCE_BREAKUP_APPROVED_BASE_SQL} AS approved_amount,
+     SUM(${FINANCE_BREAKUP_APPROVED_BASE_SQL}) AS approved_amount,
      0 AS used_amount,
-     ${FINANCE_BREAKUP_APPROVED_BASE_SQL} AS remaining_amount
+     SUM(${FINANCE_BREAKUP_APPROVED_BASE_SQL}) AS remaining_amount
    FROM finance_budget_breakup fbb
    LEFT JOIN budget_proposal_lines bpl ON bpl.id = fbb.budget_line_id
    WHERE fbb.finance_id = ?
      AND fbb.budget_line_id IN (${placeholders})
+   GROUP BY fbb.budget_line_id
    FOR UPDATE`,
   [normalizedFinanceRequestId, ...normalizedBudgetLineIds],
 );
@@ -2644,7 +2752,9 @@ const incomeRows = Array.isArray(data.income_rows)
       requestedExpenditure: expenditureTotal,
     });
 
-    if (usageRows.length) {
+    if (requestType === 'Expenditure') {
+      await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows);
+    } else if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,
         financeRequestId,
@@ -2931,11 +3041,16 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       }
     }
 
-    if (usageRows.length) {
+    if (requestType === 'Expenditure') {
+      await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows, {
+        excludeExpenditureId: normalizedExpenditureId,
+      });
+    } else if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,
         financeRequestId,
         usageRows.map((row) => row.budgetLineId),
+        { excludeExpenditureId: normalizedExpenditureId },
       );
 
       for (const usageRow of usageRows) {
@@ -2957,7 +3072,9 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     const budgetSnapshotsByLine = buildBudgetSnapshotsByLine(
       requestType,
       usageRows,
-      await getRemainingBudgetByLine(conn, financeRequestId, usageRows.map((row) => row.budgetLineId)),
+      await getRemainingBudgetByLine(conn, financeRequestId, usageRows.map((row) => row.budgetLineId), {
+        excludeExpenditureId: normalizedExpenditureId,
+      }),
     );
 
     const normalizeSqlDate = (value) => {
@@ -3583,6 +3700,116 @@ export async function updateExpenditureWorkflowSnapshot(recordId, newState, { tx
   return Number(result?.affectedRows || 0) > 0;
 }
 
+export async function autoApprovePrincipalWorkflowStage(recordId, {
+  actor = {},
+  feedback = 'Auto-approved after DoF clearance',
+} = {}, { tx = null } = {}) {
+  if (!tx) {
+    return withTransaction((conn) =>
+      autoApprovePrincipalWorkflowStage(recordId, { actor, feedback }, { tx: conn })
+    );
+  }
+
+  const normalizedRecordId = toPositiveInt(recordId);
+  if (!normalizedRecordId) {
+    throw new Error('Invalid expenditure request ID');
+  }
+
+  const [rows] = await tx.query(
+    `SELECT workflow_state
+       FROM expenditure_requests
+      WHERE id = ?
+      FOR UPDATE`,
+    [normalizedRecordId]
+  );
+
+  if (!rows.length) {
+    throw new Error('Expenditure request not found');
+  }
+
+  const previousState = normalizeWorkflowState(rows[0].workflow_state);
+  if (!previousState) {
+    throw new Error('Workflow state not found');
+  }
+
+  const flow = Array.isArray(previousState.flow)
+    ? previousState.flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
+    : [];
+  const currentStage = normalizeText(previousState.currentStage).toLowerCase();
+  const principalIndex = flow.indexOf('principal');
+
+  if (
+    currentStage !== 'principal' ||
+    previousState.status !== 'in_progress' ||
+    principalIndex < 0
+  ) {
+    return {
+      autoApproved: false,
+      previousState,
+      currentState: previousState,
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const nextStage = flow[principalIndex + 1] || null;
+  const nextState = {
+    ...previousState,
+    flow,
+    currentStage: nextStage,
+    status: nextStage ? 'in_progress' : 'completed',
+    isEditableByApplicant: false,
+    resolvedAt: nextStage ? null : nowIso,
+    lastDecision: 'approved',
+    lastFeedback: normalizeText(feedback) || null,
+    updatedAt: nowIso,
+  };
+
+  const actorUserId = toPositiveInt(actor?.userId || actor?.id);
+
+  await tx.query(
+    `INSERT INTO workflow_actions (
+        module_key,
+        record_id,
+        stage,
+        decision,
+        feedback,
+        actor_user_id,
+        actor_email,
+        actor_role,
+        snapshot_before,
+        meta
+      ) VALUES (?, ?, 'principal', 'approved', ?, ?, ?, 'principal', ?, ?)`,
+    [
+      'expenditure',
+      normalizedRecordId,
+      nextState.lastFeedback,
+      actorUserId,
+      'system-auto@ksrct.ac.in',
+      JSON.stringify(previousState),
+      JSON.stringify({
+        origin: 'system',
+        requestId: null,
+        moduleMetaVersion: 1,
+        moduleMeta: {
+          trigger: 'auto_principal_approval_after_dof',
+          route: 'PATCH /api/expenditure-requests/:id/approval',
+        },
+      }),
+    ]
+  );
+
+  const updated = await updateExpenditureWorkflowSnapshot(normalizedRecordId, nextState, { tx });
+  if (!updated) {
+    throw new Error('Failed to update workflow snapshot');
+  }
+
+  return {
+    autoApproved: true,
+    previousState,
+    currentState: nextState,
+  };
+}
+
 export async function forceWorkflowTransition(recordId, {
   decision,
   feedback = null,
@@ -3757,8 +3984,15 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
   const normalizedStage = normalizeText(stage).toLowerCase();
   const workflowStatus = normalizeText(filters.workflowStatus).toLowerCase() || 'in_progress';
   const isSuperAdmin = Boolean(filters.isSuperAdmin);
+  const isAllProposals = isSuperAdmin && Boolean(filters.allProposals);
   const level1Role = normalizeText(filters.level1Role).toLowerCase();
+  const requestedStatusCategory = normalizeText(filters.statusCategory).toLowerCase();
+  const statusCategoryFilter = ['pending', 'approved', 'returned', 'rejected', 'archived'].includes(requestedStatusCategory)
+    ? requestedStatusCategory
+    : '';
   const isAllStage = normalizedStage === 'all';
+  const statusStageScope = isAllProposals || isAllStage ? 'all' : normalizedStage;
+  const searchTerm = normalizeText(filters.q || filters.search);
 
   const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
   const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
@@ -3768,9 +4002,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
   const whereParams = [];
 
   if (workflowStatus === 'all') {
-    if (isSuperAdmin) {
-      whereParts.push('1 = 1');
-    } else if (isAllStage) {
+    if (isAllProposals || isAllStage) {
       whereParts.push('1 = 1');
     } else {
       whereParts.push(
@@ -3789,7 +4021,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
       whereParams.push(normalizedStage, normalizedStage);
     }
   } else {
-    if (!isAllStage) {
+    if (!isAllProposals && !isAllStage) {
       whereParts.push(`${WORKFLOW_STAGE_SQL_EXPR} = ?`);
       whereParams.push(normalizedStage);
     }
@@ -3831,15 +4063,193 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
     }
   }
 
-  const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+  if (searchTerm) {
+    const searchLike = `%${searchTerm}%`;
+    whereParts.push(
+      `(
+        CAST(er.id AS CHAR) LIKE ?
+        OR EXISTS (
+          SELECT 1
+            FROM expenditure_request_refs err_search
+           WHERE err_search.expenditure_request_id = er.id
+             AND LOWER(COALESCE(err_search.request_ref, '')) LIKE LOWER(?)
+        )
+        OR LOWER(CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))) LIKE LOWER(?)
+        OR LOWER(CONCAT('EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))) LIKE LOWER(?)
+        OR LOWER(COALESCE(er.applicant_name, '')) LIKE LOWER(?)
+        OR EXISTS (
+          SELECT 1
+            FROM master_employees emp_search
+           WHERE emp_search.id = er.employee_id
+             AND LOWER(CONCAT_WS(' ',
+               emp_search.title,
+               emp_search.first_name,
+               emp_search.last_name,
+               emp_search.erp_id,
+               emp_search.email
+             )) LIKE LOWER(?)
+        )
+        OR LOWER(COALESCE(er.request_type, '')) LIKE LOWER(?)
+        OR LOWER(COALESCE(er.beneficiary_type, '')) LIKE LOWER(?)
+        OR LOWER(COALESCE(er.beneficiary_value, '')) LIKE LOWER(?)
+        OR LOWER(COALESCE(er.primary_head, '')) LIKE LOWER(?)
+        OR LOWER(COALESCE(er.department, '')) LIKE LOWER(?)
+        OR LOWER(COALESCE(er.description, '')) LIKE LOWER(?)
+      )`
+    );
+    whereParams.push(
+      searchLike,
+      searchLike,
+      searchLike,
+      searchLike,
+      searchLike,
+      searchLike,
+      searchLike,
+      searchLike,
+      searchLike,
+      searchLike,
+      searchLike,
+      searchLike
+    );
+  }
+
+  const priorTerminalStageByDashboard = {
+    principal: 'dof',
+    chairman: 'principal',
+  };
+  const priorTerminalStage = priorTerminalStageByDashboard[normalizedStage];
+  if (priorTerminalStage) {
+    whereParts.push(
+      `NOT EXISTS (
+        SELECT 1
+          FROM workflow_actions latest_terminal
+         WHERE latest_terminal.id = (
+           SELECT wa_latest.id
+             FROM workflow_actions wa_latest
+            WHERE wa_latest.module_key = 'expenditure'
+              AND wa_latest.record_id = er.id
+            ORDER BY wa_latest.decided_at DESC, wa_latest.id DESC
+            LIMIT 1
+         )
+           AND LOWER(TRIM(latest_terminal.stage)) = ?
+           AND latest_terminal.decision IN ('returned', 'rejected')
+      )`
+    );
+    whereParams.push(priorTerminalStage);
+  }
+
+  const baseWhereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
   const [countRows] = await tx.query(
     `SELECT COUNT(*) AS total
        FROM expenditure_requests er
-       ${whereClause}`,
+       ${baseWhereClause}`,
     whereParams
   );
   const total = Number(countRows?.[0]?.total || 0);
+
+  const [statusCountRows] = await tx.query(
+    `SELECT
+       COUNT(*) AS total,
+       SUM(CASE WHEN status_category = 'pending' THEN 1 ELSE 0 END) AS pending,
+       SUM(CASE WHEN status_category = 'approved' THEN 1 ELSE 0 END) AS approved,
+       SUM(CASE WHEN status_category = 'returned' THEN 1 ELSE 0 END) AS returned,
+       SUM(CASE WHEN status_category = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+       SUM(CASE WHEN status_category = 'archived' THEN 1 ELSE 0 END) AS archived
+     FROM (
+       SELECT
+         CASE
+           WHEN combined_status LIKE '%archive%' THEN 'archived'
+           WHEN combined_status LIKE '%rejected%' THEN 'rejected'
+           WHEN combined_status LIKE '%returned%' OR combined_status LIKE '%return%' THEN 'returned'
+           WHEN (? = 'all' OR workflow_stage = ?) AND workflow_status = 'in_progress' THEN 'pending'
+           WHEN workflow_stage_decision LIKE '%approved%' OR combined_status LIKE '%approved%' OR combined_status LIKE '%completed%' THEN 'approved'
+           ELSE CASE WHEN ? = 'all' THEN 'pending' ELSE 'other' END
+         END AS status_category
+       FROM (
+         SELECT
+           ${WORKFLOW_STATUS_SQL_EXPR} AS workflow_status,
+           ${WORKFLOW_STAGE_SQL_EXPR} AS workflow_stage,
+           COALESCE((
+             SELECT LOWER(TRIM(wa.decision))
+               FROM workflow_actions wa
+              WHERE wa.module_key = 'expenditure'
+                AND wa.record_id = er.id
+                AND (? = 'all' OR LOWER(TRIM(wa.stage)) = ?)
+              ORDER BY wa.decided_at DESC, wa.id DESC
+              LIMIT 1
+           ), '') AS workflow_stage_decision,
+           LOWER(CONCAT_WS(' ',
+             ${WORKFLOW_STATUS_SQL_EXPR},
+             ${WORKFLOW_STAGE_SQL_EXPR},
+             COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+           )) AS combined_status
+         FROM expenditure_requests er
+         ${baseWhereClause}
+       ) scoped_status
+     ) categorized_status`,
+    [statusStageScope, statusStageScope, statusStageScope, statusStageScope, statusStageScope, ...whereParams]
+  );
+
+  const statusCounts = {
+    total: Number(statusCountRows?.[0]?.total || 0),
+    pending: Number(statusCountRows?.[0]?.pending || 0),
+    approved: Number(statusCountRows?.[0]?.approved || 0),
+    returned: Number(statusCountRows?.[0]?.returned || 0),
+    rejected: Number(statusCountRows?.[0]?.rejected || 0),
+    archived: Number(statusCountRows?.[0]?.archived || 0),
+  };
+
+  if (statusCategoryFilter) {
+    whereParts.push(
+      `(CASE
+        WHEN LOWER(CONCAT_WS(' ',
+          ${WORKFLOW_STATUS_SQL_EXPR},
+          ${WORKFLOW_STAGE_SQL_EXPR},
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+        )) LIKE '%archive%' THEN 'archived'
+        WHEN LOWER(CONCAT_WS(' ',
+          ${WORKFLOW_STATUS_SQL_EXPR},
+          ${WORKFLOW_STAGE_SQL_EXPR},
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+        )) LIKE '%rejected%' THEN 'rejected'
+        WHEN LOWER(CONCAT_WS(' ',
+          ${WORKFLOW_STATUS_SQL_EXPR},
+          ${WORKFLOW_STAGE_SQL_EXPR},
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+        )) LIKE '%returned%' OR LOWER(CONCAT_WS(' ',
+          ${WORKFLOW_STATUS_SQL_EXPR},
+          ${WORKFLOW_STAGE_SQL_EXPR},
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+        )) LIKE '%return%' THEN 'returned'
+        WHEN (? = 'all' OR ${WORKFLOW_STAGE_SQL_EXPR} = ?) AND ${WORKFLOW_STATUS_SQL_EXPR} = 'in_progress' THEN 'pending'
+        WHEN COALESCE((
+          SELECT LOWER(TRIM(wa.decision))
+            FROM workflow_actions wa
+           WHERE wa.module_key = 'expenditure'
+             AND wa.record_id = er.id
+             AND (? = 'all' OR LOWER(TRIM(wa.stage)) = ?)
+           ORDER BY wa.decided_at DESC, wa.id DESC
+           LIMIT 1
+        ), '') LIKE '%approved%' OR LOWER(CONCAT_WS(' ',
+          ${WORKFLOW_STATUS_SQL_EXPR},
+          ${WORKFLOW_STAGE_SQL_EXPR},
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+        )) LIKE '%approved%' OR LOWER(CONCAT_WS(' ',
+          ${WORKFLOW_STATUS_SQL_EXPR},
+          ${WORKFLOW_STAGE_SQL_EXPR},
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
+        )) LIKE '%completed%' THEN 'approved'
+        ELSE CASE WHEN ? = 'all' THEN 'pending' ELSE 'other' END
+      END) = ?`
+    );
+    whereParams.push(statusStageScope, statusStageScope, statusStageScope, statusStageScope, statusStageScope, statusCategoryFilter);
+  }
+
+  const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+  const filteredTotal = statusCategoryFilter
+    ? Number(statusCounts[statusCategoryFilter] || 0)
+    : total;
 
   const [rows] = await tx.query(
     `SELECT
@@ -3879,7 +4289,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
      ${whereClause}
      ORDER BY er.created_at DESC
      LIMIT ? OFFSET ?`,
-    [normalizedStage, normalizedStage, ...whereParams, limit, offset]
+    [statusStageScope, statusStageScope, ...whereParams, limit, offset]
   );
 
   return {
@@ -3888,7 +4298,8 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
       workflow_state: normalizeWorkflowState(row.workflow_state),
       level1_route_type: resolveExpenditureLevel1RouteType(row),
     })),
-    total,
+    total: filteredTotal,
+    statusCounts,
     page,
     limit,
   };
