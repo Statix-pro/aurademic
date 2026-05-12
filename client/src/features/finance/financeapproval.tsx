@@ -31,6 +31,54 @@ interface SelectOption {
   label: string;
 }
 
+const FINANCE_CONFLICT_MESSAGE =
+  'Finance request conflicts with approved budget allocation. Please check the budget head amounts and available balance.';
+
+const normalizeErrorMessage = (value: unknown): string =>
+  typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+
+const isGenericConflictMessage = (message: string): boolean => {
+  const normalized = message.toLowerCase();
+  return normalized.includes('page was not displayed') && normalized.includes('conflict');
+};
+
+const getFinanceSubmitErrorMessage = (error: unknown): string => {
+  const candidate = error as {
+    response?: {
+      data?: unknown;
+      status?: number;
+    };
+    message?: string;
+  };
+  const responseData = candidate.response?.data;
+  const statusCode = candidate.response?.status;
+
+  if (typeof responseData === 'string') {
+    const message = normalizeErrorMessage(responseData);
+    if (message) return isGenericConflictMessage(message) ? FINANCE_CONFLICT_MESSAGE : message;
+  }
+
+  if (responseData && typeof responseData === 'object') {
+    const data = responseData as { message?: unknown; error?: unknown };
+    const message = normalizeErrorMessage(data.message);
+    if (message) return isGenericConflictMessage(message) ? FINANCE_CONFLICT_MESSAGE : message;
+
+    const errorMessage = normalizeErrorMessage(data.error);
+    if (errorMessage) return isGenericConflictMessage(errorMessage) ? FINANCE_CONFLICT_MESSAGE : errorMessage;
+  }
+
+  const fallbackMessage = normalizeErrorMessage(candidate.message);
+  if (fallbackMessage) {
+    return isGenericConflictMessage(fallbackMessage) ? FINANCE_CONFLICT_MESSAGE : fallbackMessage;
+  }
+
+  if (statusCode === 409) {
+    return FINANCE_CONFLICT_MESSAGE;
+  }
+
+  return 'Something went wrong while submitting';
+};
+
 interface BudgetRow {
   category: string;
   head: string;
@@ -175,7 +223,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
   },
   {
     label: 'Events & Competitions',
-    options: ['Academic Events', 'Club Activities', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Event', 'Cultural & Celebrations', 'Sports', 'Competitions'],
+    options: ['Academic Events', 'Club Activities', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Events', 'Cultural & Celebrations', 'Sports', 'Competitions'],
   },
   {
     label: 'Meetings & Audits',
@@ -195,7 +243,6 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
       'Student Capacity Building',
       'Ranking & Accreditation',
       'Examination Expenses',
-      'Awards & Recognition',
     ],
   },
   {
@@ -383,12 +430,8 @@ const getHoacGroupForHead = (head: string): string | undefined => {
   return undefined;
 };
 
-const isHeadInSharedHoacGroup = (head: string): boolean =>
-  Boolean(getHoacGroupForHead(String(head || '').trim()));
-
-const shouldUseHeadOnlyAvailabilityMatch = (budgetHead: string, subHead: string): boolean => {
+const shouldUseHeadOnlyAvailabilityMatch = (budgetHead: string, _subHead: string): boolean => {
   const normalizedHead = String(budgetHead || '').trim();
-  void subHead;
   return Boolean(normalizedHead);
 };
 
@@ -632,7 +675,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Association Function',
     'Parents Meeting'
   ],
-  'Outreach Event': [
+  'Outreach Events': [
     'Awareness Program',
     'Campaigns',
     'Crash Course',
@@ -640,7 +683,9 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Mini Marathon',
     'Rally',
     'School Visit',
-    'Summer Internship'
+    'Summer Internship',
+    'Grama Saba Meet',
+    'Orientation Session'
   ],
   'Cultural & Celebrations': [
     'Celebration Day',
@@ -651,18 +696,24 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   'Sports': ['Sports Day', 'Sports Meet'],
 
   'Club Activities': [
-    'Competitions',
     'Flash Mob',
     'Fun Events',
     'Road show',
     'Wall Painting'
   ],
   'Competitions': [
-    'Competitions',
-    'Hackathons',
-    'Ideathon',
-    'Project Expo',
-    'Start-up meet'
+    'Innovation & Startup Competitions',
+    'Academic Competitions',
+    'Technical Competitions',
+    'Cultural Competitions',
+    'Creative Competitions',
+    'Literary Competitions',
+    'Sports Competitions',
+    'Management Competitions',
+    'Online Competitions',
+    'General Competitions',
+    'Project Exhibition',
+    'Science Exhibition'
   ],
 
   'Institutional Governance Meetings': [
@@ -772,17 +823,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Degree Recommendation',
     'CoE Staff Remuneration'
   ],
-  'Awards & Recognition': [
-    'Accommodation',
-    'Registration fee',
-    'Food & Refreshment',
-    'Driver Beta',
-    'Travel Allowance',
-    'Daily Allowance',
-    'Printing',
-    'Stationery',
-    'Others'
-  ],
+
   'Advertisement & Branding': ['Digital Promotion', 'News Paper Advertisement'],
   'Public Relations': [
     'Branding',
@@ -829,7 +870,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Office Expenses',
     'Scholarship Expenses',
     'Stamp Charges',
-    'Testing Charges'
+    'Testing Charges',
+    'Awards & Recognitions'
   ],
   'Licenses & Taxes': [
     'Building Tax',
@@ -1783,15 +1825,10 @@ const FinanceApproval: React.FC = () => {
 
     setBudgetRows((prev) => {
       const updated = [...prev];
-      const previousHead = normalizeText(updated[index]?.category);
       updated[index] = {
         ...updated[index],
         category: selectedHead,
         head: selectedSubHead,
-        amount:
-          selectedHead && selectedHead !== previousHead
-            ? ''
-            : updated[index].amount,
       };
       return updated;
     });
@@ -2329,11 +2366,7 @@ const FinanceApproval: React.FC = () => {
       );
     } catch (error) {
       console.error('Finance submit error:', error);
-      const apiMessage =
-        (error as any)?.response?.data?.message ||
-        (error as any)?.response?.data?.error ||
-        (error as any)?.message;
-      showAlert(apiMessage ? String(apiMessage) : 'Something went wrong while submitting', 'error');
+      showAlert(getFinanceSubmitErrorMessage(error), 'error');
     }
   };
 

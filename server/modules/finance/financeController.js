@@ -269,6 +269,9 @@ const isHandledFinanceDomainError = (error) => {
   ].some((token) => message.includes(token));
 };
 
+const unwrapFinanceModelError = (message = '') =>
+  normalizeText(message).replace(/^Error (creating|updating) finance request:\s*/i, '');
+
 const handleWorkflowError = (res, error, fallbackMessage) => {
   if (error instanceof WorkflowError) {
     return res.status(error.statusCode || 400).json({
@@ -279,9 +282,10 @@ const handleWorkflowError = (res, error, fallbackMessage) => {
   }
 
   if (isHandledFinanceDomainError(error)) {
+    const message = unwrapFinanceModelError(error?.message);
     return res.status(409).json({
       status: 'error',
-      message: error.message || 'Finance request cannot be processed due to budget validation',
+      message: message || 'Finance request cannot be processed due to budget validation',
       code: 'FINANCE_BUDGET_VALIDATION_FAILED',
     });
   }
@@ -1052,7 +1056,7 @@ const financeController = {
   async getFinanceQueue(req, res) {
     try {
       const stage = normalizeText(req.params.stage).toLowerCase();
-      const { page, limit, workflowStatus, statusCategory, level1Role } = req.query;
+      const { page, limit, workflowStatus, statusCategory, level1Role, q, allProposals } = req.query;
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
       const effectiveLevel1Role = stage === 'level1'
         ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
@@ -1070,6 +1074,8 @@ const financeController = {
           workflowStatus,
           statusCategory,
           level1Role: effectiveLevel1Role,
+          q,
+          allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
         },
       });
 

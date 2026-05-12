@@ -22,6 +22,7 @@ import {
   resolveLevel1Route as sharedResolveLevel1Route,
   resolveStageLabel as sharedResolveStageLabel,
   formatApprovalFlowString as sharedFormatApprovalFlowString,
+  getInitialApprovalStage as sharedGetInitialApprovalStage,
   parsePositiveAmount as sharedParsePositiveAmount,
 } from '../shared/budget/budgetUtils.js';
 import * as userResolvers from '../shared/budget/userResolvers.js';
@@ -40,6 +41,7 @@ const WORKFLOW_STAGES = SHARED_WORKFLOW_STAGES;
 const normalizeText = sharedNormalizeText;
 const normalizeEntityName = sharedNormalizeEntityName;
 const parsePositiveAmount = sharedParsePositiveAmount;
+const getInitialApprovalStage = (flow) => sharedGetInitialApprovalStage(flow);
 
 export const normalizeBeneficiaryType = (beneficiaryType) => sharedNormalizeBeneficiaryType(beneficiaryType);
 const BUDGET_PROPOSAL_COLUMN_EXISTS_CACHE = new Map();
@@ -569,7 +571,7 @@ export async function create(payload, options = {}) {
       });
       const normalizedSubmitterRole = normalizeText(options?.submitterRole).toLowerCase();
       const isDirectDoFSubmission = normalizedSubmitterRole === 'dof';
-      const initialStage = flow.requiresLevel1 ? 'level1' : flow.requiresDof ? 'dof' : 'principal';
+      const initialStage = getInitialApprovalStage(flow);
       const createdStatus = isDirectDoFSubmission ? 'completed' : 'submitted';
       const createdCurrentStage = isDirectDoFSubmission ? 'completed' : initialStage;
       const approvalFlowString = formatApprovalFlowString(flow);
@@ -1074,7 +1076,7 @@ export async function update(
       budgetTag: payload.budget_tag,
     });
     const approvalFlowString = formatApprovalFlowString(flow);
-    const initialStage = flow.requiresLevel1 ? 'level1' : flow.requiresDof ? 'dof' : 'principal';
+    const initialStage = getInitialApprovalStage(flow);
     const isReturnedState = proposal.status && proposal.status.endsWith('_returned');
     const nextCurrentStage =
       ['draft', 'submitted'].includes(proposal.status) || isReturnedState

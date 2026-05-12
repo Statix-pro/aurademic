@@ -240,6 +240,19 @@ const normalizeEntityTypeCode = (typeCode) => {
   return normalized || null;
 };
 
+const normalizeHeadLabelForMatch = (value) =>
+  normalizeText(value)
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const shouldUseHeadOnlyAvailabilityMatch = (budgetHead, _subHead = '') => {
+  const normalized = normalizeHeadLabelForMatch(budgetHead);
+  return Boolean(normalized);
+};
+
 const normalizeBudgetRows = (rows = []) => {
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error('At least one budget breakup row is required');
@@ -252,7 +265,7 @@ const normalizeBudgetRows = (rows = []) => {
     const rowNo = index + 1;
     const budgetHead = normalizeText(row?.budget_head || row?.category);
     const subHead = normalizeText(row?.sub_head || row?.head);
-    const headOnlyMatch = Boolean(row?.head_only_match);
+    const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(budgetHead, subHead);
     const parsedAmount = Number(row?.amount);
     const hasAvailableSnapshot =
       row?.available_amount_snapshot !== undefined && row?.available_amount_snapshot !== null;
@@ -530,19 +543,6 @@ const isLooseTextMatch = (leftValue, rightValue) => {
   return leftNormalized === rightNormalized;
 };
 
-const normalizeHeadLabelForMatch = (value) =>
-  normalizeText(value)
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const shouldUseHeadOnlyAvailabilityMatch = (budgetHead) => {
-  const normalized = normalizeHeadLabelForMatch(budgetHead);
-  return Boolean(normalized);
-};
-
 const WORKFLOW_STATUS_SQL_EXPR = `
   COALESCE(
     NULLIF(LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.status')))), ''),
@@ -652,7 +652,7 @@ const buildFinanceSelectSql = ({
         FROM workflow_actions wa
        WHERE wa.module_key = 'finance'
          AND wa.record_id = fr.id
-         AND LOWER(TRIM(wa.stage)) = ?
+         AND (? = 'all' OR LOWER(TRIM(wa.stage)) = ?)
        ORDER BY wa.decided_at DESC, wa.id DESC
        LIMIT 1
     ) AS workflow_stage_decision,
@@ -1075,7 +1075,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   const normalizedSubHead = normalizeSubHeadForLookup(subHead);
   const normalizedPreferredBudgetLineId = toPositiveInt(preferredBudgetLineId);
   const normalizedExcludeFinanceId = toPositiveInt(excludeFinanceId);
-  const applyHeadOnlyMatch = Boolean(headOnlyMatch) || shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead);
+  const applyHeadOnlyMatch = Boolean(headOnlyMatch) || shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead, normalizedSubHead);
   const scope = await resolveBudgetAvailabilityScope(conn, {
     beneficiaryType,
     beneficiaryValue,
@@ -1292,7 +1292,7 @@ const enrichBudgetRowsWithBudgetRefs = async (
     const effectiveLookupBudgetHead = row.budget_head || normalizedLookupBudgetHead;
     const effectiveLookupSubHead = normalizeSubHeadForLookup(row.sub_head) || normalizedLookupSubHead;
     const applyHeadOnlyMatch =
-      Boolean(row.head_only_match) || shouldUseHeadOnlyAvailabilityMatch(effectiveLookupBudgetHead);
+      Boolean(row.head_only_match) || shouldUseHeadOnlyAvailabilityMatch(effectiveLookupBudgetHead, effectiveLookupSubHead);
 
     const availability = await resolveBudgetAvailabilityForUser(conn, {
       userId,
@@ -2636,7 +2636,7 @@ const financeModel = {
          WHERE fr.id = ?
            AND ${FINANCE_NOT_DELETED_CONDITION_SQL}
          LIMIT 1`,
-        ['', id]
+        ['', '', id]
       );
 
       if (!rows.length) return null;
@@ -2659,7 +2659,7 @@ const financeModel = {
     try {
       const financeSelectSql = await getFinanceSelectSql();
       let query = `${financeSelectSql} WHERE 1 = 1`;
-      const params = [''];
+      const params = ['', ''];
 
       query += ` AND ${FINANCE_NOT_DELETED_CONDITION_SQL}`;
 
@@ -3487,11 +3487,14 @@ const financeModel = {
     const normalizedStage = normalizeText(stage).toLowerCase();
     const workflowStatus = normalizeText(filters.workflowStatus).toLowerCase() || 'in_progress';
     const isSuperAdmin = Boolean(filters.isSuperAdmin);
+    const isAllProposals = isSuperAdmin && Boolean(filters.allProposals);
+    const statusStageScope = isAllProposals ? 'all' : normalizedStage;
     const level1Role = normalizeText(filters.level1Role).toLowerCase();
     const requestedStatusCategory = normalizeText(filters.statusCategory).toLowerCase();
     const statusCategoryFilter = ['pending', 'approved', 'returned', 'rejected', 'archived'].includes(requestedStatusCategory)
       ? requestedStatusCategory
       : '';
+    const searchTerm = normalizeText(filters.q || filters.search);
 
     const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
     const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
@@ -3503,7 +3506,7 @@ const financeModel = {
     whereParts.push(FINANCE_NOT_DELETED_CONDITION_SQL);
 
     if (workflowStatus === 'all') {
-      if (isSuperAdmin) {
+      if (isAllProposals) {
         whereParts.push('1 = 1');
       } else {
         whereParts.push(
@@ -3556,6 +3559,54 @@ const financeModel = {
       }
     }
 
+    if (searchTerm) {
+      const searchLike = `%${searchTerm}%`;
+      whereParts.push(
+        `(
+          CAST(fr.id AS CHAR) LIKE ?
+          OR EXISTS (
+            SELECT 1
+              FROM finance_request_refs frr_search
+             WHERE frr_search.finance_request_id = fr.id
+               AND LOWER(COALESCE(frr_search.request_ref, '')) LIKE LOWER(?)
+          )
+          OR LOWER(CONCAT('#F-', YEAR(COALESCE(fr.request_date, fr.created_at)), '-', LPAD(fr.id, 4, '0'))) LIKE LOWER(?)
+          OR LOWER(CONCAT('F-', YEAR(COALESCE(fr.request_date, fr.created_at)), '-', LPAD(fr.id, 4, '0'))) LIKE LOWER(?)
+          OR LOWER(COALESCE(fr.applicant_name, '')) LIKE LOWER(?)
+          OR EXISTS (
+            SELECT 1
+              FROM master_employees e_search
+             WHERE e_search.id = fr.employee_id
+               AND LOWER(CONCAT_WS(' ',
+                 e_search.title,
+                 e_search.first_name,
+                 e_search.last_name,
+                 e_search.erp_id,
+                 e_search.email
+               )) LIKE LOWER(?)
+          )
+          OR LOWER(COALESCE(fr.beneficiary_type, '')) LIKE LOWER(?)
+          OR LOWER(COALESCE(fr.beneficiary_value, '')) LIKE LOWER(?)
+          OR LOWER(COALESCE(fr.primary_head, '')) LIKE LOWER(?)
+          OR LOWER(COALESCE(fr.event_sub_head, '')) LIKE LOWER(?)
+          OR LOWER(COALESCE(fr.description, '')) LIKE LOWER(?)
+        )`
+      );
+      whereParams.push(
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike,
+        searchLike
+      );
+    }
+
     const priorTerminalStageByDashboard = {
       principal: 'dof',
       chairman: 'principal',
@@ -3606,9 +3657,12 @@ const financeModel = {
              WHEN combined_status LIKE '%archive%' THEN 'archived'
              WHEN combined_status LIKE '%rejected%' THEN 'rejected'
              WHEN combined_status LIKE '%returned%' OR combined_status LIKE '%return%' THEN 'returned'
-             WHEN workflow_stage = ? AND workflow_status = 'in_progress' THEN 'pending'
+             WHEN (? = 'all' OR workflow_stage = ?)
+               AND workflow_stage IN ('level1', 'dof', 'principal', 'chairman')
+               AND workflow_status NOT IN ('completed', 'rejected', 'returned', 'archived', 'deleted')
+               THEN 'pending'
              WHEN workflow_stage_decision LIKE '%approved%' OR combined_status LIKE '%approved%' OR combined_status LIKE '%completed%' THEN 'approved'
-             ELSE 'pending'
+             ELSE CASE WHEN ? = 'all' THEN 'pending' ELSE 'other' END
            END AS status_category
          FROM (
            SELECT
@@ -3619,7 +3673,7 @@ const financeModel = {
                  FROM workflow_actions wa
                 WHERE wa.module_key = 'finance'
                   AND wa.record_id = fr.id
-                  AND LOWER(TRIM(wa.stage)) = ?
+                  AND (? = 'all' OR LOWER(TRIM(wa.stage)) = ?)
                 ORDER BY wa.decided_at DESC, wa.id DESC
                 LIMIT 1
              ), '') AS workflow_stage_decision,
@@ -3632,7 +3686,7 @@ const financeModel = {
            ${baseWhereClause}
          ) scoped_status
        ) categorized_status`,
-      [normalizedStage, normalizedStage, ...whereParams]
+      [statusStageScope, statusStageScope, statusStageScope, statusStageScope, statusStageScope, ...whereParams]
     );
 
     const statusCounts = {
@@ -3666,13 +3720,16 @@ const financeModel = {
             ${WORKFLOW_STAGE_SQL_EXPR},
             COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.lastDecision')), '')
           )) LIKE '%return%' THEN 'returned'
-          WHEN ${WORKFLOW_STAGE_SQL_EXPR} = ? AND ${WORKFLOW_STATUS_SQL_EXPR} = 'in_progress' THEN 'pending'
+          WHEN (? = 'all' OR ${WORKFLOW_STAGE_SQL_EXPR} = ?)
+            AND ${WORKFLOW_STAGE_SQL_EXPR} IN ('level1', 'dof', 'principal', 'chairman')
+            AND ${WORKFLOW_STATUS_SQL_EXPR} NOT IN ('completed', 'rejected', 'returned', 'archived', 'deleted')
+            THEN 'pending'
           WHEN COALESCE((
             SELECT LOWER(TRIM(wa.decision))
               FROM workflow_actions wa
              WHERE wa.module_key = 'finance'
                AND wa.record_id = fr.id
-               AND LOWER(TRIM(wa.stage)) = ?
+               AND (? = 'all' OR LOWER(TRIM(wa.stage)) = ?)
              ORDER BY wa.decided_at DESC, wa.id DESC
              LIMIT 1
           ), '') LIKE '%approved%' OR LOWER(CONCAT_WS(' ',
@@ -3684,10 +3741,10 @@ const financeModel = {
             ${WORKFLOW_STAGE_SQL_EXPR},
             COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.lastDecision')), '')
           )) LIKE '%completed%' THEN 'approved'
-          ELSE 'pending'
+          ELSE CASE WHEN ? = 'all' THEN 'pending' ELSE 'other' END
         END) = ?`
       );
-      whereParams.push(normalizedStage, normalizedStage, statusCategoryFilter);
+      whereParams.push(statusStageScope, statusStageScope, statusStageScope, statusStageScope, statusStageScope, statusCategoryFilter);
     }
 
     const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
@@ -3701,7 +3758,7 @@ const financeModel = {
        ${whereClause}
        ORDER BY fr.created_at DESC
        LIMIT ? OFFSET ?`,
-      [normalizedStage, ...whereParams, limit, offset]
+      [statusStageScope, statusStageScope, ...whereParams, limit, offset]
     );
     const financeIds = rows.map((row) => row.id);
     const principalDocuments = await getFinancePrincipalDocumentsByFinanceIds(financeIds, { tx });

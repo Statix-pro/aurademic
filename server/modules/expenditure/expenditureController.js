@@ -144,6 +144,9 @@ const resolveActor = (req) => {
 const sendError = (res, status, message) =>
   res.status(status).json({ status: 'error', message });
 
+const unwrapTransactionMessage = (message = '') =>
+  normalizeText(message).replace(/^Transaction failed:\s*/i, '');
+
 const handleError = (res, err, fallback) => {
   if (err instanceof WorkflowError) {
     return res.status(err.statusCode || 400).json({
@@ -272,6 +275,9 @@ const isDomainValidationError = (message = '') =>
   [
     'not found',
     'not yet approved',
+    'not approved',
+    'Payee must be selected from approved suggestions',
+    'New payees require DoF approval',
     'exceeds',
     'required',
     'Invalid request type',
@@ -280,9 +286,14 @@ const isDomainValidationError = (message = '') =>
     'cannot be created',
     'outstanding advance',
     'Create a new row',
-  ].some(
-    (fragment) => message.includes(fragment),
-  );
+  ].some((fragment) => unwrapTransactionMessage(message).includes(fragment));
+
+const sendDomainValidationError = (res, err) => {
+  const message = unwrapTransactionMessage(err?.message);
+  if (!isDomainValidationError(message)) return false;
+  sendError(res, 400, message);
+  return true;
+};
 
 const resolveBulkNeftTemplatePath = () => {
   if (fs.existsSync(BULK_NEFT_TEMPLATE_PATH)) return BULK_NEFT_TEMPLATE_PATH;
@@ -634,7 +645,7 @@ const expenditureController = {
         data: result,
       });
     } catch (err) {
-      if (isDomainValidationError(err.message)) return sendError(res, 400, err.message);
+      if (sendDomainValidationError(res, err)) return;
       return handleError(res, err, 'Error submitting advance request');
     }
   },
@@ -699,7 +710,7 @@ const uploads = {
         data: result,
       });
     } catch (err) {
-      if (isDomainValidationError(err.message)) return sendError(res, 400, err.message);
+      if (sendDomainValidationError(res, err)) return;
       return handleError(res, err, 'Error submitting expenditure request');
     }
   },
@@ -788,6 +799,20 @@ const uploads = {
       const workflowStatus = normalizeText(workflowState?.status || record.workflow_status || record.overall_status).toLowerCase();
       const currentStage = normalizeText(workflowState?.currentStage || record.workflow_stage).toLowerCase();
       const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(workflowStatus);
+      const requestBody = req.body || {};
+      const paymentUpdateKeys = new Set([
+        'payment_status',
+        'payment_date',
+        'payment_ref_no',
+        'payment_mode',
+        'payment_debit_account',
+      ]);
+      const bodyKeys = Object.keys(requestBody).filter((key) => requestBody[key] !== undefined);
+      const isPaymentOnlyUpdate =
+        bodyKeys.length > 0 && bodyKeys.every((key) => paymentUpdateKeys.has(key));
+      const isFinalApprovedWorkflow =
+        ['approved', 'completed'].includes(workflowStatus) ||
+        normalizeText(record.overall_status).toLowerCase() === 'approved';
 
       if (!isOwner && !isWorkflowEditor) return sendError(res, 403, 'Access denied');
 
@@ -797,7 +822,11 @@ const uploads = {
         workflowStatus === 'submitted' ||
         currentStage === 'level1';
 
-      if (isOwner && !isApplicantEditable) {
+      if (
+        isOwner &&
+        !isApplicantEditable &&
+        !(isPaymentOnlyUpdate && isFinalApprovedWorkflow)
+      ) {
         return sendError(res, 403, 'This request is not editable in current workflow state');
       }
 
@@ -867,6 +896,7 @@ const uploads = {
         data: { affectedRows: result.affectedRows },
       });
     } catch (err) {
+      if (sendDomainValidationError(res, err)) return;
       return handleError(res, err, 'Error updating expenditure request');
     }
   },
@@ -948,7 +978,7 @@ const uploads = {
   async getExpenditureQueue(req, res) {
     try {
       const stage = normalizeText(req.params.stage).toLowerCase();
-      const { page, limit, workflowStatus, level1Role } = req.query;
+      const { page, limit, workflowStatus, statusCategory, level1Role, q, allProposals } = req.query;
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
       const effectiveLevel1Role = stage === 'level1'
         ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
@@ -964,7 +994,10 @@ const uploads = {
           page,
           limit,
           workflowStatus,
+          statusCategory,
           level1Role: effectiveLevel1Role,
+          q,
+          allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
         },
       });
 
@@ -975,6 +1008,7 @@ const uploads = {
           total: queue.total,
           page: queue.page,
           limit: queue.limit,
+          statusCounts: queue.statusCounts,
         },
       });
     } catch (err) {
@@ -1028,14 +1062,37 @@ const uploads = {
             },
           },
         });
+
+        const reachedPrincipalAfterDofApproval =
+          result?.stage === 'dof' &&
+          result?.decision === 'approved' &&
+          normalizeText(result?.currentState?.currentStage).toLowerCase() === 'principal';
+
+        if (reachedPrincipalAfterDofApproval) {
+          const autoPrincipalResult = await expenditureModel.autoApprovePrincipalWorkflowStage(
+            expenditureId,
+            { actor }
+          );
+
+          if (autoPrincipalResult?.autoApproved) {
+            result = {
+              ...result,
+              currentState: autoPrincipalResult.currentState,
+              autoApprovedStages: ['principal'],
+            };
+          }
+        }
       }
 
       return res.status(200).json({
         status: 'success',
-        message: `Workflow ${result.decision} at stage ${result.stage}`,
+        message: result.autoApprovedStages?.includes('principal')
+          ? 'Workflow approved at stage dof; principal auto-approved'
+          : `Workflow ${result.decision} at stage ${result.stage}`,
         data: {
           previousState: result.previousState,
           currentState: result.currentState,
+          autoApprovedStages: result.autoApprovedStages || [],
         },
       });
     } catch (err) {

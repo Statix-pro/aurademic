@@ -90,7 +90,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
   },
   {
     label: 'Events & Competitions',
-    options: ['Academic Events', 'Club Activities', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Event', 'Cultural & Celebrations', 'Sports', 'Competitions'],
+    options: ['Academic Events', 'Club Activities', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Events', 'Cultural & Celebrations', 'Sports', 'Competitions'],
   },
   {
     label: 'Meetings & Audits',
@@ -101,7 +101,7 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
   {
     label: 'Academics',
     options: [
-      'Faculty Empowerment', 'Staff Empowerment', 'Student Empowerment', 'Student Capacity Building', 'Ranking & Accreditation', 'Examination Expenses', 'Awards & Recognition',
+      'Faculty Empowerment', 'Staff Empowerment', 'Student Empowerment', 'Student Capacity Building', 'Ranking & Accreditation', 'Examination Expenses',
     ],
   },
   {
@@ -348,7 +348,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Association Function',
     'Parents Meeting'
   ],
-  'Outreach Event': [
+  'Outreach Events': [
     'Awareness Program',
     'Campaigns',
     'Crash Course',
@@ -356,7 +356,9 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Mini Marathon',
     'Rally',
     'School Visit',
-    'Summer Internship'
+    'Summer Internship',
+    'Grama Saba Meet',
+    'Orientation Session'
   ],
   'Cultural & Celebrations': [
     'Celebration Day',
@@ -366,18 +368,24 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   ],
   'Sports': ['Sports Day', 'Sports Meet'],
   'Club Activities': [
-    'Competitions',
     'Flash Mob',
     'Fun Events',
     'Road show',
     'Wall Painting'
   ],
   'Competitions': [
-    'Competitions',
-    'Hackathons',
-    'Ideathon',
-    'Project Expo',
-    'Start-up meet'
+    'Innovation & Startup Competitions',
+    'Academic Competitions',
+    'Technical Competitions',
+    'Cultural Competitions',
+    'Creative Competitions',
+    'Literary Competitions',
+    'Sports Competitions',
+    'Management Competitions',
+    'Online Competitions',
+    'General Competitions',
+    'Project Exhibition',
+    'Science Exhibition'
   ],
 
   'Institutional Governance Meetings': [
@@ -489,17 +497,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Degree Recommendation',
     'CoE Staff Remuneration'
   ],
-  'Awards & Recognition': [
-    'Accommodation',
-    'Registration fee',
-    'Food & Refreshment',
-    'Driver Beta',
-    'Travel Allowance',
-    'Daily Allowance',
-    'Printing',
-    'Stationery',
-    'Others'
-  ],
+
   'Advertisement & Branding': ['Digital Promotion', 'News Paper Advertisement'],
   'Public Relations': [
     'Branding',
@@ -546,7 +544,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Office Expenses',
     'Scholarship Expenses',
     'Stamp Charges',
-    'Testing Charges'
+    'Testing Charges',
+    'Awards & Recognitions'
   ],
   'Licenses & Taxes': [
     'Building Tax',
@@ -690,7 +689,7 @@ const guidelineDeptData: Record<Exclude<GuidelineSectionId, "skill" | "events" |
   departmentEvents: ["Webinar", "Guest Lecture", "Hands-on Training", "Conclave", "Convention", "Networking Event", "Industry Interaction"],
   assoc: ["Association Function", "Alumni Meeting", "Alumni Interaction", "Parents Meeting"],
   outreach: ["School Visit", "Awareness Program", "Campaigns", "Crash Course", "Summer Internship", "Mini Marathon", "Education Fair", "Rally"],
-  academics: ["DAB Meeting", "BoS Meeting", "Printing", "Awards & Recognition"],
+  academics: ["DAB Meeting", "BoS Meeting", "Printing"],
   office: ["Stationery", "Test Notes", "Printing"],
   student: ["Skill Development Training", "Aptitude Training", "Higher Education Coaching", "Competitive Exam Coaching", "Placement Training", "Placement Drives", "One Credit Course", "Value Added Course", "Certification Programs", "Exposure Visit", "Language Proficiency Courses"],
 };
