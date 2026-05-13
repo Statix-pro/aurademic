@@ -4,11 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import expenditureController from './expenditureController.js';
 import * as expenditureModel from './expenditureModel.js';
-import {
-  authMiddleware,
-  authorizationSnapshotMiddleware,
-  permissionMiddleware,
-} from '../../middleware/authMiddleware.js';
+import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
 
 
 const router = express.Router();
@@ -54,13 +50,11 @@ const expenditureUpload = multer({
     return cb(new Error('Bulk NEFT upload only accepts .xlsx or .xls files'));
   }
   if (file.fieldname === 'bill_files') {
-    const allowed = ['.pdf', '.png', '.jpg', '.jpeg'];
-
-    if (allowed.includes(extension)) {
+    if (extension === '.pdf') {
       return cb(null, true);
     }
 
-    return cb(new Error('Bill files only accept .pdf, .png, .jpg, .jpeg'));
+    return cb(new Error('Bill files only accept .pdf'));
   }
   return cb(new Error('Invalid file field'));
 },
@@ -68,27 +62,9 @@ const expenditureUpload = multer({
 
 const EXPENDITURE_WORKFLOW_PERMISSIONS = [
   'expenditure.workflow.*',
-  'finance.workflow.*',
 ];
-const EXPENDITURE_DOF_PERMISSIONS = ['expenditure.workflow.dof', 'finance.workflow.dof'];
 
 const canAccessExpenditureWorkflow = permissionMiddleware(EXPENDITURE_WORKFLOW_PERMISSIONS);
-const canAccessExpenditureDofQueue = permissionMiddleware(EXPENDITURE_DOF_PERMISSIONS);
-const canAccessPayeeApprovalQueue = (req, res, next) => {
-  const roles = Array.isArray(req.user?.roles)
-    ? req.user.roles
-    : (req.user?.roles ? [req.user.roles] : (req.user?.role ? [req.user.role] : []));
-  const normalizedRoles = roles.map((role) => String(role || '').trim().toLowerCase());
-  const hasQueueRole = normalizedRoles.some((role) =>
-    ['dof', 'super_admin'].includes(role)
-  );
-
-  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || hasQueueRole) {
-    return next();
-  }
-
-  return canAccessExpenditureDofQueue(req, res, next);
-};
 const canAccessExpenditureWorkflowForAdmins = (req, res, next) => {
   const roles = Array.isArray(req.user?.roles)
     ? req.user.roles
@@ -153,11 +129,10 @@ router.get('/advance-summary', expenditureController.getAdvanceSummary);
 
 router.get('/payees', expenditureController.listPayees);
 router.post('/payees', expenditureController.createPayee);
-router.get('/payees/pending', canAccessPayeeApprovalQueue, expenditureController.listPendingPayees);
-router.patch('/payees/:id', canAccessPayeeApprovalQueue, expenditureController.updatePayee);
-router.patch('/payees/:id/approval', canAccessPayeeApprovalQueue, expenditureController.approvePayee);
-router.delete('/payees/:id', canAccessPayeeApprovalQueue, expenditureController.deletePayee);
 router.get('/payees/:id', expenditureController.getPayee);
+router.patch('/payees/:id', canAccessExpenditureWorkflowForAdmins, expenditureController.updatePayee);
+router.patch('/payees/:id/approval', canAccessExpenditureWorkflowForAdmins, expenditureController.updatePayeeApproval);
+router.delete('/payees/:id', canAccessExpenditureWorkflowForAdmins, expenditureController.deletePayee);
 
 router.get('/', expenditureController.listExpenditures);
 router.get('/workflow/meta', canAccessExpenditureWorkflowForAdmins, expenditureController.getWorkflowMeta);
@@ -165,27 +140,25 @@ router.get('/queue/:stage', canAccessExpenditureWorkflowForAdmins, expenditureCo
 router.patch('/:id/approval', canAccessExpenditureWorkflowForAdmins, expenditureController.approveExpenditureWorkflow);
 router.patch('/:id/archive-toggle', canAccessExpenditureWorkflowForAdmins, expenditureController.toggleArchiveStatus);
 router.post('/:id/resubmit', expenditureController.resubmitExpenditureRequest);
-router.get('/:id/status-updates', authorizationSnapshotMiddleware, expenditureController.getStatusUpdates);
+router.get('/:id/status-updates', expenditureController.getStatusUpdates);
 
-router.get('/:id', authorizationSnapshotMiddleware, expenditureController.getExpenditure);
-router.get('/:id/timeline', authorizationSnapshotMiddleware, expenditureController.getExpenditureWorkflowTimeline);
+router.get('/:id', expenditureController.getExpenditure);
+router.get('/:id/timeline', expenditureController.getExpenditureWorkflowTimeline);
 
 router.post(
   '/',
   expenditureUpload.fields([
     { name: 'bulk_neft_file', maxCount: 1 },
-    { name: 'bill_files', maxCount: 20 },
+    { name: 'bill_files', maxCount: 1 },
   ]),
   expenditureController.createExpenditureRequest,
 );
 
-router.post('/advance', expenditureController.createAdvance);
-router.put(
+router.post('/advance', expenditureController.createAdvance);router.put(
   '/:id',
-  authorizationSnapshotMiddleware,
   expenditureUpload.fields([
     { name: 'bulk_neft_file', maxCount: 1 },
-    { name: 'bill_files', maxCount: 20 },
+    { name: 'bill_files', maxCount: 1 },
   ]),
   expenditureController.updateExpenditure,
 );

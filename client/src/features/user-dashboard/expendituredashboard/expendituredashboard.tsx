@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import "./expendituredashboard.css";
+import AddPayeeModal, { AddPayeeModalPayee } from '../../../shared/components/AddPayeeModal';
 import {
   Eye,
   Edit2,
@@ -8,13 +9,16 @@ import {
   ChevronDown,
   Plus,
   Search,
+  XCircle,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { Button, Modal } from "react-bootstrap";
 
 interface ExpenditureItem {
   id: number;
   financeid?: number;
   proposalref?: string;
+  requestref?: string;
   applicantname: string;
   beneficiarytype: string;
   primaryhead: string;
@@ -27,6 +31,16 @@ interface ExpenditureItem {
 }
 
 type WorkflowModule = "Advance" | "Settlement" | "Expenditure";
+
+interface ExpenditureDialogConfig {
+  show: boolean;
+  title: string;
+  message: React.ReactNode;
+  variant?: "info" | "warning" | "danger";
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm?: () => void | Promise<void>;
+}
 
 interface DashboardReturnState {
   dashboardRowId?: string;
@@ -51,6 +65,7 @@ interface ExpenditureProposalCard {
   financeRequestId: string;
   proposalId: string;
   applicantName: string;
+  beneficiaryName: string;
   tag: string;
   totalAmount: number;
   expenditureAmount: number;
@@ -64,6 +79,8 @@ interface ExpenditureDashboardCardApi {
   request_ref?: string;
   applicantname?: string;
   applicant_name?: string;
+  beneficiaryname?: string;
+  beneficiary_name?: string;
   financetag?: string;
   finance_tag?: string;
   approvedamount?: number;
@@ -74,24 +91,6 @@ interface ExpenditureDashboardCardApi {
   balance_amount?: number;
 }
 
-interface PayeeDraft {
-  beneficiaryType: "individual" | "organization";
-  payeeName: string;
-  accountName: string;
-  panNumber: string;
-  accountNo: string;
-  accountType: string;
-  bankName: string;
-  branchName: string;
-  ifsc: string;
-  beneficiaryOrg: string;
-  organizationType: string;
-  msme: string;
-  gstin: string;
-  tdsDetails: string;
-  tdsSection: string;
-}
-
 interface WorkflowRow {
   id: string;
   requestId?: number | null;
@@ -99,6 +98,10 @@ interface WorkflowRow {
   advanceRequestId2?: number | null; // For second advance
   expenditureRequestId?: number | null;
   settlementRequestId?: number | null;
+  advanceRequestRef?: string;
+  advanceRequestRef2?: string;
+  expenditureRequestRef?: string;
+  settlementRequestRef?: string;
   rowIndex: number;
   baseRowRef: string;
   advanceRef: string;
@@ -142,24 +145,10 @@ const getRunningFYStart = () => {
 };
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
+const normalizeSearchText = (value: unknown) => normalizeText(value).toLowerCase();
+const normalizeCompactSearchText = (value: unknown) =>
+  normalizeSearchText(value).replace(/[^a-z0-9]/g, "");
 
-const createEmptyPayeeDraft = (): PayeeDraft => ({
-  beneficiaryType: "individual",
-  payeeName: "",
-  accountName: "",
-  panNumber: "",
-  accountNo: "",
-  accountType: "",
-  bankName: "",
-  branchName: "",
-  ifsc: "",
-  beneficiaryOrg: "",
-  organizationType: "",
-  msme: "",
-  gstin: "",
-  tdsDetails: "",
-  tdsSection: "",
-});
 
 const resolveCanonicalPayeeName = (payeeName: string, accountName: string) => {
   const normalizedPayeeName = normalizeText(payeeName);
@@ -175,19 +164,19 @@ const normalizeModule = (value: unknown): WorkflowModule | null => {
   return null;
 };
 
-  const normalizeStatus = (value: unknown) => normalizeText(value).toLowerCase() || "pending";
+const normalizeStatus = (value: unknown) => normalizeText(value).toLowerCase() || "pending";
 
 const parseWorkflowState = (value: unknown): Record<string, unknown> | null => {
-    if (!value) return null;
-    if (typeof value === "object" && !Array.isArray(value)) {
-      return value as Record<string, unknown>;
-    }
+  if (!value) return null;
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
 
-    try {
-      const parsed = JSON.parse(String(value));
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
-    } catch {
-      return null;
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
   }
 };
 
@@ -195,9 +184,9 @@ const getRequestWorkflowStatus = (req: ExpenditureItem) => {
   const workflowState = parseWorkflowState(req.workflow_state);
   return normalizeStatus(
     workflowState?.status ??
-      workflowState?.workflowStatus ??
-      workflowState?.overallStatus ??
-      req.overallstatus,
+    workflowState?.workflowStatus ??
+    workflowState?.overallStatus ??
+    req.overallstatus,
   );
 };
 
@@ -206,15 +195,15 @@ const getRequestWorkflowState = (req: ExpenditureItem) => parseWorkflowState(req
 const getWorkflowApprovalLabel = (workflowState: Record<string, unknown> | null | undefined) => {
   const status = normalizeStatus(
     workflowState?.status ??
-      workflowState?.workflowStatus ??
-      workflowState?.overallStatus ??
-      "",
+    workflowState?.workflowStatus ??
+    workflowState?.overallStatus ??
+    "",
   );
   const lastDecision = normalizeText(workflowState?.lastDecision ?? "").toLowerCase();
   const currentStage = normalizeText(
     workflowState?.currentStage ??
-      workflowState?.workflowStage ??
-      "",
+    workflowState?.workflowStage ??
+    "",
   ).toLowerCase();
 
   if (lastDecision === "resubmitted") return "Resubmitted";
@@ -222,12 +211,18 @@ const getWorkflowApprovalLabel = (workflowState: Record<string, unknown> | null 
   if (status === "rejected") return "Rejected";
   if (status === "returned") return "Returned";
   if (status === "principal_approved") return "Approved";
-  if (status === "dof_approved") return "Pending Principal Approval";
-  if (status === "hod_approved" || status === "level1_approved") return "Pending DoF Approval";
-  if (currentStage === "level1" || currentStage === "hod") return "Pending HOD Approval";
-  if (currentStage === "dof") return "Pending DoF Approval";
-  if (currentStage === "principal") return "Pending Principal Approval";
-  return "Pending HOD Approval";
+  if (
+    status === "dof_approved" ||
+    status === "hod_approved" ||
+    status === "level1_approved" ||
+    currentStage === "level1" ||
+    currentStage === "hod" ||
+    currentStage === "dof" ||
+    currentStage === "principal"
+  ) {
+    return "Pending";
+  }
+  return "Pending";
 };
 
 const getWorkflowApprovalStageState = (
@@ -236,14 +231,14 @@ const getWorkflowApprovalStageState = (
 ) => {
   const status = normalizeStatus(
     workflowState?.status ??
-      workflowState?.workflowStatus ??
-      workflowState?.overallStatus ??
-      "",
+    workflowState?.workflowStatus ??
+    workflowState?.overallStatus ??
+    "",
   );
   const currentStage = normalizeText(
     workflowState?.currentStage ??
-      workflowState?.workflowStage ??
-      "",
+    workflowState?.workflowStage ??
+    "",
   ).toLowerCase();
   const normalizedCurrentStage =
     currentStage === "level1" ? "hod" : currentStage;
@@ -259,16 +254,16 @@ const getWorkflowApprovalStageState = (
 };
 
 const getRowKey = (req: ExpenditureItem) => {
-    const state = parseWorkflowState(req.workflow_state);
-    const direct = normalizeText(
-      state?.dashboardRowId ??
-      state?.workflowrowref ??
-      state?.rowReferenceId ??
-      state?.rowIndex ??
-      ""
-    );
+  const state = parseWorkflowState(req.workflow_state);
+  const direct = normalizeText(
+    state?.dashboardRowId ??
+    state?.workflowrowref ??
+    state?.rowReferenceId ??
+    state?.rowIndex ??
+    ""
+  );
 
-    if (direct) return direct;
+  if (direct) return direct;
   return `finance-${normalizeText(req.financeid ?? "")}-request-${normalizeText(req.id ?? "")}`;
 };
 
@@ -283,6 +278,54 @@ const getNextWorkflowRowIndex = (rows: WorkflowRow[]): number => {
   return maxIndex + 1;
 };
 
+const normalizeFinanceRequestRefBase = (value: unknown, financeRequestId: unknown) => {
+  const text = normalizeText(value);
+  const structuredMatch = text.match(/^#?F[-_](\d{4})[-_](\d+)$/i);
+  if (structuredMatch) {
+    return `#F-${structuredMatch[1]}-${structuredMatch[2].padStart(4, "0")}`;
+  }
+
+  const fallbackYear = text.match(/(20\d{2})/)?.[1] ?? String(new Date().getFullYear());
+  const fallbackSequence = String(financeRequestId ?? "")
+    .replace(/\D/g, "")
+    .padStart(4, "0");
+
+  return `#F-${fallbackYear}-${fallbackSequence || "0000"}`;
+};
+
+const getFinanceRefSequence = (financeBaseRef: string) => {
+  const structuredMatch = normalizeText(financeBaseRef).match(/^#?F[-_]\d{4}[-_](\d+)$/i);
+  return structuredMatch?.[1]?.padStart(4, "0") ?? "";
+};
+
+const getWorkflowRequestDisplayCode = (value: unknown) => {
+  const ref = normalizeText(value);
+  if (!ref) return "";
+
+  const rowStepCode = ref.match(/([A-Z]+\d+)$/i)?.[1];
+  if (rowStepCode) return rowStepCode.toUpperCase();
+
+  const matchedCode = ref.match(/(A\d{3}|S\d{3}|E\d{3})$/i)?.[1];
+  if (matchedCode) return matchedCode.toUpperCase();
+
+  const trailingSegment = ref.split(/[_-]/).filter(Boolean).pop() ?? ref;
+  return trailingSegment.toUpperCase();
+};
+
+const buildWorkflowRequestRefMap = (requests: ExpenditureItem[]) => {
+  const refs = new Map<number, string>();
+
+  requests.forEach((request) => {
+    const requestId = Number(request.id);
+    const backendRequestRef = normalizeText(request.requestref);
+    if (Number.isFinite(requestId) && requestId > 0 && backendRequestRef) {
+      refs.set(requestId, backendRequestRef);
+    }
+  });
+
+  return refs;
+};
+
 const ExpenditureDashboard: React.FC = () => {
   const [data, setData] = useState<ExpenditureItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -295,35 +338,31 @@ const ExpenditureDashboard: React.FC = () => {
   >({});
   const [financeIdQuery, setFinanceIdQuery] = useState<string>("");
   const [financialYear, setFinancialYear] = useState<string>(getDefaultFilterFY());
+  const [selectedBeneficiary, setSelectedBeneficiary] = useState<string>("all");
   const [proposalCards, setProposalCards] = useState<ExpenditureProposalCard[]>([]);
   const [cardRows, setCardRows] = useState<Record<string, WorkflowRow[]>>({});
+  const [dialogConfig, setDialogConfig] = useState<ExpenditureDialogConfig>({
+    show: false,
+    title: "",
+    message: "",
+  });
   const [showAddPayeeModal, setShowAddPayeeModal] = useState(false);
-  const [payeeDraft, setPayeeDraft] = useState<PayeeDraft>(() => createEmptyPayeeDraft());
   const [isSubmittingPayee, setIsSubmittingPayee] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
   const dashboardState = (location.state as DashboardReturnState | null) ?? null;
 
-  const updatePayeeDraft = <K extends keyof PayeeDraft>(key: K, value: PayeeDraft[K]) => {
-    setPayeeDraft((prev) => ({ ...prev, [key]: value }));
-  };
 
-  const closeAddPayeeModal = () => {
-    if (isSubmittingPayee) return;
-    setShowAddPayeeModal(false);
-    setPayeeDraft(createEmptyPayeeDraft());
-  };
-
-  const submitPayeeForApproval = async () => {
-    const canonicalPayeeName = resolveCanonicalPayeeName(payeeDraft.payeeName, payeeDraft.accountName);
+  const submitPayeeForApproval = async (payee: AddPayeeModalPayee) => {
+    const canonicalPayeeName = resolveCanonicalPayeeName(payee.payeeName, payee.accountName);
 
     if (
       !canonicalPayeeName ||
-      !normalizeText(payeeDraft.accountNo) ||
-      !normalizeText(payeeDraft.ifsc) ||
-      !normalizeText(payeeDraft.bankName) ||
-      !normalizeText(payeeDraft.branchName)
+      !normalizeText(payee.accountNo) ||
+      !normalizeText(payee.ifsc) ||
+      !normalizeText(payee.bankName) ||
+      !normalizeText(payee.branchName)
     ) {
       window.alert("Please enter account name, account number, IFSC, bank name and branch name.");
       return;
@@ -334,33 +373,33 @@ const ExpenditureDashboard: React.FC = () => {
       const response = await authenticityUtility.post("/expenditure/payees", {
         payee_name: canonicalPayeeName,
         account_name: canonicalPayeeName,
-        pan_number: normalizeText(payeeDraft.panNumber) || null,
-        account_no: normalizeText(payeeDraft.accountNo),
-        account_type: normalizeText(payeeDraft.accountType) || null,
-        bank_name: normalizeText(payeeDraft.bankName),
-        branch_name: normalizeText(payeeDraft.branchName),
-        ifsc: normalizeText(payeeDraft.ifsc).toUpperCase(),
-        beneficiary_type: payeeDraft.beneficiaryType,
-        beneficiary_org: normalizeText(payeeDraft.beneficiaryOrg) || null,
+        pan_number: normalizeText(payee.panNumber) || null,
+        account_no: normalizeText(payee.accountNo),
+        account_type: normalizeText(payee.accountType) || null,
+        bank_name: normalizeText(payee.bankName),
+        branch_name: normalizeText(payee.branchName),
+        ifsc: normalizeText(payee.ifsc).toUpperCase(),
+        beneficiary_type: payee.beneficiaryType,
+        beneficiary_org: normalizeText(payee.beneficiaryOrg) || null,
         organization_type:
-          payeeDraft.beneficiaryType === "organization"
-            ? normalizeText(payeeDraft.organizationType) || null
+          payee.beneficiaryType === "organization"
+            ? normalizeText(payee.organizationType) || null
             : null,
         msme:
-          payeeDraft.beneficiaryType === "organization"
-            ? normalizeText(payeeDraft.msme) || null
+          payee.beneficiaryType === "organization"
+            ? normalizeText(payee.msme) || null
             : null,
         gstin:
-          payeeDraft.beneficiaryType === "organization"
-            ? normalizeText(payeeDraft.gstin) || null
+          payee.beneficiaryType === "organization"
+            ? normalizeText(payee.gstin) || null
             : null,
         tds_details:
-          payeeDraft.beneficiaryType === "organization"
-            ? normalizeText(payeeDraft.tdsDetails) || null
+          payee.beneficiaryType === "organization"
+            ? normalizeText(payee.tdsDetails) || null
             : null,
         tds_section:
-          payeeDraft.beneficiaryType === "organization"
-            ? normalizeText(payeeDraft.tdsSection) || null
+          payee.beneficiaryType === "organization"
+            ? normalizeText(payee.tdsSection) || null
             : null,
       }) as { status?: string; message?: string };
 
@@ -370,7 +409,6 @@ const ExpenditureDashboard: React.FC = () => {
 
       window.alert(response.message || "Payee request submitted for DoF approval.");
       setShowAddPayeeModal(false);
-      setPayeeDraft(createEmptyPayeeDraft());
     } catch (error) {
       console.error("Failed to submit payee:", error);
       const apiMessage =
@@ -401,20 +439,79 @@ const ExpenditureDashboard: React.FC = () => {
 
   const normalizedFinanceIdQuery = financeIdQuery.trim().toLowerCase();
 
+  const beneficiaryOptions = useMemo(() => {
+    const beneficiaryTypes = Array.from(
+      new Set(
+        data
+          .map((item) => String(item.beneficiarytype || "").trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+
+    return [
+      { value: "all", label: "All Beneficiaries" },
+      ...beneficiaryTypes.map((type) => ({ value: type, label: type })),
+    ];
+  }, [data]);
+
   const filteredProposalCards = useMemo(() => {
-    if (!normalizedFinanceIdQuery) return proposalCards;
+    const financeIdsByBeneficiary =
+      selectedBeneficiary === "all"
+        ? null
+        : new Set(
+          data
+            .filter((item) => String(item.beneficiarytype || "").trim() === selectedBeneficiary)
+            .map((item) => String(item.financeid ?? ""))
+        );
 
     return proposalCards.filter((card) => {
+      if (financeIdsByBeneficiary && !financeIdsByBeneficiary.has(card.financeRequestId)) {
+        return false;
+      }
+
+      if (!normalizedFinanceIdQuery) {
+        return true;
+      }
+
+      const rows = cardRows[card.financeRequestId] ?? [];
+      const financeBaseRef = normalizeFinanceRequestRefBase(card.proposalId, card.financeRequestId);
+      const financeSequence = getFinanceRefSequence(financeBaseRef);
+      const workflowSearchValues = rows.flatMap((row) => {
+        const refs = [
+          row.advanceRequestRef,
+          row.advanceRequestRef2,
+          row.expenditureRequestRef,
+          row.settlementRequestRef,
+        ].filter(Boolean);
+
+        return refs.flatMap((ref) => {
+          const displayCode = getWorkflowRequestDisplayCode(ref);
+          return [
+            ref,
+            displayCode,
+            financeSequence && displayCode ? `${financeSequence}${displayCode}` : "",
+          ];
+        });
+      });
+
       const searchValues = [
         String(card.financeRequestId ?? ""),
         String(card.proposalId ?? ""),
+        String(card.applicantName ?? ""),
+        String(card.beneficiaryName ?? ""),
+        String(card.tag ?? ""),
+        ...workflowSearchValues,
       ]
         .join(" ")
         .toLowerCase();
 
-      return searchValues.includes(normalizedFinanceIdQuery);
+      const compactSearchValues = normalizeCompactSearchText(searchValues);
+      const compactQuery = normalizeCompactSearchText(normalizedFinanceIdQuery);
+
+      return searchValues.includes(normalizedFinanceIdQuery) ||
+        Boolean(compactQuery && compactSearchValues.includes(compactQuery));
     });
-  }, [proposalCards, normalizedFinanceIdQuery]);
+  }, [cardRows, data, proposalCards, normalizedFinanceIdQuery, selectedBeneficiary]);
 
   const filteredData = useMemo(() => {
     const visibleFinanceIds = new Set(filteredProposalCards.map((card) => card.financeRequestId));
@@ -422,7 +519,24 @@ const ExpenditureDashboard: React.FC = () => {
   }, [data, filteredProposalCards]);
 
   const formatAmount = (amount: number) =>
-    `Rs ${Number(amount || 0).toLocaleString("en-IN")}`;
+    `₹${Number(amount || 0).toLocaleString("en-IN")}`;
+
+  const closeDialog = () => {
+    setDialogConfig((prev) => ({
+      ...prev,
+      show: false,
+      onConfirm: undefined,
+    }));
+  };
+
+  const showDialog = (config: Omit<ExpenditureDialogConfig, "show">) => {
+    setDialogConfig({
+      show: true,
+      variant: "info",
+      confirmText: "OK",
+      ...config,
+    });
+  };
 
   const isApprovedStatus = (status?: string | null) =>
     ["approved", "completed", "principal_approved"].includes(normalizeStatus(status));
@@ -462,6 +576,10 @@ const ExpenditureDashboard: React.FC = () => {
     advanceRequestId2: null,
     expenditureRequestId: null,
     settlementRequestId: null,
+    advanceRequestRef: "",
+    advanceRequestRef2: "",
+    expenditureRequestRef: "",
+    settlementRequestRef: "",
     rowIndex,
     baseRowRef: `${financeId}-manual-${rowIndex}`,
     advanceRef: `${financeId}-advance-manual-${rowIndex}`,
@@ -492,10 +610,10 @@ const ExpenditureDashboard: React.FC = () => {
     module: WorkflowModule | "Advance2",
     card: ExpenditureProposalCard,
     options?: { forceNew?: boolean; mode?: "create" | "edit" | "view" }
-   ) => {
+  ) => {
     const targetRow = row;
 
-    // Handle Advance2 specifically
+    // Handle interim advance specifically
     const isAdvance2 = module === "Advance2";
     const targetModule = isAdvance2 ? "Advance" : module;
 
@@ -505,18 +623,18 @@ const ExpenditureDashboard: React.FC = () => {
           ? targetRow.advanceRef2 ?? `${targetRow.advanceRef}-2`
           : targetRow.advanceRef
         : targetModule === "Expenditure"
-        ? targetRow.expenditureRef
-        : targetRow.settlementRef;
+          ? targetRow.expenditureRef
+          : targetRow.settlementRef;
 
     const requestId = options?.forceNew
       ? null
       : targetModule === "Advance"
-      ? isAdvance2
-        ? targetRow.advanceRequestId2
-        : targetRow.advanceRequestId
-      : targetModule === "Expenditure"
-      ? targetRow.expenditureRequestId
-      : targetRow.settlementRequestId;
+        ? isAdvance2
+          ? targetRow.advanceRequestId2
+          : targetRow.advanceRequestId
+        : targetModule === "Expenditure"
+          ? targetRow.expenditureRequestId
+          : targetRow.settlementRequestId;
 
     const targetRequestId = requestId ?? null;
     const launchMode =
@@ -530,13 +648,13 @@ const ExpenditureDashboard: React.FC = () => {
       launchMode === "edit" && targetRequestId
         ? `/expenditure/${targetRequestId}/edit`
         : targetRequestId
-        ? `/expenditure/${targetRequestId}`
-        : "/expenditure/new";
+          ? `/expenditure/${targetRequestId}`
+          : "/expenditure/new";
 
     navigate(route, {
       state: {
         ...(launchMode === "view" ? { viewOnly: true } : { activeTab: targetModule }),
-        isAdvance2: isAdvance2, // Pass flag for Advance2
+        isAdvance2: isAdvance2,
         dashboardRowId: targetRow.baseRowRef,
         rowReferenceId,
         rowIndex: targetRow.rowIndex,
@@ -560,21 +678,21 @@ const ExpenditureDashboard: React.FC = () => {
     const hasAdvance1 = Boolean(row.advanceRequestId);
     const hasAdvance2 = Boolean(row.advanceRequestId2);
     const hasSettlement = Boolean(row.settlementRequestId);
-    const showAdvance2 = (hasAdvance1 || hasAdvance2) && !hasSettlement;
+    const showAdvance2 = hasAdvance2 || (hasAdvance1 && !hasSettlement);
     const showSettlement = hasAdvance1 || hasAdvance2 || hasSettlement;
 
     if (isCompleted) {
       return [
         {
-          label: "Advance",
+          label: "Initial Advance",
           module: "Advance" as const,
           hidden: !hasAdvance1,
           submitted: hasAdvance1,
         },
         {
-          label: "Advance2",
+          label: "Interim Advance",
           module: "Advance2" as const,
-          hidden: !hasAdvance2 || hasSettlement,
+          hidden: !hasAdvance2,
           submitted: hasAdvance2,
         },
         {
@@ -595,13 +713,13 @@ const ExpenditureDashboard: React.FC = () => {
     if (row.primaryChoice === "Advance") {
       return [
         {
-          label: "Advance",
+          label: "Initial Advance",
           module: "Advance" as const,
           hidden: false,
           submitted: hasAdvance1,
         },
         {
-          label: "Advance2",
+          label: "Interim Advance",
           module: "Advance2" as const,
           hidden: !showAdvance2,
           submitted: hasAdvance2,
@@ -621,16 +739,73 @@ const ExpenditureDashboard: React.FC = () => {
       ];
     }
 
-  if (row.primaryChoice === "Expenditure") {
+    if (row.primaryChoice === "Expenditure") {
+      return [
+        {
+          label: "Initial Advance",
+          module: "Advance" as const,
+          hidden: true,
+          submitted: false,
+        },
+        {
+          label: "Interim Advance",
+          module: "Advance2" as const,
+          hidden: true,
+          submitted: false,
+        },
+        {
+          label: "Settlement",
+          module: "Settlement" as const,
+          hidden: true,
+          submitted: false,
+        },
+        {
+          label: "Expenditure",
+          module: "Expenditure" as const,
+          hidden: false,
+          submitted: Boolean(row.expenditureRequestId) || row.expenditureAmount > 0,
+        },
+      ];
+    }
+
+    if (row.primaryChoice === "Settlement") {
+      return [
+        {
+          label: "Initial Advance",
+          module: "Advance" as const,
+          hidden: !hasAdvance1,
+          submitted: hasAdvance1,
+        },
+        {
+          label: "Interim Advance",
+          module: "Advance2" as const,
+          hidden: !showAdvance2,
+          submitted: hasAdvance2,
+        },
+        {
+          label: "Settlement",
+          module: "Settlement" as const,
+          hidden: false,
+          submitted: hasSettlement,
+        },
+        {
+          label: "Expenditure",
+          module: "Expenditure" as const,
+          hidden: true,
+          submitted: false,
+        },
+      ];
+    }
+
     return [
       {
-        label: "Advance",
+        label: "Initial Advance",
         module: "Advance" as const,
-        hidden: true,
+        hidden: false,
         submitted: false,
       },
       {
-        label: "Advance2",
+        label: "Interim Advance",
         module: "Advance2" as const,
         hidden: true,
         submitted: false,
@@ -645,67 +820,31 @@ const ExpenditureDashboard: React.FC = () => {
         label: "Expenditure",
         module: "Expenditure" as const,
         hidden: false,
-        submitted: Boolean(row.expenditureRequestId) || row.expenditureAmount > 0,
-      },
-    ];
-  }
-
-  if (row.primaryChoice === "Settlement") {
-    return [
-      {
-        label: "Advance",
-        module: "Advance" as const,
-        hidden: !hasAdvance1,
-        submitted: hasAdvance1,
-      },
-      {
-        label: "Advance2",
-        module: "Advance2" as const,
-        hidden: !showAdvance2,
-        submitted: hasAdvance2,
-      },
-      {
-        label: "Settlement",
-        module: "Settlement" as const,
-        hidden: false,
-        submitted: hasSettlement,
-      },
-      {
-        label: "Expenditure",
-        module: "Expenditure" as const,
-        hidden: true,
         submitted: false,
       },
     ];
-  }
+  };
 
-  return [
-    {
-      label: "Advance",
-      module: "Advance" as const,
-      hidden: false,
-      submitted: false,
-    },
-    {
-      label: "Advance2",
-      module: "Advance2" as const,
-      hidden: true,
-      submitted: false,
-    },
-    {
-      label: "Settlement",
-      module: "Settlement" as const,
-      hidden: true,
-      submitted: false,
-    },
-    {
-      label: "Expenditure",
-      module: "Expenditure" as const,
-      hidden: false,
-      submitted: false,
-    },
-  ];
-};
+  const getWorkflowOptionRequestRef = (
+    row: WorkflowRow,
+    module: WorkflowModule | "Advance2"
+  ) => {
+    if (module === "Advance2") return row.advanceRequestRef2 || "";
+    if (module === "Advance") return row.advanceRequestRef || "";
+    if (module === "Settlement") return row.settlementRequestRef || "";
+    return row.expenditureRequestRef || "";
+  };
+
+  const getWorkflowOptionAmount = (
+    row: WorkflowRow,
+    module: WorkflowModule | "Advance2"
+  ) => {
+    if (module === "Advance2") return Number(row.advanceAmount2 || 0);
+    if (module === "Advance") return Number(row.advanceAmount || 0);
+    if (module === "Settlement") return Number(row.settlementAmount || 0);
+    return Number(row.expenditureAmount || 0);
+  };
+
   const getWorkflowStatusLabel = (row: WorkflowRow) => {
     return getWorkflowApprovalLabel(parseWorkflowState(row.latestWorkflowState));
   };
@@ -738,8 +877,40 @@ const ExpenditureDashboard: React.FC = () => {
     };
   };
 
+  const getRowDisplaySubHead = (row: WorkflowRow) => {
+    if (row.latestRequestType === "Settlement" && row.settlementSubHead) {
+      return row.settlementSubHead;
+    }
+
+    if (row.latestRequestType === "Expenditure" && row.expenditureSubHead) {
+      return row.expenditureSubHead;
+    }
+
+    if (row.latestRequestType === "Advance") {
+      return row.advanceSubHead2 || row.advanceSubHead || "";
+    }
+
+    return (
+      row.advanceSubHead2 ||
+      row.advanceSubHead ||
+      row.settlementSubHead ||
+      row.expenditureSubHead ||
+      ""
+    );
+  };
+
   const getRequestStatusLabel = (item: ExpenditureItem) =>
     getWorkflowApprovalLabel(parseWorkflowState(item.workflow_state));
+
+  const getStatusPillToneClass = (label: string) => {
+    const normalizedLabel = label.toLowerCase();
+
+    if (normalizedLabel.includes("approved")) return "expenditure-status-pill--approved";
+    if (normalizedLabel.includes("pending")) return "expenditure-status-pill--pending";
+    if (normalizedLabel.includes("rejected")) return "expenditure-status-pill--rejected";
+
+    return "";
+  };
 
   const getRequestTimelineState = (
     item: ExpenditureItem,
@@ -762,30 +933,30 @@ const ExpenditureDashboard: React.FC = () => {
     return currentStage === "dof" || currentStage === "principal";
   };
 
- const getWorkflowGateMessage = (
-  row: WorkflowRow,
-  module: WorkflowModule | "Advance2"
-) => {
-  const advanceApproved = isApprovedStatus(row.advanceStatus);
+  const getWorkflowGateMessage = (
+    row: WorkflowRow,
+    module: WorkflowModule | "Advance2"
+  ) => {
+    const advanceApproved = isApprovedStatus(row.advanceStatus);
 
-  if (module === "Advance2" && !advanceApproved) {
-    return "Advance 2 can be filled only after Advance 1 is completely approved.";
-  }
+    if (module === "Advance2" && !advanceApproved) {
+      return "Interim Advance can be filled only after Initial Advance is completely approved.";
+    }
 
-  if (module === "Settlement" && !advanceApproved) {
-    return "Settlement can be filled only after Advance 1 is completely approved.";
-  }
+    if (module === "Settlement" && !advanceApproved) {
+      return "Settlement can be filled only after Initial Advance is completely approved.";
+    }
 
-  return null;
-};
+    return null;
+  };
 
   const hasSubmittedProposal = (row: WorkflowRow) =>
     Boolean(
       row.latestRequestId ||
-        row.advanceRequestId ||
-        row.advanceRequestId2 ||
-        row.expenditureRequestId ||
-        row.settlementRequestId
+      row.advanceRequestId ||
+      row.advanceRequestId2 ||
+      row.expenditureRequestId ||
+      row.settlementRequestId
     );
 
   const getRowWorkflowLabel = (row: WorkflowRow) => {
@@ -807,6 +978,7 @@ const ExpenditureDashboard: React.FC = () => {
       const related = requests.filter(
         (req) => String(req.financeid ?? "") === financeId
       );
+      const requestRefsById = buildWorkflowRequestRefMap(related);
       const rowsByKey = new Map<string, ExpenditureItem[]>();
       related.forEach((req) => {
         const key = getRowKey(req);
@@ -916,6 +1088,22 @@ const ExpenditureDashboard: React.FC = () => {
           advanceRequestId2: advanceSummary2?.requestId ?? null,
           expenditureRequestId: expenditureSummary.requestId,
           settlementRequestId: settlementSummary.requestId,
+          advanceRequestRef:
+            firstAdvance?.id != null
+              ? requestRefsById.get(firstAdvance.id) ?? ""
+              : "",
+          advanceRequestRef2:
+            secondAdvance?.id != null
+              ? requestRefsById.get(secondAdvance.id) ?? ""
+              : "",
+          expenditureRequestRef:
+            expenditureSummary.requestId != null
+              ? requestRefsById.get(expenditureSummary.requestId) ?? ""
+              : "",
+          settlementRequestRef:
+            settlementSummary.requestId != null
+              ? requestRefsById.get(settlementSummary.requestId) ?? ""
+              : "",
           rowIndex: persistedRowIndex,
           baseRowRef: rowKey || `${financeId}-req-${latestRequest?.id ?? index + 1}`,
           advanceRef: `${financeId}-advance-${rowKey || index + 1}`,
@@ -943,12 +1131,12 @@ const ExpenditureDashboard: React.FC = () => {
             ? latestWorkflowStatus === "approved"
               ? 3
               : latestWorkflowStatus === "rejected"
-              ? 0
-              : latestWorkflowCurrentStage === "principal"
-              ? 3
-              : latestWorkflowCurrentStage === "dof"
-              ? 2
-              : 1
+                ? 0
+                : latestWorkflowCurrentStage === "principal"
+                  ? 3
+                  : latestWorkflowCurrentStage === "dof"
+                    ? 2
+                    : 1
             : 0,
         };
       });
@@ -959,12 +1147,18 @@ const ExpenditureDashboard: React.FC = () => {
           requestId: null,
           advanceRequestId: null,
           advanceRequestId2: null,
+          expenditureRequestId: null,
+          settlementRequestId: null,
+          advanceRequestRef: "",
+          advanceRequestRef2: "",
           rowIndex: 1,
           baseRowRef: `${financeId}-blank-1`,
           advanceRef: `${financeId}-advance-blank-1`,
           advanceRef2: `${financeId}-advance2-blank-1`,
           expenditureRef: `${financeId}-expenditure-blank-1`,
           settlementRef: `${financeId}-settlement-blank-1`,
+          expenditureRequestRef: "",
+          settlementRequestRef: "",
           primaryChoice: null,
           advanceAmount: 0,
           advanceAmount2: 0,
@@ -995,7 +1189,11 @@ const ExpenditureDashboard: React.FC = () => {
     const cardBalanceAmount = Math.max(Number(sourceCard?.balanceAmount || 0), 0);
 
     if (cardBalanceAmount <= 0) {
-      window.alert('No remaining balance is available for this proposal.');
+      showDialog({
+        title: "No Balance Available",
+        message: "No remaining balance is available for this proposal.",
+        variant: "warning",
+      });
       return;
     }
 
@@ -1036,29 +1234,37 @@ const ExpenditureDashboard: React.FC = () => {
   const deleteExpenditureRequest = async (requestId: number) => {
     if (!Number.isFinite(requestId) || requestId <= 0) return;
 
-    const confirmed = window.confirm(
-      "Delete this pending expenditure request? This will reverse the reserved amount."
-    );
-    if (!confirmed) return;
+    showDialog({
+      title: "Delete Request",
+      message: "Delete this pending expenditure request? This will reverse the reserved amount.",
+      variant: "danger",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          const result = await authenticityUtility.delete(`/expenditure/${requestId}`) as {
+            status?: string;
+            message?: string;
+          };
 
-    try {
-      setLoading(true);
-      const result = await authenticityUtility.delete(`/expenditure/${requestId}`) as {
-        status?: string;
-        message?: string;
-      };
+          if (result?.status !== "success") {
+            throw new Error(result?.message || "Failed to delete expenditure request");
+          }
 
-      if (result?.status !== "success") {
-        throw new Error(result?.message || "Failed to delete expenditure request");
-      }
-
-      await fetchDashboard(openCardId);
-    } catch (error) {
-      console.error("Failed to delete expenditure request:", error);
-      window.alert("Unable to delete this request. Only pending requests can be deleted.");
-    } finally {
-      setLoading(false);
-    }
+          await fetchDashboard(openCardId);
+        } catch (error) {
+          console.error("Failed to delete expenditure request:", error);
+          showDialog({
+            title: "Delete Failed",
+            message: "Unable to delete this request. Only pending requests can be deleted.",
+            variant: "danger",
+          });
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
   };
 
   const fetchDashboard = async (preferredOpenCardId?: string | null) => {
@@ -1080,8 +1286,8 @@ const ExpenditureDashboard: React.FC = () => {
       const apiData = Array.isArray(payload?.data)
         ? payload.data
         : Array.isArray(payload?.requests)
-        ? payload.requests
-        : [];
+          ? payload.requests
+          : [];
 
       const apiCards = Array.isArray(payload?.cards) ? payload.cards : [];
 
@@ -1089,6 +1295,7 @@ const ExpenditureDashboard: React.FC = () => {
         id: Number(item.id),
         financeid: Number(item.financeid ?? item.finance_id ?? 0),
         proposalref: String(item.proposalref ?? item.proposal_ref ?? ""),
+        requestref: String(item.requestref ?? item.request_ref ?? ""),
         applicantname: String(item.applicantname ?? item.applicant_name ?? ""),
         beneficiarytype: String(item.beneficiarytype ?? item.beneficiary_type ?? ""),
         primaryhead: String(item.primaryhead ?? item.primary_head ?? ""),
@@ -1105,7 +1312,8 @@ const ExpenditureDashboard: React.FC = () => {
           financeRequestId: String(card.finance_request_id ?? card.financerequestid ?? ""),
           proposalId: String(card.request_ref ?? card.requestref ?? card.finance_request_id ?? card.financerequestid ?? ""),
           applicantName: String(card.applicantname ?? card.applicant_name ?? ""),
-          tag: String(card.financetag ?? card.finance_tag ?? "Finance"),
+          beneficiaryName: String(card.beneficiaryname ?? card.beneficiary_name ?? ""),
+          tag: String(card.financetag ?? card.finance_tag ?? ""),
           totalAmount: Number(card.approvedamount ?? card.approved_amount ?? 0),
           expenditureAmount: Number(
             card.expenditureamount ?? card.expenditure_amount ?? 0
@@ -1128,18 +1336,18 @@ const ExpenditureDashboard: React.FC = () => {
       setLoading(false);
     }
   };
-useEffect(() => {
-  const state = location.state as DashboardReturnState | null;
+  useEffect(() => {
+    const state = location.state as DashboardReturnState | null;
 
-  const financeId = normalizeText(state?.financeRequestId ?? "");
+    const financeId = normalizeText(state?.financeRequestId ?? "");
 
-  if (financeId) {
-    fetchDashboard(financeId);
-    navigate("/expenditurecard", { replace: true, state: null });
-  } else {
-    fetchDashboard();
-  }
-}, [location.state, financialYear, navigate]);
+    if (financeId) {
+      fetchDashboard(financeId);
+      navigate("/expenditurecard", { replace: true, state: null });
+    } else {
+      fetchDashboard();
+    }
+  }, [location.state, financialYear, navigate]);
   return (
     <section className="expenditure-page">
       <div className="expenditure-container">
@@ -1167,13 +1375,19 @@ useEffect(() => {
                   className="expenditure-search-input"
                   value={financeIdQuery}
                   onChange={(e) => setFinanceIdQuery(e.target.value)}
-                  placeholder="Search finance/proposal ID..."
-                  aria-label="Search finance/proposal ID"
+                  placeholder="Search applicant or primary head..."
+                  aria-label="Search applicant or primary head"
                 />
+                {financeIdQuery && (
+                  <XCircle
+                    size={16}
+                    className="expenditure-clear-icon"
+                    onClick={() => setFinanceIdQuery("")}
+                  />
+                )}
               </div>
 
-              <div className="expenditure-financial-year-wrap">
-                <span className="expenditure-financial-year-label">Financial Year</span>
+              <div className="expenditure-filter-group">
                 <select
                   className="expenditure-financial-year"
                   value={financialYear}
@@ -1186,202 +1400,34 @@ useEffect(() => {
                     </option>
                   ))}
                 </select>
+
+                <select
+                  className="expenditure-beneficiary-filter"
+                  value={selectedBeneficiary}
+                  onChange={(e) => setSelectedBeneficiary(e.target.value)}
+                  aria-label="Select beneficiary type"
+                >
+                  {beneficiaryOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
+
             </div>
           </div>
 
-          {showAddPayeeModal && (
-            <div 
-              className="expenditure-payee-modal-backdrop" 
-              role="presentation"
-              onClick={(e) => {
-                if (e.target === e.currentTarget && !isSubmittingPayee) {
-                  closeAddPayeeModal();
-                }
-              }}
-            >
-              <div className="expenditure-payee-modal" role="dialog" aria-modal="true" aria-labelledby="add-payee-title">
-                <div className="expenditure-payee-modal__header">
-                  <div>
-                    <h3 id="add-payee-title">Add Payee</h3>
-                    <p>Submit payee details for DoF approval.</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="expenditure-payee-modal__close"
-                    onClick={closeAddPayeeModal}
-                    disabled={isSubmittingPayee}
-                    aria-label="Close add payee"
-                  >
-                    ×
-                  </button>
-                </div>
-
-                <div className="expenditure-payee-type-toggle">
-                  <button
-                    type="button"
-                    className={payeeDraft.beneficiaryType === "individual" ? "active" : ""}
-                    onClick={() => updatePayeeDraft("beneficiaryType", "individual")}
-                    disabled={isSubmittingPayee}
-                  >
-                    Individual
-                  </button>
-                  <button
-                    type="button"
-                    className={payeeDraft.beneficiaryType === "organization" ? "active" : ""}
-                    onClick={() => updatePayeeDraft("beneficiaryType", "organization")}
-                    disabled={isSubmittingPayee}
-                  >
-                    Organization
-                  </button>
-                </div>
-
-                <div className="expenditure-payee-modal__grid">
-                  <label>
-                    <span>Account Name</span>
-                    <input
-                      value={payeeDraft.accountName}
-                      onChange={(event) => updatePayeeDraft("accountName", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>Payee Name</span>
-                    <input
-                      value={payeeDraft.payeeName}
-                      onChange={(event) => updatePayeeDraft("payeeName", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>PAN Number</span>
-                    <input
-                      value={payeeDraft.panNumber}
-                      onChange={(event) => updatePayeeDraft("panNumber", event.target.value.toUpperCase())}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>Account Number</span>
-                    <input
-                      value={payeeDraft.accountNo}
-                      onChange={(event) => updatePayeeDraft("accountNo", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>Account Type</span>
-                    <input
-                      value={payeeDraft.accountType}
-                      onChange={(event) => updatePayeeDraft("accountType", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>Bank Name</span>
-                    <input
-                      value={payeeDraft.bankName}
-                      onChange={(event) => updatePayeeDraft("bankName", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>Branch Name</span>
-                    <input
-                      value={payeeDraft.branchName}
-                      onChange={(event) => updatePayeeDraft("branchName", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>IFSC</span>
-                    <input
-                      value={payeeDraft.ifsc}
-                      onChange={(event) => updatePayeeDraft("ifsc", event.target.value.toUpperCase())}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>Beneficiary Org</span>
-                    <select
-                      value={payeeDraft.beneficiaryOrg}
-                      onChange={(event) => updatePayeeDraft("beneficiaryOrg", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    >
-                      <option value="">Select</option>
-                      <option value="KSRCT">KSRCT</option>
-                      <option value="KSREI">KSREI</option>
-                      <option value="External">External</option>
-                    </select>
-                  </label>
-
-                  {payeeDraft.beneficiaryType === "organization" && (
-                    <>
-                      <label>
-                        <span>Organization Type</span>
-                        <input
-                          value={payeeDraft.organizationType}
-                          onChange={(event) => updatePayeeDraft("organizationType", event.target.value)}
-                          disabled={isSubmittingPayee}
-                        />
-                      </label>
-                      <label>
-                        <span>MSME</span>
-                        <input
-                          value={payeeDraft.msme}
-                          onChange={(event) => updatePayeeDraft("msme", event.target.value)}
-                          disabled={isSubmittingPayee}
-                        />
-                      </label>
-                      <label>
-                        <span>GSTIN</span>
-                        <input
-                          value={payeeDraft.gstin}
-                          onChange={(event) => updatePayeeDraft("gstin", event.target.value.toUpperCase())}
-                          disabled={isSubmittingPayee}
-                        />
-                      </label>
-                      <label>
-                        <span>TDS Details</span>
-                        <input
-                          value={payeeDraft.tdsDetails}
-                          onChange={(event) => updatePayeeDraft("tdsDetails", event.target.value)}
-                          disabled={isSubmittingPayee}
-                        />
-                      </label>
-                      <label>
-                        <span>TDS Section</span>
-                        <input
-                          value={payeeDraft.tdsSection}
-                          onChange={(event) => updatePayeeDraft("tdsSection", event.target.value)}
-                          disabled={isSubmittingPayee}
-                        />
-                      </label>
-                    </>
-                  )}
-                </div>
-
-                <div className="expenditure-payee-modal__actions">
-                  <button
-                    type="button"
-                    className="expenditure-payee-modal__secondary"
-                    onClick={closeAddPayeeModal}
-                    disabled={isSubmittingPayee}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="expenditure-payee-modal__primary"
-                    onClick={submitPayeeForApproval}
-                    disabled={isSubmittingPayee}
-                  >
-                    {isSubmittingPayee ? "Submitting..." : "Submit for Approval"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          <AddPayeeModal
+            show={showAddPayeeModal}
+            onClose={() => {
+              if (!isSubmittingPayee) setShowAddPayeeModal(false);
+            }}
+            onAddPayee={submitPayeeForApproval}
+            showAlert={(message) => window.alert(String(message))}
+            submitLabel="Submit for Approval"
+            isSubmitting={isSubmittingPayee}
+          />
 
           <div className="expenditure-body">
             <div className="expenditure-demo-wrap">
@@ -1407,14 +1453,37 @@ useEffect(() => {
                       }
                     >
                       <div className="expenditure-demo-trigger__content">
-                        <div className="expenditure-demo-trigger__id">{card.proposalId}</div>
+                        {(() => {
+                          const proposalText = String(card.proposalId || "").trim();
+                          const shortToken =
+                            proposalText.split("_").filter(Boolean).pop() || proposalText;
+                          const isCompact = /^[AE]\d+$/i.test(shortToken);
+
+                          return (
+                            <div
+                              className={`expenditure-demo-trigger__id ${isCompact ? "expenditure-demo-trigger__id--compact" : ""
+                                }`}
+                            >
+                              {isCompact ? shortToken : proposalText}
+                            </div>
+                          );
+                        })()}
 
                         <div className="expenditure-demo-trigger__title">
                           {card.applicantName}
                         </div>
 
                         <div className="expenditure-demo-trigger__meta">
-                          <span>{card.tag}</span>
+                          {card.beneficiaryName && (
+                            <span className="expenditure-demo-trigger__meta-text">
+                              {card.beneficiaryName}
+                            </span>
+                          )}
+                          {card.tag && (
+                            <span className="expenditure-demo-trigger__meta-tag">
+                              {card.tag}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -1428,13 +1497,6 @@ useEffect(() => {
 
                         <div className="expenditure-demo-trigger__summary-item">
                           <span className="expenditure-demo-trigger__summary-label">
-                            Expenditure
-                          </span>
-                          <strong>{formatAmount(cardExpenditureAmount)}</strong>
-                        </div>
-
-                        <div className="expenditure-demo-trigger__summary-item">
-                          <span className="expenditure-demo-trigger__summary-label">
                             Balance
                           </span>
                           <strong>{formatAmount(cardBalanceAmount)}</strong>
@@ -1443,9 +1505,8 @@ useEffect(() => {
 
                       <ChevronDown
                         size={20}
-                        className={`expenditure-demo-trigger__arrow ${
-                          isCardOpen ? "open" : ""
-                        }`}
+                        className={`expenditure-demo-trigger__arrow ${isCardOpen ? "open" : ""
+                          }`}
                       />
                     </button>
 
@@ -1457,16 +1518,14 @@ useEffect(() => {
                               {rows.map((row) => {
                                 const actions = getRowActions(row);
                                 const isLastRow = rows[rows.length - 1]?.id === row.id;
-                                const showAdvanceAmount = row.advanceAmount > 0;
-                                const showAdvance2Amount =
-                                  row.advanceAmount2 > 0 && !Boolean(row.settlementRequestId);
-                                const showExpenditureAmount = row.expenditureAmount > 0;
-                                const showSettlementAmount = row.settlementAmount > 0;
                                 const isCompleted = isWorkflowRowCompleted(row);
                                 const isActionLocked = isWorkflowActionLocked(row);
                                 const hasProposal = hasSubmittedProposal(row);
+                                const rowDisplaySubHead = getRowDisplaySubHead(row);
                                 const isReturnedRow = normalizeStatus(row.latestWorkflowStatus) === "returned";
                                 const isRejectedRow = normalizeStatus(row.latestWorkflowStatus) === "rejected";
+                                const canAddWorkflowRow =
+                                  !isReturnedRow && !isRejectedRow && isLastRow && canAddRow;
                                 const canEditRow =
                                   hasProposal &&
                                   !isActionLocked &&
@@ -1477,11 +1536,10 @@ useEffect(() => {
                                 return (
                                   <div
                                     key={row.id}
-                                    className={`expenditure-demo-row ${
-                                      isCompleted
-                                        ? "expenditure-demo-row--completed"
-                                        : ""
-                                    }`}
+                                    className={`expenditure-demo-row ${isCompleted
+                                      ? "expenditure-demo-row--completed"
+                                      : ""
+                                      }`}
                                   >
                                     <div className="expenditure-demo-row__header">
                                       <div className="expenditure-demo-row__left">
@@ -1490,26 +1548,48 @@ useEffect(() => {
                                             // Skip hidden buttons
                                             if (option.hidden) return null;
                                             const gateMessage = getWorkflowGateMessage(row, option.module);
-                                            
+                                            const optionRequestRef = option.submitted
+                                              ? getWorkflowOptionRequestRef(row, option.module)
+                                              : "";
+                                            const optionRequestCode = getWorkflowRequestDisplayCode(
+                                              optionRequestRef
+                                            );
+                                            const optionAmount = option.submitted
+                                              ? getWorkflowOptionAmount(row, option.module)
+                                              : 0;
+                                            const showOptionDetails = Boolean(
+                                              optionRequestRef || optionAmount > 0
+                                            );
+                                            const isConstructionOption = option.label
+                                              ?.toLowerCase()
+                                              .includes("construction");
+
                                             return (
-                                            <button
-                                              key={`${row.id}-${option.label}`}
-                                              type="button"
-                                              className={`expenditure-demo-option ${
-                                                option.submitted ? "submitted" : ""
-                                              } ${
-                                                gateMessage ? "disabled" : ""
-                                              } ${
-                                                row.primaryChoice === option.module ||
-                                                (option.module === "Settlement" &&
-                                                  row.settlementAmount > 0)
-                                                  ? "chosen"
-                                                  : ""
-                                              }`}
-                                              onClick={() =>
-                                                gateMessage
-                                                  ? window.alert(gateMessage)
-                                                  : handleModuleLaunch(
+                                              <button
+                                                key={`${row.id}-${option.label}`}
+                                                type="button"
+                                                className={`expenditure-demo-option ${option.submitted ? "submitted" : ""
+                                                  } ${gateMessage ? "disabled" : ""
+                                                  } ${showOptionDetails
+                                                    ? "expenditure-demo-option--detailed"
+                                                    : ""
+                                                  } ${row.primaryChoice === option.module ||
+                                                    (option.module === "Settlement" &&
+                                                      row.settlementAmount > 0)
+                                                    ? "chosen"
+                                                    : ""
+                                                  } ${isConstructionOption && !showOptionDetails
+                                                    ? "expenditure-demo-option--construction"
+                                                    : ""
+                                                  }`}
+                                                onClick={() =>
+                                                  gateMessage
+                                                    ? showDialog({
+                                                      title: "Action Not Available",
+                                                      message: gateMessage,
+                                                      variant: "warning",
+                                                    })
+                                                    : handleModuleLaunch(
                                                       row,
                                                       option.module,
                                                       card,
@@ -1527,108 +1607,72 @@ useEffect(() => {
                                                           !Boolean(row.advanceRequestId2),
                                                       }
                                                     )
-                                              }
-                                              title={gateMessage || undefined}
-                                            >
-                                              <span className="expenditure-demo-option__label">
-                                                {option.label}
-                                              </span>
-                                            </button>
-                                          )})}
-                                        </div>
-
-                                        <div className="expenditure-demo-row__amounts">
-                                          {showAdvanceAmount && (
-                                            <button
-                                              type="button"
-                                              className="expenditure-demo-row__amount-chip expenditure-demo-row__amount-chip--button"
-                                              onClick={() =>
-                                                handleModuleLaunch(row, "Advance", card, {
-                                                  mode: "view",
-                                                })
-                                              }
-                                            >
-                                              <span className="expenditure-demo-row__amount-label">
-                                                Advance
-                                              </span>
-                                              <strong>
-                                                {getModuleSummary(row, "Advance").subHead
-                                                  ? `${getModuleSummary(row, "Advance").subHead} | `
-                                                  : ""}
-                                                {formatAmount(row.advanceAmount)}
-                                              </strong>
-                                            </button>
-                                          )}
-
-                                          {showAdvance2Amount && (
-                                            <button
-                                              type="button"
-                                              className="expenditure-demo-row__amount-chip expenditure-demo-row__amount-chip--button"
-                                              onClick={() =>
-                                                handleModuleLaunch(row, "Advance2", card, {
-                                                  mode: "view",
-                                                })
-                                              }
-                                            >
-                                              <span className="expenditure-demo-row__amount-label">
-                                                Advance2
-                                              </span>
-                                              <strong>
-                                                {row.advanceSubHead2
-                                                  ? `${row.advanceSubHead2} | `
-                                                  : ""}
-                                                {formatAmount(row.advanceAmount2)}
-                                              </strong>
-                                            </button>
-                                          )}
-
-                                          {showExpenditureAmount && (
-                                            <button
-                                              type="button"
-                                              className="expenditure-demo-row__amount-chip expenditure-demo-row__amount-chip--button"
-                                              onClick={() =>
-                                                handleModuleLaunch(row, "Expenditure", card, {
-                                                  mode: "view",
-                                                })
-                                              }
-                                            >
-                                              <span className="expenditure-demo-row__amount-label">
-                                                Expenditure
-                                              </span>
-                                              <strong>
-                                                {getModuleSummary(row, "Expenditure").subHead
-                                                  ? `${getModuleSummary(row, "Expenditure").subHead} | `
-                                                  : ""}
-                                                {formatAmount(row.expenditureAmount)}
-                                              </strong>
-                                            </button>
-                                          )}
-
-                                          {showSettlementAmount && (
-                                            <button
-                                              type="button"
-                                              className="expenditure-demo-row__amount-chip expenditure-demo-row__amount-chip--button"
-                                              onClick={() =>
-                                                handleModuleLaunch(row, "Settlement", card, {
-                                                  mode: "view",
-                                                })
-                                              }
-                                            >
-                                              <span className="expenditure-demo-row__amount-label">
-                                                Settlement
-                                              </span>
-                                              <strong>
-                                                {getModuleSummary(row, "Settlement").subHead
-                                                  ? `${getModuleSummary(row, "Settlement").subHead} | `
-                                                  : ""}
-                                                {formatAmount(row.settlementAmount)}
-                                              </strong>
-                                            </button>
-                                          )}
+                                                }
+                                                title={gateMessage || undefined}
+                                              >
+                                                {showOptionDetails && (
+                                                  <span className="expenditure-demo-option__detail-grid">
+                                                    <span
+                                                      className="expenditure-demo-option__detail-box expenditure-demo-option__detail-box--ref"
+                                                      title={optionRequestRef || undefined}
+                                                      aria-label={
+                                                        optionRequestRef
+                                                          ? `Reference Request ID: ${optionRequestRef}`
+                                                          : "Reference Request ID unavailable"
+                                                      }
+                                                    >
+                                                      <strong className="expenditure-demo-option__detail-ref-value">
+                                                        {optionRequestCode || "-"}
+                                                      </strong>
+                                                    </span>
+                                                    <span className="expenditure-demo-option__detail-box expenditure-demo-option__detail-box--amount">
+                                                      <span className="expenditure-demo-option__detail-module">
+                                                        {option.label}
+                                                      </span>
+                                                      {optionAmount > 0 && (
+                                                        <strong className="expenditure-demo-option__detail-amount-value">
+                                                          {formatAmount(optionAmount)}
+                                                        </strong>
+                                                      )}
+                                                    </span>
+                                                  </span>
+                                                )}
+                                                {!showOptionDetails && (
+                                                  <span
+                                                    className={`expenditure-demo-option__label ${option.label
+                                                      ?.toLowerCase()
+                                                      .includes("construction")
+                                                      ? "expenditure-demo-option__label--construction"
+                                                      : ""
+                                                      }`}
+                                                  >
+                                                    {option.label}
+                                                  </span>
+                                                )}
+                                              </button>
+                                            )
+                                          })}
                                         </div>
                                       </div>
 
                                       <div className="expenditure-demo-row__status">
+                                        <div
+                                          className={`expenditure-demo-row__subhead ${rowDisplaySubHead
+                                            ? ""
+                                            : "expenditure-demo-row__subhead--empty"
+                                            } ${rowDisplaySubHead
+                                              ?.toLowerCase()
+                                              .includes("construction")
+                                              ? "expenditure-demo-row__subhead--construction"
+                                              : ""
+                                            }`}
+                                          title={rowDisplaySubHead || "Sub head not selected"}
+                                        >
+                                          <strong className="expenditure-demo-row__subhead-value">
+                                            {rowDisplaySubHead || "Sub Head -"}
+                                          </strong>
+                                        </div>
+
                                         {/* Edit button - only show for submitted proposals */}
                                         {hasProposal && (
                                           <button
@@ -1668,32 +1712,32 @@ useEffect(() => {
                                           </button>
                                         )}
 
-                                        {hasProposal && (
-                                          <button
-                                            type="button"
-                                            className={`expenditure-status-pill ${
-                                              isCompleted
-                                                ? "expenditure-status-pill--approved"
-                                                : ""
-                                            } ${
-                                              showWorkflowStatusDetail[row.id]
-                                                ? "expenditure-status-pill--active"
-                                                : ""
-                                            }`}
-                                            onClick={() =>
-                                              setShowWorkflowStatusDetail((prev) => ({
-                                                ...prev,
-                                                [row.id]: !prev[row.id],
-                                              }))
-                                            }
-                                            aria-expanded={Boolean(
-                                              showWorkflowStatusDetail[row.id]
-                                            )}
-                                            aria-label={`Toggle approval status for ${row.id}`}
-                                          >
-                                            {getRowWorkflowLabel(row)}
-                                          </button>
-                                        )}
+                                        {hasProposal && (() => {
+                                          const rowStatusLabel = getRowWorkflowLabel(row);
+
+                                          return (
+                                            <button
+                                              type="button"
+                                              className={`expenditure-status-pill ${getStatusPillToneClass(rowStatusLabel)
+                                                } ${showWorkflowStatusDetail[row.id]
+                                                  ? "expenditure-status-pill--active"
+                                                  : ""
+                                                }`}
+                                              onClick={() =>
+                                                setShowWorkflowStatusDetail((prev) => ({
+                                                  ...prev,
+                                                  [row.id]: !prev[row.id],
+                                                }))
+                                              }
+                                              aria-expanded={Boolean(
+                                                showWorkflowStatusDetail[row.id]
+                                              )}
+                                              aria-label={`Toggle approval status for ${row.id}`}
+                                            >
+                                              {rowStatusLabel}
+                                            </button>
+                                          );
+                                        })()}
 
                                         {hasProposal && showWorkflowStatusDetail[row.id] && (
                                           <div className="expenditure-status-detail-line">
@@ -1722,50 +1766,57 @@ useEffect(() => {
                                       </div>
 
                                       <div className="expenditure-demo-row__actions">
-                                        {!isReturnedRow && !isRejectedRow && isLastRow && canAddRow && (
-                                          <button
-                                            type="button"
-                                            className="expenditure-demo-row__icon-btn"
-                                            onClick={() => addRow(card.financeRequestId)}
-                                            title="Add row"
-                                            aria-label="Add workflow row"
-                                          >
-                                            <Plus size={14} />
-                                          </button>
-                                        )}
+                                        <button
+                                          type="button"
+                                          className="expenditure-demo-row__icon-btn"
+                                          disabled={!canAddWorkflowRow}
+                                          onClick={() => {
+                                            if (!canAddWorkflowRow) return;
+                                            addRow(card.financeRequestId);
+                                          }}
+                                          title={
+                                            canAddWorkflowRow
+                                              ? "Add row"
+                                              : "Only the latest addable row can create a new row"
+                                          }
+                                          aria-label="Add workflow row"
+                                        >
+                                          <Plus size={14} />
+                                        </button>
 
-                                        {/* Hide delete button after approval/completion/archive */}
-                                        {!isReturnedRow && !isRejectedRow && (
-                                          <button
-                                            type="button"
-                                            className="expenditure-demo-row__icon-btn expenditure-demo-row__icon-btn--danger"
-                                            disabled={
+                                        <button
+                                          type="button"
+                                          className="expenditure-demo-row__icon-btn expenditure-demo-row__icon-btn--danger"
+                                          disabled={
+                                            isActionLocked ||
+                                            row.latestWorkflowStatus === "approved" ||
+                                            row.latestWorkflowStatus === "completed" ||
+                                            row.latestWorkflowStatus === "archived" ||
+                                            isReturnedRow ||
+                                            isRejectedRow
+                                          }
+                                          onClick={() => {
+                                            if (
                                               isActionLocked ||
                                               row.latestWorkflowStatus === "approved" ||
                                               row.latestWorkflowStatus === "completed" ||
-                                              row.latestWorkflowStatus === "archived"
+                                              row.latestWorkflowStatus === "archived" ||
+                                              isReturnedRow ||
+                                              isRejectedRow
+                                            ) {
+                                              return;
                                             }
-                                            onClick={() => {
-                                              if (
-                                                isActionLocked ||
-                                                row.latestWorkflowStatus === "approved" ||
-                                                row.latestWorkflowStatus === "completed" ||
-                                                row.latestWorkflowStatus === "archived"
-                                              ) {
-                                                return;
-                                              }
-                                              deleteWorkflowRow(card.financeRequestId, row);
-                                            }}
-                                            title={
-                                              isActionLocked
-                                                ? "Delete is disabled while approval is in progress"
-                                                : "Delete row"
-                                            }
-                                            aria-label="Delete workflow row"
-                                          >
-                                            <Trash2 size={14} />
-                                          </button>
-                                        )}
+                                            deleteWorkflowRow(card.financeRequestId, row);
+                                          }}
+                                          title={
+                                            isActionLocked
+                                              ? "Delete is disabled while approval is in progress"
+                                              : "Delete row"
+                                          }
+                                          aria-label="Delete workflow row"
+                                        >
+                                          <Trash2 size={14} />
+                                        </button>
                                       </div>
                                     </div>
                                   </div>
@@ -1815,7 +1866,7 @@ useEffect(() => {
 
                         <div className="expenditure-request-cardright">
                           <div className="expenditure-request-cardamount">
-                            Rs {Number(item.amount || 0).toLocaleString("en-IN")}
+                            ₹{Number(item.amount || 0).toLocaleString("en-IN")}
                           </div>
 
                           <div className="expenditure-request-cardactions">
@@ -1856,9 +1907,9 @@ useEffect(() => {
 
                           <button
                             type="button"
-                            className={`expenditure-status-pill ${
-                              isExpanded ? "expenditure-status-pill--active" : ""
-                            }`}
+                            className={`expenditure-status-pill ${getStatusPillToneClass(statusLabel)
+                              } ${isExpanded ? "expenditure-status-pill--active" : ""
+                              }`}
                             onClick={() =>
                               setShowRequestStatusDetail((prev) => ({
                                 ...prev,
@@ -1916,10 +1967,43 @@ useEffect(() => {
               </div>
             )}
 
-            
+
           </div>
         </div>
       </div>
+
+      <Modal
+        show={dialogConfig.show}
+        onHide={closeDialog}
+        centered
+        className={`expenditure-dialog-modal expenditure-dialog-modal--${dialogConfig.variant ?? "info"}`}
+        aria-labelledby="expenditure-dialog-title"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title id="expenditure-dialog-title">{dialogConfig.title}</Modal.Title>
+        </Modal.Header>
+
+        <Modal.Body>{dialogConfig.message}</Modal.Body>
+
+        <Modal.Footer>
+          {dialogConfig.cancelText && (
+            <Button variant="outline-secondary" onClick={closeDialog}>
+              {dialogConfig.cancelText}
+            </Button>
+          )}
+          <Button
+            variant={dialogConfig.variant === "danger" ? "danger" : "primary"}
+            autoFocus
+            onClick={async () => {
+              const onConfirm = dialogConfig.onConfirm;
+              closeDialog();
+              await onConfirm?.();
+            }}
+          >
+            {dialogConfig.confirmText ?? "OK"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </section>
   );
 };
