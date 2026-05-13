@@ -295,6 +295,13 @@ const sendDomainValidationError = (res, err) => {
   return true;
 };
 
+const sendAccessDeniedError = (res, err) => {
+  const message = unwrapTransactionMessage(err?.message);
+  if (!message.toLowerCase().includes('access denied')) return false;
+  sendError(res, 403, message);
+  return true;
+};
+
 const resolveBulkNeftTemplatePath = () => {
   if (fs.existsSync(BULK_NEFT_TEMPLATE_PATH)) return BULK_NEFT_TEMPLATE_PATH;
   if (fs.existsSync(SAMPLE_BULK_NEFT_TEMPLATE_PATH)) return SAMPLE_BULK_NEFT_TEMPLATE_PATH;
@@ -397,6 +404,7 @@ const expenditureController = {
         userId,
         userEmail,
         financeRequestId,
+        allowAnyApprovedFinance: isSuperAdminRequest(req) || hasAnyExpenditureWorkflowPermission(req),
       });
 
       const head = normalizeText(req.query.head).toLowerCase();
@@ -879,7 +887,11 @@ const uploads = {
     : null,
 };
 
-        const result = await expenditureModel.updateExpenditureRequest(id, payload, userId, uploads);
+        const result = await expenditureModel.updateExpenditureRequest(id, payload, userId, uploads, {
+          actor: resolveActor(req),
+          isSuperAdmin: isSuperAdminRequest(req),
+          isWorkflowEditor,
+        });
 
         return res.json({
           status: 'success',
@@ -896,6 +908,7 @@ const uploads = {
         data: { affectedRows: result.affectedRows },
       });
     } catch (err) {
+      if (sendAccessDeniedError(res, err)) return;
       if (sendDomainValidationError(res, err)) return;
       return handleError(res, err, 'Error updating expenditure request');
     }

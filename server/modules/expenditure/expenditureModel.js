@@ -834,14 +834,14 @@ async function getApprovedFinanceRequestOwner(connOrDb, financeRequestId) {
   return rows[0] || null;
 }
 
-export async function getApprovedBudgets({ userId, userEmail, financeRequestId } = {}) {
+export async function getApprovedBudgets({ userId, userEmail, financeRequestId, allowAnyApprovedFinance = false } = {}) {
   const uid = toPositiveInt(userId);
   const financeId = toPositiveInt(financeRequestId);
   if (!financeId || !uid) return [];
 
   const owner = await getApprovedFinanceRequestOwner(db, financeId);
   if (!owner) return [];
-  if (toPositiveInt(owner.created_by) !== uid) return [];
+  if (!allowAnyApprovedFinance && toPositiveInt(owner.created_by) !== uid) return [];
 
   try {
     const [financeRows] = await db.execute(
@@ -2881,11 +2881,21 @@ await insertExpenditureRows(conn, expenditureId, expenditureRows, budgetSnapshot
   });
 }
 
-export async function updateExpenditureRequest(expenditureId, data, userId, uploads = {}) {
+export async function updateExpenditureRequest(expenditureId, data, userId, uploads = {}, options = {}) {
   const normalizedExpenditureId = toPositiveInt(expenditureId);
   if (!normalizedExpenditureId) {
     throw new Error('Invalid expenditure request ID');
   }
+
+  const canBypassFinanceOwnerCheck = Boolean(
+    options?.isSuperAdmin ||
+      options?.isWorkflowEditor ||
+      options?.actor?.isSuperAdmin ||
+      options?.actor?.is_super_admin ||
+      normalizeText(options?.actor?.role).toLowerCase() === 'super_admin' ||
+      (Array.isArray(options?.actor?.roles) &&
+        options.actor.roles.some((role) => normalizeText(role).toLowerCase() === 'super_admin')),
+  );
 
   return withTransaction(async (conn) => {
     const uid = toPositiveInt(userId);
@@ -2956,7 +2966,7 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     if (!financeOwner) {
       throw new Error('Finance request not found or not approved');
     }
-    if (toPositiveInt(financeOwner.created_by) !== uid) {
+    if (!canBypassFinanceOwnerCheck && toPositiveInt(financeOwner.created_by) !== uid) {
       throw new Error('Access denied for this finance request');
     }
 

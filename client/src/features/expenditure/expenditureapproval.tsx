@@ -77,6 +77,16 @@ interface PayeeLookupResult {
 }
 type PayeeLookupField = 'payeeName' | 'accountNo' | 'bankName' | 'ifsc' | 'branchName';
 
+const normalizeExpenditureErrorMessage = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  const message = value.replace(/\s+/g, ' ').trim();
+  if (!message) return '';
+  if (/<html[\s>]|<!doctype html/i.test(message)) {
+    return 'Server returned an internal error. Please check the server logs for the exact reason.';
+  }
+  return message;
+};
+
 const getSubmitErrorMessage = (error: unknown): string => {
   const candidate = error as {
     response?: {
@@ -87,18 +97,19 @@ const getSubmitErrorMessage = (error: unknown): string => {
   const responseData = candidate.response?.data;
 
   if (typeof responseData === 'string' && responseData.trim()) {
-    return responseData.trim();
+    return normalizeExpenditureErrorMessage(responseData);
   }
 
   if (responseData && typeof responseData === 'object') {
     const data = responseData as { message?: unknown; error?: unknown };
-    if (typeof data.message === 'string' && data.message.trim()) return data.message.trim();
-    if (typeof data.error === 'string' && data.error.trim()) return data.error.trim();
+    const message = normalizeExpenditureErrorMessage(data.message);
+    if (message) return message;
+    const errorMessage = normalizeExpenditureErrorMessage(data.error);
+    if (errorMessage) return errorMessage;
   }
 
-  if (typeof candidate.message === 'string' && candidate.message.trim()) {
-    return candidate.message.trim();
-  }
+  const fallbackMessage = normalizeExpenditureErrorMessage(candidate.message);
+  if (fallbackMessage) return fallbackMessage;
 
   return 'Something went wrong while submitting';
 };
@@ -2271,13 +2282,8 @@ const workflowRowRefFromState = (() => {
       .map((budget) => String(budget.head || '').trim())
       .filter(Boolean);
 
-    if (approvedHeads.length > 0) {
-      return Array.from(new Set(approvedHeads))
-        .map((head) => ({ value: head, label: head }));
-    }
-
-    return PRIMARY_HEAD_OPTIONS.flatMap((group) => group.options)
-      .map((option) => ({ value: String(option.value), label: String(option.label) }));
+    return Array.from(new Set(approvedHeads))
+      .map((head) => ({ value: head, label: head }));
   };
 
   const getApprovedSubHeadOptionsForAdvance = (budgetHead: string | number): OptionType[] => {
@@ -2288,13 +2294,8 @@ const workflowRowRefFromState = (() => {
       .map((budget) => String(budget.subHead || '').trim())
       .filter(Boolean);
 
-    if (approvedSubHeads.length > 0) {
-      return Array.from(new Set(approvedSubHeads))
-        .map((subHead) => ({ value: subHead, label: subHead }));
-    }
-
-    return (SUB_HEAD_BY_BUDGET_HEAD[String(budgetHead)] || [])
-      .map((subHead) => ({ value: String(subHead), label: String(subHead) }));
+    return Array.from(new Set(approvedSubHeads))
+      .map((subHead) => ({ value: subHead, label: subHead }));
   };
 
   const findApprovedBudgetOption = (budgetHead: string | number, subHead: string | number) => {
@@ -2310,6 +2311,41 @@ const workflowRowRefFromState = (() => {
 
   const getApprovedBudgetAmount = (budget: ApprovedBudgetOption | null) =>
     budget ? String(budget.remainingAmount ?? budget.totalAmount ?? '') : '';
+
+  const hydrateRowsFromApprovedBudgets = <T extends {
+    budgetHead: string | number;
+    subHead: string | number;
+    budget: string;
+    budgetLineId?: number | null;
+    budgetProposalId?: number | null;
+  }>(rows: T[]): T[] => {
+    if (!approvedBudgetOptions.length) return rows;
+
+    return rows.map((row) => {
+      const budgetLineId = Number(row.budgetLineId || 0) || null;
+      const matchedBudget = budgetLineId
+        ? approvedBudgetOptions.find((budget) => Number(budget.budgetLineId || 0) === budgetLineId)
+        : null;
+
+      if (!matchedBudget) return row;
+
+      return {
+        ...row,
+        budgetHead: row.budgetHead || matchedBudget.head,
+        subHead: row.subHead || matchedBudget.subHead,
+        budget: row.budget || getApprovedBudgetAmount(matchedBudget),
+        budgetProposalId: row.budgetProposalId ?? matchedBudget.budgetProposalId,
+      };
+    });
+  };
+
+  useEffect(() => {
+    if (!approvedBudgetOptions.length) return;
+
+    setAdvanceRows((rows) => hydrateRowsFromApprovedBudgets(rows));
+    setSettlementRows((rows) => hydrateRowsFromApprovedBudgets(rows));
+    setExpenditureSubRows((rows) => hydrateRowsFromApprovedBudgets(rows));
+  }, [approvedBudgetOptions]);
 
   const getBudgetDisplayValue = (rowBudget: string) => {
     if (rowBudget !== '') {
