@@ -42,6 +42,17 @@ const isGenericConflictMessage = (message: string): boolean => {
   return normalized.includes('page was not displayed') && normalized.includes('conflict');
 };
 
+const resolveTagValue = (value: unknown, options: SelectOption[]) => {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return '';
+
+  const matched = options.find(
+    (option) => String(option.value ?? '').trim().toLowerCase() === normalized.toLowerCase(),
+  );
+
+  return matched?.value || normalized;
+};
+
 const getFinanceSubmitErrorMessage = (error: unknown): string => {
   const candidate = error as {
     response?: {
@@ -253,6 +264,8 @@ const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
     label: 'General',
     options: [
       'Research & Development',
+      'Government Funded Projects',
+      'Government Funded Events',
       'Administrative Expenses',
       'Licenses & Taxes',
       'Salary',
@@ -853,6 +866,52 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Seed Fund (Testing)',
     'Seed Fund (Travel)'
   ],
+  'Government Funded Projects': [
+    'Manpower',
+    'Equipment',
+    'Consumables',
+    'IT Infrastructure',
+    'Travel',
+    'Printing',
+    'Stationery',
+    'Miscellaneous',
+    'Overhead Expenses',
+    'Food & Refreshment',
+    'Incidental Expenses',
+    'Administrative Expenses',
+    'Accommodation',
+    'Honorarium',
+    'Accessories & Peripherals',
+    'Memento & Gifts',
+    'Publicity & Promotion',
+    'Software & Licenses'
+  ],
+  'Government Funded Events': [
+    'A/V Arrangements',
+    'Accessories',
+    'Accommodation',
+    'Auditing Charge',
+    'Bag',
+    'Consumables',
+    'Decorations',
+    'Driver Bata',
+    'Event Logistics',
+    'Food & Refreshment',
+    'Honorarium',
+    'Memento & Gifts',
+    'Miscellaneous',
+    'Printing',
+    'Prizes',
+    'Promotions',
+    'Publication Charges',
+    'Registration fee',
+    'Registration Kit',
+    'Remuneration',
+    'Sitting Fees',
+    'Stationery',
+    'T-shirt',
+    'Travel'
+  ],
   'Administrative Expenses': [
     'Affiliation Fees',
     'AICTE Fees',
@@ -1439,7 +1498,7 @@ const FinanceApproval: React.FC = () => {
     const loadTagOptions = async () => {
       try {
         const response = await authenticityUtility.get('/finance-requests/tags') as any;
-        if (response?.success && Array.isArray(response?.data)) {
+        if ((response?.status === 'success' || response?.success === true) && Array.isArray(response?.data)) {
           const options = response.data
             .map((row: any) => ({
               value: String(row?.tag_name || '').trim(),
@@ -2690,6 +2749,15 @@ const FinanceApproval: React.FC = () => {
   }, [beneficiaryType]);
 
   useEffect(() => {
+    if (!selectedTag) return;
+
+    const resolvedTag = resolveTagValue(selectedTag, tagOptions);
+    if (resolvedTag !== selectedTag) {
+      setSelectedTag(resolvedTag);
+    }
+  }, [selectedTag, tagOptions]);
+
+  useEffect(() => {
     if (!id) {
       return;
     }
@@ -2778,7 +2846,7 @@ const FinanceApproval: React.FC = () => {
         setAmountProposed(record.proposed_amount !== null && record.proposed_amount !== undefined ? String(record.proposed_amount) : '');
         setBalanceAmount(record.balance_amount !== null && record.balance_amount !== undefined ? String(record.balance_amount) : '');
         setDebitStatus(record.debit_status || '');
-        setSelectedTag(record.budget_tag || '');
+        setSelectedTag(resolveTagValue(record.budget_tag, tagOptions));
         const annexuresFromApi = Array.isArray(record.annexures)
           ? record.annexures
           : [];

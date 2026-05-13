@@ -2710,11 +2710,21 @@ const proposalFilteredRows = useMemo(() => {
                                 title="Edit"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (!isApproved || (isSuperAdminView && config.moduleKey === 'finance')) {
+                                  if (
+                                    !isApproved ||
+                                    (isSuperAdminView &&
+                                      (config.moduleKey === 'finance' || config.moduleKey === 'expenditure'))
+                                  ) {
                                     navigate(getRecordRoute(recordId, 'edit'));
                                   }
                                 }}
-                                disabled={isApproved && !(isSuperAdminView && config.moduleKey === 'finance')}
+                                disabled={
+                                  isApproved &&
+                                  !(
+                                    isSuperAdminView &&
+                                    (config.moduleKey === 'finance' || config.moduleKey === 'expenditure')
+                                  )
+                                }
                               >
                                 <Edit2 size={16} />
                               </button>
