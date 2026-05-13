@@ -1,21 +1,45 @@
-import React, { useState, useRef, CSSProperties, useEffect, ChangeEvent, MouseEvent, Fragment } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Info, Plus, X, Upload, Eye, Trash2, Download, ChevronLeft, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
-import { useReactToPrint } from 'react-to-print';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import 'bootstrap/dist/css/bootstrap.min.css';
+import React, {
+  useState,
+  useRef,
+  CSSProperties,
+  useEffect,
+  ChangeEvent,
+  MouseEvent,
+  Fragment,
+} from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import {
+  Info,
+  Plus,
+  X,
+  Upload,
+  Eye,
+  Trash2,
+  Download,
+  ChevronLeft,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle2,
+} from "lucide-react";
+import { useReactToPrint } from "react-to-print";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import "bootstrap/dist/css/bootstrap.min.css";
 
-import './expenditureapproval.css';
-import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
+import "./expenditureapproval.css";
+import KSRCTLogo from "../../shared/assets/images/ksrct_logo.png";
 
-import authenticityUtility from '../../shared/utils/authenticityUtility';
-import CustomTagInput from '../../shared/components/ui/CustomTagInput';
-import CustomInput from '../../shared/components/ui/CustomInput';
-import CustomDropdown, { OptionType } from '../../shared/components/ui/CustomDropdown';
-import CustomToggle from '../../shared/components/ui/CustomToggle';
-import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
-import AddPayeeModal, { AddPayeeModalPayee } from '../../shared/components/AddPayeeModal';
+import authenticityUtility from "../../shared/utils/authenticityUtility";
+import CustomTagInput from "../../shared/components/ui/CustomTagInput";
+import CustomInput from "../../shared/components/ui/CustomInput";
+import CustomDropdown, {
+  OptionType,
+} from "../../shared/components/ui/CustomDropdown";
+import CustomToggle from "../../shared/components/ui/CustomToggle";
+import AlertModal, { AlertType } from "../../shared/components/ui/AlertModal";
+import AddPayeeModal, {
+  AddPayeeModalPayee,
+} from "../../shared/components/AddPayeeModal";
 
 interface SelectOption {
   value: string;
@@ -48,7 +72,7 @@ interface PayeeRow {
   accountName?: string;
   panNumber?: string;
   accountType?: string;
-  beneficiaryType?: 'individual' | 'organization';
+  beneficiaryType?: "individual" | "organization";
   beneficiaryOrg?: string;
   organizationType?: string;
   msme?: string;
@@ -75,14 +99,19 @@ interface PayeeLookupResult {
   tds_details?: string | null;
   tds_section?: string | null;
 }
-type PayeeLookupField = 'payeeName' | 'accountNo' | 'bankName' | 'ifsc' | 'branchName';
+type PayeeLookupField =
+  | "payeeName"
+  | "accountNo"
+  | "bankName"
+  | "ifsc"
+  | "branchName";
 
 const normalizeExpenditureErrorMessage = (value: unknown): string => {
-  if (typeof value !== 'string') return '';
-  const message = value.replace(/\s+/g, ' ').trim();
-  if (!message) return '';
+  if (typeof value !== "string") return "";
+  const message = value.replace(/\s+/g, " ").trim();
+  if (!message) return "";
   if (/<html[\s>]|<!doctype html/i.test(message)) {
-    return 'Server returned an internal error. Please check the server logs for the exact reason.';
+    return "Server returned an internal error. Please check the server logs for the exact reason.";
   }
   return message;
 };
@@ -96,11 +125,11 @@ const getSubmitErrorMessage = (error: unknown): string => {
   };
   const responseData = candidate.response?.data;
 
-  if (typeof responseData === 'string' && responseData.trim()) {
+  if (typeof responseData === "string" && responseData.trim()) {
     return normalizeExpenditureErrorMessage(responseData);
   }
 
-  if (responseData && typeof responseData === 'object') {
+  if (responseData && typeof responseData === "object") {
     const data = responseData as { message?: unknown; error?: unknown };
     const message = normalizeExpenditureErrorMessage(data.message);
     if (message) return message;
@@ -111,7 +140,7 @@ const getSubmitErrorMessage = (error: unknown): string => {
   const fallbackMessage = normalizeExpenditureErrorMessage(candidate.message);
   if (fallbackMessage) return fallbackMessage;
 
-  return 'Something went wrong while submitting';
+  return "Something went wrong while submitting";
 };
 interface FinanceRequestContext {
   finance_request_id: number;
@@ -161,40 +190,49 @@ interface ApprovedBudgetOption {
 }
 
 const normalizeBudgetToken = (value: unknown): string =>
-  String(value ?? '')
+  String(value ?? "")
     .trim()
-    .replace(/\s+/g, ' ')
+    .replace(/\s+/g, " ")
     .toLowerCase();
 
 const normalizeDateForInput = (value: string | null | undefined): string => {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
+  const raw = String(value || "").trim();
+  if (!raw) return "";
   const ymd = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (ymd) return `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
   const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+  if (Number.isNaN(parsed.getTime())) return "";
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
 };
 
-const normalizeApprovedBudgetOption = (row: any): ApprovedBudgetOption | null => {
-  if (!row || typeof row !== 'object') return null;
+const normalizeApprovedBudgetOption = (
+  row: any,
+): ApprovedBudgetOption | null => {
+  if (!row || typeof row !== "object") return null;
 
-  const head = String(row.head ?? row.budget_head ?? '').trim();
-  const subHead = String(row.subHead ?? row.sub_head ?? '').trim();
+  const head = String(row.head ?? row.budget_head ?? "").trim();
+  const subHead = String(row.subHead ?? row.sub_head ?? "").trim();
   if (!head || !subHead) return null;
 
   return {
     budgetLineId: Number(row.budgetLineId ?? row.budget_line_id) || null,
-    budgetProposalId: Number(row.budgetProposalId ?? row.budget_proposal_id) || null,
-    proposalRef: String(row.proposalRef ?? row.proposal_ref ?? '').trim(),
-    fiscalYear: Number(row.fiscalYear ?? row.fiscal_year) || new Date().getFullYear(),
+    budgetProposalId:
+      Number(row.budgetProposalId ?? row.budget_proposal_id) || null,
+    proposalRef: String(row.proposalRef ?? row.proposal_ref ?? "").trim(),
+    fiscalYear:
+      Number(row.fiscalYear ?? row.fiscal_year) || new Date().getFullYear(),
     head,
     subHead,
     totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0) || 0,
     usedAmount: Number(row.usedAmount ?? row.used_amount ?? 0) || 0,
-    remainingAmount: Number(row.remainingAmount ?? row.remaining_amount ?? 0) || 0,
-    beneficiaryType: String(row.beneficiaryType ?? row.beneficiary_type ?? '').trim(),
-    beneficiaryValue: String(row.beneficiaryValue ?? row.beneficiary_value ?? '').trim(),
+    remainingAmount:
+      Number(row.remainingAmount ?? row.remaining_amount ?? 0) || 0,
+    beneficiaryType: String(
+      row.beneficiaryType ?? row.beneficiary_type ?? "",
+    ).trim(),
+    beneficiaryValue: String(
+      row.beneficiaryValue ?? row.beneficiary_value ?? "",
+    ).trim(),
   };
 };
 interface AdvanceFormRow {
@@ -239,7 +277,8 @@ const SUBCATEGORY_OPTIONS: Record<string, string[]> = {
     "Research Team",
     "Question Paper Setting Team",
   ],
-  Student_Team: ["Computer Science and Engineering",
+  Student_Team: [
+    "Computer Science and Engineering",
     "Electronics and Communication Engineering",
     "Mechanical Engineering",
     "Civil Engineering",
@@ -263,332 +302,321 @@ const SUBCATEGORY_OPTIONS: Record<string, string[]> = {
     "Women Empowerment Cell",
     "Alumni Cell",
   ],
-  Club: [
-    "Coding Club",
-    "Robotics Club",
-    "Cultural Club",
-    "Sports Club",
-  ],
+  Club: ["Coding Club", "Robotics Club", "Cultural Club", "Sports Club"],
 };
 
 const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
   {
-    label: 'Non-Recurring',
+    label: "Non-Recurring",
     options: [
-      'Civil Infrastructure',
-      'Electrical Infrastructure',
-      'IT Infrastructure',
-      'Furniture & Fixtures',
-      'Vehicles',
-      'Equipment',
-      'Accessories & Kits',
+      "Civil Infrastructure",
+      "Electrical Infrastructure",
+      "IT Infrastructure",
+      "Furniture & Fixtures",
+      "Vehicles",
+      "Equipment",
+      "Accessories & Kits",
     ],
   },
   {
-    label: 'Recurring',
+    label: "Recurring",
     options: [],
   },
   {
-    label: 'Maintenance & Spares',
+    label: "Maintenance & Spares",
+    options: ["Maintenance Charges", "Spares", "Annual Maintenance Charges"],
+  },
+  {
+    label: "Operational",
     options: [
-      'Maintenance Charges',
-      'Spares',
-      'Annual Maintenance Charges',
+      "Consumables",
+      "Software",
+      "Membership & Subscriptions",
+      "Student Essentials",
+      "Printing & Stationery",
+      "Postal Expenses",
+      "Local Conveyance",
+      "Operational Expenses",
     ],
   },
   {
-    label: 'Operational',
+    label: "Events & Engagement",
+    options: ["Events & Competitions", "Meetings & Audits"],
+  },
+  {
+    label: "Academics",
     options: [
-      'Consumables',
-      'Software',
-      'Membership & Subscriptions',
-      'Student Essentials',
-      'Printing & Stationery',
-      'Postal Expenses',
-      'Local Conveyance',
-      'Operational Expenses',
+      "Faculty Empowerment",
+      "Staff Empowerment",
+      "Student Empowerment",
+      "Student Capacity Building",
+      "Learning Resources",
+      "Accreditation Expenses",
+      "Professional Body Expenses",
+      "Awards & Recognition",
     ],
   },
   {
-    label: 'Events & Engagement',
-    options: [
-      'Events & Competitions',
-      'Meetings & Audits',
-    ],
+    label: "Branding & Outreach",
+    options: ["Advertisement & Branding", "Public Relations", "Admissions"],
   },
   {
-    label: 'Academics',
+    label: "General",
     options: [
-      'Faculty Empowerment',
-      'Staff Empowerment',
-      'Student Empowerment',
-      'Student Capacity Building',
-      'Learning Resources',
-      'Accreditation Expenses',
-      'Professional Body Expenses',
-      'Awards & Recognition',
-    ],
-  },
-  {
-    label: 'Branding & Outreach',
-    options: [
-      'Advertisement & Branding',
-      'Public Relations',
-      'Admissions',
-    ],
-  },
-  {
-    label: 'General',
-    options: [
-      'Research & Development',
-      'Government Funded Projects',
-      'Government Funded Events',
-      'Administrative Expenses',
-      'Salary',
-      'Bills & Payments',
-      'Miscellaneous Expenses',
+      "Research & Development",
+      "Government Funded Projects",
+      "Government Funded Events",
+      "Administrative Expenses",
+      "Salary",
+      "Bills & Payments",
+      "Miscellaneous Expenses",
     ],
   },
 ];
 const INCOME_SOURCE_OPTIONS = [
-  'Government Funding',
-  'Registration Fees',
-  'Sponsorship',
-  'Management',
-  'Staff Club',
+  "Government Funding",
+  "Registration Fees",
+  "Sponsorship",
+  "Management",
+  "Staff Club",
 ];
 const toOptions = (items: string[]): OptionType[] =>
   items.map((item) => ({ value: item, label: item }));
-const CONTRIBUTION_OPTIONS = ['Full', 'Partial'];
-const STATUS_OPTIONS = ['Credited', 'Reimbursement'];
+const CONTRIBUTION_OPTIONS = ["Full", "Partial"];
+const STATUS_OPTIONS = ["Credited", "Reimbursement"];
 const CREDIT_ACCOUNT_OPTIONS = [
-  'PRINCIPAL GNERAL A/C | 0751301000015840',
-  'KSRCT-PRINCIPAL COMMON A/C | 0751301000264891',
-  'PRINCIPAL SCHOLARSHIP A/C | 0751301000001328',
-  'PRINCIPAL KSRCT ASSOCIATION ACCOUNT | 0751301000028594',
-  'STAFF CLUB A/C | 0751301000005664',
-  'SOCIETY OF AUTOMOTIVE ENGINEERS (SAE) CLUB KSRCTA/C | 0751301000021422',
-  'KSRCT IETE CHAPTER A/C | 0751301000265626',
-  'KSRCT CIVIL SERB NPDF | 0751301000264860',
-  'KSRCT CIVIL SERB NPDF 2 | 0751301000265593',
-  'K S RANGASAMY COLLEGE OF TECHNOLOGY AUTONOMOUS | 0751302000000224',
-  'KSRCT-CNST A/C | 0751301000045784',
-  'CSI CHAPTER BRANCH OF KSRCT A/C | 0751301000185368',
-  'KSRCT NSS CORPUS FUND | 0751301000047863',
-  'PRINCIPAL NSS UNIT KSRCT | 0751301000004545',
-  'IEEE Student KSRCT | 0751301000059822',
-  'ISTE Student Chapter KSRCT | 0751301000023696',
-  'KSRCT RPS AICTE Project | 0075133800000643',
+  "PRINCIPAL GNERAL A/C | 0751301000015840",
+  "KSRCT-PRINCIPAL COMMON A/C | 0751301000264891",
+  "PRINCIPAL SCHOLARSHIP A/C | 0751301000001328",
+  "PRINCIPAL KSRCT ASSOCIATION ACCOUNT | 0751301000028594",
+  "STAFF CLUB A/C | 0751301000005664",
+  "SOCIETY OF AUTOMOTIVE ENGINEERS (SAE) CLUB KSRCTA/C | 0751301000021422",
+  "KSRCT IETE CHAPTER A/C | 0751301000265626",
+  "KSRCT CIVIL SERB NPDF | 0751301000264860",
+  "KSRCT CIVIL SERB NPDF 2 | 0751301000265593",
+  "K S RANGASAMY COLLEGE OF TECHNOLOGY AUTONOMOUS | 0751302000000224",
+  "KSRCT-CNST A/C | 0751301000045784",
+  "CSI CHAPTER BRANCH OF KSRCT A/C | 0751301000185368",
+  "KSRCT NSS CORPUS FUND | 0751301000047863",
+  "PRINCIPAL NSS UNIT KSRCT | 0751301000004545",
+  "IEEE Student KSRCT | 0751301000059822",
+  "ISTE Student Chapter KSRCT | 0751301000023696",
+  "KSRCT RPS AICTE Project | 0075133800000643",
 ];
 const DEBIT_ACCOUNT_OPTIONS = CREDIT_ACCOUNT_OPTIONS;
 const CATEGORY_TYPE_OPTIONS = [
-  'Faculty',
-  'Staff',
-  'Department',
-  'Centre',
-  'Cell',
-  'Club',
-  'Section',
-  'Professional Body',
-  'Institution',
+  "Faculty",
+  "Staff",
+  "Department",
+  "Centre",
+  "Cell",
+  "Club",
+  "Section",
+  "Professional Body",
+  "Institution",
 ];
 const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
-  Department: 'DEPARTMENT',
-  Centre: 'CENTRE',
-  Cell: 'CELL',
-  Club: 'CLUB',
-  Section: 'SECTION',
-  'Professional Body': 'PROFESSIONAL_BODY',
+  Department: "DEPARTMENT",
+  Centre: "CENTRE",
+  Cell: "CELL",
+  Club: "CLUB",
+  Section: "SECTION",
+  "Professional Body": "PROFESSIONAL_BODY",
 };
 const FALLBACK_SUBCATEGORY_OPTIONS: Record<string, string[]> = {
   Department: [
-    'Computer Science and Engineering',
-    'Electronics and Communication Engineering',
-    'Mechanical Engineering',
-    'Civil Engineering',
-    'Information Technology',
+    "Computer Science and Engineering",
+    "Electronics and Communication Engineering",
+    "Mechanical Engineering",
+    "Civil Engineering",
+    "Information Technology",
   ],
   Centre: [
-    'Centre for Research',
-    'Centre for Innovation',
-    'Centre for Industry Collaboration',
+    "Centre for Research",
+    "Centre for Innovation",
+    "Centre for Industry Collaboration",
   ],
   Cell: [
-    'Placement Cell',
-    'Entrepreneurship Development Cell',
-    'Women Empowerment Cell',
-    'Alumni Cell',
+    "Placement Cell",
+    "Entrepreneurship Development Cell",
+    "Women Empowerment Cell",
+    "Alumni Cell",
   ],
-  Club: [
-    'Coding Club',
-    'Robotics Club',
-    'Cultural Club',
-    'Sports Club',
-  ],
-  Section: [
-    'Section A',
-    'Section B',
-    'Section C',
-  ],
-  'Professional Body': [
-    'American Society of Mechanical Engineers (Student Chapter)',
-    'Computer Society of India',
-    'Erode Salaram Foundation',
-    'Local Library Authority, Erode & Namakkal',
-    'Society for the Advancement of Library and Information Science',
-    'The Indian Institute of Welding',
-    'The Indian Society of Heating, Refrigerating and Air Conditioning',
+  Club: ["Coding Club", "Robotics Club", "Cultural Club", "Sports Club"],
+  Section: ["Section A", "Section B", "Section C"],
+  "Professional Body": [
+    "American Society of Mechanical Engineers (Student Chapter)",
+    "Computer Society of India",
+    "Erode Salaram Foundation",
+    "Local Library Authority, Erode & Namakkal",
+    "Society for the Advancement of Library and Information Science",
+    "The Indian Institute of Welding",
+    "The Indian Society of Heating, Refrigerating and Air Conditioning",
   ],
 };
 const FALLBACK_TAG_OPTIONS: SelectOption[] = [
-  { value: 'Laboratory', label: 'Laboratory' },
-  { value: 'Association', label: 'Association' },
-  { value: 'Skilling', label: 'Skilling' },
-  { value: 'Research', label: 'Research' },
-  { value: 'Outreach', label: 'Outreach' },
-  { value: 'Office', label: 'Office' },
-  { value: 'Academics', label: 'Academics' },
-  { value: 'Essentials', label: 'Essentials' },
-  { value: 'Events', label: 'Events' },
-  { value: 'Innovation', label: 'Innovation' },
-  { value: 'Start-up', label: 'Start-up' },
-  { value: 'Entrepreneurship', label: 'Entrepreneurship' },
+  { value: "Laboratory", label: "Laboratory" },
+  { value: "Association", label: "Association" },
+  { value: "Skilling", label: "Skilling" },
+  { value: "Research", label: "Research" },
+  { value: "Outreach", label: "Outreach" },
+  { value: "Office", label: "Office" },
+  { value: "Academics", label: "Academics" },
+  { value: "Essentials", label: "Essentials" },
+  { value: "Events", label: "Events" },
+  { value: "Innovation", label: "Innovation" },
+  { value: "Start-up", label: "Start-up" },
+  { value: "Entrepreneurship", label: "Entrepreneurship" },
 ];
-const PAYMENT_MODE_OPTIONS = ['NEFT', 'RTGS', 'IMPS', 'Cheque', 'Cash', 'G-Pay', 'PhonePe', 'Internal Transfer'];
-const PAYMENT_STATUS_OPTIONS = ['Paid', 'Pending', 'Processing', 'Cancelled'];
-const BULK_NEFT_TEMPLATE_VERSION = '2026-04-11';
-const EVENT_SUBHEAD_GROUPS: Record<string, Array<{ label: string; options: OptionType[] }>> = {
-  'Events & Competitions': [
+const PAYMENT_MODE_OPTIONS = [
+  "NEFT",
+  "RTGS",
+  "IMPS",
+  "Cheque",
+  "Cash",
+  "G-Pay",
+  "PhonePe",
+  "Internal Transfer",
+];
+const PAYMENT_STATUS_OPTIONS = ["Paid", "Pending", "Processing", "Cancelled"];
+const BULK_NEFT_TEMPLATE_VERSION = "2026-04-11";
+const EVENT_SUBHEAD_GROUPS: Record<
+  string,
+  Array<{ label: string; options: OptionType[] }>
+> = {
+  "Events & Competitions": [
     {
-      label: 'Academic & Professional Development',
+      label: "Academic & Professional Development",
       options: toOptions([
-        'Seminar',
-        'Webinar',
-        'Guest Lecture',
-        'Workshop',
-        'Hands-on Training',
-        'FDP (Faculty Development Programme)',
-        'STTP (Short-Term Training Programme)',
+        "Seminar",
+        "Webinar",
+        "Guest Lecture",
+        "Workshop",
+        "Hands-on Training",
+        "FDP (Faculty Development Programme)",
+        "STTP (Short-Term Training Programme)",
       ]),
     },
     {
-      label: 'Conferences & Conclaves',
+      label: "Conferences & Conclaves",
       options: toOptions([
-        'National Conference',
-        'International Conference',
-        'Conclave',
-        'Convention',
+        "National Conference",
+        "International Conference",
+        "Conclave",
+        "Convention",
       ]),
     },
     {
-      label: 'Industry & Networking',
+      label: "Industry & Networking",
       options: toOptions([
-        'Industry Visit',
-        'Expert Visit',
-        'Networking Event',
-        'Industry Interaction',
-        'MoU Signing',
+        "Industry Visit",
+        "Expert Visit",
+        "Networking Event",
+        "Industry Interaction",
+        "MoU Signing",
       ]),
     },
     {
-      label: 'Association & Institutional Activities',
+      label: "Association & Institutional Activities",
       options: toOptions([
-        'Association Function',
-        'Alumni Meeting',
-        'Alumni Interaction',
-        'Parents Meeting',
+        "Association Function",
+        "Alumni Meeting",
+        "Alumni Interaction",
+        "Parents Meeting",
       ]),
     },
     {
-      label: 'Outreach Event',
+      label: "Outreach Event",
       options: toOptions([
-        'School Visit',
-        'Awareness Program',
-        'Campaigns',
-        'Mini Marathon',
+        "School Visit",
+        "Awareness Program",
+        "Campaigns",
+        "Mini Marathon",
       ]),
     },
     {
-      label: 'Competitions & Innovation',
+      label: "Competitions & Innovation",
       options: toOptions([
-        'Hackathons',
-        'Competitions',
-        'Club Activities',
-        'Project Expo',
-        'Ideathon',
-        'Start-up meet',
-        'Mentoring Sessions',
+        "Hackathons",
+        "Competitions",
+        "Club Activities",
+        "Project Expo",
+        "Ideathon",
+        "Start-up meet",
+        "Mentoring Sessions",
       ]),
     },
     {
-      label: 'Cultural & Celebrations',
+      label: "Cultural & Celebrations",
       options: toOptions([
-        'Annual Day',
-        'Sports Day',
-        'Graduation Day',
-        'Science Day',
-        'Womens Day',
-        'Celebration Day',
-        'Festival Celebrations',
-        'Dakshaa',
-        'Harmonicks',
+        "Annual Day",
+        "Sports Day",
+        "Graduation Day",
+        "Science Day",
+        "Womens Day",
+        "Celebration Day",
+        "Festival Celebrations",
+        "Dakshaa",
+        "Harmonicks",
       ]),
     },
     {
-      label: 'Sports & Student Engagement',
+      label: "Sports & Student Engagement",
       options: toOptions([
-        'Sports Meet',
-        'Sports Day (Engagement)',
-        'Camp',
-        'Rally',
-        'Student Induction Programme',
-        'Orientation Session',
+        "Sports Meet",
+        "Sports Day (Engagement)",
+        "Camp",
+        "Rally",
+        "Student Induction Programme",
+        "Orientation Session",
       ]),
     },
   ],
-  'Meetings & Audits': [
+  "Meetings & Audits": [
     {
-      label: 'Institutional Governance',
+      label: "Institutional Governance",
       options: toOptions([
-        'Governing Body Meeting',
-        'Research Advisory Board Meeting',
-        'Finance Committee Meeting',
-        'Result Passing Board Meeting',
-        'Examination Committee Meeting',
-        'Placement Meeting',
-        'Network Meeting',
+        "Governing Body Meeting",
+        "Research Advisory Board Meeting",
+        "Finance Committee Meeting",
+        "Result Passing Board Meeting",
+        "Examination Committee Meeting",
+        "Placement Meeting",
+        "Network Meeting",
       ]),
     },
     {
-      label: 'Academic Governance',
+      label: "Academic Governance",
       options: toOptions([
-        'Academic Council Meeting',
-        'Standing Committee Meeting',
-        'Board of Studies Meeting',
-        'DAB Meeting',
+        "Academic Council Meeting",
+        "Standing Committee Meeting",
+        "Board of Studies Meeting",
+        "DAB Meeting",
       ]),
     },
     {
-      label: 'Audits',
+      label: "Audits",
       options: toOptions([
-        'Academic Audit',
-        'Administrative Audit',
-        'Energy & Green Audit',
-        'Government Meetings',
+        "Academic Audit",
+        "Administrative Audit",
+        "Energy & Green Audit",
+        "Government Meetings",
       ]),
     },
   ],
 };
 
-const flattenOptions = (options: Array<OptionType | { label: string; options: OptionType[] }>): OptionType[] =>
-  options.flatMap((opt) => ('options' in opt ? opt.options : opt));
+const flattenOptions = (
+  options: Array<OptionType | { label: string; options: OptionType[] }>,
+): OptionType[] =>
+  options.flatMap((opt) => ("options" in opt ? opt.options : opt));
 
 const parsePositiveIntLike = (value: unknown): number | null => {
-  if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
     return value;
   }
 
-  const text = String(value ?? '').trim();
+  const text = String(value ?? "").trim();
   if (!text) return null;
 
   const direct = Number.parseInt(text, 10);
@@ -603,27 +631,36 @@ const parsePositiveIntLike = (value: unknown): number | null => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
-const normalizeWorkflowModule = (value: unknown): 'Advance' | 'Settlement' | 'Expenditure' | null => {
-  const text = String(value ?? '').trim().toLowerCase();
-  if (text === 'advance') return 'Advance';
-  if (text === 'settlement') return 'Settlement';
-  if (text === 'expenditure') return 'Expenditure';
+const normalizeWorkflowModule = (
+  value: unknown,
+): "Advance" | "Settlement" | "Expenditure" | null => {
+  const text = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (text === "advance") return "Advance";
+  if (text === "settlement") return "Settlement";
+  if (text === "expenditure") return "Expenditure";
   return null;
 };
 
 const resolveTagValue = (value: unknown, options: SelectOption[]) => {
-  const normalized = String(value ?? '').trim();
-  if (!normalized) return '';
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "";
 
   const matched = options.find(
-    (option) => String(option.value ?? '').trim().toLowerCase() === normalized.toLowerCase(),
+    (option) =>
+      String(option.value ?? "")
+        .trim()
+        .toLowerCase() === normalized.toLowerCase(),
   );
 
   return matched?.value || normalized;
 };
 
-const extractTagCandidate = (source: Record<string, unknown> | null | undefined): string => {
-  if (!source || typeof source !== 'object') return '';
+const extractTagCandidate = (
+  source: Record<string, unknown> | null | undefined,
+): string => {
+  if (!source || typeof source !== "object") return "";
   const candidate =
     source.budget_tag ??
     source.budgetTag ??
@@ -632,45 +669,57 @@ const extractTagCandidate = (source: Record<string, unknown> | null | undefined)
     source.financeTag ??
     source.tag_name ??
     source.tag ??
-    '';
-  return String(candidate ?? '').trim();
+    "";
+  return String(candidate ?? "").trim();
 };
 
 const resolveBillFileUrl = (file: BillFileRecord) => {
-  const rawUrl = String(file.file_url ?? file.download_url ?? file.file_path ?? '').trim();
-  if (!rawUrl) return '';
+  const rawUrl = String(
+    file.file_url ?? file.download_url ?? file.file_path ?? "",
+  ).trim();
+  if (!rawUrl) return "";
   if (/^https?:\/\//i.test(rawUrl)) return rawUrl;
 
   const baseUrl = authenticityUtility.getBaseURL();
-  return rawUrl.startsWith('/') ? `${baseUrl}${rawUrl}` : `${baseUrl}/${rawUrl}`;
+  return rawUrl.startsWith("/")
+    ? `${baseUrl}${rawUrl}`
+    : `${baseUrl}/${rawUrl}`;
 };
 
-const hasReachedPostDofStage = (record: Record<string, any>, workflowStatus: string): boolean => {
+const hasReachedPostDofStage = (
+  record: Record<string, any>,
+  workflowStatus: string,
+): boolean => {
   if (
-    ['approved', 'completed', 'dof_approved', 'principal_approved'].includes(workflowStatus) ||
-    workflowStatus.includes('dof_approved') ||
-    workflowStatus.includes('principal_approved')
+    ["approved", "completed", "dof_approved", "principal_approved"].includes(
+      workflowStatus,
+    ) ||
+    workflowStatus.includes("dof_approved") ||
+    workflowStatus.includes("principal_approved")
   ) {
     return true;
   }
 
   const state = record?.workflow_state;
   const currentStage = String(
-    (state && typeof state === 'object' ? (state as Record<string, unknown>).currentStage : '') ||
+    (state && typeof state === "object"
+      ? (state as Record<string, unknown>).currentStage
+      : "") ||
       record?.workflow_stage ||
-      '',
+      "",
   )
     .trim()
     .toLowerCase();
 
-  return ['principal', 'chairman'].includes(currentStage);
+  return ["principal", "chairman"].includes(currentStage);
 };
 
 const getSelectedOption = (
   value: string | number,
-  options: Array<OptionType | { label: string; options: OptionType[] }>
+  options: Array<OptionType | { label: string; options: OptionType[] }>,
 ): OptionType | null =>
-  flattenOptions(options).find((opt) => String(opt.value) === String(value)) ?? null;
+  flattenOptions(options).find((opt) => String(opt.value) === String(value)) ??
+  null;
 
 const PRIMARY_HEAD_OPTIONS: Array<{ label: string; options: OptionType[] }> =
   BUDGET_HEAD_GROUPS.map((group) => ({
@@ -678,557 +727,557 @@ const PRIMARY_HEAD_OPTIONS: Array<{ label: string; options: OptionType[] }> =
     options: toOptions(group.options),
   }));
 const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
-
-  'Civil Infrastructure': [
-    'Construction Works',
-    'Partition Works',
-    'False Ceiling Works',
-    'Plumbing Works',
-    'Canopy',
+  "Civil Infrastructure": [
+    "Construction Works",
+    "Partition Works",
+    "False Ceiling Works",
+    "Plumbing Works",
+    "Canopy",
   ],
 
-  'Electrical Infrastructure': [
-    'Electrical Wiring',
-    'Lights & Fans',
-    'Lift Installation',
-    'Air Conditioner',
-    'UPS Inverter',
-    'Battery',
+  "Electrical Infrastructure": [
+    "Electrical Wiring",
+    "Lights & Fans",
+    "Lift Installation",
+    "Air Conditioner",
+    "UPS Inverter",
+    "Battery",
   ],
 
-  'IT Infrastructure': [
-    'Hardwares',
-    'Softwares',
-    'Hard Disks',
-    'Monitors',
-    'Wi-fi Router',
-    'Network Materials',
-    'Laptops',
-    'Interactive Displays',
-    'Desktops',
-    'CCTV Materials',
-    'Television',
-    'Projectors',
-    'Printers',
-    'Mobiles & Tablet',
-    'Mic & Speakers',
-    'Amplifiers',
-    'A/V Equipment',
-    'Intercom',
-    'Xerox Machine',
+  "IT Infrastructure": [
+    "Hardwares",
+    "Softwares",
+    "Hard Disks",
+    "Monitors",
+    "Wi-fi Router",
+    "Network Materials",
+    "Laptops",
+    "Interactive Displays",
+    "Desktops",
+    "CCTV Materials",
+    "Television",
+    "Projectors",
+    "Printers",
+    "Mobiles & Tablet",
+    "Mic & Speakers",
+    "Amplifiers",
+    "A/V Equipment",
+    "Intercom",
+    "Xerox Machine",
   ],
 
-  'Furniture & Fixtures': [
-    'Chair',
-    'Faculty Table',
-    'Computer Table',
-    'Discussion Table',
-    'Work Table',
-    'Wooden Cup Boards',
+  "Furniture & Fixtures": [
+    "Chair",
+    "Faculty Table",
+    "Computer Table",
+    "Discussion Table",
+    "Work Table",
+    "Wooden Cup Boards",
   ],
 
-  Vehicles: [
-    'Two Wheeler',
-    'Light Motor Vehicle',
-    'Heavy Motor Vehicle',
-  ],
+  Vehicles: ["Two Wheeler", "Light Motor Vehicle", "Heavy Motor Vehicle"],
 
   Equipment: [
-    'Lab Equipment',
-    'Consultancy Equipment',
-    'Research Equipment',
-    'Equipment Upgrade',
+    "Lab Equipment",
+    "Consultancy Equipment",
+    "Research Equipment",
+    "Equipment Upgrade",
   ],
 
-  'Accessories & Kits': [
-    'Power Tools',
-    'Weighing Machine',
-    'Drilling Machine',
-    'Drone Kit',
+  "Accessories & Kits": [
+    "Power Tools",
+    "Weighing Machine",
+    "Drilling Machine",
+    "Drone Kit",
   ],
 
-  'Maintenance Charges': [
-    'Building Maintenance',
-    'Computer Maintenance',
-    'Electrical Maintenance',
-    'Furniture Maintenance',
-    'Plumbing Maintenance',
-    'Vehicle Maintenance',
-    'Garden Maintenance',
-    'Equipment Maintenance',
-    'Infrastructure Maintenance',
-    'AC Maintenance',
-    'UPS Maintenance',
-    'Lift Maintenance',
-    'Printer Maintenance',
-    'Painting',
+  "Maintenance Charges": [
+    "Building Maintenance",
+    "Computer Maintenance",
+    "Electrical Maintenance",
+    "Furniture Maintenance",
+    "Plumbing Maintenance",
+    "Vehicle Maintenance",
+    "Garden Maintenance",
+    "Equipment Maintenance",
+    "Infrastructure Maintenance",
+    "AC Maintenance",
+    "UPS Maintenance",
+    "Lift Maintenance",
+    "Printer Maintenance",
+    "Painting",
   ],
 
-  Spares: ['Printer Donors', 'SMPS', 'Chargers'],
+  Spares: ["Printer Donors", "SMPS", "Chargers"],
 
-  'Annual Maintenance Charges': [
-    'Equipment Maintenance',
-    'Software Maintenance',
+  "Annual Maintenance Charges": [
+    "Equipment Maintenance",
+    "Software Maintenance",
   ],
 
   Consumables: [
-    'Chemicals',
-    'Glasswares',
-    'Plasticwares',
-    'Electrical Components',
-    'Electronic Components',
-    'Mechanical Components',
-    'Construction Materials',
-    'Cutting Tools',
-    'Oils & Lubricants',
-    'Metals & Alloys',
-    'Carpentary Items',
-    'Others',
+    "Chemicals",
+    "Glasswares",
+    "Plasticwares",
+    "Electrical Components",
+    "Electronic Components",
+    "Mechanical Components",
+    "Construction Materials",
+    "Cutting Tools",
+    "Oils & Lubricants",
+    "Metals & Alloys",
+    "Carpentary Items",
+    "Others",
   ],
 
   Software: [
-    'Plagiarism',
-    'Grammer Check',
-    'Grievance',
-    'Programming',
-    'Modelling',
-    'Analysis',
-    'Antivirus',
-    'Firewall',
-    'Graphical Design',
-    'AI Tools',
-    'Others',
+    "Plagiarism",
+    "Grammer Check",
+    "Grievance",
+    "Programming",
+    "Modelling",
+    "Analysis",
+    "Antivirus",
+    "Firewall",
+    "Graphical Design",
+    "AI Tools",
+    "Others",
   ],
 
-  'Membership & Subscriptions': [
-    'Professional Body fees',
-    'Membership fees',
-    'Annual Membership fee',
-    'Journals',
-    'Magazines',
-    'Newspaper',
-    'DELNET',
-    'E-Resources',
-    'Data Subscription Charges',
+  "Membership & Subscriptions": [
+    "Professional Body fees",
+    "Membership fees",
+    "Annual Membership fee",
+    "Journals",
+    "Magazines",
+    "Newspaper",
+    "DELNET",
+    "E-Resources",
+    "Data Subscription Charges",
   ],
 
-  'Student Essentials': ['Note Books', 'Log Books', 'ID Card', 'Others'],
+  "Student Essentials": ["Note Books", "Log Books", "ID Card", "Others"],
 
-  'Printing & Stationery': [
-    'Banner',
-    'Pamphlet',
-    'Brochure',
-    'Vinyl Boards',
-    'Certificates',
-    'Diary',
-    'Calendar',
-    'Visitng Card',
-    'Seal/ Stamp Pad',
-    'Pen/ Pencil/ Eraser',
-    'Stapler/ Punching Machine',
-    'Files/ Folders',
-    'Entry Registers',
-    'Print Sheets',
-    'Others',
+  "Printing & Stationery": [
+    "Banner",
+    "Pamphlet",
+    "Brochure",
+    "Vinyl Boards",
+    "Certificates",
+    "Diary",
+    "Calendar",
+    "Visitng Card",
+    "Seal/ Stamp Pad",
+    "Pen/ Pencil/ Eraser",
+    "Stapler/ Punching Machine",
+    "Files/ Folders",
+    "Entry Registers",
+    "Print Sheets",
+    "Others",
   ],
 
-  'Postal Expenses': [
-    'Frieght Charges',
-    'Postal Charges',
-    'Courier Charges',
-    'Others',
+  "Postal Expenses": [
+    "Frieght Charges",
+    "Postal Charges",
+    "Courier Charges",
+    "Others",
   ],
 
-  'Local Conveyance': [
-    'Travel Expense',
-    'Food & Refreshment',
-    'Beta',
-    'Others',
+  "Local Conveyance": [
+    "Travel Expense",
+    "Food & Refreshment",
+    "Beta",
+    "Others",
   ],
 
-  'Operational Expenses': [
-    'Water Bottle',
-    'Food & Refreshment',
-    'Pooja Expenses',
-    'Accessories',
-    'Legal stamp paper',
-    'Miscellaneous'
+  "Operational Expenses": [
+    "Water Bottle",
+    "Food & Refreshment",
+    "Pooja Expenses",
+    "Accessories",
+    "Legal stamp paper",
+    "Miscellaneous",
   ],
 
-  'Events & Competitions': [
-    'Remuneration',
-    'Travel',
-    'Accommodation',
-    'Memento & Gifts',
-    'Food & Refreshment',
-    'A/V Arrangements',
-    'Stationary',
-    'Printing',
-    'Prizes',
-    'Publication Charges',
-    'Promotions',
-    'Decorations',
-    'Event Logistics',
-    'Registration Kit',
-    'Give away',
-    'T-Shirt',
-    'Bag',
-    'Consumables',
-    'Others',
+  "Events & Competitions": [
+    "Remuneration",
+    "Travel",
+    "Accommodation",
+    "Memento & Gifts",
+    "Food & Refreshment",
+    "A/V Arrangements",
+    "Stationary",
+    "Printing",
+    "Prizes",
+    "Publication Charges",
+    "Promotions",
+    "Decorations",
+    "Event Logistics",
+    "Registration Kit",
+    "Give away",
+    "T-Shirt",
+    "Bag",
+    "Consumables",
+    "Others",
 ],
 
-  'Meetings & Audits': [
-    'Remuneration',
-    'Travel',
-    'Accommodation',
-    'Memento & Gifts',
-    'Food & Refreshment',
-    'Stationary',
-    'Printing',
-    'Others',
+  "Meetings & Audits": [
+    "Remuneration",
+    "Travel",
+    "Accommodation",
+    "Memento & Gifts",
+    "Food & Refreshment",
+    "Stationary",
+    "Printing",
+    "Others",
   ],
 
-  'Faculty Empowerment': [
-    'Registration fee',
-    'Travel Allowance',
-    'Food & Refreshment',
-    'Accommodation',
-    'Daily Allowance',
-    'Membership Fees',
-    'Incentives',
-    'Leadership Meet',
-    'Faculty Welfare',
+  "Faculty Empowerment": [
+    "Registration fee",
+    "Travel Allowance",
+    "Food & Refreshment",
+    "Accommodation",
+    "Daily Allowance",
+    "Membership Fees",
+    "Incentives",
+    "Leadership Meet",
+    "Faculty Welfare",
   ],
 
-  'Staff Empowerment': [
-    'Registration fee',
-    'Travel Allowance',
-    'Food & Refreshment',
-    'Accommodation',
-    'Daily Allowance',
-    'Incentives',
-    'Staff Welfare',
+  "Staff Empowerment": [
+    "Registration fee",
+    "Travel Allowance",
+    "Food & Refreshment",
+    "Accommodation",
+    "Daily Allowance",
+    "Incentives",
+    "Staff Welfare",
   ],
 
-  'Student Empowerment': [
-    'Registration fee',
-    'Travel Support',
-    'Food & Refreshment',
-    'Accommodation',
-    'Certification Costs',
-    'Medical Expense',
-    'Incentives',
-    'Prizes',
-    'Student Welfare',
-    'Student Uniform',
+  "Student Empowerment": [
+    "Registration fee",
+    "Travel Support",
+    "Food & Refreshment",
+    "Accommodation",
+    "Certification Costs",
+    "Medical Expense",
+    "Incentives",
+    "Prizes",
+    "Student Welfare",
+    "Student Uniform",
   ],
-  'Awards & Recognition': [
-    'Accommodation',
-    'Registration fee',
-    'Food & Refreshment',
-    'Driver Beta',
-    'Travel Allowance',
-    'Daily Allowance',
-    'Printing',
-    'Stationery',
-    'Others'
-  ],
-
-  'Student Capacity Building': [
-    'Skill Development Training',
-    'ApptitudeTraining',
-    'Higher Education Coaching',
-    'Competitive Exam Coaching',
-    'Placement Training',
-    'Placement Drives',
-    'One Credit Course',
-    'Value Added Course',
-    'Certification Programs',
-    'Internship',
-    'International Connect',
-    'Exposure Visit',
-    'Language Proficiency Courses',
-    'Others',
+  "Awards & Recognition": [
+    "Accommodation",
+    "Registration fee",
+    "Food & Refreshment",
+    "Driver Beta",
+    "Travel Allowance",
+    "Daily Allowance",
+    "Printing",
+    "Stationery",
+    "Others",
   ],
 
-  'Learning Resources': ['Text Books', 'E-Resources'],
-
-  'Accreditation Expenses': [
-    'NAAC Fees',
-    'NBA Fees',
-    'NAAC Inspection',
-    'NBA Inspection',
+  "Student Capacity Building": [
+    "Skill Development Training",
+    "ApptitudeTraining",
+    "Higher Education Coaching",
+    "Competitive Exam Coaching",
+    "Placement Training",
+    "Placement Drives",
+    "One Credit Course",
+    "Value Added Course",
+    "Certification Programs",
+    "Internship",
+    "International Connect",
+    "Exposure Visit",
+    "Language Proficiency Courses",
+    "Others",
   ],
 
-  'Advertisement & Branding': [
-    'News Paper Advertisement',
-    'Digital Promotion',
+  "Learning Resources": ["Text Books", "E-Resources"],
+
+  "Accreditation Expenses": [
+    "NAAC Fees",
+    "NBA Fees",
+    "NAAC Inspection",
+    "NBA Inspection",
   ],
 
-  'Public Relations': ['Press & Media', 'Promotions', 'Branding', 'Corporate Gift'],
+  "Advertisement & Branding": ["News Paper Advertisement", "Digital Promotion"],
+
+  "Public Relations": [
+    "Press & Media",
+    "Promotions",
+    "Branding",
+    "Corporate Gift",
+  ],
 
   Admissions: [
-    'Stalls',
-    'School Visits',
-    'Field Visits',
-    'Student Directory',
-    'Consultant Charges',
+    "Stalls",
+    "School Visits",
+    "Field Visits",
+    "Student Directory",
+    "Consultant Charges",
   ],
 
-
-  'Research & Development': [
-    'Seed Fund (Product Development)',
-    'Seed Fund (IPR Charges)',
-    'Seed Fund (Travel)',
-    'Institute Research Fellowship',
-    'Research Grant',
-    'Publication Support',
-    'Consultancy',
-    'Research Cenre Renewal',
-    'HI Contribution',
+  "Research & Development": [
+    "Seed Fund (Product Development)",
+    "Seed Fund (IPR Charges)",
+    "Seed Fund (Travel)",
+    "Institute Research Fellowship",
+    "Research Grant",
+    "Publication Support",
+    "Consultancy",
+    "Research Cenre Renewal",
+    "HI Contribution",
   ],
 
-  'Government Funded Projects': [
-    'Manpower',
-    'Equipment',
-    'Consumables',
-    'IT Infrastructure',
-    'Travel',
-    'Printing',
-    'Stationery',
-    'Miscellaneous',
-    'Overhead Expenses',
-    'Food & Refreshment',
-    'Incidental Expenses',
-    'Administrative Expenses',
-    'Accommodation',
-    'Honorarium',
-    'Accessories & Peripherals',
-    'Memento & Gifts',
-    'Publicity & Promotion',
-    'Software & Licenses',
+  "Government Funded Projects": [
+    "Manpower",
+    "Equipment",
+    "Consumables",
+    "IT Infrastructure",
+    "Travel",
+    "Printing",
+    "Stationery",
+    "Miscellaneous",
+    "Overhead Expenses",
+    "Food & Refreshment",
+    "Incidental Expenses",
+    "Administrative Expenses",
+    "Accommodation",
+    "Honorarium",
+    "Accessories & Peripherals",
+    "Memento & Gifts",
+    "Publicity & Promotion",
+    "Software & Licenses",
   ],
 
-  'Government Funded Events': [
-    'A/V Arrangements',
-    'Accessories',
-    'Accommodation',
-    'Auditing Charge',
-    'Bag',
-    'Consumables',
-    'Decorations',
-    'Driver Bata',
-    'Event Logistics',
-    'Food & Refreshment',
-    'Honorarium',
-    'Memento & Gifts',
-    'Miscellaneous',
-    'Printing',
-    'Prizes',
-    'Promotions',
-    'Publication Charges',
-    'Registration fee',
-    'Registration Kit',
-    'Remuneration',
-    'Sitting Fees',
-    'Stationery',
-    'T-shirt',
-    'Travel',
+  "Government Funded Events": [
+    "A/V Arrangements",
+    "Accessories",
+    "Accommodation",
+    "Auditing Charge",
+    "Bag",
+    "Consumables",
+    "Decorations",
+    "Driver Bata",
+    "Event Logistics",
+    "Food & Refreshment",
+    "Honorarium",
+    "Memento & Gifts",
+    "Miscellaneous",
+    "Printing",
+    "Prizes",
+    "Promotions",
+    "Publication Charges",
+    "Registration fee",
+    "Registration Kit",
+    "Remuneration",
+    "Sitting Fees",
+    "Stationery",
+    "T-shirt",
+    "Travel",
   ],
 
-  'Administrative Expenses': [
-    'AICTE Fees',
-    'Affiliation Fees',
-    'Anna University Fees',
-    'DOTE Fees',
-    'Consortium Fees',
-    'Inspection Expenses',
-    'Autonomous Charges',
-    'DTCP Approval',
-    'Licenses & Taxes',
-    'Spirit License',
-    'License Renewal',
-    'Insurance Charges',
-    'Water Charges',
-    'Stamp Charges',
-    'Flag Day Expenses',
-    'Fee Fixation Expenses',
-    'Scholarship Expenses',
-    'International Travel',
-    'Testing Charges',
+  "Administrative Expenses": [
+    "AICTE Fees",
+    "Affiliation Fees",
+    "Anna University Fees",
+    "DOTE Fees",
+    "Consortium Fees",
+    "Inspection Expenses",
+    "Autonomous Charges",
+    "DTCP Approval",
+    "Licenses & Taxes",
+    "Spirit License",
+    "License Renewal",
+    "Insurance Charges",
+    "Water Charges",
+    "Stamp Charges",
+    "Flag Day Expenses",
+    "Fee Fixation Expenses",
+    "Scholarship Expenses",
+    "International Travel",
+    "Testing Charges",
   ],
 
   Salary: [
-    'Monthly Salary',
-    'Provident Fund',
-    'Emoluments',
-    'Professional Payments',
-    'Wages',
+    "Monthly Salary",
+    "Provident Fund",
+    "Emoluments",
+    "Professional Payments",
+    "Wages",
   ],
 
-  'Bills & Payments': [
-    'Electricity Charges',
-    'Internet Charges',
-    'Telephone Charges',
+  "Bills & Payments": [
+    "Electricity Charges",
+    "Internet Charges",
+    "Telephone Charges",
   ],
 
-  'Miscellaneous Expenses': [
-    'Bank Charges',
-    'Bank Interest',
-    'Loan Processing Charges',
-    'Generator & Fuel',
-    'Guest House',
-    'Fire Extinguisher',
-    'General Expenses',
-    'Sewage Treatment',
-    'Farm Expenses',
-    'Laundry Service',
-    'House Keeping',
-    'RO Mineral Water',
-    'Audit Fees',
-    'Office Expenses',
-    'Fire Extinguisher',
-    'First Aid Kit Expenses',
+  "Miscellaneous Expenses": [
+    "Bank Charges",
+    "Bank Interest",
+    "Loan Processing Charges",
+    "Generator & Fuel",
+    "Guest House",
+    "Fire Extinguisher",
+    "General Expenses",
+    "Sewage Treatment",
+    "Farm Expenses",
+    "Laundry Service",
+    "House Keeping",
+    "RO Mineral Water",
+    "Audit Fees",
+    "Office Expenses",
+    "Fire Extinguisher",
+    "First Aid Kit Expenses",
   ],
 };
 
 const BUDGET_SELECT_STYLES = {
   control: (base: any, state: any) => ({
     ...base,
-    minHeight: '45px',
+    minHeight: "45px",
     height: 45,
-    borderRadius: '12px',
-    border: state.isFocused
-      ? '1px solid #0069ab'
-      : '1px solid #e0e0e0',
-    backgroundColor: '#fcfdff',
-    boxShadow: state.isFocused
-      ? '0 0 0 3px rgba(0, 105, 171, 0.15)'
-      : 'none',
-    '&:hover': {
-      borderColor: '#0069ab'
-    }
+    borderRadius: "12px",
+    border: state.isFocused ? "1px solid #0069ab" : "1px solid #e0e0e0",
+    backgroundColor: "#fcfdff",
+    boxShadow: state.isFocused ? "0 0 0 3px rgba(0, 105, 171, 0.15)" : "none",
+    "&:hover": {
+      borderColor: "#0069ab",
+    },
   }),
   dropdownIndicator: (base: any, state: any) => ({
     ...base,
-    padding: '0 12px',
-    color: '#666',
-    transition: 'transform 0.2s ease',
-    transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+    padding: "0 12px",
+    color: "#666",
+    transition: "transform 0.2s ease",
+    transform: state.selectProps.menuIsOpen ? "rotate(180deg)" : "rotate(0deg)",
   }),
-  indicatorSeparator: () => ({ display: 'none' }),
+  indicatorSeparator: () => ({ display: "none" }),
   valueContainer: (base: any) => ({
     ...base,
-    padding: '2px 8px',
-    justifyContent: 'center',  // This centers the text horizontally
-    alignItems: 'center',
-    display: 'flex'
+    padding: "2px 8px",
+    justifyContent: "center", // This centers the text horizontally
+    alignItems: "center",
+    display: "flex",
   }),
   singleValue: (base: any) => ({
     ...base,
-    color: '#333',
-    fontSize: '0.95rem',
-    textAlign: 'center',  // Center text
+    color: "#333",
+    fontSize: "0.95rem",
+    textAlign: "center", // Center text
     margin: 0,
-    position: 'static',
-    transform: 'none',
-    maxWidth: 'calc(100% - 20px)'
+    position: "static",
+    transform: "none",
+    maxWidth: "calc(100% - 20px)",
   }),
   input: (base: any) => ({
     ...base,
-    color: '#333',
-    padding: '0',
-    margin: '0',
-    textAlign: 'center',
-    '& input': {
-      textAlign: 'center !important'
-    }
+    color: "#333",
+    padding: "0",
+    margin: "0",
+    textAlign: "center",
+    "& input": {
+      textAlign: "center !important",
+    },
   }),
   placeholder: (base: any) => ({
     ...base,
-    textAlign: 'center',
-    color: '#999',
+    textAlign: "center",
+    color: "#999",
     margin: 0,
-    position: 'static',
-    transform: 'none'
+    position: "static",
+    transform: "none",
   }),
   menu: (base: any) => ({
     ...base,
     zIndex: 999999,
-    backgroundColor: 'white',
-    borderRadius: '12px',
-    boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
-    marginTop: '4px',
-    overflow: 'hidden'
+    backgroundColor: "white",
+    borderRadius: "12px",
+    boxShadow: "0 8px 25px rgba(0,0,0,0.15)",
+    marginTop: "4px",
+    overflow: "hidden",
   }),
   menuList: (base: any) => ({
     ...base,
-    padding: '8px 0',
-    maxHeight: '300px'
+    padding: "8px 0",
+    maxHeight: "300px",
   }),
   option: (base: any, state: any) => ({
     ...base,
-    padding: '10px 15px',
+    padding: "10px 15px",
     backgroundColor: state.isSelected
-      ? '#0069ab'
+      ? "#0069ab"
       : state.isFocused
-        ? 'rgba(0,105,171,0.1)'
-        : 'white',
-    color: state.isSelected ? 'white' : '#333',
-    cursor: 'pointer',
-    textAlign: 'center',  // Center option text
-    fontSize: '0.9rem',
-    '&:active': {
-      backgroundColor: '#0069ab',
-      color: 'white'
-    }
-  })
+        ? "rgba(0,105,171,0.1)"
+        : "white",
+    color: state.isSelected ? "white" : "#333",
+    cursor: "pointer",
+    textAlign: "center", // Center option text
+    fontSize: "0.9rem",
+    "&:active": {
+      backgroundColor: "#0069ab",
+      color: "white",
+    },
+  }),
 };
 
 const createIncomeRow = (): IncomeRow => ({
-  id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
+  id:
+    typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-  incomeSource: '',
-  contribution: '',
-  amount: '',
-  status: '',
-  creditAccount: '',
+  incomeSource: "",
+  contribution: "",
+  amount: "",
+  status: "",
+  creditAccount: "",
 });
 
 const createPayeeRow = (): PayeeRow => ({
-  id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
+  id:
+    typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
   payeeId: null,
-  payeeName: '',
-  bankName: '',
-  accountNo: '',
-  ifsc: '',
-  branchName: '',
-  url: '',
-  amount: '',
-  mode: '',
-  accountName: '',
-  panNumber: '',
-  accountType: '',
-  beneficiaryType: 'individual',
-  beneficiaryOrg: '',
-  organizationType: '',
-  msme: '',
-  gstin: '',
-  tdsDetails: '',
-  tdsSection: '',
+  payeeName: "",
+  bankName: "",
+  accountNo: "",
+  ifsc: "",
+  branchName: "",
+  url: "",
+  amount: "",
+  mode: "",
+  accountName: "",
+  panNumber: "",
+  accountType: "",
+  beneficiaryType: "individual",
+  beneficiaryOrg: "",
+  organizationType: "",
+  msme: "",
+  gstin: "",
+  tdsDetails: "",
+  tdsSection: "",
 });
 
-const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'] as const;
+const BENEFICIARY_ORG_OPTIONS = ["KSRCT", "KSREI", "External"] as const;
 
-const normalizePayeeText = (value: unknown): string => String(value ?? '').trim();
+const normalizePayeeText = (value: unknown): string =>
+  String(value ?? "").trim();
 
 const isBeneficiaryOrgValue = (value: unknown): boolean =>
-  BENEFICIARY_ORG_OPTIONS.some((option) => option === normalizePayeeText(value));
+  BENEFICIARY_ORG_OPTIONS.some(
+    (option) => option === normalizePayeeText(value),
+  );
 
-const resolveCanonicalPayeeName = (payeeName: unknown, accountName: unknown): string => {
+const resolveCanonicalPayeeName = (
+  payeeName: unknown,
+  accountName: unknown,
+): string => {
   const normalizedPayeeName = normalizePayeeText(payeeName);
   const normalizedAccountName = normalizePayeeText(accountName);
 
@@ -1249,57 +1298,63 @@ const resolveCanonicalBeneficiaryOrg = (
   }
 
   const normalizedLegacyPayeeName = normalizePayeeText(legacyPayeeName);
-  return isBeneficiaryOrgValue(normalizedLegacyPayeeName) ? normalizedLegacyPayeeName : '';
+  return isBeneficiaryOrgValue(normalizedLegacyPayeeName)
+    ? normalizedLegacyPayeeName
+    : "";
 };
 
 const createAdvanceRow = (): AdvanceFormRow => ({
   id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-  budgetHead: '',
-  subHead: '',
-  budget: '',
-  preAdvance: '0',
-  advance: '',
+  budgetHead: "",
+  subHead: "",
+  budget: "",
+  preAdvance: "0",
+  advance: "",
   budgetLineId: null,
   budgetProposalId: null,
 });
 
 const createSettlementRow = (): SettlementFormRow => ({
   id: `${Date.now()}-${Math.random().toString(16).slice(2)}-s`,
-  budgetHead: '',
-  subHead: '',
-  budget: '',
-  advance: '',
-  settlement: '',
+  budgetHead: "",
+  subHead: "",
+  budget: "",
+  advance: "",
+  settlement: "",
   budgetLineId: null,
   budgetProposalId: null,
 });
 
 const createExpenditureRow = (): ExpenditureFormRow => ({
   id: `${Date.now()}-${Math.random().toString(16).slice(2)}-e`,
-  budgetHead: '',
-  subHead: '',
-  budget: '',
-  expenditure: '',
-  autoSum: '',
+  budgetHead: "",
+  subHead: "",
+  budget: "",
+  expenditure: "",
+  autoSum: "",
   budgetLineId: null,
   budgetProposalId: null,
 });
 
-const mapFinanceBeneficiaryTypeToExpenditureCategory = (value: string): string => {
-  const normalized = String(value || '').trim().toLowerCase();
+const mapFinanceBeneficiaryTypeToExpenditureCategory = (
+  value: string,
+): string => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
 
-  if (!normalized) return '';
-  if (normalized === 'faculty') return 'Faculty';
-  if (normalized === 'staff') return 'Staff';
-  if (normalized === 'department') return 'Department';
-  if (normalized === 'centre' || normalized === 'center') return 'Centre';
-  if (normalized === 'cell') return 'Cell';
-  if (normalized === 'club') return 'Club';
-  if (normalized === 'section') return 'Section';
-  if (normalized === 'professional body') return 'Professional Body';
-  if (normalized === 'institution') return 'Institution';
+  if (!normalized) return "";
+  if (normalized === "faculty") return "Faculty";
+  if (normalized === "staff") return "Staff";
+  if (normalized === "department") return "Department";
+  if (normalized === "centre" || normalized === "center") return "Centre";
+  if (normalized === "cell") return "Cell";
+  if (normalized === "club") return "Club";
+  if (normalized === "section") return "Section";
+  if (normalized === "professional body") return "Professional Body";
+  if (normalized === "institution") return "Institution";
 
-  return '';
+  return "";
 };
 
 const ExpenditureApproval: React.FC = () => {
@@ -1312,7 +1367,10 @@ const ExpenditureApproval: React.FC = () => {
       submittedModule?: unknown;
     } | null;
 
-    return normalizeWorkflowModule(state?.activeTab) ?? normalizeWorkflowModule(state?.submittedModule);
+    return (
+      normalizeWorkflowModule(state?.activeTab) ??
+      normalizeWorkflowModule(state?.submittedModule)
+    );
   })();
 
   // Check if this is Advance2
@@ -1332,14 +1390,16 @@ const ExpenditureApproval: React.FC = () => {
 
   const isReadOnlyView =
     Boolean(routeId) &&
-    (isReadOnlyNavigation || (!launchModuleFromState && !location.pathname.endsWith('/edit')));
-  const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
+    (isReadOnlyNavigation ||
+      (!launchModuleFromState && !location.pathname.endsWith("/edit")));
+  const isAdminWorkflowContext =
+    new URLSearchParams(location.search).get("admin") === "true";
   const dashboardRowIdFromState = (() => {
     const state = location.state as {
       dashboardRowId?: unknown;
     } | null;
 
-    return String(state?.dashboardRowId || '').trim() || null;
+    return String(state?.dashboardRowId || "").trim() || null;
   })();
   const rowIndexFromState = (() => {
     const state = location.state as {
@@ -1371,17 +1431,23 @@ const ExpenditureApproval: React.FC = () => {
       submittedRequestId?: unknown;
     } | null;
 
-    return parsePositiveIntLike(state?.submittedRequestId) ?? parsePositiveIntLike(routeId);
+    return (
+      parsePositiveIntLike(state?.submittedRequestId) ??
+      parsePositiveIntLike(routeId)
+    );
   })();
   const isEditingExistingRequest = Boolean(submittedRequestIdFromState);
-  const submitActionLabel = isEditingExistingRequest ? 'Update' : 'Submit';
+  const submitActionLabel = isEditingExistingRequest ? "Update" : "Submit";
   const sourceRequestIdFromState = (() => {
     const state = location.state as {
       sourceRequestId?: unknown;
       source_request_id?: unknown;
     } | null;
 
-    return parsePositiveIntLike(state?.sourceRequestId) ?? parsePositiveIntLike(state?.source_request_id);
+    return (
+      parsePositiveIntLike(state?.sourceRequestId) ??
+      parsePositiveIntLike(state?.source_request_id)
+    );
   })();
   const financeApprovedAmountFromState = (() => {
     const state = location.state as {
@@ -1391,7 +1457,9 @@ const ExpenditureApproval: React.FC = () => {
       };
     } | null;
 
-    return Number.parseFloat(String(state?.financeProposal?.totalAmount ?? '0')) || 0;
+    return (
+      Number.parseFloat(String(state?.financeProposal?.totalAmount ?? "0")) || 0
+    );
   })();
   const financeTagFromState = (() => {
     const state = location.state as {
@@ -1399,68 +1467,102 @@ const ExpenditureApproval: React.FC = () => {
         tag?: unknown;
       };
     } | null;
-    return String(state?.financeProposal?.tag ?? '').trim();
+    return String(state?.financeProposal?.tag ?? "").trim();
   })();
-  const [resolvedFinanceRequestId, setResolvedFinanceRequestId] = useState<number | null>(
-    financeRequestIdFromState,
+  const [resolvedFinanceRequestId, setResolvedFinanceRequestId] = useState<
+    number | null
+  >(financeRequestIdFromState);
+  const [isReturnedWorkflowRequest, setIsReturnedWorkflowRequest] =
+    useState<boolean>(false);
+  const [loadedWorkflowStatus, setLoadedWorkflowStatus] = useState<string>("");
+  const [hasDofApprovalForPaymentStatus, setHasDofApprovalForPaymentStatus] =
+    useState<boolean>(false);
+  const [financeApprovedAmount, setFinanceApprovedAmount] = useState<number>(
+    financeApprovedAmountFromState,
   );
-  const [isReturnedWorkflowRequest, setIsReturnedWorkflowRequest] = useState<boolean>(false);
-  const [loadedWorkflowStatus, setLoadedWorkflowStatus] = useState<string>('');
-  const [hasDofApprovalForPaymentStatus, setHasDofApprovalForPaymentStatus] = useState<boolean>(false);
-  const [financeApprovedAmount, setFinanceApprovedAmount] = useState<number>(financeApprovedAmountFromState);
   useEffect(() => {
     setResolvedFinanceRequestId(financeRequestIdFromState);
   }, [financeRequestIdFromState]);
   useEffect(() => {
     setFinanceApprovedAmount(financeApprovedAmountFromState);
   }, [financeApprovedAmountFromState]);
-  const [applicantName, setApplicantName] = useState<string>('');
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [designation, setDesignation] = useState<string>('');
-  const [mobile, setMobile] = useState<string>('');
-  const [department, setDepartment] = useState<string>('');
-  const [description, setDescription] = useState<string>('');
-  const [amountProposed, setAmountProposed] = useState<string>('');
-  const [directorComments, setDirectorComments] = useState<string>('');
-  const [isBudgetProposed, setIsBudgetProposed] = useState<string>('');
-  const [balanceAmount, setBalanceAmount] = useState<string>('');
-  const [debitStatus, setDebitStatus] = useState<'credited' | 'reimbursement' | ''>('');
-  const [email, setEmail] = useState<string>('');
+  const [applicantName, setApplicantName] = useState<string>("");
+  const [date, setDate] = useState<string>(
+    new Date().toISOString().split("T")[0],
+  );
+  const [designation, setDesignation] = useState<string>("");
+  const [mobile, setMobile] = useState<string>("");
+  const [department, setDepartment] = useState<string>("");
+  const [description, setDescription] = useState<string>("");
+  const [amountProposed, setAmountProposed] = useState<string>("");
+  const [directorComments, setDirectorComments] = useState<string>("");
+  const [isBudgetProposed, setIsBudgetProposed] = useState<string>("");
+  const [balanceAmount, setBalanceAmount] = useState<string>("");
+  const [debitStatus, setDebitStatus] = useState<
+    "credited" | "reimbursement" | ""
+  >("");
+  const [email, setEmail] = useState<string>("");
   const [budgetRows, setBudgetRows] = useState([
-    { category: "", head: "", amount: "" },]);
+    { category: "", head: "", amount: "" },
+  ]);
   const [showIncomeSection, setShowIncomeSection] = useState<boolean>(false);
-  const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([createIncomeRow()]);
+  const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([
+    createIncomeRow(),
+  ]);
   const [payeeRows, setPayeeRows] = useState<PayeeRow[]>([createPayeeRow()]);
-  const [activePayeeLookupRowId, setActivePayeeLookupRowId] = useState<string | null>(null);
-  const [activePayeeLookupField, setActivePayeeLookupField] = useState<PayeeLookupField | null>(null);
-  const [payeeLookupResults, setPayeeLookupResults] = useState<PayeeLookupResult[]>([]);
+  const [activePayeeLookupRowId, setActivePayeeLookupRowId] = useState<
+    string | null
+  >(null);
+  const [activePayeeLookupField, setActivePayeeLookupField] =
+    useState<PayeeLookupField | null>(null);
+  const [payeeLookupResults, setPayeeLookupResults] = useState<
+    PayeeLookupResult[]
+  >([]);
   const [isPayeeLookupOpen, setIsPayeeLookupOpen] = useState(false);
   const [isPayeeLookupLoading, setIsPayeeLookupLoading] = useState(false);
   const [showBulkNEFT, setShowBulkNEFT] = useState<boolean>(false);
   const [paymentDetails, setPaymentDetails] = useState({
-    mode: '',
-    refNo: '',
-    date: new Date().toISOString().split('T')[0],
-    status: 'Pending',
-    debitAccount: ''
+    mode: "",
+    refNo: "",
+    date: new Date().toISOString().split("T")[0],
+    status: "Pending",
+    debitAccount: "",
   });
   const bulkNeftInputRef = useRef<HTMLInputElement>(null);
   const [bulkNeftFile, setBulkNeftFile] = useState<File | null>(null);
   const [uploadedPayeeBills, setUploadedPayeeBills] = useState<File[]>([]);
-  const [uploadedPaymentProofs, setUploadedPaymentProofs] = useState<File[]>([]);
-  const [existingPayeeBills, setExistingPayeeBills] = useState<BillFileRecord[]>([]);
+  const [uploadedPaymentProofs, setUploadedPaymentProofs] = useState<File[]>(
+    [],
+  );
+  const [existingPayeeBills, setExistingPayeeBills] = useState<
+    BillFileRecord[]
+  >([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
-  const [isExternalApplicant, setIsExternalApplicant] = useState<boolean>(false);
-  const [applicantSearchQuery, setApplicantSearchQuery] = useState<string>('');
-  const [applicantSearchResults, setApplicantSearchResults] = useState<Array<{ employee_id: number; name: string; designation: string; department: string; email: string; mobile: string; employee_type: string }>>([]);
-  const [showApplicantDropdown, setShowApplicantDropdown] = useState<boolean>(false);
-  const isFinalApprovedWorkflow = ['approved', 'completed'].includes(loadedWorkflowStatus);
+  const [isExternalApplicant, setIsExternalApplicant] =
+    useState<boolean>(false);
+  const [applicantSearchQuery, setApplicantSearchQuery] = useState<string>("");
+  const [applicantSearchResults, setApplicantSearchResults] = useState<
+    Array<{
+      employee_id: number;
+      name: string;
+      designation: string;
+      department: string;
+      email: string;
+      mobile: string;
+      employee_type: string;
+    }>
+  >([]);
+  const [showApplicantDropdown, setShowApplicantDropdown] =
+    useState<boolean>(false);
+  const isFinalApprovedWorkflow = ["approved", "completed"].includes(
+    loadedWorkflowStatus,
+  );
   const canEditPaymentStatus = Boolean(
     submittedRequestIdFromState &&
       isReadOnlyView &&
       !isAdminWorkflowContext &&
-      isFinalApprovedWorkflow
+    isFinalApprovedWorkflow,
   );
   const componentRef = useRef<HTMLDivElement>(null);
   const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(true);
@@ -1469,38 +1571,59 @@ const ExpenditureApproval: React.FC = () => {
     setIsApplicantCardOpen(!isEditingExistingRequest);
   }, [isEditingExistingRequest]);
 
-  const [advanceRows, setAdvanceRows] = useState<AdvanceFormRow[]>([createAdvanceRow()]);
-  const [settlementRows, setSettlementRows] = useState<SettlementFormRow[]>([createSettlementRow()]);
+  const [advanceRows, setAdvanceRows] = useState<AdvanceFormRow[]>([
+    createAdvanceRow(),
+  ]);
+  const [settlementRows, setSettlementRows] = useState<SettlementFormRow[]>([
+    createSettlementRow(),
+  ]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [categoryType, setCategoryType] = useState<string>('');
-  const [categoryItem, setCategoryItem] = useState<string>('');
+  const [categoryType, setCategoryType] = useState<string>("");
+  const [categoryItem, setCategoryItem] = useState<string>("");
   const [categorySelections, setCategorySelections] = useState<string[]>([]);
-  const [primaryHead, setPrimaryHead] = useState<string>('');
-  const [eventSubHead, setEventSubHead] = useState<string>('');
-  const [beneficiarySearchQuery, setBeneficiarySearchQuery] = useState<string>('');
-  const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<Array<{
-    employeeid: number; name: string; designation: string; department: string;
-  }>>([]);
+  const [primaryHead, setPrimaryHead] = useState<string>("");
+  const [eventSubHead, setEventSubHead] = useState<string>("");
+  const [beneficiarySearchQuery, setBeneficiarySearchQuery] =
+    useState<string>("");
+  const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<
+    Array<{
+      employeeid: number;
+      name: string;
+      designation: string;
+      department: string;
+    }>
+  >([]);
   const [showBeneficiaryDropdown, setShowBeneficiaryDropdown] = useState(false);
-  const [beneficiaryEmployeeId, setBeneficiaryEmployeeId] = useState<number | null>(null);
+  const [beneficiaryEmployeeId, setBeneficiaryEmployeeId] = useState<
+    number | null
+  >(null);
   const lockBeneficiaryAndTagFields = true;
   const [isPayeeCardOpen, setIsPayeeCardOpen] = useState(true);
   const [showAddPayeeModal, setShowAddPayeeModal] = useState(false);
   const [newPayee, setNewPayee] = useState<PayeeRow>(createPayeeRow());
-  const [approvedBudgetOptions, setApprovedBudgetOptions] = useState<ApprovedBudgetOption[]>([]);
+  const [approvedBudgetOptions, setApprovedBudgetOptions] = useState<
+    ApprovedBudgetOption[]
+  >([]);
   const [isApprovedBudgetLoading, setIsApprovedBudgetLoading] = useState(false);
-  const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
-  const [tagOptions, setTagOptions] = useState<SelectOption[]>(FALLBACK_TAG_OPTIONS);
-  const [pendingPrefillTag, setPendingPrefillTag] = useState<string>(financeTagFromState);
-  const [showDebitAccountDropdown, setShowDebitAccountDropdown] = useState(false);
+  const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<
+    Record<string, SelectOption[]>
+  >({});
+  const [tagOptions, setTagOptions] =
+    useState<SelectOption[]>(FALLBACK_TAG_OPTIONS);
+  const [pendingPrefillTag, setPendingPrefillTag] =
+    useState<string>(financeTagFromState);
+  const [showDebitAccountDropdown, setShowDebitAccountDropdown] =
+    useState(false);
   const payeeLookupTimeoutRef = useRef<number | null>(null);
   const payeeLookupRequestRef = useRef(0);
-const normalizeText = (value: unknown): string => String(value ?? '').trim();
-  const [expenditureSubRows, setExpenditureSubRows] = useState<ExpenditureFormRow[]>([createExpenditureRow()]);
-  const [activeTab, setActiveTab] = useState<'Advance' | 'Settlement' | 'Expenditure' | null>(
-    launchModuleFromState,
-  );
+  const normalizeText = (value: unknown): string => String(value ?? "").trim();
+  const [expenditureSubRows, setExpenditureSubRows] = useState<
+    ExpenditureFormRow[]
+  >([createExpenditureRow()]);
+  const [activeTab, setActiveTab] = useState<
+    "Advance" | "Settlement" | "Expenditure" | null
+  >(launchModuleFromState);
 
   useEffect(() => {
     if (!resolvedFinanceRequestId) {
@@ -1511,58 +1634,87 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
 
     const loadFinanceContext = async () => {
       try {
-        const response = await authenticityUtility.get(
-          `/expenditure/finance-context/${resolvedFinanceRequestId}`
-        ) as { status: string; data?: FinanceRequestContext };
+        const response = (await authenticityUtility.get(
+          `/expenditure/finance-context/${resolvedFinanceRequestId}`,
+        )) as { status: string; data?: FinanceRequestContext };
 
-        if (isCancelled || response.status !== 'success' || !response.data) {
+        if (isCancelled || response.status !== "success" || !response.data) {
           return;
         }
 
         const financeContext = response.data;
-        const nextCategoryType = mapFinanceBeneficiaryTypeToExpenditureCategory(financeContext.beneficiary_type || '');
-
-        setFinanceApprovedAmount(Number(financeContext.approved_amount || financeApprovedAmountFromState || 0));
-        setEmployeeId(financeContext.employee_id ?? null);
-        setApplicantName(financeContext.applicant_name || '');
-        setApplicantSearchQuery(financeContext.applicant_name || '');
-        setDesignation(financeContext.designation || '');
-        setDepartment(financeContext.department || '');
-        setEmail(financeContext.email || '');
-        setMobile(financeContext.mobile || '');
-        setDescription((prev) => prev || financeContext.description || '');
-        setPrimaryHead((prev) => prev || financeContext.primary_head || '');
-        setEventSubHead((prev) => prev || financeContext.event_sub_head || '');
-        setCategoryType((prev) => prev || nextCategoryType);
-        setCategoryItem((prev) => prev || financeContext.beneficiary_value || '');
-        const financeContextTagRaw = extractTagCandidate(
-          financeContext as FinanceRequestContext & Record<string, unknown>
+        const nextCategoryType = mapFinanceBeneficiaryTypeToExpenditureCategory(
+          financeContext.beneficiary_type || "",
         );
-        let resolvedPrefillTag = resolveTagValue(financeContextTagRaw, tagOptions);
+
+        setFinanceApprovedAmount(
+          Number(
+            financeContext.approved_amount ||
+              financeApprovedAmountFromState ||
+              0,
+          ),
+        );
+        setEmployeeId(financeContext.employee_id ?? null);
+        setApplicantName(financeContext.applicant_name || "");
+        setApplicantSearchQuery(financeContext.applicant_name || "");
+        setDesignation(financeContext.designation || "");
+        setDepartment(financeContext.department || "");
+        setEmail(financeContext.email || "");
+        setMobile(financeContext.mobile || "");
+        setDescription((prev) => prev || financeContext.description || "");
+        setPrimaryHead((prev) => prev || financeContext.primary_head || "");
+        setEventSubHead((prev) => prev || financeContext.event_sub_head || "");
+        setCategoryType((prev) => prev || nextCategoryType);
+        setCategoryItem(
+          (prev) => prev || financeContext.beneficiary_value || "",
+        );
+        const financeContextTagRaw = extractTagCandidate(
+          financeContext as FinanceRequestContext & Record<string, unknown>,
+        );
+        let resolvedPrefillTag = resolveTagValue(
+          financeContextTagRaw,
+          tagOptions,
+        );
 
         // Fallback: if finance-context doesn't include tag, fetch finance request details.
         if (!resolvedPrefillTag && resolvedFinanceRequestId) {
           try {
-            const financeDetailResp = await authenticityUtility.get(`/finance-requests/${resolvedFinanceRequestId}`) as any;
+            const financeDetailResp = (await authenticityUtility.get(
+              `/finance-requests/${resolvedFinanceRequestId}`,
+            )) as any;
             const payload = financeDetailResp?.data ?? {};
             const candidate =
               extractTagCandidate(payload) ||
-              extractTagCandidate(payload?.master as Record<string, unknown> | undefined) ||
-              extractTagCandidate(payload?.record as Record<string, unknown> | undefined);
+              extractTagCandidate(
+                payload?.master as Record<string, unknown> | undefined,
+              ) ||
+              extractTagCandidate(
+                payload?.record as Record<string, unknown> | undefined,
+              );
             resolvedPrefillTag = resolveTagValue(candidate, tagOptions);
           } catch (tagFallbackError) {
-            console.error('Failed to fetch finance tag fallback:', tagFallbackError);
+            console.error(
+              "Failed to fetch finance tag fallback:",
+              tagFallbackError,
+            );
           }
         }
 
-        const nextTag = resolvedPrefillTag || financeContextTagRaw || financeTagFromState || '';
+        const nextTag =
+          resolvedPrefillTag ||
+          financeContextTagRaw ||
+          financeTagFromState ||
+          "";
         setSelectedTag((prev) => prev || nextTag);
         if (nextTag) {
           setPendingPrefillTag(nextTag);
         }
       } catch (error) {
         if (!isCancelled) {
-          console.error('Failed to load finance context for expenditure form:', error);
+          console.error(
+            "Failed to load finance context for expenditure form:",
+            error,
+          );
         }
       }
     };
@@ -1586,7 +1738,7 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
     if (!submittedRequestIdFromState) {
       setExistingPayeeBills([]);
       setIsReturnedWorkflowRequest(false);
-      setLoadedWorkflowStatus('');
+      setLoadedWorkflowStatus("");
       setHasDofApprovalForPaymentStatus(false);
       return;
     }
@@ -1595,27 +1747,39 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
 
     const loadSubmittedRequest = async () => {
       try {
-        const response = await authenticityUtility.get(`/expenditure/${submittedRequestIdFromState}`) as {
+        const response = (await authenticityUtility.get(
+          `/expenditure/${submittedRequestIdFromState}`,
+        )) as {
           status: string;
           data?: any;
         };
 
-        if (isCancelled || response.status !== 'success' || !response.data) {
+        if (isCancelled || response.status !== "success" || !response.data) {
           return;
         }
 
         const record = response.data;
-        setResolvedFinanceRequestId(parsePositiveIntLike(record.finance_request_id) ?? null);
+        setResolvedFinanceRequestId(
+          parsePositiveIntLike(record.finance_request_id) ?? null,
+        );
         const workflowState = (() => {
           const rawState = record.workflow_state;
-          if (rawState && typeof rawState === 'object' && !Array.isArray(rawState)) {
+          if (
+            rawState &&
+            typeof rawState === "object" &&
+            !Array.isArray(rawState)
+          ) {
             return rawState as WorkflowStateSnapshot;
           }
 
-          if (typeof rawState === 'string') {
+          if (typeof rawState === "string") {
             try {
               const parsed = JSON.parse(rawState) as WorkflowStateSnapshot;
-              return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+              return parsed &&
+                typeof parsed === "object" &&
+                !Array.isArray(parsed)
+                ? parsed
+                : null;
             } catch {
               return null;
             }
@@ -1628,21 +1792,24 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
             workflowState?.lastDecision ||
             record.workflow_status ||
             record.overall_status ||
-            '',
+            "",
         ).toLowerCase();
-        setIsReturnedWorkflowRequest(workflowStatus === 'returned');
+        setIsReturnedWorkflowRequest(workflowStatus === "returned");
         setLoadedWorkflowStatus(workflowStatus);
-        setHasDofApprovalForPaymentStatus(hasReachedPostDofStage(record, workflowStatus));
-        const toRowId = (suffix: string, index: number) => `${submittedRequestIdFromState}-${suffix}-${index}`;
+        setHasDofApprovalForPaymentStatus(
+          hasReachedPostDofStage(record, workflowStatus),
+        );
+        const toRowId = (suffix: string, index: number) =>
+          `${submittedRequestIdFromState}-${suffix}-${index}`;
 
         const mapAdvanceRows = Array.isArray(record.advance_rows)
           ? record.advance_rows.map((row: any, index: number) => ({
-              id: toRowId('advance', index),
-              budgetHead: String(row?.budget_head || ''),
-              subHead: String(row?.sub_head || ''),
-              budget: String(row?.budget_amount ?? ''),
-              preAdvance: String(row?.pre_advance_amount ?? ''),
-              advance: String(row?.advance_amount ?? ''),
+              id: toRowId("advance", index),
+              budgetHead: String(row?.budget_head || ""),
+              subHead: String(row?.sub_head || ""),
+              budget: String(row?.budget_amount ?? ""),
+              preAdvance: String(row?.pre_advance_amount ?? ""),
+              advance: String(row?.advance_amount ?? ""),
               budgetLineId: row?.budget_line_id ?? null,
               budgetProposalId: row?.budget_proposal_id ?? null,
             }))
@@ -1650,12 +1817,12 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
 
         const mapSettlementRows = Array.isArray(record.settlement_rows)
           ? record.settlement_rows.map((row: any, index: number) => ({
-              id: toRowId('settlement', index),
-              budgetHead: String(row?.budget_head || ''),
-              subHead: String(row?.sub_head || ''),
-              budget: String(row?.budget_amount ?? ''),
-              advance: String(row?.advance_amount ?? ''),
-              settlement: String(row?.settlement_amount ?? ''),
+              id: toRowId("settlement", index),
+              budgetHead: String(row?.budget_head || ""),
+              subHead: String(row?.sub_head || ""),
+              budget: String(row?.budget_amount ?? ""),
+              advance: String(row?.advance_amount ?? ""),
+              settlement: String(row?.settlement_amount ?? ""),
               budgetLineId: row?.budget_line_id ?? null,
               budgetProposalId: row?.budget_proposal_id ?? null,
             }))
@@ -1663,12 +1830,12 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
 
         const mapExpenditureRows = Array.isArray(record.expenditure_rows)
           ? record.expenditure_rows.map((row: any, index: number) => ({
-              id: toRowId('expenditure', index),
-              budgetHead: String(row?.budget_head || ''),
-              subHead: String(row?.sub_head || ''),
-              budget: String(row?.budget_amount ?? ''),
-              expenditure: String(row?.expenditure_input ?? ''),
-              autoSum: String(row?.auto_sum_amount ?? ''),
+              id: toRowId("expenditure", index),
+              budgetHead: String(row?.budget_head || ""),
+              subHead: String(row?.sub_head || ""),
+              budget: String(row?.budget_amount ?? ""),
+              expenditure: String(row?.expenditure_input ?? ""),
+              autoSum: String(row?.auto_sum_amount ?? ""),
               budgetLineId: row?.budget_line_id ?? null,
               budgetProposalId: row?.budget_proposal_id ?? null,
             }))
@@ -1692,34 +1859,37 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
               })(),
               id: `${submittedRequestIdFromState}-payee-${index}`,
               payeeId: row?.payee_id ?? null,
-              bankName: String(row?.bank_name || ''),
-              accountNo: String(row?.account_no || ''),
-              ifsc: String(row?.ifsc || ''),
-              branchName: String(row?.branch_name || ''),
-              url: String(row?.url || ''),
-              amount: String(row?.amount || ''),
-              mode: String(row?.mode || ''),
-              panNumber: String(row?.pan_number || ''),
-              accountType: String(row?.account_type || ''),
-              beneficiaryType: String(row?.beneficiary_type || 'individual'),
-              organizationType: String(row?.organization_type || ''),
-              msme: String(row?.msme || ''),
-              gstin: String(row?.gstin || ''),
-              tdsDetails: String(row?.tds_details || ''),
-              tdsSection: String(row?.tds_section || ''),
+              bankName: String(row?.bank_name || ""),
+              accountNo: String(row?.account_no || ""),
+              ifsc: String(row?.ifsc || ""),
+              branchName: String(row?.branch_name || ""),
+              url: String(row?.url || ""),
+              amount: String(row?.amount || ""),
+              mode: String(row?.mode || ""),
+              panNumber: String(row?.pan_number || ""),
+              accountType: String(row?.account_type || ""),
+              beneficiaryType: String(row?.beneficiary_type || "individual"),
+              organizationType: String(row?.organization_type || ""),
+              msme: String(row?.msme || ""),
+              gstin: String(row?.gstin || ""),
+              tdsDetails: String(row?.tds_details || ""),
+              tdsSection: String(row?.tds_section || ""),
             }))
           : [];
 
-        setApplicantName(String(record.applicant_name || ''));
-        setApplicantSearchQuery(String(record.applicant_name || ''));
-        setDesignation(String(record.designation || ''));
-        setDepartment(String(record.department || ''));
-        setEmail(String(record.email || ''));
-        setMobile(String(record.mobile || ''));
-        setDate(normalizeDateForInput(String(record.request_date || '')) || new Date().toISOString().split('T')[0]);
-        setDescription(String(record.description || ''));
-        setCategoryType(String(record.beneficiary_type || ''));
-        setCategoryItem(String(record.beneficiary_value || ''));
+        setApplicantName(String(record.applicant_name || ""));
+        setApplicantSearchQuery(String(record.applicant_name || ""));
+        setDesignation(String(record.designation || ""));
+        setDepartment(String(record.department || ""));
+        setEmail(String(record.email || ""));
+        setMobile(String(record.mobile || ""));
+        setDate(
+          normalizeDateForInput(String(record.request_date || "")) ||
+            new Date().toISOString().split("T")[0],
+        );
+        setDescription(String(record.description || ""));
+        setCategoryType(String(record.beneficiary_type || ""));
+        setCategoryItem(String(record.beneficiary_value || ""));
         {
           const recordTag = resolveTagValue(
             record.budget_tag ??
@@ -1728,46 +1898,71 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
               record.tag ??
               record.finance_tag ??
               record.financeTag ??
-              '',
+              "",
             tagOptions,
           );
           setSelectedTag((prev) => prev || recordTag);
         }
-        setPrimaryHead(String(record.primary_head || ''));
-        setEventSubHead(String(record.event_sub_head || ''));
-        setIsBudgetProposed(String(record.is_budget_proposed || ''));
-        setDebitStatus(String(record.debit_status || '') as 'credited' | 'reimbursement' | '');
-        setAmountProposed(String(record.total_amount ?? record.approved_total_amount ?? ''));
+        setPrimaryHead(String(record.primary_head || ""));
+        setEventSubHead(String(record.event_sub_head || ""));
+        setIsBudgetProposed(String(record.is_budget_proposed || ""));
+        setDebitStatus(
+          String(record.debit_status || "") as
+            | "credited"
+            | "reimbursement"
+            | "",
+        );
+        setAmountProposed(
+          String(record.total_amount ?? record.approved_total_amount ?? ""),
+        );
         if (Number(record.approved_amount || 0) > 0) {
           setFinanceApprovedAmount(Number(record.approved_amount));
         }
         const requestType = normalizeText(record.request_type);
         setActiveTab(
-          launchModuleFromState
-            ?? (requestType === 'Advance' || requestType === 'Settlement' || requestType === 'Expenditure'
+          launchModuleFromState ??
+            (requestType === "Advance" ||
+            requestType === "Settlement" ||
+            requestType === "Expenditure"
               ? requestType
               : null),
         );
-        setAdvanceRows(mapAdvanceRows.length > 0 ? mapAdvanceRows : [createAdvanceRow()]);
-        setSettlementRows(mapSettlementRows.length > 0 ? mapSettlementRows : [createSettlementRow()]);
-        setExpenditureSubRows(mapExpenditureRows.length > 0 ? mapExpenditureRows : [createExpenditureRow()]);
-        setPayeeRows(mapPayeeRows.length > 0 ? mapPayeeRows : [createPayeeRow()]);
+        setAdvanceRows(
+          mapAdvanceRows.length > 0 ? mapAdvanceRows : [createAdvanceRow()],
+        );
+        setSettlementRows(
+          mapSettlementRows.length > 0
+            ? mapSettlementRows
+            : [createSettlementRow()],
+        );
+        setExpenditureSubRows(
+          mapExpenditureRows.length > 0
+            ? mapExpenditureRows
+            : [createExpenditureRow()],
+        );
+        setPayeeRows(
+          mapPayeeRows.length > 0 ? mapPayeeRows : [createPayeeRow()],
+        );
         setPaymentDetails({
-          mode: String(record.payment_mode || ''),
-          refNo: String(record.payment_ref_no || ''),
-          date: String(record.payment_date || new Date().toISOString().split('T')[0]),
-          status: String(record.payment_status || 'Pending'),
-          debitAccount: String(record.payment_debit_account || ''),
+          mode: String(record.payment_mode || ""),
+          refNo: String(record.payment_ref_no || ""),
+          date: String(
+            record.payment_date || new Date().toISOString().split("T")[0],
+          ),
+          status: String(record.payment_status || "Pending"),
+          debitAccount: String(record.payment_debit_account || ""),
         });
         setShowBulkNEFT(Boolean(record.bulk_neft_file));
         setShowDebitAccountDropdown(Boolean(record.payment_debit_account));
-        setExistingPayeeBills(Array.isArray(record.bill_files) ? record.bill_files : []);
+        setExistingPayeeBills(
+          Array.isArray(record.bill_files) ? record.bill_files : [],
+        );
         setUploadedPayeeBills([]);
       } catch (error) {
         if (!isCancelled) {
-          console.error('Failed to load submitted expenditure request:', error);
+          console.error("Failed to load submitted expenditure request:", error);
           setIsReturnedWorkflowRequest(false);
-          setLoadedWorkflowStatus('');
+          setLoadedWorkflowStatus("");
           setHasDofApprovalForPaymentStatus(false);
         }
       }
@@ -1779,7 +1974,6 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
       isCancelled = true;
     };
   }, [submittedRequestIdFromState, tagOptions]);
-
 
   useEffect(() => {
     let isCancelled = false;
@@ -1793,20 +1987,22 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
       try {
         setIsApprovedBudgetLoading(true);
         const budgetUrl = `/expenditure/budget/approved?finance_request_id=${resolvedFinanceRequestId}`;
-        const response = await authenticityUtility.get(budgetUrl) as {
+        const response = (await authenticityUtility.get(budgetUrl)) as {
           status: string;
           data?: ApprovedBudgetOption[];
         };
 
-        if (!isCancelled && response.status === 'success') {
-          const normalizedRows = (Array.isArray(response.data) ? response.data : [])
+        if (!isCancelled && response.status === "success") {
+          const normalizedRows = (
+            Array.isArray(response.data) ? response.data : []
+          )
             .map((row) => normalizeApprovedBudgetOption(row))
             .filter((row): row is ApprovedBudgetOption => Boolean(row));
           setApprovedBudgetOptions(normalizedRows);
         }
       } catch (error) {
         if (!isCancelled) {
-          console.error('Failed to load approved budgets:', error);
+          console.error("Failed to load approved budgets:", error);
           setApprovedBudgetOptions([]);
         }
       } finally {
@@ -1824,7 +2020,7 @@ const normalizeText = (value: unknown): string => String(value ?? '').trim();
   }, [resolvedFinanceRequestId]);
  const rowReferenceIdFromState = (() => {
   const state = location.state as { rowReferenceId?: unknown } | null;
-  const value = String(state?.rowReferenceId ?? '').trim();
+    const value = String(state?.rowReferenceId ?? "").trim();
   return value || null;
 })();
 
@@ -1842,7 +2038,7 @@ const workflowBudgetLineIdFromState = (() => {
 
 const workflowRowRefFromState = (() => {
   const state = location.state as { workflowrowref?: unknown } | null;
-  const value = String(state?.workflowrowref ?? '').trim();
+    const value = String(state?.workflowrowref ?? "").trim();
   return value || null;
 })();
   useEffect(() => {
@@ -1851,38 +2047,57 @@ const workflowRowRefFromState = (() => {
     const loadBeneficiaryOptions = async () => {
       const toOptionList = (rows: any[]): SelectOption[] =>
         rows
-          .map((row: any) => String(row?.name || '').trim())
+          .map((row: any) => String(row?.name || "").trim())
           .filter(Boolean)
           .map((name: string) => ({ value: name, label: name }));
 
       const nextOptions: Record<string, SelectOption[]> = {};
 
       try {
-        const response = await authenticityUtility.get('budget/org-units') as any;
+        const response = (await authenticityUtility.get(
+          "budget/org-units",
+        )) as any;
         const grouped = response?.data?.grouped;
 
-        if (grouped && typeof grouped === 'object') {
-          Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).forEach(([beneficiaryKey, apiType]) => {
-            const rows = Array.isArray((grouped as Record<string, any[]>)[apiType])
+        if (grouped && typeof grouped === "object") {
+          Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).forEach(
+            ([beneficiaryKey, apiType]) => {
+              const rows = Array.isArray(
+                (grouped as Record<string, any[]>)[apiType],
+              )
               ? (grouped as Record<string, any[]>)[apiType]
               : [];
             nextOptions[beneficiaryKey] = toOptionList(rows);
-          });
+            },
+          );
         } else {
-          throw new Error('Grouped org-units payload unavailable');
+          throw new Error("Grouped org-units payload unavailable");
         }
       } catch (error) {
-        console.error('Failed to fetch bulk org units, falling back to per-type calls:', error);
+        console.error(
+          "Failed to fetch bulk org units, falling back to per-type calls:",
+          error,
+        );
 
-        for (const [beneficiaryKey, apiType] of Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE)) {
+        for (const [beneficiaryKey, apiType] of Object.entries(
+          BENEFICIARY_TYPE_TO_ENTITY_API_TYPE,
+        )) {
           try {
-            const response = await authenticityUtility.get(`/finance-requests/org-units/${apiType}`) as any;
+            const response = (await authenticityUtility.get(
+              `/finance-requests/org-units/${apiType}`,
+            )) as any;
             const rows = Array.isArray(response?.data) ? response.data : [];
             nextOptions[beneficiaryKey] = toOptionList(rows);
           } catch (fallbackError) {
-            console.error(`Failed to fetch options for ${beneficiaryKey}:`, fallbackError);
+            console.error(
+              `Failed to fetch options for ${beneficiaryKey}:`,
+              fallbackError,
+            );
             nextOptions[beneficiaryKey] =
-              FALLBACK_SUBCATEGORY_OPTIONS[beneficiaryKey]?.map((opt) => ({ value: opt, label: opt })) || [];
+              FALLBACK_SUBCATEGORY_OPTIONS[beneficiaryKey]?.map((opt) => ({
+                value: opt,
+                label: opt,
+              })) || [];
           }
         }
       }
@@ -1902,12 +2117,17 @@ const workflowRowRefFromState = (() => {
   useEffect(() => {
     const loadTagOptions = async () => {
       try {
-        const response = await authenticityUtility.get('/finance-requests/tags') as any;
-        if ((response?.status === 'success' || response?.success === true) && Array.isArray(response?.data)) {
+        const response = (await authenticityUtility.get(
+          "/finance-requests/tags",
+        )) as any;
+        if (
+          (response?.status === "success" || response?.success === true) &&
+          Array.isArray(response?.data)
+        ) {
           const options = response.data
             .map((row: any) => ({
-              value: String(row?.tag_name || '').trim(),
-              label: String(row?.tag_name || '').trim(),
+              value: String(row?.tag_name || "").trim(),
+              label: String(row?.tag_name || "").trim(),
             }))
             .filter((opt: SelectOption) => opt.value.length > 0);
 
@@ -1916,7 +2136,7 @@ const workflowRowRefFromState = (() => {
           setTagOptions(FALLBACK_TAG_OPTIONS);
         }
       } catch (error) {
-        console.error('Failed to load budget tags', error);
+        console.error("Failed to load budget tags", error);
         setTagOptions(FALLBACK_TAG_OPTIONS);
       }
     };
@@ -1924,33 +2144,39 @@ const workflowRowRefFromState = (() => {
     loadTagOptions();
   }, []);
 
-  const addAdvanceRow = () => setAdvanceRows([...advanceRows, createAdvanceRow()]);
-  const removeAdvanceRow = (id: string) => setAdvanceRows(advanceRows.filter(r => r.id !== id));
+  const addAdvanceRow = () =>
+    setAdvanceRows([...advanceRows, createAdvanceRow()]);
+  const removeAdvanceRow = (id: string) =>
+    setAdvanceRows(advanceRows.filter((r) => r.id !== id));
 
-  const addSettlementRow = () => setSettlementRows([...settlementRows, createSettlementRow()]);
-  const removeSettlementRow = (id: string) => setSettlementRows(settlementRows.filter(r => r.id !== id));
+  const addSettlementRow = () =>
+    setSettlementRows([...settlementRows, createSettlementRow()]);
+  const removeSettlementRow = (id: string) =>
+    setSettlementRows(settlementRows.filter((r) => r.id !== id));
 
   const calculateSum = (input: string): string => {
     try {
-      if (!input) return '';
+      if (!input) return "";
       // If it doesn't contain '+', just return the value if it's a number
-      if (!input.includes('+')) {
+      if (!input.includes("+")) {
         const val = parseFloat(input);
-        return isNaN(val) ? '' : val.toString();
+        return isNaN(val) ? "" : val.toString();
       }
-      const parts = input.split('+').map(p => p.trim());
+      const parts = input.split("+").map((p) => p.trim());
       const sum = parts.reduce((acc, part) => {
         const val = parseFloat(part);
         return acc + (isNaN(val) ? 0 : val);
       }, 0);
-      return sum > 0 ? sum.toString() : '';
+      return sum > 0 ? sum.toString() : "";
     } catch (e) {
-      return '';
+      return "";
     }
   };
 
-  const addExpenditureRow = () => setExpenditureSubRows([...expenditureSubRows, createExpenditureRow()]);
-  const removeExpenditureRow = (id: string) => setExpenditureSubRows(expenditureSubRows.filter(r => r.id !== id));
+  const addExpenditureRow = () =>
+    setExpenditureSubRows([...expenditureSubRows, createExpenditureRow()]);
+  const removeExpenditureRow = (id: string) =>
+    setExpenditureSubRows(expenditureSubRows.filter((r) => r.id !== id));
 
    const formatDMY = (value: string | Date | null | undefined) => {
      if (!value) return "";
@@ -1964,25 +2190,79 @@ const workflowRowRefFromState = (() => {
 
    const numberToIndianWords = (num: number): string => {
      if (num === 0) return "Zero rupees only";
-     const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-     const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+    const a = [
+      "",
+      "One",
+      "Two",
+      "Three",
+      "Four",
+      "Five",
+      "Six",
+      "Seven",
+      "Eight",
+      "Nine",
+      "Ten",
+      "Eleven",
+      "Twelve",
+      "Thirteen",
+      "Fourteen",
+      "Fifteen",
+      "Sixteen",
+      "Seventeen",
+      "Eighteen",
+      "Nineteen",
+    ];
+    const b = [
+      "",
+      "",
+      "Twenty",
+      "Thirty",
+      "Forty",
+      "Fifty",
+      "Sixty",
+      "Seventy",
+      "Eighty",
+      "Ninety",
+    ];
      const inWordsBelowThousand = (n: number): string => {
        let str = "";
-       if (n > 99) { str += a[Math.floor(n / 100)] + " hundred "; n %= 100; }
-       if (n > 19) { str += b[Math.floor(n / 10)]!.toLowerCase() + " "; n %= 10; }
-       if (n > 0) { str += a[n]!.toLowerCase().replace(/^./, c => c.toUpperCase()) + " "; }
+      if (n > 99) {
+        str += a[Math.floor(n / 100)] + " hundred ";
+        n %= 100;
+      }
+      if (n > 19) {
+        str += b[Math.floor(n / 10)]!.toLowerCase() + " ";
+        n %= 10;
+      }
+      if (n > 0) {
+        str += a[n]!.toLowerCase().replace(/^./, (c) => c.toUpperCase()) + " ";
+      }
        return str.trim();
      };
      let n = Math.floor(num);
      let result = "";
      const crore = Math.floor(n / 10000000);
-     if (crore) { result += inWordsBelowThousand(crore) + " crore "; n %= 10000000; }
+    if (crore) {
+      result += inWordsBelowThousand(crore) + " crore ";
+      n %= 10000000;
+    }
      const lakh = Math.floor(n / 100000);
-     if (lakh) { result += inWordsBelowThousand(lakh) + " lakh "; n %= 100000; }
+    if (lakh) {
+      result += inWordsBelowThousand(lakh) + " lakh ";
+      n %= 100000;
+    }
      const thousand = Math.floor(n / 1000);
-     if (thousand) { result += inWordsBelowThousand(thousand) + " thousand "; n %= 1000; }
-     if (n > 0) { result += inWordsBelowThousand(n); }
-     const titleCased = result.trim().replace(/\b\w/g, l => l.toUpperCase()).replace(/[A-Z]{2,}/g, m => m.charAt(0) + m.slice(1).toLowerCase());
+    if (thousand) {
+      result += inWordsBelowThousand(thousand) + " thousand ";
+      n %= 1000;
+    }
+    if (n > 0) {
+      result += inWordsBelowThousand(n);
+    }
+    const titleCased = result
+      .trim()
+      .replace(/\b\w/g, (l) => l.toUpperCase())
+      .replace(/[A-Z]{2,}/g, (m) => m.charAt(0) + m.slice(1).toLowerCase());
      return titleCased + " Rupees only";
    };
 
@@ -1993,16 +2273,25 @@ const workflowRowRefFromState = (() => {
      return category;
    };
 
-  const isMultipleSelect = (type: string) => type === 'Faculty' || type === 'Staff';
+  const isMultipleSelect = (type: string) =>
+    type === "Faculty" || type === "Staff";
 
-  const subcategoryOptions: OptionType[] = subcategoryOptionsByType[categoryType] || [];
-  const subcategoryList: string[] = subcategoryOptions.map((option) => String(option.value));
+  const subcategoryOptions: OptionType[] =
+    subcategoryOptionsByType[categoryType] || [];
+  const subcategoryList: string[] = subcategoryOptions.map((option) =>
+    String(option.value),
+  );
    const hasSubcategories = subcategoryList.length > 0;
 
-   const extraDropdownVisible = primaryHead === 'Events & Competitions' || primaryHead === 'Meetings & Audits';
+  const extraDropdownVisible =
+    primaryHead === "Events & Competitions" ||
+    primaryHead === "Meetings & Audits";
 
   const addPayeeRow = () => setPayeeRows([...payeeRows, createPayeeRow()]);
-  const removePayeeRow = (id: string) => setPayeeRows(prev => prev.length > 1 ? prev.filter(r => r.id !== id) : prev);
+  const removePayeeRow = (id: string) =>
+    setPayeeRows((prev) =>
+      prev.length > 1 ? prev.filter((r) => r.id !== id) : prev,
+    );
 
   useEffect(() => {
     return () => {
@@ -2015,44 +2304,49 @@ const workflowRowRefFromState = (() => {
   useEffect(() => {
     if (!categoryType?.trim()) {
       if (!pendingPrefillTag && !financeTagFromState) {
-        setSelectedTag('');
+        setSelectedTag("");
       }
       return;
     }
 
     setSelectedTag((prev) => {
-      if (prev && prev.trim() !== '') {
+      if (prev && prev.trim() !== "") {
         return prev;
       }
 
-      if (categoryType === 'Staff' || categoryType === 'Faculty') {
-        return 'Skilling';
+      if (categoryType === "Staff" || categoryType === "Faculty") {
+        return "Skilling";
       }
 
-      if (categoryType === 'Department') {
+      if (categoryType === "Department") {
         if (pendingPrefillTag || financeTagFromState) {
-          return pendingPrefillTag || financeTagFromState || '';
+          return pendingPrefillTag || financeTagFromState || "";
         }
-        return String(tagOptions?.[0]?.value || '');
+        return String(tagOptions?.[0]?.value || "");
       }
 
       if (
-        categoryType === 'Centre'
-        || categoryType === 'Cell'
-        || categoryType === 'Club'
-        || categoryType === 'Section'
-        || categoryType === 'Institution'
-        || categoryType === 'Professional Body'
+        categoryType === "Centre" ||
+        categoryType === "Cell" ||
+        categoryType === "Club" ||
+        categoryType === "Section" ||
+        categoryType === "Institution" ||
+        categoryType === "Professional Body"
       ) {
-        return 'Essentials';
+        return "Essentials";
       }
 
-      return '';
+      return "";
     });
   }, [categoryType, pendingPrefillTag, financeTagFromState, tagOptions]);
 
-  const updatePayeeRow = (rowId: string, updater: (row: PayeeRow) => PayeeRow) => {
-    setPayeeRows((prev) => prev.map((row) => (row.id === rowId ? updater(row) : row)));
+  const updatePayeeRow = (
+    rowId: string,
+    updater: (row: PayeeRow) => PayeeRow,
+  ) => {
+    setPayeeRows((prev) =>
+      prev.map((row) => (row.id === rowId ? updater(row) : row)),
+    );
   };
 
   const closePayeeLookup = () => {
@@ -2063,7 +2357,10 @@ const workflowRowRefFromState = (() => {
     setPayeeLookupResults([]);
   };
 
-  const getLocalPayeeSuggestions = (rowId: string, query: string): PayeeLookupResult[] => {
+  const getLocalPayeeSuggestions = (
+    rowId: string,
+    query: string,
+  ): PayeeLookupResult[] => {
     const normalizedQuery = query.trim().toLowerCase();
     if (normalizedQuery.length < 1) {
       return [];
@@ -2073,7 +2370,14 @@ const workflowRowRefFromState = (() => {
 
     return payeeRows
       .filter((row) => row.id !== rowId)
-      .filter((row) => row.payeeName || row.accountNo || row.bankName || row.ifsc || row.branchName)
+      .filter(
+        (row) =>
+          row.payeeName ||
+          row.accountNo ||
+          row.bankName ||
+          row.ifsc ||
+          row.branchName,
+      )
       .filter((row) => {
         const haystack = [
           row.payeeName,
@@ -2085,14 +2389,17 @@ const workflowRowRefFromState = (() => {
           row.panNumber,
         ]
           .filter(Boolean)
-          .join(' ')
+          .join(" ")
           .toLowerCase();
 
         return normalizedParts.every((part) => haystack.includes(part));
       })
       .slice(0, 8)
       .map((row, index) => {
-        const canonicalPayeeName = resolveCanonicalPayeeName(row.payeeName, row.accountName);
+        const canonicalPayeeName = resolveCanonicalPayeeName(
+          row.payeeName,
+          row.accountName,
+        );
 
         return {
           id: Number(`9${index + 1}`),
@@ -2105,8 +2412,10 @@ const workflowRowRefFromState = (() => {
           bank_name: row.bankName,
           branch_name: row.branchName,
           ifsc: row.ifsc,
-          beneficiary_type: row.beneficiaryType || 'individual',
-          beneficiary_org: resolveCanonicalBeneficiaryOrg(row.beneficiaryOrg, row.payeeName) || null,
+          beneficiary_type: row.beneficiaryType || "individual",
+          beneficiary_org:
+            resolveCanonicalBeneficiaryOrg(row.beneficiaryOrg, row.payeeName) ||
+            null,
           organization_type: row.organizationType || null,
           msme: row.msme || null,
           gstin: row.gstin || null,
@@ -2130,9 +2439,9 @@ const workflowRowRefFromState = (() => {
     setIsPayeeLookupLoading(true);
 
     try {
-      const response = await authenticityUtility.get(
-        `/expenditure/payees?search=${encodeURIComponent(normalizedQuery)}&limit=8`
-      ) as { status: string; data?: PayeeLookupResult[] };
+      const response = (await authenticityUtility.get(
+        `/expenditure/payees?search=${encodeURIComponent(normalizedQuery)}&limit=8`,
+      )) as { status: string; data?: PayeeLookupResult[] };
 
       if (requestId !== payeeLookupRequestRef.current) {
         return;
@@ -2143,12 +2452,12 @@ const workflowRowRefFromState = (() => {
       const seenKeys = new Set(
         localMatches.map(
           (payee) =>
-            `${payee.account_no || ''}|${String(payee.ifsc || '').toUpperCase()}|${resolveCanonicalPayeeName(payee.payee_name, payee.account_name)}`,
-        )
+            `${payee.account_no || ""}|${String(payee.ifsc || "").toUpperCase()}|${resolveCanonicalPayeeName(payee.payee_name, payee.account_name)}`,
+        ),
       );
 
       remoteMatches.forEach((payee) => {
-        const key = `${payee.account_no || ''}|${String(payee.ifsc || '').toUpperCase()}|${resolveCanonicalPayeeName(payee.payee_name, payee.account_name)}`;
+        const key = `${payee.account_no || ""}|${String(payee.ifsc || "").toUpperCase()}|${resolveCanonicalPayeeName(payee.payee_name, payee.account_name)}`;
         if (!seenKeys.has(key)) {
           seenKeys.add(key);
           mergedMatches.push(payee);
@@ -2162,7 +2471,7 @@ const workflowRowRefFromState = (() => {
         return;
       }
 
-      console.error('Payee lookup error:', error);
+      console.error("Payee lookup error:", error);
       setPayeeLookupResults(localMatches);
       setIsPayeeLookupOpen(localMatches.length > 0);
       setIsPayeeLookupLoading(false);
@@ -2191,36 +2500,40 @@ const workflowRowRefFromState = (() => {
 
   const handlePayeeLookupInputChange = (
     rowId: string,
-    field: PayeeLookupField | 'amount',
+    field: PayeeLookupField | "amount",
     value: string,
   ) => {
     let nextQuery = value;
     setActivePayeeLookupRowId(rowId);
-    setActivePayeeLookupField(field === 'amount' ? null : field);
+    setActivePayeeLookupField(field === "amount" ? null : field);
 
     updatePayeeRow(rowId, (row) => {
-      const shouldResetPayeeId = field !== 'amount';
+      const shouldResetPayeeId = field !== "amount";
       const nextRow = {
         ...row,
         [field]: value,
         payeeId: shouldResetPayeeId ? null : row.payeeId,
       };
-      if (field === 'ifsc') {
+      if (field === "ifsc") {
         nextRow.ifsc = value.toUpperCase();
       }
 
-      if (field === 'accountNo' && nextRow.ifsc) {
+      if (field === "accountNo" && nextRow.ifsc) {
         nextQuery = `${value} ${nextRow.ifsc}`;
-      } else if (field === 'ifsc' && nextRow.accountNo) {
+      } else if (field === "ifsc" && nextRow.accountNo) {
         nextQuery = `${nextRow.accountNo} ${nextRow.ifsc}`;
-      } else if (field === 'payeeName' || field === 'bankName' || field === 'branchName') {
+      } else if (
+        field === "payeeName" ||
+        field === "bankName" ||
+        field === "branchName"
+      ) {
         nextQuery = value;
       }
 
       return nextRow;
     });
 
-    if (field === 'amount') {
+    if (field === "amount") {
       return;
     }
 
@@ -2238,24 +2551,31 @@ const workflowRowRefFromState = (() => {
       row.bankName ||
       row.ifsc ||
       row.branchName ||
-      ''
+      ""
     ).trim();
   };
 
-  const getPayeeLookupQueryForField = (row: PayeeRow, field: PayeeLookupField) => {
-    if (field === 'accountNo') {
-      return row.ifsc ? `${row.accountNo} ${row.ifsc}`.trim() : row.accountNo.trim();
+  const getPayeeLookupQueryForField = (
+    row: PayeeRow,
+    field: PayeeLookupField,
+  ) => {
+    if (field === "accountNo") {
+      return row.ifsc
+        ? `${row.accountNo} ${row.ifsc}`.trim()
+        : row.accountNo.trim();
     }
 
-    if (field === 'ifsc') {
-      return row.accountNo ? `${row.accountNo} ${row.ifsc}`.trim() : row.ifsc.trim();
+    if (field === "ifsc") {
+      return row.accountNo
+        ? `${row.accountNo} ${row.ifsc}`.trim()
+        : row.ifsc.trim();
     }
 
-    if (field === 'bankName') {
+    if (field === "bankName") {
       return row.bankName.trim();
     }
 
-    if (field === 'branchName') {
+    if (field === "branchName") {
       return row.branchName.trim();
     }
 
@@ -2279,52 +2599,70 @@ const workflowRowRefFromState = (() => {
 
   const getApprovedBudgetHeadsForAdvance = (): OptionType[] => {
     const approvedHeads: string[] = approvedBudgetOptions
-      .map((budget) => String(budget.head || '').trim())
+      .map((budget) => String(budget.head || "").trim())
       .filter(Boolean);
 
-    return Array.from(new Set(approvedHeads))
-      .map((head) => ({ value: head, label: head }));
+    return Array.from(new Set(approvedHeads)).map((head) => ({
+      value: head,
+      label: head,
+    }));
   };
 
-  const getApprovedSubHeadOptionsForAdvance = (budgetHead: string | number): OptionType[] => {
+  const getApprovedSubHeadOptionsForAdvance = (
+    budgetHead: string | number,
+  ): OptionType[] => {
     const normalizedHead = normalizeBudgetToken(budgetHead);
     if (!normalizedHead) return [];
     const approvedSubHeads: string[] = approvedBudgetOptions
       .filter((budget) => normalizeBudgetToken(budget.head) === normalizedHead)
-      .map((budget) => String(budget.subHead || '').trim())
+      .map((budget) => String(budget.subHead || "").trim())
       .filter(Boolean);
 
-    return Array.from(new Set(approvedSubHeads))
-      .map((subHead) => ({ value: subHead, label: subHead }));
+    return Array.from(new Set(approvedSubHeads)).map((subHead) => ({
+      value: subHead,
+      label: subHead,
+    }));
   };
 
-  const findApprovedBudgetOption = (budgetHead: string | number, subHead: string | number) => {
+  const findApprovedBudgetOption = (
+    budgetHead: string | number,
+    subHead: string | number,
+  ) => {
     const normalizedHead = normalizeBudgetToken(budgetHead);
     const normalizedSubHead = normalizeBudgetToken(subHead);
     if (!normalizedHead || !normalizedSubHead) return null;
 
-    return approvedBudgetOptions.find((budget) =>
-      normalizeBudgetToken(budget.head) === normalizedHead
-      && normalizeBudgetToken(budget.subHead) === normalizedSubHead
-    ) || null;
+    return (
+      approvedBudgetOptions.find(
+        (budget) =>
+          normalizeBudgetToken(budget.head) === normalizedHead &&
+          normalizeBudgetToken(budget.subHead) === normalizedSubHead,
+      ) || null
+    );
   };
 
   const getApprovedBudgetAmount = (budget: ApprovedBudgetOption | null) =>
-    budget ? String(budget.remainingAmount ?? budget.totalAmount ?? '') : '';
+    budget ? String(budget.remainingAmount ?? budget.totalAmount ?? "") : "";
 
-  const hydrateRowsFromApprovedBudgets = <T extends {
+  const hydrateRowsFromApprovedBudgets = <
+    T extends {
     budgetHead: string | number;
     subHead: string | number;
     budget: string;
     budgetLineId?: number | null;
     budgetProposalId?: number | null;
-  }>(rows: T[]): T[] => {
+    },
+  >(
+    rows: T[],
+  ): T[] => {
     if (!approvedBudgetOptions.length) return rows;
 
     return rows.map((row) => {
       const budgetLineId = Number(row.budgetLineId || 0) || null;
       const matchedBudget = budgetLineId
-        ? approvedBudgetOptions.find((budget) => Number(budget.budgetLineId || 0) === budgetLineId)
+        ? approvedBudgetOptions.find(
+            (budget) => Number(budget.budgetLineId || 0) === budgetLineId,
+          )
         : null;
 
       if (!matchedBudget) return row;
@@ -2334,7 +2672,8 @@ const workflowRowRefFromState = (() => {
         budgetHead: row.budgetHead || matchedBudget.head,
         subHead: row.subHead || matchedBudget.subHead,
         budget: row.budget || getApprovedBudgetAmount(matchedBudget),
-        budgetProposalId: row.budgetProposalId ?? matchedBudget.budgetProposalId,
+        budgetProposalId:
+          row.budgetProposalId ?? matchedBudget.budgetProposalId,
       };
     });
   };
@@ -2348,28 +2687,43 @@ const workflowRowRefFromState = (() => {
   }, [approvedBudgetOptions]);
 
   const getBudgetDisplayValue = (rowBudget: string) => {
-    if (rowBudget !== '') {
-      return `Rs ${Number(rowBudget || 0).toLocaleString('en-IN')}`;
+    if (rowBudget !== "") {
+      return `Rs ${Number(rowBudget || 0).toLocaleString("en-IN")}`;
     }
 
     const approved = Number(financeApprovedAmount || 0);
     if (approved > 0) {
-      return `Rs ${approved.toLocaleString('en-IN')}`;
+      return `Rs ${approved.toLocaleString("en-IN")}`;
     }
 
-    return '';
+    return "";
   };
 
-  const updateAdvanceRow = (rowId: string, updater: (row: AdvanceFormRow) => AdvanceFormRow) => {
-    setAdvanceRows((prev) => prev.map((row) => (row.id === rowId ? updater(row) : row)));
+  const updateAdvanceRow = (
+    rowId: string,
+    updater: (row: AdvanceFormRow) => AdvanceFormRow,
+  ) => {
+    setAdvanceRows((prev) =>
+      prev.map((row) => (row.id === rowId ? updater(row) : row)),
+    );
   };
 
-  const updateSettlementRow = (rowId: string, updater: (row: SettlementFormRow) => SettlementFormRow) => {
-    setSettlementRows((prev) => prev.map((row) => (row.id === rowId ? updater(row) : row)));
+  const updateSettlementRow = (
+    rowId: string,
+    updater: (row: SettlementFormRow) => SettlementFormRow,
+  ) => {
+    setSettlementRows((prev) =>
+      prev.map((row) => (row.id === rowId ? updater(row) : row)),
+    );
   };
 
-  const updateExpenditureRow = (rowId: string, updater: (row: ExpenditureFormRow) => ExpenditureFormRow) => {
-    setExpenditureSubRows((prev) => prev.map((row) => (row.id === rowId ? updater(row) : row)));
+  const updateExpenditureRow = (
+    rowId: string,
+    updater: (row: ExpenditureFormRow) => ExpenditureFormRow,
+  ) => {
+    setExpenditureSubRows((prev) =>
+      prev.map((row) => (row.id === rowId ? updater(row) : row)),
+    );
   };
 
   const loadPreAdvanceSummary = async (
@@ -2378,34 +2732,44 @@ const workflowRowRefFromState = (() => {
     budgetHead: string | number,
     subHead: string | number,
   ) => {
-    const normalizedHead = String(budgetHead || '').trim();
-    const normalizedSubHead = String(subHead || '').trim();
+    const normalizedHead = String(budgetHead || "").trim();
+    const normalizedSubHead = String(subHead || "").trim();
 
     if (!budgetLineId && (!normalizedHead || !normalizedSubHead)) {
-      updateAdvanceRow(rowId, (row) => ({ ...row, preAdvance: '0' }));
+      updateAdvanceRow(rowId, (row) => ({ ...row, preAdvance: "0" }));
       return;
     }
 
     try {
       const query = new URLSearchParams();
-      if (budgetLineId) query.set('budget_line_id', String(budgetLineId));
-      if (normalizedHead) query.set('head', normalizedHead);
-      if (normalizedSubHead) query.set('sub_head', normalizedSubHead);
-      if (resolvedFinanceRequestId) query.set('finance_request_id', String(resolvedFinanceRequestId));
-      if (dashboardRowIdFromState) query.set('dashboard_row_id', dashboardRowIdFromState);
+      if (budgetLineId) query.set("budget_line_id", String(budgetLineId));
+      if (normalizedHead) query.set("head", normalizedHead);
+      if (normalizedSubHead) query.set("sub_head", normalizedSubHead);
+      if (resolvedFinanceRequestId)
+        query.set("finance_request_id", String(resolvedFinanceRequestId));
+      if (dashboardRowIdFromState)
+        query.set("dashboard_row_id", dashboardRowIdFromState);
       if (workflowRowRefFromState ?? rowReferenceIdFromState) {
-        query.set('workflowrowref', workflowRowRefFromState ?? rowReferenceIdFromState ?? '');
+        query.set(
+          "workflowrowref",
+          workflowRowRefFromState ?? rowReferenceIdFromState ?? "",
+        );
       }
-      if (sourceRequestIdFromState) query.set('source_request_id', String(sourceRequestIdFromState));
-      if (!dashboardRowIdFromState && !(workflowRowRefFromState ?? rowReferenceIdFromState) && rowIndexFromState) {
-        query.set('row_index', String(rowIndexFromState));
+      if (sourceRequestIdFromState)
+        query.set("source_request_id", String(sourceRequestIdFromState));
+      if (
+        !dashboardRowIdFromState &&
+        !(workflowRowRefFromState ?? rowReferenceIdFromState) &&
+        rowIndexFromState
+      ) {
+        query.set("row_index", String(rowIndexFromState));
       }
 
-      const response = await authenticityUtility.get(
-        `/expenditure/advance-summary?${query.toString()}`
-      ) as { status: string; data?: { preAdvance?: number } };
+      const response = (await authenticityUtility.get(
+        `/expenditure/advance-summary?${query.toString()}`,
+      )) as { status: string; data?: { preAdvance?: number } };
 
-      if (response.status === 'success') {
+      if (response.status === "success") {
         const preAdvance = Number(response.data?.preAdvance || 0);
         updateAdvanceRow(rowId, (row) => ({
           ...row,
@@ -2413,27 +2777,43 @@ const workflowRowRefFromState = (() => {
         }));
       }
     } catch (error) {
-      console.error('Failed to load pre-advance summary:', error);
+      console.error("Failed to load pre-advance summary:", error);
     }
   };
 
   const totalAdvanceAmount = advanceRows.reduce((sum, row) => {
-    const amount = Number(String(row.advance || '').replace(/,/g, '').trim());
+    const amount = Number(
+      String(row.advance || "")
+        .replace(/,/g, "")
+        .trim(),
+    );
     return sum + (Number.isFinite(amount) ? amount : 0);
   }, 0);
 
   const totalSettlementAmount = settlementRows.reduce((sum, row) => {
-    const amount = Number(String(row.settlement || '').replace(/,/g, '').trim());
+    const amount = Number(
+      String(row.settlement || "")
+        .replace(/,/g, "")
+        .trim(),
+    );
     return sum + (Number.isFinite(amount) ? amount : 0);
   }, 0);
 
   const totalSettlementAdvanceAmount = settlementRows.reduce((sum, row) => {
-    const amount = Number(String(row.advance || '').replace(/,/g, '').trim());
+    const amount = Number(
+      String(row.advance || "")
+        .replace(/,/g, "")
+        .trim(),
+    );
     return sum + (Number.isFinite(amount) ? amount : 0);
   }, 0);
 
   const totalExpenditureAmount = expenditureSubRows.reduce((sum, row) => {
-    const amount = Number(String(row.autoSum || row.expenditure || '').replace(/,/g, '').trim());
+    const amount = Number(
+      String(row.autoSum || row.expenditure || "")
+        .replace(/,/g, "")
+        .trim(),
+    );
     return sum + (Number.isFinite(amount) ? amount : 0);
   }, 0);
 
@@ -2443,30 +2823,39 @@ const workflowRowRefFromState = (() => {
       return sum + (Number.isFinite(amount) ? amount : 0);
     }, 0);
 
-  const handleAdvanceBudgetHeadChange = (rowId: string, budgetHeadValue: string) => {
+  const handleAdvanceBudgetHeadChange = (
+    rowId: string,
+    budgetHeadValue: string,
+  ) => {
     updateAdvanceRow(rowId, (row) => ({
       ...row,
       budgetHead: budgetHeadValue,
-      subHead: '',
-      budget: '',
-      preAdvance: '0',
+      subHead: "",
+      budget: "",
+      preAdvance: "0",
       advance: row.advance,
       budgetLineId: null,
       budgetProposalId: null,
     }));
   };
 
-  const handleAdvanceSubHeadChange = async (rowId: string, subHeadValue: string) => {
+  const handleAdvanceSubHeadChange = async (
+    rowId: string,
+    subHeadValue: string,
+  ) => {
     const row = advanceRows.find((entry) => entry.id === rowId);
-    const budgetHeadValue = String(row?.budgetHead || '').trim();
+    const budgetHeadValue = String(row?.budgetHead || "").trim();
 
-    const selectedBudget = findApprovedBudgetOption(budgetHeadValue, subHeadValue);
+    const selectedBudget = findApprovedBudgetOption(
+      budgetHeadValue,
+      subHeadValue,
+    );
 
     updateAdvanceRow(rowId, (currentRow) => ({
       ...currentRow,
       subHead: subHeadValue,
       budget: getApprovedBudgetAmount(selectedBudget),
-      preAdvance: '',
+      preAdvance: "",
       budgetLineId: selectedBudget?.budgetLineId ?? null,
       budgetProposalId: selectedBudget?.budgetProposalId ?? null,
     }));
@@ -2479,21 +2868,30 @@ const workflowRowRefFromState = (() => {
     );
   };
 
-  const handleSettlementBudgetHeadChange = (rowId: string, budgetHeadValue: string) => {
+  const handleSettlementBudgetHeadChange = (
+    rowId: string,
+    budgetHeadValue: string,
+  ) => {
     updateSettlementRow(rowId, (row) => ({
       ...row,
       budgetHead: budgetHeadValue,
-      subHead: '',
-      budget: '',
+      subHead: "",
+      budget: "",
       budgetLineId: null,
       budgetProposalId: null,
     }));
   };
 
-  const handleSettlementSubHeadChange = (rowId: string, subHeadValue: string) => {
+  const handleSettlementSubHeadChange = (
+    rowId: string,
+    subHeadValue: string,
+  ) => {
     const row = settlementRows.find((entry) => entry.id === rowId);
-    const budgetHeadValue = String(row?.budgetHead || '').trim();
-    const selectedBudget = findApprovedBudgetOption(budgetHeadValue, subHeadValue);
+    const budgetHeadValue = String(row?.budgetHead || "").trim();
+    const selectedBudget = findApprovedBudgetOption(
+      budgetHeadValue,
+      subHeadValue,
+    );
 
     updateSettlementRow(rowId, (currentRow) => ({
       ...currentRow,
@@ -2504,21 +2902,30 @@ const workflowRowRefFromState = (() => {
     }));
   };
 
-  const handleExpenditureBudgetHeadChange = (rowId: string, budgetHeadValue: string) => {
+  const handleExpenditureBudgetHeadChange = (
+    rowId: string,
+    budgetHeadValue: string,
+  ) => {
     updateExpenditureRow(rowId, (row) => ({
       ...row,
       budgetHead: budgetHeadValue,
-      subHead: '',
-      budget: '',
+      subHead: "",
+      budget: "",
       budgetLineId: null,
       budgetProposalId: null,
     }));
   };
 
-  const handleExpenditureSubHeadChange = (rowId: string, subHeadValue: string) => {
+  const handleExpenditureSubHeadChange = (
+    rowId: string,
+    subHeadValue: string,
+  ) => {
     const row = expenditureSubRows.find((entry) => entry.id === rowId);
-    const budgetHeadValue = String(row?.budgetHead || '').trim();
-    const selectedBudget = findApprovedBudgetOption(budgetHeadValue, subHeadValue);
+    const budgetHeadValue = String(row?.budgetHead || "").trim();
+    const selectedBudget = findApprovedBudgetOption(
+      budgetHeadValue,
+      subHeadValue,
+    );
 
     updateExpenditureRow(rowId, (currentRow) => ({
       ...currentRow,
@@ -2529,7 +2936,10 @@ const workflowRowRefFromState = (() => {
     }));
   };
 
-  const applyPayeeLookupSelection = (rowId: string, payee: PayeeLookupResult) => {
+  const applyPayeeLookupSelection = (
+    rowId: string,
+    payee: PayeeLookupResult,
+  ) => {
     const canonicalPayeeName = resolveCanonicalPayeeName(
       payee.payee_name,
       payee.account_name,
@@ -2539,32 +2949,45 @@ const workflowRowRefFromState = (() => {
       ...row,
       payeeId: payee.payee_id ?? payee.id ?? row.payeeId ?? null,
       payeeName: canonicalPayeeName || row.payeeName,
-      accountNo: String(payee.account_no || '').trim() || row.accountNo,
-      bankName: String(payee.bank_name || '').trim() || row.bankName,
-      ifsc: String(payee.ifsc || '').trim().toUpperCase() || row.ifsc,
-      branchName: String(payee.branch_name || '').trim() || row.branchName,
+      accountNo: String(payee.account_no || "").trim() || row.accountNo,
+      bankName: String(payee.bank_name || "").trim() || row.bankName,
+      ifsc:
+        String(payee.ifsc || "")
+          .trim()
+          .toUpperCase() || row.ifsc,
+      branchName: String(payee.branch_name || "").trim() || row.branchName,
       accountName: canonicalPayeeName || row.accountName,
-      panNumber: String(payee.pan_number || '').trim() || row.panNumber,
-      accountType: String(payee.account_type || '').trim() || row.accountType,
-      beneficiaryType: String(payee.beneficiary_type || '').trim().toLowerCase() === 'organization'
-        ? 'organization'
-        : 'individual',
+      panNumber: String(payee.pan_number || "").trim() || row.panNumber,
+      accountType: String(payee.account_type || "").trim() || row.accountType,
+      beneficiaryType:
+        String(payee.beneficiary_type || "")
+          .trim()
+          .toLowerCase() === "organization"
+          ? "organization"
+          : "individual",
       beneficiaryOrg: resolveCanonicalBeneficiaryOrg(
         payee.beneficiary_org,
         payee.payee_name,
       ),
-      organizationType: String(payee.organization_type || '').trim(),
-      msme: String(payee.msme || '').trim(),
-      gstin: String(payee.gstin || '').trim(),
-      tdsDetails: '',
-      tdsSection: '',
+      organizationType: String(payee.organization_type || "").trim(),
+      msme: String(payee.msme || "").trim(),
+      gstin: String(payee.gstin || "").trim(),
+      tdsDetails: "",
+      tdsSection: "",
     }));
 
     closePayeeLookup();
   };
 
-  const renderPayeeLookupDropdown = (rowId: string, field: PayeeLookupField) => {
-    if (activePayeeLookupRowId !== rowId || activePayeeLookupField !== field || !isPayeeLookupOpen) {
+  const renderPayeeLookupDropdown = (
+    rowId: string,
+    field: PayeeLookupField,
+  ) => {
+    if (
+      activePayeeLookupRowId !== rowId ||
+      activePayeeLookupField !== field ||
+      !isPayeeLookupOpen
+    ) {
       return null;
     }
 
@@ -2575,7 +2998,7 @@ const workflowRowRefFromState = (() => {
         ) : payeeLookupResults.length > 0 ? (
           payeeLookupResults.map((payee) => (
             <div
-              key={`${payee.payee_id || payee.id}-${payee.account_no || ''}-${payee.ifsc || ''}`}
+              key={`${payee.payee_id || payee.id}-${payee.account_no || ""}-${payee.ifsc || ""}`}
               className="payee-search-item"
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -2583,7 +3006,10 @@ const workflowRowRefFromState = (() => {
               }}
             >
               <div className="payee-search-item-name">
-                {resolveCanonicalPayeeName(payee.payee_name, payee.account_name) || 'Unnamed payee'}
+                {resolveCanonicalPayeeName(
+                  payee.payee_name,
+                  payee.account_name,
+                ) || "Unnamed payee"}
               </div>
               <div className="payee-search-item-sub">
                 {[
@@ -2591,7 +3017,9 @@ const workflowRowRefFromState = (() => {
                   payee.account_no,
                   payee.ifsc,
                   payee.branch_name,
-                ].filter(Boolean).join(' | ')}
+                ]
+                  .filter(Boolean)
+                  .join(" | ")}
               </div>
             </div>
           ))
@@ -2607,20 +3035,23 @@ const workflowRowRefFromState = (() => {
     if (!selectedFile) return;
 
     if (existingPayeeBills.length > 0) {
-      e.target.value = '';
-      showAlert('Only one bills PDF can be attached for this request.', 'warning');
+      e.target.value = "";
+      showAlert(
+        "Only one bills PDF can be attached for this request.",
+        "warning",
+      );
       return;
     }
 
-    const isPdf = selectedFile.name.toLowerCase().endsWith('.pdf');
+    const isPdf = selectedFile.name.toLowerCase().endsWith(".pdf");
     if (!isPdf) {
-      e.target.value = '';
-      showAlert('Bills upload accepts only PDF files (.pdf).', 'warning');
+      e.target.value = "";
+      showAlert("Bills upload accepts only PDF files (.pdf).", "warning");
       return;
     }
 
     setUploadedPayeeBills([selectedFile]);
-    e.target.value = '';
+    e.target.value = "";
   };
 
   const handlePaymentProofUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -2638,14 +3069,18 @@ const workflowRowRefFromState = (() => {
     }
 
     const lowerName = file.name.toLowerCase();
-    const isExcelFile = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
+    const isExcelFile =
+      lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls");
 
     if (!isExcelFile) {
       setBulkNeftFile(null);
       if (bulkNeftInputRef.current) {
-        bulkNeftInputRef.current.value = '';
+        bulkNeftInputRef.current.value = "";
       }
-      showAlert('Bulk NEFT upload accepts only Excel files (.xlsx or .xls).', 'warning');
+      showAlert(
+        "Bulk NEFT upload accepts only Excel files (.xlsx or .xls).",
+        "warning",
+      );
       return;
     }
 
@@ -2654,25 +3089,30 @@ const workflowRowRefFromState = (() => {
 
   const handleDownloadBulkNeftTemplate = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const response = await fetch(
         `${authenticityUtility.getBaseURL()}/api/expenditure/templates/bulk-neft`,
         {
-          method: 'GET',
+          method: "GET",
           headers: token ? { Authorization: `Bearer ${token}` } : {},
-        }
+        },
       );
 
       if (!response.ok) {
-        throw new Error(`Template download failed with status ${response.status}`);
+        throw new Error(
+          `Template download failed with status ${response.status}`,
+        );
       }
 
       const blob = await response.blob();
-      const contentDisposition = response.headers.get('Content-Disposition') || '';
+      const contentDisposition =
+        response.headers.get("Content-Disposition") || "";
       const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
-      const filename = filenameMatch?.[1] || `bulk-neft-template-v${BULK_NEFT_TEMPLATE_VERSION}.xls`;
+      const filename =
+        filenameMatch?.[1] ||
+        `bulk-neft-template-v${BULK_NEFT_TEMPLATE_VERSION}.xls`;
       const objectUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
 
       link.href = objectUrl;
       link.download = filename;
@@ -2681,24 +3121,27 @@ const workflowRowRefFromState = (() => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(objectUrl);
     } catch (error) {
-      console.error('Bulk NEFT template download error:', error);
-      showAlert('Unable to download the Bulk NEFT template right now.', 'error');
+      console.error("Bulk NEFT template download error:", error);
+      showAlert(
+        "Unable to download the Bulk NEFT template right now.",
+        "error",
+      );
     }
   };
 
   const removeBulkNeftFile = () => {
     setBulkNeftFile(null);
     if (bulkNeftInputRef.current) {
-      bulkNeftInputRef.current.value = '';
+      bulkNeftInputRef.current.value = "";
     }
   };
 
   const removePayeeBill = (index: number) => {
-    setUploadedPayeeBills(prev => prev.filter((_, i) => i !== index));
+    setUploadedPayeeBills((prev) => prev.filter((_, i) => i !== index));
   };
 
   const removeExistingPayeeBill = (index: number) => {
-    setExistingPayeeBills(prev => prev.filter((_, i) => i !== index));
+    setExistingPayeeBills((prev) => prev.filter((_, i) => i !== index));
   };
 
   const [alertConfig, setAlertConfig] = useState<{
@@ -2712,17 +3155,34 @@ const workflowRowRefFromState = (() => {
   }>({
     show: false,
     message: "",
-    type: "info"
+    type: "info",
   });
 
-  const showAlert = (message: React.ReactNode, type: AlertType = "info", title?: string, showCancel = false, confirmText = "OK", onConfirm?: () => void) => {
-    setAlertConfig({ show: true, message, type, title, onConfirm, showCancel, confirmText });
+  const showAlert = (
+    message: React.ReactNode,
+    type: AlertType = "info",
+    title?: string,
+    showCancel = false,
+    confirmText = "OK",
+    onConfirm?: () => void,
+  ) => {
+    setAlertConfig({
+      show: true,
+      message,
+      type,
+      title,
+      onConfirm,
+      showCancel,
+      confirmText,
+    });
   };
 
-  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+  const closeAlert = () => setAlertConfig((prev) => ({ ...prev, show: false }));
 
   const parseAmountValue = (value: unknown): number => {
-    const normalized = String(value ?? '').replace(/,/g, '').trim();
+    const normalized = String(value ?? "")
+      .replace(/,/g, "")
+      .trim();
     if (!normalized) return 0;
 
     const parsed = Number(normalized);
@@ -2730,7 +3190,9 @@ const workflowRowRefFromState = (() => {
   };
 
   const getRowBudgetLimit = (budgetValue: string | number): number | null => {
-    const normalized = String(budgetValue ?? '').replace(/,/g, '').trim();
+    const normalized = String(budgetValue ?? "")
+      .replace(/,/g, "")
+      .trim();
     if (!normalized) return null;
 
     const parsed = Number(normalized);
@@ -2764,7 +3226,10 @@ const workflowRowRefFromState = (() => {
       }
 
       const nextCumulativeAmount = Number(
-        ((cumulativeAmountsByBudgetLine.get(budgetLineId) || 0) + requestedAmount).toFixed(2),
+        (
+          (cumulativeAmountsByBudgetLine.get(budgetLineId) || 0) +
+          requestedAmount
+        ).toFixed(2),
       );
 
       cumulativeAmountsByBudgetLine.set(budgetLineId, nextCumulativeAmount);
@@ -2793,7 +3258,9 @@ const workflowRowRefFromState = (() => {
 
       budgetLimitsByHead.set(
         headKey,
-        Number(((budgetLimitsByHead.get(headKey) || 0) + budgetLimit).toFixed(2)),
+        Number(
+          ((budgetLimitsByHead.get(headKey) || 0) + budgetLimit).toFixed(2),
+        ),
       );
     }
 
@@ -2802,16 +3269,24 @@ const workflowRowRefFromState = (() => {
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index];
       const headKey = normalizeBudgetToken(row.budgetHead);
-      const budgetLimit = headKey ? budgetLimitsByHead.get(headKey) ?? null : getRowBudgetLimit(row.budget);
+      const budgetLimit = headKey
+        ? (budgetLimitsByHead.get(headKey) ?? null)
+        : getRowBudgetLimit(row.budget);
       const requestedAmount = parseAmountValue(row.autoSum || row.expenditure);
 
       if (budgetLimit === null || requestedAmount <= 0) continue;
 
       const nextCumulativeAmount = Number(
-        ((cumulativeAmountsByHead.get(headKey || `row-${index}`) || 0) + requestedAmount).toFixed(2),
+        (
+          (cumulativeAmountsByHead.get(headKey || `row-${index}`) || 0) +
+          requestedAmount
+        ).toFixed(2),
       );
 
-      cumulativeAmountsByHead.set(headKey || `row-${index}`, nextCumulativeAmount);
+      cumulativeAmountsByHead.set(
+        headKey || `row-${index}`,
+        nextCumulativeAmount,
+      );
 
       if (nextCumulativeAmount > budgetLimit) {
         return {
@@ -2825,12 +3300,18 @@ const workflowRowRefFromState = (() => {
   };
 
   const formatAmountInputValue = (value: number): string => {
-    if (!Number.isFinite(value)) return '';
-    return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
+    if (!Number.isFinite(value)) return "";
+    return Number.isInteger(value)
+      ? String(value)
+      : value.toFixed(2).replace(/\.?0+$/, "");
   };
 
 const toNumber = (value: unknown) => {
-  const n = Number(String(value ?? "").replace(/,/g, "").trim());
+    const n = Number(
+      String(value ?? "")
+        .replace(/,/g, "")
+        .trim(),
+    );
   return Number.isFinite(n) ? n : 0;
 };
 const evaluateArithmeticExpression = (input: string) => {
@@ -2841,7 +3322,12 @@ const evaluateArithmeticExpression = (input: string) => {
 
   const output: string[] = [];
   const operators: string[] = [];
-  const precedence: Record<string, number> = { "+": 1, "-": 1, "*": 2, "/": 2 };
+    const precedence: Record<string, number> = {
+      "+": 1,
+      "-": 1,
+      "*": 2,
+      "/": 2,
+    };
 
   for (const token of tokens) {
     if (/^\d+(?:\.\d+)?$/.test(token)) {
@@ -2894,12 +3380,19 @@ const evaluateArithmeticExpression = (input: string) => {
   if (stack.length !== 1 || !Number.isFinite(stack[0])) return 0;
   return Math.max(0, stack[0]);
 };
-const groupedAdvanceUsage = new Map<string, { budget: number; used: number }>();
+  const groupedAdvanceUsage = new Map<
+    string,
+    { budget: number; used: number }
+  >();
 
 advanceRows.forEach((row) => {
   const key = [
-    String(row.budgetHead ?? "").trim().toLowerCase(),
-    String(row.subHead ?? "").trim().toLowerCase(),
+      String(row.budgetHead ?? "")
+        .trim()
+        .toLowerCase(),
+      String(row.subHead ?? "")
+        .trim()
+        .toLowerCase(),
   ].join("||");
 
   const current = groupedAdvanceUsage.get(key) ?? {
@@ -2917,28 +3410,35 @@ for (const [, group] of groupedAdvanceUsage) {
   if (group.used > group.budget) {
     showAlert(
       `Total entered advance ₹ ${group.used.toLocaleString("en-IN")} exceeds available balance ₹ ${group.budget.toLocaleString("en-IN")} for one of the selected budget lines.`,
-      'warning'
+        "warning",
     );
     return;
   }
 }
-
 
 const getAdvanceRowAvailableBalance = (rowId: string | number) => {
   const currentRow = advanceRows.find((row) => row.id === rowId);
   if (!currentRow) return 0;
 
   const rowBudget = toNumber(currentRow.budget);
-  const currentHead = String(currentRow.budgetHead ?? "").trim().toLowerCase();
-  const currentSubHead = String(currentRow.subHead ?? "").trim().toLowerCase();
+    const currentHead = String(currentRow.budgetHead ?? "")
+      .trim()
+      .toLowerCase();
+    const currentSubHead = String(currentRow.subHead ?? "")
+      .trim()
+      .toLowerCase();
 
   const usedByOtherRows = advanceRows.reduce((sum, row) => {
     if (row.id === rowId) return sum;
 
     const sameHead =
-      String(row.budgetHead ?? "").trim().toLowerCase() === currentHead;
+        String(row.budgetHead ?? "")
+          .trim()
+          .toLowerCase() === currentHead;
     const sameSubHead =
-      String(row.subHead ?? "").trim().toLowerCase() === currentSubHead;
+        String(row.subHead ?? "")
+          .trim()
+          .toLowerCase() === currentSubHead;
 
     if (!sameHead || !sameSubHead) return sum;
 
@@ -2952,16 +3452,24 @@ const getExpenditureRowAvailableBalance = (rowId: string | number) => {
   if (!currentRow) return 0;
 
   const rowBudget = toNumber(currentRow.budget);
-  const currentHead = String(currentRow.budgetHead ?? "").trim().toLowerCase();
-  const currentSubHead = String(currentRow.subHead ?? "").trim().toLowerCase();
+    const currentHead = String(currentRow.budgetHead ?? "")
+      .trim()
+      .toLowerCase();
+    const currentSubHead = String(currentRow.subHead ?? "")
+      .trim()
+      .toLowerCase();
 
   const usedByOtherRows = expenditureSubRows.reduce((sum, row) => {
     if (row.id === rowId) return sum;
 
     const sameHead =
-      String(row.budgetHead ?? "").trim().toLowerCase() === currentHead;
+        String(row.budgetHead ?? "")
+          .trim()
+          .toLowerCase() === currentHead;
     const sameSubHead =
-      String(row.subHead ?? "").trim().toLowerCase() === currentSubHead;
+        String(row.subHead ?? "")
+          .trim()
+          .toLowerCase() === currentSubHead;
 
     if (!sameHead || !sameSubHead) return sum;
 
@@ -2979,27 +3487,26 @@ const getExpenditureRowAvailableBalance = (rowId: string | number) => {
   if (numericValue > allowedBalance) {
     showAlert(
       `Entered amount exceeds available balance. Maximum allowed is ₹ ${allowedBalance.toLocaleString("en-IN")}.`,
-      'warning'
+        "warning",
     );
     return;
   }
 
   const updatedRows = advanceRows.map((row) =>
-    row.id === rowId
-      ? { ...row, advance: value }
-      : row
+      row.id === rowId ? { ...row, advance: value } : row,
   );
 
   setAdvanceRows(updatedRows);
 };
 
- const handleExpenditureAmountChange = (rowId: string | number, value: string) => {
+  const handleExpenditureAmountChange = (
+    rowId: string | number,
+    value: string,
+  ) => {
   const sanitizedValue = value.replace(/[^\d.+\-*/() ]/g, "");
 
   const updatedRows = expenditureSubRows.map((row) =>
-    row.id === rowId
-      ? { ...row, expenditure: sanitizedValue }
-      : row
+      row.id === rowId ? { ...row, expenditure: sanitizedValue } : row,
   );
 
   const targetRow = updatedRows.find((row) => row.id === rowId);
@@ -3023,7 +3530,7 @@ const getExpenditureRowAvailableBalance = (rowId: string | number) => {
   if (evaluatedAmount > allowedBalance) {
     showAlert(
       `Entered expenditure exceeds available balance. Maximum allowed is ₹ ${allowedBalance.toLocaleString("en-IN")}.`,
-      'warning'
+        "warning",
     );
     return;
   }
@@ -3035,17 +3542,24 @@ const getExpenditureRowAvailableBalance = (rowId: string | number) => {
           expenditure: sanitizedValue,
           autoSum: evaluatedAmount ? String(evaluatedAmount) : "",
         }
-      : row
+        : row,
   );
 
   setExpenditureSubRows(finalRows);
 };
-const groupedExpenditureUsage = new Map<string, { budget: number; used: number }>();
+  const groupedExpenditureUsage = new Map<
+    string,
+    { budget: number; used: number }
+  >();
 
 expenditureSubRows.forEach((row) => {
   const key = [
-    String(row.budgetHead ?? "").trim().toLowerCase(),
-    String(row.subHead ?? "").trim().toLowerCase(),
+      String(row.budgetHead ?? "")
+        .trim()
+        .toLowerCase(),
+      String(row.subHead ?? "")
+        .trim()
+        .toLowerCase(),
   ].join("||");
 
   const current = groupedExpenditureUsage.get(key) ?? {
@@ -3063,7 +3577,7 @@ for (const [, group] of groupedExpenditureUsage) {
   if (group.used > group.budget) {
     showAlert(
       `Total expenditure ₹ ${group.used.toLocaleString("en-IN")} exceeds available balance ₹ ${group.budget.toLocaleString("en-IN")} for one of the selected budget lines.`,
-      'warning'
+        "warning",
     );
     return;
   }
@@ -3075,24 +3589,44 @@ for (const [, group] of groupedExpenditureUsage) {
     // Allow empty query to fetch initial list
     // if (query.length < 2) { ... } <- Removed restriction
     try {
-      const response = await authenticityUtility.get(`/expenditure/search-applicant?q=${encodeURIComponent(query)}`) as { status: string; data: Array<{ employee_id: number; name: string; designation: string; department: string; email: string; mobile: string; employee_type: string }> };
-      if (response.status === 'success') {
+      const response = (await authenticityUtility.get(
+        `/expenditure/search-applicant?q=${encodeURIComponent(query)}`,
+      )) as {
+        status: string;
+        data: Array<{
+          employee_id: number;
+          name: string;
+          designation: string;
+          department: string;
+          email: string;
+          mobile: string;
+          employee_type: string;
+        }>;
+      };
+      if (response.status === "success") {
         setApplicantSearchResults(response.data || []);
         setShowApplicantDropdown(true);
       }
     } catch (error) {
-      console.error('Error searching applicant:', error);
+      console.error("Error searching applicant:", error);
     }
   };
 
   // Select applicant from search results
-  const handleSelectApplicant = (emp: { employee_id: number; name: string; designation: string; department: string; email: string; mobile: string }) => {
+  const handleSelectApplicant = (emp: {
+    employee_id: number;
+    name: string;
+    designation: string;
+    department: string;
+    email: string;
+    mobile: string;
+  }) => {
     setEmployeeId(emp.employee_id);
     setApplicantName(emp.name.trim());
-    setDesignation(emp.designation || '');
-    setDepartment(emp.department || '');
-    setEmail(emp.email || '');
-    setMobile(emp.mobile || '');
+    setDesignation(emp.designation || "");
+    setDepartment(emp.department || "");
+    setEmail(emp.email || "");
+    setMobile(emp.mobile || "");
     setIsExternalApplicant(false);
     setShowApplicantDropdown(false);
     setApplicantSearchQuery(emp.name.trim()); // Show selected name in input
@@ -3102,11 +3636,11 @@ for (const [, group] of groupedExpenditureUsage) {
   const handleAddExternalApplicant = () => {
     setIsExternalApplicant(true);
     setEmployeeId(null);
-    setApplicantName('');
-    setDesignation('');
-    setDepartment('');
-    setEmail('');
-    setMobile('');
+    setApplicantName("");
+    setDesignation("");
+    setDepartment("");
+    setEmail("");
+    setMobile("");
     setShowApplicantDropdown(false);
   };
 
@@ -3135,32 +3669,40 @@ for (const [, group] of groupedExpenditureUsage) {
     documentTitle: "Expenditure_Approval_Request",
   });
    const formatSelections = (selections: SelectOption[]): string => {
-    return selections.map(sel => sel.value).join(', ') || '';
+    return selections.map((sel) => sel.value).join(", ") || "";
   };
 
   const handleAddRow = () => {
-    const firstRowCategory = budgetRows[0]?.category || '';
+    const firstRowCategory = budgetRows[0]?.category || "";
 
-    setBudgetRows(prev => [
+    setBudgetRows((prev) => [
       ...prev,
       {
         category: firstRowCategory,
-        head: '',
-        amount: ''
-      }
+        head: "",
+        amount: "",
+      },
     ]);
   };
 
   const handleDeleteRow = (index: number): void => {
     const updated = budgetRows.filter((_, i) => i !== index);
-    setBudgetRows(updated.length ? updated : [{ category: 'Individual', head: '', amount: '' }]);
+    setBudgetRows(
+      updated.length
+        ? updated
+        : [{ category: "Individual", head: "", amount: "" }],
+    );
   };
 
-  const handleBudgetChange = (index: number, field: keyof BudgetRow, value: string) => {
+  const handleBudgetChange = (
+    index: number,
+    field: keyof BudgetRow,
+    value: string,
+  ) => {
     const updated = [...budgetRows];
-    if (field === 'category') {
-      updated[index] = { ...updated[index], category: value, head: '' };
-    } else if (field === 'amount') {
+    if (field === "category") {
+      updated[index] = { ...updated[index], category: value, head: "" };
+    } else if (field === "amount") {
       let num = Number(value) || 0;
       if (num > MAX_AMOUNT) num = MAX_AMOUNT;
       updated[index][field] = num.toString();
@@ -3175,75 +3717,83 @@ for (const [, group] of groupedExpenditureUsage) {
   };
 
   const handleDeleteIncomeRow = (id: string) => {
-    setIncomeRows((prev) => (prev.length === 1 ? prev : prev.filter((row) => row.id !== id)));
-  };
-
-  const handleIncomeRowChange = (id: string, field: keyof IncomeRow, value: string) => {
     setIncomeRows((prev) =>
-      prev.map((row) => (row.id === id ? { ...row, [field]: value } : row))
+      prev.length === 1 ? prev : prev.filter((row) => row.id !== id),
     );
   };
 
-  const totalBudget = budgetRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const handleIncomeRowChange = (
+    id: string,
+    field: keyof IncomeRow,
+    value: string,
+  ) => {
+    setIncomeRows((prev) =>
+      prev.map((row) => (row.id === id ? { ...row, [field]: value } : row)),
+    );
+  };
+
+  const totalBudget = budgetRows.reduce(
+    (sum, row) => sum + Number(row.amount || 0),
+    0,
+  );
   const actionCell: CSSProperties = {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: '12px',
-    flexWrap: 'nowrap',
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "12px",
+    flexWrap: "nowrap",
   };
 
   const iconBtn: CSSProperties = {
-    width: '28px',
-    height: '28px',
-    borderRadius: '50%',
-    border: 'none',
-    background: '#f5f6f8',
-    color: '#000000',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '12px',
-    transition: 'background-color 0.3s ease',
+    width: "28px",
+    height: "28px",
+    borderRadius: "50%",
+    border: "none",
+    background: "#f5f6f8",
+    color: "#000000",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "12px",
+    transition: "background-color 0.3s ease",
   };
 
   const deleteIconBtn: CSSProperties = {
     ...iconBtn,
-    background: '#ffe6e6',
-    color: '#000000',
-    alignItems: 'center'
+    background: "#ffe6e6",
+    color: "#000000",
+    alignItems: "center",
   };
 
   const inputStyle: CSSProperties = {
-    border: '1px solid #ced4da',
-    borderRadius: '0.25rem',
-    padding: '6px 8px',
-    fontSize: '0.95rem',
-    width: '100%',
-    fontFamily: 'inherit',
+    border: "1px solid #ced4da",
+    borderRadius: "0.25rem",
+    padding: "6px 8px",
+    fontSize: "0.95rem",
+    width: "100%",
+    fontFamily: "inherit",
   };
   const incomeHeaderStyle: CSSProperties = {
-    padding: '10px',
-    border: '1px solid #e0e0e0',
-    backgroundColor: '#eaf2ff',
-    textAlign: 'center',
+    padding: "10px",
+    border: "1px solid #e0e0e0",
+    backgroundColor: "#eaf2ff",
+    textAlign: "center",
     fontWeight: 600,
-    color: '#374151',
+    color: "#374151",
   };
   const incomeCellStyle: CSSProperties = {
-    padding: '8px',
-    border: '1px solid #e0e0e0',
-    textAlign: 'center',
-
+    padding: "8px",
+    border: "1px solid #e0e0e0",
+    textAlign: "center",
   };
   const incomeSubRowLabelStyle: CSSProperties = {
-    padding: '8px',
-    border: '1px solid #e0e0e0',
-    backgroundColor: '#eaf2ff',
-    textAlign: 'center',
+    padding: "8px",
+    border: "1px solid #e0e0e0",
+    backgroundColor: "#eaf2ff",
+    textAlign: "center",
     fontWeight: 600,
-    color: '#374151',
+    color: "#374151",
   };
 
   const renderPayeeDetails = () => {
@@ -3264,20 +3814,20 @@ for (const [, group] of groupedExpenditureUsage) {
 
           <div className="bulk-neft-panel">
             <div className="bulk-neft-file-name">
-              <p>{bulkNeftFile?.name || 'No Bulk NEFT file uploaded yet.'}</p>
+              <p>{bulkNeftFile?.name || "No Bulk NEFT file uploaded yet."}</p>
             </div>
             <div className="bulk-neft-actions">
               <input
                 ref={bulkNeftInputRef}
                 type="file"
                 accept=".xlsx,.xls"
-                style={{ display: 'none' }}
+                style={{ display: "none" }}
                 onChange={handleBulkNeftUpload}
               />
-              <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ display: "flex", gap: "12px" }}>
                 <button
                   className="payee-row-btn"
-                  style={{ backgroundColor: '#0069ab', color: 'white' }}
+                  style={{ backgroundColor: "#0069ab", color: "white" }}
                   title="Upload"
                   onClick={(e) => {
                     e.preventDefault();
@@ -3288,13 +3838,13 @@ for (const [, group] of groupedExpenditureUsage) {
                 </button>
                 <button
                   className="payee-row-btn"
-                  style={{ backgroundColor: '#629ac4', color: 'white' }}
+                  style={{ backgroundColor: "#629ac4", color: "white" }}
                   title="View"
                   disabled={!bulkNeftFile}
                   onClick={(e) => {
                     e.preventDefault();
                     if (bulkNeftFile) {
-                      window.open(URL.createObjectURL(bulkNeftFile), '_blank');
+                      window.open(URL.createObjectURL(bulkNeftFile), "_blank");
                     }
                   }}
                 >
@@ -3302,7 +3852,7 @@ for (const [, group] of groupedExpenditureUsage) {
                 </button>
                 <button
                   className="payee-row-btn"
-                  style={{ backgroundColor: '#fff5f5', color: '#ff4d4f' }}
+                  style={{ backgroundColor: "#fff5f5", color: "#ff4d4f" }}
                   title="Delete"
                   disabled={!bulkNeftFile}
                   onClick={(e) => {
@@ -3315,7 +3865,7 @@ for (const [, group] of groupedExpenditureUsage) {
               </div>
               <button
                 className="payee-toolbar-btn payee-toolbar-btn-secondary"
-                style={{ color: '#0069ab', gap: '6px' }}
+                style={{ color: "#0069ab", gap: "6px" }}
                 onClick={(e) => {
                   e.preventDefault();
                   handleDownloadBulkNeftTemplate();
@@ -3329,12 +3879,18 @@ for (const [, group] of groupedExpenditureUsage) {
   <div className="payee-footer-input-wrap">
     <div className="payee-footer-debit-inline">
       <div className="payee-footer-debit-left">
-        <span className="payee-footer-input-label">Debit Account</span>
+                  <span className="payee-footer-input-label">
+                    Debit Account
+                  </span>
         <button
           type="button"
-          className={`payee-footer-switch ${showDebitAccountDropdown ? 'is-on' : 'is-off'}`}
+                    className={`payee-footer-switch ${showDebitAccountDropdown ? "is-on" : "is-off"}`}
           onClick={() => setShowDebitAccountDropdown((prev) => !prev)}
-          aria-label={showDebitAccountDropdown ? 'Disable debit account dropdown' : 'Enable debit account dropdown'}
+                    aria-label={
+                      showDebitAccountDropdown
+                        ? "Disable debit account dropdown"
+                        : "Enable debit account dropdown"
+                    }
           aria-pressed={showDebitAccountDropdown}
         >
           <span className="payee-footer-switch-thumb" />
@@ -3345,8 +3901,18 @@ for (const [, group] of groupedExpenditureUsage) {
           <CustomDropdown
             name="debitAccount"
             options={toOptions(DEBIT_ACCOUNT_OPTIONS)}
-            value={getSelectedOption(paymentDetails.debitAccount, toOptions(DEBIT_ACCOUNT_OPTIONS))}
-            onChange={(option) => setPaymentDetails({ ...paymentDetails, debitAccount: String((option as OptionType)?.value || '') })}
+                      value={getSelectedOption(
+                        paymentDetails.debitAccount,
+                        toOptions(DEBIT_ACCOUNT_OPTIONS),
+                      )}
+                      onChange={(option) =>
+                        setPaymentDetails({
+                          ...paymentDetails,
+                          debitAccount: String(
+                            (option as OptionType)?.value || "",
+                          ),
+                        })
+                      }
             placeholder="Select debit account"
             className="mb-0"
           />
@@ -3376,7 +3942,12 @@ for (const [, group] of groupedExpenditureUsage) {
         <div className="payee-details-header">
           <h5 className="payee-details-title">Payee Details</h5>
           <div className="payee-details-actions">
-            <button className="payee-toolbar-btn" onClick={() => setShowAddPayeeModal(true)}>Add Payee</button>
+            <button
+              className="payee-toolbar-btn"
+              onClick={() => setShowAddPayeeModal(true)}
+            >
+              Add Payee
+            </button>
             <button
               className="payee-toolbar-btn payee-toolbar-btn-secondary"
               onClick={() => setShowBulkNEFT(true)}
@@ -3409,12 +3980,18 @@ for (const [, group] of groupedExpenditureUsage) {
                             placeholder="Accountant Name"
                             value={row.payeeName}
                             onChange={(e) => {
-                              handlePayeeLookupInputChange(row.id, 'payeeName', e.target.value);
+                              handlePayeeLookupInputChange(
+                                row.id,
+                                "payeeName",
+                                e.target.value,
+                              );
                             }}
-                            onFocus={() => handlePayeeLookupFocus(row, 'payeeName')}
+                            onFocus={() =>
+                              handlePayeeLookupFocus(row, "payeeName")
+                            }
                             onBlur={handlePayeeLookupBlur}
                           />
-                          {renderPayeeLookupDropdown(row.id, 'payeeName')}
+                          {renderPayeeLookupDropdown(row.id, "payeeName")}
                         </div>
                         <div className="payee-field-wrap">
                           <input
@@ -3422,12 +3999,18 @@ for (const [, group] of groupedExpenditureUsage) {
                             placeholder="Account No."
                             value={row.accountNo}
                             onChange={(e) => {
-                              handlePayeeLookupInputChange(row.id, 'accountNo', e.target.value);
+                              handlePayeeLookupInputChange(
+                                row.id,
+                                "accountNo",
+                                e.target.value,
+                              );
                             }}
-                            onFocus={() => handlePayeeLookupFocus(row, 'accountNo')}
+                            onFocus={() =>
+                              handlePayeeLookupFocus(row, "accountNo")
+                            }
                             onBlur={handlePayeeLookupBlur}
                           />
-                          {renderPayeeLookupDropdown(row.id, 'accountNo')}
+                          {renderPayeeLookupDropdown(row.id, "accountNo")}
                         </div>
                         <div className="payee-field-wrap">
                           <input
@@ -3435,12 +4018,18 @@ for (const [, group] of groupedExpenditureUsage) {
                             placeholder="Bank Name"
                             value={row.bankName}
                             onChange={(e) => {
-                              handlePayeeLookupInputChange(row.id, 'bankName', e.target.value);
+                              handlePayeeLookupInputChange(
+                                row.id,
+                                "bankName",
+                                e.target.value,
+                              );
                             }}
-                            onFocus={() => handlePayeeLookupFocus(row, 'bankName')}
+                            onFocus={() =>
+                              handlePayeeLookupFocus(row, "bankName")
+                            }
                             onBlur={handlePayeeLookupBlur}
                           />
-                          {renderPayeeLookupDropdown(row.id, 'bankName')}
+                          {renderPayeeLookupDropdown(row.id, "bankName")}
                         </div>
                         <div className="payee-field-wrap">
                           <input
@@ -3448,12 +4037,16 @@ for (const [, group] of groupedExpenditureUsage) {
                             placeholder="IFSC"
                             value={row.ifsc}
                             onChange={(e) => {
-                              handlePayeeLookupInputChange(row.id, 'ifsc', e.target.value);
+                              handlePayeeLookupInputChange(
+                                row.id,
+                                "ifsc",
+                                e.target.value,
+                              );
                             }}
-                            onFocus={() => handlePayeeLookupFocus(row, 'ifsc')}
+                            onFocus={() => handlePayeeLookupFocus(row, "ifsc")}
                             onBlur={handlePayeeLookupBlur}
                           />
-                          {renderPayeeLookupDropdown(row.id, 'ifsc')}
+                          {renderPayeeLookupDropdown(row.id, "ifsc")}
                         </div>
                         <div className="payee-field-wrap payee-field-wrap-full">
                           <input
@@ -3461,12 +4054,18 @@ for (const [, group] of groupedExpenditureUsage) {
                             placeholder="Branch Name"
                             value={row.branchName}
                             onChange={(e) => {
-                              handlePayeeLookupInputChange(row.id, 'branchName', e.target.value);
+                              handlePayeeLookupInputChange(
+                                row.id,
+                                "branchName",
+                                e.target.value,
+                              );
                             }}
-                            onFocus={() => handlePayeeLookupFocus(row, 'branchName')}
+                            onFocus={() =>
+                              handlePayeeLookupFocus(row, "branchName")
+                            }
                             onBlur={handlePayeeLookupBlur}
                           />
-                          {renderPayeeLookupDropdown(row.id, 'branchName')}
+                          {renderPayeeLookupDropdown(row.id, "branchName")}
                         </div>
                       </div>
                     </div>
@@ -3485,21 +4084,51 @@ for (const [, group] of groupedExpenditureUsage) {
                       <CustomDropdown
                         className="payee-transaction-mode-dropdown"
                         options={toOptions(PAYMENT_MODE_OPTIONS)}
-                        value={getSelectedOption(row.mode, toOptions(PAYMENT_MODE_OPTIONS))}
+                          value={getSelectedOption(
+                            row.mode,
+                            toOptions(PAYMENT_MODE_OPTIONS),
+                          )}
                         onChange={(opt) => {
                           const selected = opt as OptionType | null;
-                          const updated = payeeRows.map(r => r.id === row.id ? { ...r, mode: selected?.value ? String(selected.value) : '' } : r);
+                            const updated = payeeRows.map((r) =>
+                              r.id === row.id
+                                ? {
+                                    ...r,
+                                    mode: selected?.value
+                                      ? String(selected.value)
+                                      : "",
+                                  }
+                                : r,
+                            );
                           setPayeeRows(updated);
                         }}
                         placeholder="Mode"
-
                       />
                     </div>
-                    {((row.tdsDetails && row.tdsDetails !== 'Yes' && row.tdsDetails !== 'No')
-                      || (row.tdsSection && row.tdsSection !== 'Yes' && row.tdsSection !== 'No')) && (
-                      <div style={{ marginTop: '8px', fontSize: '12px', color: '#6c757d', lineHeight: 1.5 }}>
-                        {row.tdsDetails && row.tdsDetails !== 'Yes' && row.tdsDetails !== 'No' && <div>TDS Details: {row.tdsDetails}</div>}
-                        {row.tdsSection && row.tdsSection !== 'Yes' && row.tdsSection !== 'No' && <div>TDS Section: {row.tdsSection}</div>}
+                      {((row.tdsDetails &&
+                        row.tdsDetails !== "Yes" &&
+                        row.tdsDetails !== "No") ||
+                        (row.tdsSection &&
+                          row.tdsSection !== "Yes" &&
+                          row.tdsSection !== "No")) && (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            fontSize: "12px",
+                            color: "#6c757d",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {row.tdsDetails &&
+                            row.tdsDetails !== "Yes" &&
+                            row.tdsDetails !== "No" && (
+                              <div>TDS Details: {row.tdsDetails}</div>
+                            )}
+                          {row.tdsSection &&
+                            row.tdsSection !== "Yes" &&
+                            row.tdsSection !== "No" && (
+                              <div>TDS Section: {row.tdsSection}</div>
+                            )}
                       </div>
                     )}
                     <div className="payee-tds-row">
@@ -3509,33 +4138,90 @@ for (const [, group] of groupedExpenditureUsage) {
                           type="radio"
                           name={`tds-${row.id}`}
                           value="Yes"
-                          checked={row.tdsSection === 'Yes'}
-                          onChange={() => updatePayeeRow(row.id, (r) => ({ ...r, tdsSection: 'Yes' }))}
-                        /> Yes
+                            checked={row.tdsSection === "Yes"}
+                            onChange={() =>
+                              updatePayeeRow(row.id, (r) => ({
+                                ...r,
+                                tdsSection: "Yes",
+                              }))
+                            }
+                          />{" "}
+                          Yes
                       </label>
                       <label className="payee-tds-option">
                         <input
                           type="radio"
                           name={`tds-${row.id}`}
                           value="No"
-                          checked={row.tdsSection === 'No'}
-                          onChange={() => updatePayeeRow(row.id, (r) => ({ ...r, tdsSection: 'No' }))}
-                        /> No
+                            checked={row.tdsSection === "No"}
+                            onChange={() =>
+                              updatePayeeRow(row.id, (r) => ({
+                                ...r,
+                                tdsSection: "No",
+                              }))
+                            }
+                          />{" "}
+                          No
                       </label>
                     </div>
                     </div>
                   </td>
-                  <td style={{ borderBottom: 'none', verticalAlign: 'middle', textAlign: 'center' }}>
+                  <td
+                    style={{
+                      borderBottom: "none",
+                      verticalAlign: "middle",
+                      textAlign: "center",
+                    }}
+                  >
                     <div className="payee-row-actions">
                       {index === payeeRows.length - 1 && (
                         <button
                           className="payee-row-btn"
-                          disabled={!row.payeeName || !row.accountNo || !row.bankName || !row.ifsc || !row.branchName || !row.amount || !row.mode}
-                          onClick={(e) => { e.preventDefault(); addPayeeRow(); }}
-                          title={(!row.payeeName || !row.accountNo || !row.bankName || !row.ifsc || !row.branchName || !row.amount || !row.mode) ? "Please fill all fields to add a new row" : "Add Row"}
+                          disabled={
+                            !row.payeeName ||
+                            !row.accountNo ||
+                            !row.bankName ||
+                            !row.ifsc ||
+                            !row.branchName ||
+                            !row.amount ||
+                            !row.mode
+                          }
+                          onClick={(e) => {
+                            e.preventDefault();
+                            addPayeeRow();
+                          }}
+                          title={
+                            !row.payeeName ||
+                            !row.accountNo ||
+                            !row.bankName ||
+                            !row.ifsc ||
+                            !row.branchName ||
+                            !row.amount ||
+                            !row.mode
+                              ? "Please fill all fields to add a new row"
+                              : "Add Row"
+                          }
                           style={{
-                            opacity: (!row.payeeName || !row.accountNo || !row.bankName || !row.ifsc || !row.branchName || !row.amount || !row.mode) ? 0.5 : 1,
-                            cursor: (!row.payeeName || !row.accountNo || !row.bankName || !row.ifsc || !row.branchName || !row.amount || !row.mode) ? 'not-allowed' : 'pointer'
+                            opacity:
+                              !row.payeeName ||
+                              !row.accountNo ||
+                              !row.bankName ||
+                              !row.ifsc ||
+                              !row.branchName ||
+                              !row.amount ||
+                              !row.mode
+                                ? 0.5
+                                : 1,
+                            cursor:
+                              !row.payeeName ||
+                              !row.accountNo ||
+                              !row.bankName ||
+                              !row.ifsc ||
+                              !row.branchName ||
+                              !row.amount ||
+                              !row.mode
+                                ? "not-allowed"
+                                : "pointer",
                           }}
                         >
                           <Plus size={14} strokeWidth={2.5} />
@@ -3544,7 +4230,10 @@ for (const [, group] of groupedExpenditureUsage) {
                       {payeeRows.length > 1 && (
                         <button
                           className="payee-row-btn payee-row-btn-delete"
-                          onClick={(e) => { e.preventDefault(); removePayeeRow(row.id); }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            removePayeeRow(row.id);
+                          }}
                           title="Delete Row"
                         >
                           <X size={14} strokeWidth={2.5} />
@@ -3565,9 +4254,13 @@ for (const [, group] of groupedExpenditureUsage) {
                 <span className="payee-footer-input-label">Debit Account</span>
                 <button
                   type="button"
-                  className={`payee-footer-switch ${showDebitAccountDropdown ? 'is-on' : 'is-off'}`}
+                  className={`payee-footer-switch ${showDebitAccountDropdown ? "is-on" : "is-off"}`}
                   onClick={() => setShowDebitAccountDropdown((prev) => !prev)}
-                  aria-label={showDebitAccountDropdown ? 'Disable debit account dropdown' : 'Enable debit account dropdown'}
+                  aria-label={
+                    showDebitAccountDropdown
+                      ? "Disable debit account dropdown"
+                      : "Enable debit account dropdown"
+                  }
                   aria-pressed={showDebitAccountDropdown}
                 >
                   <span className="payee-footer-switch-thumb" />
@@ -3578,8 +4271,18 @@ for (const [, group] of groupedExpenditureUsage) {
                   <CustomDropdown
                     name="debitAccount"
                     options={toOptions(DEBIT_ACCOUNT_OPTIONS)}
-                    value={getSelectedOption(paymentDetails.debitAccount, toOptions(DEBIT_ACCOUNT_OPTIONS))}
-                    onChange={(option) => setPaymentDetails({ ...paymentDetails, debitAccount: String((option as OptionType)?.value || '') })}
+                    value={getSelectedOption(
+                      paymentDetails.debitAccount,
+                      toOptions(DEBIT_ACCOUNT_OPTIONS),
+                    )}
+                    onChange={(option) =>
+                      setPaymentDetails({
+                        ...paymentDetails,
+                        debitAccount: String(
+                          (option as OptionType)?.value || "",
+                        ),
+                      })
+                    }
                     placeholder="Select debit account"
                     className="mb-0"
                   />
@@ -3587,7 +4290,9 @@ for (const [, group] of groupedExpenditureUsage) {
               </div>
             </div>
           </div>
-          {!isReadOnlyView && existingPayeeBills.length === 0 && uploadedPayeeBills.length === 0 && (
+          {!isReadOnlyView &&
+            existingPayeeBills.length === 0 &&
+            uploadedPayeeBills.length === 0 && (
             <label className="payee-upload-label payee-footer-upload-label">
               <span className="payee-upload-label-content">
                 <span className="payee-upload-label-text">Bills</span>
@@ -3604,7 +4309,10 @@ for (const [, group] of groupedExpenditureUsage) {
         </div>
 
         {(existingPayeeBills.length > 0 || uploadedPayeeBills.length > 0) && (
-          <div className="payee-uploaded-files" style={{ marginTop: '14px', pointerEvents: 'auto' }}>
+          <div
+            className="payee-uploaded-files"
+            style={{ marginTop: "14px", pointerEvents: "auto" }}
+          >
             <div className="payee-uploaded-files-header">
               <span>S.No</span>
               <span>Bills File</span>
@@ -3612,13 +4320,23 @@ for (const [, group] of groupedExpenditureUsage) {
             </div>
             {existingPayeeBills.map((file, i) => {
               const fileUrl = resolveBillFileUrl(file);
-              const displayName =
-                normalizeText(file.original_name || file.stored_name || file.file_path || `File ${i + 1}`);
+              const displayName = normalizeText(
+                file.original_name ||
+                  file.stored_name ||
+                  file.file_path ||
+                  `File ${i + 1}`,
+              );
 
               return (
-                <div key={`existing-${file.id ?? i}`} className="payee-uploaded-file-row">
+                <div
+                  key={`existing-${file.id ?? i}`}
+                  className="payee-uploaded-file-row"
+                >
                   <span className="payee-uploaded-file-index">{i + 1}</span>
-                  <span className="payee-uploaded-file-name" title={displayName}>
+                  <span
+                    className="payee-uploaded-file-name"
+                    title={displayName}
+                  >
                     {displayName}
                   </span>
                   <div className="payee-upload-actions">
@@ -3627,7 +4345,8 @@ for (const [, group] of groupedExpenditureUsage) {
                       disabled={!fileUrl}
                       onClick={(e) => {
                         e.preventDefault();
-                        if (fileUrl) window.open(fileUrl, '_blank', 'noopener,noreferrer');
+                        if (fileUrl)
+                          window.open(fileUrl, "_blank", "noopener,noreferrer");
                       }}
                     >
                       <Eye size={16} />
@@ -3649,14 +4368,23 @@ for (const [, group] of groupedExpenditureUsage) {
             })}
             {uploadedPayeeBills.map((file, i) => (
               <div key={`uploaded-${i}`} className="payee-uploaded-file-row">
-                <span className="payee-uploaded-file-index">{existingPayeeBills.length + i + 1}</span>
-                <span className="payee-uploaded-file-name" title={file.name}>{file.name}</span>
+                <span className="payee-uploaded-file-index">
+                  {existingPayeeBills.length + i + 1}
+                </span>
+                <span className="payee-uploaded-file-name" title={file.name}>
+                  {file.name}
+                </span>
                 <div className="payee-upload-actions">
                   <button
                     className="payee-upload-view-btn"
                     onClick={(e) => {
                       e.preventDefault();
-                      if (file) window.open(URL.createObjectURL(file), '_blank', 'noopener,noreferrer');
+                      if (file)
+                        window.open(
+                          URL.createObjectURL(file),
+                          "_blank",
+                          "noopener,noreferrer",
+                        );
                     }}
                   >
                     <Eye size={16} />
@@ -3686,9 +4414,9 @@ for (const [, group] of groupedExpenditureUsage) {
   | ExpenditureFormRow;
 
 const getRowsForActiveTab = (): WorkflowFormRow[] => {
-  if (activeTab === 'Advance') return advanceRows;
-  if (activeTab === 'Settlement') return settlementRows;
-  if (activeTab === 'Expenditure') return expenditureSubRows;
+    if (activeTab === "Advance") return advanceRows;
+    if (activeTab === "Settlement") return settlementRows;
+    if (activeTab === "Expenditure") return expenditureSubRows;
   return [];
 };
 
@@ -3701,7 +4429,9 @@ const getSelectedWorkflowRow = (): WorkflowFormRow | null => {
 
   if (workflowBudgetLineIdFromState) {
     const matched = rows.find(
-      (row) => parsePositiveIntLike(row.budgetLineId) === workflowBudgetLineIdFromState
+        (row) =>
+          parsePositiveIntLike(row.budgetLineId) ===
+          workflowBudgetLineIdFromState,
     );
     if (matched) return matched;
   }
@@ -3709,7 +4439,7 @@ const getSelectedWorkflowRow = (): WorkflowFormRow | null => {
   if (rows.length === 1) return rows[0];
 
   const rowsWithBudgetLine = rows.filter((row) =>
-    Boolean(parsePositiveIntLike(row.budgetLineId))
+      Boolean(parsePositiveIntLike(row.budgetLineId)),
   );
 
   if (rowsWithBudgetLine.length === 1) return rowsWithBudgetLine[0];
@@ -3726,27 +4456,33 @@ const getSelectedWorkflowBudgetLineId = (): number | null =>
   parsePositiveIntLike(getSelectedWorkflowRow()?.budgetProposalId);
 
 const getActiveTabTransactionAmount = (
-  tab: 'Advance' | 'Settlement' | 'Expenditure',
+    tab: "Advance" | "Settlement" | "Expenditure",
 ): number => {
-  if (tab === 'Advance') return totalAdvanceAmount;
-  if (tab === 'Settlement') return totalSettlementAmount;
+    if (tab === "Advance") return totalAdvanceAmount;
+    if (tab === "Settlement") return totalSettlementAmount;
   return totalExpenditureAmount;
 };
 
 const getWorkflowRowEnteredAmount = (
   row: WorkflowFormRow | null | undefined,
-  tab: 'Advance' | 'Settlement' | 'Expenditure' | null,
+    tab: "Advance" | "Settlement" | "Expenditure" | null,
 ): number => {
   if (!row || !tab) return 0;
 
-  if (tab === 'Advance') return parseAmountValue((row as AdvanceFormRow).advance ?? '');
-  if (tab === 'Settlement') return parseAmountValue((row as SettlementFormRow).settlement ?? '');
-  return parseAmountValue((row as ExpenditureFormRow).autoSum || (row as ExpenditureFormRow).expenditure || '');
+    if (tab === "Advance")
+      return parseAmountValue((row as AdvanceFormRow).advance ?? "");
+    if (tab === "Settlement")
+      return parseAmountValue((row as SettlementFormRow).settlement ?? "");
+    return parseAmountValue(
+      (row as ExpenditureFormRow).autoSum ||
+        (row as ExpenditureFormRow).expenditure ||
+        "",
+    );
 };
 
 const getInvalidWorkflowBudgetRowNumbers = (
   rows: WorkflowFormRow[],
-  tab: 'Advance' | 'Settlement' | 'Expenditure',
+    tab: "Advance" | "Settlement" | "Expenditure",
 ): number[] =>
   rows
     .map((row, index) => ({
@@ -3766,11 +4502,14 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
   let exceededLimit = false;
 
   setPayeeRows((prev) => {
-    const updatedRows = prev.map((row) => (
-      row.id === rowId ? { ...row, amount: nextValue } : row
-    ));
+      const updatedRows = prev.map((row) =>
+        row.id === rowId ? { ...row, amount: nextValue } : row,
+      );
 
-    if (workflowAmount > 0 && getPayeeTransactionTotal(updatedRows) > workflowAmount) {
+      if (
+        workflowAmount > 0 &&
+        getPayeeTransactionTotal(updatedRows) > workflowAmount
+      ) {
       exceededLimit = true;
       return prev;
     }
@@ -3780,17 +4519,19 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
   if (exceededLimit && activeTab) {
     showAlert(
-      `Total payee transaction amount cannot exceed the ${activeTab.toLowerCase()} amount of Rs ${workflowAmount.toLocaleString('en-IN')}.`,
-      'warning',
+        `Total payee transaction amount cannot exceed the ${activeTab.toLowerCase()} amount of Rs ${workflowAmount.toLocaleString("en-IN")}.`,
+        "warning",
     );
   }
 };
   const getSettlementAdjustmentNotice = () => {
-    if (activeTab !== 'Settlement') {
+    if (activeTab !== "Settlement") {
       return null;
     }
 
-    const difference = Number((totalSettlementAmount - totalSettlementAdvanceAmount).toFixed(2));
+    const difference = Number(
+      (totalSettlementAmount - totalSettlementAdvanceAmount).toFixed(2),
+    );
     if (difference === 0) {
       return null;
     }
@@ -3798,52 +4539,61 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     if (difference < 0) {
       const returnedAmount = Math.abs(difference);
       return {
-        title: 'Settlement Adjustment',
+        title: "Settlement Adjustment",
         message: (
           <div style={{ lineHeight: 1.6 }}>
             <div>
-              Settlement is Rs {returnedAmount.toLocaleString('en-IN', {
+              Settlement is Rs{" "}
+              {returnedAmount.toLocaleString("en-IN", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
-              })} less than the advance amount.
+              })}{" "}
+              less than the advance amount.
             </div>
-            <div>
-              The returned amount will be added back to the balance.
-            </div>
+            <div>The returned amount will be added back to the balance.</div>
           </div>
         ),
       };
     }
 
     return {
-      title: 'Settlement Adjustment',
+      title: "Settlement Adjustment",
       message: (
         <div style={{ lineHeight: 1.6 }}>
           <div>
-            Settlement is Rs {difference.toLocaleString('en-IN', {
+            Settlement is Rs{" "}
+            {difference.toLocaleString("en-IN", {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
-            })} more than the advance amount.
+            })}{" "}
+            more than the advance amount.
           </div>
-          <div>
-            The excess amount will be reduced from the balance.
-          </div>
+          <div>The excess amount will be reduced from the balance.</div>
         </div>
       ),
     };
   };
 
   const getComputedBalanceAmount = () => {
-    if (activeTab === 'Settlement') {
-      return Math.max(0, financeApprovedAmount - totalSettlementAmount - totalExpenditureAmount);
+    if (activeTab === "Settlement") {
+      return Math.max(
+        0,
+        financeApprovedAmount - totalSettlementAmount - totalExpenditureAmount,
+      );
     }
 
-    if (activeTab === 'Advance') {
-      return Math.max(0, financeApprovedAmount - totalAdvanceAmount - totalExpenditureAmount);
+    if (activeTab === "Advance") {
+      return Math.max(
+        0,
+        financeApprovedAmount - totalAdvanceAmount - totalExpenditureAmount,
+      );
     }
 
-    if (activeTab === 'Expenditure') {
-      return Math.max(0, financeApprovedAmount - totalAdvanceAmount - totalExpenditureAmount);
+    if (activeTab === "Expenditure") {
+      return Math.max(
+        0,
+        financeApprovedAmount - totalAdvanceAmount - totalExpenditureAmount,
+      );
     }
 
     return 0;
@@ -3852,74 +4602,94 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
   const performSubmit = async (): Promise<void> => {
   try {
     if (isReadOnlyView) {
-      showAlert('This proposal is opened in view mode and cannot be submitted again.', 'warning');
+        showAlert(
+          "This proposal is opened in view mode and cannot be submitted again.",
+          "warning",
+        );
       return;
     }
 
     if (!resolvedFinanceRequestId) {
-      showAlert('Open Expenditure from an approved Finance request to continue.', 'warning');
+        showAlert(
+          "Open Expenditure from an approved Finance request to continue.",
+          "warning",
+        );
       return;
     }
 
     if (!activeTab) {
-      showAlert('Please choose Advance, Settlement, or Expenditure before submitting.', 'warning');
+        showAlert(
+          "Please choose Advance, Settlement, or Expenditure before submitting.",
+          "warning",
+        );
       return;
     }
 
     const workflowRows = getRowsForActiveTab();
     const selectedWorkflowRow =
-      workflowRows.find((row) => getWorkflowRowEnteredAmount(row, activeTab) > 0)
-      || getSelectedWorkflowRow()
-      || workflowRows.find((row) => parsePositiveIntLike(row.budgetLineId))
-      || workflowRows[0]
-      || null;
-    const selectedWorkflowBudgetLineId = parsePositiveIntLike(selectedWorkflowRow?.budgetLineId);
-    const selectedWorkflowBudgetProposalId = parsePositiveIntLike(selectedWorkflowRow?.budgetProposalId);
+        workflowRows.find(
+          (row) => getWorkflowRowEnteredAmount(row, activeTab) > 0,
+        ) ||
+        getSelectedWorkflowRow() ||
+        workflowRows.find((row) => parsePositiveIntLike(row.budgetLineId)) ||
+        workflowRows[0] ||
+        null;
+      const selectedWorkflowBudgetLineId = parsePositiveIntLike(
+        selectedWorkflowRow?.budgetLineId,
+      );
+      const selectedWorkflowBudgetProposalId = parsePositiveIntLike(
+        selectedWorkflowRow?.budgetProposalId,
+      );
 
     if (!workflowRows.length) {
       showAlert(
-        'No workflow rows were found for the selected request type.',
-        'warning'
+          "No workflow rows were found for the selected request type.",
+          "warning",
       );
       return;
     }
 
-    const invalidBudgetRows = getInvalidWorkflowBudgetRowNumbers(workflowRows, activeTab);
+      const invalidBudgetRows = getInvalidWorkflowBudgetRowNumbers(
+        workflowRows,
+        activeTab,
+      );
     if (invalidBudgetRows.length > 0) {
       showAlert(
-        `Please select a valid approved budget line (head + sub-head) for row ${invalidBudgetRows.join(', ')} before submitting.`,
-        'warning'
+          `Please select a valid approved budget line (head + sub-head) for row ${invalidBudgetRows.join(", ")} before submitting.`,
+          "warning",
       );
       return;
     }
 
-    if (activeTab === 'Advance') {
+      if (activeTab === "Advance") {
       const exceededAdvanceRow = findAdvanceBudgetExceededRow(advanceRows);
 
       if (exceededAdvanceRow) {
         showAlert(
-          `Advance amount in row ${exceededAdvanceRow.rowNumber} cannot exceed the budget amount of Rs ${exceededAdvanceRow.budgetLimit.toLocaleString('en-IN')}.`,
-          'warning',
+            `Advance amount in row ${exceededAdvanceRow.rowNumber} cannot exceed the budget amount of Rs ${exceededAdvanceRow.budgetLimit.toLocaleString("en-IN")}.`,
+            "warning",
         );
         return;
       }
     }
 
-    if (activeTab === 'Expenditure') {
-      const exceededExpenditureRow = findExpenditureBudgetExceededRow(expenditureSubRows);
+      if (activeTab === "Expenditure") {
+        const exceededExpenditureRow =
+          findExpenditureBudgetExceededRow(expenditureSubRows);
 
       if (exceededExpenditureRow) {
         showAlert(
-          `Expenditure amount in row ${exceededExpenditureRow.rowNumber} cannot exceed the remaining budget of Rs ${exceededExpenditureRow.budgetLimit.toLocaleString('en-IN')}.`,
-          'warning',
+            `Expenditure amount in row ${exceededExpenditureRow.rowNumber} cannot exceed the remaining budget of Rs ${exceededExpenditureRow.budgetLimit.toLocaleString("en-IN")}.`,
+            "warning",
         );
         return;
       }
     }
 
-    const hasExistingBills = isEditingExistingRequest && existingPayeeBills.length > 0;
+      const hasExistingBills =
+        isEditingExistingRequest && existingPayeeBills.length > 0;
     if (uploadedPayeeBills.length === 0 && !hasExistingBills) {
-      showAlert('Please upload bills before submitting the form.', 'warning');
+        showAlert("Please upload bills before submitting the form.", "warning");
       return;
     }
 
@@ -3932,14 +4702,20 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
     if (normalizedTotalPayeeTransactionAmount !== normalizedWorkflowAmount) {
       showAlert(
-        `${activeTab} amount is Rs ${normalizedWorkflowAmount.toLocaleString('en-IN', {
+          `${activeTab} amount is Rs ${normalizedWorkflowAmount.toLocaleString(
+            "en-IN",
+            {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
-        })} and total payee transaction amount is Rs ${normalizedTotalPayeeTransactionAmount.toLocaleString('en-IN', {
+            },
+          )} and total payee transaction amount is Rs ${normalizedTotalPayeeTransactionAmount.toLocaleString(
+            "en-IN",
+            {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
-        })}. Both must be exactly the same. Form cannot be submitted.`,
-        'warning'
+            },
+          )}. Both must be exactly the same. Form cannot be submitted.`,
+          "warning",
       );
       return;
     }
@@ -3947,45 +4723,44 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     const primaryIncomeRow = showIncomeSection ? incomeRows[0] : undefined;
 
     const normalizedPayeeRows = payeeRows.map((row) => {
-      const canonicalPayeeName = resolveCanonicalPayeeName(row.payeeName, row.accountName);
+        const canonicalPayeeName = resolveCanonicalPayeeName(
+          row.payeeName,
+          row.accountName,
+        );
 
       return {
         payee_id: row.payeeId ?? null,
         payee_name: canonicalPayeeName,
-        bank_name: row.bankName?.trim() || '',
-        account_no: row.accountNo?.trim() || '',
-        ifsc: row.ifsc?.trim().toUpperCase() || '',
-        branch_name: row.branchName?.trim() || '',
-        url: row.url?.trim() || '',
-        amount: row.amount?.trim() || '',
-        mode: row.mode?.trim() || '',
+          bank_name: row.bankName?.trim() || "",
+          account_no: row.accountNo?.trim() || "",
+          ifsc: row.ifsc?.trim().toUpperCase() || "",
+          branch_name: row.branchName?.trim() || "",
+          url: row.url?.trim() || "",
+          amount: row.amount?.trim() || "",
+          mode: row.mode?.trim() || "",
         account_name: canonicalPayeeName,
-        pan_number: row.panNumber?.trim() || '',
-        account_type: row.accountType?.trim() || '',
-        beneficiary_type: row.beneficiaryType || 'individual',
-        beneficiary_org: resolveCanonicalBeneficiaryOrg(row.beneficiaryOrg, row.payeeName),
-        organization_type: row.organizationType?.trim() || '',
-        msme: row.msme?.trim() || '',
-        gstin: row.gstin?.trim() || '',
-        tds_details: row.tdsDetails?.trim() || '',
-        tds_section: row.tdsSection?.trim() || '',
+          pan_number: row.panNumber?.trim() || "",
+          account_type: row.accountType?.trim() || "",
+          beneficiary_type: row.beneficiaryType || "individual",
+          beneficiary_org: resolveCanonicalBeneficiaryOrg(
+            row.beneficiaryOrg,
+            row.payeeName,
+          ),
+          organization_type: row.organizationType?.trim() || "",
+          msme: row.msme?.trim() || "",
+          gstin: row.gstin?.trim() || "",
+          tds_details: row.tdsDetails?.trim() || "",
+          tds_section: row.tdsSection?.trim() || "",
       };
     });
 
-    const selectedAdvanceRows =
-      activeTab === 'Advance'
-        ? advanceRows
-        : [];
+      const selectedAdvanceRows = activeTab === "Advance" ? advanceRows : [];
 
     const selectedSettlementRows =
-      activeTab === 'Settlement'
-        ? settlementRows
-        : [];
+        activeTab === "Settlement" ? settlementRows : [];
 
     const selectedExpenditureRows =
-      activeTab === 'Expenditure'
-        ? expenditureSubRows
-        : [];
+        activeTab === "Expenditure" ? expenditureSubRows : [];
 
     const payload = {
       financerequestid: resolvedFinanceRequestId,
@@ -4039,23 +4814,25 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     };
 
     const formData = new FormData();
-    formData.append('payload', JSON.stringify(payload));
+      formData.append("payload", JSON.stringify(payload));
 
     uploadedPayeeBills.forEach((file) => {
-      formData.append('bill_files', file);
+        formData.append("bill_files", file);
     });
 
     if (bulkNeftFile) {
-      formData.append('bulk_neft_file', bulkNeftFile);
+        formData.append("bulk_neft_file", bulkNeftFile);
     }
 
-    const endpoint = isEditingExistingRequest && submittedRequestIdFromState
+      const endpoint =
+        isEditingExistingRequest && submittedRequestIdFromState
       ? `/expenditure/${submittedRequestIdFromState}`
-      : '/expenditure';
-    const result = isEditingExistingRequest && submittedRequestIdFromState
+          : "/expenditure";
+      const result =
+        isEditingExistingRequest && submittedRequestIdFromState
       ? await authenticityUtility.put(endpoint, formData, {
           headers: {
-            'Content-Type': 'multipart/form-data',
+                "Content-Type": "multipart/form-data",
           },
         })
       : await authenticityUtility.postFile(endpoint, formData);
@@ -4068,8 +4845,8 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       };
     };
 
-    if (normalizedResult.status !== 'success') {
-      showAlert(normalizedResult.message || 'Submission failed', 'error');
+      if (normalizedResult.status !== "success") {
+        showAlert(normalizedResult.message || "Submission failed", "error");
       return;
     }
 
@@ -4084,74 +4861,97 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         {},
       )) as { status?: string; message?: string };
 
-      if (resubmitResult.status !== 'success') {
+        if (resubmitResult.status !== "success") {
         showAlert(
-          resubmitResult.message || 'Request updated, but resubmission failed',
-          'error',
+            resubmitResult.message ||
+              "Request updated, but resubmission failed",
+            "error",
         );
         return;
       }
     }
 
     const submittedAmount =
-      activeTab === 'Advance'
+        activeTab === "Advance"
         ? totalAdvanceAmount
-        : activeTab === 'Settlement'
+          : activeTab === "Settlement"
           ? totalSettlementAmount
-          : activeTab === 'Expenditure'
+            : activeTab === "Expenditure"
             ? totalExpenditureAmount
             : 0;
 
-    const savedRequestId = parsePositiveIntLike(normalizedResult.data?.expenditureId);
-    const savedRequestRef = String(normalizedResult.data?.requestRef || '').trim();
+      const savedRequestId = parsePositiveIntLike(
+        normalizedResult.data?.expenditureId,
+      );
+      const savedRequestRef = String(
+        normalizedResult.data?.requestRef || "",
+      ).trim();
     const financeIdLabel = `Finance ID: ${resolvedFinanceRequestId}`;
     const proposalRefLabel = `Proposal Ref: ${String(
-      (location.state as { financeProposal?: { proposalId?: unknown } } | null)?.financeProposal?.proposalId || ''
+        (
+          location.state as {
+            financeProposal?: { proposalId?: unknown };
+          } | null
+        )?.financeProposal?.proposalId || "",
     ).trim()}`;
     const moduleLabel = activeTab
       ? shouldResubmitAfterSave
         ? `${activeTab} resubmitted successfully.`
-        : `${activeTab} ${isEditingExistingRequest ? 'updated successfully.' : 'submitted successfully.'}`
+          : `${activeTab} ${isEditingExistingRequest ? "updated successfully." : "submitted successfully."}`
       : isEditingExistingRequest
-        ? (shouldResubmitAfterSave ? 'Resubmitted successfully.' : 'Updated successfully.')
-        : 'Submitted successfully.';
-    const requestLabel = savedRequestRef ? `Request Ref: ${savedRequestRef}` : '';
+          ? shouldResubmitAfterSave
+            ? "Resubmitted successfully."
+            : "Updated successfully."
+          : "Submitted successfully.";
+      const requestLabel = savedRequestRef
+        ? `Request Ref: ${savedRequestRef}`
+        : "";
 
     showAlert(
       <div style={{ lineHeight: 1.6 }}>
         <div>{moduleLabel}</div>
         <div>{financeIdLabel}</div>
-        {proposalRefLabel.trim() !== 'Proposal Ref:' && <div>{proposalRefLabel}</div>}
+          {proposalRefLabel.trim() !== "Proposal Ref:" && (
+            <div>{proposalRefLabel}</div>
+          )}
         {requestLabel && <div>{requestLabel}</div>}
       </div>,
-      'success',
-      'Submission Successful',
+        "success",
+        "Submission Successful",
       false,
-      'Continue',
+        "Continue",
       () => {
         closeAlert();
-        navigate('/expenditurecard', {
+          navigate("/expenditurecard", {
           state: {
-            ...(dashboardRowIdFromState ? { dashboardRowId: dashboardRowIdFromState } : {}),
-            ...(rowReferenceIdFromState ? { rowReferenceId: rowReferenceIdFromState } : {}),
-            ...(workflowRowRefFromState ? { workflowrowref: workflowRowRefFromState } : {}),
+              ...(dashboardRowIdFromState
+                ? { dashboardRowId: dashboardRowIdFromState }
+                : {}),
+              ...(rowReferenceIdFromState
+                ? { rowReferenceId: rowReferenceIdFromState }
+                : {}),
+              ...(workflowRowRefFromState
+                ? { workflowrowref: workflowRowRefFromState }
+                : {}),
             workflowbudgetlineid: selectedWorkflowBudgetLineId,
             budgetLineId: selectedWorkflowBudgetLineId,
-            workflowbudgetproposalid: selectedWorkflowBudgetProposalId ?? undefined,
+              workflowbudgetproposalid:
+                selectedWorkflowBudgetProposalId ?? undefined,
             submittedModule: activeTab ?? undefined,
             submittedAmount,
             submittedRequestId: savedRequestId ?? undefined,
             financeRequestId: resolvedFinanceRequestId ?? undefined,
             financeProposal:
-              (location.state as { financeProposal?: unknown } | null)?.financeProposal ?? null,
+                (location.state as { financeProposal?: unknown } | null)
+                  ?.financeProposal ?? null,
           },
         });
-      }
+        },
     );
     return;
   } catch (error) {
-    console.error('Expenditure submit error:', error);
-    showAlert(getSubmitErrorMessage(error), 'error');
+      console.error("Expenditure submit error:", error);
+      showAlert(getSubmitErrorMessage(error), "error");
   }
 };
 
@@ -4161,10 +4961,10 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     if (settlementNotice) {
       showAlert(
         settlementNotice.message,
-        'warning',
+        "warning",
         settlementNotice.title,
         true,
-        'Continue',
+        "Continue",
         () => {
           closeAlert();
           void performSubmit();
@@ -4178,54 +4978,66 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
   const handlePaymentStatusUpdate = async (): Promise<void> => {
     if (!submittedRequestIdFromState || !canEditPaymentStatus) {
-      showAlert('Payment status can be updated only after final approval.', 'warning');
+      showAlert(
+        "Payment status can be updated only after final approval.",
+        "warning",
+      );
       return;
     }
 
     try {
-      const response = await authenticityUtility.put(`/expenditure/${submittedRequestIdFromState}`, {
-        payment_status: paymentDetails.status || 'Pending',
+      const response = (await authenticityUtility.put(
+        `/expenditure/${submittedRequestIdFromState}`,
+        {
+          payment_status: paymentDetails.status || "Pending",
         payment_date: paymentDetails.date || null,
         payment_ref_no: paymentDetails.refNo || null,
         payment_mode: paymentDetails.mode || null,
         payment_debit_account: paymentDetails.debitAccount || null,
-      }) as { status?: string; message?: string };
+        },
+      )) as { status?: string; message?: string };
 
-      if (response.status !== 'success') {
-        showAlert(response.message || 'Unable to update payment status', 'error');
+      if (response.status !== "success") {
+        showAlert(
+          response.message || "Unable to update payment status",
+          "error",
+        );
         return;
       }
 
-      showAlert(response.message || 'Payment status updated successfully', 'success');
+      showAlert(
+        response.message || "Payment status updated successfully",
+        "success",
+      );
     } catch (error) {
-      console.error('Payment status update error:', error);
-      showAlert(getSubmitErrorMessage(error), 'error');
+      console.error("Payment status update error:", error);
+      showAlert(getSubmitErrorMessage(error), "error");
     }
   };
 
   const handleReset = (force = false): void => {
     const performReset = () => {
-      setApplicantName('');
-      setDate('');
-      setDesignation('');
-      setMobile('');
-      setEmail('');
-      setDepartment('');
-      setDescription('');
+      setApplicantName("");
+      setDate("");
+      setDesignation("");
+      setMobile("");
+      setEmail("");
+      setDepartment("");
+      setDescription("");
 
-       setCategoryType('');
-      setCategoryItem('');
+      setCategoryType("");
+      setCategoryItem("");
       setBeneficiaryEmployeeId(null);
-      setBeneficiarySearchQuery('');
+      setBeneficiarySearchQuery("");
       setBeneficiarySearchResults([]);
       setShowBeneficiaryDropdown(false);
-      setSelectedTag('');
-      setPrimaryHead('');
-      setEventSubHead('');
-      setDebitStatus('');
-      setBalanceAmount('');
-      setIsBudgetProposed('');
-      setBudgetRows([{ category: '', head: '', amount: '' }]);
+      setSelectedTag("");
+      setPrimaryHead("");
+      setEventSubHead("");
+      setDebitStatus("");
+      setBalanceAmount("");
+      setIsBudgetProposed("");
+      setBudgetRows([{ category: "", head: "", amount: "" }]);
       setAmountProposed("");
       setShowIncomeSection(false);
       setIncomeRows([createIncomeRow()]);
@@ -4237,14 +5049,14 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       setBulkNeftFile(null);
       setUploadedPayeeBills([]);
       if (bulkNeftInputRef.current) {
-        bulkNeftInputRef.current.value = '';
+        bulkNeftInputRef.current.value = "";
       }
       setPaymentDetails({
-        mode: '',
-        refNo: '',
-        date: new Date().toISOString().split('T')[0],
-        status: 'Pending',
-        debitAccount: ''
+        mode: "",
+        refNo: "",
+        date: new Date().toISOString().split("T")[0],
+        status: "Pending",
+        debitAccount: "",
       });
     };
 
@@ -4252,15 +5064,15 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       performReset();
     } else {
       showAlert(
-        'Are you sure you want to reset the form?',
-        'warning',
-        'Confirm Reset',
+        "Are you sure you want to reset the form?",
+        "warning",
+        "Confirm Reset",
         true,
-        'Reset',
+        "Reset",
         () => {
           closeAlert();
           performReset();
-        }
+        },
       );
     }
   };
@@ -4268,10 +5080,12 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
    // Helper functions previously here moved to top
 
 // Tag
-const [selectedTag, setSelectedTag] = useState<string>('');
+  const [selectedTag, setSelectedTag] = useState<string>("");
 useEffect(() => {
   if (!financeTagFromState) return;
-  setSelectedTag((prev) => prev || resolveTagValue(financeTagFromState, tagOptions));
+    setSelectedTag(
+      (prev) => prev || resolveTagValue(financeTagFromState, tagOptions),
+    );
 }, [financeTagFromState, tagOptions]);
 
 useEffect(() => {
@@ -4286,13 +5100,13 @@ useEffect(() => {
 const handleBeneficiarySearch = async (query: string) => {
   setBeneficiarySearchQuery(query);
   try {
-    let typeParam = '';
-    if (categoryType === 'Faculty') typeParam = '&type=Teaching';
-    else if (categoryType === 'Staff') typeParam = '&type=Non-Teaching';
-    const response = await (authenticityUtility as any).get(
-      `/expenditure/search-applicant?q=${encodeURIComponent(query)}${typeParam}`
-    ) as any;
-    if (response.status === 'success') {
+      let typeParam = "";
+      if (categoryType === "Faculty") typeParam = "&type=Teaching";
+      else if (categoryType === "Staff") typeParam = "&type=Non-Teaching";
+      const response = (await (authenticityUtility as any).get(
+        `/expenditure/search-applicant?q=${encodeURIComponent(query)}${typeParam}`,
+      )) as any;
+      if (response.status === "success") {
       setBeneficiarySearchResults(response.data);
       setShowBeneficiaryDropdown(true);
     }
@@ -4302,7 +5116,12 @@ const handleBeneficiarySearch = async (query: string) => {
   }
 };
 
-const handleSelectBeneficiary = (emp: { employeeid: number; name: string; designation: string; department: string }) => {
+  const handleSelectBeneficiary = (emp: {
+    employeeid: number;
+    name: string;
+    designation: string;
+    department: string;
+  }) => {
   setCategoryItem(emp.name.trim());
   setBeneficiaryEmployeeId(emp.employeeid);
   setBeneficiarySearchQuery(emp.name.trim());
@@ -4311,9 +5130,12 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
 
   const handleAddPayee = async (payee: AddPayeeModalPayee) => {
     try {
-      const canonicalPayeeName = resolveCanonicalPayeeName(payee.payeeName, payee.accountName);
+      const canonicalPayeeName = resolveCanonicalPayeeName(
+        payee.payeeName,
+        payee.accountName,
+      );
 
-      const response = await authenticityUtility.post('/expenditure/payees', {
+      const response = (await authenticityUtility.post("/expenditure/payees", {
         payee_name: canonicalPayeeName,
         account_name: canonicalPayeeName || null,
         pan_number: payee.panNumber || null,
@@ -4322,17 +5144,21 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         bank_name: payee.bankName,
         branch_name: payee.branchName,
         ifsc: payee.ifsc,
-        beneficiary_type: payee.beneficiaryType || 'individual',
-        beneficiary_org: resolveCanonicalBeneficiaryOrg(payee.beneficiaryOrg, payee.payeeName) || null,
+        beneficiary_type: payee.beneficiaryType || "individual",
+        beneficiary_org:
+          resolveCanonicalBeneficiaryOrg(
+            payee.beneficiaryOrg,
+            payee.payeeName,
+          ) || null,
         organization_type: payee.organizationType || null,
         msme: payee.msme || null,
         gstin: payee.gstin || null,
         tds_details: payee.tdsDetails || null,
         tds_section: payee.tdsSection || null,
-      }) as { status: string; message?: string; data?: PayeeLookupResult };
+      })) as { status: string; message?: string; data?: PayeeLookupResult };
 
-      if (response.status !== 'success' || !response.data) {
-        showAlert(response.message || 'Unable to save payee', 'error');
+      if (response.status !== "success" || !response.data) {
+        showAlert(response.message || "Unable to save payee", "error");
         return;
       }
 
@@ -4346,35 +5172,55 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         payeeId: savedPayee.payee_id ?? savedPayee.id ?? payee.payeeId ?? null,
         payeeName: savedCanonicalPayeeName || canonicalPayeeName,
         accountName: savedCanonicalPayeeName || canonicalPayeeName,
-        panNumber: String(savedPayee.pan_number || payee.panNumber || '').trim(),
+        panNumber: String(
+          savedPayee.pan_number || payee.panNumber || "",
+        ).trim(),
         accountNo: String(savedPayee.account_no || payee.accountNo).trim(),
-        accountType: String(savedPayee.account_type || payee.accountType || '').trim(),
+        accountType: String(
+          savedPayee.account_type || payee.accountType || "",
+        ).trim(),
         bankName: String(savedPayee.bank_name || payee.bankName).trim(),
         branchName: String(savedPayee.branch_name || payee.branchName).trim(),
-        ifsc: String(savedPayee.ifsc || payee.ifsc).trim().toUpperCase(),
-        beneficiaryType: String(savedPayee.beneficiary_type || payee.beneficiaryType || 'individual').trim().toLowerCase() === 'organization'
-          ? 'organization'
-          : 'individual',
+        ifsc: String(savedPayee.ifsc || payee.ifsc)
+          .trim()
+          .toUpperCase(),
+        beneficiaryType:
+          String(
+            savedPayee.beneficiary_type ||
+              payee.beneficiaryType ||
+              "individual",
+          )
+            .trim()
+            .toLowerCase() === "organization"
+            ? "organization"
+            : "individual",
         beneficiaryOrg: resolveCanonicalBeneficiaryOrg(
           savedPayee.beneficiary_org,
           savedPayee.payee_name || payee.payeeName,
         ),
-        organizationType: String(savedPayee.organization_type || payee.organizationType || '').trim(),
-        msme: String(savedPayee.msme || payee.msme || '').trim(),
-        gstin: String(savedPayee.gstin || payee.gstin || '').trim(),
-        tdsDetails: String(savedPayee.tds_details || payee.tdsDetails || '').trim(),
-        tdsSection: String(savedPayee.tds_section || payee.tdsSection || '').trim(),
+        organizationType: String(
+          savedPayee.organization_type || payee.organizationType || "",
+        ).trim(),
+        msme: String(savedPayee.msme || payee.msme || "").trim(),
+        gstin: String(savedPayee.gstin || payee.gstin || "").trim(),
+        tdsDetails: String(
+          savedPayee.tds_details || payee.tdsDetails || "",
+        ).trim(),
+        tdsSection: String(
+          savedPayee.tds_section || payee.tdsSection || "",
+        ).trim(),
       };
 
       setPayeeRows((prev) => {
-        const hasOnlyEmptyStarterRow = prev.length === 1
-          && !prev[0]?.payeeName
-          && !prev[0]?.accountNo
-          && !prev[0]?.bankName
-          && !prev[0]?.ifsc
-          && !prev[0]?.branchName
-          && !prev[0]?.amount
-          && !prev[0]?.mode;
+        const hasOnlyEmptyStarterRow =
+          prev.length === 1 &&
+          !prev[0]?.payeeName &&
+          !prev[0]?.accountNo &&
+          !prev[0]?.bankName &&
+          !prev[0]?.ifsc &&
+          !prev[0]?.branchName &&
+          !prev[0]?.amount &&
+          !prev[0]?.mode;
 
         if (hasOnlyEmptyStarterRow) {
           return [{ ...prev[0], ...nextPayeeRow, id: prev[0].id }];
@@ -4384,10 +5230,10 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
       });
 
       setShowAddPayeeModal(false);
-      showAlert('Payee saved successfully', 'success');
+      showAlert("Payee saved successfully", "success");
     } catch (error) {
-      console.error('Failed to save payee:', error);
-      showAlert('Unable to save payee right now', 'error');
+      console.error("Failed to save payee:", error);
+      showAlert("Unable to save payee right now", "error");
     }
   };
 
@@ -4395,18 +5241,22 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
     <div
       className="expenditure-approval-body"
       style={{
-        padding: '0',
-        backgroundColor: '#f0f6ff',
-        minHeight: '100vh',
-        pointerEvents: isReadOnlyView ? 'none' : 'auto',
+        padding: "0",
+        backgroundColor: "#f0f6ff",
+        minHeight: "100vh",
+        pointerEvents: isReadOnlyView ? "none" : "auto",
       }}
     >
-
-
-
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
-          <div className="ea-applicantCard">
-
+      <div
+        style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 20px 30px" }}
+      >
+        <div
+          className="ea-applicantCard"
+          style={{
+            pointerEvents: "auto",
+            userSelect: "auto",
+      }}
+    >
             {/* Collapsible Header */}
             <div
               className="ea-cardHeader"
@@ -4414,10 +5264,19 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             >
               <h5>Applicant Details</h5>
               <svg
-                width="12" height="8" viewBox="0 0 12 8"
-                className={`ea-card-toggle-arrow ${isApplicantCardOpen ? 'open' : ''}`}
+              width="12"
+              height="8"
+              viewBox="0 0 12 8"
+              className={`ea-card-toggle-arrow ${isApplicantCardOpen ? "open" : ""}`}
               >
-                <polyline points="1.5,1.5 6,5.5 10.5,1.5" stroke="#0069ab" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              <polyline
+                points="1.5,1.5 6,5.5 10.5,1.5"
+                stroke="#0069ab"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
               </svg>
             </div>
 
@@ -4428,17 +5287,29 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                   <div className="ea-col-7">
                     <div className="ea-formGroup" style={{ marginBottom: 0 }}>
                       <label>Applicant Name</label>
-                      <input type="text" value={applicantName} disabled readOnly
-                        className="ea-budget-input" style={{ cursor: 'pointer' }}
-                        onClick={() => setIsApplicantCardOpen(true)} />
+                    <input
+                      type="text"
+                      value={applicantName}
+                      disabled
+                      readOnly
+                      className="ea-budget-input"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setIsApplicantCardOpen(true)}
+                    />
                     </div>
                   </div>
                   <div className="ea-col-5">
                     <div className="ea-formGroup" style={{ marginBottom: 0 }}>
                       <label>Date</label>
-                      <input type="date" value={date} disabled readOnly
-                        className="ea-budget-input" style={{ cursor: 'pointer' }}
-                        onClick={() => setIsApplicantCardOpen(true)} />
+                    <input
+                      type="date"
+                      value={date}
+                      disabled
+                      readOnly
+                      className="ea-budget-input"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setIsApplicantCardOpen(true)}
+                    />
                     </div>
                   </div>
                 </div>
@@ -4450,23 +5321,45 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             <div
               className="cardContent"
               style={{
-                padding: '20px',
-                pointerEvents: isReadOnlyView ? 'none' : 'auto',
+                padding: "20px",
               }}
             >
-
-            <div className="row mb-3" style={{ marginBottom: '15px' }}>
+              <div className="row mb-3" style={{ marginBottom: "15px" }}>
               <div className="col-md-7">
-                <div className="form-group" style={{ position: 'relative' }}>
-                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-                    Applicant Name <span style={{ color: 'red' }}></span>
-                    {isExternalApplicant && <span style={{ fontSize: '12px', color: '#6c757d', marginLeft: '8px' }}>(External)</span>}
+                  <div className="form-group" style={{ position: "relative" }}>
+                    <label
+                      style={{
+                        fontSize: "14px",
+                        color: "#495057",
+                        marginBottom: "8px",
+                        fontWeight: "600",
+                        display: "block",
+                      }}
+                    >
+                      Applicant Name <span style={{ color: "red" }}></span>
+                      {isExternalApplicant && (
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            color: "#6c757d",
+                            marginLeft: "8px",
+                          }}
+                        >
+                          (External)
+                        </span>
+                      )}
                   </label>
                   <CustomInput
                     name="applicantName"
                     type="text"
-                    value={isExternalApplicant ? applicantName : applicantSearchQuery}
+                      value={
+                        isExternalApplicant
+                          ? applicantName
+                          : applicantSearchQuery
+                      }
+                      readOnly={isReadOnlyView}
                     onChange={(value) => {
+                        if (isReadOnlyView) return;
                       if (isExternalApplicant) {
                         setApplicantName(value);
                       } else {
@@ -4474,48 +5367,66 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                       }
                     }}
                     onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#0069ab';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                        e.currentTarget.style.borderColor = "#0069ab";
+                        e.currentTarget.style.boxShadow =
+                          "0 0 0 3px rgba(0, 105, 171, 0.15)";
                       if (!isExternalApplicant && !showApplicantDropdown) {
                         handleApplicantSearch(applicantSearchQuery);
                       }
                     }}
                     onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.borderColor = "#e0e0e0";
+                        e.currentTarget.style.boxShadow = "none";
                       setTimeout(() => setShowApplicantDropdown(false), 200);
                     }}
-                    placeholder={isExternalApplicant ? "Enter external applicant name" : "Search employee by name or ERP ID"}
+                      placeholder={
+                        isExternalApplicant
+                          ? "Enter external applicant name"
+                          : "Search employee by name or ERP ID"
+                      }
                   />
                   {/* Search Results Dropdown */}
-                  {showApplicantDropdown && applicantSearchResults.length > 0 && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '100%',
+                    {!isReadOnlyView &&
+                      showApplicantDropdown &&
+                      applicantSearchResults.length > 0 && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: "100%",
                       left: 0,
                       right: 0,
-                      backgroundColor: '#fff',
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '12px',
-                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                            backgroundColor: "#fff",
+                            border: "1px solid #e0e0e0",
+                            borderRadius: "12px",
+                            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)",
                       zIndex: 1000,
-                      maxHeight: '250px',
-                      overflowY: 'auto',
-                      marginTop: '4px'
-                    }}>
+                            maxHeight: "250px",
+                            overflowY: "auto",
+                            marginTop: "4px",
+                          }}
+                        >
                       {/* Add External Option */}
                       <div
-                        onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleAddExternalApplicant();
+                            }}
                         style={{
-                          padding: '10px 15px',
-                          cursor: 'pointer',
-                          backgroundColor: '#f8f9fa',
-                          color: '#0069ab',
-                          fontWeight: '600',
-                          borderBottom: '2px solid #e0e0e0'
+                              padding: "10px 15px",
+                              cursor: "pointer",
+                              backgroundColor: "#f8f9fa",
+                              color: "#0069ab",
+                              fontWeight: "600",
+                              borderBottom: "2px solid #e0e0e0",
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                "#e9ecef")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                "#f8f9fa")
+                            }
                       >
                         + Add External Applicant
                       </div>
@@ -4523,18 +5434,30 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                       {applicantSearchResults.map((emp) => (
                         <div
                           key={emp.employee_id}
-                          onMouseDown={(e) => { e.preventDefault(); handleSelectApplicant(emp); }}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelectApplicant(emp);
+                              }}
                           style={{
-                            padding: '10px 15px',
-                            cursor: 'pointer',
-                            borderBottom: '1px solid #f0f0f0',
-                            transition: 'background-color 0.2s'
+                                padding: "10px 15px",
+                                cursor: "pointer",
+                                borderBottom: "1px solid #f0f0f0",
+                                transition: "background-color 0.2s",
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
+                              onMouseEnter={(e) =>
+                                (e.currentTarget.style.backgroundColor =
+                                  "#f8f9fa")
+                              }
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.backgroundColor = "#fff")
+                              }
+                            >
+                              <div style={{ fontWeight: "600", color: "#333" }}>
+                                {emp.name}
+                              </div>
+                              <div
+                                style={{ fontSize: "12px", color: "#6c757d" }}
                         >
-                          <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
-                          <div style={{ fontSize: '12px', color: '#6c757d' }}>
                             {emp.designation} | {emp.department}
                           </div>
                         </div>
@@ -4542,32 +5465,50 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                     </div>
                   )}
                   {/* No results message */}
-                  {showApplicantDropdown && applicantSearchQuery.length >= 2 && applicantSearchResults.length === 0 && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '100%',
+                    {!isReadOnlyView &&
+                      showApplicantDropdown &&
+                      applicantSearchQuery.length >= 2 &&
+                      applicantSearchResults.length === 0 && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: "100%",
                       left: 0,
                       right: 0,
-                      backgroundColor: '#fff',
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '12px',
-                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                            backgroundColor: "#fff",
+                            border: "1px solid #e0e0e0",
+                            borderRadius: "12px",
+                            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)",
                       zIndex: 1000,
-                      marginTop: '4px'
-                    }}>
-                      <div style={{ padding: '10px 15px', color: '#6c757d' }}>No employees found</div>
+                            marginTop: "4px",
+                          }}
+                        >
+                          <div
+                            style={{ padding: "10px 15px", color: "#6c757d" }}
+                          >
+                            No employees found
+                          </div>
                       <div
-                        onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleAddExternalApplicant();
+                            }}
                         style={{
-                          padding: '10px 15px',
-                          cursor: 'pointer',
-                          backgroundColor: '#f8f9fa',
-                          color: '#0069ab',
-                          fontWeight: '600',
-                          borderTop: '1px solid #e0e0e0'
+                              padding: "10px 15px",
+                              cursor: "pointer",
+                              backgroundColor: "#f8f9fa",
+                              color: "#0069ab",
+                              fontWeight: "600",
+                              borderTop: "1px solid #e0e0e0",
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                "#e9ecef")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                "#f8f9fa")
+                            }
                       >
                         + Add External Applicant
                       </div>
@@ -4577,116 +5518,157 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
               </div>
               <div className="col-md-5">
                 <div className="form-group">
-                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-                    Date<span style={{ color: 'red' }}></span>
+                    <label
+                      style={{
+                        fontSize: "14px",
+                        color: "#495057",
+                        marginBottom: "8px",
+                        fontWeight: "600",
+                        display: "block",
+                      }}
+                    >
+                      Date<span style={{ color: "red" }}></span>
                   </label>
                   <input
                     type="date"
                     value={date}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setDate(e.target.value)}
+                      disabled={isReadOnlyView}
+                      readOnly={isReadOnlyView}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        if (isReadOnlyView) return;
+                        setDate(e.target.value);
+                      }}
                     style={{
-                      borderRadius: '12px',
-                      border: '1px solid #e0e0e0',
-                      padding: '10px 15px',
-                      fontSize: '0.95rem',
-                      width: '100%',
-                      fontFamily: 'inherit',
-                      backgroundColor: '#fcfdff',
-                      transition: 'all 0.3s ease',
-                      outline: 'none'
+                        borderRadius: "12px",
+                        border: "1px solid #e0e0e0",
+                        padding: "10px 15px",
+                        fontSize: "0.95rem",
+                        width: "100%",
+                        fontFamily: "inherit",
+                        backgroundColor: "#fcfdff",
+                        transition: "all 0.3s ease",
+                        outline: "none",
                     }}
                     onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#0069ab';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                        e.currentTarget.style.borderColor = "#0069ab";
+                        e.currentTarget.style.boxShadow =
+                          "0 0 0 3px rgba(0, 105, 171, 0.15)";
                     }}
                     onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.borderColor = "#e0e0e0";
+                        e.currentTarget.style.boxShadow = "none";
                     }}
                     required
                   />
                 </div>
-
               </div>
-
             </div>
 
-            <div className="row md-3" style={{ marginBottom: '15px' }}>
+              <div className="row md-3" style={{ marginBottom: "15px" }}>
               <div className="col-md-7">
                 <div className="form-group">
-                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Department</label>
+                    <label
+                      style={{
+                        fontSize: "14px",
+                        color: "#495057",
+                        marginBottom: "8px",
+                        fontWeight: "600",
+                        display: "block",
+                      }}
+                    >
+                      Department
+                    </label>
                   <input
                     type="text"
                     value={department}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setDepartment(e.target.value)}
+                      disabled={isReadOnlyView}
+                      readOnly={isReadOnlyView}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        if (isReadOnlyView) return;
+                        setDepartment(e.target.value);
+                      }}
                     style={{
-                      borderRadius: '12px',
-                      border: '1px solid #e0e0e0',
-                      padding: '10px 15px',
-                      fontSize: '0.95rem',
-                      width: '100%',
-                      fontFamily: 'inherit',
-                      backgroundColor: '#fcfdff',
-                      transition: 'all 0.3s ease',
-                      outline: 'none'
+                        borderRadius: "12px",
+                        border: "1px solid #e0e0e0",
+                        padding: "10px 15px",
+                        fontSize: "0.95rem",
+                        width: "100%",
+                        fontFamily: "inherit",
+                        backgroundColor: "#fcfdff",
+                        transition: "all 0.3s ease",
+                        outline: "none",
                     }}
                     onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#0069ab';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                        e.currentTarget.style.borderColor = "#0069ab";
+                        e.currentTarget.style.boxShadow =
+                          "0 0 0 3px rgba(0, 105, 171, 0.15)";
                     }}
                     onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.borderColor = "#e0e0e0";
+                        e.currentTarget.style.boxShadow = "none";
                     }}
                     placeholder="Department name"
                   />
                 </div>
-
               </div>
-
 
               <div className="col-md-5">
                 <div className="form-group">
-                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Designation</label>
+                    <label
+                      style={{
+                        fontSize: "14px",
+                        color: "#495057",
+                        marginBottom: "8px",
+                        fontWeight: "600",
+                        display: "block",
+                      }}
+                    >
+                      Designation
+                    </label>
                   <input
                     type="text"
                     value={designation}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setDesignation(e.target.value)}
+                      disabled={isReadOnlyView}
+                      readOnly={isReadOnlyView}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        if (isReadOnlyView) return;
+                        setDesignation(e.target.value);
+                      }}
                     style={{
-                      borderRadius: '12px',
-                      border: '1px solid #e0e0e0',
-                      padding: '10px 15px',
-                      fontSize: '0.95rem',
-                      width: '100%',
-                      fontFamily: 'inherit',
-                      backgroundColor: '#fcfdff',
-                      transition: 'all 0.3s ease',
-                      outline: 'none'
+                        borderRadius: "12px",
+                        border: "1px solid #e0e0e0",
+                        padding: "10px 15px",
+                        fontSize: "0.95rem",
+                        width: "100%",
+                        fontFamily: "inherit",
+                        backgroundColor: "#fcfdff",
+                        transition: "all 0.3s ease",
+                        outline: "none",
                     }}
                     onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#0069ab';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                        e.currentTarget.style.borderColor = "#0069ab";
+                        e.currentTarget.style.boxShadow =
+                          "0 0 0 3px rgba(0, 105, 171, 0.15)";
                     }}
                     onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.borderColor = "#e0e0e0";
+                        e.currentTarget.style.boxShadow = "none";
                     }}
                     placeholder="e.g., Manager, Staff"
                   />
                 </div>
               </div>
             </div>
-            <div className="row mb-3" style={{ marginBottom: '15px' }}>
+              <div className="row mb-3" style={{ marginBottom: "15px" }}>
               <div className="col-md-7">
                 <div className="form-group">
                   <label
                     style={{
-                      fontSize: '14px',
-                      color: '#495057',
-                      marginBottom: '8px',
-                      fontWeight: '600',
-                      display: 'block',
-
+                        fontSize: "14px",
+                        color: "#495057",
+                        marginBottom: "8px",
+                        fontWeight: "600",
+                        display: "block",
                     }}
                   >
                     Email
@@ -4694,27 +5676,31 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                      disabled={isReadOnlyView}
+                      readOnly={isReadOnlyView}
+                      onChange={(e) => {
+                        if (isReadOnlyView) return;
+                        setEmail(e.target.value);
+                      }}
                     style={{
-                      borderRadius: '12px',
-                      border: '1px solid #e0e0e0',
-                      padding: '10px 15px',
-                      fontSize: '0.95rem',
-                      width: '100%',
-                      fontFamily: 'inherit',
-                      backgroundColor: '#fcfdff',
-                      transition: 'all 0.3s ease',
-                      outline: 'none'
+                        borderRadius: "12px",
+                        border: "1px solid #e0e0e0",
+                        padding: "10px 15px",
+                        fontSize: "0.95rem",
+                        width: "100%",
+                        fontFamily: "inherit",
+                        backgroundColor: "#fcfdff",
+                        transition: "all 0.3s ease",
+                        outline: "none",
                     }}
-
                     onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#0069ab';
+                        e.currentTarget.style.borderColor = "#0069ab";
                       e.currentTarget.style.boxShadow =
-                        '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                          "0 0 0 3px rgba(0, 105, 171, 0.15)";
                     }}
                     onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.borderColor = "#e0e0e0";
+                        e.currentTarget.style.boxShadow = "none";
                     }}
                     placeholder="example@email.com"
                   />
@@ -4722,29 +5708,45 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
               </div>
               <div className="col-md-5">
                 <div className="form-group">
-                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '6px', fontWeight: '600', display: 'block' }}>Mobile <span style={{ color: 'red' }}>   </span></label>
+                    <label
+                      style={{
+                        fontSize: "14px",
+                        color: "#495057",
+                        marginBottom: "6px",
+                        fontWeight: "600",
+                        display: "block",
+                      }}
+                    >
+                      Mobile <span style={{ color: "red" }}> </span>
+                    </label>
                   <input
                     type="tel"
                     value={mobile}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setMobile(e.target.value)}
+                      disabled={isReadOnlyView}
+                      readOnly={isReadOnlyView}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        if (isReadOnlyView) return;
+                        setMobile(e.target.value);
+                      }}
                     style={{
-                      borderRadius: '12px',
-                      border: '1px solid #e0e0e0',
-                      padding: '10px 15px',
-                      fontSize: '0.95rem',
-                      width: '100%',
-                      fontFamily: 'inherit',
-                      backgroundColor: '#fcfdff',
-                      transition: 'all 0.3s ease',
-                      outline: 'none'
+                        borderRadius: "12px",
+                        border: "1px solid #e0e0e0",
+                        padding: "10px 15px",
+                        fontSize: "0.95rem",
+                        width: "100%",
+                        fontFamily: "inherit",
+                        backgroundColor: "#fcfdff",
+                        transition: "all 0.3s ease",
+                        outline: "none",
                     }}
                     onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#0069ab';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                        e.currentTarget.style.borderColor = "#0069ab";
+                        e.currentTarget.style.boxShadow =
+                          "0 0 0 3px rgba(0, 105, 171, 0.15)";
                     }}
                     onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.borderColor = "#e0e0e0";
+                        e.currentTarget.style.boxShadow = "none";
                     }}
                     placeholder="10 digit mobile"
                     pattern="[0-9]{10}"
@@ -4753,75 +5755,99 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                 </div>
               </div>
             </div>
-
           </div>
             )}
           </div>
-          <div style={{
-            backgroundColor: '#fff',
-            padding: '30px',
-            borderRadius: '20px',
-            marginBottom: '20px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
-          }}>
-
+        <div
+          style={{
+            backgroundColor: "#fff",
+            padding: "30px",
+            borderRadius: "20px",
+            marginBottom: "20px",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+          }}
+        >
             <div className="row mb-3">
               <div className="col-md-13">
                 <div className="form-group">
                   <label
                     style={{
-                      fontSize: '14px',
-                      color: '#495057',
-                      marginBottom: '8px',
-                      fontWeight: '600',
-                      display: 'block',
+                    fontSize: "14px",
+                    color: "#495057",
+                    marginBottom: "8px",
+                    fontWeight: "600",
+                    display: "block",
                     }}
-                  >
-
-                  </label>
+                ></label>
 
                   {/* REPLACE the entire beneficiary row with this: */}
-                        <div className="row mb-3" style={{ alignItems: 'flex-start' }}>
-
+                <div className="row mb-3" style={{ alignItems: "flex-start" }}>
                        {/* Column 1: Beneficiary Type */}
                           <div className="col-md-3">
                               <div className="form-group">
-                                 <label style={{ fontSize: 14, color: '#3b4f73', marginBottom: 8, fontWeight: 600, display: 'block' }}>
+                      <label
+                        style={{
+                          fontSize: 14,
+                          color: "#3b4f73",
+                          marginBottom: 8,
+                          fontWeight: 600,
+                          display: "block",
+                        }}
+                      >
                                       Beneficiary
                                       </label>
                                   <CustomDropdown
         name="categoryType"
         options={toOptions(CATEGORY_TYPE_OPTIONS)}
-        value={getSelectedOption(categoryType, toOptions(CATEGORY_TYPE_OPTIONS))}
+                        value={getSelectedOption(
+                          categoryType,
+                          toOptions(CATEGORY_TYPE_OPTIONS),
+                        )}
         isDisabled={lockBeneficiaryAndTagFields}
         onChange={(option) => {
           const selected = option as OptionType | null;
-          const next = selected?.value ? String(selected.value) : '';
+                          const next = selected?.value
+                            ? String(selected.value)
+                            : "";
           setCategoryType(next);
-          setCategoryItem('');
+                          setCategoryItem("");
           setCategorySelections([]);
           setBeneficiaryEmployeeId(null);
-          setBeneficiarySearchQuery('');
+                          setBeneficiarySearchQuery("");
           setBeneficiarySearchResults([]);
           setShowBeneficiaryDropdown(false);
-          setSelectedTag('');
-          if (next === 'Institution') setCategoryItem('K.S.Rangasamy College of Technology');
-          else setCategoryItem('');
+                          setSelectedTag("");
+                          if (next === "Institution")
+                            setCategoryItem(
+                              "K.S.Rangasamy College of Technology",
+                            );
+                          else setCategoryItem("");
         }}
         placeholder="Select"
-
       />
     </div>
   </div>
 
   {/* Column 2: Dynamic field based on type */}
   <div className="col-md-6">
-
     {/* Faculty / Staff — live search */}
-    {['Faculty', 'Staff'].includes(categoryType) && (
-      <div className="form-group" style={{ position: 'relative' }}>
-        <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
-          {categoryType === 'Staff' ? 'Staff Name' : 'Faculty Name'}
+                    {["Faculty", "Staff"].includes(categoryType) && (
+                      <div
+                        className="form-group"
+                        style={{ position: "relative" }}
+                      >
+                        <label
+                          style={{
+                            fontSize: 14,
+                            color: "#495057",
+                            marginBottom: 8,
+                            fontWeight: 600,
+                            display: "block",
+                          }}
+                        >
+                          {categoryType === "Staff"
+                            ? "Staff Name"
+                            : "Faculty Name"}
         </label>
         <input
           type="text"
@@ -4835,38 +5861,93 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             handleBeneficiarySearch(e.target.value);
           }}
           onFocus={(e) => {
-            e.currentTarget.style.borderColor = '#0069ab';
-            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,105,171,0.15)';
-            if (!showBeneficiaryDropdown) handleBeneficiarySearch(beneficiarySearchQuery);
+                            e.currentTarget.style.borderColor = "#0069ab";
+                            e.currentTarget.style.boxShadow =
+                              "0 0 0 3px rgba(0,105,171,0.15)";
+                            if (!showBeneficiaryDropdown)
+                              handleBeneficiarySearch(beneficiarySearchQuery);
           }}
           onBlur={(e) => {
-            e.currentTarget.style.borderColor = '#e0e0e0';
-            e.currentTarget.style.boxShadow = 'none';
-            setTimeout(() => setShowBeneficiaryDropdown(false), 200);
+                            e.currentTarget.style.borderColor = "#e0e0e0";
+                            e.currentTarget.style.boxShadow = "none";
+                            setTimeout(
+                              () => setShowBeneficiaryDropdown(false),
+                              200,
+                            );
           }}
-          placeholder={categoryType === 'Staff' ? 'Search staff by name or ERP ID' : 'Search faculty by name or ERP ID'}
+                          placeholder={
+                            categoryType === "Staff"
+                              ? "Search staff by name or ERP ID"
+                              : "Search faculty by name or ERP ID"
+                          }
           style={{
             borderRadius: 12,
-            border: '1px solid #e0e0e0',
-            padding: '10px 15px',
-            fontSize: '0.95rem',
-            width: '100%',
-            backgroundColor: lockBeneficiaryAndTagFields ? '#e9ecef' : '#fcfdff',
-            color: lockBeneficiaryAndTagFields ? '#495057' : undefined,
-            cursor: lockBeneficiaryAndTagFields ? 'not-allowed' : 'text',
-            outline: 'none',
+                            border: "1px solid #e0e0e0",
+                            padding: "10px 15px",
+                            fontSize: "0.95rem",
+                            width: "100%",
+                            backgroundColor: lockBeneficiaryAndTagFields
+                              ? "#e9ecef"
+                              : "#fcfdff",
+                            color: lockBeneficiaryAndTagFields
+                              ? "#495057"
+                              : undefined,
+                            cursor: lockBeneficiaryAndTagFields
+                              ? "not-allowed"
+                              : "text",
+                            outline: "none",
           }}
         />
         {/* Search Results Dropdown */}
-        {showBeneficiaryDropdown && beneficiarySearchResults.length > 0 && (
-          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 1001, maxHeight: 250, overflowY: 'auto', marginTop: 4 }}>
+                        {showBeneficiaryDropdown &&
+                          beneficiarySearchResults.length > 0 && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                top: "100%",
+                                left: 0,
+                                right: 0,
+                                backgroundColor: "#fff",
+                                border: "1px solid #e0e0e0",
+                                borderRadius: 12,
+                                boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                                zIndex: 1001,
+                                maxHeight: 250,
+                                overflowY: "auto",
+                                marginTop: 4,
+                              }}
+                            >
             {beneficiarySearchResults.map((emp) => (
-              <div key={emp.employeeid} onMouseDown={(e) => { e.preventDefault(); handleSelectBeneficiary(emp); }}
-                style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fff')}>
-                <div style={{ fontWeight: 600, color: '#333' }}>{emp.name}</div>
-                <div style={{ fontSize: 12, color: '#6c757d' }}>{emp.designation} — {emp.department}</div>
+                                <div
+                                  key={emp.employeeid}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    handleSelectBeneficiary(emp);
+                                  }}
+                                  style={{
+                                    padding: "10px 15px",
+                                    cursor: "pointer",
+                                    borderBottom: "1px solid #f0f0f0",
+                                  }}
+                                  onMouseEnter={(e) =>
+                                    (e.currentTarget.style.backgroundColor =
+                                      "#f8f9fa")
+                                  }
+                                  onMouseLeave={(e) =>
+                                    (e.currentTarget.style.backgroundColor =
+                                      "#fff")
+                                  }
+                                >
+                                  <div
+                                    style={{ fontWeight: 600, color: "#333" }}
+                                  >
+                                    {emp.name}
+                                  </div>
+                                  <div
+                                    style={{ fontSize: 12, color: "#6c757d" }}
+                                  >
+                                    {emp.designation} — {emp.department}
+                                  </div>
               </div>
             ))}
           </div>
@@ -4875,26 +5956,63 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
     )}
 
     {/* Institution — readonly */}
-    {categoryType === 'Institution' && (
+                    {categoryType === "Institution" && (
       <div className="form-group">
-        <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>Institution</label>
-        <input type="text" value="K.S.Rangasamy College of Technology" readOnly
-          style={{ borderRadius: 12, border: '1px solid #e0e0e0', padding: '10px 15px', fontSize: '0.95rem', width: '100%', backgroundColor: '#e9ecef', color: '#495057', cursor: 'not-allowed', outline: 'none' }} />
+                        <label
+                          style={{
+                            fontSize: 14,
+                            color: "#495057",
+                            marginBottom: 8,
+                            fontWeight: 600,
+                            display: "block",
+                          }}
+                        >
+                          Institution
+                        </label>
+                        <input
+                          type="text"
+                          value="K.S.Rangasamy College of Technology"
+                          readOnly
+                          style={{
+                            borderRadius: 12,
+                            border: "1px solid #e0e0e0",
+                            padding: "10px 15px",
+                            fontSize: "0.95rem",
+                            width: "100%",
+                            backgroundColor: "#e9ecef",
+                            color: "#495057",
+                            cursor: "not-allowed",
+                            outline: "none",
+                          }}
+                        />
       </div>
     )}
 
     {/* Department / Centre / Cell / Club — subcategory dropdown or tag */}
     {hasSubcategories && (
       <div className="form-group">
-        <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
+                        <label
+                          style={{
+                            fontSize: 14,
+                            color: "#495057",
+                            marginBottom: 8,
+                            fontWeight: 600,
+                            display: "block",
+                          }}
+                        >
           {getSubcategoryLabel(categoryType)}
         </label>
         {isMultipleSelect(categoryType) ? (
           <CustomTagInput
             name="categorySelections"
             value={categorySelections}
-            onChange={(tags) => { setCategorySelections(tags); setCategoryItem(tags.join(', ')); }}
-            suggestions={subcategoryList.filter((sub) => !categorySelections.includes(sub))}
+                            onChange={(tags) => {
+                              setCategorySelections(tags);
+                              setCategoryItem(tags.join(", "));
+                            }}
+                            suggestions={subcategoryList.filter(
+                              (sub) => !categorySelections.includes(sub),
+                            )}
             placeholder=""
             disabled={lockBeneficiaryAndTagFields}
             className="mb-0"
@@ -4903,15 +6021,19 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           <CustomDropdown
             name="categoryItem"
             options={subcategoryOptions}
-            value={getSelectedOption(categoryItem, subcategoryOptions)}
+                            value={getSelectedOption(
+                              categoryItem,
+                              subcategoryOptions,
+                            )}
             isDisabled={lockBeneficiaryAndTagFields}
             onChange={(option) => {
               const selected = option as OptionType | null;
-              setCategoryItem(selected?.value ? String(selected.value) : '');
+                              setCategoryItem(
+                                selected?.value ? String(selected.value) : "",
+                              );
               setCategorySelections([]);
             }}
             placeholder="Select"
-
           />
         )}
       </div>
@@ -4922,21 +6044,37 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
       <div className="col-md-3">
     {categoryType && (
       <div className="form-group">
-        <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>Tag</label>
+                        <label
+                          style={{
+                            fontSize: 14,
+                            color: "#495057",
+                            marginBottom: 8,
+                            fontWeight: 600,
+                            display: "block",
+                          }}
+                        >
+                          Tag
+                        </label>
         <CustomDropdown
           name="selectedTag"
           options={tagOptions}
           isDisabled={lockBeneficiaryAndTagFields}
           value={(() => {
-            const resolvedTag = resolveTagValue(selectedTag, tagOptions);
-            return resolvedTag ? { value: resolvedTag, label: resolvedTag } : null;
+                            const resolvedTag = resolveTagValue(
+                              selectedTag,
+                              tagOptions,
+                            );
+                            return resolvedTag
+                              ? { value: resolvedTag, label: resolvedTag }
+                              : null;
           })()}
           onChange={(option) => {
             const selected = option as OptionType | null;
-            setSelectedTag(selected?.value ? String(selected.value) : '');
+                            setSelectedTag(
+                              selected?.value ? String(selected.value) : "",
+                            );
           }}
           placeholder="Select Tag"
-
         />
       </div>
     )}
@@ -4947,29 +6085,42 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             </div>
 
             <div className="form-group">
-              <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Description</label>
+            <label
+              style={{
+                fontSize: "14px",
+                color: "#495057",
+                marginBottom: "8px",
+                fontWeight: "600",
+                display: "block",
+              }}
+            >
+              Description
+            </label>
               <textarea
                 value={description}
-                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+                setDescription(e.target.value)
+              }
                 style={{
-                  borderRadius: '12px',
-                  border: '1px solid #e0e0e0',
-                  padding: '10px 15px',
-                  fontSize: '0.95rem',
-                  width: '100%',
-                  fontFamily: 'inherit',
-                  backgroundColor: '#fcfdff',
-                  transition: 'all 0.3s ease',
-                  resize: 'vertical',
-                  outline: 'none'
+                borderRadius: "12px",
+                border: "1px solid #e0e0e0",
+                padding: "10px 15px",
+                fontSize: "0.95rem",
+                width: "100%",
+                fontFamily: "inherit",
+                backgroundColor: "#fcfdff",
+                transition: "all 0.3s ease",
+                resize: "vertical",
+                outline: "none",
                 }}
                 onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#0069ab';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                e.currentTarget.style.borderColor = "#0069ab";
+                e.currentTarget.style.boxShadow =
+                  "0 0 0 3px rgba(0, 105, 171, 0.15)";
                 }}
                 onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#e0e0e0';
-                  e.currentTarget.style.boxShadow = 'none';
+                e.currentTarget.style.borderColor = "#e0e0e0";
+                e.currentTarget.style.boxShadow = "none";
                 }}
                 rows={3}
                 placeholder="Enter short description"
@@ -4977,59 +6128,341 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             </div>
           </div>
 
-
-          {activeTab === 'Advance' && (
-            <div style={{
-              backgroundColor: '#fff',
-              padding: '30px',
-              borderRadius: '20px',
-              marginBottom: '20px',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
-            }}>
-              <h6 style={{ fontWeight: 600, color: '#0a2540', marginBottom: '24px' }}>Advance</h6>
-            <div style={{ overflowX: 'visible' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff', border: '1px solid #e0e0e0', tableLayout: 'fixed' }}>
+        {activeTab === "Advance" && (
+          <div
+            style={{
+              backgroundColor: "#fff",
+              padding: "30px",
+              borderRadius: "20px",
+              marginBottom: "20px",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+            }}
+          >
+            <h6
+              style={{
+                fontWeight: 600,
+                color: "#0a2540",
+                marginBottom: "24px",
+              }}
+            >
+              Advance
+            </h6>
+            <div style={{ overflowX: "visible" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  backgroundColor: "#fff",
+                  border: "1px solid #e0e0e0",
+                  tableLayout: "fixed",
+                }}
+              >
                 <thead>
-                  <tr style={{ backgroundColor: '#f0f6ff' }}>
-                    <th style={{ width: '6%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>S.No</th>
-                    <th style={{ width: '35%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget Head</th>
-                    <th style={{ width: '35%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Sub Head</th>
-                    <th style={{ width: '14%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget</th>
-                    <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Action</th>
+                  <tr style={{ backgroundColor: "#f0f6ff" }}>
+                    <th
+                      style={{
+                        width: "6%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      S.No
+                    </th>
+                    <th
+                      style={{
+                        width: "35%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      Budget Head
+                    </th>
+                    <th
+                      style={{
+                        width: "35%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      Sub Head
+                    </th>
+                    <th
+                      style={{
+                        width: "14%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      Budget
+                    </th>
+                    <th
+                      style={{
+                        width: "10%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      Action
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {advanceRows.map((row, idx) => (
                     <Fragment key={row.id}>
                       <tr>
-                        <td rowSpan={2} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', verticalAlign: 'middle', color: '#495057' }}>{idx + 1}</td>
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                          <CustomDropdown className="mb-0" options={getApprovedBudgetHeadsForAdvance()} value={getSelectedOption(row.budgetHead, getApprovedBudgetHeadsForAdvance())} onChange={(option) => { const val = String((option as OptionType)?.value || ''); handleAdvanceBudgetHeadChange(row.id, val); }} placeholder={isApprovedBudgetLoading ? "Loading..." : "Select Head"} />
+                        <td
+                          rowSpan={2}
+                          style={{
+                            padding: "12px",
+                            border: "1px solid #e0e0e0",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            color: "#495057",
+                          }}
+                        >
+                          {idx + 1}
                         </td>
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                          <CustomDropdown className="mb-0" options={getApprovedSubHeadOptionsForAdvance(row.budgetHead)} value={getSelectedOption(row.subHead, getApprovedSubHeadOptionsForAdvance(row.budgetHead))} onChange={async (option) => { const val = String((option as OptionType)?.value || ''); await handleAdvanceSubHeadChange(row.id, val); }} placeholder="Select Sub Head" isDisabled={!row.budgetHead} />
+                        <td
+                          style={{
+                            padding: "12px",
+                            border: "1px solid #e0e0e0",
+                          }}
+                        >
+                          <CustomDropdown
+                            className="mb-0"
+                            options={getApprovedBudgetHeadsForAdvance()}
+                            value={getSelectedOption(
+                              row.budgetHead,
+                              getApprovedBudgetHeadsForAdvance(),
+                            )}
+                            onChange={(option) => {
+                              const val = String(
+                                (option as OptionType)?.value || "",
+                              );
+                              handleAdvanceBudgetHeadChange(row.id, val);
+                            }}
+                            placeholder={
+                              isApprovedBudgetLoading
+                                ? "Loading..."
+                                : "Select Head"
+                            }
+                          />
                         </td>
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                          <input type="text" value={`₹ ${getAdvanceRowAvailableBalance(row.id).toLocaleString("en-IN")}`} readOnly style={{ border: '1px solid #d7dee7', borderRadius: '12px', padding: '10px 15px', fontSize: '0.95rem', width: '100%', height: '45px', backgroundColor: '#f3f5f7', color: '#51627d', textAlign: 'center', outline: 'none' }} />
+                        <td
+                          style={{
+                            padding: "12px",
+                            border: "1px solid #e0e0e0",
+                          }}
+                        >
+                          <CustomDropdown
+                            className="mb-0"
+                            options={getApprovedSubHeadOptionsForAdvance(
+                              row.budgetHead,
+                            )}
+                            value={getSelectedOption(
+                              row.subHead,
+                              getApprovedSubHeadOptionsForAdvance(
+                                row.budgetHead,
+                              ),
+                            )}
+                            onChange={async (option) => {
+                              const val = String(
+                                (option as OptionType)?.value || "",
+                              );
+                              await handleAdvanceSubHeadChange(row.id, val);
+                            }}
+                            placeholder="Select Sub Head"
+                            isDisabled={!row.budgetHead}
+                          />
                         </td>
-                        <td rowSpan={2} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', verticalAlign: 'middle' }}>
-                          <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
-                            {advanceRows.length > 1 && (<button onClick={(e) => { e.preventDefault(); removeAdvanceRow(row.id); }} style={deleteIconBtn} title="Delete Row"><X size={14} strokeWidth={2.5} /></button>)}
-                            {idx === advanceRows.length - 1 && (() => { const isFilled = row.budgetHead && row.subHead && row.advance !== ''; return (<button onClick={(e) => { e.preventDefault(); addAdvanceRow(); }} disabled={!isFilled} style={{ ...iconBtn, opacity: isFilled ? 1 : 0.5, cursor: isFilled ? 'pointer' : 'not-allowed' }} title="Add Row"><Plus size={14} strokeWidth={2.5} /></button>); })()}
+                        <td
+                          style={{
+                            padding: "12px",
+                            border: "1px solid #e0e0e0",
+                          }}
+                        >
+                          <input
+                            type="text"
+                            value={`₹ ${getAdvanceRowAvailableBalance(row.id).toLocaleString("en-IN")}`}
+                            readOnly
+                            style={{
+                              border: "1px solid #d7dee7",
+                              borderRadius: "12px",
+                              padding: "10px 15px",
+                              fontSize: "0.95rem",
+                              width: "100%",
+                              height: "45px",
+                              backgroundColor: "#f3f5f7",
+                              color: "#51627d",
+                              textAlign: "center",
+                              outline: "none",
+                            }}
+                          />
+                        </td>
+                        <td
+                          rowSpan={2}
+                          style={{
+                            padding: "12px",
+                            border: "1px solid #e0e0e0",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "center",
+                              gap: "10px",
+                            }}
+                          >
+                            {advanceRows.length > 1 && (
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  removeAdvanceRow(row.id);
+                                }}
+                                style={deleteIconBtn}
+                                title="Delete Row"
+                              >
+                                <X size={14} strokeWidth={2.5} />
+                              </button>
+                            )}
+                            {idx === advanceRows.length - 1 &&
+                              (() => {
+                                const isFilled =
+                                  row.budgetHead &&
+                                  row.subHead &&
+                                  row.advance !== "";
+                                return (
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      addAdvanceRow();
+                                    }}
+                                    disabled={!isFilled}
+                                    style={{
+                                      ...iconBtn,
+                                      opacity: isFilled ? 1 : 0.5,
+                                      cursor: isFilled
+                                        ? "pointer"
+                                        : "not-allowed",
+                                    }}
+                                    title="Add Row"
+                                  >
+                                    <Plus size={14} strokeWidth={2.5} />
+                                  </button>
+                                );
+                              })()}
                           </div>
                         </td>
                       </tr>
                       <tr>
-                        <td style={{ padding: '12px 16px', border: '1px solid #e0e0e0' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ minWidth: '110px', color: '#364152', fontSize: '1rem', fontWeight: 500 }}>Pre Advance</span>
-                            <input type="text" value={row.preAdvance ? `₹ ${row.preAdvance}` : '₹ 0'} readOnly style={{ border: '1px solid #d7dee7', borderRadius: '12px', padding: '10px 15px', fontSize: '0.95rem', width: '100%', height: '45px', backgroundColor: '#f3f5f7', color: '#51627d', textAlign: 'center', outline: 'none' }} />
+                        <td
+                          style={{
+                            padding: "12px 16px",
+                            border: "1px solid #e0e0e0",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                          >
+                            <span
+                              style={{
+                                minWidth: "110px",
+                                color: "#364152",
+                                fontSize: "1rem",
+                                fontWeight: 500,
+                              }}
+                            >
+                              Pre Advance
+                            </span>
+                            <input
+                              type="text"
+                              value={
+                                row.preAdvance ? `₹ ${row.preAdvance}` : "₹ 0"
+                              }
+                              readOnly
+                              style={{
+                                border: "1px solid #d7dee7",
+                                borderRadius: "12px",
+                                padding: "10px 15px",
+                                fontSize: "0.95rem",
+                                width: "100%",
+                                height: "45px",
+                                backgroundColor: "#f3f5f7",
+                                color: "#51627d",
+                                textAlign: "center",
+                                outline: "none",
+                              }}
+                            />
                           </div>
                         </td>
-                        <td colSpan={2} style={{ padding: '12px 16px', border: '1px solid #e0e0e0' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ minWidth: '72px', color: '#364152', fontSize: '1rem', fontWeight: 500 }}>Advance</span>
-                            <input type="text" placeholder="₹ 0" value={row.advance} onChange={(e) => handleAdvanceAmountChange(row.id, e.target.value)} style={{ border: '1px solid #d7dee7', borderRadius: '12px', padding: '10px 15px', fontSize: '0.95rem', width: '100%', height: '45px', backgroundColor: '#f8fbff', color: '#2a3f5e', textAlign: 'center', outline: 'none' }} />
+                        <td
+                          colSpan={2}
+                          style={{
+                            padding: "12px 16px",
+                            border: "1px solid #e0e0e0",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                          >
+                            <span
+                              style={{
+                                minWidth: "72px",
+                                color: "#364152",
+                                fontSize: "1rem",
+                                fontWeight: 500,
+                              }}
+                            >
+                              Advance
+                            </span>
+                            <input
+                              type="text"
+                              placeholder="₹ 0"
+                              value={row.advance}
+                              onChange={(e) =>
+                                handleAdvanceAmountChange(
+                                  row.id,
+                                  e.target.value,
+                                )
+                              }
+                              style={{
+                                border: "1px solid #d7dee7",
+                                borderRadius: "12px",
+                                padding: "10px 15px",
+                                fontSize: "0.95rem",
+                                width: "100%",
+                                height: "45px",
+                                backgroundColor: "#f8fbff",
+                                color: "#2a3f5e",
+                                textAlign: "center",
+                                outline: "none",
+                              }}
+                            />
                           </div>
                         </td>
                       </tr>
@@ -5037,102 +6470,269 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr style={{ backgroundColor: '#f0f6ff' }}>
-                    <td colSpan={5} style={{ padding: '16px 20px', border: '1px solid #e0e0e0', textAlign: 'right', fontWeight: '700', color: '#0069ab', fontSize: '1.05rem' }}>
-                      Total Advance: ₹ {totalAdvanceAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <tr style={{ backgroundColor: "#f0f6ff" }}>
+                    <td
+                      colSpan={5}
+                      style={{
+                        padding: "16px 20px",
+                        border: "1px solid #e0e0e0",
+                        textAlign: "right",
+                        fontWeight: "700",
+                        color: "#0069ab",
+                        fontSize: "1.05rem",
+                      }}
+                    >
+                      Total Advance: ₹{" "}
+                      {totalAdvanceAmount.toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </td>
                   </tr>
                 </tfoot>
               </table>
 
-              <div style={{ marginTop: "10px", padding: "10px 14px", borderRadius: "10px", backgroundColor: "#f0f6ff", border: "1px solid #cfe2ff", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", fontSize: "0.9rem", color: "#0b3d75", textAlign: "center", width: "100%" }}>
+              <div
+                style={{
+                  marginTop: "10px",
+                  padding: "10px 14px",
+                  borderRadius: "10px",
+                  backgroundColor: "#f0f6ff",
+                  border: "1px solid #cfe2ff",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "0.9rem",
+                  color: "#0b3d75",
+                  textAlign: "center",
+                  width: "100%",
+                }}
+              >
                 <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                <span style={{ fontWeight: 600 }}>{numberToIndianWords(totalAdvanceAmount)}</span>
+                <span style={{ fontWeight: 600 }}>
+                  {numberToIndianWords(totalAdvanceAmount)}
+                </span>
               </div>
             </div>
           </div>
           )}
 
-          {activeTab === 'Settlement' && (
-            <div style={{
-              backgroundColor: '#fff',
-              padding: '30px',
-              borderRadius: '20px',
-              marginBottom: '20px',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
-            }}>
-              <h6 style={{ fontWeight: 600, color: '#0a2540', marginBottom: '24px' }}>Settlement</h6>
-            <div style={{ overflowX: 'visible' }}>
-              <table style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                backgroundColor: '#fff',
-                border: '1px solid #e0e0e0',
-                tableLayout: 'fixed'
-              }}>
+        {activeTab === "Settlement" && (
+          <div
+            style={{
+              backgroundColor: "#fff",
+              padding: "30px",
+              borderRadius: "20px",
+              marginBottom: "20px",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+            }}
+          >
+            <h6
+              style={{
+                fontWeight: 600,
+                color: "#0a2540",
+                marginBottom: "24px",
+              }}
+            >
+              Settlement
+            </h6>
+            <div style={{ overflowX: "visible" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  backgroundColor: "#fff",
+                  border: "1px solid #e0e0e0",
+                  tableLayout: "fixed",
+                }}
+              >
                 <thead>
-                  <tr style={{ backgroundColor: '#f0f6ff' }}>
-                    <th style={{ width: '8%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>S.No</th>
-                    <th style={{ width: '25%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget Head</th>
-                    <th style={{ width: '25%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Sub Head</th>
-                    <th style={{ width: '14%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget</th>
-                    <th style={{ width: '13%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Settlement</th>
-                    <th style={{ width: '15%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Action</th>
+                  <tr style={{ backgroundColor: "#f0f6ff" }}>
+                    <th
+                      style={{
+                        width: "8%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      S.No
+                    </th>
+                    <th
+                      style={{
+                        width: "25%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      Budget Head
+                    </th>
+                    <th
+                      style={{
+                        width: "25%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      Sub Head
+                    </th>
+                    <th
+                      style={{
+                        width: "14%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      Budget
+                    </th>
+                    <th
+                      style={{
+                        width: "13%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      Settlement
+                    </th>
+                    <th
+                      style={{
+                        width: "15%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      Action
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {settlementRows.map((row, idx) => (
-                    <tr key={row.id} style={{ borderBottom: '1px solid #e0e0e0' }}>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', verticalAlign: 'middle', color: '#495057' }}>{idx + 1}</td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
+                    <tr
+                      key={row.id}
+                      style={{ borderBottom: "1px solid #e0e0e0" }}
+                    >
+                      <td
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          textAlign: "center",
+                          verticalAlign: "middle",
+                          color: "#495057",
+                        }}
+                      >
+                        {idx + 1}
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          verticalAlign: "middle",
+                          textAlign: "center",
+                        }}
+                      >
                         <CustomDropdown
                           className="mb-0"
                           options={getApprovedBudgetHeadsForAdvance()}
-                          value={getSelectedOption(row.budgetHead, getApprovedBudgetHeadsForAdvance())}
+                          value={getSelectedOption(
+                            row.budgetHead,
+                            getApprovedBudgetHeadsForAdvance(),
+                          )}
                           onChange={(option) => {
-                            const val = String((option as OptionType)?.value || '');
+                            const val = String(
+                              (option as OptionType)?.value || "",
+                            );
                             handleSettlementBudgetHeadChange(row.id, val);
                           }}
-                          placeholder={isApprovedBudgetLoading ? "Loading..." : "Select Head"}
+                          placeholder={
+                            isApprovedBudgetLoading
+                              ? "Loading..."
+                              : "Select Head"
+                          }
                         />
                       </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
+                      <td
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          verticalAlign: "middle",
+                          textAlign: "center",
+                        }}
+                      >
                         <CustomDropdown
                           className="mb-0"
-                          options={getApprovedSubHeadOptionsForAdvance(row.budgetHead)}
-                          value={getSelectedOption(row.subHead, getApprovedSubHeadOptionsForAdvance(row.budgetHead))}
+                          options={getApprovedSubHeadOptionsForAdvance(
+                            row.budgetHead,
+                          )}
+                          value={getSelectedOption(
+                            row.subHead,
+                            getApprovedSubHeadOptionsForAdvance(row.budgetHead),
+                          )}
                           onChange={(option) => {
-                            const val = String((option as OptionType)?.value || '');
+                            const val = String(
+                              (option as OptionType)?.value || "",
+                            );
                             handleSettlementSubHeadChange(row.id, val);
                           }}
                           placeholder="Select Sub Head"
                           isDisabled={!row.budgetHead}
                         />
                       </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
+                      <td
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          verticalAlign: "middle",
+                          textAlign: "center",
+                        }}
+                      >
                         <input
                           type="text"
                           placeholder="<Fetch>"
                           value={getBudgetDisplayValue(row.budget)}
                           readOnly
                           style={{
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '12px',
-                            padding: '10px 15px',
-                            fontSize: '0.95rem',
-                            width: '100%',
-                            height: '45px',
-                            boxSizing: 'border-box',
-                            fontFamily: 'inherit',
-                            backgroundColor: '#f8f9fa',
-                            color: '#6c757d',
-                            textAlign: 'center',
-                            outline: 'none',
-                            cursor: 'not-allowed'
+                            border: "1px solid #e0e0e0",
+                            borderRadius: "12px",
+                            padding: "10px 15px",
+                            fontSize: "0.95rem",
+                            width: "100%",
+                            height: "45px",
+                            boxSizing: "border-box",
+                            fontFamily: "inherit",
+                            backgroundColor: "#f8f9fa",
+                            color: "#6c757d",
+                            textAlign: "center",
+                            outline: "none",
+                            cursor: "not-allowed",
                           }}
                         />
                       </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
+                      <td
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          verticalAlign: "middle",
+                          textAlign: "center",
+                        }}
+                      >
                         <input
                           type="text"
                           placeholder="₹ 0"
@@ -5142,36 +6742,50 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
   if (!/^\d*\.?\d*$/.test(value)) return;
 
   const updated = settlementRows.map((r) =>
-    r.id === row.id ? { ...r, settlement: value } : r
+                              r.id === row.id ? { ...r, settlement: value } : r,
   );
   setSettlementRows(updated);
 }}
                           style={{
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '12px',
-                            padding: '10px 15px',
-                            fontSize: '0.95rem',
-                            width: '100%',
-                            height: '45px',
-                            boxSizing: 'border-box',
-                            fontFamily: 'inherit',
-                            backgroundColor: '#fcfdff',
-                            color: '#000',
-                            outline: 'none',
-                            textAlign: 'center'
+                            border: "1px solid #e0e0e0",
+                            borderRadius: "12px",
+                            padding: "10px 15px",
+                            fontSize: "0.95rem",
+                            width: "100%",
+                            height: "45px",
+                            boxSizing: "border-box",
+                            fontFamily: "inherit",
+                            backgroundColor: "#fcfdff",
+                            color: "#000",
+                            outline: "none",
+                            textAlign: "center",
                           }}
                           onFocus={(e) => {
-                            e.currentTarget.style.borderColor = '#0069ab';
-                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            e.currentTarget.style.borderColor = "#0069ab";
+                            e.currentTarget.style.boxShadow =
+                              "0 0 0 3px rgba(0, 105, 171, 0.15)";
                           }}
                           onBlur={(e) => {
-                            e.currentTarget.style.borderColor = '#e0e0e0';
-                            e.currentTarget.style.boxShadow = 'none';
+                            e.currentTarget.style.borderColor = "#e0e0e0";
+                            e.currentTarget.style.boxShadow = "none";
                           }}
                         />
                       </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                      <td
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          textAlign: "center",
+                          verticalAlign: "middle",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "center",
+                            gap: "10px",
+                          }}
+                        >
                           {settlementRows.length > 1 && (
                             <button
                               onClick={(e) => {
@@ -5180,14 +6794,24 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                               }}
                               style={deleteIconBtn}
                               title="Delete Row"
-                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#ffdede')}
-                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ffe6e6')}
+                              onMouseEnter={(e) =>
+                                (e.currentTarget.style.backgroundColor =
+                                  "#ffdede")
+                              }
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.backgroundColor =
+                                  "#ffe6e6")
+                              }
                             >
                               <X size={14} strokeWidth={2.5} />
                             </button>
                           )}
-                          {idx === settlementRows.length - 1 && (() => {
-                            const isFilled = row.budgetHead && row.subHead && row.settlement !== '';
+                          {idx === settlementRows.length - 1 &&
+                            (() => {
+                              const isFilled =
+                                row.budgetHead &&
+                                row.subHead &&
+                                row.settlement !== "";
                             return (
                               <button
                                 onClick={(e) => {
@@ -5198,14 +6822,20 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                                 style={{
                                   ...iconBtn,
                                   opacity: isFilled ? 1 : 0.5,
-                                  cursor: isFilled ? 'pointer' : 'not-allowed'
+                                    cursor: isFilled
+                                      ? "pointer"
+                                      : "not-allowed",
                                 }}
                                 title="Add Row"
                                 onMouseEnter={(e) => {
-                                  if (isFilled) e.currentTarget.style.backgroundColor = '#eceef2';
+                                    if (isFilled)
+                                      e.currentTarget.style.backgroundColor =
+                                        "#eceef2";
                                 }}
                                 onMouseLeave={(e) => {
-                                  if (isFilled) e.currentTarget.style.backgroundColor = '#f5f6f8';
+                                    if (isFilled)
+                                      e.currentTarget.style.backgroundColor =
+                                        "#f5f6f8";
                                 }}
                               >
                                 <Plus size={14} strokeWidth={2.5} />
@@ -5241,7 +6871,8 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         textAlign: "center",
       }}
     >
-      ₹ {totalSettlementAmount.toLocaleString("en-IN", {
+                      ₹{" "}
+                      {totalSettlementAmount.toLocaleString("en-IN", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })}
@@ -5269,94 +6900,231 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                 }}
                >
                 <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                <span style={{ fontWeight: 600 }}>{numberToIndianWords(totalSettlementAmount)}</span>
+                <span style={{ fontWeight: 600 }}>
+                  {numberToIndianWords(totalSettlementAmount)}
+                </span>
               </div>
             </div>
           </div>
           )}
-              {activeTab === 'Expenditure' && (
-  <div style={{
-    backgroundColor: '#fff',
-    padding: '30px',
-    borderRadius: '20px',
-    marginBottom: '20px',
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
-  }}>
-    <h6 style={{ fontWeight: 600, color: '#0a2540', marginBottom: '24px' }}>Expenditure</h6>
-    <div style={{ overflowX: 'visible' }}>
-      <table style={{
-        width: '100%',
-        borderCollapse: 'collapse',
-        backgroundColor: '#fff',
-        border: '1px solid #e0e0e0',
-        tableLayout: 'fixed'
-      }}>
+        {activeTab === "Expenditure" && (
+          <div
+            style={{
+              backgroundColor: "#fff",
+              padding: "30px",
+              borderRadius: "20px",
+              marginBottom: "20px",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+            }}
+          >
+            <h6
+              style={{
+                fontWeight: 600,
+                color: "#0a2540",
+                marginBottom: "24px",
+              }}
+            >
+              Expenditure
+            </h6>
+            <div style={{ overflowX: "visible" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  backgroundColor: "#fff",
+                  border: "1px solid #e0e0e0",
+                  tableLayout: "fixed",
+                }}
+              >
         <thead>
-          <tr style={{ backgroundColor: '#f0f6ff' }}>
-            <th style={{ width: '5%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>S.No</th>
-            <th style={{ width: '28%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget Head</th>
-            <th style={{ width: '28%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Sub Head</th>
-            <th style={{ width: '12%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget</th>
-            <th style={{ width: '8%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Action</th>
+                  <tr style={{ backgroundColor: "#f0f6ff" }}>
+                    <th
+                      style={{
+                        width: "5%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      S.No
+                    </th>
+                    <th
+                      style={{
+                        width: "28%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      Budget Head
+                    </th>
+                    <th
+                      style={{
+                        width: "28%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      Sub Head
+                    </th>
+                    <th
+                      style={{
+                        width: "12%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      Budget
+                    </th>
+                    <th
+                      style={{
+                        width: "8%",
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        color: "#0069ab",
+                        fontWeight: "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      Action
+                    </th>
           </tr>
         </thead>
         <tbody>
           {expenditureSubRows.map((row, idx) => (
             <React.Fragment key={row.id}>
               <tr>
-                <td style={{ padding: '12px', border: '1px solid #e0e0e0', borderBottom: 'none', textAlign: 'center', verticalAlign: 'middle', color: '#495057' }}>
+                        <td
+                          style={{
+                            padding: "12px",
+                            border: "1px solid #e0e0e0",
+                            borderBottom: "none",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            color: "#495057",
+                          }}
+                        >
                   {idx + 1}
                 </td>
-                <td style={{ padding: '12px', border: '1px solid #e0e0e0', borderBottom: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
+                        <td
+                          style={{
+                            padding: "12px",
+                            border: "1px solid #e0e0e0",
+                            borderBottom: "1px solid #e0e0e0",
+                            verticalAlign: "middle",
+                            textAlign: "center",
+                          }}
+                        >
                   <CustomDropdown
                     className="mb-0"
                     options={getApprovedBudgetHeadsForAdvance()}
-                    value={getSelectedOption(row.budgetHead, getApprovedBudgetHeadsForAdvance())}
+                            value={getSelectedOption(
+                              row.budgetHead,
+                              getApprovedBudgetHeadsForAdvance(),
+                            )}
                     onChange={(option) => {
-                      const val = String((option as OptionType)?.value || '');
+                              const val = String(
+                                (option as OptionType)?.value || "",
+                              );
                       handleExpenditureBudgetHeadChange(row.id, val);
                     }}
-                    placeholder={isApprovedBudgetLoading ? "Loading..." : "Select Head"}
+                            placeholder={
+                              isApprovedBudgetLoading
+                                ? "Loading..."
+                                : "Select Head"
+                            }
                   />
                 </td>
-                <td style={{ padding: '12px', border: '1px solid #e0e0e0', borderBottom: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
+                        <td
+                          style={{
+                            padding: "12px",
+                            border: "1px solid #e0e0e0",
+                            borderBottom: "1px solid #e0e0e0",
+                            verticalAlign: "middle",
+                            textAlign: "center",
+                          }}
+                        >
                   <CustomDropdown
                     className="mb-0"
-                    options={getApprovedSubHeadOptionsForAdvance(row.budgetHead)}
-                    value={getSelectedOption(row.subHead, getApprovedSubHeadOptionsForAdvance(row.budgetHead))}
+                            options={getApprovedSubHeadOptionsForAdvance(
+                              row.budgetHead,
+                            )}
+                            value={getSelectedOption(
+                              row.subHead,
+                              getApprovedSubHeadOptionsForAdvance(
+                                row.budgetHead,
+                              ),
+                            )}
                     onChange={(option) => {
-                      const val = String((option as OptionType)?.value || '');
+                              const val = String(
+                                (option as OptionType)?.value || "",
+                              );
                       handleExpenditureSubHeadChange(row.id, val);
                     }}
                     placeholder="Select Sub Head"
                     isDisabled={!row.budgetHead}
                   />
                 </td>
-                <td style={{ padding: '12px', border: '1px solid #e0e0e0', borderBottom: '1px solid #e0e0e0', verticalAlign: 'middle', textAlign: 'center' }}>
+                        <td
+                          style={{
+                            padding: "12px",
+                            border: "1px solid #e0e0e0",
+                            borderBottom: "1px solid #e0e0e0",
+                            verticalAlign: "middle",
+                            textAlign: "center",
+                          }}
+                        >
                   <input
                     type="text"
                     placeholder="<Fetch>"
                     value={getBudgetDisplayValue(row.budget)}
                     readOnly
                     style={{
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '12px',
-                      padding: '10px 15px',
-                      fontSize: '0.95rem',
-                      width: '100%',
-                      height: '45px',
-                      boxSizing: 'border-box',
-                      fontFamily: 'inherit',
-                      backgroundColor: '#fff',
-                      color: '#6c757d',
-                      textAlign: 'center',
-                      outline: 'none',
-                      cursor: 'not-allowed'
+                              border: "1px solid #e0e0e0",
+                              borderRadius: "12px",
+                              padding: "10px 15px",
+                              fontSize: "0.95rem",
+                              width: "100%",
+                              height: "45px",
+                              boxSizing: "border-box",
+                              fontFamily: "inherit",
+                              backgroundColor: "#fff",
+                              color: "#6c757d",
+                              textAlign: "center",
+                              outline: "none",
+                              cursor: "not-allowed",
                     }}
                   />
                 </td>
-                <td style={{ padding: '12px', border: '1px solid #e0e0e0', borderBottom: '1px solid #e0e0e0', textAlign: 'center', verticalAlign: 'middle' }} rowSpan={2}>
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', alignItems: 'center', flexWrap: 'nowrap' }}>
+                        <td
+                          style={{
+                            padding: "12px",
+                            border: "1px solid #e0e0e0",
+                            borderBottom: "1px solid #e0e0e0",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                          }}
+                          rowSpan={2}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "center",
+                              gap: "12px",
+                              alignItems: "center",
+                              flexWrap: "nowrap",
+                            }}
+                          >
                     {expenditureSubRows.length > 1 && (
                       <button
                         onClick={(e) => {
@@ -5365,16 +7133,16 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                         }}
                         title="Delete Row"
                         style={{
-                          width: '38px',
-                          height: '38px',
-                          borderRadius: '50%',
-                          border: 'none',
-                          background: '#ffe6e6',
-                          color: '#000000',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
+                                  width: "38px",
+                                  height: "38px",
+                                  borderRadius: "50%",
+                                  border: "none",
+                                  background: "#ffe6e6",
+                                  color: "#000000",
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
                         }}
                       >
                         <X size={14} strokeWidth={2.5} />
@@ -5382,24 +7150,44 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                     )}
                     {idx === expenditureSubRows.length - 1 && (
                       <button
-                        disabled={!row.budgetHead || !row.subHead || !row.expenditure}
+                                disabled={
+                                  !row.budgetHead ||
+                                  !row.subHead ||
+                                  !row.expenditure
+                                }
                         onClick={(e) => {
                           e.preventDefault();
                           addExpenditureRow();
                         }}
-                        title={(!row.budgetHead || !row.subHead || !row.expenditure) ? "Please fill all fields to add a new row" : "Add Row"}
+                                title={
+                                  !row.budgetHead ||
+                                  !row.subHead ||
+                                  !row.expenditure
+                                    ? "Please fill all fields to add a new row"
+                                    : "Add Row"
+                                }
                         style={{
-                          width: '38px',
-                          height: '38px',
-                          borderRadius: '50%',
-                          border: 'none',
-                          background: '#f5f6f8',
-                          color: '#000000',
-                          cursor: (!row.budgetHead || !row.subHead || !row.expenditure) ? 'not-allowed' : 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          opacity: (!row.budgetHead || !row.subHead || !row.expenditure) ? 0.5 : 1
+                                  width: "38px",
+                                  height: "38px",
+                                  borderRadius: "50%",
+                                  border: "none",
+                                  background: "#f5f6f8",
+                                  color: "#000000",
+                                  cursor:
+                                    !row.budgetHead ||
+                                    !row.subHead ||
+                                    !row.expenditure
+                                      ? "not-allowed"
+                                      : "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  opacity:
+                                    !row.budgetHead ||
+                                    !row.subHead ||
+                                    !row.expenditure
+                                      ? 0.5
+                                      : 1,
                         }}
                       >
                         <Plus size={14} strokeWidth={2.5} />
@@ -5409,59 +7197,101 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
                 </td>
               </tr>
               <tr>
-                <td style={{ padding: '12px', border: '1px solid #e0e0e0', borderTop: 'none', borderBottom: '1px solid #e0e0e0', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#fff' }}>
+                        <td
+                          style={{
+                            padding: "12px",
+                            border: "1px solid #e0e0e0",
+                            borderTop: "none",
+                            borderBottom: "1px solid #e0e0e0",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            backgroundColor: "#fff",
+                          }}
+                        >
                   {/* Empty cell under S.No */}
                 </td>
-                <td colSpan={3} style={{ padding: '12px', border: '1px solid #e0e0e0', borderTop: 'none', borderBottom: '1px solid #e0e0e0', verticalAlign: 'middle', backgroundColor: '#fff' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontWeight: '500', color: '#495057', minWidth: '80px' }}>Expenditure</span>
+                        <td
+                          colSpan={3}
+                          style={{
+                            padding: "12px",
+                            border: "1px solid #e0e0e0",
+                            borderTop: "none",
+                            borderBottom: "1px solid #e0e0e0",
+                            verticalAlign: "middle",
+                            backgroundColor: "#fff",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "12px",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontWeight: "500",
+                                color: "#495057",
+                                minWidth: "80px",
+                              }}
+                            >
+                              Expenditure
+                            </span>
                     <input
                       type="text"
                       placeholder="Eg: 455+345+780"
                       value={row.expenditure}
-                      onChange={(e) => handleExpenditureAmountChange(row.id, e.target.value)}
+                              onChange={(e) =>
+                                handleExpenditureAmountChange(
+                                  row.id,
+                                  e.target.value,
+                                )
+                              }
                       style={{
-                        border: '1px solid #e0e0e0',
-                        borderRadius: '12px',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
+                                border: "1px solid #e0e0e0",
+                                borderRadius: "12px",
+                                padding: "10px 15px",
+                                fontSize: "0.95rem",
                         flex: 1,
-                        height: '45px',
-                        boxSizing: 'border-box',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#fcfdff',
-                        color: '#000',
-                        outline: 'none',
+                                height: "45px",
+                                boxSizing: "border-box",
+                                fontFamily: "inherit",
+                                backgroundColor: "#fcfdff",
+                                color: "#000",
+                                outline: "none",
                       }}
                       onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                        e.currentTarget.style.backgroundColor = '#fcfdff';
+                                e.currentTarget.style.borderColor = "#0069ab";
+                                e.currentTarget.style.boxShadow =
+                                  "0 0 0 3px rgba(0, 105, 171, 0.15)";
+                                e.currentTarget.style.backgroundColor =
+                                  "#fcfdff";
                       }}
                       onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                        e.currentTarget.style.backgroundColor = '#fcfdff';
+                                e.currentTarget.style.borderColor = "#e0e0e0";
+                                e.currentTarget.style.boxShadow = "none";
+                                e.currentTarget.style.backgroundColor =
+                                  "#fcfdff";
                       }}
                     />
                     <input
                       type="text"
                       readOnly
-                      value={row.autoSum ? `₹ ${row.autoSum}` : ''}
+                              value={row.autoSum ? `₹ ${row.autoSum}` : ""}
                       style={{
-                        border: '1px solid #e0e0e0',
-                        borderRadius: '12px',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
-                        width: '145px',
-                        height: '45px',
-                        boxSizing: 'border-box',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#fff',
-                        color: '#6c757d',
-                        textAlign: 'center',
-                        outline: 'none',
-                        cursor: 'not-allowed'
+                                border: "1px solid #e0e0e0",
+                                borderRadius: "12px",
+                                padding: "10px 15px",
+                                fontSize: "0.95rem",
+                                width: "145px",
+                                height: "45px",
+                                boxSizing: "border-box",
+                                fontFamily: "inherit",
+                                backgroundColor: "#fff",
+                                color: "#6c757d",
+                                textAlign: "center",
+                                outline: "none",
+                                cursor: "not-allowed",
                       }}
                     />
                   </div>
@@ -5471,9 +7301,25 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           ))}
         </tbody>
                 <tfoot>
-          <tr style={{ backgroundColor: '#f0f6ff' }}>
-            <td colSpan={5} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '18px', fontWeight: '600', color: '#0069ab' }}>
-              Total Expenditure: &#8377; {expenditureSubRows.reduce((sum, r) => sum + (parseFloat(r.autoSum) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  <tr style={{ backgroundColor: "#f0f6ff" }}>
+                    <td
+                      colSpan={5}
+                      style={{
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        textAlign: "right",
+                        paddingRight: "18px",
+                        fontWeight: "600",
+                        color: "#0069ab",
+                      }}
+                    >
+                      Total Expenditure: &#8377;{" "}
+                      {expenditureSubRows
+                        .reduce(
+                          (sum, r) => sum + (parseFloat(r.autoSum) || 0),
+                          0,
+                        )
+                        .toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </td>
           </tr>
         </tfoot>
@@ -5497,36 +7343,50 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
         }}
       >
         <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-        <span style={{ fontWeight: 600 }}>{numberToIndianWords(expenditureSubRows.reduce((sum, r) => sum + (parseFloat(r.autoSum) || 0), 0))}</span>
+                <span style={{ fontWeight: 600 }}>
+                  {numberToIndianWords(
+                    expenditureSubRows.reduce(
+                      (sum, r) => sum + (parseFloat(r.autoSum) || 0),
+                      0,
+                    ),
+                  )}
+                </span>
       </div>
     </div>
   </div>
 )}
 
           {/* Payee Details Section */}
-          <div style={{ marginTop: '20px' }}>
-            {renderPayeeDetails()}
-          </div>
+        <div style={{ marginTop: "20px" }}>{renderPayeeDetails()}</div>
 
           {/* Payment Status Section - Separate Card */}
        {!showBulkNEFT && hasDofApprovalForPaymentStatus && (
-  <div className="payee-details-card" style={{ marginTop: '20px', pointerEvents: 'auto' }}>
+          <div
+            className="payee-details-card"
+            style={{ marginTop: "20px", pointerEvents: "auto" }}
+          >
     <div className="payee-details-header">
       <h5 className="payee-details-title">Payment Status</h5>
     </div>
     <div
       className="payee-status-card-fields"
       style={{
-        padding: '20px',
+                padding: "20px",
       }}
     >
       {/* 1. Dropdown (Status) */}
       <div className="payee-status-col payee-status-col-pending">
         <CustomDropdown
           options={toOptions(PAYMENT_STATUS_OPTIONS)}
-          value={getSelectedOption(paymentDetails.status, toOptions(PAYMENT_STATUS_OPTIONS))}
+                  value={getSelectedOption(
+                    paymentDetails.status,
+                    toOptions(PAYMENT_STATUS_OPTIONS),
+                  )}
           onChange={(opt) =>
-            setPaymentDetails({ ...paymentDetails, status: String((opt as OptionType)?.value || '') })
+                    setPaymentDetails({
+                      ...paymentDetails,
+                      status: String((opt as OptionType)?.value || ""),
+                    })
           }
           placeholder="Status"
           isDisabled={!canEditPaymentStatus}
@@ -5539,9 +7399,14 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           type="date"
           className="payee-field"
           value={paymentDetails.date}
-          onChange={(e) => setPaymentDetails({ ...paymentDetails, date: e.target.value })}
+                  onChange={(e) =>
+                    setPaymentDetails({
+                      ...paymentDetails,
+                      date: e.target.value,
+                    })
+                  }
           disabled={!canEditPaymentStatus}
-          style={{ width: '100%' }}
+                  style={{ width: "100%" }}
         />
       </div>
 
@@ -5552,15 +7417,17 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             className="payee-upload-label payee-status-upload-label"
             style={{
               margin: 0,
-              justifyContent: 'center',
-              display: 'flex',
-              alignItems: 'center',
-              width: '100%',
-              boxSizing: 'border-box',
+                      justifyContent: "center",
+                      display: "flex",
+                      alignItems: "center",
+                      width: "100%",
+                      boxSizing: "border-box",
             }}
           >
             <span className="payee-upload-label-content">
-              <span className="payee-upload-label-text">Payment proof </span>
+                      <span className="payee-upload-label-text">
+                        Payment proof{" "}
+                      </span>
               <Upload size={16} />
             </span>
             <input
@@ -5573,7 +7440,14 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           </label>
         )}
         {uploadedPaymentProofs.length > 0 && (
-          <div style={{ fontSize: '11px', color: '#2c7a4d', marginTop: '4px', textAlign: 'center' }}>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "#2c7a4d",
+                      marginTop: "4px",
+                      textAlign: "center",
+                    }}
+                  >
             {uploadedPaymentProofs.length} file(s)
           </div>
         )}
@@ -5587,13 +7461,23 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             className="payee-field payee-status-comment-input"
             placeholder="Transaction number"
             value={paymentDetails.refNo}
-            onChange={(e) => setPaymentDetails({ ...paymentDetails, refNo: e.target.value })}
+                    onChange={(e) =>
+                      setPaymentDetails({
+                        ...paymentDetails,
+                        refNo: e.target.value,
+                      })
+                    }
             disabled={!canEditPaymentStatus}
-            style={{ width: '100%' }}
+                    style={{ width: "100%" }}
           />
           <button
             type="button"
-            onClick={() => setPaymentDetails((prev) => ({ ...prev, refNo: prev.refNo.trim() }))}
+                    onClick={() =>
+                      setPaymentDetails((prev) => ({
+                        ...prev,
+                        refNo: prev.refNo.trim(),
+                      }))
+                    }
             className="payee-comment-tick-btn"
             aria-label="Confirm comment"
             disabled={!canEditPaymentStatus}
@@ -5602,7 +7486,6 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           </button>
         </div>
       </div>
-
     </div>
   </div>
 )}
@@ -5611,17 +7494,26 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
             <div className="expenditure-submit-buttons">
               <button
                 className="btn-submit"
-            onClick={(e) => { e.preventDefault(); handleSubmit(); }}
+              onClick={(e) => {
+                e.preventDefault();
+                handleSubmit();
+              }}
           >
             {submitActionLabel}
           </button>
         </div>
       )}
           {canEditPaymentStatus && (
-            <div className="expenditure-submit-buttons" style={{ pointerEvents: 'auto' }}>
+          <div
+            className="expenditure-submit-buttons"
+            style={{ pointerEvents: "auto" }}
+          >
               <button
                 className="btn-submit"
-                onClick={(e) => { e.preventDefault(); handlePaymentStatusUpdate(); }}
+              onClick={(e) => {
+                e.preventDefault();
+                handlePaymentStatusUpdate();
+              }}
               >
                 Update Payment Status
               </button>
@@ -5653,29 +7545,24 @@ const handleSelectBeneficiary = (emp: { employeeid: number; name: string; design
           />
         </div>
         )
-
-
-          <div style={{
-            position: 'absolute',
-            bottom: '2mm',
-            right: '15mm',
-            width: 'auto',
-            textAlign: 'right',
-            fontSize: '13px',
-            color: '#000000',
+      <div
+        style={{
+          position: "absolute",
+          bottom: "2mm",
+          right: "15mm",
+          width: "auto",
+          textAlign: "right",
+          fontSize: "13px",
+          color: "#000000",
             fontFamily: '"Times New Roman", serif',
-            backgroundColor: '#fff',
-            padding: '2px 8px',
-            border: '1px solid #ddd',
-            borderRadius: '4px',
+          backgroundColor: "#fff",
+          padding: "2px 8px",
+          border: "1px solid #ddd",
+          borderRadius: "4px",
             zIndex: 100,
-          }}>
-          </div>
-
-
-
+        }}
+      ></div>
      </div>
-
   );
 };
 

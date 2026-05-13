@@ -3199,6 +3199,8 @@ const FinanceApproval: React.FC = () => {
               marginTop: '30px',
               borderRadius: '18px',
               boxShadow: '0 8px 24px rgba(0, 0, 0, 0.06)',
+              pointerEvents: 'auto',
+              userSelect: 'auto',
             }}>
               <div
                 style={{
@@ -3288,7 +3290,7 @@ const FinanceApproval: React.FC = () => {
                   </div>
                 )}
 
-                {isApplicantCardOpen && !isViewMode && (
+                {isApplicantCardOpen && (
                   <>
                     <div className="row mb-3" style={{ marginBottom: '15px' }}>
                       <div className="col-md-7">
@@ -3301,7 +3303,9 @@ const FinanceApproval: React.FC = () => {
                             name="applicantName"
                             type="text"
                             value={isViewMode ? applicantName : (isExternalApplicant ? applicantName : applicantSearchQuery)}
+                            readOnly={isViewMode}
                             onChange={(value) => {
+                              if (isViewMode) return;
                               if (isExternalApplicant) {
                                 setApplicantName(value);
                               } else {
@@ -3322,7 +3326,7 @@ const FinanceApproval: React.FC = () => {
                             }}
                             placeholder={isExternalApplicant ? "Enter external applicant name" : "Search employee by name or ERP ID"}
                           />
-                          {showApplicantDropdown && applicantSearchResults.length > 0 && (
+                          {!isViewMode && showApplicantDropdown && applicantSearchResults.length > 0 && (
                             <div style={{
                               position: 'absolute',
                               top: '100%',
@@ -3373,7 +3377,7 @@ const FinanceApproval: React.FC = () => {
                               ))}
                             </div>
                           )}
-                          {showApplicantDropdown && applicantSearchQuery.length >= 2 && applicantSearchResults.length === 0 && (
+                          {!isViewMode && showApplicantDropdown && applicantSearchQuery.length >= 2 && applicantSearchResults.length === 0 && (
                             <div style={{
                               position: 'absolute',
                               top: '100%',
@@ -3414,7 +3418,12 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="date"
                             value={date}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) => setDate(e.target.value)}
+                            disabled={isViewMode}
+                            readOnly={isViewMode}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (isViewMode) return;
+                              setDate(e.target.value);
+                            }}
                             style={{
                               borderRadius: '12px',
                               border: '1px solid #e0e0e0',
@@ -3447,7 +3456,12 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="text"
                             value={department}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) => setDepartment(e.target.value)}
+                            disabled={isViewMode}
+                            readOnly={isViewMode}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (isViewMode) return;
+                              setDepartment(e.target.value);
+                            }}
                             style={{
                               borderRadius: '12px',
                               border: '1px solid #e0e0e0',
@@ -3477,7 +3491,12 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="text"
                             value={designation}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) => setDesignation(e.target.value)}
+                            disabled={isViewMode}
+                            readOnly={isViewMode}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (isViewMode) return;
+                              setDesignation(e.target.value);
+                            }}
                             style={{
                               borderRadius: '12px',
                               border: '1px solid #e0e0e0',
@@ -3512,7 +3531,12 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="email"
                             value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            disabled={isViewMode}
+                            readOnly={isViewMode}
+                            onChange={(e) => {
+                              if (isViewMode) return;
+                              setEmail(e.target.value);
+                            }}
                             style={{
                               borderRadius: '12px',
                               border: '1px solid #e0e0e0',
@@ -3542,7 +3566,12 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="tel"
                             value={mobile}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) => setMobile(e.target.value)}
+                            disabled={isViewMode}
+                            readOnly={isViewMode}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (isViewMode) return;
+                              setMobile(e.target.value);
+                            }}
                             style={{
                               borderRadius: '12px',
                               border: '1px solid #e0e0e0',

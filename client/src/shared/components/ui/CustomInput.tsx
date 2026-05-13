@@ -11,6 +11,7 @@ interface CustomInputProps {
   placeholder?: string;
   error?: string;
   disabled?: boolean;
+  readOnly?: boolean;
   className?: string;
   as?: React.ElementType;
   rows?: number;
