@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Briefcase, CheckCircle2, Clock, XCircle, Eye, Info, Edit2, Archive, Trash2, FileText, Upload, Download ,RotateCcw, CreditCard } from 'lucide-react';
+import { Briefcase, CheckCircle2, Clock, XCircle, Eye, Info, Edit2, Archive, Trash2, FileText, Upload, Download, RotateCcw, CreditCard, Search } from 'lucide-react';
 import PendingPayeeApprovals from './PendingPayeeApprovals';
 import { useNavigate } from 'react-router-dom';
 import authenticityUtility from '../../utils/authenticityUtility';
@@ -522,6 +522,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [payeeSearchTerm, setPayeeSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'total' | 'pending' | 'approved' | 'returned' | 'rejected' | 'archived'>('pending');
   const [viewMode, setViewMode] = useState<'workflow' | 'payees'>('workflow');
   const [actingRecordId, setActingRecordId] = useState<number | string | null>(null);
@@ -2323,6 +2324,19 @@ const proposalFilteredRows = useMemo(() => {
               </div>
             )}
             {config.moduleKey === 'expenditure' && (
+              <>
+              {viewMode === 'payees' && (
+                <div className="fw-payee-header-search">
+                  <Search size={16} className="fw-payee-header-search-icon" />
+                  <input
+                    type="text"
+                    className="fw-control fw-payee-header-search-input"
+                    placeholder="Search payee..."
+                    value={payeeSearchTerm}
+                    onChange={(e) => setPayeeSearchTerm(e.target.value)}
+                  />
+                </div>
+              )}
               <div className="fw-proposal-filter-bar">
                 <button
                   type="button"
@@ -2356,6 +2370,7 @@ const proposalFilteredRows = useMemo(() => {
                   S
                 </button>
               </div>
+              </>
             )}
             {viewMode === 'workflow' && (
               <div className="fw-header-actions">
@@ -2538,6 +2553,9 @@ const proposalFilteredRows = useMemo(() => {
                 pendingPayeeEditingId={pendingPayeeEditingId}
                 apiBasePath={config.apiBasePath}
                 onPayeeDelete={onPayeeDelete}
+                searchTerm={payeeSearchTerm}
+                onSearchTermChange={setPayeeSearchTerm}
+                showTopSearch={false}
               />
             </div>
           ) : (
@@ -2692,11 +2710,21 @@ const proposalFilteredRows = useMemo(() => {
                                 title="Edit"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (!isApproved || (isSuperAdminView && config.moduleKey === 'finance')) {
+                                  if (
+                                    !isApproved ||
+                                    (isSuperAdminView &&
+                                      (config.moduleKey === 'finance' || config.moduleKey === 'expenditure'))
+                                  ) {
                                     navigate(getRecordRoute(recordId, 'edit'));
                                   }
                                 }}
-                                disabled={isApproved && !(isSuperAdminView && config.moduleKey === 'finance')}
+                                disabled={
+                                  isApproved &&
+                                  !(
+                                    isSuperAdminView &&
+                                    (config.moduleKey === 'finance' || config.moduleKey === 'expenditure')
+                                  )
+                                }
                               >
                                 <Edit2 size={16} />
                               </button>

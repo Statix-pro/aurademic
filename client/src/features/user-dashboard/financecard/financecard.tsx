@@ -1029,7 +1029,7 @@ const FinanceCard: React.FC = () => {
                           <div className="card-header-right">
                             <div className="card-amount-box">
                               <span className="amount-label">Proposed</span>
-                              <span className="amount-value">Rs {getDisplayAmount(item).toLocaleString()}</span>
+                              <span className="amount-value">₹{getDisplayAmount(item).toLocaleString()}</span>
                             </div>
                             <div className="card-actions-main">
                               <button
