@@ -314,7 +314,10 @@ const isSuperAdminRequest = (req) =>
 
 const hasAnyExpenditureWorkflowPermission = (req) => {
   const permissions = getNormalizedUserPermissions(req);
-  return permissions.some((permission) => permission.startsWith('expenditure.workflow.'));
+  return permissions.some((permission) =>
+    permission.startsWith('expenditure.workflow.') ||
+    permission.startsWith('finance.workflow.')
+  );
 };
 
 const hasExpenditureStagePermission = (req, stage) => {
@@ -323,7 +326,10 @@ const hasExpenditureStagePermission = (req, stage) => {
   if (isSuperAdminRequest(req)) return true;
 
   const permissions = getNormalizedUserPermissions(req);
-  return permissions.includes(`expenditure.workflow.${normalizedStage}`);
+  return (
+    permissions.includes(`expenditure.workflow.${normalizedStage}`) ||
+    permissions.includes(`finance.workflow.${normalizedStage}`)
+  );
 };
 
 const canAccessExpenditureByRole = (req) => {
@@ -404,7 +410,10 @@ const expenditureController = {
         userId,
         userEmail,
         financeRequestId,
-        allowAnyApprovedFinance: isSuperAdminRequest(req) || hasAnyExpenditureWorkflowPermission(req),
+        allowAnyApprovedFinance:
+          isSuperAdminRequest(req) ||
+          hasAnyExpenditureWorkflowPermission(req) ||
+          canAccessExpenditureByRole(req),
       });
 
       const head = normalizeText(req.query.head).toLowerCase();
@@ -699,6 +708,7 @@ const uploads = {
             moduleMetaVersion: 1,
             moduleMeta: {
               trigger: 'create_expenditure_request',
+              beneficiaryType: normalizeText(payload.beneficiary_type) || null,
             },
           },
         });
@@ -1244,6 +1254,7 @@ const uploads = {
           moduleMetaVersion: 1,
           moduleMeta: {
             trigger: 'applicant_resubmit',
+            beneficiaryType: normalizeText(record.beneficiary_type) || null,
           },
         },
       });
@@ -1252,7 +1263,7 @@ const uploads = {
       await expenditureModel.updateExpenditureWorkflowSnapshot(expenditureId, {
         ...(restartResult.state || {}),
         status: 'in_progress',
-        currentStage: 'level1',
+        currentStage: restartResult.state?.currentStage || 'level1',
         isEditableByApplicant: false,
         lastDecision: 'resubmitted',
         lastFeedback: null,
