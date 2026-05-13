@@ -50,13 +50,11 @@ const expenditureUpload = multer({
     return cb(new Error('Bulk NEFT upload only accepts .xlsx or .xls files'));
   }
   if (file.fieldname === 'bill_files') {
-    const allowed = ['.pdf', '.png', '.jpg', '.jpeg'];
-
-    if (allowed.includes(extension)) {
+    if (extension === '.pdf') {
       return cb(null, true);
     }
 
-    return cb(new Error('Bill files only accept .pdf, .png, .jpg, .jpeg'));
+    return cb(new Error('Bill files only accept .pdf'));
   }
   return cb(new Error('Invalid file field'));
 },
@@ -151,7 +149,7 @@ router.post(
   '/',
   expenditureUpload.fields([
     { name: 'bulk_neft_file', maxCount: 1 },
-    { name: 'bill_files', maxCount: 20 },
+    { name: 'bill_files', maxCount: 1 },
   ]),
   expenditureController.createExpenditureRequest,
 );
@@ -160,7 +158,7 @@ router.post('/advance', expenditureController.createAdvance);router.put(
   '/:id',
   expenditureUpload.fields([
     { name: 'bulk_neft_file', maxCount: 1 },
-    { name: 'bill_files', maxCount: 20 },
+    { name: 'bill_files', maxCount: 1 },
   ]),
   expenditureController.updateExpenditure,
 );

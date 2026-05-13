@@ -1,0 +1,325 @@
+.add-payee-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.32);
+  backdrop-filter: blur(4px);
+}
+
+.add-payee-modal {
+  position: relative;
+  width: min(660px, 92vw);
+  max-height: min(92vh, 900px);
+  overflow-y: auto;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  font-family: "Inter", "Segoe UI", sans-serif;
+}
+
+.add-payee-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #6c757d;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.add-payee-modal-close:hover {
+  color: #0069ab;
+}
+
+.add-payee-modal-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.add-payee-modal-content {
+  padding: 18px 34px 22px;
+}
+
+.payee-modal-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 5px;
+  margin: 0 0 28px;
+  border-radius: 20px;
+  background: #f4f7fb;
+}
+
+.payee-modal-toggle-btn {
+  height: 46px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+}
+
+.payee-modal-toggle-btn.active {
+  background: #0077b6;
+  color: #ffffff;
+  box-shadow: 0 5px 12px rgba(0, 105, 171, 0.2);
+}
+
+.payee-modal-toggle-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.payee-modal-toggle-btn:focus-visible {
+  outline: 3px solid rgba(0, 105, 171, 0.24);
+  outline-offset: 2px;
+}
+
+.add-payee-modal-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.add-payee-modal-section--bank {
+  margin-top: 14px;
+}
+
+.add-payee-modal-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.add-payee-modal-row>label {
+  flex: 0 0 150px;
+  width: 150px;
+  margin: 0;
+  color: #3f4a63;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.add-payee-modal-row>.payee-modal-field-input,
+.add-payee-modal-row>.organization-type-dropdown,
+.add-payee-modal-row>.payee-modal-select-dropdown {
+  flex: 1;
+  min-width: 0;
+}
+
+.add-payee-modal-row>.organization-type-dropdown,
+.add-payee-modal-row>.payee-modal-select-dropdown,
+.add-payee-modal-row .tds-section-dropdown {
+  margin-bottom: 0;
+}
+
+.add-payee-modal-radio-group {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex: 1;
+  min-width: 0;
+}
+
+.add-payee-modal-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #5f6f85;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.add-payee-modal-radio input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #8aa9c6;
+}
+
+.payee-modal-field-input {
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #4b5563;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.payee-modal-field-input:focus {
+  border-color: #2b9ed6;
+  box-shadow: 0 0 0 4px rgba(43, 158, 214, 0.18);
+}
+
+.payee-modal-field-input:disabled {
+  background: #edf2f7;
+  cursor: not-allowed;
+}
+
+.payee-modal-field-input::placeholder,
+.payee-modal-select-dropdown .react-select__placeholder,
+.organization-type-dropdown .react-select__placeholder,
+.tds-section-dropdown .react-select__placeholder {
+  color: #6f7682;
+}
+
+.organization-type-dropdown .react-select__control,
+.payee-modal-select-dropdown .react-select__control,
+.tds-section-dropdown .react-select__control {
+  min-height: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border-color: #d6dce5;
+  background: #f8fafc;
+  box-shadow: none;
+}
+
+.organization-type-dropdown .react-select__control:hover,
+.organization-type-dropdown .react-select__control--is-focused,
+.payee-modal-select-dropdown .react-select__control:hover,
+.payee-modal-select-dropdown .react-select__control--is-focused,
+.tds-section-dropdown .react-select__control:hover,
+.tds-section-dropdown .react-select__control--is-focused {
+  border-color: #2b9ed6;
+  box-shadow: 0 0 0 4px rgba(43, 158, 214, 0.18);
+}
+
+.organization-type-dropdown .react-select__value-container,
+.payee-modal-select-dropdown .react-select__value-container,
+.tds-section-dropdown .react-select__value-container {
+  min-height: 40px;
+  height: 40px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+}
+
+.organization-type-dropdown .react-select__single-value,
+.organization-type-dropdown .react-select__placeholder,
+.payee-modal-select-dropdown .react-select__single-value,
+.payee-modal-select-dropdown .react-select__placeholder,
+.tds-section-dropdown .react-select__single-value,
+.tds-section-dropdown .react-select__placeholder {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  line-height: 1.2;
+}
+
+.organization-type-dropdown .react-select__indicators,
+.payee-modal-select-dropdown .react-select__indicators,
+.tds-section-dropdown .react-select__indicators {
+  height: 40px;
+  align-items: center;
+}
+
+.organization-type-dropdown .react-select__dropdown-indicator,
+.payee-modal-select-dropdown .react-select__dropdown-indicator,
+.tds-section-dropdown .react-select__dropdown-indicator {
+  display: flex;
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.payee-modal-select-dropdown .react-select__indicator-separator {
+  display: none;
+}
+
+.payee-modal-select-dropdown .react-select__menu {
+  z-index: 9999;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.payee-modal-select-dropdown .react-select__menu-list {
+  max-height: 220px;
+}
+
+.add-payee-modal-tds-control {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.add-payee-modal-tds-section {
+  flex: 0 1 260px;
+  min-width: 220px;
+  display: none;
+}
+
+.add-payee-modal-tds-section.visible {
+  display: block;
+}
+
+.add-payee-modal-submit {
+  width: 100%;
+  height: 46px;
+  margin-top: 20px;
+  border: 0;
+  border-radius: 12px;
+  background: #0069ab;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.add-payee-modal-submit:hover {
+  background: #005492;
+}
+
+.add-payee-modal-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .add-payee-modal-content {
+    padding: 22px 20px 26px;
+  }
+
+  .payee-modal-toggle {
+    margin-bottom: 28px;
+  }
+
+  .add-payee-modal-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .add-payee-modal-row>label {
+    width: auto;
+    flex-basis: auto;
+  }
+
+  .add-payee-modal-radio-group {
+    flex-wrap: wrap;
+  }
+
+  .add-payee-modal-tds-section {
+    min-width: 100%;
+  }
+}

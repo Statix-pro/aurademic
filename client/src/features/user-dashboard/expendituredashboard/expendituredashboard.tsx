@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import "./expendituredashboard.css";
+import AddPayeeModal, { AddPayeeModalPayee } from '../../../shared/components/AddPayeeModal';
 import {
   Eye,
   Edit2,
@@ -11,6 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { Button, Modal } from "react-bootstrap";
 
 interface ExpenditureItem {
   id: number;
@@ -89,24 +91,6 @@ interface ExpenditureDashboardCardApi {
   balance_amount?: number;
 }
 
-interface PayeeDraft {
-  beneficiaryType: "individual" | "organization";
-  payeeName: string;
-  accountName: string;
-  panNumber: string;
-  accountNo: string;
-  accountType: string;
-  bankName: string;
-  branchName: string;
-  ifsc: string;
-  beneficiaryOrg: string;
-  organizationType: string;
-  msme: string;
-  gstin: string;
-  tdsDetails: string;
-  tdsSection: string;
-}
-
 interface WorkflowRow {
   id: string;
   requestId?: number | null;
@@ -165,23 +149,6 @@ const normalizeSearchText = (value: unknown) => normalizeText(value).toLowerCase
 const normalizeCompactSearchText = (value: unknown) =>
   normalizeSearchText(value).replace(/[^a-z0-9]/g, "");
 
-const createEmptyPayeeDraft = (): PayeeDraft => ({
-  beneficiaryType: "individual",
-  payeeName: "",
-  accountName: "",
-  panNumber: "",
-  accountNo: "",
-  accountType: "",
-  bankName: "",
-  branchName: "",
-  ifsc: "",
-  beneficiaryOrg: "",
-  organizationType: "",
-  msme: "",
-  gstin: "",
-  tdsDetails: "",
-  tdsSection: "",
-});
 
 const resolveCanonicalPayeeName = (payeeName: string, accountName: string) => {
   const normalizedPayeeName = normalizeText(payeeName);
@@ -380,32 +347,22 @@ const ExpenditureDashboard: React.FC = () => {
     message: "",
   });
   const [showAddPayeeModal, setShowAddPayeeModal] = useState(false);
-  const [payeeDraft, setPayeeDraft] = useState<PayeeDraft>(() => createEmptyPayeeDraft());
   const [isSubmittingPayee, setIsSubmittingPayee] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
   const dashboardState = (location.state as DashboardReturnState | null) ?? null;
 
-  const updatePayeeDraft = <K extends keyof PayeeDraft>(key: K, value: PayeeDraft[K]) => {
-    setPayeeDraft((prev) => ({ ...prev, [key]: value }));
-  };
 
-  const closeAddPayeeModal = () => {
-    if (isSubmittingPayee) return;
-    setShowAddPayeeModal(false);
-    setPayeeDraft(createEmptyPayeeDraft());
-  };
-
-  const submitPayeeForApproval = async () => {
-    const canonicalPayeeName = resolveCanonicalPayeeName(payeeDraft.payeeName, payeeDraft.accountName);
+  const submitPayeeForApproval = async (payee: AddPayeeModalPayee) => {
+    const canonicalPayeeName = resolveCanonicalPayeeName(payee.payeeName, payee.accountName);
 
     if (
       !canonicalPayeeName ||
-      !normalizeText(payeeDraft.accountNo) ||
-      !normalizeText(payeeDraft.ifsc) ||
-      !normalizeText(payeeDraft.bankName) ||
-      !normalizeText(payeeDraft.branchName)
+      !normalizeText(payee.accountNo) ||
+      !normalizeText(payee.ifsc) ||
+      !normalizeText(payee.bankName) ||
+      !normalizeText(payee.branchName)
     ) {
       window.alert("Please enter account name, account number, IFSC, bank name and branch name.");
       return;
@@ -416,33 +373,33 @@ const ExpenditureDashboard: React.FC = () => {
       const response = await authenticityUtility.post("/expenditure/payees", {
         payee_name: canonicalPayeeName,
         account_name: canonicalPayeeName,
-        pan_number: normalizeText(payeeDraft.panNumber) || null,
-        account_no: normalizeText(payeeDraft.accountNo),
-        account_type: normalizeText(payeeDraft.accountType) || null,
-        bank_name: normalizeText(payeeDraft.bankName),
-        branch_name: normalizeText(payeeDraft.branchName),
-        ifsc: normalizeText(payeeDraft.ifsc).toUpperCase(),
-        beneficiary_type: payeeDraft.beneficiaryType,
-        beneficiary_org: normalizeText(payeeDraft.beneficiaryOrg) || null,
+        pan_number: normalizeText(payee.panNumber) || null,
+        account_no: normalizeText(payee.accountNo),
+        account_type: normalizeText(payee.accountType) || null,
+        bank_name: normalizeText(payee.bankName),
+        branch_name: normalizeText(payee.branchName),
+        ifsc: normalizeText(payee.ifsc).toUpperCase(),
+        beneficiary_type: payee.beneficiaryType,
+        beneficiary_org: normalizeText(payee.beneficiaryOrg) || null,
         organization_type:
-          payeeDraft.beneficiaryType === "organization"
-            ? normalizeText(payeeDraft.organizationType) || null
+          payee.beneficiaryType === "organization"
+            ? normalizeText(payee.organizationType) || null
             : null,
         msme:
-          payeeDraft.beneficiaryType === "organization"
-            ? normalizeText(payeeDraft.msme) || null
+          payee.beneficiaryType === "organization"
+            ? normalizeText(payee.msme) || null
             : null,
         gstin:
-          payeeDraft.beneficiaryType === "organization"
-            ? normalizeText(payeeDraft.gstin) || null
+          payee.beneficiaryType === "organization"
+            ? normalizeText(payee.gstin) || null
             : null,
         tds_details:
-          payeeDraft.beneficiaryType === "organization"
-            ? normalizeText(payeeDraft.tdsDetails) || null
+          payee.beneficiaryType === "organization"
+            ? normalizeText(payee.tdsDetails) || null
             : null,
         tds_section:
-          payeeDraft.beneficiaryType === "organization"
-            ? normalizeText(payeeDraft.tdsSection) || null
+          payee.beneficiaryType === "organization"
+            ? normalizeText(payee.tdsSection) || null
             : null,
       }) as { status?: string; message?: string };
 
@@ -452,7 +409,6 @@ const ExpenditureDashboard: React.FC = () => {
 
       window.alert(response.message || "Payee request submitted for DoF approval.");
       setShowAddPayeeModal(false);
-      setPayeeDraft(createEmptyPayeeDraft());
     } catch (error) {
       console.error("Failed to submit payee:", error);
       const apiMessage =
@@ -1462,198 +1418,16 @@ const ExpenditureDashboard: React.FC = () => {
             </div>
           </div>
 
-          {showAddPayeeModal && (
-            <div
-              className="expenditure-payee-modal-backdrop"
-              role="presentation"
-              onClick={(e) => {
-                if (e.target === e.currentTarget && !isSubmittingPayee) {
-                  closeAddPayeeModal();
-                }
-              }}
-            >
-              <div className="expenditure-payee-modal" role="dialog" aria-modal="true" aria-labelledby="add-payee-title">
-                <div className="expenditure-payee-modal__header">
-                  <div>
-                    <h3 id="add-payee-title">Add Payee</h3>
-                    <p>Submit payee details for DoF approval.</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="expenditure-payee-modal__close"
-                    onClick={closeAddPayeeModal}
-                    disabled={isSubmittingPayee}
-                    aria-label="Close add payee"
-                  >
-                    ×
-                  </button>
-                </div>
-
-                <div className="expenditure-payee-type-toggle">
-                  <button
-                    type="button"
-                    className={payeeDraft.beneficiaryType === "individual" ? "active" : ""}
-                    onClick={() => updatePayeeDraft("beneficiaryType", "individual")}
-                    disabled={isSubmittingPayee}
-                  >
-                    Individual
-                  </button>
-                  <button
-                    type="button"
-                    className={payeeDraft.beneficiaryType === "organization" ? "active" : ""}
-                    onClick={() => updatePayeeDraft("beneficiaryType", "organization")}
-                    disabled={isSubmittingPayee}
-                  >
-                    Organization
-                  </button>
-                </div>
-
-                <div className="expenditure-payee-modal__grid">
-                  <label>
-                    <span>Account Name</span>
-                    <input
-                      value={payeeDraft.accountName}
-                      onChange={(event) => updatePayeeDraft("accountName", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>Payee Name</span>
-                    <input
-                      value={payeeDraft.payeeName}
-                      onChange={(event) => updatePayeeDraft("payeeName", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>PAN Number</span>
-                    <input
-                      value={payeeDraft.panNumber}
-                      onChange={(event) => updatePayeeDraft("panNumber", event.target.value.toUpperCase())}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>Account Number</span>
-                    <input
-                      value={payeeDraft.accountNo}
-                      onChange={(event) => updatePayeeDraft("accountNo", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>Account Type</span>
-                    <input
-                      value={payeeDraft.accountType}
-                      onChange={(event) => updatePayeeDraft("accountType", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>Bank Name</span>
-                    <input
-                      value={payeeDraft.bankName}
-                      onChange={(event) => updatePayeeDraft("bankName", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>Branch Name</span>
-                    <input
-                      value={payeeDraft.branchName}
-                      onChange={(event) => updatePayeeDraft("branchName", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>IFSC</span>
-                    <input
-                      value={payeeDraft.ifsc}
-                      onChange={(event) => updatePayeeDraft("ifsc", event.target.value.toUpperCase())}
-                      disabled={isSubmittingPayee}
-                    />
-                  </label>
-                  <label>
-                    <span>Beneficiary Org</span>
-                    <select
-                      value={payeeDraft.beneficiaryOrg}
-                      onChange={(event) => updatePayeeDraft("beneficiaryOrg", event.target.value)}
-                      disabled={isSubmittingPayee}
-                    >
-                      <option value="">Select</option>
-                      <option value="KSRCT">KSRCT</option>
-                      <option value="KSREI">KSREI</option>
-                      <option value="External">External</option>
-                    </select>
-                  </label>
-
-                  {payeeDraft.beneficiaryType === "organization" && (
-                    <>
-                      <label>
-                        <span>Organization Type</span>
-                        <input
-                          value={payeeDraft.organizationType}
-                          onChange={(event) => updatePayeeDraft("organizationType", event.target.value)}
-                          disabled={isSubmittingPayee}
-                        />
-                      </label>
-                      <label>
-                        <span>MSME</span>
-                        <input
-                          value={payeeDraft.msme}
-                          onChange={(event) => updatePayeeDraft("msme", event.target.value)}
-                          disabled={isSubmittingPayee}
-                        />
-                      </label>
-                      <label>
-                        <span>GSTIN</span>
-                        <input
-                          value={payeeDraft.gstin}
-                          onChange={(event) => updatePayeeDraft("gstin", event.target.value.toUpperCase())}
-                          disabled={isSubmittingPayee}
-                        />
-                      </label>
-                      <label>
-                        <span>TDS Details</span>
-                        <input
-                          value={payeeDraft.tdsDetails}
-                          onChange={(event) => updatePayeeDraft("tdsDetails", event.target.value)}
-                          disabled={isSubmittingPayee}
-                        />
-                      </label>
-                      <label>
-                        <span>TDS Section</span>
-                        <input
-                          value={payeeDraft.tdsSection}
-                          onChange={(event) => updatePayeeDraft("tdsSection", event.target.value)}
-                          disabled={isSubmittingPayee}
-                        />
-                      </label>
-                    </>
-                  )}
-                </div>
-
-                <div className="expenditure-payee-modal__actions">
-                  <button
-                    type="button"
-                    className="expenditure-payee-modal__secondary"
-                    onClick={closeAddPayeeModal}
-                    disabled={isSubmittingPayee}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="expenditure-payee-modal__primary"
-                    onClick={submitPayeeForApproval}
-                    disabled={isSubmittingPayee}
-                  >
-                    {isSubmittingPayee ? "Submitting..." : "Submit for Approval"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          <AddPayeeModal
+            show={showAddPayeeModal}
+            onClose={() => {
+              if (!isSubmittingPayee) setShowAddPayeeModal(false);
+            }}
+            onAddPayee={submitPayeeForApproval}
+            showAlert={(message) => window.alert(String(message))}
+            submitLabel="Submit for Approval"
+            isSubmitting={isSubmittingPayee}
+          />
 
           <div className="expenditure-body">
             <div className="expenditure-demo-wrap">
@@ -2198,63 +1972,38 @@ const ExpenditureDashboard: React.FC = () => {
         </div>
       </div>
 
-      {dialogConfig.show && (
-        <div
-          className="expenditure-dialog-overlay"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
+      <Modal
+        show={dialogConfig.show}
+        onHide={closeDialog}
+        centered
+        className={`expenditure-dialog-modal expenditure-dialog-modal--${dialogConfig.variant ?? "info"}`}
+        aria-labelledby="expenditure-dialog-title"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title id="expenditure-dialog-title">{dialogConfig.title}</Modal.Title>
+        </Modal.Header>
+
+        <Modal.Body>{dialogConfig.message}</Modal.Body>
+
+        <Modal.Footer>
+          {dialogConfig.cancelText && (
+            <Button variant="outline-secondary" onClick={closeDialog}>
+              {dialogConfig.cancelText}
+            </Button>
+          )}
+          <Button
+            variant={dialogConfig.variant === "danger" ? "danger" : "primary"}
+            autoFocus
+            onClick={async () => {
+              const onConfirm = dialogConfig.onConfirm;
               closeDialog();
-            }
-          }}
-        >
-          <div
-            className={`expenditure-dialog expenditure-dialog--${dialogConfig.variant ?? "info"}`}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="expenditure-dialog-title"
+              await onConfirm?.();
+            }}
           >
-            <div className="expenditure-dialog__header">
-              <h6 id="expenditure-dialog-title" className="expenditure-dialog__title">
-                {dialogConfig.title}
-              </h6>
-              <button
-                type="button"
-                className="expenditure-dialog__close"
-                onClick={closeDialog}
-                aria-label="Close dialog"
-              >
-                <XCircle size={18} />
-              </button>
-            </div>
-
-            <div className="expenditure-dialog__body">{dialogConfig.message}</div>
-
-            <div className="expenditure-dialog__actions">
-              {dialogConfig.cancelText && (
-                <button
-                  type="button"
-                  className="expenditure-dialog__btn expenditure-dialog__btn--secondary"
-                  onClick={closeDialog}
-                >
-                  {dialogConfig.cancelText}
-                </button>
-              )}
-              <button
-                type="button"
-                className="expenditure-dialog__btn expenditure-dialog__btn--primary"
-                onClick={async () => {
-                  const onConfirm = dialogConfig.onConfirm;
-                  closeDialog();
-                  await onConfirm?.();
-                }}
-              >
-                {dialogConfig.confirmText ?? "OK"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            {dialogConfig.confirmText ?? "OK"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </section>
   );
 };

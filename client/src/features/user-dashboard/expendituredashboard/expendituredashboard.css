@@ -161,166 +161,6 @@
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.12);
 }
 
-.expenditure-payee-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1050;
-  background: rgba(15, 23, 42, 0.48);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.expenditure-payee-modal {
-  width: min(980px, 100%);
-  max-height: min(760px, calc(100vh - 48px));
-  overflow: auto;
-  border-radius: 18px;
-  background: #ffffff;
-  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.25);
-  border: 1px solid #dbeafe;
-}
-
-.expenditure-payee-modal__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 24px 12px;
-  border-bottom: 1px solid #eef2f6;
-}
-
-.expenditure-payee-modal__header h3 {
-  margin: 0;
-  color: #0a2540;
-  font-size: 22px;
-  font-weight: 800;
-}
-
-.expenditure-payee-modal__header p {
-  margin: 4px 0 0;
-  color: #64748b;
-  font-size: 14px;
-}
-
-.expenditure-payee-modal__close {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  border: 1px solid #d7e3ef;
-  background: #f8fbff;
-  color: #0a2540;
-  font-size: 26px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.expenditure-payee-modal__close:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.expenditure-payee-type-toggle {
-  display: inline-flex;
-  margin: 14px 24px 0;
-  padding: 4px;
-  border-radius: 12px;
-  background: #eef4fb;
-  gap: 4px;
-}
-
-.expenditure-payee-type-toggle button {
-  min-width: 130px;
-  height: 38px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: #5b6f86;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.expenditure-payee-type-toggle button.active {
-  background: #ffffff;
-  color: #0a2540;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
-}
-
-.expenditure-payee-modal__grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  padding: 16px 24px 20px;
-}
-
-.expenditure-payee-modal__grid label {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  color: #5b6f86;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.expenditure-payee-modal__grid input,
-.expenditure-payee-modal__grid select {
-  height: 40px;
-  border: 1.5px solid #d7e3ef;
-  border-radius: 11px;
-  padding: 0 12px;
-  color: #0a2540;
-  background: #ffffff;
-  font-size: 14px;
-  outline: none;
-}
-
-.expenditure-payee-modal__grid input:focus,
-.expenditure-payee-modal__grid select:focus {
-  border-color: #0069ab;
-  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.12);
-}
-
-.expenditure-payee-modal__grid input:disabled,
-.expenditure-payee-modal__grid select:disabled {
-  background: #f8fafc;
-  cursor: not-allowed;
-}
-
-.expenditure-payee-modal__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 14px 24px 20px;
-  border-top: 1px solid #eef2f6;
-}
-
-.expenditure-payee-modal__secondary,
-.expenditure-payee-modal__primary {
-  height: 42px;
-  border-radius: 11px;
-  padding: 0 18px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.expenditure-payee-modal__secondary {
-  border: 1px solid #d7e3ef;
-  background: #ffffff;
-  color: #475569;
-}
-
-.expenditure-payee-modal__primary {
-  border: 1px solid #0069ab;
-  background: #0069ab;
-  color: #ffffff;
-}
-
-.expenditure-payee-modal__secondary:disabled,
-.expenditure-payee-modal__primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 
 /* Body */
 .expenditure-body {
@@ -1479,107 +1319,53 @@
   transform: translateY(-1px);
 }
 
-.expenditure-dialog-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(2px);
+.expenditure-dialog-modal .modal-dialog {
+  max-width: 420px;
 }
 
-.expenditure-dialog {
-  width: min(420px, 100%);
+.expenditure-dialog-modal .modal-content {
   border-radius: 16px;
-  background: #ffffff;
   border: 1px solid #dbe7f4;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
   overflow: hidden;
 }
 
-.expenditure-dialog__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 20px 12px;
+.expenditure-dialog-modal .modal-header {
+  padding: 12px 20px 8px;
+  border-bottom: 0;
 }
 
-.expenditure-dialog__title {
-  margin: 0;
+.expenditure-dialog-modal .modal-title {
   color: #0a2540;
   font-size: 18px;
   font-weight: 800;
 }
 
-.expenditure-dialog__close {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid #dbe7f4;
-  background: #f8fbff;
-  color: #64748b;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.expenditure-dialog__close:hover {
-  background: #edf5ff;
-  color: #0b5fb1;
-}
-
-.expenditure-dialog__body {
-  padding: 0 20px 20px;
+.expenditure-dialog-modal .modal-body {
+  padding: 10px 20px 28px;
   color: #475569;
   font-size: 15px;
   font-weight: 600;
   line-height: 1.5;
 }
 
-.expenditure-dialog__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 14px 20px 20px;
+.expenditure-dialog-modal .modal-footer {
+  padding: 6px 20px 8px;
   border-top: 1px solid #edf2f7;
+  gap: 10px;
 }
 
-.expenditure-dialog__btn {
+.expenditure-dialog-modal .btn {
   min-width: 92px;
-  min-height: 40px;
+  min-height: 38px;
   border-radius: 10px;
-  padding: 9px 16px;
-  border: 1px solid transparent;
   font-size: 14px;
   font-weight: 800;
-  cursor: pointer;
 }
 
-.expenditure-dialog__btn--secondary {
-  background: #ffffff;
-  color: #334155;
-  border-color: #cbd5e1;
-}
-
-.expenditure-dialog__btn--primary {
-  background: #0b5fb1;
-  color: #ffffff;
-  border-color: #0b5fb1;
-}
-
-.expenditure-dialog--warning .expenditure-dialog__btn--primary {
+.expenditure-dialog-modal--warning .btn-primary {
   background: #b77900;
   border-color: #b77900;
-}
-
-.expenditure-dialog--danger .expenditure-dialog__btn--primary {
-  background: #dc2626;
-  border-color: #dc2626;
 }
 
 /* Responsive */
@@ -1683,19 +1469,6 @@
     border-top: 1px solid #e2e8f0;
     padding-left: 0;
     padding-top: 18px;
-  }
-
-  .expenditure-payee-modal__grid {
-    grid-template-columns: 1fr;
-  }
-
-  .expenditure-payee-modal__actions {
-    flex-direction: column-reverse;
-  }
-
-  .expenditure-payee-modal__secondary,
-  .expenditure-payee-modal__primary {
-    width: 100%;
   }
 }
 
