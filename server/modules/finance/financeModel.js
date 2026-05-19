@@ -3235,7 +3235,8 @@ const financeModel = {
        FROM finance_requests fr
        LEFT JOIN master_departments scope_dept
          ON LOWER(TRIM(COALESCE(fr.beneficiary_type, ''))) = 'department'
-        AND LOWER(TRIM(scope_dept.name)) = LOWER(TRIM(fr.beneficiary_value))
+        AND LOWER(TRIM(CONVERT(scope_dept.name USING utf8mb4) COLLATE utf8mb4_unicode_ci))
+          = LOWER(TRIM(CONVERT(fr.beneficiary_value USING utf8mb4) COLLATE utf8mb4_unicode_ci))
        WHERE fr.id = ?${lockClause}`,
       [normalizedRecordId]
     );
@@ -3555,9 +3556,10 @@ const financeModel = {
           fr.department_id,
           (
             SELECT md_scope.id
-              FROM master_departments md_scope
+             FROM master_departments md_scope
              WHERE LOWER(TRIM(COALESCE(fr.beneficiary_type, ''))) = 'department'
-               AND LOWER(TRIM(md_scope.name)) = LOWER(TRIM(fr.beneficiary_value))
+               AND LOWER(TRIM(CONVERT(md_scope.name USING utf8mb4) COLLATE utf8mb4_unicode_ci))
+                 = LOWER(TRIM(CONVERT(fr.beneficiary_value USING utf8mb4) COLLATE utf8mb4_unicode_ci))
              LIMIT 1
           )
         ) IN (?)`);

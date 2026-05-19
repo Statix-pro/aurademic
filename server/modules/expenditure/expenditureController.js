@@ -844,6 +844,7 @@ const uploads = {
 
       if (
         isOwner &&
+        !isWorkflowEditor &&
         !isApplicantEditable &&
         !(isPaymentOnlyUpdate && isFinalApprovedWorkflow)
       ) {
