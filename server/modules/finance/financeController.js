@@ -528,7 +528,7 @@ const financeController = {
       await financeModel.updateFinanceWorkflowSnapshot(financeId, {
         ...(restartResult.state || {}),
         status: 'in_progress',
-        currentStage: 'level1',
+        currentStage: restartResult.state?.currentStage || 'level1',
         isEditableByApplicant: false,
         lastDecision: 'resubmitted',
         lastFeedback: null,

@@ -680,13 +680,15 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Industry Interaction',
     'International Conference',
     'National Conference',
-    'Networking Event'
+    'Networking Event',
+    'Refund'
   ],
   'Association Activities': [
     'Alumni Interaction',
     'Alumni Meeting',
     'Association Function',
-    'Parents Meeting'
+    'Parents Meeting',
+    'Refund'
   ],
   'Outreach Events': [
     'Awareness Program',
@@ -698,21 +700,24 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'School Visit',
     'Summer Internship',
     'Grama Saba Meet',
-    'Orientation Session'
+    'Orientation Session',
+    'Refund'
   ],
   'Cultural & Celebrations': [
     'Celebration Day',
     'Festival Celebrations',
     'Harmonicks',
-    'Hostel Day'
+    'Hostel Day',
+    'Refund'
   ],
-  'Sports': ['Sports Day', 'Sports Meet'],
+  'Sports': ['Sports Day', 'Sports Meet', 'Refund'],
 
   'Club Activities': [
     'Flash Mob',
     'Fun Events',
     'Road show',
-    'Wall Painting'
+    'Wall Painting',
+    'Refund'
   ],
   'Competitions': [
     'Innovation & Startup Competitions',
@@ -726,7 +731,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Online Competitions',
     'General Competitions',
     'Project Exhibition',
-    'Science Exhibition'
+    'Science Exhibition',
+    'Refund'
   ],
 
   'Institutional Governance Meetings': [
@@ -735,7 +741,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Governing Body Meeting',
     'Placement Meeting',
     'Research Advisory Board Meeting',
-    'Result Passing Board (RPB) Meeting'
+    'Result Passing Board (RPB) Meeting',
+    'IQAC Meeting'
   ],
 
   'Academic Governance Meetings': [
@@ -769,7 +776,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Seminar',
     'STTP (Short-Term Training Programme)',
     'Webinar',
-    'Workshop'
+    'Workshop',
+    'Refund'
   ],
 
   'College Events': [
@@ -780,7 +788,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Orientation Session',
     'Science Day',
     'Student Induction Programme',
-    'Womens Day'
+    'Womens Day',
+    'Refund'
   ],
   'Staff Empowerment': [
     'Accommodation',
@@ -3185,14 +3194,38 @@ const FinanceApproval: React.FC = () => {
     return hasFilledText(entry.status) || hasFilledText(entry.remarks);
   });
 
+  const handleViewModeFocusCapture = (event: React.FocusEvent<HTMLDivElement>) => {
+    if (!isViewMode) return;
+    const target = event.target as HTMLElement | null;
+    if (!target || target.closest('[data-readonly-applicant-card="true"]')) return;
+    if (target.matches('input, textarea, select, button, [tabindex]')) {
+      target.blur();
+    }
+  };
+
+  const handleViewModeKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!isViewMode) return;
+    const target = event.target as HTMLElement | null;
+    if (!target || target.closest('[data-readonly-applicant-card="true"]')) return;
+    if (target.matches('input, textarea, select, button, [tabindex]') && event.key !== 'Tab') {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+
   return (
-    <div className="finance-approval-body" style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}>
+    <div
+      className="finance-approval-body"
+      onFocusCapture={handleViewModeFocusCapture}
+      onKeyDownCapture={handleViewModeKeyDownCapture}
+      style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}
+    >
 
       {!showPreview && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
           <div style={isViewMode ? { pointerEvents: 'none', userSelect: 'none' } : undefined}>
             {/* Applicant Details Section */}
-            <div style={{
+            <div data-readonly-applicant-card="true" style={{
               backgroundColor: '#fff',
               padding: '24px',
               marginBottom: '30px',
