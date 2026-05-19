@@ -2547,6 +2547,41 @@ async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeReques
   }
 }
 
+async function assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, requestedAmount) {
+  const normalizedFinanceRequestId = toPositiveInt(financeRequestId);
+  const normalizedRequestType = normalizeRequestType(requestType);
+  const normalizedRequestedAmount = toMoney(requestedAmount);
+
+  if (
+    !normalizedFinanceRequestId ||
+    !['Advance', 'Expenditure'].includes(normalizedRequestType) ||
+    normalizedRequestedAmount <= 0
+  ) {
+    return;
+  }
+
+  const [rows] = await conn.execute(
+    `SELECT COALESCE(
+       NULLIF(fr.approved_total_amount, 0),
+       NULLIF(fr.total_budget, 0),
+       NULLIF(fr.proposed_amount, 0),
+       0
+     ) AS approved_amount
+       FROM finance_requests fr
+      WHERE fr.id = ?
+      LIMIT 1`,
+    [normalizedFinanceRequestId],
+  );
+
+  const approvedAmount = toMoney(rows?.[0]?.approved_amount);
+
+  if (approvedAmount > 0 && normalizedRequestedAmount > approvedAmount) {
+    throw new Error(
+      `Total ${normalizedRequestType.toLowerCase()} amount ${normalizedRequestedAmount.toFixed(2)} exceeds approved finance amount ${approvedAmount.toFixed(2)}`,
+    );
+  }
+}
+
 async function applyBudgetUsageDelta(conn, usageRows = [], multiplier = 1) {
   for (const usageRow of usageRows) {
     const budgetLineId = toPositiveInt(usageRow.budgetLineId);
@@ -2752,8 +2787,10 @@ const incomeRows = Array.isArray(data.income_rows)
       requestedExpenditure: expenditureTotal,
     });
 
-    if (requestType === 'Expenditure') {
-      await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows);
+    if (requestType === 'Advance') {
+      await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, advanceTotal);
+    } else if (requestType === 'Expenditure') {
+      await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, expenditureTotal);
     } else if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,
@@ -3051,10 +3088,10 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       }
     }
 
-    if (requestType === 'Expenditure') {
-      await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows, {
-        excludeExpenditureId: normalizedExpenditureId,
-      });
+    if (requestType === 'Advance') {
+      await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, advanceTotal);
+    } else if (requestType === 'Expenditure') {
+      await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, expenditureTotal);
     } else if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,

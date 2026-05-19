@@ -824,6 +824,8 @@ const uploads = {
         'payment_ref_no',
         'payment_mode',
         'payment_debit_account',
+        'paymentdetails',
+        'payment_details',
       ]);
       const bodyKeys = Object.keys(requestBody).filter((key) => requestBody[key] !== undefined);
       const isPaymentOnlyUpdate =
@@ -866,9 +868,7 @@ const uploads = {
         req.body?.expenditure_rows ||
         req.body?.expenditurerows ||
         req.body?.payee_rows ||
-        req.body?.payeerows ||
-        req.body?.paymentdetails ||
-        req.body?.payment_details
+        req.body?.payeerows
       );
 
       if (hasProposalPayload) {
