@@ -108,7 +108,8 @@ async function resolveExpenditureWorkflowContext(conn, expenditureData = {}) {
     const [departmentRows] = await conn.execute(
       `SELECT id
          FROM master_departments
-        WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
+        WHERE LOWER(TRIM(CONVERT(name USING utf8mb4) COLLATE utf8mb4_unicode_ci))
+              = LOWER(TRIM(CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci))
         LIMIT 1`,
       [beneficiaryValue],
     );
@@ -125,7 +126,8 @@ async function resolveExpenditureWorkflowContext(conn, expenditureData = {}) {
          JOIN master_entity_types met ON met.id = me.entity_type_id
         WHERE me.is_active = 1
           AND UPPER(TRIM(met.code)) = ?
-          AND LOWER(TRIM(me.name)) = LOWER(TRIM(?))
+          AND LOWER(TRIM(CONVERT(me.name USING utf8mb4) COLLATE utf8mb4_unicode_ci))
+              = LOWER(TRIM(CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci))
         LIMIT 1`,
       [entityTypeCode, beneficiaryValue],
     );
