@@ -365,6 +365,7 @@ const CATEGORY_TYPE_OPTIONS = [
 const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
   'Events & Competitions': [
     'A/V Arrangements',
+    'Refund',
     'Accessories',
     'Accommodation',
     'Auditing Charge',
@@ -680,16 +681,12 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Industry Interaction',
     'International Conference',
     'National Conference',
-    'Networking Event',
-    'Refund'
-  ],
+    'Networking Event'],
   'Association Activities': [
     'Alumni Interaction',
     'Alumni Meeting',
     'Association Function',
-    'Parents Meeting',
-    'Refund'
-  ],
+    'Parents Meeting'],
   'Outreach Events': [
     'Awareness Program',
     'Campaigns',
@@ -700,25 +697,19 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'School Visit',
     'Summer Internship',
     'Grama Saba Meet',
-    'Orientation Session',
-    'Refund'
-  ],
+    'Orientation Session'],
   'Cultural & Celebrations': [
     'Celebration Day',
     'Festival Celebrations',
     'Harmonicks',
-    'Hostel Day',
-    'Refund'
-  ],
-  'Sports': ['Sports Day', 'Sports Meet', 'Refund'],
+    'Hostel Day'],
+  'Sports': ['Sports Day', 'Sports Meet'],
 
   'Club Activities': [
     'Flash Mob',
     'Fun Events',
     'Road show',
-    'Wall Painting',
-    'Refund'
-  ],
+    'Wall Painting'],
   'Competitions': [
     'Innovation & Startup Competitions',
     'Academic Competitions',
@@ -731,9 +722,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Online Competitions',
     'General Competitions',
     'Project Exhibition',
-    'Science Exhibition',
-    'Refund'
-  ],
+    'Science Exhibition'],
 
   'Institutional Governance Meetings': [
     'Examination Committee Meeting',
@@ -776,9 +765,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Seminar',
     'STTP (Short-Term Training Programme)',
     'Webinar',
-    'Workshop',
-    'Refund'
-  ],
+    'Workshop'],
 
   'College Events': [
     'Annual Day',
@@ -788,17 +775,14 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Orientation Session',
     'Science Day',
     'Student Induction Programme',
-    'Womens Day',
-    'Refund'
-  ],
+    'Womens Day'],
   'Staff Empowerment': [
     'Accommodation',
     'Daily Allowance',
     'Food & Refreshment',
     'Incentives',
     'Staff Welfare',
-    'Medical Expenses'
-  ],
+    'Medical Expenses'],
 
   'Student Empowerment': [
     'Accommodation',
@@ -809,8 +793,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Prizes',
     'Registration fee',
     'Student Welfare',
-    'Travel Support'
-  ],
+    'Travel Support'],
   'Student Capacity Building': [
     'ApptitudeTraining',
     'Certification Programs',
@@ -835,16 +818,14 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'NBA Inspection',
     'QS Ranking',
     'SDG Ranking',
-    'Other Rankings'
-  ],
+    'Other Rankings'],
   'Examination Expenses': [
     'Autonomous Exam Remuneration',
     'Government Exam Remuneration',
     'Online Exam Remuneration',
     'QP Setting Expenses',
     'Degree Recommendation',
-    'CoE Staff Remuneration'
-  ],
+    'CoE Staff Remuneration'],
 
   'Advertisement & Branding': ['Digital Promotion', 'News Paper Advertisement'],
   'Public Relations': [
@@ -853,15 +834,13 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'CSR Activity',
     'Press & Media',
     'Promotions',
-    'Sponsorship'
-  ],
+    'Sponsorship'],
   'Admissions': [
     'Consultant Charges',
     'Field Visits',
     'School Visits',
     'Stalls',
-    'Student Directory'
-  ],
+    'Student Directory'],
   'Research & Development': [
     'Consultancy',
     'HI Contribution',
@@ -873,8 +852,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Seed Fund (IPR Charges)',
     'Seed Fund (Product Development)',
     'Seed Fund (Testing)',
-    'Seed Fund (Travel)'
-  ],
+    'Seed Fund (Travel)'],
   'Government Funded Projects': [
     'Manpower',
     'Equipment',
@@ -893,8 +871,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Accessories & Peripherals',
     'Memento & Gifts',
     'Publicity & Promotion',
-    'Software & Licenses'
-  ],
+    'Software & Licenses'],
   'Government Funded Events': [
     'A/V Arrangements',
     'Accessories',
@@ -919,8 +896,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Sitting Fees',
     'Stationery',
     'T-shirt',
-    'Travel'
-  ],
+    'Travel'],
   'Administrative Expenses': [
     'Affiliation Fees',
     'AICTE Fees',

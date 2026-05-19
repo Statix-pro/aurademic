@@ -343,14 +343,12 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'International Conference',
     'National Conference',
     'Networking Event',
-    'Refund'
   ],
   'Association Activities': [
     'Alumni Interaction',
     'Alumni Meeting',
     'Association Function',
     'Parents Meeting',
-    'Refund'
   ],
   'Outreach Events': [
     'Awareness Program',
@@ -363,22 +361,19 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Summer Internship',
     'Grama Saba Meet',
     'Orientation Session',
-    'Refund'
   ],
   'Cultural & Celebrations': [
     'Celebration Day',
     'Festival Celebrations',
     'Harmonicks',
     'Hostel Day',
-    'Refund'
   ],
-  'Sports': ['Sports Day', 'Sports Meet', 'Refund'],
+  'Sports': ['Sports Day', 'Sports Meet'],
   'Club Activities': [
     'Flash Mob',
     'Fun Events',
     'Road show',
     'Wall Painting',
-    'Refund'
   ],
   'Competitions': [
     'Innovation & Startup Competitions',
@@ -393,7 +388,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'General Competitions',
     'Project Exhibition',
     'Science Exhibition',
-    'Refund'
   ],
 
   'Institutional Governance Meetings': [
@@ -439,7 +433,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'STTP (Short-Term Training Programme)',
     'Webinar',
     'Workshop',
-    'Refund'
   ],
 
   'College Events': [
@@ -451,7 +444,6 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Science Day',
     'Student Induction Programme',
     'Womens Day',
-    'Refund'
   ],
   'Staff Empowerment': [
     'Accommodation',
@@ -975,9 +967,9 @@ const Budget: React.FC = () => {
     Boolean(user?.is_super_admin)
     || Boolean((user as any)?.isSuperAdmin)
     || (
-    Array.isArray(user?.roles) &&
-    user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
-  );
+      Array.isArray(user?.roles) &&
+      user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
+    );
 
   const { id } = useParams();
   const location = useLocation();
