@@ -342,13 +342,15 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Industry Interaction',
     'International Conference',
     'National Conference',
-    'Networking Event'
+    'Networking Event',
+    'Refund'
   ],
   'Association Activities': [
     'Alumni Interaction',
     'Alumni Meeting',
     'Association Function',
-    'Parents Meeting'
+    'Parents Meeting',
+    'Refund'
   ],
   'Outreach Events': [
     'Awareness Program',
@@ -360,20 +362,23 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'School Visit',
     'Summer Internship',
     'Grama Saba Meet',
-    'Orientation Session'
+    'Orientation Session',
+    'Refund'
   ],
   'Cultural & Celebrations': [
     'Celebration Day',
     'Festival Celebrations',
     'Harmonicks',
-    'Hostel Day'
+    'Hostel Day',
+    'Refund'
   ],
-  'Sports': ['Sports Day', 'Sports Meet'],
+  'Sports': ['Sports Day', 'Sports Meet', 'Refund'],
   'Club Activities': [
     'Flash Mob',
     'Fun Events',
     'Road show',
-    'Wall Painting'
+    'Wall Painting',
+    'Refund'
   ],
   'Competitions': [
     'Innovation & Startup Competitions',
@@ -387,7 +392,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Online Competitions',
     'General Competitions',
     'Project Exhibition',
-    'Science Exhibition'
+    'Science Exhibition',
+    'Refund'
   ],
 
   'Institutional Governance Meetings': [
@@ -396,7 +402,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Governing Body Meeting',
     'Placement Meeting',
     'Research Advisory Board Meeting',
-    'Result Passing Board (RPB) Meeting'
+    'Result Passing Board (RPB) Meeting',
+    'IQAC Meeting'
   ],
 
   'Academic Governance Meetings': [
@@ -431,7 +438,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Seminar',
     'STTP (Short-Term Training Programme)',
     'Webinar',
-    'Workshop'
+    'Workshop',
+    'Refund'
   ],
 
   'College Events': [
@@ -442,7 +450,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Orientation Session',
     'Science Day',
     'Student Induction Programme',
-    'Womens Day'
+    'Womens Day',
+    'Refund'
   ],
   'Staff Empowerment': [
     'Accommodation',

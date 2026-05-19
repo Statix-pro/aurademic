@@ -20,6 +20,9 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle2,
+  RotateCcw,
+  XCircle,
+  Archive,
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import jsPDF from "jspdf";
@@ -37,9 +40,11 @@ import CustomDropdown, {
 } from "../../shared/components/ui/CustomDropdown";
 import CustomToggle from "../../shared/components/ui/CustomToggle";
 import AlertModal, { AlertType } from "../../shared/components/ui/AlertModal";
+import CustomModal from "../../shared/components/ui/CustomModal";
 import AddPayeeModal, {
   AddPayeeModalPayee,
 } from "../../shared/components/AddPayeeModal";
+import { useAuth } from "../../contexts/AuthContext";
 
 interface SelectOption {
   value: string;
@@ -495,6 +500,7 @@ const EVENT_SUBHEAD_GROUPS: Record<
         "Hands-on Training",
         "FDP (Faculty Development Programme)",
         "STTP (Short-Term Training Programme)",
+        "Refund",
       ]),
     },
     {
@@ -504,6 +510,7 @@ const EVENT_SUBHEAD_GROUPS: Record<
         "International Conference",
         "Conclave",
         "Convention",
+        "Refund",
       ]),
     },
     {
@@ -514,6 +521,7 @@ const EVENT_SUBHEAD_GROUPS: Record<
         "Networking Event",
         "Industry Interaction",
         "MoU Signing",
+        "Refund",
       ]),
     },
     {
@@ -523,6 +531,7 @@ const EVENT_SUBHEAD_GROUPS: Record<
         "Alumni Meeting",
         "Alumni Interaction",
         "Parents Meeting",
+        "Refund",
       ]),
     },
     {
@@ -532,6 +541,7 @@ const EVENT_SUBHEAD_GROUPS: Record<
         "Awareness Program",
         "Campaigns",
         "Mini Marathon",
+        "Refund",
       ]),
     },
     {
@@ -544,6 +554,7 @@ const EVENT_SUBHEAD_GROUPS: Record<
         "Ideathon",
         "Start-up meet",
         "Mentoring Sessions",
+        "Refund",
       ]),
     },
     {
@@ -558,6 +569,7 @@ const EVENT_SUBHEAD_GROUPS: Record<
         "Festival Celebrations",
         "Dakshaa",
         "Harmonicks",
+        "Refund",
       ]),
     },
     {
@@ -569,6 +581,7 @@ const EVENT_SUBHEAD_GROUPS: Record<
         "Rally",
         "Student Induction Programme",
         "Orientation Session",
+        "Refund",
       ]),
     },
   ],
@@ -583,6 +596,7 @@ const EVENT_SUBHEAD_GROUPS: Record<
         "Examination Committee Meeting",
         "Placement Meeting",
         "Network Meeting",
+        "IQAC Meeting",
       ]),
     },
     {
@@ -919,6 +933,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     "Bag",
     "Consumables",
     "Others",
+    "Refund",
 ],
 
   "Meetings & Audits": [
@@ -1079,6 +1094,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     "Stationery",
     "T-shirt",
     "Travel",
+    "Refund",
   ],
 
   "Administrative Expenses": [
@@ -1360,6 +1376,7 @@ const mapFinanceBeneficiaryTypeToExpenditureCategory = (
 const ExpenditureApproval: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { id: routeId } = useParams<{ id?: string }>();
   const launchModuleFromState = (() => {
     const state = location.state as {
@@ -1475,6 +1492,13 @@ const ExpenditureApproval: React.FC = () => {
   const [isReturnedWorkflowRequest, setIsReturnedWorkflowRequest] =
     useState<boolean>(false);
   const [loadedWorkflowStatus, setLoadedWorkflowStatus] = useState<string>("");
+  const [loadedCurrentStage, setLoadedCurrentStage] = useState<string>("");
+  const [wfActionPopupOpen, setWfActionPopupOpen] = useState(false);
+  const [wfActionType, setWfActionType] = useState<
+    "returned" | "rejected" | null
+  >(null);
+  const [wfActionComment, setWfActionComment] = useState("");
+  const [wfActionSubmitting, setWfActionSubmitting] = useState(false);
   const [hasDofApprovalForPaymentStatus, setHasDofApprovalForPaymentStatus] =
     useState<boolean>(false);
   const [financeApprovedAmount, setFinanceApprovedAmount] = useState<number>(
@@ -1624,6 +1648,40 @@ const ExpenditureApproval: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     "Advance" | "Settlement" | "Expenditure" | null
   >(launchModuleFromState);
+  const normalizedWorkflowStatus = String(loadedWorkflowStatus || "").toLowerCase();
+  const isSuperAdminUser =
+    Boolean(user?.is_super_admin || (user as any)?.isSuperAdmin) ||
+    (Array.isArray(user?.roles) &&
+      user.roles.some(
+        (role) => String(role || "").toLowerCase() === "super_admin",
+      ));
+  const userWorkflowPermissions = Array.isArray(user?.permissions)
+    ? user.permissions.map((permission) => String(permission || "").toLowerCase())
+    : [];
+  const routeStateIsActionablePending = (location.state as any)?.isActionablePending;
+  const hideWorkflowActionsForFinalStatus =
+    !isSuperAdminUser &&
+    (routeStateIsActionablePending === false ||
+      normalizedWorkflowStatus.includes("approved") ||
+      normalizedWorkflowStatus.includes("returned") ||
+      normalizedWorkflowStatus.includes("completed") ||
+      normalizedWorkflowStatus.includes("rejected") ||
+      normalizedWorkflowStatus.includes("archived"));
+  const canActOnCurrentStage =
+    isReadOnlyView &&
+    Boolean(loadedCurrentStage) &&
+    !isSuperAdminUser &&
+    (userWorkflowPermissions.includes(`expenditure.workflow.${loadedCurrentStage}`) ||
+      userWorkflowPermissions.includes(`finance.workflow.${loadedCurrentStage}`));
+  const isWorkflowActionPage =
+    isReadOnlyView &&
+    isAdminWorkflowContext &&
+    (activeTab === "Advance" || activeTab === "Expenditure");
+  const showWorkflowActions =
+    isWorkflowActionPage &&
+    Boolean(submittedRequestIdFromState) &&
+    !hideWorkflowActionsForFinalStatus &&
+    (isSuperAdminUser || canActOnCurrentStage);
 
   useEffect(() => {
     if (!resolvedFinanceRequestId) {
@@ -1739,6 +1797,7 @@ const ExpenditureApproval: React.FC = () => {
       setExistingPayeeBills([]);
       setIsReturnedWorkflowRequest(false);
       setLoadedWorkflowStatus("");
+      setLoadedCurrentStage("");
       setHasDofApprovalForPaymentStatus(false);
       return;
     }
@@ -1794,8 +1853,18 @@ const ExpenditureApproval: React.FC = () => {
             record.overall_status ||
             "",
         ).toLowerCase();
+        const currentStage = String(
+          workflowState?.currentStage ||
+            (workflowState as Record<string, unknown> | null)?.stage ||
+            record.workflow_stage ||
+            record.current_stage ||
+            "",
+        )
+          .trim()
+          .toLowerCase();
         setIsReturnedWorkflowRequest(workflowStatus === "returned");
         setLoadedWorkflowStatus(workflowStatus);
+        setLoadedCurrentStage(currentStage);
         setHasDofApprovalForPaymentStatus(
           hasReachedPostDofStage(record, workflowStatus),
         );
@@ -1963,6 +2032,7 @@ const ExpenditureApproval: React.FC = () => {
           console.error("Failed to load submitted expenditure request:", error);
           setIsReturnedWorkflowRequest(false);
           setLoadedWorkflowStatus("");
+          setLoadedCurrentStage("");
           setHasDofApprovalForPaymentStatus(false);
         }
       }
@@ -4102,7 +4172,7 @@ for (const [, group] of groupedExpenditureUsage) {
                             );
                           setPayeeRows(updated);
                         }}
-                        placeholder="Mode"
+                        placeholder="Mode *"
                       />
                     </div>
                       {((row.tdsDetails &&
@@ -4693,6 +4763,15 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       return;
     }
 
+    const missingModeRowIndex = payeeRows.findIndex((row) => !row.mode || !row.mode.trim());
+    if (missingModeRowIndex !== -1) {
+      showAlert(
+        `Please select a transaction mode for Payee row ${missingModeRowIndex + 1} before submitting.`,
+        "warning",
+      );
+      return;
+    }
+
     const normalizedTotalPayeeTransactionAmount = Number(
       getPayeeTransactionTotal(payeeRows).toFixed(2),
     );
@@ -4976,6 +5055,100 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     await performSubmit();
   };
 
+  const closeWfActionPopup = () => {
+    if (wfActionSubmitting) return;
+    setWfActionPopupOpen(false);
+    setWfActionType(null);
+    setWfActionComment("");
+  };
+
+  const executeWorkflowAction = async (
+    decision: "approved" | "returned" | "rejected" | "archived",
+    feedback?: string,
+  ) => {
+    if (!submittedRequestIdFromState) return;
+
+    try {
+      setIsLoading(true);
+
+      const response = (decision === "archived"
+        ? await authenticityUtility.patch(
+            `/expenditure/${submittedRequestIdFromState}/archive-toggle`,
+            {},
+          )
+        : await authenticityUtility.patch(
+            `/expenditure/${submittedRequestIdFromState}/approval`,
+            {
+              decision,
+              feedback,
+            },
+          )) as { status?: string; success?: boolean; message?: string };
+
+      if (response?.status !== "success" && response?.success !== true) {
+        showAlert(response?.message || `Failed to ${decision}`, "error");
+        return;
+      }
+
+      navigate("/workflow/expenditure");
+    } catch (error: any) {
+      showAlert(
+        error?.response?.data?.message ||
+          error?.message ||
+          `Failed to ${decision}`,
+        "error",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleWorkflowAction = async (
+    decision: "approved" | "returned" | "rejected" | "archived",
+  ) => {
+    if (!submittedRequestIdFromState) return;
+
+    if (decision === "returned" || decision === "rejected") {
+      setWfActionType(decision);
+      setWfActionComment("");
+      setWfActionPopupOpen(true);
+      return;
+    }
+
+    const isArchiveAction = decision === "archived";
+    showAlert(
+      isArchiveAction
+        ? "Are you sure you want to archive this request?"
+        : "Are you sure you want to approve this request?",
+      "warning",
+      isArchiveAction ? "Confirm Archive" : "Confirm Approval",
+      true,
+      isArchiveAction ? "Archive" : "Approve",
+      () => {
+        closeAlert();
+        void executeWorkflowAction(decision);
+      },
+    );
+  };
+
+  const submitWfActionWithComment = async () => {
+    if (!wfActionType || wfActionSubmitting) return;
+    const comment = wfActionComment.trim();
+    if (!comment) {
+      showAlert("Please enter comments.", "warning");
+      return;
+    }
+
+    try {
+      setWfActionSubmitting(true);
+      await executeWorkflowAction(wfActionType, comment);
+      setWfActionPopupOpen(false);
+      setWfActionType(null);
+      setWfActionComment("");
+    } finally {
+      setWfActionSubmitting(false);
+    }
+  };
+
   const handlePaymentStatusUpdate = async (): Promise<void> => {
     if (!submittedRequestIdFromState || !canEditPaymentStatus) {
       showAlert(
@@ -5237,9 +5410,34 @@ const handleBeneficiarySearch = async (query: string) => {
     }
   };
 
+  const handleReadOnlyFocusCapture = (event: React.FocusEvent<HTMLDivElement>) => {
+    if (!isReadOnlyView) return;
+    const target = event.target as HTMLElement | null;
+    if (!target || target.closest('[data-readonly-applicant-card="true"]')) return;
+    if (target.closest('[data-readonly-action-bar="true"]')) return;
+    if (target.closest('[data-readonly-scrollable="true"]')) return;
+    if (target.matches("input, textarea, select, button, [tabindex]")) {
+      target.blur();
+    }
+  };
+
+  const handleReadOnlyKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!isReadOnlyView) return;
+    const target = event.target as HTMLElement | null;
+    if (!target || target.closest('[data-readonly-applicant-card="true"]')) return;
+    if (target.closest('[data-readonly-action-bar="true"]')) return;
+    if (target.closest('[data-readonly-scrollable="true"]')) return;
+    if (target.matches("input, textarea, select, button, [tabindex]") && event.key !== "Tab") {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+
   return (
     <div
       className="expenditure-approval-body"
+      onFocusCapture={handleReadOnlyFocusCapture}
+      onKeyDownCapture={handleReadOnlyKeyDownCapture}
       style={{
         padding: "0",
         backgroundColor: "#f0f6ff",
@@ -5252,6 +5450,7 @@ const handleBeneficiarySearch = async (query: string) => {
       >
         <div
           className="ea-applicantCard"
+          data-readonly-applicant-card="true"
           style={{
             pointerEvents: "auto",
             userSelect: "auto",
@@ -6097,10 +6296,13 @@ const handleBeneficiarySearch = async (query: string) => {
               Description
             </label>
               <textarea
+                data-readonly-scrollable="true"
                 value={description}
-              onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
-                setDescription(e.target.value)
-              }
+                readOnly={isReadOnlyView}
+                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
+                  if (isReadOnlyView) return;
+                  setDescription(e.target.value);
+                }}
                 style={{
                 borderRadius: "12px",
                 border: "1px solid #e0e0e0",
@@ -7520,6 +7722,66 @@ const handleBeneficiarySearch = async (query: string) => {
             </div>
           )}
 
+          {showWorkflowActions && (
+            <div
+              className="expenditure-workflow-actions"
+              data-readonly-action-bar="true"
+              style={{ pointerEvents: "auto" }}
+            >
+              {!isSuperAdminUser && canActOnCurrentStage && (
+                <>
+                  <button
+                    type="button"
+                    className="expenditure-workflow-btn expenditure-workflow-btn--approve"
+                    onClick={() => handleWorkflowAction("approved")}
+                    disabled={isLoading}
+                  >
+                    <CheckCircle2 size={18} />
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="expenditure-workflow-btn expenditure-workflow-btn--return"
+                    onClick={() => handleWorkflowAction("returned")}
+                    disabled={isLoading}
+                  >
+                    <RotateCcw size={18} />
+                    Return
+                  </button>
+                  <button
+                    type="button"
+                    className="expenditure-workflow-btn expenditure-workflow-btn--reject"
+                    onClick={() => handleWorkflowAction("rejected")}
+                    disabled={isLoading}
+                  >
+                    <XCircle size={18} />
+                    Reject
+                  </button>
+                </>
+              )}
+              {isSuperAdminUser && (
+                <button
+                  type="button"
+                  className="expenditure-workflow-btn expenditure-workflow-btn--return"
+                  onClick={() => handleWorkflowAction("returned")}
+                  disabled={isLoading}
+                >
+                  <RotateCcw size={18} />
+                  Return
+                </button>
+              )}
+              <button
+                type="button"
+                className="expenditure-workflow-btn expenditure-workflow-btn--archive"
+                onClick={() => handleWorkflowAction("archived")}
+                disabled={isLoading}
+              >
+                <Archive size={18} />
+                Archive
+              </button>
+            </div>
+          )}
+
           <AlertModal
             show={alertConfig.show}
             onHide={closeAlert}
@@ -7536,6 +7798,68 @@ const handleBeneficiarySearch = async (query: string) => {
             showCancel={alertConfig.showCancel}
             confirmText={alertConfig.confirmText}
           />
+
+          <CustomModal
+            show={wfActionPopupOpen}
+            onHide={wfActionSubmitting ? () => {} : closeWfActionPopup}
+            title={
+              wfActionType === "returned"
+                ? "Return Item - Comments"
+                : "Reject Item - Comments"
+            }
+            size="sm"
+            centered
+            backdrop={wfActionSubmitting ? "static" : true}
+            keyboard={!wfActionSubmitting}
+            hideCloseButton={wfActionSubmitting}
+            footer={
+              <div className="d-flex justify-content-end gap-2 w-100">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={closeWfActionPopup}
+                  disabled={wfActionSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${
+                    wfActionType === "rejected"
+                      ? "btn-danger"
+                      : "btn-warning text-dark"
+                  }`}
+                  onClick={submitWfActionWithComment}
+                  disabled={wfActionSubmitting}
+                >
+                  {wfActionSubmitting
+                    ? "Submitting..."
+                    : wfActionType === "returned"
+                      ? "Return"
+                      : "Reject"}
+                </button>
+              </div>
+            }
+          >
+            <div className="p-2">
+              <label className="form-label fw-semibold">
+                Comments <span className="text-danger">*</span>
+              </label>
+              <textarea
+                className="form-control"
+                rows={4}
+                value={wfActionComment}
+                onChange={(event) => setWfActionComment(event.target.value)}
+                placeholder={
+                  wfActionType === "returned"
+                    ? "Enter return comments"
+                    : "Enter rejection comments"
+                }
+                disabled={wfActionSubmitting}
+                autoFocus
+              />
+            </div>
+          </CustomModal>
 
           <AddPayeeModal
             show={showAddPayeeModal}

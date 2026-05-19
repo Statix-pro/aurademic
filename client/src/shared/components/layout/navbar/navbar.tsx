@@ -385,7 +385,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 className={`sb-sublink ${isActive("/financecard") ? "active" : ""}`}
                 onClick={handleLinkClick}
               >
-                Approval
+                Application
               </Link>
               <Link
                 to="/expenditurecard"
@@ -600,7 +600,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                     }`}
                     onClick={handleLinkClick}
                   >
-                    Expenditure Workflow
+                    Expenditure Approval
                   </Link>
                 )}
               </div>
