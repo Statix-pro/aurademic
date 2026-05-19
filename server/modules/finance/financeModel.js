@@ -2619,7 +2619,10 @@ const financeModel = {
         await cleanupOrphanFinanceAnnexureFiles(removedStoredNames);
       }
 
-      return result;
+      return {
+        ...result,
+        affectedRows: result.affectedRows || (hasBudgetRowsInput || hasIncomeRowsInput || hasAnnexuresInput ? 1 : 0),
+      };
     } catch (error) {
       await connection.rollback();
       throw new Error(`Error updating finance request: ${error.message}`);
@@ -3227,9 +3230,12 @@ const financeModel = {
          fr.created_by,
          fr.beneficiary_type,
          fr.beneficiary_entity_id,
-         fr.department_id,
+         COALESCE(fr.department_id, scope_dept.id) AS department_id,
          fr.total_budget
        FROM finance_requests fr
+       LEFT JOIN master_departments scope_dept
+         ON LOWER(TRIM(COALESCE(fr.beneficiary_type, ''))) = 'department'
+        AND LOWER(TRIM(scope_dept.name)) = LOWER(TRIM(fr.beneficiary_value))
        WHERE fr.id = ?${lockClause}`,
       [normalizedRecordId]
     );
@@ -3545,7 +3551,16 @@ const financeModel = {
         if (scopeFilters.forceEmpty || departmentIds.length === 0) {
           return { items: [], total: 0, page, limit };
         }
-        whereParts.push('fr.department_id IN (?)');
+        whereParts.push(`COALESCE(
+          fr.department_id,
+          (
+            SELECT md_scope.id
+              FROM master_departments md_scope
+             WHERE LOWER(TRIM(COALESCE(fr.beneficiary_type, ''))) = 'department'
+               AND LOWER(TRIM(md_scope.name)) = LOWER(TRIM(fr.beneficiary_value))
+             LIMIT 1
+          )
+        ) IN (?)`);
         whereParams.push(departmentIds);
       }
 

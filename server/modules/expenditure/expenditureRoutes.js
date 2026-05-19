@@ -65,6 +65,7 @@ const EXPENDITURE_WORKFLOW_PERMISSIONS = [
 ];
 
 const canAccessExpenditureWorkflow = permissionMiddleware(EXPENDITURE_WORKFLOW_PERMISSIONS);
+const refreshExpenditureAuthorization = permissionMiddleware([]);
 const canAccessExpenditureWorkflowForAdmins = (req, res, next) => {
   const roles = Array.isArray(req.user?.roles)
     ? req.user.roles
@@ -142,8 +143,8 @@ router.patch('/:id/archive-toggle', canAccessExpenditureWorkflowForAdmins, expen
 router.post('/:id/resubmit', expenditureController.resubmitExpenditureRequest);
 router.get('/:id/status-updates', expenditureController.getStatusUpdates);
 
-router.get('/:id', expenditureController.getExpenditure);
-router.get('/:id/timeline', expenditureController.getExpenditureWorkflowTimeline);
+router.get('/:id', refreshExpenditureAuthorization, expenditureController.getExpenditure);
+router.get('/:id/timeline', refreshExpenditureAuthorization, expenditureController.getExpenditureWorkflowTimeline);
 
 router.post(
   '/',
@@ -156,6 +157,7 @@ router.post(
 
 router.post('/advance', expenditureController.createAdvance);router.put(
   '/:id',
+  refreshExpenditureAuthorization,
   expenditureUpload.fields([
     { name: 'bulk_neft_file', maxCount: 1 },
     { name: 'bill_files', maxCount: 1 },
