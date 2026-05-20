@@ -1043,6 +1043,66 @@ const createIncomeRow = (): IncomeRow => ({
 const normalizeText = (value: string | null | undefined): string =>
   String(value || '').trim();
 
+const normalizeBudgetGroupKey = (budgetHead: unknown, subHead: unknown): string =>
+  `${normalizeText(String(budgetHead || '')).toLowerCase()}|${normalizeText(String(subHead || '')).toLowerCase()}`;
+
+const groupFinanceBudgetRowsForForm = (rows: any[]): { rows: BudgetRow[]; meta: Record<number, BudgetLineMeta> } => {
+  const groupedRows: BudgetRow[] = [];
+  const groupedMeta: Record<number, BudgetLineMeta> = {};
+  const indexByKey = new Map<string, number>();
+  const lineIdsByGroup = new Map<number, Set<number>>();
+  const proposalIdsByGroup = new Map<number, Set<number>>();
+
+  rows.forEach((row: any) => {
+    const category = normalizeText(String(row?.budget_head || ''));
+    const head = normalizeText(String(row?.sub_head || ''));
+    const key = normalizeBudgetGroupKey(category, head);
+    const amount = Number(row?.amount || 0);
+    const availableAmount = Number(row?.available_amount_snapshot ?? 0);
+    let groupIndex = indexByKey.get(key);
+
+    if (groupIndex === undefined) {
+      groupIndex = groupedRows.length;
+      indexByKey.set(key, groupIndex);
+      groupedRows.push({
+        category,
+        head,
+        amount: Number.isFinite(amount) ? String(amount) : '',
+      });
+      groupedMeta[groupIndex] = {
+        budgetLineId: null,
+        budgetProposalId: null,
+        availableAmount: Number.isFinite(availableAmount) ? availableAmount : 0,
+      };
+      lineIdsByGroup.set(groupIndex, new Set<number>());
+      proposalIdsByGroup.set(groupIndex, new Set<number>());
+    } else {
+      const existingAmount = Number(groupedRows[groupIndex].amount || 0);
+      groupedRows[groupIndex].amount = String(existingAmount + (Number.isFinite(amount) ? amount : 0));
+      groupedMeta[groupIndex].availableAmount += Number.isFinite(availableAmount) ? availableAmount : 0;
+    }
+
+    const lineId = Number(row?.budget_line_id || 0);
+    if (Number.isFinite(lineId) && lineId > 0) {
+      lineIdsByGroup.get(groupIndex)?.add(lineId);
+    }
+
+    const proposalId = Number(row?.budget_proposal_id || 0);
+    if (Number.isFinite(proposalId) && proposalId > 0) {
+      proposalIdsByGroup.get(groupIndex)?.add(proposalId);
+    }
+  });
+
+  groupedRows.forEach((_row, index) => {
+    const lineIds = Array.from(lineIdsByGroup.get(index) || []);
+    const proposalIds = Array.from(proposalIdsByGroup.get(index) || []);
+    groupedMeta[index].budgetLineId = lineIds.length === 1 ? lineIds[0] : null;
+    groupedMeta[index].budgetProposalId = proposalIds.length === 1 ? proposalIds[0] : null;
+  });
+
+  return { rows: groupedRows, meta: groupedMeta };
+};
+
 interface SearchBudgetModalProps {
   show: boolean;
   searchTerm: string;
@@ -2893,25 +2953,13 @@ const FinanceApproval: React.FC = () => {
             .filter(Boolean)
         );
         setShowIncomeSection(incomeRowsFromApi.length > 0);
+        const groupedBudgetRows = groupFinanceBudgetRowsForForm(budgetRowsFromApi);
         setBudgetRows(
-          budgetRowsFromApi.length > 0
-            ? budgetRowsFromApi.map((row: any) => ({
-              category: String(row?.budget_head || ''),
-              head: String(row?.sub_head || ''),
-              amount: String(row?.amount ?? ''),
-            }))
+          groupedBudgetRows.rows.length > 0
+            ? groupedBudgetRows.rows
             : [{ category: '', head: '', amount: '' }]
         );
-        setBudgetLineMetaByRow(
-          budgetRowsFromApi.reduce((acc: Record<number, BudgetLineMeta>, row: any, index: number) => {
-            acc[index] = {
-              budgetLineId: row?.budget_line_id ? Number(row.budget_line_id) : null,
-              budgetProposalId: row?.budget_proposal_id ? Number(row.budget_proposal_id) : null,
-              availableAmount: Number(row?.available_amount_snapshot ?? 0),
-            };
-            return acc;
-          }, {})
-        );
+        setBudgetLineMetaByRow(groupedBudgetRows.meta);
         setIncomeRows(
           incomeRowsFromApi.length > 0
             ? incomeRowsFromApi.map((row: any, index: number) => ({

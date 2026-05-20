@@ -3442,9 +3442,12 @@ export async function updateExpenditure(id, data, actor = null) {
 
   if (!Object.keys(update).length) return { affectedRows: 0 };
 
+  const updateKeys = Object.keys(update);
+  const setClause = updateKeys.map((key) => `${key} = ?`).join(', ');
+
   const [result] = await db.execute(
-    'UPDATE expenditure_requests SET ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [update, id],
+    `UPDATE expenditure_requests SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [...updateKeys.map((key) => update[key]), id],
   );
 
   try {

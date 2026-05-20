@@ -722,6 +722,7 @@ const collectChangedFields = (previousRecord, nextRecord, fieldMap = []) => {
 
   for (const field of fieldMap) {
     const isDateField = field.valueType === 'date';
+    const isMoneyField = field.valueType === 'money';
     const normalizeDateOnly = (value) => {
       if (value === undefined || value === null || value === '') return '';
       if (value instanceof Date) {
@@ -744,12 +745,14 @@ const collectChangedFields = (previousRecord, nextRecord, fieldMap = []) => {
       return ymdPrefixMatch ? ymdPrefixMatch[1] : raw;
     };
 
-    const previousValue = isDateField
-      ? normalizeDateOnly(previousRecord?.[field.storageKey])
-      : normalizeText(previousRecord?.[field.storageKey]);
-    const nextValue = isDateField
-      ? normalizeDateOnly(nextRecord?.[field.storageKey])
-      : normalizeText(nextRecord?.[field.storageKey]);
+    const normalizeFieldValue = (value) => {
+      if (isDateField) return normalizeDateOnly(value);
+      if (isMoneyField) return Number.isFinite(Number(value)) ? toMoney(value).toFixed(2) : normalizeText(value);
+      return normalizeText(value);
+    };
+
+    const previousValue = normalizeFieldValue(previousRecord?.[field.storageKey]);
+    const nextValue = normalizeFieldValue(nextRecord?.[field.storageKey]);
 
     if (previousValue === nextValue) {
       continue;
@@ -811,10 +814,10 @@ const buildFinanceUpdateAudit = ({
     { storageKey: 'budget_tag', label: 'Budget tag' },
     { storageKey: 'primary_head', label: 'Primary head' },
     { storageKey: 'event_sub_head', label: 'Event sub head' },
-    { storageKey: 'proposed_amount', label: 'Proposed amount' },
-    { storageKey: 'balance_amount', label: 'Balance amount' },
+    { storageKey: 'proposed_amount', label: 'Proposed amount', valueType: 'money' },
+    { storageKey: 'balance_amount', label: 'Balance amount', valueType: 'money' },
     { storageKey: 'unplanned_budget_enabled', label: 'Unplanned budget enabled' },
-    { storageKey: 'unplanned_budget_amount', label: 'Unplanned budget amount' },
+    { storageKey: 'unplanned_budget_amount', label: 'Unplanned budget amount', valueType: 'money' },
     { storageKey: 'unplanned_budget_description', label: 'Unplanned budget description' },
     { storageKey: 'annexure_type', label: 'Annexure type' },
     { storageKey: 'annexure_file_name', label: 'Annexure file name' },
@@ -822,13 +825,13 @@ const buildFinanceUpdateAudit = ({
     { storageKey: 'annexure_file_path', label: 'Annexure file path' },
     { storageKey: 'annexure_mime_type', label: 'Annexure mime type' },
     { storageKey: 'annexure_file_size', label: 'Annexure file size' },
-    { storageKey: 'total_budget', label: 'Total budget' },
+    { storageKey: 'total_budget', label: 'Total budget', valueType: 'money' },
     { storageKey: 'income_type', label: 'Income type' },
     { storageKey: 'income_status', label: 'Income status' },
     { storageKey: 'income_amount_type', label: 'Income amount type' },
     { storageKey: 'credit_status', label: 'Credit status' },
     { storageKey: 'debit_status', label: 'Debit status' },
-    { storageKey: 'partial_amount', label: 'Partial amount' },
+    { storageKey: 'partial_amount', label: 'Partial amount', valueType: 'money' },
   ]);
 
   const rowChanges = [];
