@@ -1799,7 +1799,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const getFinanceProgressIndicators = useCallback((record: Record<string, any>) => {
     if (config.moduleKey !== 'finance') return null;
     const activeStageKey = String(activeStage || '').toLowerCase();
-    if (!['dof', 'principal'].includes(activeStageKey)) return null;
     const statusCategory = resolveStatusCategory(record);
     if (statusCategory === 'returned' || statusCategory === 'rejected') return null;
 
@@ -1815,18 +1814,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       flow.includes('chairman') ||
       currentStage === 'chairman' ||
       combinedStatus.includes('chairman_approved');
-    const hasPassedDof =
-      currentStage === 'principal' ||
-      currentStage === 'chairman' ||
-      currentStage === 'completed' ||
-      combinedStatus.includes('dof_approved') ||
-      combinedStatus.includes('principal_approved') ||
-      combinedStatus.includes('chairman_approved') ||
-      combinedStatus.includes('completed') ||
-      combinedStatus === 'approved';
-
-    if (!hasPassedDof) return null;
-
     const isPrincipalApproved =
       currentStage === 'chairman' ||
       currentStage === 'completed' ||
@@ -1840,23 +1827,34 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       combinedStatus.includes('completed') ||
       combinedStatus === 'approved';
 
-    if (hasChairmanStage && isPrincipalApproved) {
-      return [{
-        label: isChairmanApproved ? 'Chairman Approved' : 'Chairman Pending',
-        className: isChairmanApproved
-          ? 'fw-principal-indicator fw-principal-indicator--accepted'
-          : 'fw-principal-indicator fw-principal-indicator--pending',
-      }];
-    }
-
-    if (activeStageKey !== 'dof') return null;
-
-    return [{
-      label: isPrincipalApproved ? 'Principal Approved' : 'Principal Pending',
-      className: isPrincipalApproved
+    const principalApprovedIndicator = {
+      label: 'Principal Approved',
+      className: 'fw-principal-indicator fw-principal-indicator--accepted',
+    };
+    const chairmanIndicator = {
+      label: isChairmanApproved ? 'Chairman Approved' : 'Chairman Pending',
+      className: isChairmanApproved
         ? 'fw-principal-indicator fw-principal-indicator--accepted'
         : 'fw-principal-indicator fw-principal-indicator--pending',
-    }];
+    };
+
+    if (hasChairmanStage && isPrincipalApproved) {
+      if (activeStageKey === 'dof') {
+        return [principalApprovedIndicator, chairmanIndicator];
+      }
+      if (activeStageKey === 'principal') {
+        return [chairmanIndicator];
+      }
+      return null;
+    }
+
+    if (activeStageKey === 'principal') return null;
+
+    if (activeStageKey === 'dof' && isPrincipalApproved) {
+      return [principalApprovedIndicator];
+    }
+
+    return null;
   }, [activeStage, config.moduleKey, getRecordCurrentStage, resolveStatusCategory]);
 
   function resolveFinanceLevel1Role(record: Record<string, any>): 'hod' | 'coordinator' {

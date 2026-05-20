@@ -53,6 +53,57 @@ const resolveTagValue = (value: unknown, options: SelectOption[]) => {
   return matched?.value || normalized;
 };
 
+const normalizeFinanceRoleCodes = (user: any): string[] => {
+  const extractRoleToken = (value: any): string => {
+    if (typeof value === 'string') return value.trim();
+    if (value && typeof value === 'object') {
+      return String(value.code || value.role_code || value.name || value.role || value.permission_key || '').trim();
+    }
+    return '';
+  };
+
+  const candidates = [
+    ...(Array.isArray(user?.roles) ? user.roles : []),
+    ...(Array.isArray(user?.roleCodes) ? user.roleCodes : []),
+    user?.role,
+    user?.role_code,
+    user?.roleCode,
+  ];
+
+  return Array.from(
+    new Set(
+      candidates
+        .map(extractRoleToken)
+        .filter(Boolean)
+        .map((role) => role.toLowerCase())
+    )
+  );
+};
+
+const normalizeFinancePermissionKeys = (user: any): string[] => {
+  const extractPermissionToken = (value: any): string => {
+    if (typeof value === 'string') return value.trim();
+    if (value && typeof value === 'object') {
+      return String(value.permission_key || value.permission_name || value.key || value.name || '').trim();
+    }
+    return '';
+  };
+
+  const candidates = [
+    ...(Array.isArray(user?.permissions) ? user.permissions : []),
+    ...(Array.isArray(user?.permissionKeys) ? user.permissionKeys : []),
+  ];
+
+  return Array.from(
+    new Set(
+      candidates
+        .map(extractPermissionToken)
+        .filter(Boolean)
+        .map((permission) => permission.toLowerCase())
+    )
+  );
+};
+
 const getFinanceSubmitErrorMessage = (error: unknown): string => {
   const candidate = error as {
     response?: {
@@ -2762,8 +2813,16 @@ const FinanceApproval: React.FC = () => {
     if (!isViewMode || !loadedCurrentStage) return false;
     // Super admin cannot approve/reject — only the respective head can
     if (isSuperAdminUser) return false;
-    const userPermissions = (user?.permissions || []).map(p => String(p).toLowerCase());
-    return userPermissions.includes(`finance.workflow.${loadedCurrentStage}`);
+    const userPermissions = normalizeFinancePermissionKeys(user);
+    if (userPermissions.includes(`finance.workflow.${loadedCurrentStage}`)) return true;
+
+    const stageRoleFallback: Record<string, string[]> = {
+      dof: ['dof'],
+      principal: ['principal'],
+      chairman: ['chairman'],
+    };
+    const userRoles = normalizeFinanceRoleCodes(user);
+    return (stageRoleFallback[loadedCurrentStage] || []).some((role) => userRoles.includes(role));
   })();
   const canEditStageRemark =
     canActOnCurrentStage && ['dof', 'principal', 'chairman'].includes(loadedCurrentStage);
@@ -4965,65 +5024,6 @@ const FinanceApproval: React.FC = () => {
       </div>
 
       {showPreview && (() => {
-        const getApprovalDetailUi = (stageKeys: string[]) => {
-          let lastResetIdx = -1;
-
-          for (let i = statusUpdates.length - 1; i >= 0; i--) {
-            const dec = String(statusUpdates[i]?.decision || '').toLowerCase();
-            const stat = String(statusUpdates[i]?.status || '').toLowerCase();
-
-            if (
-              dec === 'returned' ||
-              dec === 'rejected' ||
-              stat === 'returned' ||
-              stat === 'rejected' ||
-              dec === 'resubmitted' ||
-              dec.includes('resubmit')
-            ) {
-              lastResetIdx = i;
-              break;
-            }
-          }
-
-          const currentFlowUpdates = statusUpdates.slice(lastResetIdx + 1);
-
-          const approved = currentFlowUpdates.filter((u: any) => {
-            const stage = String(u?.stage || '').toLowerCase();
-            const decision = String(u?.decision || '').toLowerCase();
-            const status = String(u?.status || '').toLowerCase();
-
-            return (
-              stageKeys.includes(stage) &&
-              (decision === 'approved' || status === 'approved' || status.includes('approved'))
-            );
-          });
-
-          if (approved.length === 0) {
-            return { name: '', email: '', date: '' };
-          }
-
-          approved.sort((a: any, b: any) => {
-            const tA = new Date(a?.decidedat || a?.createdat || 0).getTime();
-            const tB = new Date(b?.decidedat || b?.createdat || 0).getTime();
-            return tB - tA;
-          });
-
-          const latest = approved[0];
-          const dateStr = latest?.decidedat || latest?.createdat;
-
-          const formattedDate = dateStr
-            ? new Date(dateStr).toLocaleString('en-IN', {
-              timeZone: 'Asia/Kolkata',
-              hour12: true,
-            })
-            : '';
-
-          return {
-            name: latest?.username || latest?.actorname || '',
-            email: latest?.email || latest?.actoremail || latest?.useremail || '',
-            date: formattedDate,
-          };
-        };
         const getSubmittedDetailUi = () => {
           const approvalHistory = getWorkflowTimeline(statusUpdates, {
             name: applicantName || '',
@@ -5048,15 +5048,36 @@ const FinanceApproval: React.FC = () => {
           };
         };
 
-        const submittedByUi = getSubmittedDetailUi();
-        const level1ApprovalUi = getApprovalDetailUi(['level1', 'hod', 'coordinator', 'ithead']);
-        const dofApprovalUi = getApprovalDetailUi(['dof']);
-        const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
         const approvalHistory = getWorkflowTimeline(statusUpdates, {
           name: applicantName || '',
           email: email || '',
           date: submittedAt ? formatWorkflowTimestamp(submittedAt) : getCurrentWorkflowTimestamp(),
         });
+        const getApprovalDetailUi = (stageKeys: string[]) => {
+          const stages = stageKeys.map((stage) => String(stage || '').toLowerCase());
+          const approved = approvalHistory.filter((entry) => {
+            const stage = String(entry.stage || '').toLowerCase();
+            const decision = String(entry.decision || '').toLowerCase();
+            return (
+              stages.includes(stage) &&
+              entry.label === 'Approved' &&
+              (decision === 'approved' || decision.includes('approved') || !decision)
+            );
+          });
+
+          const latest = approved.length ? approved[approved.length - 1] : null;
+          return {
+            name: latest?.actor || '',
+            email: latest?.email || '',
+            date: latest?.timestamp || '',
+          };
+        };
+
+        const submittedByUi = getSubmittedDetailUi();
+        const level1ApprovalUi = getApprovalDetailUi(['level1', 'hod', 'coordinator', 'ithead']);
+        const dofApprovalUi = getApprovalDetailUi(['dof']);
+        const principalApprovalUi = getApprovalDetailUi(['principal']);
+        const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
         const approvalSteps = approvalHistory.filter((entry) =>
           entry.label === 'Approved' &&
           !(totalBudget > 10000 && (String(entry.stage).includes('principal') || String(entry.stage).includes('chairman')))
@@ -5082,6 +5103,25 @@ const FinanceApproval: React.FC = () => {
               {displayMail}
               {displayTime}
             </span>
+          );
+        };
+
+        const renderSeniorApprovalLine = (
+          actionLabel: 'Recommended by' | 'Approved by',
+          detail: { name?: string; email?: string; date?: string }
+        ) => {
+          const hasDetail = Boolean(
+            String(detail.name || detail.email || detail.date || '').trim()
+          );
+          if (!hasDetail) return null;
+
+          return (
+            <div style={{ ...previewTimelineRowStyle, borderBottom: '1px solid #000' }}>
+              <span style={previewTimelineLabelStyle}>{actionLabel}</span>
+              <span style={previewTimelineValueStyle}>
+                {renderPersonLine(detail.name, detail.email, detail.date)}
+              </span>
+            </div>
           );
         };
 
@@ -5369,7 +5409,7 @@ const FinanceApproval: React.FC = () => {
                         key={entryKey}
                         style={{
                           ...previewTimelineRowStyle,
-                          borderBottom: index === approvalSteps.length - 1 ? 'none' : '1px solid #000',
+                          borderBottom: index === approvalSteps.length - 1 && !showSeniorApprovalRow ? 'none' : '1px solid #000',
                         }}
                       >
                         <span style={previewTimelineLabelStyle}>{getPreviewDecisionLabel(entry)}</span>
@@ -5420,6 +5460,16 @@ const FinanceApproval: React.FC = () => {
                     <div style={previewTimelineRowStyle}>
                       No approval history available
                     </div>
+                  ) : null}
+                  {showSeniorApprovalRow ? (
+                    <>
+                      {renderSeniorApprovalLine('Recommended by', {
+                        name: principalApprovalUi.name,
+                        email: principalApprovalUi.email,
+                        date: principalApprovalUi.date,
+                      })}
+                      {renderSeniorApprovalLine('Approved by', chairmanApprovalUi)}
+                    </>
                   ) : null}
                 </td>
               </tr>
