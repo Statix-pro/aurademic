@@ -385,6 +385,34 @@ const getWorkflowDecisionText = (entry: WorkflowTimelineEntry): string => {
   return `${entry.label} by`;
 };
 
+const getLatestApprovalEntry = (
+  approvalHistory: WorkflowTimelineEntry[],
+  stageKeys: string[]
+): WorkflowTimelineEntry | null => {
+  const stages = stageKeys.map((stage) => String(stage || '').toLowerCase());
+  const approved = approvalHistory.filter((entry) => {
+    const stage = String(entry.stage || '').toLowerCase();
+    const decision = String(entry.decision || '').toLowerCase();
+    return (
+      stages.includes(stage) &&
+      entry.label === 'Approved' &&
+      (decision === 'approved' || decision.includes('approved') || !decision)
+    );
+  });
+
+  return approved.length ? approved[approved.length - 1] : null;
+};
+
+const formatSeniorApprovalRow = (
+  actionLabel: 'Recommended by' | 'Approved by',
+  entry: WorkflowTimelineEntry | null
+): any[] | null => entry
+  ? [{
+    content: `${actionLabel} ${formatWorkflowPersonText(entry.actor, entry.email, entry.timestamp)}`,
+    colSpan: 2,
+  }]
+  : null;
+
 export const getAnnexureOpenUrl = (row: FinancePdfAnnexureRow, baseUrl: string): string => {
   const sourceUrl = String(row.previewUrl || row.filePath || '').trim();
   if (!sourceUrl) return '';
@@ -799,19 +827,13 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
   );
   const submittedByUi = approvalHistory.find((entry) => entry.label === 'Submitted') || submittedBy;
   const showSeniorApprovalRow = totalBudget > 10000;
+  const principalApprovalEntry = getLatestApprovalEntry(approvalHistory, ['principal']);
+  const chairmanApprovalEntry = getLatestApprovalEntry(approvalHistory, ['chairman']);
   const seniorApprovalRows = showSeniorApprovalRow
-    ? [[
-      {
-        content: 'Principal',
-        styles: { halign: 'left', fontStyle: 'bold', minCellHeight: 15, fontSize: 11 },
-      },
-      {
-        content: 'Chairman',
-        styles: { halign: 'left', fontStyle: 'bold', minCellHeight: 15, fontSize: 11 },
-      },
-
-    ],
-    ]
+    ? [
+      formatSeniorApprovalRow('Recommended by', principalApprovalEntry),
+      formatSeniorApprovalRow('Approved by', chairmanApprovalEntry),
+    ].filter((row): row is any[] => Boolean(row))
     : [];
   const digitalSignRows: any[] = [
     [{ content: 'Submission and Approval Status', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'center' } }],
