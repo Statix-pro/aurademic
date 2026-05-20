@@ -29,26 +29,8 @@ const FALLBACK_BENEFICIARY_OPTIONS = [
   "Institution",
 ];
 
-// Map beneficiary type to tag
-const getTagFromBeneficiary = (beneficiaryType: string): string => {
-  if (!beneficiaryType) return '';
-  
-  const type = beneficiaryType.toLowerCase().trim();
-  
-  if (type === 'faculty' || type === 'staff') {
-    return 'Skilling';
-  }
-  if (type === 'association') {
-    return 'Association';
-  }
-  if (type === 'department') {
-    return 'Association'; // Change this to whatever tag you want for Department
-  }
-  if (type === 'centre' || type === 'cell' || type === 'club' || type === 'section' || type === 'professional body' || type === 'institution') {
-    return 'Essentials';
-  }
-  
-  return '';
+const getWorkflowRecordTag = (record: Record<string, any>): string => {
+  return String(record.budget_tag || record.budgetTag || '').trim();
 };
 
 const formatStageLabel = (stage: string, labels: Record<string, string> = {}) => {
@@ -1967,12 +1949,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     if (searchTerm.trim()) {
       const query = searchTerm.trim().toLowerCase();
       filtered = filtered.filter((record) => {
-        const beneficiaryType = record.beneficiary_type || record.beneficiaryType || '';
-        const tag = getTagFromBeneficiary(beneficiaryType);
+        const tag = getWorkflowRecordTag(record);
         const searchable = [
           record.id,
           record.applicant_name,
-          beneficiaryType,
+          record.beneficiary_type || record.beneficiaryType,
           record.proposal_ref,
           tag,
         ]
@@ -2612,9 +2593,7 @@ const proposalFilteredRows = useMemo(() => {
                       config.moduleKey === 'finance' &&
                       Boolean(annexureUrl);
                     
-                    // Get tag based on beneficiary type
-                    const beneficiaryType = record.beneficiary_type || record.beneficiaryType || '';
-                    const tag = getTagFromBeneficiary(beneficiaryType);
+                    const tag = getWorkflowRecordTag(record);
 
                     return (
                       <div key={timelineKey} className="fw-item-wrap">

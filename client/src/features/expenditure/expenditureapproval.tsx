@@ -5163,6 +5163,7 @@ const handleBeneficiarySearch = async (query: string) => {
     const target = event.target as HTMLElement | null;
     if (!target || target.closest('[data-readonly-applicant-card="true"]')) return;
     if (target.closest('[data-readonly-action-bar="true"]')) return;
+    if (target.closest('[data-readonly-payment-status="true"]')) return;
     if (target.closest('[data-readonly-scrollable="true"]')) return;
     if (target.matches("input, textarea, select, button, [tabindex]")) {
       target.blur();
@@ -5174,6 +5175,7 @@ const handleBeneficiarySearch = async (query: string) => {
     const target = event.target as HTMLElement | null;
     if (!target || target.closest('[data-readonly-applicant-card="true"]')) return;
     if (target.closest('[data-readonly-action-bar="true"]')) return;
+    if (target.closest('[data-readonly-payment-status="true"]')) return;
     if (target.closest('[data-readonly-scrollable="true"]')) return;
     if (target.matches("input, textarea, select, button, [tabindex]") && event.key !== "Tab") {
       event.preventDefault();
@@ -7313,6 +7315,7 @@ const handleBeneficiarySearch = async (query: string) => {
        {!showBulkNEFT && hasDofApprovalForPaymentStatus && (
           <div
             className="payee-details-card"
+            data-readonly-payment-status={canEditPaymentStatus ? "true" : undefined}
             style={{ marginTop: "20px", pointerEvents: "auto" }}
           >
     <div className="payee-details-header">
@@ -7406,11 +7409,11 @@ const handleBeneficiarySearch = async (query: string) => {
       {/* 4. Comments Input */}
       <div className="payee-status-col payee-status-col-comments">
         <div className="payee-comments-group">
-          <input
-            type="text"
-            className="payee-field payee-status-comment-input"
-            placeholder="Transaction number"
-            value={paymentDetails.refNo}
+            <input
+              type="text"
+              className="payee-field payee-status-comment-input"
+              placeholder="Transaction Details"
+              value={paymentDetails.refNo}
                     onChange={(e) =>
                       setPaymentDetails({
                         ...paymentDetails,
@@ -7561,7 +7564,7 @@ const handleBeneficiarySearch = async (query: string) => {
             keyboard={!wfActionSubmitting}
             hideCloseButton={wfActionSubmitting}
             footer={
-              <div className="d-flex justify-content-end gap-2 w-100">
+              <div className="d-flex justify-content-end gap-2 w-100" data-readonly-action-bar="true">
                 <button
                   type="button"
                   className="btn btn-sm btn-outline-secondary"
@@ -7589,7 +7592,7 @@ const handleBeneficiarySearch = async (query: string) => {
               </div>
             }
           >
-            <div className="p-2">
+            <div className="p-2" data-readonly-action-bar="true">
               <label className="form-label fw-semibold">
                 Comments <span className="text-danger">*</span>
               </label>
