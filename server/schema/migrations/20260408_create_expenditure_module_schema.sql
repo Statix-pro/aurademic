@@ -379,6 +379,7 @@ CREATE TABLE IF NOT EXISTS expenditure_request_bills (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   expenditure_id INT NOT NULL,
   payee_row_id BIGINT NULL,
+  file_category ENUM('bill','payment_proof') NOT NULL DEFAULT 'bill',
   original_name VARCHAR(255) NULL,
   stored_name VARCHAR(255) NOT NULL,
   file_path VARCHAR(512) NOT NULL,
@@ -389,6 +390,7 @@ CREATE TABLE IF NOT EXISTS expenditure_request_bills (
   PRIMARY KEY (id),
   KEY idx_expenditure_request_bills_request (expenditure_id),
   KEY idx_expenditure_request_bills_payee_row (payee_row_id),
+  KEY idx_expenditure_request_bills_category (expenditure_id, file_category),
   KEY idx_expenditure_request_bills_sort (expenditure_id, sort_order, id),
   CONSTRAINT fk_expenditure_request_bills_request
     FOREIGN KEY (expenditure_id) REFERENCES expenditure_requests(id)

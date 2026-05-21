@@ -167,6 +167,18 @@ const parseRequestPayload = (req) => {
   return req.body || {};
 };
 
+const getExpenditureUploads = (req) => ({
+  billFiles: Array.isArray(req.files?.bill_files)
+    ? req.files.bill_files
+    : [],
+  bulkNeftFile: Array.isArray(req.files?.bulk_neft_file)
+    ? req.files.bulk_neft_file[0]
+    : null,
+  paymentProofFiles: Array.isArray(req.files?.payment_proof_files)
+    ? req.files.payment_proof_files
+    : [],
+});
+
 const VALID_REQUEST_TYPES = new Set(['Advance', 'Settlement', 'Expenditure']);
 
 const normalizeRequestType = (value) => {
@@ -686,15 +698,7 @@ const expenditureController = {
           'Invalid request type. Expected Advance, Settlement, or Expenditure.',
         );
       }
-const uploads = {
-  billFiles: Array.isArray(req.files?.bill_files)
-    ? req.files.bill_files
-    : [],
-
-  bulkNeftFile: Array.isArray(req.files?.bulk_neft_file)
-    ? req.files.bulk_neft_file[0]
-    : null,
-};
+      const uploads = getExpenditureUploads(req);
 
       const result = await expenditureModel.createExpenditureRequest(payload, userId, uploads);
 
@@ -888,15 +892,7 @@ const uploads = {
           );
         }
 
-       const uploads = {
-  billFiles: Array.isArray(req.files?.bill_files)
-    ? req.files.bill_files
-    : [],
-
-  bulkNeftFile: Array.isArray(req.files?.bulk_neft_file)
-    ? req.files.bulk_neft_file[0]
-    : null,
-};
+        const uploads = getExpenditureUploads(req);
 
         const result = await expenditureModel.updateExpenditureRequest(id, payload, userId, uploads, {
           actor: resolveActor(req),
@@ -911,12 +907,20 @@ const uploads = {
         });
       }
 
-      const result = await expenditureModel.updateExpenditure(id, req.body || {}, resolveActor(req));
+      const result = await expenditureModel.updateExpenditure(
+        id,
+        req.body || {},
+        resolveActor(req),
+        getExpenditureUploads(req),
+      );
 
       return res.json({
         status: 'success',
         message: 'Expenditure request updated',
-        data: { affectedRows: result.affectedRows },
+        data: {
+          affectedRows: result.affectedRows,
+          payment_proof_files: result.payment_proof_files || [],
+        },
       });
     } catch (err) {
       if (sendAccessDeniedError(res, err)) return;

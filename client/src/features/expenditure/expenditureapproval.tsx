@@ -147,6 +147,36 @@ const getSubmitErrorMessage = (error: unknown): string => {
 
   return "Something went wrong while submitting";
 };
+
+const formatDateForInput = (value: unknown): string => {
+  if (value === null || value === undefined || value === "") return "";
+
+  const raw = String(value).trim();
+  if (!raw) return "";
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw;
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    const yyyy = parsed.getFullYear();
+    const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+    const dd = String(parsed.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  const ymdPrefixMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return ymdPrefixMatch ? ymdPrefixMatch[1] : "";
+};
+
+const getLocalTodayYmd = (): string => {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
 interface FinanceRequestContext {
   finance_request_id: number;
   employee_id?: number | null;
@@ -1504,7 +1534,7 @@ const ExpenditureApproval: React.FC = () => {
   }, [financeApprovedAmountFromState]);
   const [applicantName, setApplicantName] = useState<string>("");
   const [date, setDate] = useState<string>(
-    new Date().toISOString().split("T")[0],
+    getLocalTodayYmd(),
   );
   const [designation, setDesignation] = useState<string>("");
   const [mobile, setMobile] = useState<string>("");
@@ -1540,7 +1570,7 @@ const ExpenditureApproval: React.FC = () => {
   const [paymentDetails, setPaymentDetails] = useState({
     mode: "",
     refNo: "",
-    date: new Date().toISOString().split("T")[0],
+    date: getLocalTodayYmd(),
     status: "Pending",
     debitAccount: "",
   });
@@ -1550,6 +1580,9 @@ const ExpenditureApproval: React.FC = () => {
   const [uploadedPaymentProofs, setUploadedPaymentProofs] = useState<File[]>(
     [],
   );
+  const [existingPaymentProofs, setExistingPaymentProofs] = useState<
+    BillFileRecord[]
+  >([]);
   const [existingPayeeBills, setExistingPayeeBills] = useState<
     BillFileRecord[]
   >([]);
@@ -1946,7 +1979,7 @@ const ExpenditureApproval: React.FC = () => {
         setMobile(String(record.mobile || ""));
         setDate(
           normalizeDateForInput(String(record.request_date || "")) ||
-            new Date().toISOString().split("T")[0],
+            getLocalTodayYmd(),
         );
         setDescription(String(record.description || ""));
         setCategoryType(String(record.beneficiary_type || ""));
@@ -2008,7 +2041,7 @@ const ExpenditureApproval: React.FC = () => {
           mode: String(record.payment_mode || ""),
           refNo: String(record.payment_ref_no || ""),
           date: String(
-            record.payment_date || new Date().toISOString().split("T")[0],
+            formatDateForInput(record.payment_date) || getLocalTodayYmd(),
           ),
           status: String(record.payment_status || "Pending"),
           debitAccount: String(record.payment_debit_account || ""),
@@ -2018,7 +2051,13 @@ const ExpenditureApproval: React.FC = () => {
         setExistingPayeeBills(
           Array.isArray(record.bill_files) ? record.bill_files : [],
         );
+        setExistingPaymentProofs(
+          Array.isArray(record.payment_proof_files)
+            ? record.payment_proof_files
+            : [],
+        );
         setUploadedPayeeBills([]);
+        setUploadedPaymentProofs([]);
       } catch (error) {
         if (!isCancelled) {
           console.error("Failed to load submitted expenditure request:", error);
@@ -3134,10 +3173,26 @@ const workflowRowRefFromState = (() => {
   };
 
   const handlePaymentProofUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      setUploadedPaymentProofs((prev) => [...prev, ...files]);
+    const selectedFiles = Array.from(e.target.files || []);
+    if (!selectedFiles.length) return;
+
+    const allowedExtensions = new Set(["pdf", "png", "jpg", "jpeg"]);
+    const invalidFile = selectedFiles.find((file) => {
+      const extension = file.name.split(".").pop()?.toLowerCase() || "";
+      return !allowedExtensions.has(extension);
+    });
+
+    if (invalidFile) {
+      e.target.value = "";
+      showAlert(
+        "Payment proof accepts only PDF or image files (.pdf, .png, .jpg, .jpeg).",
+        "warning",
+      );
+      return;
     }
+
+    setUploadedPaymentProofs((prev) => [...prev, ...selectedFiles]);
+    e.target.value = "";
   };
 
   const handleBulkNeftUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -3221,6 +3276,10 @@ const workflowRowRefFromState = (() => {
 
   const removeExistingPayeeBill = (index: number) => {
     setExistingPayeeBills((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removePaymentProof = (index: number) => {
+    setUploadedPaymentProofs((prev) => prev.filter((_, i) => i !== index));
   };
 
   const [alertConfig, setAlertConfig] = useState<{
@@ -4907,16 +4966,48 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     }
 
     try {
+      const paymentPayload = {
+        payment_status: paymentDetails.status || "Pending",
+        payment_date: formatDateForInput(paymentDetails.date) || "",
+        payment_ref_no: paymentDetails.refNo.trim(),
+        payment_mode: paymentDetails.mode.trim(),
+        payment_debit_account: paymentDetails.debitAccount.trim(),
+      };
+      const hasPaymentProofs = uploadedPaymentProofs.length > 0;
+      const requestBody = hasPaymentProofs
+        ? new FormData()
+        : {
+            payment_status: paymentPayload.payment_status,
+            payment_date: paymentPayload.payment_date || null,
+            payment_ref_no: paymentPayload.payment_ref_no || null,
+            payment_mode: paymentPayload.payment_mode || null,
+            payment_debit_account: paymentPayload.payment_debit_account || null,
+          };
+
+      if (hasPaymentProofs && requestBody instanceof FormData) {
+        Object.entries(paymentPayload).forEach(([key, value]) => {
+          requestBody.append(key, value);
+        });
+        uploadedPaymentProofs.forEach((file) => {
+          requestBody.append("payment_proof_files", file);
+        });
+      }
+
       const response = (await authenticityUtility.put(
         `/expenditure/${submittedRequestIdFromState}`,
-        {
-          payment_status: paymentDetails.status || "Pending",
-        payment_date: paymentDetails.date || null,
-        payment_ref_no: paymentDetails.refNo || null,
-        payment_mode: paymentDetails.mode || null,
-        payment_debit_account: paymentDetails.debitAccount || null,
-        },
-      )) as { status?: string; message?: string };
+        requestBody,
+        hasPaymentProofs
+          ? {
+              headers: {
+                "Content-Type": "multipart/form-data",
+              },
+            }
+          : undefined,
+      )) as {
+        status?: string;
+        message?: string;
+        data?: { payment_proof_files?: BillFileRecord[] };
+      };
 
       if (response.status !== "success") {
         showAlert(
@@ -4930,6 +5021,10 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         response.message || "Payment status updated successfully",
         "success",
       );
+      if (Array.isArray(response.data?.payment_proof_files)) {
+        setExistingPaymentProofs(response.data.payment_proof_files);
+      }
+      setUploadedPaymentProofs([]);
     } catch (error) {
       console.error("Payment status update error:", error);
       showAlert(getSubmitErrorMessage(error), "error");
@@ -4969,13 +5064,15 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       setShowBulkNEFT(false);
       setBulkNeftFile(null);
       setUploadedPayeeBills([]);
+      setUploadedPaymentProofs([]);
+      setExistingPaymentProofs([]);
       if (bulkNeftInputRef.current) {
         bulkNeftInputRef.current.value = "";
       }
       setPaymentDetails({
         mode: "",
         refNo: "",
-        date: new Date().toISOString().split("T")[0],
+        date: getLocalTodayYmd(),
         status: "Pending",
         debitAccount: "",
       });
@@ -7378,30 +7475,29 @@ const handleBeneficiarySearch = async (query: string) => {
             }}
           >
             <span className="payee-upload-label-content">
-                      <span className="payee-upload-label-text">
-                        Payment proof{" "}
-                      </span>
+              <span className="payee-upload-label-text">
+                Payment proof{" "}
+              </span>
               <Upload size={16} />
             </span>
             <input
               type="file"
               className="payee-upload-input"
               multiple
+              accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
               disabled={!canEditPaymentStatus}
               onChange={handlePaymentProofUpload}
             />
           </label>
         )}
-        {uploadedPaymentProofs.length > 0 && (
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      color: "#2c7a4d",
-                      marginTop: "4px",
-                      textAlign: "center",
-                    }}
-                  >
-            {uploadedPaymentProofs.length} file(s)
+        {(existingPaymentProofs.length > 0 || uploadedPaymentProofs.length > 0) && (
+          <div
+            style={{
+              fontSize: "11px",
+              marginTop: "8px",
+            }}
+          >
+            {[...existingPaymentProofs, ...uploadedPaymentProofs].length} file(s)
           </div>
         )}
       </div>
@@ -7425,14 +7521,16 @@ const handleBeneficiarySearch = async (query: string) => {
           />
           <button
             type="button"
-                    onClick={() =>
+                    onClick={() => {
                       setPaymentDetails((prev) => ({
                         ...prev,
                         refNo: prev.refNo.trim(),
-                      }))
-                    }
+                      }));
+                      void handlePaymentStatusUpdate();
+                    }}
             className="payee-comment-tick-btn"
-            aria-label="Confirm comment"
+            aria-label="Update payment status"
+                    title="Update payment status"
             disabled={!canEditPaymentStatus}
           >
             <CheckCircle2 size={20} strokeWidth={2.2} />
@@ -7440,6 +7538,90 @@ const handleBeneficiarySearch = async (query: string) => {
         </div>
       </div>
     </div>
+    {(existingPaymentProofs.length > 0 || uploadedPaymentProofs.length > 0) && (
+      <div
+        className="payee-uploaded-files"
+        style={{ margin: "0 20px 20px", pointerEvents: "auto" }}
+      >
+        <div className="payee-uploaded-files-header">
+          <span>S.No</span>
+          <span>Payment Proof</span>
+          <span>Action</span>
+        </div>
+        {existingPaymentProofs.map((file, i) => {
+          const fileUrl = resolveBillFileUrl(file);
+          const displayName = normalizeText(
+            file.original_name ||
+              file.stored_name ||
+              file.file_path ||
+              `Proof ${i + 1}`,
+          );
+
+          return (
+            <div
+              key={`existing-payment-proof-${file.id ?? i}`}
+              className="payee-uploaded-file-row"
+            >
+              <span className="payee-uploaded-file-index">{i + 1}</span>
+              <span className="payee-uploaded-file-name" title={displayName}>
+                {displayName}
+              </span>
+              <div className="payee-upload-actions">
+                <button
+                  className="payee-upload-view-btn"
+                  disabled={!fileUrl}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (fileUrl) {
+                      window.open(fileUrl, "_blank", "noopener,noreferrer");
+                    }
+                  }}
+                >
+                  <Eye size={16} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {uploadedPaymentProofs.map((file, i) => (
+          <div
+            key={`uploaded-payment-proof-${i}`}
+            className="payee-uploaded-file-row"
+          >
+            <span className="payee-uploaded-file-index">
+              {existingPaymentProofs.length + i + 1}
+            </span>
+            <span className="payee-uploaded-file-name" title={file.name}>
+              {file.name}
+            </span>
+            <div className="payee-upload-actions">
+              <button
+                className="payee-upload-view-btn"
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.open(
+                    URL.createObjectURL(file),
+                    "_blank",
+                    "noopener,noreferrer",
+                  );
+                }}
+              >
+                <Eye size={16} />
+              </button>
+              <button
+                className="payee-upload-view-btn payee-upload-delete-btn"
+                onClick={(e) => {
+                  e.preventDefault();
+                  removePaymentProof(i);
+                }}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
   </div>
 )}
           {/* Submit Button Section */}
