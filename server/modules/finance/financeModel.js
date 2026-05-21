@@ -1,5 +1,9 @@
 import db from '../../config/connection.js';
 import * as orgUnitQueries from '../shared/budget/orgUnitQueries.js';
+import {
+  resolveCatalogIds,
+  resolvePrimaryHeadIds,
+} from '../budgetCatalog/budgetCatalogResolver.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -1079,6 +1083,16 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   const normalizedPreferredBudgetLineId = toPositiveInt(preferredBudgetLineId);
   const normalizedExcludeFinanceId = toPositiveInt(excludeFinanceId);
   const applyHeadOnlyMatch = Boolean(headOnlyMatch) || shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead, normalizedSubHead);
+  // NEW: resolve the currently selected catalog labels to IDs, then use those
+  // IDs against approved budget lines. LEGACY: if either side has no ID, text
+  // matching below remains the fallback.
+  const requestedCatalogIds = await resolveCatalogIds(
+    conn,
+    normalizedBudgetHead,
+    normalizedSubHead,
+  );
+  const requestedBudgetHeadId = toPositiveInt(requestedCatalogIds.budget_head_id);
+  const requestedBudgetSubHeadId = toPositiveInt(requestedCatalogIds.budget_sub_head_id);
   const scope = await resolveBudgetAvailabilityScope(conn, {
     beneficiaryType,
     beneficiaryValue,
@@ -1173,6 +1187,8 @@ const resolveBudgetAvailabilityForUser = async (conn, {
        bpl.budget_proposal_id,
        bpl.budget_head,
        bpl.sub_head,
+       bpl.budget_head_id,
+       bpl.budget_sub_head_id,
        bp.proposal_ref,
        bp.fiscal_year,
        bp.beneficiary_type,
@@ -1236,18 +1252,28 @@ const resolveBudgetAvailabilityForUser = async (conn, {
       proposalBeneficiaryValue: normalizeText(row.beneficiary_value),
       budgetHead: normalizeText(row.budget_head),
       subHead: normalizeText(row.sub_head),
+      budgetHeadId: toPositiveInt(row.budget_head_id),
+      budgetSubHeadId: toPositiveInt(row.budget_sub_head_id),
       budgetLineAmount: toMoney(row.budget_line_amount),
       consumedAmount: toMoney(row.consumed_amount),
       reservedAmount: toMoney(row.reserved_amount),
       availableAmount: Math.max(0, toMoney(row.available_amount)),
     }))
     .filter((row) => {
-      if (!isLooseTextMatch(row.budgetHead, normalizedBudgetHead)) {
+      const headMatches = requestedBudgetHeadId && row.budgetHeadId
+        ? row.budgetHeadId === requestedBudgetHeadId
+        : isLooseTextMatch(row.budgetHead, normalizedBudgetHead);
+
+      if (!headMatches) {
         return false;
       }
 
       if (applyHeadOnlyMatch) {
         return true;
+      }
+
+      if (requestedBudgetSubHeadId && row.budgetSubHeadId) {
+        return row.budgetSubHeadId === requestedBudgetSubHeadId;
       }
 
       return isLooseTextMatch(row.subHead, normalizedSubHead);
@@ -1431,11 +1457,23 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
   const hasBudgetProposalIdColumn = await hasFinanceBudgetBreakupColumn('budget_proposal_id', { tx: conn });
 
   for (const row of budgetRows) {
+    // NEW: resolve catalog IDs from the snapshot text. Stored alongside the
+    // text so renames in the catalog don't break finance ↔ budget matching.
+    // LEGACY: nulls when the catalog has no row for the submitted text;
+    // matching falls back to normalized text comparison.
+    const { budget_head_id, budget_sub_head_id } = await resolveCatalogIds(
+      conn,
+      row.budget_head,
+      row.sub_head,
+    );
+
     const columns = [
       'finance_id',
       'budget_line_id',
       'budget_head',
       'sub_head',
+      'budget_head_id',
+      'budget_sub_head_id',
       'amount',
       'available_amount_snapshot',
       'sort_order',
@@ -1445,6 +1483,8 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
       row.budget_line_id || null,
       row.budget_head,
       row.sub_head,
+      budget_head_id,
+      budget_sub_head_id,
       row.amount,
       row.available_amount_snapshot,
       row.sort_order,
@@ -2201,6 +2241,19 @@ const financeModel = {
         financeEntry.annexure_file_size = Number.isFinite(parsedAnnexureSize) ? parsedAnnexureSize : null;
       }
 
+      // NEW: resolve catalog IDs for primary_head + event_sub_head.
+      // Stored alongside the snapshot text columns so matching survives
+      // future catalog renames.
+      // LEGACY: nulls when the submitted text isn't in the catalog —
+      // downstream code falls back to normalized text matching.
+      const { primary_head_id, event_sub_head_id } = await resolvePrimaryHeadIds(
+        connection,
+        financeEntry.primary_head,
+        financeEntry.event_sub_head,
+      );
+      financeEntry.primary_head_id = primary_head_id;
+      financeEntry.event_sub_head_id = event_sub_head_id;
+
       const [result] = await connection.query('INSERT INTO finance_requests SET ?', [financeEntry]);
       await insertFinanceRequestReference(connection, result.insertId, financeData.request_date);
       await replaceBudgetRows(connection, result.insertId, budgetRows);
@@ -2540,6 +2593,25 @@ const financeModel = {
       }
       if (hasAnnexuresInput) {
         await replaceFinanceAnnexures(connection, id, annexures);
+      }
+
+      // NEW: keep primary_head_id / event_sub_head_id in sync with the
+      // snapshot text when an edit changes the head/sub-head.
+      if (Object.prototype.hasOwnProperty.call(updateData, 'primary_head')
+          || Object.prototype.hasOwnProperty.call(updateData, 'event_sub_head')) {
+        const headName = Object.prototype.hasOwnProperty.call(updateData, 'primary_head')
+          ? updateData.primary_head
+          : existingRecord.primary_head;
+        const subName = Object.prototype.hasOwnProperty.call(updateData, 'event_sub_head')
+          ? updateData.event_sub_head
+          : existingRecord.event_sub_head;
+        const { primary_head_id, event_sub_head_id } = await resolvePrimaryHeadIds(
+          connection,
+          headName,
+          subName,
+        );
+        updateData.primary_head_id = primary_head_id;
+        updateData.event_sub_head_id = event_sub_head_id;
       }
 
       const [result] = await connection.query('UPDATE finance_requests SET ? WHERE id = ?', [updateData, id]);

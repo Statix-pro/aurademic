@@ -1,4 +1,5 @@
 import db from '../../config/connection.js';
+import { resolveCatalogIds } from '../budgetCatalog/budgetCatalogResolver.js';
 import {
   VALID_MONTHS as SHARED_VALID_MONTHS,
   APPROVAL_FLOW as SHARED_APPROVAL_FLOW,
@@ -2521,22 +2522,35 @@ async function insertBudgetLine(proposalId, line, conn) {
   const quantity = Number(line.quantity) || 1;
   const lineTotal = unitAmount * quantity;
 
+  // NEW: also persist catalog IDs (Phase 2 of the catalog ref hardening).
+  // LEGACY: text snapshot columns remain authoritative for old rows whose
+  // names no longer exist in the catalog.
+  const { budget_head_id, budget_sub_head_id } = await resolveCatalogIds(
+    conn,
+    line.budget_head,
+    line.sub_head,
+  );
+
   const [result] = await conn.execute(
     `INSERT INTO budget_proposal_lines (
         budget_proposal_id,
         budget_head,
         sub_head,
+        budget_head_id,
+        budget_sub_head_id,
         unit_amount,
         approved_unit_amount,
         quantity,
         line_total,
         approved_line_total,
         line_description
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       proposalId,
       line.budget_head,
       line.sub_head || '',
+      budget_head_id,
+      budget_sub_head_id,
       unitAmount,
       unitAmount,
       quantity,

@@ -613,7 +613,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           <div className="sb-group">
             <button
               className={`sb-link ${
-                isGroupActive(["/access-control", "/admin/master-data"])
+                isGroupActive(["/access-control", "/admin/master-data", "/admin/budget-catalog"])
                   ? "active"
                   : ""
               } ${activeMenu === "SuperAdmin" ? "open" : ""}`}
@@ -646,6 +646,17 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                     onClick={handleLinkClick}
                   >
                     Master Data
+                  </Link>
+                )}
+                {showMasterData && (
+                  <Link
+                    to="/admin/budget-catalog"
+                    className={`sb-sublink ${
+                      isActive("/admin/budget-catalog") ? "active" : ""
+                    }`}
+                    onClick={handleLinkClick}
+                  >
+                    Budget Catalog
                   </Link>
                 )}
               </div>
