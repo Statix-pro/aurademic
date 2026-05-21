@@ -1,0 +1,35 @@
+.budget-catalog-icon-btn {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  color: #0d6efd;
+}
+
+.budget-catalog-icon-btn:hover,
+.budget-catalog-icon-btn:focus-visible {
+  background: rgba(13, 110, 253, 0.08);
+  border-color: rgba(13, 110, 253, 0.22);
+  color: #0d6efd;
+}
+
+.budget-catalog-delete-btn {
+  color: #dc3545;
+}
+
+.budget-catalog-delete-btn:hover,
+.budget-catalog-delete-btn:focus-visible {
+  background: rgba(220, 53, 69, 0.08);
+  border-color: rgba(220, 53, 69, 0.22);
+  color: #dc3545;
+}
+
+.budget-catalog-group-row td {
+  background: #f3f7fd;
+  color: #0d6efd;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+}

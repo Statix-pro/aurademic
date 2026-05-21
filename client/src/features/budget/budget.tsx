@@ -5,6 +5,12 @@ import { useParams, useLocation, useNavigate } from "react-router-dom";
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils';
+import { useBudgetCatalog } from '../../shared/hooks/useBudgetCatalog';
+import {
+  BUDGET_HEAD_GROUPS,
+  SUB_HEAD_BY_BUDGET_HEAD,
+  subscribeBudgetCatalog,
+} from '../../shared/hooks/budgetCatalogStore';
 import Select from 'react-select';
 import './budget.css';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
@@ -54,597 +60,6 @@ interface ApplicantSearchResult {
 }
 
 
-const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
-  {
-    label: 'Non-Recurring',
-    options: [
-      'Civil Infrastructure',
-      'Electrical Infrastructure',
-      'IT Infrastructure',
-      'Furniture & Fixtures',
-      'Vehicles',
-      'Equipment',
-      'Accessories & Kits',
-      'Library',
-    ],
-  },
-  { label: 'Recurring', options: [] },
-  {
-    label: 'Maintenance & Spares',
-    options: ['Maintenance Charges', 'Spares'],
-  },
-  {
-    label: 'Operational',
-    options: [
-      'Consumables',
-      'Software',
-      'Membership & Subscriptions',
-      'College Essentials',
-      'Printing',
-      'Stationery',
-      'Postal Expenses',
-      'Local Conveyance',
-      'Operational Expenses',
-      'Official Visits',
-    ],
-  },
-  {
-    label: 'Events & Competitions',
-    options: ['Academic Events', 'Club Activities', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Events', 'Cultural & Celebrations', 'Sports', 'Competitions'],
-  },
-  {
-    label: 'Meetings & Audits',
-    options: [
-      'Institutional Governance Meetings', 'Academic Governance Meetings', 'Institutional Audits', 'Government Meetings',
-    ],
-  },
-  {
-    label: 'Academics',
-    options: [
-      'Faculty Empowerment', 'Staff Empowerment', 'Student Empowerment', 'Student Capacity Building', 'Ranking & Accreditation', 'Examination Expenses',
-    ],
-  },
-  {
-    label: 'Branding & Outreach',
-    options: ['Advertisement & Branding', 'Public Relations', 'Admissions'],
-  },
-  {
-    label: 'General',
-    options: [
-      'Research & Development',
-      'Government Funded Projects',
-      'Government Funded Events',
-      'Administrative Expenses', 'Licenses & Taxes',
-      'Salary',
-      'Bills & Payments',
-      'Miscellaneous Expenses',
-    ],
-  },
-
-];
-
-const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
-  'Civil Infrastructure': [
-    'Canopy',
-    'Construction Works',
-    'False Ceiling Works',
-    'Partition Works',
-    'Plumbing Works',
-    'Water Cooler'
-  ],
-  'Electrical Infrastructure': [
-    'Air Conditioner',
-    'Battery',
-    'Electrical Wiring',
-    'Generator',
-    'Lights & Fans',
-    'Lift Installation',
-    'UPS & Inverter'
-  ],
-  'IT Infrastructure': [
-    'A/V Equipment',
-    'Amplifiers',
-    'CCTV Materials',
-    'CMOS Battery',
-    'Desktops Computers',
-    'Hard Disks',
-    'Hardwares',
-    'Interactive Displays',
-    'Intercom',
-    'Keyboard',
-    'Laptops',
-    'Mic & Speakers',
-    'Mobiles & Tablet',
-    'Monitors',
-    'Mouse',
-    'Network Materials',
-    'Printers',
-    'Projectors',
-    'Softwares',
-    'Television',
-    'Wi-fi Router',
-    'Xerox Machine'
-  ],
-  'Furniture & Fixtures': [
-    'Chair',
-    'Computer Table',
-    'Discussion Table',
-    'Faculty Table',
-    'Wooden Cup Boards',
-    'Work Table'
-  ],
-  Vehicles: ['Heavy Motor Vehicle', 'Light Motor Vehicle', 'Two Wheeler'],
-  Equipment: [
-    'Consultancy Equipment',
-    'Equipment Upgrade',
-    'Lab Equipment',
-    'Minor Equipment',
-    'Office Equipment',
-    'Research Equipment',
-    'Sports Equipment'
-  ],
-  'Accessories & Kits': [
-    'Drilling Machine',
-    'Drone Kit',
-    'Lab Accessories',
-    'Power Tools',
-    'Weighing Machine',
-    'Others'
-  ],
-  'Library': [
-    'Books',
-    'Databases',
-    'E-Books',
-    'E-Journals',
-    'Journals',
-    'Magazines',
-    'Membership',
-    'Newspapers',
-    'Non Books (CD etc.)',
-    'Plagiarism Detection Tool',
-    'Remote Access Tool'
-  ],
-
-  'Maintenance Charges': [
-    'AC Maintenance',
-    'Annual Maintenance Charges',
-    'Building Maintenance',
-    'Computer Maintenance',
-    'Electrical Maintenance',
-    'Equipment Maintenance',
-    'Farm Maintenance',
-    'Furniture Maintenance',
-    'Garden Maintenance',
-    'General Repairs',
-    'Housekeeping Expenses',
-    'Infrastructure Maintenance',
-    'Lift Maintenance',
-    'Office Maintenance',
-    'Painting',
-    'Playground Maintenance',
-    'Plumbing Maintenance',
-    'Printer Maintenance',
-    'Software Maintenance',
-    'UPS Maintenance',
-    'Vehicle Maintenance',
-    'Toner Refill'
-  ],
-  Spares: ['Chargers', 'Printer Toner', 'SMPS'],
-  'Annual Maintenance Charges': ['Equipment Maintenance', 'Software Maintenance'],
-  Consumables: [
-    'Carpentary Items',
-    'Chemicals',
-    'Construction Materials',
-    'Cutting Tools',
-    'Electrical Components',
-    'Electronic Components',
-    'Glasswares',
-    'Mechanical Components',
-    'Metals & Alloys',
-    'Oils & Lubricants',
-    'Plasticwares',
-    'Others'
-  ],
-  Software: [
-    'AI Tools',
-    'Analysis',
-    'Antivirus',
-    'Firewall',
-    'Graphical Design',
-    'Grammer Check',
-    'Grievance',
-    'Modelling',
-    'Plagiarism',
-    'Programming',
-    'Others'
-  ],
-  'Membership & Subscriptions': [
-    'Annual Subscription Charges',
-    'Data Subscription Charges',
-    'E-Resources',
-    'Membership fees',
-    'Professional Body fees'
-  ],
-  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Student Uniform', 'Others'],
-  'Printing': [
-    'Badge',
-    'Banner',
-    'Beach Flag',
-    'Binding',
-    'Brochure',
-    'Calendar',
-    'Certificates',
-    'Combined Items',
-    'Diary',
-    'ID Card',
-    'Letter Pad',
-    'Magazines',
-    'News Letters',
-    'Note Pad',
-    'Official Documents',
-    'Pamphlet',
-    'Registers',
-    'Reports',
-    'Sign Board',
-    'Vinyl Board',
-    'Visiting Card',
-    'Wiro Pad',
-    'Others'
-  ],
-  'Stationery': [
-    'Adhesive Gum',
-    'Adhesive Tape',
-    'Answer Booklet',
-    'Chalk Box',
-    'Clips/ Pins',
-    'Cloth Covers',
-    'Combined Items',
-    'Duster',
-    'Files/ Folders',
-    'Grade Sheet',
-    'Highlighter',
-    'Marker Pen',
-    'Office Covers',
-    'Pen/ Pencil/ Eraser',
-    'Plastic Tray',
-    'Print Sheets',
-    'Rubber Band',
-    'Rubber Stamp',
-    'Scissor/ Knife',
-    'Stamp Pad/ Ink',
-    'Stapler/ Punching Machine',
-    'Sticky Notes',
-    'Others'
-  ],
-  'Postal Expenses': [
-    'Courier Charges',
-    'Frieght Charges',
-    'Postal Charges',
-    'Others'
-  ],
-  'Local Conveyance': [
-    'Beta',
-    'Food & Refreshment',
-    'Travel Expense',
-    'Others'
-  ],
-  'Operational Expenses': [
-    'Water Bottle',
-    'Food & Refreshment',
-    'Pooja Expenses',
-    'Accessories',
-    'Legal stamp paper',
-    'Miscellaneous'
-  ],
-  'Conferences & Conclaves': [
-    'Conclave',
-    'Convention',
-    'Industry Interaction',
-    'International Conference',
-    'National Conference',
-    'Networking Event',
-  ],
-  'Association Activities': [
-    'Alumni Interaction',
-    'Alumni Meeting',
-    'Association Function',
-    'Parents Meeting',
-  ],
-  'Outreach Events': [
-    'Awareness Program',
-    'Campaigns',
-    'Crash Course',
-    'Education Fair',
-    'Mini Marathon',
-    'Rally',
-    'School Visit',
-    'Summer Internship',
-    'Grama Saba Meet',
-    'Orientation Session',
-  ],
-  'Cultural & Celebrations': [
-    'Celebration Day',
-    'Festival Celebrations',
-    'Harmonicks',
-    'Hostel Day',
-  ],
-  'Sports': ['Sports Day', 'Sports Meet'],
-  'Club Activities': [
-    'Flash Mob',
-    'Fun Events',
-    'Road show',
-    'Wall Painting',
-  ],
-  'Competitions': [
-    'Innovation & Startup Competitions',
-    'Academic Competitions',
-    'Technical Competitions',
-    'Cultural Competitions',
-    'Creative Competitions',
-    'Literary Competitions',
-    'Sports Competitions',
-    'Management Competitions',
-    'Online Competitions',
-    'General Competitions',
-    'Project Exhibition',
-    'Science Exhibition',
-  ],
-
-  'Institutional Governance Meetings': [
-    'Examination Committee Meeting',
-    'Finance Committee Meeting',
-    'Governing Body Meeting',
-    'Placement Meeting',
-    'Research Advisory Board Meeting',
-    'Result Passing Board (RPB) Meeting',
-    'IQAC Meeting'
-  ],
-
-  'Academic Governance Meetings': [
-    'Academic Council Meeting',
-    'Board of Studies (Bos) Meeting',
-    'DAB Meeting',
-    'Standing Committee Meeting'
-  ],
-  'Institutional Audits': ['Academic Audit', 'Administrative Audit', 'Energy & Green Audit'],
-  'Government Meetings': ['Government Meetings'],
-
-  'Faculty Empowerment': [
-    'Accommodation',
-    'Daily Allowance',
-    'Faculty Welfare',
-    'Food & Refreshment',
-    'Incentives',
-    'Leadership Meet',
-    'Medical Expenses',
-    'Membership Fees',
-    'Registration fee',
-    'Travel Allowance'
-  ],
-
-  'Academic Events': [
-    'Expert Visit',
-    'FDP (Faculty Development Programme)',
-    'Guest Lecture',
-    'Hands-on Training',
-    'Industry Visit',
-    'MoU Inking',
-    'Seminar',
-    'STTP (Short-Term Training Programme)',
-    'Webinar',
-    'Workshop',
-  ],
-
-  'College Events': [
-    'Annual Day',
-    'Dakshaa',
-    'Founder Day',
-    'Graduation Day',
-    'Orientation Session',
-    'Science Day',
-    'Student Induction Programme',
-    'Womens Day',
-  ],
-  'Staff Empowerment': [
-    'Accommodation',
-    'Daily Allowance',
-    'Food & Refreshment',
-    'Incentives',
-    'Medical Expenses',
-    'Registration fee',
-    'Staff Welfare',
-    'Travel Allowance'
-  ],
-  'Student Empowerment': [
-    'Accommodation',
-    'Certification Costs',
-    'Food & Refreshment',
-    'Incentives',
-    'Medical Expense',
-    'Prizes',
-    'Registration fee',
-    'Student Welfare',
-    'Travel Support'
-  ],
-  'Student Capacity Building': [
-    'Aptitude Training',
-    'Certification Programs',
-    'Competitive Exam Coaching',
-    'Exposure Visit',
-    'Higher Education Coaching',
-    'Internship',
-    'International Connect',
-    'Language Proficiency Courses',
-    'One Credit Course',
-    'Placement Drives',
-    'Placement Training',
-    'Skill Development Training',
-    'Value Added Course',
-    'Others'
-  ],
-
-  'Ranking & Accreditation': [
-    'NAAC Fees',
-    'NAAC Inspection',
-    'NBA Fees',
-    'NBA Inspection',
-    'QS Ranking',
-    'SDG Ranking',
-    'Other Rankings'
-  ],
-  'Examination Expenses': [
-    'Autonomous Exam Remuneration',
-    'Government Exam Remuneration',
-    'Online Exam Remuneration',
-    'QP Setting Expenses',
-    'Degree Recommendation',
-    'CoE Staff Remuneration'
-  ],
-
-  'Advertisement & Branding': ['Digital Promotion', 'News Paper Advertisement'],
-  'Public Relations': [
-    'Branding',
-    'Corporate Gift',
-    'CSR Activity',
-    'Press & Media',
-    'Promotions',
-    'Sponsorship'
-  ],
-  Admissions: [
-    'Consultant Charges',
-    'Field Visits',
-    'School Visits',
-    'Stalls',
-    'Student Directory'
-  ],
-  'Research & Development': [
-    'Consultancy',
-    'HI Contribution',
-    'Institute Research Fellowship',
-    'Publication Support',
-    'Research Cenre Renewal',
-    'Research Grant',
-    'Seed Fund (Consumables)',
-    'Seed Fund (IPR Charges)',
-    'Seed Fund (Product Development)',
-    'Seed Fund (Testing)',
-    'Seed Fund (Travel)'
-  ],
-  'Government Funded Projects': [
-    'Manpower',
-    'Equipment',
-    'Consumables',
-    'IT Infrastructure',
-    'Travel',
-    'Printing',
-    'Stationery',
-    'Miscellaneous',
-    'Overhead Expenses',
-    'Food & Refreshment',
-    'Incidental Expenses',
-    'Administrative Expenses',
-    'Accommodation',
-    'Honorarium',
-    'Accessories & Peripherals',
-    'Memento & Gifts',
-    'Publicity & Promotion',
-    'Software & Licenses'
-  ],
-  'Government Funded Events': [
-    'A/V Arrangements',
-    'Accessories',
-    'Accommodation',
-    'Auditing Charge',
-    'Bag',
-    'Consumables',
-    'Decorations',
-    'Driver Bata',
-    'Event Logistics',
-    'Food & Refreshment',
-    'Honorarium',
-    'Memento & Gifts',
-    'Miscellaneous',
-    'Printing',
-    'Prizes',
-    'Promotions',
-    'Publication Charges',
-    'Registration fee',
-    'Registration Kit',
-    'Remuneration',
-    'Sitting Fees',
-    'Stationery',
-    'T-shirt',
-    'Travel'
-  ],
-  'Administrative Expenses': [
-    'Affiliation Fees',
-    'AICTE Fees',
-    'Anna University Fees',
-    'Audit Fees',
-    'Autonomous Charges',
-    'Consortium Fees',
-    'DOTE Fees',
-    'Fee Fixation Expenses',
-    'Flag Day Expenses',
-    'Inspection Expenses',
-    'Insurance Charges',
-    'International Travel',
-    'Legal Expenses',
-    'Office Expenses',
-    'Scholarship Expenses',
-    'Stamp Charges',
-    'Testing Charges',
-    'Awards & Recognitions'
-  ],
-  'Licenses & Taxes': [
-    'Building Tax',
-    'DTCP Approval',
-    'License Renewal',
-    'Property Tax',
-    'Road Tax',
-    'Spirit License',
-    'Water Tax'
-  ],
-  'Salary': [
-    'Allowances',
-    'Emoluments',
-    'ESI Scheme',
-    'Monthly Salary',
-    'Professional Payments',
-    'Provident Fund',
-    'Wages'
-  ],
-  'Bills & Payments': [
-    'Diesel Expenses',
-    'Electricity Charges',
-    'Internet Charges',
-    'Telephone Charges'
-  ],
-  'Miscellaneous Expenses': [
-    'Bank Charges',
-    'Bank Interest',
-    'Fire Extinguisher',
-    'First Aid Kit Expenses',
-    'General Expenses',
-    'Irrecovable Fee',
-    'Laundry Service',
-    'Legal Expenses',
-    'Loan Processing Charges',
-    'RO  Mineral Water',
-    'Sewage Treatment',
-    'Others'
-  ],
-  'Official Visits': [
-    'Registration fees',
-    'Travel',
-    'Accommodation',
-    'Food & Refreshment',
-    'Local Conveyance',
-    'Printing & Stationery',
-    'Miscellaneous'
-  ],
-};
-
 const STAGE_PERMISSION_MAP: Record<string, string> = {
   level1: 'budget.workflow.level1',
   ithead: 'budget.workflow.ithead',
@@ -667,6 +82,9 @@ const FALLBACK_TAG_OPTIONS: SelectOption[] = [
   { value: 'Entrepreneurship', label: 'Entrepreneurship' },
 ];
 
+const BUDGET_FIELD_LAYER = 1;
+const BUDGET_DROPDOWN_LAYER = 900;
+
 
 const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
   Department: 'DEPARTMENT',
@@ -677,9 +95,6 @@ const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
   'Professional Body': 'PROFESSIONAL_BODY',
 };
 
-const BUDGET_HEAD_SUB_HEAD_CATALOG = Object.entries(SUB_HEAD_BY_BUDGET_HEAD).flatMap(
-  ([budgetHead, subHeads]) => subHeads.map((subHead) => ({ budgetHead, subHead }))
-);
 
 const MONTH_KEYS = [
   'Apr',
@@ -897,6 +312,18 @@ const BudgetProposalGuidelines: React.FC<{ embedded?: boolean }> = ({ embedded =
 
 
 const Budget: React.FC = () => {
+  useBudgetCatalog();
+  const [catalogVersion, setCatalogVersion] = useState(0);
+  useEffect(() => subscribeBudgetCatalog(() => setCatalogVersion((n) => n + 1)), []);
+  const BUDGET_HEAD_SUB_HEAD_CATALOG = useMemo(
+    () =>
+      Object.entries(SUB_HEAD_BY_BUDGET_HEAD).flatMap(
+        ([budgetHead, subHeads]) =>
+          subHeads.map((subHead) => ({ budgetHead, subHead })),
+      ),
+    [catalogVersion],
+  );
+
   const [alertConfig, setAlertConfig] = useState<{
     show: boolean;
     message: React.ReactNode;
@@ -1955,6 +1382,7 @@ const Budget: React.FC = () => {
   }, [beneficiaryType]);
 
   const showTagDropdown = !!beneficiaryType?.trim();
+  const isBudgetFormLocked = isViewMode || !isEditable;
 
   return (
     <div className="budgetPage">
@@ -2104,7 +1532,7 @@ const Budget: React.FC = () => {
                             border: '1px solid #e0e0e0',
                             borderRadius: '12px',
                             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                            zIndex: 1000,
+                            zIndex: BUDGET_DROPDOWN_LAYER,
                             maxHeight: '250px',
                             overflowY: 'auto',
                             marginTop: '4px',
@@ -2152,7 +1580,7 @@ const Budget: React.FC = () => {
                               border: '1px solid #e0e0e0',
                               borderRadius: '12px',
                               boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                              zIndex: 1000,
+                              zIndex: BUDGET_DROPDOWN_LAYER,
                               marginTop: '4px',
                             }}
                           >
@@ -2274,7 +1702,7 @@ const Budget: React.FC = () => {
                   <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
                     Beneficiary
                   </label>
-                  <div style={{ position: 'relative', zIndex: 1000 }}>
+                  <div style={{ position: 'relative', zIndex: BUDGET_FIELD_LAYER }}>
                     <Select
                       value={beneficiaryType ? { value: beneficiaryType, label: beneficiaryType } as SelectOption : null}
                       onChange={(selected: any) => {
@@ -2307,6 +1735,7 @@ const Budget: React.FC = () => {
                       placeholder=""
                       isSearchable={true}
                       isClearable={false}
+                      isDisabled={isBudgetFormLocked}
                       menuPosition="fixed"
                       menuPlacement="auto"
                       styles={{
@@ -2346,7 +1775,7 @@ const Budget: React.FC = () => {
                         }),
                         menu: (base: any) => ({
                           ...base,
-                          zIndex: 999999,
+                          zIndex: BUDGET_DROPDOWN_LAYER,
                           backgroundColor: 'white',
                           borderRadius: 12,
                           boxShadow: '0 8px 25px rgba(0,0,0,0.15)'
@@ -2429,7 +1858,7 @@ const Budget: React.FC = () => {
                             border: '1px solid #e0e0e0',
                             borderRadius: '12px',
                             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                            zIndex: 1001,
+                            zIndex: BUDGET_DROPDOWN_LAYER,
                             maxHeight: '250px',
                             overflowY: 'auto',
                             marginTop: '4px',
@@ -2477,7 +1906,7 @@ const Budget: React.FC = () => {
                               border: '1px solid #e0e0e0',
                               borderRadius: '12px',
                               boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                              zIndex: 1001,
+                              zIndex: BUDGET_DROPDOWN_LAYER,
                               marginTop: '4px',
                             }}
                           >
@@ -2520,7 +1949,7 @@ const Budget: React.FC = () => {
                     <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
                       {getSubcategoryLabel(beneficiaryType)}
                     </label>
-                    <div style={{ position: 'relative', zIndex: 1000, flex: 1 }}>
+                    <div style={{ position: 'relative', zIndex: BUDGET_FIELD_LAYER, flex: 1 }}>
                       <Select
                         value={
                           categoryItem
@@ -2536,6 +1965,7 @@ const Budget: React.FC = () => {
                         placeholder=""
                         isSearchable={true}
                         isClearable={false}
+                        isDisabled={isBudgetFormLocked}
                         menuPosition="fixed"
                         menuPlacement="auto"
                         styles={{
@@ -2583,7 +2013,7 @@ const Budget: React.FC = () => {
                     <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
                       Tag
                     </label>
-                    <div style={{ position: 'relative', zIndex: 1000, flex: 1 }}>
+                    <div style={{ position: 'relative', zIndex: BUDGET_FIELD_LAYER, flex: 1 }}>
                       <Select
                         value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
                         onChange={(selected: any) => setSelectedTag(selected?.value || '')}
@@ -2705,7 +2135,10 @@ const Budget: React.FC = () => {
                               isClearable={true}
                               isDisabled={!isEditable || isReviewerAmountOnlyEdit}
                               maxMenuHeight={200}
+                              menuPosition="fixed"
                               menuPlacement="auto"
+                              menuPortalTarget={document.body}
+                              menuShouldScrollIntoView={false}
                               formatGroupLabel={(group: any) => (
                                 <div
                                   style={{
@@ -2754,7 +2187,7 @@ const Budget: React.FC = () => {
                                 menu: (base: any) => ({
                                   ...base,
                                   marginTop: '2px',
-                                  zIndex: 9999,
+                                  zIndex: BUDGET_DROPDOWN_LAYER,
                                   borderRadius: '4px',
                                   boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                                 }),
@@ -2771,6 +2204,10 @@ const Budget: React.FC = () => {
                                     : state.isFocused
                                       ? 'rgba(0,105,171,0.1)'
                                       : 'white',
+                                }),
+                                menuPortal: (base: any) => ({
+                                  ...base,
+                                  zIndex: BUDGET_DROPDOWN_LAYER,
                                 }),
                               }}
                             />
@@ -2800,6 +2237,10 @@ const Budget: React.FC = () => {
                               isClearable={false}
                               isDisabled={!line.budgetHead || !isEditable || isReviewerAmountOnlyEdit}
                               maxMenuHeight={200}
+                              menuPosition="fixed"
+                              menuPlacement="auto"
+                              menuPortalTarget={document.body}
+                              menuShouldScrollIntoView={false}
                               styles={{
                                 control: (base: any, state: any) => ({
                                   ...base,
@@ -2822,7 +2263,7 @@ const Budget: React.FC = () => {
                                 menu: (base: any) => ({
                                   ...base,
                                   marginTop: '2px',
-                                  zIndex: 9999,
+                                  zIndex: BUDGET_DROPDOWN_LAYER,
                                   borderRadius: '4px',
                                 }),
                                 option: (base: any, state: any) => ({
@@ -2833,6 +2274,10 @@ const Budget: React.FC = () => {
                                     : state.isFocused
                                       ? 'rgba(0,105,171,0.1)'
                                       : 'white',
+                                }),
+                                menuPortal: (base: any) => ({
+                                  ...base,
+                                  zIndex: BUDGET_DROPDOWN_LAYER,
                                 }),
                               }}
                             />

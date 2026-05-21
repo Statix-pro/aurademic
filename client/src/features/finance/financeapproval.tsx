@@ -9,6 +9,14 @@ import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
 
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import CustomTagInput from '../../shared/components/ui/CustomTagInput';
+import { useBudgetCatalog } from '../../shared/hooks/useBudgetCatalog';
+import {
+  BUDGET_HEAD_GROUPS,
+  SUB_HEAD_BY_BUDGET_HEAD,
+  HOAC_SUBHEAD_OPTIONS,
+  HEAD_TO_GROUP,
+  subscribeBudgetCatalog,
+} from '../../shared/hooks/budgetCatalogStore';
 import CustomInput from '../../shared/components/ui/CustomInput';
 import CustomDropdown, { OptionType } from '../../shared/components/ui/CustomDropdown';
 import CustomToggle from '../../shared/components/ui/CustomToggle';
@@ -249,82 +257,6 @@ const FALLBACK_TAG_OPTIONS: SelectOption[] = [
   { value: 'Entrepreneurship', label: 'Entrepreneurship' },
 ];
 
-const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
-  {
-    label: 'Non-Recurring',
-    options: [
-      'Civil Infrastructure',
-      'Electrical Infrastructure',
-      'IT Infrastructure',
-      'Furniture & Fixtures',
-      'Vehicles',
-      'Equipment',
-      'Accessories & Kits',
-      'Library',
-    ],
-  },
-  { label: 'Recurring', options: [] },
-  {
-    label: 'Maintenance & Spares',
-    options: ['Maintenance Charges', 'Spares'],
-  },
-  {
-    label: 'Operational',
-    options: [
-      'Consumables',
-      'Software',
-      'Membership & Subscriptions',
-      'College Essentials',
-      'Printing',
-      'Stationery',
-      'Postal Expenses',
-      'Local Conveyance',
-      'Operational Expenses',
-      'Official Visits',
-    ],
-  },
-  {
-    label: 'Events & Competitions',
-    options: ['Academic Events', 'Club Activities', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Events', 'Cultural & Celebrations', 'Sports', 'Competitions'],
-  },
-  {
-    label: 'Meetings & Audits',
-    options: [
-      'Institutional Governance Meetings',
-      'Academic Governance Meetings',
-      'Institutional Audits',
-      'Government Meetings',
-    ],
-  },
-  {
-    label: 'Academics',
-    options: [
-      'Faculty Empowerment',
-      'Staff Empowerment',
-      'Student Empowerment',
-      'Student Capacity Building',
-      'Ranking & Accreditation',
-      'Examination Expenses',
-    ],
-  },
-  {
-    label: 'Branding & Outreach',
-    options: ['Advertisement & Branding', 'Public Relations', 'Admissions'],
-  },
-  {
-    label: 'General',
-    options: [
-      'Research & Development',
-      'Government Funded Projects',
-      'Government Funded Events',
-      'Administrative Expenses',
-      'Licenses & Taxes',
-      'Salary',
-      'Bills & Payments',
-      'Miscellaneous Expenses',
-    ],
-  },
-];
 
 const INCOME_SOURCE_OPTIONS = [
   'Government Funding',
@@ -414,53 +346,6 @@ const CATEGORY_TYPE_OPTIONS = [
 
 // 1. Shared HOAC Sub-Heads (for Events & Competitions, Meetings & Audits)
 // Used in the 'extra' top-level dropdown (eventSubHead) when a HOAC group is active.
-const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
-  'Events & Competitions': [
-    'A/V Arrangements',
-    'Refund',
-    'Accessories',
-    'Accommodation',
-    'Auditing Charge',
-    'Bag',
-    'Consumables',
-    'Decorations',
-    'Driver Bata',
-    'Event Logistics',
-    'Food & Refreshment',
-    'Honorarium',
-    'Memento & Gifts',
-    'Miscellaneous',
-    'Printing',
-    'Prizes',
-    'Promotions',
-    'Publication Charges',
-    'Registration fee',
-    'Registration Kit',
-    'Remuneration',
-    'Sitting Fees',
-    'Stationery',
-    'T-Shirt',
-    'Travel',
-    'Others',
-  ],
-  'Meetings & Audits': [
-    'Accessories',
-    'Accommodation',
-    'Auditing Charge',
-    'Driver Bata',
-    'Food & Refreshment',
-    'Honorarium',
-    'Memento & Gifts',
-    'Miscellaneous',
-    'Printing',
-    'Registration fee',
-    'Remuneration',
-    'Sitting Fees',
-    'Stationery',
-    'Travel',
-    'Others',
-  ],
-};
 
 const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
 
@@ -473,21 +358,11 @@ const getSelectedOption = (
 ): OptionType | null =>
   flattenOptions(options).find((opt) => String(opt.value) === String(value)) ?? null;
 
-const PRIMARY_HEAD_OPTIONS: Array<{ label: string; options: OptionType[] }> =
+const getPrimaryHeadOptions = (): Array<{ label: string; options: OptionType[] }> =>
   BUDGET_HEAD_GROUPS.map((group) => ({
     label: group.label,
     options: toOptions(group.options),
   }));
-
-const HEAD_TO_GROUP: Record<string, string> = BUDGET_HEAD_GROUPS.reduce(
-  (acc, group) => {
-    group.options.forEach((option) => {
-      acc[option] = group.label;
-    });
-    return acc;
-  },
-  {} as Record<string, string>
-);
 
 const getHoacGroupForHead = (head: string): string | undefined => {
   if (HOAC_GROUPS.has(head)) return head;
@@ -511,513 +386,6 @@ const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {
 
 // 2. Specific Budget Sub-Heads (Head-specific mapping)
 // Used in the row-level budget table (subHead-${index}) to pick specific expenses for a head.
-const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
-  'Civil Infrastructure': [
-    'Canopy',
-    'Construction Works',
-    'False Ceiling Works',
-    'Partition Works',
-    'Plumbing Works',
-    'Water Cooler'
-  ],
-  'Electrical Infrastructure': [
-    'Air Conditioner',
-    'Battery',
-    'Electrical Wiring',
-    'Generator',
-    'Lights & Fans',
-    'Lift Installation',
-    'UPS & Inverter'
-  ],
-  'IT Infrastructure': [
-    'A/V Equipment',
-    'Amplifiers',
-    'CCTV Materials',
-    'CMOS Battery',
-    'Desktops Computers',
-    'Hard Disks',
-    'Hardwares',
-    'Interactive Displays',
-    'Intercom',
-    'Keyboard',
-    'Laptops',
-    'Mic & Speakers',
-    'Mobiles & Tablet',
-    'Monitors',
-    'Mouse',
-    'Network Materials',
-    'Printers',
-    'Projectors',
-    'Softwares',
-    'Television',
-    'Wi-fi Router',
-    'Xerox Machine'
-  ],
-  'Furniture & Fixtures': [
-    'Chair',
-    'Computer Table',
-    'Discussion Table',
-    'Faculty Table',
-    'Wooden Cup Boards',
-    'Work Table'
-  ],
-  Vehicles: ['Heavy Motor Vehicle', 'Light Motor Vehicle', 'Two Wheeler'],
-  Equipment: [
-    'Consultancy Equipment',
-    'Equipment Upgrade',
-    'Lab Equipment',
-    'Office Equipment',
-    'Research Equipment',
-    'Sports Equipment'
-  ],
-  'Accessories & Kits': [
-    'Drilling Machine',
-    'Drone Kit',
-    'Lab Accessories',
-    'Power Tools',
-    'Weighing Machine',
-    'Others'
-  ],
-  'Library': [
-    'Books',
-    'Databases',
-    'E-Books',
-    'E-Journals',
-    'Journals',
-    'Magazines',
-    'Membership',
-    'Newspapers',
-    'Non Books (CD etc.)',
-    'Plagiarism Detection Tool',
-    'Remote Access Tool'
-  ],
-
-  'Maintenance Charges': [
-    'AC Maintenance',
-    'Annual Maintenance Charges',
-    'Building Maintenance',
-    'Computer Maintenance',
-    'Electrical Maintenance',
-    'Equipment Maintenance',
-    'Farm Maintenance',
-    'Furniture Maintenance',
-    'Garden Maintenance',
-    'General Repairs',
-    'Housekeeping Expenses',
-    'Infrastructure Maintenance',
-    'Lift Maintenance',
-    'Office Maintenance',
-    'Painting',
-    'Playground Maintenance',
-    'Plumbing Maintenance',
-    'Printer Maintenance',
-    'Software Maintenance',
-    'UPS Maintenance',
-    'Vehicle Maintenance',
-    'Toner Refill'
-  ],
-  Spares: ['Chargers', 'Printer Toner', 'SMPS'],
-  'Annual Maintenance Charges': ['Equipment Maintenance', 'Software Maintenance'],
-  Consumables: [
-    'Carpentary Items',
-    'Chemicals',
-    'Construction Materials',
-    'Cutting Tools',
-    'Electrical Components',
-    'Electronic Components',
-    'Glasswares',
-    'Mechanical Components',
-    'Metals & Alloys',
-    'Oils & Lubricants',
-    'Plasticwares',
-    'Others'
-  ],
-  Software: [
-    'AI Tools',
-    'Analysis',
-    'Antivirus',
-    'Firewall',
-    'Graphical Design',
-    'Grammer Check',
-    'Grievance',
-    'Modelling',
-    'Plagiarism',
-    'Programming',
-    'Others'
-  ],
-  'Membership & Subscriptions': [
-    'Annual Subscription Charges',
-    'Data Subscription Charges',
-    'E-Resources',
-    'Membership fees',
-    'Professional Body fees'
-  ],
-  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Student Uniform', 'Others'],
-
-  'Printing': [
-    'Badge',
-    'Banner',
-    'Beach Flag',
-    'Binding',
-    'Brochure',
-    'Calendar',
-    'Certificates',
-    'Combined Items',
-    'Diary',
-    'ID Card',
-    'Letter Pad',
-    'Magazines',
-    'News Letters',
-    'Note Pad',
-    'Official Documents',
-    'Pamphlet',
-    'Registers',
-    'Reports',
-    'Sign Board',
-    'Vinyl Board',
-    'Visiting Card',
-    'Wiro Pad',
-    'Others'
-  ],
-
-  'Stationery': [
-    'Adhesive Gum',
-    'Adhesive Tape',
-    'Answer Booklet',
-    'Chalk Box',
-    'Clips/ Pins',
-    'Cloth Covers',
-    'Combined Items',
-    'Duster',
-    'Files/ Folders',
-    'Grade Sheet',
-    'Highlighter',
-    'Marker Pen',
-    'Office Covers',
-    'Pen/ Pencil/ Eraser',
-    'Plastic Tray',
-    'Print Sheets',
-    'Rubber Band',
-    'Rubber Stamp',
-    'Scissor/ Knife',
-    'Stamp Pad/ Ink',
-    'Stapler/ Punching Machine',
-    'Sticky Notes',
-    'Others'
-  ],
-
-  'Postal Expenses': [
-    'Courier Charges',
-    'Frieght Charges',
-    'Postal Charges',
-    'Others'
-  ],
-  'Local Conveyance': [
-    'Beta',
-    'Food & Refreshment',
-    'Travel Expense',
-    'Others'
-  ],
-  'Operational Expenses': [
-    'Water Bottle',
-    'Food & Refreshment',
-    'Pooja Expenses',
-    'Accessories',
-    'Legal stamp paper',
-    'Miscellaneous'
-  ],
-  'Conferences & Conclaves': [
-    'Conclave',
-    'Consumables',
-    'Convention',
-    'Industry Interaction',
-    'International Conference',
-    'National Conference',
-    'Networking Event'],
-  'Association Activities': [
-    'Alumni Interaction',
-    'Alumni Meeting',
-    'Association Function',
-    'Parents Meeting'],
-  'Outreach Events': [
-    'Awareness Program',
-    'Campaigns',
-    'Crash Course',
-    'Education Fair',
-    'Mini Marathon',
-    'Rally',
-    'School Visit',
-    'Summer Internship',
-    'Grama Saba Meet',
-    'Orientation Session'],
-  'Cultural & Celebrations': [
-    'Celebration Day',
-    'Festival Celebrations',
-    'Harmonicks',
-    'Hostel Day'],
-  'Sports': ['Sports Day', 'Sports Meet'],
-
-  'Club Activities': [
-    'Flash Mob',
-    'Fun Events',
-    'Road show',
-    'Wall Painting'],
-  'Competitions': [
-    'Innovation & Startup Competitions',
-    'Academic Competitions',
-    'Technical Competitions',
-    'Cultural Competitions',
-    'Creative Competitions',
-    'Literary Competitions',
-    'Sports Competitions',
-    'Management Competitions',
-    'Online Competitions',
-    'General Competitions',
-    'Project Exhibition',
-    'Science Exhibition'],
-
-  'Institutional Governance Meetings': [
-    'Examination Committee Meeting',
-    'Finance Committee Meeting',
-    'Governing Body Meeting',
-    'Placement Meeting',
-    'Research Advisory Board Meeting',
-    'Result Passing Board (RPB) Meeting',
-    'IQAC Meeting'
-  ],
-
-  'Academic Governance Meetings': [
-    'Academic Council Meeting',
-    'Board of Studies (Bos) Meeting',
-    'DAB Meeting',
-    'Standing Committee Meeting'
-  ],
-  'Institutional Audits': ['Academic Audit', 'Administrative Audit', 'Energy & Green Audit'],
-  'Government Meetings': ['Government Meetings'],
-  'Faculty Empowerment': [
-    'Accommodation',
-    'Daily Allowance',
-    'Faculty Welfare',
-    'Food & Refreshment',
-    'Incentives',
-    'Leadership Meet',
-    'Medical Expenses',
-    'Membership Fees',
-    'Registration fee',
-    'Travel Allowance'
-  ],
-
-  'Academic Events': [
-    'Expert Visit',
-    'FDP (Faculty Development Programme)',
-    'Guest Lecture',
-    'Hands-on Training',
-    'Industry Visit',
-    'MoU Inking',
-    'Seminar',
-    'STTP (Short-Term Training Programme)',
-    'Webinar',
-    'Workshop'],
-
-  'College Events': [
-    'Annual Day',
-    'Dakshaa',
-    'Founder Day',
-    'Graduation Day',
-    'Orientation Session',
-    'Science Day',
-    'Student Induction Programme',
-    'Womens Day'],
-  'Staff Empowerment': [
-    'Accommodation',
-    'Daily Allowance',
-    'Food & Refreshment',
-    'Incentives',
-    'Staff Welfare',
-    'Medical Expenses'],
-
-  'Student Empowerment': [
-    'Accommodation',
-    'Certification Costs',
-    'Food & Refreshment',
-    'Incentives',
-    'Medical Expense',
-    'Prizes',
-    'Registration fee',
-    'Student Welfare',
-    'Travel Support'],
-  'Student Capacity Building': [
-    'ApptitudeTraining',
-    'Certification Programs',
-    'Competitive Exam Coaching',
-    'Exposure Visit',
-    'Higher Education Coaching',
-    'Internship',
-    'International Connect',
-    'Language Proficiency Courses',
-    'One Credit Course',
-    'Placement Drives',
-    'Placement Training',
-    'Skill Development Training',
-    'Value Added Course',
-    'Others'
-  ],
-
-  'Ranking & Accreditation': [
-    'NAAC Fees',
-    'NAAC Inspection',
-    'NBA Fees',
-    'NBA Inspection',
-    'QS Ranking',
-    'SDG Ranking',
-    'Other Rankings'],
-  'Examination Expenses': [
-    'Autonomous Exam Remuneration',
-    'Government Exam Remuneration',
-    'Online Exam Remuneration',
-    'QP Setting Expenses',
-    'Degree Recommendation',
-    'CoE Staff Remuneration'],
-
-  'Advertisement & Branding': ['Digital Promotion', 'News Paper Advertisement'],
-  'Public Relations': [
-    'Branding',
-    'Corporate Gift',
-    'CSR Activity',
-    'Press & Media',
-    'Promotions',
-    'Sponsorship'],
-  'Admissions': [
-    'Consultant Charges',
-    'Field Visits',
-    'School Visits',
-    'Stalls',
-    'Student Directory'],
-  'Research & Development': [
-    'Consultancy',
-    'HI Contribution',
-    'Institute Research Fellowship',
-    'Publication Support',
-    'Research Cenre Renewal',
-    'Research Grant',
-    'Seed Fund (Consumables)',
-    'Seed Fund (IPR Charges)',
-    'Seed Fund (Product Development)',
-    'Seed Fund (Testing)',
-    'Seed Fund (Travel)'],
-  'Government Funded Projects': [
-    'Manpower',
-    'Equipment',
-    'Consumables',
-    'IT Infrastructure',
-    'Travel',
-    'Printing',
-    'Stationery',
-    'Miscellaneous',
-    'Overhead Expenses',
-    'Food & Refreshment',
-    'Incidental Expenses',
-    'Administrative Expenses',
-    'Accommodation',
-    'Honorarium',
-    'Accessories & Peripherals',
-    'Memento & Gifts',
-    'Publicity & Promotion',
-    'Software & Licenses'],
-  'Government Funded Events': [
-    'A/V Arrangements',
-    'Accessories',
-    'Accommodation',
-    'Auditing Charge',
-    'Bag',
-    'Consumables',
-    'Decorations',
-    'Driver Bata',
-    'Event Logistics',
-    'Food & Refreshment',
-    'Honorarium',
-    'Memento & Gifts',
-    'Miscellaneous',
-    'Printing',
-    'Prizes',
-    'Promotions',
-    'Publication Charges',
-    'Registration fee',
-    'Registration Kit',
-    'Remuneration',
-    'Sitting Fees',
-    'Stationery',
-    'T-shirt',
-    'Travel'],
-  'Administrative Expenses': [
-    'Affiliation Fees',
-    'AICTE Fees',
-    'Anna University Fees',
-    'Audit Fees',
-    'Autonomous Charges',
-    'Consortium Fees',
-    'DOTE Fees',
-    'Fee Fixation Expenses',
-    'Flag Day Expenses',
-    'Inspection Expenses',
-    'Insurance Charges',
-    'International Travel',
-    'Legal Expenses',
-    'Office Expenses',
-    'Scholarship Expenses',
-    'Stamp Charges',
-    'Testing Charges',
-    'Awards & Recognitions'
-  ],
-  'Licenses & Taxes': [
-    'Building Tax',
-    'DTCP Approval',
-    'License Renewal',
-    'Property Tax',
-    'Road Tax',
-    'Spirit License',
-    'Water Tax'
-  ],
-
-  'Salary': [
-    'Allowances',
-    'Emoluments',
-    'ESI Scheme',
-    'Monthly Salary',
-    'Professional Payments',
-    'Provident Fund',
-    'Wages'
-  ],
-  'Bills & Payments': [
-    'Diesel Expenses',
-    'Electricity Charges',
-    'Internet Charges',
-    'Telephone Charges'
-  ],
-  'Miscellaneous Expenses': [
-    'Bank Charges',
-    'Bank Interest',
-    'Fire Extinguisher',
-    'First Aid Kit Expenses',
-    'General Expenses',
-    'Irrecovable Fee',
-    'Laundry Service',
-    'Legal Expenses',
-    'Loan Processing Charges',
-    'RO  Mineral Water',
-    'Sewage Treatment',
-    'Others'
-  ],
-  'Official Visits': [
-    'Registration fees',
-    'Travel',
-    'Accommodation',
-    'Food & Refreshment',
-    'Local Conveyance',
-    'Printing & Stationery',
-    'Miscellaneous'
-  ],
-};
 const getSubHeadOptionsForHeadSearch = (budgetHead: string): string[] => {
   const hoacGroup = getHoacGroupForHead(budgetHead);
   if (hoacGroup && HOAC_SUBHEAD_OPTIONS[hoacGroup]) {
@@ -1056,7 +424,7 @@ const getSubHeadDropdownOptions = (budgetHead: string): OptionType[] => {
   return options;
 };
 
-const BUDGET_HEAD_SEARCH_OPTIONS: Array<{ label: string; options: BudgetHeadSearchOption[] }> =
+const getBudgetHeadSearchOptions = (): Array<{ label: string; options: BudgetHeadSearchOption[] }> =>
   BUDGET_HEAD_GROUPS.map((group) => ({
     label: group.label,
     options: group.options.flatMap((head) => {
@@ -1179,15 +547,11 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
   onSelectHead,
   onSelectSubHead,
 }) => {
-  const allData = useMemo(
-    () =>
-      BUDGET_HEAD_GROUPS.flatMap((group) =>
-        group.options.map((head) => ({
-          head,
-          subheads: SUB_HEAD_BY_BUDGET_HEAD[head] || [],
-        }))
-      ),
-    []
+  const allData = BUDGET_HEAD_GROUPS.flatMap((group) =>
+    group.options.map((head) => ({
+      head,
+      subheads: SUB_HEAD_BY_BUDGET_HEAD[head] || [],
+    }))
   );
 
   const query = searchTerm.trim().toLowerCase();
@@ -1413,6 +777,9 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
 };
 
 const FinanceApproval: React.FC = () => {
+  useBudgetCatalog();
+  const [catalogVersion, setCatalogVersion] = useState(0);
+  useEffect(() => subscribeBudgetCatalog(() => setCatalogVersion((n) => n + 1)), []);
   const [applicantName, setApplicantName] = useState<string>('');
   const [date, setDate] = useState<string>(getLocalTodayYmd());
   const [designation, setDesignation] = useState<string>('');
@@ -3186,7 +2553,7 @@ const FinanceApproval: React.FC = () => {
     }
     const groupSubHeads = HOAC_SUBHEAD_OPTIONS[activeHoacGroup] || [];
     return toOptions(groupSubHeads);
-  }, [primaryHead, activeHoacGroup]);
+  }, [primaryHead, activeHoacGroup, catalogVersion]);
   useEffect(() => {
     const nextFetchKeys: Record<number, string> = {};
     const normalizedBeneficiaryType = normalizeText(beneficiaryType);
@@ -3973,8 +3340,8 @@ const FinanceApproval: React.FC = () => {
                         <div style={{ flex: '1 1 180px', minWidth: '180px' }}>
                           <CustomDropdown
                             name="primaryHead"
-                            options={PRIMARY_HEAD_OPTIONS}
-                            value={getSelectedOption(primaryHead, PRIMARY_HEAD_OPTIONS)}
+                            options={getPrimaryHeadOptions()}
+                            value={getSelectedOption(primaryHead, getPrimaryHeadOptions())}
                             onChange={(option) => {
                               const selected = option as OptionType | null;
                               setPrimaryHead(selected?.value ? String(selected.value) : '');
@@ -4023,8 +3390,8 @@ const FinanceApproval: React.FC = () => {
                         <div style={{ flex: '1 1 180px', minWidth: '180px' }}>
                           <CustomDropdown
                             name="primaryHead"
-                            options={PRIMARY_HEAD_OPTIONS}
-                            value={getSelectedOption(primaryHead, PRIMARY_HEAD_OPTIONS)}
+                            options={getPrimaryHeadOptions()}
+                            value={getSelectedOption(primaryHead, getPrimaryHeadOptions())}
                             onChange={(option) => {
                               const selected = option as OptionType | null;
                               setPrimaryHead(selected?.value ? String(selected.value) : '');
@@ -4094,7 +3461,7 @@ const FinanceApproval: React.FC = () => {
                         <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
                           <CustomDropdown
                             name={`budgetHead-${index}`}
-                            options={BUDGET_HEAD_SEARCH_OPTIONS}
+                            options={getBudgetHeadSearchOptions()}
                             value={row.category ? {
                               value: `head::${row.category}`,
                               label: row.category,

@@ -1,4 +1,5 @@
 import db from '../../config/connection.js';
+import { resolveCatalogIds } from '../budgetCatalog/budgetCatalogResolver.js';
 import {
   VALID_MONTHS as SHARED_VALID_MONTHS,
   APPROVAL_FLOW as SHARED_APPROVAL_FLOW,
@@ -1673,22 +1674,37 @@ async function insertBudgetLine(proposalId, line, conn) {
   const quantity = Number(line.quantity) || 1;
   const lineTotal = unitAmount * quantity;
 
+  // NEW: resolve stable catalog IDs. Stored alongside the snapshot text so
+  // future renames in the catalog don't break workflow matching.
+  // LEGACY: if the submitted head/sub_head doesn't exist in the catalog
+  // (older data import, custom entries), IDs come back as null and the
+  // existing text columns continue to drive matching as before.
+  const { budget_head_id, budget_sub_head_id } = await resolveCatalogIds(
+    conn,
+    line.budget_head,
+    line.sub_head,
+  );
+
   const [result] = await conn.execute(
     `INSERT INTO budget_proposal_lines(
           budget_proposal_id,
           budget_head,
           sub_head,
+          budget_head_id,
+          budget_sub_head_id,
           unit_amount,
           approved_unit_amount,
           quantity,
           line_total,
           approved_line_total,
           line_description
-        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       proposalId,
       line.budget_head,
       line.sub_head || '',
+      budget_head_id,
+      budget_sub_head_id,
       unitAmount,
       unitAmount,
       quantity,

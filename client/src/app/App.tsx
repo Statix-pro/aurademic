@@ -44,6 +44,7 @@ import UnderConstruction from '../shared/components/ui/UnderConstruction';
 import ProfilePage from '../features/profile/ProfilePage';
 import AccessControlPage from '../features/admin/accessControl/AccessControlPage';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
+import BudgetCatalogPage from '../features/admin/budgetCatalog/BudgetCatalogPage';
 import { AbilityProvider } from '../shared/casl/AbilityContext';
 import MainLayout from '../shared/components/layout/MainLayout';
 import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/adminbudgetdashboard';
@@ -111,6 +112,7 @@ function App() {
                   <Route path="/admin/form-management/project-options" element={<AdminRoute><ProjectFormOptions /></AdminRoute>} />
                   <Route path="/access-control" element={<SuperAdminRoute><AccessControlPage /></SuperAdminRoute>} />
                   <Route path="/admin/master-data" element={<SuperAdminRoute><MasterDataPage /></SuperAdminRoute>} />
+                  <Route path="/admin/budget-catalog" element={<SuperAdminRoute><BudgetCatalogPage /></SuperAdminRoute>} />
 
                   {/* ADMIN BUDGET */}
                   <Route path="/admin/budgetdashboard" element={<BudgetApprovalRoute><AdminBudgetDashboard /></BudgetApprovalRoute>} />
