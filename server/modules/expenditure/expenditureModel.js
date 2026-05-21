@@ -171,6 +171,24 @@ const normalizePaymentStatus = (value) => {
   return allowed.has(status) ? status : null;
 };
 
+const normalizeSqlDate = (value) => {
+  const text = normalizeText(value);
+  if (!text) return null;
+
+  const ymdMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ymdMatch) return `${ymdMatch[1]}-${ymdMatch[2]}-${ymdMatch[3]}`;
+
+  const dmyMatch = text.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (dmyMatch) return `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
+
+  const date = new Date(text);
+  if (!Number.isNaN(date.getTime())) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  return null;
+};
+
 const ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL = `
   LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) NOT IN ('rejected', 'deleted', 'archived')
 `;
@@ -2309,19 +2327,31 @@ async function insertExpenditureRows(conn, expenditureId, rows = [], budgetSnaps
   }
 }
 
-async function insertBillFiles(conn, expenditureId, files = []) {
+async function insertBillFiles(conn, expenditureId, files = [], fileCategory = 'bill') {
   const validFiles = Array.isArray(files) ? files : [];
-  let sortOrder = 0;
+  if (!validFiles.length) return;
+
+  const category = fileCategory === 'payment_proof' ? 'payment_proof' : 'bill';
+
+  const [rows] = await conn.execute(
+    `SELECT COALESCE(MAX(sort_order), -1) AS max_sort_order
+       FROM expenditure_request_bills
+      WHERE expenditure_id = ?
+        AND file_category = ?`,
+    [expenditureId, category],
+  );
+  let sortOrder = Number(rows[0]?.max_sort_order ?? -1) + 1;
 
   for (const file of validFiles) {
     if (!file?.filename || !file?.path) continue;
 
     await conn.execute(
       `INSERT INTO expenditure_request_bills
-         (expenditure_id, payee_row_id, original_name, stored_name, file_path, mime_type, file_size, sort_order)
-       VALUES (?, NULL, ?, ?, ?, ?, ?, ?)`,
+         (expenditure_id, payee_row_id, file_category, original_name, stored_name, file_path, mime_type, file_size, sort_order)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
       [
         expenditureId,
+        category,
         sanitizeRowValue(file.originalname),
         sanitizeRowValue(file.filename),
         toStoredUploadPath(file.path),
@@ -2897,18 +2927,19 @@ const incomeRows = Array.isArray(data.income_rows)
       rowIndex: workflowRowIdentity.rowIndex,
     });
 
-   await insertIncomeRows(conn, expenditureId, incomeRows);
-await insertPayeeRows(conn, expenditureId, payeeRows, userId);
-await insertAdvanceRows(conn, expenditureId, advanceRows, userId, budgetSnapshotsByLine, {
-  financeRequestId,
-  rowIndex: workflowRowIdentity.rowIndex,
-  dashboardRowId: workflowRowIdentity.dashboardRowId,
-  workflowRowRef: workflowRowIdentity.workflowRowRef,
-  sourceRequestId,
-});
-await insertSettlementRows(conn, expenditureId, settlementRows, budgetSnapshotsByLine);
-await insertExpenditureRows(conn, expenditureId, expenditureRows, budgetSnapshotsByLine);
+    await insertIncomeRows(conn, expenditureId, incomeRows);
+    await insertPayeeRows(conn, expenditureId, payeeRows, userId);
+    await insertAdvanceRows(conn, expenditureId, advanceRows, userId, budgetSnapshotsByLine, {
+      financeRequestId,
+      rowIndex: workflowRowIdentity.rowIndex,
+      dashboardRowId: workflowRowIdentity.dashboardRowId,
+      workflowRowRef: workflowRowIdentity.workflowRowRef,
+      sourceRequestId,
+    });
+    await insertSettlementRows(conn, expenditureId, settlementRows, budgetSnapshotsByLine);
+    await insertExpenditureRows(conn, expenditureId, expenditureRows, budgetSnapshotsByLine);
     await insertBillFiles(conn, expenditureId, uploads.billFiles);
+    await insertBillFiles(conn, expenditureId, uploads.paymentProofFiles, 'payment_proof');
     await upsertBulkNeftFile(
       conn,
       expenditureId,
@@ -3126,19 +3157,6 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       }),
     );
 
-    const normalizeSqlDate = (value) => {
-      const text = normalizeText(value);
-      if (!text) return null;
-
-      const date = new Date(text);
-      if (!Number.isNaN(date.getTime())) {
-        return date.toISOString().slice(0, 10);
-      }
-
-      const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
-      return match ? match[1] : null;
-    };
-
     const normalizedPaymentDate = normalizeSqlDate(paymentDetails.date || data.payment_date);
 
     const updatedEntry = {
@@ -3206,7 +3224,12 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     await conn.execute('DELETE FROM expenditure_line_rows WHERE expenditure_id = ?', [normalizedExpenditureId]);
 
     if (Array.isArray(uploads.billFiles) && uploads.billFiles.length) {
-      await conn.execute('DELETE FROM expenditure_request_bills WHERE expenditure_id = ?', [normalizedExpenditureId]);
+      await conn.execute(
+        `DELETE FROM expenditure_request_bills
+          WHERE expenditure_id = ?
+            AND file_category = 'bill'`,
+        [normalizedExpenditureId],
+      );
     }
 
     await insertIncomeRows(conn, normalizedExpenditureId, incomeRows);
@@ -3221,6 +3244,7 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     await insertSettlementRows(conn, normalizedExpenditureId, settlementRows, budgetSnapshotsByLine);
     await insertExpenditureRows(conn, normalizedExpenditureId, expenditureRows, budgetSnapshotsByLine);
     await insertBillFiles(conn, normalizedExpenditureId, uploads.billFiles);
+    await insertBillFiles(conn, normalizedExpenditureId, uploads.paymentProofFiles, 'payment_proof');
     await upsertBulkNeftFile(
       conn,
       normalizedExpenditureId,
@@ -3256,6 +3280,7 @@ export async function getExpenditureDetails(id) {
       settlement_rows: [],
       expenditure_rows: [],
       bill_files: [],
+      payment_proof_files: [],
       bulk_neft_file: null,
     };
   }
@@ -3267,6 +3292,7 @@ export async function getExpenditureDetails(id) {
     settlementRowsResult,
     expenditureRowsResult,
     billFilesResult,
+    paymentProofFilesResult,
     bulkNeftFileResult,
   ] = await Promise.all([
     db.execute(
@@ -3322,6 +3348,16 @@ export async function getExpenditureDetails(id) {
               sort_order, created_at
          FROM expenditure_request_bills
         WHERE expenditure_id = ?
+          AND file_category = 'bill'
+        ORDER BY sort_order ASC, id ASC`,
+      [expenditureId],
+    ),
+    db.execute(
+      `SELECT id, original_name, stored_name, file_path, mime_type, file_size,
+              sort_order, created_at
+         FROM expenditure_request_bills
+        WHERE expenditure_id = ?
+          AND file_category = 'payment_proof'
         ORDER BY sort_order ASC, id ASC`,
       [expenditureId],
     ),
@@ -3341,6 +3377,7 @@ export async function getExpenditureDetails(id) {
   const [settlement_rows] = settlementRowsResult;
   const [expenditure_rows] = expenditureRowsResult;
   const [bill_files] = billFilesResult;
+  const [payment_proof_files] = paymentProofFilesResult;
   const [bulkNeftRows] = bulkNeftFileResult;
 
   return {
@@ -3350,6 +3387,7 @@ export async function getExpenditureDetails(id) {
     settlement_rows,
     expenditure_rows,
     bill_files: bill_files.map(withUploadAccess),
+    payment_proof_files: payment_proof_files.map(withUploadAccess),
     bulk_neft_file: withUploadAccess(bulkNeftRows[0] || null),
   };
 }
@@ -3428,27 +3466,54 @@ export async function listExpenditures({
  * Update scalar fields on an expenditure request (payment tracking, status, etc.).
  * Does NOT re-run budget deduction.
  */
-export async function updateExpenditure(id, data, actor = null) {
-  const ALLOWED = [
-  'description', 'payment_debit_account', 'payment_mode',
-  'payment_ref_no', 'payment_date', 'payment_status',
-];
+export async function updateExpenditure(id, data, actor = null, uploads = {}) {
+  const ALLOWED_UPDATE_COLUMNS = {
+    description: 'description',
+    payment_debit_account: 'payment_debit_account',
+    payment_mode: 'payment_mode',
+    payment_ref_no: 'payment_ref_no',
+    payment_date: 'payment_date',
+    payment_status: 'payment_status',
+  };
 
   const update = Object.fromEntries(
     Object.entries(data)
-      .filter(([k, v]) => ALLOWED.includes(k) && v !== undefined)
+      .filter(([k, v]) => Object.prototype.hasOwnProperty.call(ALLOWED_UPDATE_COLUMNS, k) && v !== undefined)
       .map(([k, v]) => [k, v === '' ? null : v]),
   );
 
-  if (!Object.keys(update).length) return { affectedRows: 0 };
+  if (Object.prototype.hasOwnProperty.call(update, 'payment_date')) {
+    update.payment_date = normalizeSqlDate(update.payment_date);
+  }
 
-  const updateKeys = Object.keys(update);
-  const setClause = updateKeys.map((key) => `${key} = ?`).join(', ');
+  if (Object.prototype.hasOwnProperty.call(update, 'payment_status')) {
+    update.payment_status = normalizePaymentStatus(update.payment_status);
+  }
 
-  const [result] = await db.execute(
-    `UPDATE expenditure_requests SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-    [...updateKeys.map((key) => update[key]), id],
-  );
+  const paymentProofFiles = Array.isArray(uploads.paymentProofFiles)
+    ? uploads.paymentProofFiles
+    : [];
+
+  if (!Object.keys(update).length && !paymentProofFiles.length) {
+    return { affectedRows: 0, payment_proof_files: [] };
+  }
+
+  let result = { affectedRows: 0 };
+
+  if (Object.keys(update).length) {
+    const updateKeys = Object.keys(update);
+    const setClause = updateKeys
+      .map((key) => `${ALLOWED_UPDATE_COLUMNS[key]} = ?`)
+      .join(', ');
+    const updateValues = updateKeys.map((key) => update[key]);
+
+    [result] = await db.execute(
+      `UPDATE expenditure_requests SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [...updateValues, id],
+    );
+  }
+
+  await insertBillFiles(db, id, paymentProofFiles, 'payment_proof');
 
   try {
     await db.execute(
@@ -3463,14 +3528,21 @@ export async function updateExpenditure(id, data, actor = null) {
         normalizeText(actor?.role).toLowerCase()     || null,
         Boolean(actor?.isSuperAdmin) ? 1 : 0,
         'Expenditure request updated',
-        JSON.stringify({ updatedKeys: Object.keys(update) }),
+        JSON.stringify({
+          updatedKeys: Object.keys(update),
+          paymentProofFilesAdded: paymentProofFiles.length,
+        }),
       ],
     );
   } catch (auditErr) {
-    if (auditErr?.code !== 'ER_NO_SUCH_TABLE') throw auditErr;
+    console.warn('Failed to write expenditure edit audit log:', auditErr?.message || auditErr);
   }
 
-  return result;
+  const details = await getExpenditureDetails(id);
+  return {
+    affectedRows: result.affectedRows,
+    payment_proof_files: details.payment_proof_files,
+  };
 }
 
 /**
