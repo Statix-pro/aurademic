@@ -170,6 +170,15 @@ const emptyOrganizationData: OrganizationDraft = {
 
 const normalizePayeeText = (value: unknown): string => String(value ?? '').trim();
 
+const sanitizeUppercaseAlphaNumeric = (value: unknown, maxLength: number): string =>
+  normalizePayeeText(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, maxLength);
+
+const isExactUppercaseAlphaNumeric = (value: unknown, length: number): boolean =>
+  new RegExp(`^[A-Z0-9]{${length}}$`).test(normalizePayeeText(value).toUpperCase());
+
 const capitalizeFirstLetter = (value: unknown): string => {
   const text = normalizePayeeText(value);
   if (!text) return '';
@@ -415,10 +424,10 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
     const confirmAccountNo = normalizePayeeText(newConfirmAccountNo);
     const bankName = normalizePayeeText(newBankName);
      const branchName = capitalizeFirstLetter(newBranchName);
-    const ifsc = normalizePayeeText(newIfsc).toUpperCase();
+    const ifsc = sanitizeUppercaseAlphaNumeric(newIfsc, 11);
     const beneficiary = normalizePayeeText(newPayeeName);
-    const accountName = normalizePayeeText(newAccountName);
-    const panNumber = normalizePayeeText(newPanNumber).toUpperCase();
+    const accountName = normalizePayeeText(newAccountName).toUpperCase();
+    const panNumber = sanitizeUppercaseAlphaNumeric(newPanNumber, 10);
     const orgPan = normalizePayeeText(orgPanNumber).toUpperCase();
     const organizationType = normalizePayeeText(orgType);
     const msme = normalizePayeeText(msmeValue);
@@ -433,11 +442,13 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
     if (!accountName) missingFields.push('Account Name');
     if (beneficiaryType === 'individual') {
       if (!panNumber) missingFields.push('PAN Number');
+      else if (!isExactUppercaseAlphaNumeric(panNumber, 10)) missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
     } else {
       if (!organizationType) missingFields.push('Organization Type');
       if (!msme) missingFields.push('MSME');
       if (!gstin) missingFields.push('GSTIN');
       if (!orgPan) missingFields.push('PAN Number');
+      else if (!isExactUppercaseAlphaNumeric(orgPan, 10)) missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
       if (!tdsDetails) missingFields.push('TDS Details');
       if (tdsDetails === 'Yes' && !tdsSection) missingFields.push('TDS Section');
     }
@@ -448,6 +459,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
     if (!bankName) missingFields.push('Bank Name');
     if (!branchName) missingFields.push('Branch Name');
     if (!ifsc) missingFields.push('IFSC Code');
+    else if (!isExactUppercaseAlphaNumeric(ifsc, 11)) missingFields.push('IFSC Code (must be exactly 11 uppercase alphanumeric characters)');
 
     if (missingFields.length > 0) {
       showAlert?.(`Please fill all mandatory fields: ${missingFields.join(', ')}`, 'warning');
@@ -551,7 +563,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
                   className="payee-modal-field-input"
                   type="text"
                   value={newAccountName}
-                  onChange={(event) => setNewAccountName(event.target.value)}
+                  onChange={(event) => setNewAccountName(event.target.value.toUpperCase())}
                   placeholder="Enter Account name"
                   disabled={isSubmitting}
                 />
@@ -562,8 +574,11 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
                   className="payee-modal-field-input"
                   type="text"
                   value={newPanNumber}
-                  onChange={(event) => setNewPanNumber(event.target.value.toUpperCase())}
+                  onChange={(event) => setNewPanNumber(sanitizeUppercaseAlphaNumeric(event.target.value, 10))}
                   placeholder="Enter PAN number"
+                  maxLength={10}
+                  minLength={10}
+                  pattern="[A-Z0-9]{10}"
                   disabled={isSubmitting}
                 />
               </div>
@@ -596,7 +611,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
                   className="payee-modal-field-input"
                   type="text"
                   value={newAccountName}
-                  onChange={(event) => setNewAccountName(event.target.value)}
+                  onChange={(event) => setNewAccountName(event.target.value.toUpperCase())}
                   placeholder="Enter Account name"
                   disabled={isSubmitting}
                 />
@@ -660,8 +675,11 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
                   className="payee-modal-field-input"
                   type="text"
                   value={orgPanNumber}
-                  onChange={(event) => setOrgPanNumber(event.target.value.toUpperCase())}
+                  onChange={(event) => setOrgPanNumber(sanitizeUppercaseAlphaNumeric(event.target.value, 10))}
                   placeholder="Enter PAN number"
+                  maxLength={10}
+                  minLength={10}
+                  pattern="[A-Z0-9]{10}"
                   disabled={isSubmitting}
                 />
               </div>
@@ -807,8 +825,11 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
                 className="payee-modal-field-input"
                 type="text"
                 value={newIfsc}
-                onChange={(event) => setNewIfsc(event.target.value.toUpperCase())}
+                onChange={(event) => setNewIfsc(sanitizeUppercaseAlphaNumeric(event.target.value, 11))}
                 placeholder="Enter IFSC code"
+                maxLength={11}
+                minLength={11}
+                pattern="[A-Z0-9]{11}"
                 disabled={isSubmitting}
               />
             </div>
