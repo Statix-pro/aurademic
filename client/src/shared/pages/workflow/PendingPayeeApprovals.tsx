@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ChevronLeft, ChevronRight, Clock3, CreditCard, Edit2, Eye, LoaderCircle, Search, Trash2, X, XCircle } from 'lucide-react';
 import authenticityUtility from '../../utils/authenticityUtility';
+import '../../components/AddPayeeModal.css';
 
 interface PendingPayeeRecord {
   id: number;
@@ -26,6 +27,99 @@ interface PendingPayeeRecord {
   created_at?: string | null;
   updated_at?: string | null;
 }
+
+type PayeeFormDraft = PendingPayeeRecord & {
+  confirm_account_no: string;
+};
+
+const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'] as const;
+
+const ORGANIZATION_TYPE_OPTIONS = [
+  'Sole Proprietorship',
+  'Partnership Firm',
+  'Private Company',
+  'Public Limited',
+  'Trust / Society',
+  'Government Entity',
+];
+
+const TDS_SECTION_OPTIONS = [
+  '192 - Salary',
+  '194C - Contractor / Work',
+  '194J - Professional / Technical Services',
+  '194H - Commission / Brokerage',
+  '194I - Rent',
+  '194Q - Purchase of Goods',
+  '195 - Non-Resident Payments',
+  'Others',
+];
+
+const INDIAN_BANK_OPTIONS = [
+  'State Bank of India',
+  'Punjab National Bank',
+  'Bank of Baroda',
+  'Canara Bank',
+  'Union Bank of India',
+  'Indian Bank',
+  'Bank of India',
+  'Central Bank of India',
+  'Indian Overseas Bank',
+  'UCO Bank',
+  'Bank of Maharashtra',
+  'Punjab & Sind Bank',
+  'HDFC Bank',
+  'ICICI Bank',
+  'Axis Bank',
+  'Kotak Mahindra Bank',
+  'IndusInd Bank',
+  'Yes Bank',
+  'IDFC FIRST Bank',
+  'Federal Bank',
+  'South Indian Bank',
+  'Karnataka Bank',
+  'Karur Vysya Bank',
+  'City Union Bank',
+  'Dhanlaxmi Bank',
+  'Tamilnad Mercantile Bank',
+  'RBL Bank',
+  'Bandhan Bank',
+  'CSB Bank',
+  'DCB Bank',
+  'Nainital Bank',
+  'Jammu & Kashmir Bank',
+  'IDBI Bank',
+  'AU Small Finance Bank',
+  'Ujjivan Small Finance Bank',
+  'Equitas Small Finance Bank',
+  'Jana Small Finance Bank',
+  'Suryoday Small Finance Bank',
+  'ESAF Small Finance Bank',
+  'Fincare Small Finance Bank',
+  'Utkarsh Small Finance Bank',
+  'North East Small Finance Bank',
+  'Capital Small Finance Bank',
+  'Shivalik Small Finance Bank',
+  'Airtel Payments Bank',
+  'India Post Payments Bank',
+  'Fino Payments Bank',
+  'Paytm Payments Bank',
+  'NSDL Payments Bank',
+  'Aditya Birla Idea Payments Bank',
+  'Deutsche Bank India',
+  'HSBC India',
+  'Standard Chartered Bank',
+  'Citibank India',
+  'DBS Bank India',
+  'Barclays Bank',
+  'BNP Paribas India',
+  'JPMorgan Chase Bank India',
+  'MUFG Bank India',
+  'Mizuho Bank India',
+  'Bank of America N.A. India',
+  'American Express Banking Corp',
+  'Societe Generale India',
+  'Credit Agricole CIB India',
+];
 
 interface PendingPayeeApprovalsProps {
   pendingPayees: PendingPayeeRecord[];
@@ -58,7 +152,7 @@ const overlayStyle: React.CSSProperties = {
 };
 
 const modalStyle: React.CSSProperties = {
-  width: 'min(920px, 100%)',
+  width: 'min(760px, 100%)',
   maxHeight: '90vh',
   overflowY: 'auto',
   background: '#ffffff',
@@ -104,6 +198,26 @@ const detailValueStyle: React.CSSProperties = {
 const normalizePayeeName = (payee: PendingPayeeRecord | null | undefined) =>
   String(payee?.payee_name || payee?.account_name || '').trim();
 
+const normalizePayeeText = (value: unknown): string => String(value ?? '').trim();
+
+const sanitizeUppercaseAlphaNumeric = (value: unknown, maxLength: number): string =>
+  normalizePayeeText(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, maxLength);
+
+const isExactUppercaseAlphaNumeric = (value: unknown, length: number): boolean =>
+  new RegExp(`^[A-Z0-9]{${length}}$`).test(normalizePayeeText(value).toUpperCase());
+
+const capitalizeFirstLetter = (value: unknown): string => {
+  const text = normalizePayeeText(value);
+  if (!text) return '';
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+};
+
+const isBeneficiaryOrgValue = (value: unknown): boolean =>
+  BENEFICIARY_ORG_OPTIONS.some((option) => option === normalizePayeeText(value));
+
 const formatDateTime = (value?: string | null) => {
   const raw = String(value || '').trim();
   if (!raw) return '-';
@@ -128,12 +242,12 @@ const getStatusToken = (value?: string | null): PayeeFilterStatus | 'unknown' =>
   return 'unknown';
 };
 
-const createDraftFromPayee = (payee: PendingPayeeRecord): PendingPayeeRecord => ({
+const createDraftFromPayee = (payee: PendingPayeeRecord): PayeeFormDraft => ({
   ...payee,
   id: Number(payee.id),
-  payee_name: normalizePayeeName(payee),
-  account_name: normalizePayeeName(payee) || null,
-  pan_number: payee.pan_number || '',
+  payee_name: normalizePayeeText(payee.payee_name || payee.account_name),
+  account_name: normalizePayeeText(payee.account_name || payee.payee_name) || null,
+  pan_number: normalizePayeeText(payee.pan_number || '').toUpperCase(),
   account_no: String(payee.account_no || '').trim(),
   account_type: payee.account_type || '',
   ifsc: String(payee.ifsc || '').trim().toUpperCase(),
@@ -142,12 +256,13 @@ const createDraftFromPayee = (payee: PendingPayeeRecord): PendingPayeeRecord => 
   beneficiary_type: String(payee.beneficiary_type || 'individual').trim().toLowerCase() === 'organization'
     ? 'organization'
     : 'individual',
-  beneficiary_org: payee.beneficiary_org || '',
+  beneficiary_org: normalizePayeeText(payee.beneficiary_org || '') || (isBeneficiaryOrgValue(payee.payee_name) ? normalizePayeeText(payee.payee_name) : ''),
   organization_type: payee.organization_type || '',
   msme: payee.msme || '',
   gstin: payee.gstin || '',
   tds_details: payee.tds_details || '',
   tds_section: payee.tds_section || '',
+  confirm_account_no: String(payee.account_no || '').trim(),
 });
 
 const PayeeDetailField: React.FC<{ label: string; value?: string | null }> = ({ label, value }) => (
@@ -173,7 +288,7 @@ const PayeeDetailModal: React.FC<{
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [payee, setPayee] = useState<PendingPayeeRecord | null>(null);
-  const [draft, setDraft] = useState<PendingPayeeRecord | null>(null);
+  const [draft, setDraft] = useState<PayeeFormDraft | null>(null);
 
   const isOpen = Number.isInteger(payeeId) && Number(payeeId) > 0;
   const isEditing = busyEditId !== null && busyEditId === payeeId;
@@ -185,6 +300,8 @@ const PayeeDetailModal: React.FC<{
   const isApproved = approvalStatus === 'approved';
   const isRejected = approvalStatus === 'rejected';
   const isOrganization = String(draft?.beneficiary_type || effectivePayee?.beneficiary_type || 'individual').toLowerCase() === 'organization';
+  const formDraft = draft || (effectivePayee ? createDraftFromPayee(effectivePayee) : null);
+  const isReadOnly = mode === 'view';
 
   const loadPayee = async (targetPayeeId: number, { silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -261,29 +378,80 @@ const PayeeDetailModal: React.FC<{
 
   if (!isOpen || !payeeId) return null;
 
-  const updateDraft = (key: keyof PendingPayeeRecord, value: string) => {
+  const updateDraft = (key: keyof PayeeFormDraft, value: string) => {
     setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
 
   const handleSave = async () => {
     if (!draft) return;
+    const accountName = normalizePayeeText(draft.payee_name).toUpperCase();
+    const beneficiaryOrg = normalizePayeeText(draft.beneficiary_org);
+    const panNumber = sanitizeUppercaseAlphaNumeric(draft.pan_number, 10);
+    const ifsc = sanitizeUppercaseAlphaNumeric(draft.ifsc, 11);
+    const accountNo = normalizePayeeText(draft.account_no);
+    const confirmAccountNo = normalizePayeeText(draft.confirm_account_no);
+    const bankName = normalizePayeeText(draft.bank_name);
+    const branchName = capitalizeFirstLetter(draft.branch_name);
+    const beneficiaryType = String(draft.beneficiary_type || 'individual').toLowerCase() === 'organization'
+      ? 'organization'
+      : 'individual';
+    const organizationType = normalizePayeeText(draft.organization_type);
+    const msme = normalizePayeeText(draft.msme);
+    const gstin = normalizePayeeText(draft.gstin).toUpperCase();
+    const tdsDetails = normalizePayeeText(draft.tds_details);
+    const tdsSection = normalizePayeeText(draft.tds_section);
+    const accountType = normalizePayeeText(draft.account_type);
+
+    const missingFields: string[] = [];
+    if (!beneficiaryOrg) missingFields.push('Beneficiary');
+    if (!accountName) missingFields.push('Account Name');
+    if (beneficiaryType === 'individual') {
+      if (!panNumber) missingFields.push('PAN Number');
+      else if (!isExactUppercaseAlphaNumeric(panNumber, 10)) missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
+    } else {
+      if (!organizationType) missingFields.push('Organization Type');
+      if (!msme) missingFields.push('MSME');
+      if (!gstin) missingFields.push('GSTIN');
+      if (!panNumber) missingFields.push('PAN Number');
+      else if (!isExactUppercaseAlphaNumeric(panNumber, 10)) missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
+      if (!tdsDetails) missingFields.push('TDS Details');
+      if (tdsDetails === 'Yes' && !tdsSection) missingFields.push('TDS Section');
+    }
+    if (!accountNo) missingFields.push('Account Number');
+    if (!confirmAccountNo) missingFields.push('Re-enter Account Number');
+    if (!accountType) missingFields.push('Account Type');
+    if (!bankName) missingFields.push('Bank Name');
+    if (!branchName) missingFields.push('Branch Name');
+    if (!ifsc) missingFields.push('IFSC Code');
+    else if (!isExactUppercaseAlphaNumeric(ifsc, 11)) missingFields.push('IFSC Code (must be exactly 11 uppercase alphanumeric characters)');
+
+    if (missingFields.length > 0) {
+      setError(`Please fill all mandatory fields: ${missingFields.join(', ')}`);
+      return;
+    }
+
+    if (accountNo !== confirmAccountNo) {
+      setError('Account number and re-enter account number must match.');
+      return;
+    }
+
     const payload: PendingPayeeRecord = {
       ...draft,
-      payee_name: String(draft.payee_name || '').trim(),
-      account_name: String(draft.payee_name || '').trim() || null,
-      account_no: String(draft.account_no || '').trim(),
-      ifsc: String(draft.ifsc || '').trim().toUpperCase(),
-      bank_name: String(draft.bank_name || '').trim(),
-      branch_name: String(draft.branch_name || '').trim(),
-      beneficiary_type: isOrganization ? 'organization' : 'individual',
-      beneficiary_org: isOrganization ? String(draft.beneficiary_org || '').trim() : '',
-      organization_type: isOrganization ? String(draft.organization_type || '').trim() : '',
-      msme: isOrganization ? String(draft.msme || '').trim() : '',
-      gstin: isOrganization ? String(draft.gstin || '').trim() : '',
-      tds_details: isOrganization ? String(draft.tds_details || '').trim() : '',
-      tds_section: isOrganization ? String(draft.tds_section || '').trim() : '',
-      pan_number: String(draft.pan_number || '').trim(),
-      account_type: String(draft.account_type || '').trim(),
+      payee_name: accountName,
+      account_name: accountName || null,
+      account_no: accountNo,
+      ifsc,
+      bank_name: bankName,
+      branch_name: branchName,
+      beneficiary_type: beneficiaryType,
+      beneficiary_org: beneficiaryOrg,
+      organization_type: beneficiaryType === 'organization' ? organizationType : '',
+      msme: beneficiaryType === 'organization' ? msme : '',
+      gstin: beneficiaryType === 'organization' ? gstin : '',
+      tds_details: beneficiaryType === 'organization' ? tdsDetails : '',
+      tds_section: beneficiaryType === 'organization' ? (tdsDetails === 'Yes' ? tdsSection : '') : '',
+      pan_number: panNumber,
+      account_type: accountType,
     };
 
     const updated = await onSave(payeeId, payload);
@@ -522,6 +690,649 @@ const PayeeDetailModal: React.FC<{
             ) : null}
           </div>
         </div>
+      </div>
+    </div>
+  );
+};
+
+const PayeeFormModal: React.FC<{
+  payeeId: number | null;
+  queuePayee: PendingPayeeRecord | null;
+  apiBasePath: string;
+  initialMode: PayeeModalMode;
+  busyActionId: number | null;
+  busyEditId: number | null;
+  onClose: () => void;
+  onSave: (id: number, payload: PendingPayeeRecord) => Promise<boolean> | boolean;
+  onDecision: (id: number, decision: 'approved' | 'rejected') => Promise<boolean> | boolean;
+  onDelete: (id: number) => Promise<boolean> | boolean;
+}> = ({ payeeId, queuePayee, apiBasePath, initialMode, busyActionId, busyEditId, onClose, onSave, onDecision, onDelete }) => {
+  const [mode, setMode] = useState<PayeeModalMode>(initialMode);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [payee, setPayee] = useState<PendingPayeeRecord | null>(null);
+  const [draft, setDraft] = useState<PayeeFormDraft | null>(null);
+  const [originalDraft, setOriginalDraft] = useState<PayeeFormDraft | null>(null);
+
+  const isOpen = Number.isInteger(payeeId) && Number(payeeId) > 0;
+  const isEditing = busyEditId !== null && busyEditId === payeeId;
+  const isActing = busyActionId !== null && busyActionId === payeeId;
+  const busy = loading || isEditing || isActing;
+  const effectivePayee = payee || queuePayee;
+  const approvalStatus = String(effectivePayee?.approval_status || 'pending').trim().toLowerCase();
+  const isPending = approvalStatus === 'pending';
+  const isApproved = approvalStatus === 'approved';
+  const isRejected = approvalStatus === 'rejected';
+  const isReadOnly = mode === 'view';
+  const formDraft = draft || (effectivePayee ? createDraftFromPayee(effectivePayee) : null);
+  const beneficiaryType = String(formDraft?.beneficiary_type || 'individual').trim().toLowerCase() === 'organization'
+    ? 'organization'
+    : 'individual';
+
+  const loadPayee = async (targetPayeeId: number, { silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    try {
+      const response = await authenticityUtility.get(`${apiBasePath}/payees/${targetPayeeId}`) as {
+        status?: string;
+        data?: PendingPayeeRecord;
+        message?: string;
+      };
+
+      if (response?.status === 'success' && response.data) {
+        setPayee(response.data);
+        const nextDraft = createDraftFromPayee(response.data);
+        setDraft(nextDraft);
+        setOriginalDraft(nextDraft);
+        setError('');
+        return true;
+      }
+
+      setError(response?.message || 'Unable to load payee details.');
+      return false;
+    } catch (fetchError: any) {
+      setError(fetchError?.response?.data?.message || fetchError?.message || 'Unable to load payee details.');
+      return false;
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen || !payeeId) return undefined;
+
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !busy) onClose();
+    };
+
+    document.addEventListener('keydown', handleEsc);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleEsc);
+      document.body.style.overflow = 'unset';
+    };
+  }, [busy, isOpen, onClose, payeeId]);
+
+  useEffect(() => {
+    if (!payeeId) {
+      setMode(initialMode);
+      setLoading(false);
+      setError('');
+      setPayee(null);
+      setDraft(null);
+      setOriginalDraft(null);
+      return;
+    }
+
+    setMode(initialMode);
+    setError('');
+    if (queuePayee) {
+      setPayee(queuePayee);
+      const nextDraft = createDraftFromPayee(queuePayee);
+      setDraft(nextDraft);
+      setOriginalDraft(nextDraft);
+    } else {
+      setPayee(null);
+      setDraft(null);
+      setOriginalDraft(null);
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const success = await loadPayee(payeeId);
+      if (cancelled && success) return;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBasePath, initialMode, payeeId]);
+
+  const title = useMemo(() => normalizePayeeName(effectivePayee) || 'Payee Details', [effectivePayee]);
+
+  if (!isOpen || !payeeId) return null;
+
+  const updateDraft = (key: keyof PayeeFormDraft, value: string) => {
+    setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
+  };
+
+  const resetToView = () => {
+    setDraft(effectivePayee ? createDraftFromPayee(effectivePayee) : null);
+    setOriginalDraft(effectivePayee ? createDraftFromPayee(effectivePayee) : null);
+    setMode('view');
+    setError('');
+  };
+
+  const handleSave = async () => {
+    if (!draft) return;
+
+    const original = originalDraft || createDraftFromPayee(effectivePayee || draft);
+    const accountName = normalizePayeeText(draft.payee_name).toUpperCase();
+    const beneficiaryOrg = normalizePayeeText(draft.beneficiary_org) || normalizePayeeText(original.beneficiary_org);
+    const originalPan = normalizePayeeText(original.pan_number).toUpperCase();
+    const originalIfsc = normalizePayeeText(original.ifsc).toUpperCase();
+    const panNumber = sanitizeUppercaseAlphaNumeric(draft.pan_number, 10);
+    const ifsc = sanitizeUppercaseAlphaNumeric(draft.ifsc, 11);
+    const originalPanChanged = panNumber !== sanitizeUppercaseAlphaNumeric(originalPan, 10);
+    const originalIfscChanged = ifsc !== sanitizeUppercaseAlphaNumeric(originalIfsc, 11);
+    const accountNo = normalizePayeeText(draft.account_no);
+    const confirmAccountNo = normalizePayeeText(draft.confirm_account_no);
+    const bankName = normalizePayeeText(draft.bank_name);
+    const branchName = capitalizeFirstLetter(draft.branch_name);
+    const organizationType = normalizePayeeText(draft.organization_type);
+    const msme = normalizePayeeText(draft.msme);
+    const gstin = normalizePayeeText(draft.gstin).toUpperCase();
+    const tdsDetails = normalizePayeeText(draft.tds_details);
+    const tdsSection = normalizePayeeText(draft.tds_section);
+    const accountType = normalizePayeeText(draft.account_type);
+
+    const missingFields: string[] = [];
+    if (!accountName) missingFields.push('Account Name');
+    if (beneficiaryType === 'organization') {
+      if (!organizationType) missingFields.push('Organization Type');
+      if (!msme) missingFields.push('MSME');
+      if (!gstin) missingFields.push('GSTIN');
+      if (!tdsDetails) missingFields.push('TDS Details');
+      if (tdsDetails === 'Yes' && !tdsSection) missingFields.push('TDS Section');
+    }
+    if (!accountNo) missingFields.push('Account Number');
+    if (!confirmAccountNo) missingFields.push('Re-enter Account Number');
+    if (!accountType) missingFields.push('Account Type');
+    if (!bankName) missingFields.push('Bank Name');
+    if (!branchName) missingFields.push('Branch Name');
+    if (!ifsc) missingFields.push('IFSC Code');
+    else if (originalIfscChanged && !isExactUppercaseAlphaNumeric(ifsc, 11)) missingFields.push('IFSC Code (must be exactly 11 uppercase alphanumeric characters)');
+    if ((beneficiaryType === 'individual' || beneficiaryType === 'organization') && !panNumber) missingFields.push('PAN Number');
+    else if (originalPanChanged && !isExactUppercaseAlphaNumeric(panNumber, 10)) missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
+
+    if (missingFields.length > 0) {
+      setError(`Please fill all mandatory fields: ${missingFields.join(', ')}`);
+      return;
+    }
+
+    if (accountNo !== confirmAccountNo) {
+      setError('Account number and re-enter account number must match.');
+      return;
+    }
+
+    const payload: PendingPayeeRecord = {
+      ...draft,
+      payee_name: accountName,
+      account_name: accountName || null,
+      account_no: accountNo,
+      ifsc,
+      bank_name: bankName,
+      branch_name: branchName,
+      beneficiary_type: beneficiaryType,
+      beneficiary_org: beneficiaryOrg,
+      organization_type: beneficiaryType === 'organization' ? organizationType : '',
+      msme: beneficiaryType === 'organization' ? msme : '',
+      gstin: beneficiaryType === 'organization' ? gstin : '',
+      tds_details: beneficiaryType === 'organization' ? tdsDetails : '',
+      tds_section: beneficiaryType === 'organization' ? (tdsDetails === 'Yes' ? tdsSection : '') : '',
+      pan_number: panNumber,
+      account_type: accountType,
+    };
+
+    const updated = await onSave(payeeId, payload);
+    if (!updated) return;
+    const refreshed = createDraftFromPayee({ ...payload, id: payeeId });
+    setPayee({ ...payload, id: payeeId });
+    setDraft(refreshed);
+    setOriginalDraft(refreshed);
+    void loadPayee(payeeId, { silent: true });
+    setError('');
+    setMode('view');
+    onClose();
+  };
+
+  const handleDecision = async (decision: 'approved' | 'rejected') => {
+    const success = await onDecision(payeeId, decision);
+    if (success) onClose();
+  };
+
+  const handleDelete = async () => {
+    const deleted = await onDelete(payeeId);
+    if (deleted) onClose();
+  };
+
+  return (
+    <div style={overlayStyle} onClick={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+      <div style={modalStyle} role="dialog" aria-modal="true" aria-label={title}>
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+          <div>
+            <div style={{ fontSize: '1.08rem', fontWeight: 700, color: '#0f172a' }}>{title}</div>
+            <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>
+              {isReadOnly ? 'Review the full payee record before taking action.' : 'Update payee details before approval.'}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: busy ? 'not-allowed' : 'pointer' }}
+            aria-label="Close payee details"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {loading ? (
+          <div style={{ padding: '36px 22px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', color: '#475569' }}>
+            <LoaderCircle size={20} className="spin" />
+            Loading payee details...
+          </div>
+        ) : formDraft ? (
+          <>
+            {error ? (
+              <div style={{ padding: '14px 22px 0', color: '#b91c1c', fontSize: '0.95rem', lineHeight: 1.5 }}>
+                {error}
+              </div>
+            ) : null}
+            <div className="add-payee-modal-content" style={{ padding: '18px 34px 14px' }}>
+              <div className="payee-modal-toggle">
+                <button
+                  type="button"
+                  onClick={() => !isReadOnly && updateDraft('beneficiary_type', 'individual')}
+                  className={`payee-modal-toggle-btn ${beneficiaryType === 'individual' ? 'active' : ''}`}
+                  disabled={busy || isReadOnly}
+                >
+                  Individual
+                </button>
+                <button
+                  type="button"
+                  onClick={() => !isReadOnly && updateDraft('beneficiary_type', 'organization')}
+                  className={`payee-modal-toggle-btn ${beneficiaryType === 'organization' ? 'active' : ''}`}
+                  disabled={busy || isReadOnly}
+                >
+                  Organization
+                </button>
+              </div>
+
+              <div className="add-payee-modal-section">
+                <div className="add-payee-modal-row">
+                  <label>Beneficiary</label>
+                  <div className="add-payee-modal-radio-group">
+                    {BENEFICIARY_ORG_OPTIONS.map((option) => (
+                      <label key={option} className="add-payee-modal-radio">
+                        <input
+                          type="radio"
+                          name="beneficiaryOrg"
+                          value={option}
+                          checked={String(formDraft.beneficiary_org || '') === option}
+                          onChange={() => !isReadOnly && updateDraft('beneficiary_org', option)}
+                          disabled={busy || isReadOnly}
+                        />
+                        <span>{option}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="add-payee-modal-row">
+                  <label>Account Name</label>
+                  <input
+                    className="payee-modal-field-input"
+                    type="text"
+                    value={String(formDraft.payee_name || '')}
+                    onChange={(event) => !isReadOnly && updateDraft('payee_name', event.target.value.toUpperCase())}
+                    placeholder="Enter Account name"
+                    readOnly={isReadOnly}
+                    disabled={busy}
+                  />
+                </div>
+
+                <div className="add-payee-modal-row">
+                  <label>PAN Number</label>
+                  <input
+                    className="payee-modal-field-input"
+                    type="text"
+                    value={String(formDraft.pan_number || '')}
+                    onChange={(event) => !isReadOnly && updateDraft('pan_number', sanitizeUppercaseAlphaNumeric(event.target.value, 10))}
+                    placeholder="Enter PAN number"
+                    maxLength={10}
+                    minLength={10}
+                    pattern="[A-Z0-9]{10}"
+                    readOnly={isReadOnly}
+                    disabled={busy}
+                  />
+                </div>
+
+                {beneficiaryType === 'organization' && (
+                  <>
+                    <div className="add-payee-modal-row">
+                      <label>Organization Type</label>
+                      <select
+                        className="payee-modal-field-input"
+                        value={String(formDraft.organization_type || '')}
+                        onChange={(event) => !isReadOnly && updateDraft('organization_type', event.target.value)}
+                        disabled={busy || isReadOnly}
+                      >
+                        <option value="">Select Organization Type</option>
+                        {ORGANIZATION_TYPE_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="add-payee-modal-row">
+                      <label>MSME</label>
+                      <div className="add-payee-modal-radio-group">
+                        <label className="add-payee-modal-radio">
+                          <input
+                            type="radio"
+                            name="msme"
+                            value="Yes"
+                            checked={String(formDraft.msme || '') === 'Yes'}
+                            onChange={(event) => !isReadOnly && updateDraft('msme', event.target.value)}
+                            disabled={busy || isReadOnly}
+                          />
+                          <span>Yes</span>
+                        </label>
+                        <label className="add-payee-modal-radio">
+                          <input
+                            type="radio"
+                            name="msme"
+                            value="No"
+                            checked={String(formDraft.msme || '') === 'No'}
+                            onChange={(event) => !isReadOnly && updateDraft('msme', event.target.value)}
+                            disabled={busy || isReadOnly}
+                          />
+                          <span>No</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="add-payee-modal-row">
+                      <label>GSTIN</label>
+                      <input
+                        className="payee-modal-field-input"
+                        type="text"
+                        value={String(formDraft.gstin || '')}
+                        onChange={(event) => !isReadOnly && updateDraft('gstin', event.target.value.toUpperCase())}
+                        placeholder="Enter GSTIN"
+                        readOnly={isReadOnly}
+                        disabled={busy}
+                      />
+                    </div>
+
+                    <div className="add-payee-modal-row">
+                      <label>PAN Number</label>
+                      <input
+                        className="payee-modal-field-input"
+                        type="text"
+                        value={String(formDraft.pan_number || '')}
+                        onChange={(event) => !isReadOnly && updateDraft('pan_number', sanitizeUppercaseAlphaNumeric(event.target.value, 10))}
+                        placeholder="Enter PAN number"
+                        maxLength={10}
+                        minLength={10}
+                        pattern="[A-Z0-9]{10}"
+                        readOnly={isReadOnly}
+                        disabled={busy}
+                      />
+                    </div>
+
+                    <div className="add-payee-modal-row add-payee-modal-row--tds">
+                      <label>TDS Details</label>
+                      <div className="add-payee-modal-radio-group add-payee-modal-tds-control">
+                        <label className="add-payee-modal-radio">
+                          <input
+                            type="radio"
+                            name="tds"
+                            value="Yes"
+                            checked={String(formDraft.tds_details || '') === 'Yes'}
+                            onChange={(event) => !isReadOnly && updateDraft('tds_details', event.target.value)}
+                            disabled={busy || isReadOnly}
+                          />
+                          <span>Yes</span>
+                        </label>
+                        <label className="add-payee-modal-radio">
+                          <input
+                            type="radio"
+                            name="tds"
+                            value="No"
+                            checked={String(formDraft.tds_details || '') === 'No'}
+                            onChange={(event) => !isReadOnly && updateDraft('tds_details', event.target.value)}
+                            disabled={busy || isReadOnly}
+                          />
+                          <span>No</span>
+                        </label>
+                        <div className={`add-payee-modal-tds-section ${String(formDraft.tds_details || '') === 'Yes' ? 'visible' : ''}`}>
+                          <select
+                            className="payee-modal-field-input"
+                            value={String(formDraft.tds_section || '')}
+                            onChange={(event) => !isReadOnly && updateDraft('tds_section', event.target.value)}
+                            disabled={busy || isReadOnly || String(formDraft.tds_details || '') !== 'Yes'}
+                          >
+                            <option value="">Select TDS Section</option>
+                            {TDS_SECTION_OPTIONS.map((option) => (
+                              <option key={option} value={option}>{option}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="add-payee-modal-section add-payee-modal-section--bank">
+                <div className="add-payee-modal-row">
+                  <label>Account Number</label>
+                  <input
+                    className="payee-modal-field-input"
+                    type="text"
+                    value={String(formDraft.account_no || '')}
+                    onChange={(event) => !isReadOnly && updateDraft('account_no', event.target.value)}
+                    placeholder="Enter account number"
+                    inputMode="numeric"
+                    readOnly={isReadOnly}
+                    disabled={busy}
+                  />
+                </div>
+                <div className="add-payee-modal-row">
+                  <label>Re-enter Account No</label>
+                  <div className="payee-modal-confirm-field">
+                    <input
+                      className={`payee-modal-field-input ${!isReadOnly && formDraft.confirm_account_no && formDraft.account_no && formDraft.confirm_account_no !== formDraft.account_no ? 'is-invalid' : ''}`}
+                      type="text"
+                      value={String(formDraft.confirm_account_no || '')}
+                      onChange={(event) => !isReadOnly && updateDraft('confirm_account_no', event.target.value)}
+                      onPaste={(event) => !isReadOnly && event.preventDefault()}
+                      onDrop={(event) => !isReadOnly && event.preventDefault()}
+                      placeholder="Re-enter account number"
+                      inputMode="numeric"
+                      readOnly={isReadOnly}
+                      disabled={busy}
+                    />
+                    {!isReadOnly && formDraft.confirm_account_no && formDraft.account_no && formDraft.confirm_account_no === formDraft.account_no && (
+                      <CheckCircle2 className="payee-modal-confirm-icon" size={18} aria-hidden="true" />
+                    )}
+                  </div>
+                </div>
+                {!isReadOnly && formDraft.confirm_account_no && formDraft.account_no && formDraft.confirm_account_no !== formDraft.account_no && (
+                  <div className="add-payee-modal-row add-payee-modal-row--helper">
+                    <span className="add-payee-modal-helper-text add-payee-modal-helper-text--error">
+                      Account numbers do not match
+                    </span>
+                  </div>
+                )}
+                <div className="add-payee-modal-row">
+                  <label>Account Type</label>
+                  <div className="add-payee-modal-radio-group">
+                    <label className="add-payee-modal-radio">
+                      <input
+                        type="radio"
+                        name="accountType"
+                        value="Savings"
+                        checked={String(formDraft.account_type || '') === 'Savings'}
+                        onChange={() => !isReadOnly && updateDraft('account_type', 'Savings')}
+                        disabled={busy || isReadOnly}
+                      />
+                      <span>Savings</span>
+                    </label>
+                    <label className="add-payee-modal-radio">
+                      <input
+                        type="radio"
+                        name="accountType"
+                        value="Current"
+                        checked={String(formDraft.account_type || '') === 'Current'}
+                        onChange={() => !isReadOnly && updateDraft('account_type', 'Current')}
+                        disabled={busy || isReadOnly}
+                      />
+                      <span>Current</span>
+                    </label>
+                  </div>
+                </div>
+                <div className="add-payee-modal-row">
+                  <label>Bank Name</label>
+                  <select
+                    className="payee-modal-field-input"
+                    value={String(formDraft.bank_name || '')}
+                    onChange={(event) => !isReadOnly && updateDraft('bank_name', event.target.value)}
+                    disabled={busy || isReadOnly}
+                  >
+                    <option value="">Select bank name</option>
+                    {INDIAN_BANK_OPTIONS.map((bank) => (
+                      <option key={bank} value={bank}>{bank}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="add-payee-modal-row">
+                  <label>Branch Name</label>
+                  <input
+                    className="payee-modal-field-input"
+                    type="text"
+                    value={capitalizeFirstLetter(formDraft.branch_name)}
+                    onChange={(event) => !isReadOnly && updateDraft('branch_name', capitalizeFirstLetter(event.target.value))}
+                    placeholder="Enter branch name"
+                    readOnly={isReadOnly}
+                    disabled={busy}
+                  />
+                </div>
+                <div className="add-payee-modal-row">
+                  <label>IFSC Code</label>
+                  <input
+                    className="payee-modal-field-input"
+                    type="text"
+                    value={String(formDraft.ifsc || '')}
+                    onChange={(event) => !isReadOnly && updateDraft('ifsc', sanitizeUppercaseAlphaNumeric(event.target.value, 11))}
+                    placeholder="Enter IFSC code"
+                    maxLength={11}
+                    minLength={11}
+                    pattern="[A-Z0-9]{11}"
+                    readOnly={isReadOnly}
+                    disabled={busy}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gap: '10px', marginTop: '18px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                  <PayeeDetailField label="Approval Status" value={formatToken(formDraft.approval_status)} />
+                  <PayeeDetailField label="Requested At" value={formatDateTime(formDraft.requested_at)} />
+                  {isApproved ? <PayeeDetailField label="Approved At" value={formatDateTime(formDraft.approved_at)} /> : null}
+                  {isRejected ? <PayeeDetailField label="Rejection Reason" value={formDraft.rejection_reason} /> : null}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '18px 22px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {mode === 'view' ? (
+                  <button
+                    type="button"
+                    onClick={() => setMode('edit')}
+                    disabled={busy || !formDraft}
+                    style={{ border: '1px solid #2563eb', background: '#eff6ff', color: '#2563eb', borderRadius: '10px', padding: '10px 16px', cursor: busy || !formDraft ? 'not-allowed' : 'pointer', opacity: busy || !formDraft ? 0.7 : 1 }}
+                  >
+                    Edit
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={resetToView}
+                    disabled={busy}
+                    style={{ border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer' }}
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+                {isPending && mode === 'view' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { void handleDecision('approved'); }}
+                      disabled={busy}
+                      style={{ border: '1px solid #16a34a', background: '#f0fdf4', color: '#16a34a', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+                    >
+                      {isActing ? 'Working...' : 'Approve'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { void handleDecision('rejected'); }}
+                      disabled={busy}
+                      style={{ border: '1px solid #dc2626', background: '#fef2f2', color: '#dc2626', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+                    >
+                      {isActing ? 'Working...' : 'Reject'}
+                    </button>
+                  </>
+                ) : null}
+                {mode === 'view' ? (
+                  <button
+                    type="button"
+                    onClick={() => { void handleDelete(); }}
+                    disabled={busy}
+                    style={{ border: '1px solid #fecaca', background: '#fff1f2', color: '#dc2626', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+                  >
+                    Delete
+                  </button>
+                ) : null}
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={busy}
+                  style={{ border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer' }}
+                >
+                  Close
+                </button>
+                {mode === 'edit' ? (
+                  <button
+                    type="button"
+                    onClick={() => { void handleSave(); }}
+                    disabled={busy}
+                    style={{ border: '1px solid #0f766e', background: '#0f766e', color: '#fff', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+                  >
+                    {isEditing ? 'Saving...' : 'Save'}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </>
+        ) : error ? (
+          <div style={{ padding: '24px 22px', color: '#b91c1c', fontSize: '0.95rem' }}>{error}</div>
+        ) : null}
       </div>
     </div>
   );
@@ -799,26 +1610,30 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                 >
                   <Edit2 size={20} />
                 </button>
-                <button
-                  type="button"
-                  disabled={busy || editing || !isPending}
-                  onClick={() => { void onPayeeDecision(Number(payee.id), 'approved'); }}
-                  title="Approve"
-                  aria-label="Approve"
-                  className="fw-payee-action-btn fw-payee-action-btn--approve"
-                >
-                  <CheckCircle2 size={20} />
-                </button>
-                <button
-                  type="button"
-                  disabled={busy || editing || !isPending}
-                  onClick={() => { void onPayeeDecision(Number(payee.id), 'rejected'); }}
-                  title="Reject"
-                  aria-label="Reject"
-                  className="fw-payee-action-btn fw-payee-action-btn--reject"
-                >
-                  <XCircle size={20} />
-                </button>
+                {isPending ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={busy || editing}
+                      onClick={() => { void onPayeeDecision(Number(payee.id), 'approved'); }}
+                      title="Approve"
+                      aria-label="Approve"
+                      className="fw-payee-action-btn fw-payee-action-btn--approve"
+                    >
+                      <CheckCircle2 size={20} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy || editing}
+                      onClick={() => { void onPayeeDecision(Number(payee.id), 'rejected'); }}
+                      title="Reject"
+                      aria-label="Reject"
+                      className="fw-payee-action-btn fw-payee-action-btn--reject"
+                    >
+                      <XCircle size={20} />
+                    </button>
+                  </>
+                ) : null}
                 <button
                   type="button"
                   disabled={busy || editing}
@@ -889,7 +1704,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
       )}
       </div>
 
-      <PayeeDetailModal
+      <PayeeFormModal
         payeeId={selectedPayeeId}
         queuePayee={selectedQueuePayee}
         apiBasePath={apiBasePath}

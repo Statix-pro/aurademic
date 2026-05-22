@@ -1198,6 +1198,15 @@ export async function updatePayeeById(id, payeeData = {}) {
     throw new Error('payee_name, account_no, ifsc, bank_name and branch_name are required');
   }
 
+  const [existingRows] = await db.execute(
+    'SELECT id FROM expenditure_payees WHERE id = ? AND is_active = 1 LIMIT 1',
+    [payeeId],
+  );
+
+  if (!existingRows.length) {
+    return false;
+  }
+
   const [result] = await db.execute(
     `UPDATE expenditure_payees
         SET payee_name = ?,
@@ -1238,7 +1247,7 @@ export async function updatePayeeById(id, payeeData = {}) {
     ],
   );
 
-  return result.affectedRows > 0;
+  return result.affectedRows >= 0;
 }
 
 export async function updatePayeeApproval(id, { decision, rejectionReason = '', userId = null } = {}) {

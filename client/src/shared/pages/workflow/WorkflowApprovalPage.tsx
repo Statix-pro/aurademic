@@ -1503,9 +1503,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         data?: PendingPayeeRecord;
       };
 
-      if (response?.status === 'success' && response.data) {
+      if (response?.status === 'success') {
+        const updatedRow = response.data || payload;
         setPendingPayees((prev) =>
-          prev.map((row) => (Number(row.id) === Number(payeeId) ? { ...row, ...response.data } : row)),
+          prev.map((row) => (Number(row.id) === Number(payeeId) ? { ...row, ...updatedRow } : row)),
         );
         return true;
       }
