@@ -192,6 +192,13 @@
   overflow: hidden;
 }
 
+.expenditure-demo-card--closed {
+  border-color: #22c55e;
+  box-shadow:
+    0 0 0 2px rgba(34, 197, 94, 0.18),
+    0 8px 18px rgba(21, 128, 61, 0.14);
+}
+
 .expenditure-demo-trigger {
   width: 100%;
   display: grid;
@@ -835,26 +842,6 @@
 .expenditure-demo-option--payment-paid .expenditure-demo-option__detail-ref-value,
 .expenditure-demo-option--payment-paid .expenditure-demo-option__detail-amount-value {
   color: #106b32;
-}
-
-.expenditure-demo-option--payment-pending {
-  border-color: #e8c56f !important;
-  background: #fff8e3 !important;
-}
-
-.expenditure-demo-option--payment-pending .expenditure-demo-option__detail-box--ref {
-  background: #fffdf5;
-  border-color: #e8c56f;
-}
-
-.expenditure-demo-option--payment-pending .expenditure-demo-option__detail-box--amount {
-  background: #fff1bf;
-  border-color: #e8c56f;
-}
-
-.expenditure-demo-option--payment-pending .expenditure-demo-option__detail-ref-value,
-.expenditure-demo-option--payment-pending .expenditure-demo-option__detail-amount-value {
-  color: #8a6400;
 }
 
 .expenditure-demo-option--payment-processing {
