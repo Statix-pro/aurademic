@@ -48,7 +48,9 @@ const normalizePayeeRecord = (row) => {
     payee_name: canonicalPayeeName,
     account_name: canonicalPayeeName || null,
     beneficiary_org: resolveCanonicalBeneficiaryOrg(row.beneficiary_org, row.payee_name) || null,
-    approval_status: normalizeText(row.approval_status) || 'approved',
+    approval_status:
+      normalizeText(row.approval_status) ||
+      (row.approved_at ? 'approved' : 'pending'),
     requested_at: row.requested_at || row.created_at || null,
   };
 };
@@ -946,10 +948,15 @@ export async function getAdvanceSummary({
 
 // ─── Payee master ─────────────────────────────────────────────────────────────
 
-export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
+export async function listPayees({ search = '', limit = 20, offset = 0, status = 'all' } = {}) {
   const q = normalizeText(search);
   const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
   const offsetNum = Math.max(Number(offset) || 0, 0);
+  const normalizedStatus = normalizeText(status).toLowerCase();
+  const statusClause = normalizedStatus && normalizedStatus !== 'all'
+    ? "AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = ?"
+    : '';
+  const statusParams = statusClause ? [normalizedStatus] : [];
   const searchTerms = q
     .split(/\s+/)
     .map((term) => term.trim().toLowerCase())
@@ -1033,11 +1040,12 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
            updated_at
          FROM expenditure_payees
          WHERE is_active = 1
+           ${statusClause ? 'AND LOWER(TRIM(COALESCE(approval_status, \'approved\'))) = ?' : ''}
            AND UPPER(TRIM(COALESCE(ifsc, ''))) = ?
            AND ${accountCompareSql} = ?
          ORDER BY updated_at DESC, id DESC
          LIMIT ${limitNum} OFFSET ${offsetNum}`,
-        [ifscCandidate, normalizedAccountCandidate],
+        [...statusParams, ifscCandidate, normalizedAccountCandidate],
       );
       if (exactPayees.length) return exactPayees.map(normalizePayeeRecord);
 
@@ -1071,6 +1079,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
          INNER JOIN expenditure_payees ep
                  ON ep.id = epr.payee_id
                 AND ep.is_active = 1
+                ${statusClause ? 'AND LOWER(TRIM(COALESCE(ep.approval_status, \'approved\'))) = ?' : ''}
          INNER JOIN (
            SELECT MAX(id) AS id
              FROM expenditure_payee_rows
@@ -1084,7 +1093,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
            AND ${rowAccountCompareSql} = ?
          ORDER BY epr.updated_at DESC, epr.id DESC
          LIMIT ${limitNum} OFFSET ${offsetNum}`,
-        [ifscCandidate, normalizedAccountCandidate],
+        [...statusParams, ifscCandidate, normalizedAccountCandidate],
       );
       if (exactPayeeRows.length) return exactPayeeRows.map(normalizePayeeRecord);
     }
@@ -1097,9 +1106,10 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
   const [rows] = await db.execute(
     `SELECT * FROM expenditure_payees ep
       WHERE ep.is_active = 1
+        ${statusClause}
         AND ${payeeTermClauses}
       ORDER BY ep.payee_name ASC LIMIT ${limitNum} OFFSET ${offsetNum}`,
-    [...searchTerms.map((term) => `%${term}%`)],
+    [...statusParams, ...searchTerms.map((term) => `%${term}%`)],
   );
 
   if (rows.length) return rows.map(normalizePayeeRecord);
@@ -1138,6 +1148,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
      INNER JOIN expenditure_payees ep
              ON ep.id = epr.payee_id
             AND ep.is_active = 1
+            ${statusClause ? "AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = ?" : ''}
      INNER JOIN (
        SELECT MAX(id) AS id
          FROM expenditure_payee_rows
@@ -1155,7 +1166,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
      WHERE ${termClauses}
      ORDER BY epr.updated_at DESC, epr.id DESC
      LIMIT ${limitNum} OFFSET ${offsetNum}`,
-    [...searchTerms.map((term) => `%${term}%`)],
+    [...statusParams, ...searchTerms.map((term) => `%${term}%`)],
   );
 
   return payeeRowResults.map(normalizePayeeRecord);
@@ -1594,6 +1605,11 @@ export async function upsertPayee(payeeData, userId, conn = db) {
               gstin        = COALESCE(?, gstin),
               tds_details  = COALESCE(?, tds_details),
               tds_section  = COALESCE(?, tds_section),
+              approval_status = 'pending',
+              approved_by   = NULL,
+              approved_at   = NULL,
+              rejection_reason = NULL,
+              requested_at  = CURRENT_TIMESTAMP,
               is_active    = 1,
               updated_at   = CURRENT_TIMESTAMP
         WHERE id = ?`,
@@ -1622,8 +1638,9 @@ export async function upsertPayee(payeeData, userId, conn = db) {
        (payee_name, account_name, account_no, account_type,
         bank_name, branch_name, ifsc, beneficiary_type,
         beneficiary_org, organization_type, msme,
-        pan_number, gstin, tds_details, tds_section, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        pan_number, gstin, tds_details, tds_section,
+        approval_status, requested_at, approved_by, approved_at, rejection_reason, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, NULL, NULL, NULL, ?)`,
     [
       canonicalPayeeName,
       canonicalPayeeName || null,

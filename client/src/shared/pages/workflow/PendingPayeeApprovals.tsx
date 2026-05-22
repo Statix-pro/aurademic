@@ -43,6 +43,7 @@ interface PendingPayeeApprovalsProps {
 
 type PayeeModalMode = 'view' | 'edit';
 type PayeeFilterStatus = 'all' | 'pending' | 'approved' | 'rejected';
+type PayeeBeneficiaryFilter = 'all' | 'individual' | 'organization';
 
 const overlayStyle: React.CSSProperties = {
   position: 'fixed',
@@ -548,6 +549,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
     else setInternalSearchTerm(value);
   };
   const [statusFilter, setStatusFilter] = useState<PayeeFilterStatus>('all');
+  const [beneficiaryFilter, setBeneficiaryFilter] = useState<PayeeBeneficiaryFilter>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
 
@@ -575,6 +577,8 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
     return pendingPayees.filter((payee) => {
       const status = getStatusToken(payee.approval_status);
       if (statusFilter !== 'all' && status !== statusFilter) return false;
+      const beneficiaryType = String(payee.beneficiary_type || '').trim().toLowerCase();
+      if (beneficiaryFilter !== 'all' && beneficiaryType !== beneficiaryFilter) return false;
       if (!normalizedQuery) return true;
       const haystack = [
         payee.payee_name,
@@ -592,7 +596,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
         .join(' ');
       return haystack.includes(normalizedQuery);
     });
-  }, [pendingPayees, searchTerm, statusFilter]);
+  }, [pendingPayees, searchTerm, statusFilter, beneficiaryFilter]);
 
   const totalPages = useMemo(
     () => Math.max(1, Math.ceil(filteredPayees.length / ITEMS_PER_PAGE)),
@@ -606,7 +610,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter]);
+  }, [searchTerm, statusFilter, beneficiaryFilter]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -684,6 +688,16 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
           <div className="fw-payee-count">
             {statusFilter === 'all' ? 'All payees' : `${formatToken(statusFilter)} payees`} - {filteredPayees.length} record{filteredPayees.length === 1 ? '' : 's'}
           </div>
+          <select
+            className="fw-control fw-payee-type-filter"
+            value={beneficiaryFilter}
+            onChange={(e) => setBeneficiaryFilter(e.target.value as PayeeBeneficiaryFilter)}
+            aria-label="Filter payee by beneficiary type"
+          >
+            <option value="all">All Types</option>
+            <option value="individual">Individual</option>
+            <option value="organization">Organization</option>
+          </select>
         </div>
 
         {filteredPayees.length === 0 ? (
@@ -758,7 +772,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, auto)', gap: '10px', alignContent: 'center', justifyContent: 'end' }}>
+              <div className="fw-payee-action-buttons">
                 <button
                   type="button"
                   disabled={busy || editing}
@@ -768,12 +782,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                   }}
                   title="View"
                   aria-label="View"
-                  style={{
-                    width: '44px', height: '44px', borderRadius: '10px',
-                    border: '1px solid #334155', background: '#f8fafc', color: '#334155', fontWeight: 600,
-                    cursor: busy || editing ? 'not-allowed' : 'pointer', opacity: busy || editing ? 0.7 : 1, transition: 'all 0.2s ease',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
+                  className="fw-payee-action-btn fw-payee-action-btn--view"
                 >
                   <Eye size={20} />
                 </button>
@@ -786,12 +795,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                   }}
                   title={editing ? 'Editing' : 'Edit'}
                   aria-label={editing ? 'Editing' : 'Edit'}
-                  style={{
-                    width: '44px', height: '44px', borderRadius: '10px',
-                    border: '1px solid #2563eb', background: '#eff6ff', color: '#2563eb', fontWeight: 600,
-                    cursor: busy || editing ? 'not-allowed' : 'pointer', opacity: busy || editing ? 0.7 : 1, transition: 'all 0.2s ease',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
+                  className="fw-payee-action-btn fw-payee-action-btn--edit"
                 >
                   <Edit2 size={20} />
                 </button>
@@ -801,12 +805,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                   onClick={() => { void onPayeeDecision(Number(payee.id), 'approved'); }}
                   title="Approve"
                   aria-label="Approve"
-                  style={{
-                    width: '44px', height: '44px', borderRadius: '10px',
-                    border: '1px solid #16a34a', background: '#f0fdf4', color: '#16a34a', fontWeight: 600,
-                    cursor: busy || editing || !isPending ? 'not-allowed' : 'pointer', opacity: busy || editing || !isPending ? 0.7 : 1, transition: 'all 0.2s ease',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
+                  className="fw-payee-action-btn fw-payee-action-btn--approve"
                 >
                   <CheckCircle2 size={20} />
                 </button>
@@ -816,12 +815,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                   onClick={() => { void onPayeeDecision(Number(payee.id), 'rejected'); }}
                   title="Reject"
                   aria-label="Reject"
-                  style={{
-                    width: '44px', height: '44px', borderRadius: '10px',
-                    border: '1px solid #dc2626', background: '#fef2f2', color: '#dc2626', fontWeight: 600,
-                    cursor: busy || editing || !isPending ? 'not-allowed' : 'pointer', opacity: busy || editing || !isPending ? 0.7 : 1, transition: 'all 0.2s ease',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
+                  className="fw-payee-action-btn fw-payee-action-btn--reject"
                 >
                   <XCircle size={20} />
                 </button>
@@ -831,12 +825,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                   onClick={() => { void onPayeeDelete(Number(payee.id)); }}
                   title="Delete"
                   aria-label="Delete"
-                  style={{
-                    width: '44px', height: '44px', borderRadius: '10px',
-                    border: '1px solid #fecaca', background: '#fff1f2', color: '#dc2626', fontWeight: 600,
-                    cursor: busy || editing ? 'not-allowed' : 'pointer', opacity: busy || editing ? 0.7 : 1, transition: 'all 0.2s ease',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
+                  className="fw-payee-action-btn fw-payee-action-btn--delete"
                 >
                   <Trash2 size={20} />
                 </button>

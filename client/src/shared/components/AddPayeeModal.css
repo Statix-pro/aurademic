@@ -122,6 +122,48 @@
   min-width: 0;
 }
 
+.payee-modal-confirm-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.payee-modal-confirm-field .payee-modal-field-input {
+  width: 100%;
+  padding-right: 42px;
+}
+
+.payee-modal-field-input.is-invalid {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+}
+
+.payee-modal-confirm-icon {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  color: #16a34a;
+  pointer-events: none;
+}
+
+.add-payee-modal-row--helper {
+  margin-top: -6px;
+  justify-content: flex-end;
+}
+
+.add-payee-modal-helper-text {
+  flex: 1;
+  min-width: 0;
+  padding-left: 164px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.add-payee-modal-helper-text--error {
+  color: #dc2626;
+}
+
 .add-payee-modal-row>.organization-type-dropdown,
 .add-payee-modal-row>.payee-modal-select-dropdown,
 .add-payee-modal-row .tds-section-dropdown {
@@ -317,6 +359,10 @@
 
   .add-payee-modal-radio-group {
     flex-wrap: wrap;
+  }
+
+  .add-payee-modal-helper-text {
+    padding-left: 0;
   }
 
   .add-payee-modal-tds-section {

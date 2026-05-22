@@ -510,11 +510,12 @@ const expenditureController = {
 
   async listPayees(req, res) {
     try {
-      const { search = '', limit = 20, offset = 0 } = req.query;
+      const { search = '', limit = 20, offset = 0, status = 'all' } = req.query;
       const payees = await expenditureModel.listPayees({
         search,
         limit: Number(limit) || 20,
         offset: Number(offset) || 0,
+        status,
       });
 
       return res.json({ status: 'success', data: payees });
