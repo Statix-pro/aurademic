@@ -7426,21 +7426,21 @@ const handleBeneficiarySearch = async (query: string) => {
     >
       {/* 1. Dropdown (Status) */}
       <div className="payee-status-col payee-status-col-pending">
-        <CustomDropdown
-          options={toOptions(PAYMENT_STATUS_OPTIONS)}
-                  value={getSelectedOption(
-                    paymentDetails.status,
-                    toOptions(PAYMENT_STATUS_OPTIONS),
-                  )}
+	        <CustomDropdown
+	          options={toOptions(PAYMENT_STATUS_OPTIONS)}
+	                  value={getSelectedOption(
+	                    paymentDetails.status,
+	                    toOptions(PAYMENT_STATUS_OPTIONS),
+	                  )}
           onChange={(opt) =>
                     setPaymentDetails({
                       ...paymentDetails,
                       status: String((opt as OptionType)?.value || ""),
                     })
-          }
-          placeholder="Status"
-          isDisabled={!canEditPaymentStatus}
-        />
+	          }
+	          placeholder="Status"
+	          isDisabled={!canEditPaymentStatus}
+	        />
       </div>
 
       {/* 2. Date Picker */}
@@ -7638,23 +7638,6 @@ const handleBeneficiarySearch = async (query: string) => {
           </button>
         </div>
       )}
-          {canEditPaymentStatus && (
-          <div
-            className="expenditure-submit-buttons"
-            style={{ pointerEvents: "auto" }}
-          >
-              <button
-                className="btn-submit"
-              onClick={(e) => {
-                e.preventDefault();
-                handlePaymentStatusUpdate();
-              }}
-              >
-                Update Payment Status
-              </button>
-            </div>
-          )}
-
           {showWorkflowActions && (
             <div
               className="expenditure-workflow-actions"

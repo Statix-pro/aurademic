@@ -855,7 +855,12 @@ const expenditureController = {
         return sendError(res, 403, 'This request is not editable in current workflow state');
       }
 
-      if (isWorkflowEditor && isTerminalWorkflow && !isSuperAdminRequest(req)) {
+      if (
+        isWorkflowEditor &&
+        isTerminalWorkflow &&
+        !isSuperAdminRequest(req) &&
+        !isPaymentOnlyUpdate
+      ) {
         return sendError(res, 403, 'This request is not editable in current workflow state');
       }
 
