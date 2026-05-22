@@ -26,9 +26,10 @@ interface ExpenditureItem {
   amount: number;
   overallstatus: string;
   createdat: string;
-  request_type?: string;
-  workflow_state?: unknown;
-}
+	  request_type?: string;
+	  payment_status?: string;
+	  workflow_state?: unknown;
+	}
 
 type WorkflowModule = "Advance" | "Settlement" | "Expenditure";
 
@@ -117,11 +118,15 @@ interface WorkflowRow {
   advanceSubHead2?: string; // For second advance
   expenditureSubHead?: string;
   settlementSubHead?: string;
-  advanceStatus?: string;
-  advanceStatus2?: string; // For second advance
-  expenditureStatus?: string;
-  settlementStatus?: string;
-  latestRequestId?: number | null;
+	  advanceStatus?: string;
+	  advanceStatus2?: string; // For second advance
+	  expenditureStatus?: string;
+	  settlementStatus?: string;
+	  advancePaymentStatus?: string;
+	  advancePaymentStatus2?: string;
+	  expenditurePaymentStatus?: string;
+	  settlementPaymentStatus?: string;
+	  latestRequestId?: number | null;
   latestRequestType?: WorkflowModule | null;
   latestWorkflowState?: unknown;
   latestWorkflowStatus?: string;
@@ -538,8 +543,8 @@ const ExpenditureDashboard: React.FC = () => {
     });
   };
 
-  const isApprovedStatus = (status?: string | null) =>
-    ["approved", "completed", "principal_approved"].includes(normalizeStatus(status));
+	  const isApprovedStatus = (status?: string | null) =>
+	    ["approved", "completed", "principal_approved"].includes(normalizeStatus(status));
 
   const isEditableWorkflowStatus = (status?: string | null) => {
     const normalized = normalizeStatus(status);
@@ -595,10 +600,14 @@ const ExpenditureDashboard: React.FC = () => {
     advanceSubHead2: "",
     expenditureSubHead: "",
     settlementSubHead: "",
-    advanceStatus: "pending",
-    advanceStatus2: "pending",
-    expenditureStatus: "pending",
-    settlementStatus: "pending",
+	    advanceStatus: "pending",
+	    advanceStatus2: "pending",
+	    expenditureStatus: "pending",
+	    settlementStatus: "pending",
+	    advancePaymentStatus: "Pending",
+	    advancePaymentStatus2: "Pending",
+	    expenditurePaymentStatus: "Pending",
+	    settlementPaymentStatus: "Pending",
     latestRequestId: null,
     latestRequestType: null,
     latestWorkflowStatus: "pending",
@@ -835,15 +844,36 @@ const ExpenditureDashboard: React.FC = () => {
     return row.expenditureRequestRef || "";
   };
 
-  const getWorkflowOptionAmount = (
+	  const getWorkflowOptionAmount = (
     row: WorkflowRow,
     module: WorkflowModule | "Advance2"
   ) => {
     if (module === "Advance2") return Number(row.advanceAmount2 || 0);
     if (module === "Advance") return Number(row.advanceAmount || 0);
     if (module === "Settlement") return Number(row.settlementAmount || 0);
-    return Number(row.expenditureAmount || 0);
-  };
+	    return Number(row.expenditureAmount || 0);
+	  };
+
+	  const getWorkflowOptionPaymentStatus = (
+	    row: WorkflowRow,
+	    module: WorkflowModule | "Advance2",
+	  ) => {
+	    if (module === "Advance2") return row.advancePaymentStatus2 || "Pending";
+	    if (module === "Advance") return row.advancePaymentStatus || "Pending";
+	    if (module === "Settlement") return row.settlementPaymentStatus || "Pending";
+	    return row.expenditurePaymentStatus || "Pending";
+	  };
+
+	  const getWorkflowOptionPaymentToneClass = (
+	    row: WorkflowRow,
+	    module: WorkflowModule | "Advance2",
+	  ) => {
+	    const status = normalizeStatus(getWorkflowOptionPaymentStatus(row, module));
+	    if (status === "paid") return "expenditure-demo-option--payment-paid";
+	    if (status === "processing") return "expenditure-demo-option--payment-processing";
+	    if (status === "cancelled") return "expenditure-demo-option--payment-cancelled";
+	    return "expenditure-demo-option--payment-pending";
+	  };
 
   const getWorkflowStatusLabel = (row: WorkflowRow) => {
     return getWorkflowApprovalLabel(parseWorkflowState(row.latestWorkflowState));
@@ -1039,13 +1069,14 @@ const ExpenditureDashboard: React.FC = () => {
 
           const latestModuleRow = moduleRows[0] ?? null;
 
-          return {
-            requestId: latestModuleRow?.id ?? null,
-            amount: moduleRows.reduce((sum, req) => sum + Number(req.amount ?? 0), 0),
-            subHead: normalizeText(latestModuleRow?.sub_head),
-            status: normalizeStatus(latestModuleRow?.overallstatus),
-          };
-        };
+	          return {
+	            requestId: latestModuleRow?.id ?? null,
+	            amount: moduleRows.reduce((sum, req) => sum + Number(req.amount ?? 0), 0),
+	            subHead: normalizeText(latestModuleRow?.sub_head),
+	            status: normalizeStatus(latestModuleRow?.overallstatus),
+	            paymentStatus: normalizeText(latestModuleRow?.payment_status || "Pending"),
+	          };
+	        };
 
         // Special handling for Advance - separate first and second advance
         const advanceRows = rowRequests
@@ -1061,18 +1092,20 @@ const ExpenditureDashboard: React.FC = () => {
         const secondAdvance = advanceRows[1] ?? null;
 
         const advanceSummary = {
-          requestId: firstAdvance?.id ?? null,
-          amount: Number(firstAdvance?.amount ?? 0),
-          subHead: normalizeText(firstAdvance?.sub_head),
-          status: normalizeStatus(firstAdvance?.overallstatus),
-        };
+	          requestId: firstAdvance?.id ?? null,
+	          amount: Number(firstAdvance?.amount ?? 0),
+	          subHead: normalizeText(firstAdvance?.sub_head),
+	          status: normalizeStatus(firstAdvance?.overallstatus),
+	          paymentStatus: normalizeText(firstAdvance?.payment_status || "Pending"),
+	        };
 
         const advanceSummary2 = secondAdvance ? {
-          requestId: secondAdvance.id,
-          amount: Number(secondAdvance.amount ?? 0),
-          subHead: normalizeText(secondAdvance.sub_head),
-          status: normalizeStatus(secondAdvance.overallstatus),
-        } : null;
+	          requestId: secondAdvance.id,
+	          amount: Number(secondAdvance.amount ?? 0),
+	          subHead: normalizeText(secondAdvance.sub_head),
+	          status: normalizeStatus(secondAdvance.overallstatus),
+	          paymentStatus: normalizeText(secondAdvance.payment_status || "Pending"),
+	        } : null;
 
         const expenditureSummary = summarizeModule("Expenditure");
         const settlementSummary = summarizeModule("Settlement");
@@ -1119,10 +1152,14 @@ const ExpenditureDashboard: React.FC = () => {
           advanceSubHead2: advanceSummary2?.subHead ?? "",
           expenditureSubHead: expenditureSummary.subHead,
           settlementSubHead: settlementSummary.subHead,
-          advanceStatus: advanceSummary.status,
-          advanceStatus2: advanceSummary2?.status ?? "pending",
-          expenditureStatus: expenditureSummary.status,
-          settlementStatus: settlementSummary.status,
+	          advanceStatus: advanceSummary.status,
+	          advanceStatus2: advanceSummary2?.status ?? "pending",
+	          expenditureStatus: expenditureSummary.status,
+	          settlementStatus: settlementSummary.status,
+	          advancePaymentStatus: advanceSummary.paymentStatus,
+	          advancePaymentStatus2: advanceSummary2?.paymentStatus ?? "Pending",
+	          expenditurePaymentStatus: expenditureSummary.paymentStatus,
+	          settlementPaymentStatus: settlementSummary.paymentStatus,
           latestRequestId: latestRequest?.id ?? null,
           latestRequestType: normalizeModule(latestRequest?.request_type),
           latestWorkflowState,
@@ -1168,10 +1205,14 @@ const ExpenditureDashboard: React.FC = () => {
           advanceSubHead2: "",
           expenditureSubHead: "",
           settlementSubHead: "",
-          advanceStatus: "pending",
-          advanceStatus2: "pending",
-          expenditureStatus: "pending",
-          settlementStatus: "pending",
+	          advanceStatus: "pending",
+	          advanceStatus2: "pending",
+	          expenditureStatus: "pending",
+	          settlementStatus: "pending",
+	          advancePaymentStatus: "Pending",
+	          advancePaymentStatus2: "Pending",
+	          expenditurePaymentStatus: "Pending",
+	          settlementPaymentStatus: "Pending",
           latestRequestId: null,
           latestRequestType: null,
           latestWorkflowState: null,
@@ -1303,8 +1344,9 @@ const ExpenditureDashboard: React.FC = () => {
         amount: Number(item.amount ?? 0),
         overallstatus: String(item.overallstatus ?? item.overall_status ?? "pending"),
         createdat: String(item.createdat ?? item.created_at ?? ""),
-        request_type: item.request_type ? String(item.request_type) : item.type ? String(item.type) : undefined,
-        workflow_state: item.workflow_state ?? item.workflowState ?? null,
+	        request_type: item.request_type ? String(item.request_type) : item.type ? String(item.type) : undefined,
+	        payment_status: String(item.payment_status ?? item.paymentstatus ?? "Pending"),
+	        workflow_state: item.workflow_state ?? item.workflowState ?? null,
       }));
 
       const mappedCards: ExpenditureProposalCard[] = apiCards.map(
@@ -1560,12 +1602,15 @@ const ExpenditureDashboard: React.FC = () => {
                                             const showOptionDetails = Boolean(
                                               optionRequestRef || optionAmount > 0
                                             );
-                                            const isConstructionOption = option.label
-                                              ?.toLowerCase()
-                                              .includes("construction");
+	                                            const isConstructionOption = option.label
+	                                              ?.toLowerCase()
+	                                              .includes("construction");
+	                                            const paymentToneClass = option.submitted
+	                                              ? getWorkflowOptionPaymentToneClass(row, option.module)
+	                                              : "";
 
-                                            return (
-                                              <button
+	                                            return (
+	                                              <button
                                                 key={`${row.id}-${option.label}`}
                                                 type="button"
                                                 className={`expenditure-demo-option ${option.submitted ? "submitted" : ""
@@ -1578,10 +1623,10 @@ const ExpenditureDashboard: React.FC = () => {
                                                       row.settlementAmount > 0)
                                                     ? "chosen"
                                                     : ""
-                                                  } ${isConstructionOption && !showOptionDetails
-                                                    ? "expenditure-demo-option--construction"
-                                                    : ""
-                                                  }`}
+	                                                  } ${isConstructionOption && !showOptionDetails
+	                                                    ? "expenditure-demo-option--construction"
+	                                                    : ""
+		                                                  } ${paymentToneClass}`}
                                                 onClick={() =>
                                                   gateMessage
                                                     ? showDialog({
@@ -1608,10 +1653,10 @@ const ExpenditureDashboard: React.FC = () => {
                                                       }
                                                     )
                                                 }
-                                                title={gateMessage || undefined}
-                                              >
-                                                {showOptionDetails && (
-                                                  <span className="expenditure-demo-option__detail-grid">
+	                                                title={gateMessage || undefined}
+	                                              >
+	                                                {showOptionDetails && (
+	                                                  <span className="expenditure-demo-option__detail-grid">
                                                     <span
                                                       className="expenditure-demo-option__detail-box expenditure-demo-option__detail-box--ref"
                                                       title={optionRequestRef || undefined}
@@ -1629,15 +1674,15 @@ const ExpenditureDashboard: React.FC = () => {
                                                       <span className="expenditure-demo-option__detail-module">
                                                         {option.label}
                                                       </span>
-                                                      {optionAmount > 0 && (
-                                                        <strong className="expenditure-demo-option__detail-amount-value">
-                                                          {formatAmount(optionAmount)}
-                                                        </strong>
-                                                      )}
-                                                    </span>
-                                                  </span>
-                                                )}
-                                                {!showOptionDetails && (
+	                                                      {optionAmount > 0 && (
+	                                                        <strong className="expenditure-demo-option__detail-amount-value">
+	                                                          {formatAmount(optionAmount)}
+	                                                        </strong>
+	                                                      )}
+	                                                    </span>
+	                                                  </span>
+	                                                )}
+	                                                {!showOptionDetails && (
                                                   <span
                                                     className={`expenditure-demo-option__label ${option.label
                                                       ?.toLowerCase()
