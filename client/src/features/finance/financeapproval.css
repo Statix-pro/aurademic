@@ -919,17 +919,17 @@
   border: none !important;        /* NO BORDER */
   background: transparent !important;
   border-radius: 12px !important; /* Rounded corners */
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; /* Subtle shadow */
+  box-shadow: none !important;
 }
 
 .hoac-form-group .react-select__control:hover {
   background: transparent !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+  box-shadow: none !important;
 }
 
 .hoac-form-group .react-select__control--is-focused,
 .hoac-form-group .react-select__control:focus-within {
   background: transparent !important;
-  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15), 0 2px 8px rgba(0,0,0,0.12) !important;
+  box-shadow: none !important;
   outline: none !important;
 }

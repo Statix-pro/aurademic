@@ -34,7 +34,6 @@ import KSRCTLogo from "../../shared/assets/images/ksrct_logo.png";
 
 import authenticityUtility from "../../shared/utils/authenticityUtility";
 import CustomTagInput from "../../shared/components/ui/CustomTagInput";
-import CustomInput from "../../shared/components/ui/CustomInput";
 import CustomDropdown, {
   OptionType,
 } from "../../shared/components/ui/CustomDropdown";
@@ -66,6 +65,7 @@ interface IncomeRow {
 interface PayeeRow {
   id: string;
   payeeId?: number | null;
+  approvalStatus?: string;
   payeeName: string;
   bankName: string;
   accountNo: string;
@@ -103,6 +103,7 @@ interface PayeeLookupResult {
   gstin?: string | null;
   tds_details?: string | null;
   tds_section?: string | null;
+  approval_status?: string | null;
 }
 type PayeeLookupField =
   | "payeeName"
@@ -1282,6 +1283,7 @@ const createPayeeRow = (): PayeeRow => ({
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
   payeeId: null,
+  approvalStatus: "",
   payeeName: "",
   bankName: "",
   accountNo: "",
@@ -1306,6 +1308,13 @@ const BENEFICIARY_ORG_OPTIONS = ["KSRCT", "KSREI", "External"] as const;
 
 const normalizePayeeText = (value: unknown): string =>
   String(value ?? "").trim();
+
+const normalizeApprovalStatus = (value: unknown): string =>
+  normalizePayeeText(value).toLowerCase();
+
+const isApprovedPayeeRecord = (
+  value: { approval_status?: string | null; approvalStatus?: string | null } | null | undefined,
+): boolean => normalizeApprovalStatus(value?.approval_status ?? value?.approvalStatus) === "approved";
 
 const isBeneficiaryOrgValue = (value: unknown): boolean =>
   BENEFICIARY_ORG_OPTIONS.some(
@@ -1953,6 +1962,7 @@ const ExpenditureApproval: React.FC = () => {
               })(),
               id: `${submittedRequestIdFromState}-payee-${index}`,
               payeeId: row?.payee_id ?? null,
+              approvalStatus: String(row?.approval_status || "").trim(),
               bankName: String(row?.bank_name || ""),
               accountNo: String(row?.account_no || ""),
               ifsc: String(row?.ifsc || ""),
@@ -2471,6 +2481,7 @@ const workflowRowRefFromState = (() => {
 
     return payeeRows
       .filter((row) => row.id !== rowId)
+      .filter((row) => isApprovedPayeeRecord(row))
       .filter(
         (row) =>
           row.payeeName ||
@@ -2541,14 +2552,16 @@ const workflowRowRefFromState = (() => {
 
     try {
       const response = (await authenticityUtility.get(
-        `/expenditure/payees?search=${encodeURIComponent(normalizedQuery)}&limit=8`,
+        `/expenditure/payees?search=${encodeURIComponent(normalizedQuery)}&limit=8&status=approved`,
       )) as { status: string; data?: PayeeLookupResult[] };
 
       if (requestId !== payeeLookupRequestRef.current) {
         return;
       }
 
-      const remoteMatches = Array.isArray(response.data) ? response.data : [];
+      const remoteMatches = Array.isArray(response.data)
+        ? response.data.filter((payee) => isApprovedPayeeRecord(payee))
+        : [];
       const mergedMatches = [...localMatches];
       const seenKeys = new Set(
         localMatches.map(
@@ -2609,7 +2622,7 @@ const workflowRowRefFromState = (() => {
     setActivePayeeLookupField(field === "amount" ? null : field);
 
     updatePayeeRow(rowId, (row) => {
-      const shouldResetPayeeId = field !== "amount";
+      const shouldResetPayeeId = field !== "amount" && !(field === "payeeName" && Boolean(row.payeeId));
       const nextRow = {
         ...row,
         [field]: value,
@@ -3066,6 +3079,7 @@ const workflowRowRefFromState = (() => {
     updatePayeeRow(rowId, (row) => ({
       ...row,
       payeeId: payee.payee_id ?? payee.id ?? row.payeeId ?? null,
+      approvalStatus: payee.approval_status || "approved",
       payeeName: canonicalPayeeName || row.payeeName,
       accountNo: String(payee.account_no || "").trim() || row.accountNo,
       bankName: String(payee.bank_name || "").trim() || row.bankName,
@@ -3850,7 +3864,7 @@ const evaluateArithmeticExpression = (input: string) => {
                       <div className="payee-details-grid">
                         <div className="payee-field-wrap">
                           <input
-                            className="payee-field"
+                            className="payee-field payee-field--readonly"
                             placeholder="Accountant Name"
                             value={row.payeeName}
                             onChange={(e) => {
@@ -3869,77 +3883,39 @@ const evaluateArithmeticExpression = (input: string) => {
                         </div>
                         <div className="payee-field-wrap">
                           <input
-                            className="payee-field"
+                            className="payee-field payee-field--readonly"
                             placeholder="Account No."
                             value={row.accountNo}
-                            onChange={(e) => {
-                              handlePayeeLookupInputChange(
-                                row.id,
-                                "accountNo",
-                                e.target.value,
-                              );
-                            }}
-                            onFocus={() =>
-                              handlePayeeLookupFocus(row, "accountNo")
-                            }
-                            onBlur={handlePayeeLookupBlur}
+                            readOnly
+                            tabIndex={-1}
                           />
-                          {renderPayeeLookupDropdown(row.id, "accountNo")}
                         </div>
                         <div className="payee-field-wrap">
                           <input
-                            className="payee-field"
+                            className="payee-field payee-field--readonly"
                             placeholder="Bank Name"
                             value={row.bankName}
-                            onChange={(e) => {
-                              handlePayeeLookupInputChange(
-                                row.id,
-                                "bankName",
-                                e.target.value,
-                              );
-                            }}
-                            onFocus={() =>
-                              handlePayeeLookupFocus(row, "bankName")
-                            }
-                            onBlur={handlePayeeLookupBlur}
+                            readOnly
+                            tabIndex={-1}
                           />
-                          {renderPayeeLookupDropdown(row.id, "bankName")}
                         </div>
                         <div className="payee-field-wrap">
                           <input
-                            className="payee-field"
+                            className="payee-field payee-field--readonly"
                             placeholder="IFSC"
                             value={row.ifsc}
-                            onChange={(e) => {
-                              handlePayeeLookupInputChange(
-                                row.id,
-                                "ifsc",
-                                e.target.value,
-                              );
-                            }}
-                            onFocus={() => handlePayeeLookupFocus(row, "ifsc")}
-                            onBlur={handlePayeeLookupBlur}
+                            readOnly
+                            tabIndex={-1}
                           />
-                          {renderPayeeLookupDropdown(row.id, "ifsc")}
                         </div>
                         <div className="payee-field-wrap payee-field-wrap-full">
                           <input
-                            className="payee-field"
+                            className="payee-field payee-field--readonly"
                             placeholder="Branch Name"
                             value={row.branchName}
-                            onChange={(e) => {
-                              handlePayeeLookupInputChange(
-                                row.id,
-                                "branchName",
-                                e.target.value,
-                              );
-                            }}
-                            onFocus={() =>
-                              handlePayeeLookupFocus(row, "branchName")
-                            }
-                            onBlur={handlePayeeLookupBlur}
+                            readOnly
+                            tabIndex={-1}
                           />
-                          {renderPayeeLookupDropdown(row.id, "branchName")}
                         </div>
                       </div>
                     </div>
@@ -5395,41 +5371,50 @@ const handleBeneficiarySearch = async (query: string) => {
                         </span>
                       )}
                   </label>
-                  <CustomInput
-                    name="applicantName"
+                  <input
                     type="text"
-                      value={
-                        isExternalApplicant
-                          ? applicantName
-                          : applicantSearchQuery
-                      }
-                      readOnly={isReadOnlyView}
-                    onChange={(value) => {
-                        if (isReadOnlyView) return;
+                    value={
+                      isExternalApplicant ? applicantName : applicantSearchQuery
+                    }
+                    disabled={isReadOnlyView}
+                    readOnly={isReadOnlyView}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                      if (isReadOnlyView) return;
                       if (isExternalApplicant) {
-                        setApplicantName(value);
+                        setApplicantName(e.target.value);
                       } else {
-                        handleApplicantSearch(value);
+                        handleApplicantSearch(e.target.value);
                       }
                     }}
+                    style={{
+                      borderRadius: "12px",
+                      border: "1px solid #e0e0e0",
+                      padding: "10px 15px",
+                      fontSize: "0.95rem",
+                      width: "100%",
+                      fontFamily: "inherit",
+                      backgroundColor: "#fcfdff",
+                      transition: "all 0.3s ease",
+                      outline: "none",
+                    }}
                     onFocus={(e) => {
-                        e.currentTarget.style.borderColor = "#0069ab";
-                        e.currentTarget.style.boxShadow =
-                          "0 0 0 3px rgba(0, 105, 171, 0.15)";
+                      e.currentTarget.style.borderColor = "#0069ab";
+                      e.currentTarget.style.boxShadow =
+                        "0 0 0 3px rgba(0, 105, 171, 0.15)";
                       if (!isExternalApplicant && !showApplicantDropdown) {
                         handleApplicantSearch(applicantSearchQuery);
                       }
                     }}
                     onBlur={(e) => {
-                        e.currentTarget.style.borderColor = "#e0e0e0";
-                        e.currentTarget.style.boxShadow = "none";
+                      e.currentTarget.style.borderColor = "#e0e0e0";
+                      e.currentTarget.style.boxShadow = "none";
                       setTimeout(() => setShowApplicantDropdown(false), 200);
                     }}
-                      placeholder={
-                        isExternalApplicant
-                          ? "Enter external applicant name"
-                          : "Search employee by name or ERP ID"
-                      }
+                    placeholder={
+                      isExternalApplicant
+                        ? "Enter external applicant name"
+                        : "Search employee by name or ERP ID"
+                    }
                   />
                   {/* Search Results Dropdown */}
                     {!isReadOnlyView &&
