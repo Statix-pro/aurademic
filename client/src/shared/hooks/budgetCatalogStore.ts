@@ -43,6 +43,12 @@ export function isHeadActive(name: string | null | undefined): boolean {
     return entry ? entry.isActive : true;
 }
 
+export function isSubHeadActive(name: string | null | undefined): boolean {
+    if (!name) return true;
+    const entry = ALL_SUB_HEADS_BY_NAME[name];
+    return entry ? entry.isActive : true;
+}
+
 /**
  * For display: append "(inactive)" to a head/sub-head label when it's no
  * longer in the active catalog. Snapshot text on already-approved records
@@ -51,7 +57,7 @@ export function isHeadActive(name: string | null | undefined): boolean {
  */
 export function decorateInactive(name: string | null | undefined): string {
     if (!name) return '';
-    return isHeadActive(name) ? name : `${name} (inactive)`;
+    return isHeadActive(name) && isSubHeadActive(name) ? name : `${name} (inactive)`;
 }
 
 const listeners = new Set<() => void>();

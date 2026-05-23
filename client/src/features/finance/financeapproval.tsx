@@ -562,7 +562,7 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
   const allData = BUDGET_HEAD_GROUPS.flatMap((group) =>
     group.options.map((head) => ({
       head,
-      subheads: SUB_HEAD_BY_BUDGET_HEAD[head] || [],
+      subheads: getSubHeadOptionsForHeadSearch(head),
     }))
   );
 

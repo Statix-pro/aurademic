@@ -22,12 +22,24 @@
 -- ----- Catalog tables: stable slug -----
 SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_heads' AND COLUMN_NAME = 'code'), 'SELECT 1', 'ALTER TABLE `budget_heads` ADD COLUMN `code` VARCHAR(64) NULL AFTER `name`');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_heads' AND INDEX_NAME = 'uniq_budget_heads_code'), 'SELECT 1', 'ALTER TABLE `budget_heads` ADD UNIQUE KEY `uniq_budget_heads_code` (`code`)');
+SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_heads' AND INDEX_NAME = 'idx_budget_heads_code'), 'SELECT 1', 'ALTER TABLE `budget_heads` ADD INDEX `idx_budget_heads_code` (`code`)');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_heads' AND INDEX_NAME = 'uniq_budget_heads_code'), 'ALTER TABLE `budget_heads` DROP INDEX `uniq_budget_heads_code`', 'SELECT 1');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_sub_heads' AND COLUMN_NAME = 'code'), 'SELECT 1', 'ALTER TABLE `budget_sub_heads` ADD COLUMN `code` VARCHAR(64) NULL AFTER `name`');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_sub_heads' AND INDEX_NAME = 'idx_budget_sub_heads_code'), 'SELECT 1', 'ALTER TABLE `budget_sub_heads` ADD INDEX `idx_budget_sub_heads_code` (`code`)');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ----- Catalog tables: logical sub-head identity -----
+SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_sub_heads' AND COLUMN_NAME = 'head_identity_id'), 'SELECT 1', 'ALTER TABLE `budget_sub_heads` ADD COLUMN `head_identity_id` INT GENERATED ALWAYS AS (COALESCE(`head_id`, 0)) STORED AFTER `group_label`');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_sub_heads' AND COLUMN_NAME = 'event_type_key'), 'SELECT 1', 'ALTER TABLE `budget_sub_heads` ADD COLUMN `event_type_key` VARCHAR(100) GENERATED ALWAYS AS (COALESCE(`event_type`, '''')) STORED AFTER `head_identity_id`');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_sub_heads' AND COLUMN_NAME = 'group_label_key'), 'SELECT 1', 'ALTER TABLE `budget_sub_heads` ADD COLUMN `group_label_key` VARCHAR(150) GENERATED ALWAYS AS (COALESCE(`group_label`, '''')) STORED AFTER `event_type_key`');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_sub_heads' AND INDEX_NAME = 'uniq_budget_subhead_identity'), 'SELECT 1', 'ALTER TABLE `budget_sub_heads` ADD UNIQUE KEY `uniq_budget_subhead_identity` (`name`, `scope`, `head_identity_id`, `event_type_key`, `group_label_key`)');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- ----- Budget proposal lines -----

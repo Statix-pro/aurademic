@@ -13,13 +13,13 @@
  */
 
 import '../config/env.js';
-import db from '../config/connection.js';
+import { pathToFileURL } from 'url';
 
 // ============================================
 // HEADS (group → ordered head names)
 // Source of truth: union of all three files; budget.tsx ordering preferred.
 // ============================================
-const BUDGET_HEAD_GROUPS = [
+export const BUDGET_HEAD_GROUPS = [
     {
         label: 'Non-Recurring',
         heads: [
@@ -118,7 +118,7 @@ const BUDGET_HEAD_GROUPS = [
 // ============================================
 // HEAD-SPECIFIC SUB-HEADS (union from budget.tsx + expenditureapproval.tsx + financeapproval.tsx)
 // ============================================
-const SUB_HEAD_BY_HEAD = {
+export const SUB_HEAD_BY_HEAD = {
     'Civil Infrastructure': [
         'Canopy', 'Construction Works', 'False Ceiling Works', 'Partition Works',
         'Plumbing Works', 'Water Cooler',
@@ -388,7 +388,7 @@ const SUB_HEAD_BY_HEAD = {
 // ============================================
 // HOAC SHARED (finance) — applies to whole HOAC group
 // ============================================
-const HOAC_SUBHEADS = {
+export const HOAC_SUBHEADS = {
     'Events & Competitions': [
         'A/V Arrangements', 'Accessories', 'Accommodation', 'Auditing Charge',
         'Bag', 'Consumables', 'Decorations', 'Driver Bata', 'Event Logistics',
@@ -406,6 +406,7 @@ const HOAC_SUBHEADS = {
 };
 
 async function seed() {
+    const { default: db } = await import('../config/connection.js');
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
@@ -497,4 +498,6 @@ async function seed() {
     }
 }
 
-seed();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+    seed();
+}

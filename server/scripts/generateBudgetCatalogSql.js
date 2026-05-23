@@ -15,28 +15,14 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+    BUDGET_HEAD_GROUPS,
+    SUB_HEAD_BY_HEAD,
+    HOAC_SUBHEADS,
+} from './seedBudgetCatalog.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Read seedBudgetCatalog.js as text and extract the four constants.
-const seedSource = fs.readFileSync(
-    path.join(__dirname, 'seedBudgetCatalog.js'),
-    'utf8',
-);
-
-function extractConst(name) {
-    // Capture everything from `const NAME = ` up to the matching closing `];` or `};` at column 0
-    const re = new RegExp(`const ${name} = ([\\s\\S]*?\\n[\\]}]);`, 'm');
-    const m = seedSource.match(re);
-    if (!m) throw new Error(`Could not find const ${name}`);
-    // eslint-disable-next-line no-eval
-    return eval(`(${m[1]})`);
-}
-
-const BUDGET_HEAD_GROUPS = extractConst('BUDGET_HEAD_GROUPS');
-const SUB_HEAD_BY_HEAD = extractConst('SUB_HEAD_BY_HEAD');
-const HOAC_SUBHEADS = extractConst('HOAC_SUBHEADS');
 
 const esc = (s) => String(s).replace(/'/g, "''");
 

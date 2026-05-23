@@ -9,6 +9,8 @@ const handleError = (res, error, fallback) => {
     });
 };
 
+const isBlank = (value) => String(value ?? '').trim().length === 0;
+
 const budgetCatalogController = {
     async getCatalog(req, res) {
         try {
@@ -23,7 +25,7 @@ const budgetCatalogController = {
     async createHead(req, res) {
         try {
             const { name, group_label } = req.body || {};
-            if (!name || !group_label) {
+            if (isBlank(name) || isBlank(group_label)) {
                 return res.status(400).json({
                     success: false,
                     message: 'name and group_label are required',
@@ -66,7 +68,7 @@ const budgetCatalogController = {
     async createSubHead(req, res) {
         try {
             const { name } = req.body || {};
-            if (!name) {
+            if (isBlank(name)) {
                 return res.status(400).json({ success: false, message: 'name is required' });
             }
             const subHead = await budgetCatalogModel.createSubHead(req.body || {});

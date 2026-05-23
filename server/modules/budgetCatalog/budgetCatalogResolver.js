@@ -46,7 +46,12 @@ async function resolveHoacEventType(connection, primaryHead) {
     if (cached !== null) return cached;
 
     const [rows] = await connection.query(
-        'SELECT group_label FROM budget_heads WHERE name = ? LIMIT 1',
+        `SELECT group_label
+           FROM budget_heads
+          WHERE name = ?
+            AND is_active = 1
+            AND is_deleted = 0
+          LIMIT 1`,
         [trimmedHead],
     );
     const groupLabel = normalizeText(rows[0]?.group_label);
@@ -85,7 +90,12 @@ export async function resolveCatalogIds(connection, headName, subHeadName, opts 
     if (scope === 'head-specific') {
         if (trimmedHead) {
             const [rows] = await connection.query(
-                'SELECT id FROM budget_heads WHERE name = ? LIMIT 1',
+                `SELECT id
+                   FROM budget_heads
+                  WHERE name = ?
+                    AND is_active = 1
+                    AND is_deleted = 0
+                  LIMIT 1`,
                 [trimmedHead],
             );
             budget_head_id = rows[0]?.id || null;
@@ -93,7 +103,11 @@ export async function resolveCatalogIds(connection, headName, subHeadName, opts 
         if (budget_head_id && trimmedSub) {
             const [rows] = await connection.query(
                 `SELECT id FROM budget_sub_heads
-                 WHERE name = ? AND scope = 'head-specific' AND head_id = ?
+                 WHERE name = ?
+                   AND scope = 'head-specific'
+                   AND head_id = ?
+                   AND is_active = 1
+                   AND is_deleted = 0
                  LIMIT 1`,
                 [trimmedSub, budget_head_id],
             );
@@ -103,7 +117,11 @@ export async function resolveCatalogIds(connection, headName, subHeadName, opts 
         // headName is the event_type here.
         const [rows] = await connection.query(
             `SELECT id FROM budget_sub_heads
-             WHERE name = ? AND scope = 'hoac-shared' AND event_type = ?
+             WHERE name = ?
+               AND scope = 'hoac-shared'
+               AND event_type = ?
+               AND is_active = 1
+               AND is_deleted = 0
              LIMIT 1`,
             [trimmedSub, trimmedHead],
         );
