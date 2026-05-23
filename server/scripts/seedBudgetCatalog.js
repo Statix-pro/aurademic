@@ -258,7 +258,7 @@ export const SUB_HEAD_BY_HEAD = {
     'Outreach Events': [
         'Awareness Program', 'Campaigns', 'Crash Course', 'Education Fair',
         'Grama Saba Meet', 'Mini Marathon', 'Orientation Session', 'Rally',
-        'School Visit', 'Summer Internship',
+        'School Visit', 'Summer Internship', 'Celebration',
     ],
     'Cultural & Celebrations': [
         'Celebration Day', 'Festival Celebrations', 'Harmonicks', 'Hostel Day',
