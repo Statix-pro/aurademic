@@ -22,11 +22,6 @@
 -- ----- Catalog tables: stable slug -----
 SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_heads' AND COLUMN_NAME = 'code'), 'SELECT 1', 'ALTER TABLE `budget_heads` ADD COLUMN `code` VARCHAR(64) NULL AFTER `name`');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_heads' AND INDEX_NAME = 'idx_budget_heads_code'), 'SELECT 1', 'ALTER TABLE `budget_heads` ADD INDEX `idx_budget_heads_code` (`code`)');
-PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_heads' AND INDEX_NAME = 'uniq_budget_heads_code'), 'ALTER TABLE `budget_heads` DROP INDEX `uniq_budget_heads_code`', 'SELECT 1');
-PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
 SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_sub_heads' AND COLUMN_NAME = 'code'), 'SELECT 1', 'ALTER TABLE `budget_sub_heads` ADD COLUMN `code` VARCHAR(64) NULL AFTER `name`');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_sub_heads' AND INDEX_NAME = 'idx_budget_sub_heads_code'), 'SELECT 1', 'ALTER TABLE `budget_sub_heads` ADD INDEX `idx_budget_sub_heads_code` (`code`)');
@@ -117,12 +112,29 @@ START TRANSACTION;
 
 -- Catalog code slugs: derive from name.
 UPDATE `budget_heads`
-SET `code` = LOWER(REPLACE(REPLACE(REPLACE(REPLACE(`name`,' ','-'),'&','and'),'/','-'),',',''))
+SET `code` = CONCAT(LOWER(REPLACE(REPLACE(REPLACE(REPLACE(`name`,' ','-'),'&','and'),'/','-'),',','')), '-', `id`)
 WHERE `code` IS NULL;
+
+UPDATE `budget_heads` h
+JOIN (
+    SELECT `code`
+    FROM `budget_heads`
+    WHERE `code` IS NOT NULL
+    GROUP BY `code`
+    HAVING COUNT(*) > 1
+) dup ON dup.`code` = h.`code`
+SET h.`code` = CONCAT(h.`code`, '-', h.`id`);
 
 UPDATE `budget_sub_heads`
 SET `code` = LOWER(REPLACE(REPLACE(REPLACE(REPLACE(`name`,' ','-'),'&','and'),'/','-'),',',''))
 WHERE `code` IS NULL;
+
+COMMIT;
+
+SET @ddl = IF(EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'budget_heads' AND INDEX_NAME = 'uniq_budget_heads_code'), 'SELECT 1', 'ALTER TABLE `budget_heads` ADD UNIQUE KEY `uniq_budget_heads_code` (`code`)');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+START TRANSACTION;
 
 -- budget_proposal_lines
 UPDATE `budget_proposal_lines` bpl

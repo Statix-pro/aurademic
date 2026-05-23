@@ -1473,6 +1473,8 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
   }
 
   const hasBudgetProposalIdColumn = await hasFinanceBudgetBreakupColumn('budget_proposal_id', { tx: conn });
+  const hasBudgetHeadIdColumn = await hasFinanceBudgetBreakupColumn('budget_head_id', { tx: conn });
+  const hasBudgetSubHeadIdColumn = await hasFinanceBudgetBreakupColumn('budget_sub_head_id', { tx: conn });
 
   for (const row of budgetRows) {
     let budget_head_id = toPositiveInt(row.budget_head_id);
@@ -1495,8 +1497,6 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
       'budget_line_id',
       'budget_head',
       'sub_head',
-      'budget_head_id',
-      'budget_sub_head_id',
       'amount',
       'available_amount_snapshot',
       'sort_order',
@@ -1506,8 +1506,6 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
       row.budget_line_id || null,
       row.budget_head,
       row.sub_head,
-      budget_head_id,
-      budget_sub_head_id,
       row.amount,
       row.available_amount_snapshot,
       row.sort_order,
@@ -1516,6 +1514,17 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
     if (hasBudgetProposalIdColumn) {
       columns.splice(1, 0, 'budget_proposal_id');
       values.splice(1, 0, row.budget_proposal_id || null);
+    }
+
+    if (hasBudgetHeadIdColumn) {
+      const idx = columns.indexOf('amount');
+      columns.splice(idx, 0, 'budget_head_id');
+      values.splice(idx, 0, budget_head_id);
+    }
+    if (hasBudgetSubHeadIdColumn) {
+      const idx = columns.indexOf('amount');
+      columns.splice(idx, 0, 'budget_sub_head_id');
+      values.splice(idx, 0, budget_sub_head_id);
     }
 
     await conn.query(
