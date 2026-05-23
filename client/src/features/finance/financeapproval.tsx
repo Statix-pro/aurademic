@@ -358,8 +358,8 @@ const CREDIT_ACCOUNT_OPTIONS = [
   'ISTE Student Chapter KSRCT | 0751301000023696',
   'KSRCT RPS AICTE Project | 0075133800000643',
   'KSRCT ECE SERB CRG PROJECT | 923010005584584',
-  'K S RANGASAMY COLLEGE OF TECHNOLOGY CONTROLLER OF EXAMINATION | 925010007523846',
-  'KSRCT CONTROLLER OF EXAMINATION | CASH',
+  'K S RANGASAMY COLLEGE OF TECHNOLOGY CONTROLLER OF EXAMINATIONS | 925010007523846',
+  'KSRCT CONTROLLER OF EXAMINATIONS | CASH',
 ];
 
 const ANNEXURE_TYPE_OPTIONS = [
@@ -761,7 +761,8 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'School Visit',
     'Summer Internship',
     'Grama Saba Meet',
-    'Orientation Session'],
+    'Orientation Session',
+    'Celebration'],
   'Cultural & Celebrations': [
     'Celebration Day',
     'Festival Celebrations',
