@@ -358,6 +358,8 @@ const CREDIT_ACCOUNT_OPTIONS = [
   'ISTE Student Chapter KSRCT | 0751301000023696',
   'KSRCT RPS AICTE Project | 0075133800000643',
   'KSRCT ECE SERB CRG PROJECT | 923010005584584',
+  'K S RANGASAMY COLLEGE OF TECHNOLOGY CONTROLLER OF EXAMINATION | 925010007523846',
+  'KSRCT CONTROLLER OF EXAMINATION | CASH',
 ];
 
 const ANNEXURE_TYPE_OPTIONS = [
@@ -472,6 +474,16 @@ const getSelectedOption = (
   options: Array<OptionType | { label: string; options: OptionType[] }>
 ): OptionType | null =>
   flattenOptions(options).find((opt) => String(opt.value) === String(value)) ?? null;
+
+const getSelectedOptionWithFallback = (
+  value: string,
+  options: Array<OptionType | { label: string; options: OptionType[] }>
+): OptionType | null => {
+  const selected = getSelectedOption(value, options);
+  if (selected) return selected;
+  const normalizedValue = String(value || '').trim();
+  return normalizedValue ? { value: normalizedValue, label: normalizedValue } : null;
+};
 
 const PRIMARY_HEAD_OPTIONS: Array<{ label: string; options: OptionType[] }> =
   BUDGET_HEAD_GROUPS.map((group) => ({
@@ -3985,7 +3997,7 @@ const FinanceApproval: React.FC = () => {
                           <CustomDropdown
                             name="primaryHead"
                             options={PRIMARY_HEAD_OPTIONS}
-                            value={getSelectedOption(primaryHead, PRIMARY_HEAD_OPTIONS)}
+                            value={getSelectedOptionWithFallback(primaryHead, PRIMARY_HEAD_OPTIONS)}
                             className="mb-0"
                             styles={{
                               control: (provided: any, state: any) => ({
@@ -4048,7 +4060,7 @@ const FinanceApproval: React.FC = () => {
                           <CustomDropdown
                             name="primaryHead"
                             options={PRIMARY_HEAD_OPTIONS}
-                            value={getSelectedOption(primaryHead, PRIMARY_HEAD_OPTIONS)}
+                            value={getSelectedOptionWithFallback(primaryHead, PRIMARY_HEAD_OPTIONS)}
                             className="mb-0"
                             styles={{
                               control: (provided: any, state: any) => ({

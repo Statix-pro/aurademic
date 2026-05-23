@@ -185,6 +185,7 @@
 }
 
 .expenditure-demo-card {
+  position: relative;
   border: 1px solid #cbdff4;
   border-radius: 12px;
   background: linear-gradient(180deg, #0b5fb1 0%, #08579e 100%);
@@ -193,10 +194,13 @@
 }
 
 .expenditure-demo-card--closed {
-  border-color: #22c55e;
+  border-color: #4ade80;
+  outline: 2px solid rgba(34, 197, 94, 0.55);
+  outline-offset: 2px;
   box-shadow:
-    0 0 0 2px rgba(34, 197, 94, 0.18),
-    0 8px 18px rgba(21, 128, 61, 0.14);
+    inset 5px 0 0 #22c55e,
+    0 0 0 1px rgba(240, 253, 244, 0.95),
+    0 10px 22px rgba(21, 128, 61, 0.22);
 }
 
 .expenditure-demo-trigger {
