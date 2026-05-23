@@ -13,7 +13,7 @@ not be backfilled.
 - `budget_heads.id` and `budget_sub_heads.id` are the real identity.
 - Adding `code` (kebab-case slug) is optional but useful for cross-environment seeding and external integrations.
 - Admin rename only changes `name` (display). `id` (and `code`) never change.
-- Admin delete is **soft delete only** — `is_active = 0`. Physical delete is forbidden.
+- Admin toggle uses `is_active`; admin delete is hidden-row soft delete using `is_active = 0` and `is_deleted = 1`. Physical delete is forbidden.
 
 **2. Every record that references a head/sub-head stores both ID and snapshot text.**
 

@@ -42,7 +42,7 @@ Open <http://localhost:3000/admin/budget-catalog> as a super-admin to verify the
 
 ## Prod (AnyDesk / server without Node)
 
-Copy the three `.sql` files to the prod machine, then:
+Copy the four `.sql` files to the prod machine, then:
 
 ```bash
 # 1. Schema
@@ -110,7 +110,7 @@ Commit the regenerated `20260520_seed_budget_catalog.sql` and re-apply on prod. 
 
 ## Notes
 
-- All three migration files are idempotent — safe to run multiple times.
+- All four migration files are idempotent — safe to run multiple times.
 - The seed wraps everything in a single transaction; any failure rolls back cleanly.
 - The third migration uses guarded DDL because MySQL auto-commits schema changes; its data backfill is transactional.
 - Reads from `GET /api/budget-catalog` are open to any authenticated user (every form needs them). Writes require super-admin.

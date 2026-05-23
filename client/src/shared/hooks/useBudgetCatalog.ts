@@ -56,7 +56,13 @@ async function fetchCatalog(force = false): Promise<BudgetCatalog> {
         };
         cachedCatalog = catalog;
         hydrateBudgetCatalogStore(catalog);
-        subscribers.forEach((cb) => cb(catalog));
+        subscribers.forEach((cb) => {
+            try {
+                cb(catalog);
+            } catch (err) {
+                console.error('Budget catalog subscriber failed', err);
+            }
+        });
         return catalog;
     })().finally(() => {
         pendingFetch = null;
@@ -152,4 +158,3 @@ export function useBudgetCatalog() {
         refresh: refreshBudgetCatalog,
     };
 }
-

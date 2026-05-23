@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 
 import authenticityUtility from '../../shared/utils/authenticityUtility';
@@ -312,7 +312,8 @@ const BudgetProposalGuidelines: React.FC<{ embedded?: boolean }> = ({ embedded =
 
 
 const Budget: React.FC = () => {
-  useBudgetCatalog();
+  const budgetCatalog = useBudgetCatalog();
+  const catalogErrorAlertedRef = useRef<string | null>(null);
   const [catalogVersion, setCatalogVersion] = useState(0);
   useEffect(() => subscribeBudgetCatalog(() => setCatalogVersion((n) => n + 1)), []);
   const BUDGET_HEAD_SUB_HEAD_CATALOG = useMemo(
@@ -361,6 +362,36 @@ const Budget: React.FC = () => {
   };
 
   const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+
+  useEffect(() => {
+    if (!budgetCatalog.error) {
+      catalogErrorAlertedRef.current = null;
+      return;
+    }
+
+    if (catalogErrorAlertedRef.current === budgetCatalog.error) {
+      return;
+    }
+
+    catalogErrorAlertedRef.current = budgetCatalog.error;
+    showAlert(
+      budgetCatalog.error,
+      'error',
+      'Budget catalog unavailable',
+      () => {
+        closeAlert();
+        catalogErrorAlertedRef.current = null;
+        void budgetCatalog.refresh().catch((err) => {
+          const message = err?.message || 'Failed to load budget catalog';
+          catalogErrorAlertedRef.current = message;
+          showAlert(message, 'error', 'Budget catalog unavailable');
+        });
+      },
+      true,
+      'Retry',
+      'Dismiss',
+    );
+  }, [budgetCatalog.error, budgetCatalog.refresh]);
 
   // Form state
   const [applicantName, setApplicantName] = useState('');

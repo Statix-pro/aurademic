@@ -985,10 +985,18 @@ export async function updateApprovedAmounts(
         }
 
         if (changes.length > 0) {
+          const { budget_head_id, budget_sub_head_id } = await resolveCatalogIds(
+            conn,
+            nextBudgetHead,
+            nextSubHead,
+          );
+
           await conn.execute(
             `UPDATE budget_proposal_lines
                SET budget_head = ?,
                    sub_head = ?,
+                   budget_head_id = ?,
+                   budget_sub_head_id = ?,
                    line_description = ?,
                    approved_unit_amount = ?,
                    approved_line_total = ?,
@@ -997,6 +1005,8 @@ export async function updateApprovedAmounts(
             [
               nextBudgetHead || null,
               nextSubHead || null,
+              budget_head_id,
+              budget_sub_head_id,
               nextDescription || null,
               nextApprovedUnit,
               nextApprovedLineTotal,

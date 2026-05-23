@@ -171,7 +171,11 @@ function BudgetCatalogPage() {
 
     const refreshAll = async () => {
         await load();
-        await refreshBudgetCatalog();
+        try {
+            await refreshBudgetCatalog();
+        } catch (err) {
+            console.error('Failed to refresh shared budget catalog store', err);
+        }
     };
 
     // -------- Head CRUD --------

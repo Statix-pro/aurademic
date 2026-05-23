@@ -1033,6 +1033,8 @@ const getBudgetLineAvailabilityById = async (conn, budgetLineId) => {
        bpl.budget_proposal_id,
        bpl.budget_head,
        bpl.sub_head,
+       bpl.budget_head_id,
+       bpl.budget_sub_head_id,
        COALESCE(bpl.approved_line_total, bpl.line_total, 0) AS budget_line_amount,
        COALESCE(fblu.consumed_amount, 0) AS consumed_amount,
        (COALESCE(bpl.approved_line_total, bpl.line_total, 0) - COALESCE(fblu.consumed_amount, 0)) AS available_amount
@@ -1057,6 +1059,8 @@ const getBudgetLineAvailabilityById = async (conn, budgetLineId) => {
     budgetProposalId: toPositiveInt(rows[0].budget_proposal_id),
     budgetHead: normalizeText(rows[0].budget_head),
     subHead: normalizeText(rows[0].sub_head),
+    budgetHeadId: toPositiveInt(rows[0].budget_head_id),
+    budgetSubHeadId: toPositiveInt(rows[0].budget_sub_head_id),
     budgetLineAmount: toMoney(rows[0].budget_line_amount),
     consumedAmount: toMoney(rows[0].consumed_amount),
     availableAmount: Math.max(0, toMoney(rows[0].available_amount)),
@@ -1280,6 +1284,14 @@ const resolveBudgetAvailabilityForUser = async (conn, {
     });
 
   const totalAvailable = matches.reduce((sum, row) => sum + row.availableAmount, 0);
+  const matchedHeadIds = Array.from(
+    new Set(matches.map((row) => toPositiveInt(row.budgetHeadId)).filter(Boolean)),
+  );
+  const reservationHeadKey = requestedBudgetHeadId
+    ? `id:${requestedBudgetHeadId}`
+    : matchedHeadIds.length === 1
+      ? `id:${matchedHeadIds[0]}`
+      : `text:${normalizeHeadLabelForMatch(normalizedBudgetHead) || normalizedBudgetHead.toLowerCase()}`;
 
   let selected = null;
   if (normalizedPreferredBudgetLineId) {
@@ -1293,6 +1305,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
     selected,
     totalAvailable,
     matches,
+    reservationHeadKey,
   };
 };
 
@@ -1338,7 +1351,8 @@ const enrichBudgetRowsWithBudgetRefs = async (
     });
 
     const headReservationKey =
-      normalizeHeadLabelForMatch(effectiveLookupBudgetHead) || normalizeText(effectiveLookupBudgetHead).toLowerCase();
+      availability.reservationHeadKey ||
+      `text:${normalizeHeadLabelForMatch(effectiveLookupBudgetHead) || normalizeText(effectiveLookupBudgetHead).toLowerCase()}`;
     const alreadyRequestedForHead = toMoney(requestedByHead.get(headReservationKey) || 0);
     const remainingHeadAfterLocalReservations = Math.max(0, availability.totalAvailable - alreadyRequestedForHead);
 
@@ -1387,6 +1401,8 @@ const enrichBudgetRowsWithBudgetRefs = async (
           amount: toMoney(allocatedAmount),
           budget_line_id: candidateBudgetLineId,
           budget_proposal_id: toPositiveInt(match.budgetProposalId),
+          budget_head_id: toPositiveInt(match.budgetHeadId),
+          budget_sub_head_id: toPositiveInt(match.budgetSubHeadId),
           available_amount_snapshot: remainingForLine,
         });
 
@@ -1437,6 +1453,8 @@ const enrichBudgetRowsWithBudgetRefs = async (
       ...row,
       budget_line_id: selectedBudgetLineId,
       budget_proposal_id: toPositiveInt(selected.budgetProposalId),
+      budget_head_id: toPositiveInt(selected.budgetHeadId),
+      budget_sub_head_id: toPositiveInt(selected.budgetSubHeadId),
       available_amount_snapshot: remainingAfterLocalReservations,
     });
   }
@@ -1457,15 +1475,20 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
   const hasBudgetProposalIdColumn = await hasFinanceBudgetBreakupColumn('budget_proposal_id', { tx: conn });
 
   for (const row of budgetRows) {
-    // NEW: resolve catalog IDs from the snapshot text. Stored alongside the
-    // text so renames in the catalog don't break finance ↔ budget matching.
-    // LEGACY: nulls when the catalog has no row for the submitted text;
-    // matching falls back to normalized text comparison.
-    const { budget_head_id, budget_sub_head_id } = await resolveCatalogIds(
-      conn,
-      row.budget_head,
-      row.sub_head,
-    );
+    let budget_head_id = toPositiveInt(row.budget_head_id);
+    let budget_sub_head_id = toPositiveInt(row.budget_sub_head_id);
+
+    // NEW: carry catalog IDs from the selected approved budget line. LEGACY:
+    // only resolve from snapshot text when old/unbackfilled rows do not carry IDs.
+    if (!budget_head_id || !budget_sub_head_id) {
+      const resolvedIds = await resolveCatalogIds(
+        conn,
+        row.budget_head,
+        row.sub_head,
+      );
+      budget_head_id = budget_head_id || toPositiveInt(resolvedIds.budget_head_id);
+      budget_sub_head_id = budget_sub_head_id || toPositiveInt(resolvedIds.budget_sub_head_id);
+    }
 
     const columns = [
       'finance_id',
@@ -2143,6 +2166,8 @@ const financeModel = {
       const hasAnnexureFilePathColumn = await hasFinanceRequestColumn('annexure_file_path', { tx: connection });
       const hasAnnexureMimeTypeColumn = await hasFinanceRequestColumn('annexure_mime_type', { tx: connection });
       const hasAnnexureFileSizeColumn = await hasFinanceRequestColumn('annexure_file_size', { tx: connection });
+      const hasPrimaryHeadIdColumn = await hasFinanceRequestColumn('primary_head_id', { tx: connection });
+      const hasEventSubHeadIdColumn = await hasFinanceRequestColumn('event_sub_head_id', { tx: connection });
 
       const workflowContext = await resolveFinanceWorkflowContext(connection, financeData);
       const normalizedBudgetRows = normalizeBudgetRows(Array.isArray(financeData.budget_rows) ? financeData.budget_rows : []);
@@ -2246,13 +2271,15 @@ const financeModel = {
       // future catalog renames.
       // LEGACY: nulls when the submitted text isn't in the catalog —
       // downstream code falls back to normalized text matching.
-      const { primary_head_id, event_sub_head_id } = await resolvePrimaryHeadIds(
-        connection,
-        financeEntry.primary_head,
-        financeEntry.event_sub_head,
-      );
-      financeEntry.primary_head_id = primary_head_id;
-      financeEntry.event_sub_head_id = event_sub_head_id;
+      if (hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn) {
+        const { primary_head_id, event_sub_head_id } = await resolvePrimaryHeadIds(
+          connection,
+          financeEntry.primary_head,
+          financeEntry.event_sub_head,
+        );
+        if (hasPrimaryHeadIdColumn) financeEntry.primary_head_id = primary_head_id;
+        if (hasEventSubHeadIdColumn) financeEntry.event_sub_head_id = event_sub_head_id;
+      }
 
       const [result] = await connection.query('INSERT INTO finance_requests SET ?', [financeEntry]);
       await insertFinanceRequestReference(connection, result.insertId, financeData.request_date);
@@ -2285,6 +2312,8 @@ const financeModel = {
       const hasAnnexureFilePathColumn = await hasFinanceRequestColumn('annexure_file_path', { tx: connection });
       const hasAnnexureMimeTypeColumn = await hasFinanceRequestColumn('annexure_mime_type', { tx: connection });
       const hasAnnexureFileSizeColumn = await hasFinanceRequestColumn('annexure_file_size', { tx: connection });
+      const hasPrimaryHeadIdColumn = await hasFinanceRequestColumn('primary_head_id', { tx: connection });
+      const hasEventSubHeadIdColumn = await hasFinanceRequestColumn('event_sub_head_id', { tx: connection });
       const budgetTagSelectSql = hasBudgetTagColumn ? 'fr.budget_tag' : 'NULL AS budget_tag';
       const unplannedBudgetEnabledSelectSql = hasUnplannedBudgetEnabledColumn
         ? 'fr.unplanned_budget_enabled'
@@ -2597,8 +2626,9 @@ const financeModel = {
 
       // NEW: keep primary_head_id / event_sub_head_id in sync with the
       // snapshot text when an edit changes the head/sub-head.
-      if (Object.prototype.hasOwnProperty.call(updateData, 'primary_head')
-          || Object.prototype.hasOwnProperty.call(updateData, 'event_sub_head')) {
+      if ((hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn)
+          && (Object.prototype.hasOwnProperty.call(updateData, 'primary_head')
+            || Object.prototype.hasOwnProperty.call(updateData, 'event_sub_head'))) {
         const headName = Object.prototype.hasOwnProperty.call(updateData, 'primary_head')
           ? updateData.primary_head
           : existingRecord.primary_head;
@@ -2610,8 +2640,8 @@ const financeModel = {
           headName,
           subName,
         );
-        updateData.primary_head_id = primary_head_id;
-        updateData.event_sub_head_id = event_sub_head_id;
+        if (hasPrimaryHeadIdColumn) updateData.primary_head_id = primary_head_id;
+        if (hasEventSubHeadIdColumn) updateData.event_sub_head_id = event_sub_head_id;
       }
 
       const [result] = await connection.query('UPDATE finance_requests SET ? WHERE id = ?', [updateData, id]);

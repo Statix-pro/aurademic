@@ -18,8 +18,29 @@ import { normalizeBeneficiaryType, beneficiaryTypeToEntityTypeCode } from '../sh
 
 const normalizeText = (v) => String(v || '').trim();
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
+const EXPENDITURE_REQUEST_COLUMN_EXISTS_CACHE = new Map();
 
 const isBeneficiaryOrgValue = (value) => BENEFICIARY_ORG_OPTIONS.includes(normalizeText(value));
+
+const hasExpenditureRequestColumn = async (columnName, { tx = db } = {}) => {
+  const normalizedColumn = normalizeText(columnName);
+  if (!normalizedColumn) return false;
+  if (EXPENDITURE_REQUEST_COLUMN_EXISTS_CACHE.has(normalizedColumn)) {
+    return EXPENDITURE_REQUEST_COLUMN_EXISTS_CACHE.get(normalizedColumn) === true;
+  }
+
+  const [rows] = await tx.query(
+    `SELECT COUNT(*) AS count
+       FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'expenditure_requests'
+        AND COLUMN_NAME = ?`,
+    [normalizedColumn],
+  );
+  const exists = Number(rows?.[0]?.count || 0) > 0;
+  EXPENDITURE_REQUEST_COLUMN_EXISTS_CACHE.set(normalizedColumn, exists);
+  return exists;
+};
 
 const resolveCanonicalPayeeName = (payeeName, accountName) => {
   const normalizedPayeeName = normalizeText(payeeName);
@@ -551,15 +572,9 @@ async function getCumulativeAdvanceSummary(connOrDb, {
   let legacyMatchParams = [];
 
   if (lineId && normalizedHead && normalizedSubHead) {
-    // NEW: ID match is checked first; falls back to normalized text for
-    // rows whose IDs were never backfilled.
-    const idMatch = headIdVal && subIdVal
-      ? `OR (ar.budget_head_id = ? AND ar.budget_sub_head_id = ?)`
-      : '';
     rowMatchClause = `
       (
         ar.budget_line_id = ?
-        ${idMatch}
         OR (
           ar.budget_line_id IS NULL
           AND LOWER(TRIM(ar.budget_head)) = ?
@@ -567,9 +582,7 @@ async function getCumulativeAdvanceSummary(connOrDb, {
         )
       )
     `;
-    rowMatchParams = idMatch
-      ? [lineId, headIdVal, subIdVal, normalizedHead, normalizedSubHead]
-      : [lineId, normalizedHead, normalizedSubHead];
+    rowMatchParams = [lineId, normalizedHead, normalizedSubHead];
     if (hasLegacyBudgetLine) {
       legacyMatchClause = 'er.budget_line_id = ?';
       legacyMatchParams = [lineId];
@@ -2002,16 +2015,20 @@ async function createExpenditureLegacy(data, userId) {
       overall_status:       'pending',
     };
 
-    // NEW: resolve catalog IDs for the header head + event sub-head and add
-    // them to the entry. Keeps text snapshot AND stable IDs in sync.
-    // LEGACY: nulls allowed — text remains authoritative for those rows.
-    const advHeaderIds = await resolvePrimaryHeadIds(
-      conn,
-      entry.primary_head,
-      entry.event_sub_head,
-    );
-    entry.primary_head_id = advHeaderIds.primary_head_id;
-    entry.event_sub_head_id = advHeaderIds.event_sub_head_id;
+    const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', { tx: conn });
+    const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', { tx: conn });
+    if (hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn) {
+      // NEW: resolve catalog IDs for the header head + event sub-head and add
+      // them to the entry. Keeps text snapshot AND stable IDs in sync.
+      // LEGACY: nulls allowed — text remains authoritative for those rows.
+      const advHeaderIds = await resolvePrimaryHeadIds(
+        conn,
+        entry.primary_head,
+        entry.event_sub_head,
+      );
+      if (hasPrimaryHeadIdColumn) entry.primary_head_id = advHeaderIds.primary_head_id;
+      if (hasEventSubHeadIdColumn) entry.event_sub_head_id = advHeaderIds.event_sub_head_id;
+    }
 
     const filteredEntry = Object.fromEntries(
       Object.entries(entry).filter(([, value]) => value !== null && value !== undefined),
@@ -2656,16 +2673,26 @@ async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeReques
     const catalogHeadId = toPositiveInt(row.budget_head_id);
     const textHeadKey = normalizeBudgetHeadKey(row.budget_head);
     const headKey = catalogHeadId ? `id:${catalogHeadId}` : `text:${textHeadKey}`;
-    if (!headKey || !requestedByHead.has(headKey)) continue;
+    const requestedKeys = [];
+    if (headKey && requestedByHead.has(headKey)) {
+      requestedKeys.push(headKey);
+    }
+    const legacyTextKey = textHeadKey ? `text:${textHeadKey}` : '';
+    if (catalogHeadId && legacyTextKey && legacyTextKey !== headKey && requestedByHead.has(legacyTextKey)) {
+      requestedKeys.push(legacyTextKey);
+    }
+    if (!requestedKeys.length) continue;
 
-    approvedByHead.set(headKey, toMoney((approvedByHead.get(headKey) || 0) + toMoney(row.approved_amount)));
+    for (const requestedKey of requestedKeys) {
+      approvedByHead.set(requestedKey, toMoney((approvedByHead.get(requestedKey) || 0) + toMoney(row.approved_amount)));
 
-    const lineId = toPositiveInt(row.budget_line_id);
-    if (lineId) {
-      if (!lineIdsByHead.has(headKey)) {
-        lineIdsByHead.set(headKey, new Set());
+      const lineId = toPositiveInt(row.budget_line_id);
+      if (lineId) {
+        if (!lineIdsByHead.has(requestedKey)) {
+          lineIdsByHead.set(requestedKey, new Set());
+        }
+        lineIdsByHead.get(requestedKey).add(lineId);
       }
-      lineIdsByHead.get(headKey).add(lineId);
     }
   }
 
@@ -2947,6 +2974,7 @@ const incomeRows = Array.isArray(data.income_rows)
       await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, advanceTotal);
     } else if (requestType === 'Expenditure') {
       await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, expenditureTotal);
+      await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows);
     } else if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,
@@ -3029,15 +3057,19 @@ const incomeRows = Array.isArray(data.income_rows)
       overall_status: 'pending',
     };
 
-    // NEW: resolve and attach catalog IDs (Phase 2 of catalog ref hardening).
-    // LEGACY: nulls when the catalog has no matching name.
-    const headerIds = await resolvePrimaryHeadIds(
-      conn,
-      entry.primary_head,
-      entry.event_sub_head,
-    );
-    entry.primary_head_id = headerIds.primary_head_id;
-    entry.event_sub_head_id = headerIds.event_sub_head_id;
+    const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', { tx: conn });
+    const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', { tx: conn });
+    if (hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn) {
+      // NEW: resolve and attach catalog IDs (Phase 2 of catalog ref hardening).
+      // LEGACY: nulls when the catalog has no matching name.
+      const headerIds = await resolvePrimaryHeadIds(
+        conn,
+        entry.primary_head,
+        entry.event_sub_head,
+      );
+      if (hasPrimaryHeadIdColumn) entry.primary_head_id = headerIds.primary_head_id;
+      if (hasEventSubHeadIdColumn) entry.event_sub_head_id = headerIds.event_sub_head_id;
+    }
 
     const filteredEntry = Object.fromEntries(
       Object.entries(entry).filter(([, value]) => value !== null && value !== undefined && value !== ''),
@@ -3259,6 +3291,9 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, advanceTotal);
     } else if (requestType === 'Expenditure') {
       await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, expenditureTotal);
+      await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows, {
+        excludeExpenditureId: normalizedExpenditureId,
+      });
     } else if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,
@@ -3333,6 +3368,18 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       expenditure_total_amount: toMoney(expenditureTotal),
       total_amount: totalAmount,
     };
+
+    const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', { tx: conn });
+    const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', { tx: conn });
+    if (hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn) {
+      const headerIds = await resolvePrimaryHeadIds(
+        conn,
+        updatedEntry.primary_head,
+        updatedEntry.event_sub_head,
+      );
+      if (hasPrimaryHeadIdColumn) updatedEntry.primary_head_id = headerIds.primary_head_id;
+      if (hasEventSubHeadIdColumn) updatedEntry.event_sub_head_id = headerIds.event_sub_head_id;
+    }
 
     const filteredUpdateEntry = Object.fromEntries(
       Object.entries(updatedEntry).filter(([, value]) => value !== null && value !== undefined && value !== ''),
