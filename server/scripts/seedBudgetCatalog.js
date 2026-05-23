@@ -405,28 +405,6 @@ const HOAC_SUBHEADS = {
     ],
 };
 
-// ============================================
-// EVENT-SPECIFIC (expenditure EVENT_SUBHEAD_GROUPS)
-// Inner-group label preserved for UI grouping.
-// ============================================
-const EVENT_SUBHEAD_GROUPS = {
-    'Events & Competitions': [
-        { group: 'Academic & Professional Development', items: ['Seminar', 'Webinar', 'Guest Lecture', 'Workshop', 'Hands-on Training', 'FDP (Faculty Development Programme)', 'STTP (Short-Term Training Programme)'] },
-        { group: 'Conferences & Conclaves', items: ['National Conference', 'International Conference', 'Conclave', 'Convention'] },
-        { group: 'Industry & Networking', items: ['Industry Visit', 'Expert Visit', 'Networking Event', 'Industry Interaction', 'MoU Signing'] },
-        { group: 'Association & Institutional Activities', items: ['Association Function', 'Alumni Meeting', 'Alumni Interaction', 'Parents Meeting'] },
-        { group: 'Outreach Event', items: ['School Visit', 'Awareness Program', 'Campaigns', 'Mini Marathon'] },
-        { group: 'Competitions & Innovation', items: ['Hackathons', 'Competitions', 'Club Activities', 'Project Expo', 'Ideathon', 'Start-up meet', 'Mentoring Sessions'] },
-        { group: 'Cultural & Celebrations', items: ['Annual Day', 'Sports Day', 'Graduation Day', 'Science Day', 'Womens Day', 'Celebration Day', 'Festival Celebrations', 'Dakshaa', 'Harmonicks'] },
-        { group: 'Sports & Student Engagement', items: ['Sports Meet', 'Sports Day (Engagement)', 'Camp', 'Rally', 'Student Induction Programme', 'Orientation Session'] },
-    ],
-    'Meetings & Audits': [
-        { group: 'Institutional Governance', items: ['Governing Body Meeting', 'Research Advisory Board Meeting', 'Finance Committee Meeting', 'Result Passing Board Meeting', 'Examination Committee Meeting', 'Placement Meeting', 'Network Meeting', 'IQAC Meeting'] },
-        { group: 'Academic Governance', items: ['Academic Council Meeting', 'Standing Committee Meeting', 'Board of Studies Meeting', 'DAB Meeting'] },
-        { group: 'Audits', items: ['Academic Audit', 'Administrative Audit', 'Energy & Green Audit', 'Government Meetings'] },
-    ],
-};
-
 async function seed() {
     const connection = await db.getConnection();
     try {
@@ -506,31 +484,6 @@ async function seed() {
             }
         }
         console.log(`  ${hoacCount} HOAC shared sub-heads inserted.`);
-
-        console.log('Seeding event-specific sub-heads...');
-        let eventCount = 0;
-        for (const [eventType, groups] of Object.entries(EVENT_SUBHEAD_GROUPS)) {
-            let order = 0;
-            for (const { group, items } of groups) {
-                for (const item of items) {
-                    const [existing] = await connection.query(
-                        `SELECT id FROM budget_sub_heads
-                         WHERE name = ? AND scope = 'event-specific'
-                         AND event_type = ? AND group_label = ?`,
-                        [item, eventType, group],
-                    );
-                    if (existing.length > 0) continue;
-                    await connection.query(
-                        `INSERT INTO budget_sub_heads
-                         (name, scope, event_type, group_label, sort_order)
-                         VALUES (?, 'event-specific', ?, ?, ?)`,
-                        [item, eventType, group, order++],
-                    );
-                    eventCount++;
-                }
-            }
-        }
-        console.log(`  ${eventCount} event-specific sub-heads inserted.`);
 
         await connection.commit();
         console.log('Budget catalog seed complete.');

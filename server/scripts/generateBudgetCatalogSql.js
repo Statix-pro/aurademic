@@ -37,7 +37,6 @@ function extractConst(name) {
 const BUDGET_HEAD_GROUPS = extractConst('BUDGET_HEAD_GROUPS');
 const SUB_HEAD_BY_HEAD = extractConst('SUB_HEAD_BY_HEAD');
 const HOAC_SUBHEADS = extractConst('HOAC_SUBHEADS');
-const EVENT_SUBHEAD_GROUPS = extractConst('EVENT_SUBHEAD_GROUPS');
 
 const esc = (s) => String(s).replace(/'/g, "''");
 
@@ -101,23 +100,6 @@ for (const [eventType, subs] of Object.entries(HOAC_SUBHEADS)) {
             `FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM budget_sub_heads WHERE name = '${esc(sub)}' AND scope = 'hoac-shared' AND event_type = '${esc(eventType)}');`,
         );
         order++;
-    }
-}
-out.push('');
-
-// ----- Event-specific sub-heads -----
-out.push('-- ----- EVENT-SPECIFIC SUB-HEADS -----');
-for (const [eventType, groups] of Object.entries(EVENT_SUBHEAD_GROUPS)) {
-    let order = 0;
-    for (const { group, items } of groups) {
-        for (const item of items) {
-            out.push(
-                `INSERT INTO budget_sub_heads (name, scope, event_type, group_label, sort_order) ` +
-                `SELECT '${esc(item)}', 'event-specific', '${esc(eventType)}', '${esc(group)}', ${order} ` +
-                `FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM budget_sub_heads WHERE name = '${esc(item)}' AND scope = 'event-specific' AND event_type = '${esc(eventType)}' AND group_label = '${esc(group)}');`,
-            );
-            order++;
-        }
     }
 }
 out.push('');
