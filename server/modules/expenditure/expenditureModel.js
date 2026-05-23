@@ -572,9 +572,17 @@ async function getCumulativeAdvanceSummary(connOrDb, {
   let legacyMatchParams = [];
 
   if (lineId && normalizedHead && normalizedSubHead) {
+    const nullLineIdMatch = headIdVal && subIdVal
+      ? `OR (
+          ar.budget_line_id IS NULL
+          AND ar.budget_head_id = ?
+          AND ar.budget_sub_head_id = ?
+        )`
+      : '';
     rowMatchClause = `
       (
         ar.budget_line_id = ?
+        ${nullLineIdMatch}
         OR (
           ar.budget_line_id IS NULL
           AND LOWER(TRIM(ar.budget_head)) = ?
@@ -582,7 +590,9 @@ async function getCumulativeAdvanceSummary(connOrDb, {
         )
       )
     `;
-    rowMatchParams = [lineId, normalizedHead, normalizedSubHead];
+    rowMatchParams = nullLineIdMatch
+      ? [lineId, headIdVal, subIdVal, normalizedHead, normalizedSubHead]
+      : [lineId, normalizedHead, normalizedSubHead];
     if (hasLegacyBudgetLine) {
       legacyMatchClause = 'er.budget_line_id = ?';
       legacyMatchParams = [lineId];
@@ -2643,16 +2653,6 @@ async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeReques
     );
   }
 
-  const requestedByHead = new Map();
-  const headLabelByKey = new Map();
-  for (const row of amountRows) {
-    const key = row.budgetHeadId ? `id:${row.budgetHeadId}` : `text:${row.headKey}`;
-    requestedByHead.set(key, toMoney((requestedByHead.get(key) || 0) + row.amount));
-    if (!headLabelByKey.has(key)) {
-      headLabelByKey.set(key, row.budgetHead || row.headKey);
-    }
-  }
-
   const [approvedRows] = await conn.execute(
     `SELECT
        fbb.budget_line_id,
@@ -2668,31 +2668,45 @@ async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeReques
 
   const approvedByHead = new Map();
   const lineIdsByHead = new Map();
+  const canonicalKeyByAlias = new Map();
+
+  const addAlias = (alias, canonicalKey) => {
+    if (alias && canonicalKey && !canonicalKeyByAlias.has(alias)) {
+      canonicalKeyByAlias.set(alias, canonicalKey);
+    }
+  };
 
   for (const row of approvedRows) {
     const catalogHeadId = toPositiveInt(row.budget_head_id);
     const textHeadKey = normalizeBudgetHeadKey(row.budget_head);
-    const headKey = catalogHeadId ? `id:${catalogHeadId}` : `text:${textHeadKey}`;
-    const requestedKeys = [];
-    if (headKey && requestedByHead.has(headKey)) {
-      requestedKeys.push(headKey);
-    }
+    const canonicalKey = catalogHeadId ? `id:${catalogHeadId}` : `text:${textHeadKey}`;
+    if (!canonicalKey) continue;
+
+    addAlias(canonicalKey, canonicalKey);
     const legacyTextKey = textHeadKey ? `text:${textHeadKey}` : '';
-    if (catalogHeadId && legacyTextKey && legacyTextKey !== headKey && requestedByHead.has(legacyTextKey)) {
-      requestedKeys.push(legacyTextKey);
-    }
-    if (!requestedKeys.length) continue;
+    if (legacyTextKey) addAlias(legacyTextKey, canonicalKey);
 
-    for (const requestedKey of requestedKeys) {
-      approvedByHead.set(requestedKey, toMoney((approvedByHead.get(requestedKey) || 0) + toMoney(row.approved_amount)));
+    approvedByHead.set(canonicalKey, toMoney((approvedByHead.get(canonicalKey) || 0) + toMoney(row.approved_amount)));
 
-      const lineId = toPositiveInt(row.budget_line_id);
-      if (lineId) {
-        if (!lineIdsByHead.has(requestedKey)) {
-          lineIdsByHead.set(requestedKey, new Set());
-        }
-        lineIdsByHead.get(requestedKey).add(lineId);
+    const lineId = toPositiveInt(row.budget_line_id);
+    if (lineId) {
+      if (!lineIdsByHead.has(canonicalKey)) {
+        lineIdsByHead.set(canonicalKey, new Set());
       }
+      lineIdsByHead.get(canonicalKey).add(lineId);
+    }
+  }
+
+  const requestedByHead = new Map();
+  const headLabelByKey = new Map();
+  const rowKeyByNumber = new Map();
+  for (const row of amountRows) {
+    const rawKey = row.budgetHeadId ? `id:${row.budgetHeadId}` : `text:${row.headKey}`;
+    const canonicalKey = canonicalKeyByAlias.get(rawKey) || rawKey;
+    rowKeyByNumber.set(row.rowNumber, canonicalKey);
+    requestedByHead.set(canonicalKey, toMoney((requestedByHead.get(canonicalKey) || 0) + row.amount));
+    if (!headLabelByKey.has(canonicalKey)) {
+      headLabelByKey.set(canonicalKey, row.budgetHead || row.headKey);
     }
   }
 
@@ -2714,7 +2728,7 @@ async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeReques
 
     if (approvedAmount <= 0) {
       const rowNumbers = amountRows
-        .filter((row) => (row.budgetHeadId ? `id:${row.budgetHeadId}` : `text:${row.headKey}`) === headKey)
+        .filter((row) => rowKeyByNumber.get(row.rowNumber) === headKey)
         .map((row) => row.rowNumber);
       throw new Error(
         `Please select a valid approved budget head for row ${rowNumbers.join(', ')}`,
@@ -2722,7 +2736,7 @@ async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeReques
     }
 
     if (requestedAmount > remainingAmount) {
-      const firstRow = amountRows.find((row) => (row.budgetHeadId ? `id:${row.budgetHeadId}` : `text:${row.headKey}`) === headKey);
+      const firstRow = amountRows.find((row) => rowKeyByNumber.get(row.rowNumber) === headKey);
       throw new Error(
         `Requested expenditure ${requestedAmount.toFixed(2)} exceeds remaining budget ${remainingAmount.toFixed(2)} for "${firstRow?.budgetHead || headLabelByKey.get(headKey) || headKey}"`,
       );
@@ -3381,8 +3395,11 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       if (hasEventSubHeadIdColumn) updatedEntry.event_sub_head_id = headerIds.event_sub_head_id;
     }
 
+    const nullableCatalogIdKeys = new Set(['primary_head_id', 'event_sub_head_id']);
     const filteredUpdateEntry = Object.fromEntries(
-      Object.entries(updatedEntry).filter(([, value]) => value !== null && value !== undefined && value !== ''),
+      Object.entries(updatedEntry).filter(([key, value]) =>
+        nullableCatalogIdKeys.has(key) || (value !== null && value !== undefined && value !== ''),
+      ),
     );
 
     if (Object.keys(filteredUpdateEntry).length) {
