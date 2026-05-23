@@ -27,6 +27,7 @@ interface ExpenditureItem {
   overallstatus: string;
   createdat: string;
   request_type?: string;
+  payment_status?: string;
   workflow_state?: unknown;
 }
 
@@ -121,6 +122,10 @@ interface WorkflowRow {
   advanceStatus2?: string; // For second advance
   expenditureStatus?: string;
   settlementStatus?: string;
+  advancePaymentStatus?: string;
+  advancePaymentStatus2?: string;
+  expenditurePaymentStatus?: string;
+  settlementPaymentStatus?: string;
   latestRequestId?: number | null;
   latestRequestType?: WorkflowModule | null;
   latestWorkflowState?: unknown;
@@ -599,6 +604,10 @@ const ExpenditureDashboard: React.FC = () => {
     advanceStatus2: "pending",
     expenditureStatus: "pending",
     settlementStatus: "pending",
+    advancePaymentStatus: "Pending",
+    advancePaymentStatus2: "Pending",
+    expenditurePaymentStatus: "Pending",
+    settlementPaymentStatus: "Pending",
     latestRequestId: null,
     latestRequestType: null,
     latestWorkflowStatus: "pending",
@@ -845,6 +854,47 @@ const ExpenditureDashboard: React.FC = () => {
     return Number(row.expenditureAmount || 0);
   };
 
+  const getWorkflowOptionPaymentStatus = (
+    row: WorkflowRow,
+    module: WorkflowModule | "Advance2",
+  ) => {
+    if (module === "Advance2") return row.advancePaymentStatus2 || "";
+    if (module === "Advance") return row.advancePaymentStatus || "";
+    if (module === "Settlement") return row.settlementPaymentStatus || "";
+    return row.expenditurePaymentStatus || "";
+  };
+
+  const getWorkflowOptionPaymentToneClass = (
+    row: WorkflowRow,
+    module: WorkflowModule | "Advance2",
+  ) => {
+    const status = normalizeStatus(getWorkflowOptionPaymentStatus(row, module));
+    if (status === "paid") return "expenditure-demo-option--payment-paid";
+    if (status === "processing") return "expenditure-demo-option--payment-processing";
+    if (status === "cancelled") return "expenditure-demo-option--payment-cancelled";
+    return "";
+  };
+
+  const isWorkflowOptionPaymentPaid = (
+    row: WorkflowRow,
+    module: WorkflowModule | "Advance2",
+  ) => normalizeStatus(getWorkflowOptionPaymentStatus(row, module)) === "paid";
+
+  const isFinanceCardFullyClosed = (rows: WorkflowRow[]) => {
+    const submittedOptions = rows.flatMap((row) =>
+      getRowActions(row)
+        .filter((option) => !option.hidden && option.submitted)
+        .map((option) => ({ row, module: option.module })),
+    );
+
+    return (
+      submittedOptions.length > 0 &&
+      submittedOptions.every(({ row, module }) =>
+        isWorkflowOptionPaymentPaid(row, module),
+      )
+    );
+  };
+
   const getWorkflowStatusLabel = (row: WorkflowRow) => {
     return getWorkflowApprovalLabel(parseWorkflowState(row.latestWorkflowState));
   };
@@ -1044,6 +1094,7 @@ const ExpenditureDashboard: React.FC = () => {
             amount: moduleRows.reduce((sum, req) => sum + Number(req.amount ?? 0), 0),
             subHead: normalizeText(latestModuleRow?.sub_head),
             status: normalizeStatus(latestModuleRow?.overallstatus),
+            paymentStatus: normalizeText(latestModuleRow?.payment_status),
           };
         };
 
@@ -1065,6 +1116,7 @@ const ExpenditureDashboard: React.FC = () => {
           amount: Number(firstAdvance?.amount ?? 0),
           subHead: normalizeText(firstAdvance?.sub_head),
           status: normalizeStatus(firstAdvance?.overallstatus),
+          paymentStatus: normalizeText(firstAdvance?.payment_status),
         };
 
         const advanceSummary2 = secondAdvance ? {
@@ -1072,6 +1124,7 @@ const ExpenditureDashboard: React.FC = () => {
           amount: Number(secondAdvance.amount ?? 0),
           subHead: normalizeText(secondAdvance.sub_head),
           status: normalizeStatus(secondAdvance.overallstatus),
+          paymentStatus: normalizeText(secondAdvance.payment_status),
         } : null;
 
         const expenditureSummary = summarizeModule("Expenditure");
@@ -1123,6 +1176,10 @@ const ExpenditureDashboard: React.FC = () => {
           advanceStatus2: advanceSummary2?.status ?? "pending",
           expenditureStatus: expenditureSummary.status,
           settlementStatus: settlementSummary.status,
+          advancePaymentStatus: advanceSummary.paymentStatus,
+          advancePaymentStatus2: advanceSummary2?.paymentStatus ?? "",
+          expenditurePaymentStatus: expenditureSummary.paymentStatus,
+          settlementPaymentStatus: settlementSummary.paymentStatus,
           latestRequestId: latestRequest?.id ?? null,
           latestRequestType: normalizeModule(latestRequest?.request_type),
           latestWorkflowState,
@@ -1172,6 +1229,10 @@ const ExpenditureDashboard: React.FC = () => {
           advanceStatus2: "pending",
           expenditureStatus: "pending",
           settlementStatus: "pending",
+          advancePaymentStatus: "",
+          advancePaymentStatus2: "",
+          expenditurePaymentStatus: "",
+          settlementPaymentStatus: "",
           latestRequestId: null,
           latestRequestType: null,
           latestWorkflowState: null,
@@ -1304,6 +1365,7 @@ const ExpenditureDashboard: React.FC = () => {
         overallstatus: String(item.overallstatus ?? item.overall_status ?? "pending"),
         createdat: String(item.createdat ?? item.created_at ?? ""),
         request_type: item.request_type ? String(item.request_type) : item.type ? String(item.type) : undefined,
+        payment_status: String(item.payment_status ?? item.paymentstatus ?? ""),
         workflow_state: item.workflow_state ?? item.workflowState ?? null,
       }));
 
@@ -1437,11 +1499,14 @@ const ExpenditureDashboard: React.FC = () => {
                 const cardBalanceAmount = Math.max(Number(card.balanceAmount || 0), 0);
                 const rows = cardRows[card.financeRequestId] ?? [];
                 const canAddRow = cardBalanceAmount > 0;
+                const isFullyClosed = isFinanceCardFullyClosed(rows);
 
                 return (
                   <div
                     key={card.financeRequestId + card.applicantName}
-                    className={`expenditure-demo-card ${isCardOpen ? "open" : ""}`}
+                    className={`expenditure-demo-card ${isCardOpen ? "open" : ""} ${
+                      isFullyClosed ? "expenditure-demo-card--closed" : ""
+                    }`}
                   >
                     <button
                       type="button"
@@ -1563,6 +1628,9 @@ const ExpenditureDashboard: React.FC = () => {
                                             const isConstructionOption = option.label
                                               ?.toLowerCase()
                                               .includes("construction");
+                                            const paymentToneClass = option.submitted
+                                              ? getWorkflowOptionPaymentToneClass(row, option.module)
+                                              : "";
 
                                             return (
                                               <button
@@ -1581,7 +1649,7 @@ const ExpenditureDashboard: React.FC = () => {
                                                   } ${isConstructionOption && !showOptionDetails
                                                     ? "expenditure-demo-option--construction"
                                                     : ""
-                                                  }`}
+                                                  } ${paymentToneClass}`}
                                                 onClick={() =>
                                                   gateMessage
                                                     ? showDialog({

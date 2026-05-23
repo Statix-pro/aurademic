@@ -31,7 +31,9 @@ const expenditureUpload = multer({
     destination: (req, file, cb) => {
       const directoryPath = file.fieldname === 'bulk_neft_file'
         ? path.join(expenditureUploadRoot, 'bulk-neft')
-        : path.join(expenditureUploadRoot, 'bills');
+        : file.fieldname === 'payment_proof_files'
+          ? path.join(expenditureUploadRoot, 'payment-proofs')
+          : path.join(expenditureUploadRoot, 'bills');
 
       ensureUploadDirectory(directoryPath);
       cb(null, directoryPath);
@@ -55,6 +57,13 @@ const expenditureUpload = multer({
     }
 
     return cb(new Error('Bill files only accept .pdf'));
+  }
+  if (file.fieldname === 'payment_proof_files') {
+    if (['.pdf', '.png', '.jpg', '.jpeg'].includes(extension)) {
+      return cb(null, true);
+    }
+
+    return cb(new Error('Payment proof only accepts .pdf, .png, .jpg, or .jpeg files'));
   }
   return cb(new Error('Invalid file field'));
 },
@@ -151,6 +160,7 @@ router.post(
   expenditureUpload.fields([
     { name: 'bulk_neft_file', maxCount: 1 },
     { name: 'bill_files', maxCount: 1 },
+    { name: 'payment_proof_files', maxCount: 5 },
   ]),
   expenditureController.createExpenditureRequest,
 );
@@ -161,6 +171,7 @@ router.post('/advance', expenditureController.createAdvance);router.put(
   expenditureUpload.fields([
     { name: 'bulk_neft_file', maxCount: 1 },
     { name: 'bill_files', maxCount: 1 },
+    { name: 'payment_proof_files', maxCount: 5 },
   ]),
   expenditureController.updateExpenditure,
 );

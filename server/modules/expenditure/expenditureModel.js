@@ -52,7 +52,9 @@ const normalizePayeeRecord = (row) => {
     payee_name: canonicalPayeeName,
     account_name: canonicalPayeeName || null,
     beneficiary_org: resolveCanonicalBeneficiaryOrg(row.beneficiary_org, row.payee_name) || null,
-    approval_status: normalizeText(row.approval_status) || 'approved',
+    approval_status:
+      normalizeText(row.approval_status) ||
+      (row.approved_at ? 'approved' : 'pending'),
     requested_at: row.requested_at || row.created_at || null,
   };
 };
@@ -173,6 +175,24 @@ const normalizePaymentStatus = (value) => {
   const status = normalizeText(value);
   const allowed = new Set(['Paid', 'Pending', 'Processing', 'Cancelled']);
   return allowed.has(status) ? status : null;
+};
+
+const normalizeSqlDate = (value) => {
+  const text = normalizeText(value);
+  if (!text) return null;
+
+  const ymdMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ymdMatch) return `${ymdMatch[1]}-${ymdMatch[2]}-${ymdMatch[3]}`;
+
+  const dmyMatch = text.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (dmyMatch) return `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
+
+  const date = new Date(text);
+  if (!Number.isNaN(date.getTime())) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  return null;
 };
 
 const ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL = `
@@ -968,10 +988,15 @@ export async function getAdvanceSummary({
 
 // ─── Payee master ─────────────────────────────────────────────────────────────
 
-export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
+export async function listPayees({ search = '', limit = 20, offset = 0, status = 'all' } = {}) {
   const q = normalizeText(search);
   const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
   const offsetNum = Math.max(Number(offset) || 0, 0);
+  const normalizedStatus = normalizeText(status).toLowerCase();
+  const statusClause = normalizedStatus && normalizedStatus !== 'all'
+    ? "AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = ?"
+    : '';
+  const statusParams = statusClause ? [normalizedStatus] : [];
   const searchTerms = q
     .split(/\s+/)
     .map((term) => term.trim().toLowerCase())
@@ -1055,11 +1080,12 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
            updated_at
          FROM expenditure_payees
          WHERE is_active = 1
+           ${statusClause ? 'AND LOWER(TRIM(COALESCE(approval_status, \'approved\'))) = ?' : ''}
            AND UPPER(TRIM(COALESCE(ifsc, ''))) = ?
            AND ${accountCompareSql} = ?
          ORDER BY updated_at DESC, id DESC
          LIMIT ${limitNum} OFFSET ${offsetNum}`,
-        [ifscCandidate, normalizedAccountCandidate],
+        [...statusParams, ifscCandidate, normalizedAccountCandidate],
       );
       if (exactPayees.length) return exactPayees.map(normalizePayeeRecord);
 
@@ -1093,6 +1119,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
          INNER JOIN expenditure_payees ep
                  ON ep.id = epr.payee_id
                 AND ep.is_active = 1
+                ${statusClause ? 'AND LOWER(TRIM(COALESCE(ep.approval_status, \'approved\'))) = ?' : ''}
          INNER JOIN (
            SELECT MAX(id) AS id
              FROM expenditure_payee_rows
@@ -1106,7 +1133,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
            AND ${rowAccountCompareSql} = ?
          ORDER BY epr.updated_at DESC, epr.id DESC
          LIMIT ${limitNum} OFFSET ${offsetNum}`,
-        [ifscCandidate, normalizedAccountCandidate],
+        [...statusParams, ifscCandidate, normalizedAccountCandidate],
       );
       if (exactPayeeRows.length) return exactPayeeRows.map(normalizePayeeRecord);
     }
@@ -1119,9 +1146,10 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
   const [rows] = await db.execute(
     `SELECT * FROM expenditure_payees ep
       WHERE ep.is_active = 1
+        ${statusClause}
         AND ${payeeTermClauses}
       ORDER BY ep.payee_name ASC LIMIT ${limitNum} OFFSET ${offsetNum}`,
-    [...searchTerms.map((term) => `%${term}%`)],
+    [...statusParams, ...searchTerms.map((term) => `%${term}%`)],
   );
 
   if (rows.length) return rows.map(normalizePayeeRecord);
@@ -1160,6 +1188,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
      INNER JOIN expenditure_payees ep
              ON ep.id = epr.payee_id
             AND ep.is_active = 1
+            ${statusClause ? "AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = ?" : ''}
      INNER JOIN (
        SELECT MAX(id) AS id
          FROM expenditure_payee_rows
@@ -1177,7 +1206,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0 } = {}) {
      WHERE ${termClauses}
      ORDER BY epr.updated_at DESC, epr.id DESC
      LIMIT ${limitNum} OFFSET ${offsetNum}`,
-    [...searchTerms.map((term) => `%${term}%`)],
+    [...statusParams, ...searchTerms.map((term) => `%${term}%`)],
   );
 
   return payeeRowResults.map(normalizePayeeRecord);
@@ -1207,6 +1236,15 @@ export async function updatePayeeById(id, payeeData = {}) {
 
   if (!canonicalPayeeName || !accountNo || !ifsc || !bankName || !branchName) {
     throw new Error('payee_name, account_no, ifsc, bank_name and branch_name are required');
+  }
+
+  const [existingRows] = await db.execute(
+    'SELECT id FROM expenditure_payees WHERE id = ? AND is_active = 1 LIMIT 1',
+    [payeeId],
+  );
+
+  if (!existingRows.length) {
+    return false;
   }
 
   const [result] = await db.execute(
@@ -1249,7 +1287,7 @@ export async function updatePayeeById(id, payeeData = {}) {
     ],
   );
 
-  return result.affectedRows > 0;
+  return result.affectedRows >= 0;
 }
 
 export async function updatePayeeApproval(id, { decision, rejectionReason = '', userId = null } = {}) {
@@ -1408,9 +1446,10 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        COALESCE(NULLIF(TRIM(er.beneficiary_type), ''), 'Unknown') AS beneficiary_type,
        COALESCE(NULLIF(TRIM(er.primary_head), ''), 'Not specified') AS primary_head,
        COALESCE(NULLIF(TRIM(sample_row.sub_head), ''), '') AS sub_head,
-       er.request_type,
-       er.workflow_state,
-       COALESCE(er.total_amount, 0) AS amount,
+	       er.request_type,
+	       er.workflow_state,
+	       er.payment_status,
+	       COALESCE(er.total_amount, 0) AS amount,
        LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) AS overall_status,
          er.created_at
        FROM expenditure_requests er
@@ -1493,9 +1532,10 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
       beneficiary_type: normalizeText(row.beneficiary_type),
       primary_head: normalizeText(row.primary_head),
       sub_head: normalizeText(row.sub_head),
-      request_type: normalizeText(row.request_type),
-      workflow_state: row.workflow_state,
-      amount: toMoney(row.amount),
+	      request_type: normalizeText(row.request_type),
+	      workflow_state: row.workflow_state,
+	      payment_status: normalizeText(row.payment_status),
+	      amount: toMoney(row.amount),
       overall_status: normalizeText(row.overall_status) || 'pending',
       created_at: row.created_at,
     })),
@@ -1614,6 +1654,11 @@ export async function upsertPayee(payeeData, userId, conn = db) {
               gstin        = COALESCE(?, gstin),
               tds_details  = COALESCE(?, tds_details),
               tds_section  = COALESCE(?, tds_section),
+              approval_status = 'pending',
+              approved_by   = NULL,
+              approved_at   = NULL,
+              rejection_reason = NULL,
+              requested_at  = CURRENT_TIMESTAMP,
               is_active    = 1,
               updated_at   = CURRENT_TIMESTAMP
         WHERE id = ?`,
@@ -1642,8 +1687,9 @@ export async function upsertPayee(payeeData, userId, conn = db) {
        (payee_name, account_name, account_no, account_type,
         bank_name, branch_name, ifsc, beneficiary_type,
         beneficiary_org, organization_type, msme,
-        pan_number, gstin, tds_details, tds_section, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        pan_number, gstin, tds_details, tds_section,
+        approval_status, requested_at, approved_by, approved_at, rejection_reason, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, NULL, NULL, NULL, ?)`,
     [
       canonicalPayeeName,
       canonicalPayeeName || null,
@@ -2390,19 +2436,31 @@ async function insertExpenditureRows(conn, expenditureId, rows = [], budgetSnaps
   }
 }
 
-async function insertBillFiles(conn, expenditureId, files = []) {
+async function insertBillFiles(conn, expenditureId, files = [], fileCategory = 'bill') {
   const validFiles = Array.isArray(files) ? files : [];
-  let sortOrder = 0;
+  if (!validFiles.length) return;
+
+  const category = fileCategory === 'payment_proof' ? 'payment_proof' : 'bill';
+
+  const [rows] = await conn.execute(
+    `SELECT COALESCE(MAX(sort_order), -1) AS max_sort_order
+       FROM expenditure_request_bills
+      WHERE expenditure_id = ?
+        AND file_category = ?`,
+    [expenditureId, category],
+  );
+  let sortOrder = Number(rows[0]?.max_sort_order ?? -1) + 1;
 
   for (const file of validFiles) {
     if (!file?.filename || !file?.path) continue;
 
     await conn.execute(
       `INSERT INTO expenditure_request_bills
-         (expenditure_id, payee_row_id, original_name, stored_name, file_path, mime_type, file_size, sort_order)
-       VALUES (?, NULL, ?, ?, ?, ?, ?, ?)`,
+         (expenditure_id, payee_row_id, file_category, original_name, stored_name, file_path, mime_type, file_size, sort_order)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
       [
         expenditureId,
+        category,
         sanitizeRowValue(file.originalname),
         sanitizeRowValue(file.filename),
         toStoredUploadPath(file.path),
@@ -3003,18 +3061,19 @@ const incomeRows = Array.isArray(data.income_rows)
       rowIndex: workflowRowIdentity.rowIndex,
     });
 
-   await insertIncomeRows(conn, expenditureId, incomeRows);
-await insertPayeeRows(conn, expenditureId, payeeRows, userId);
-await insertAdvanceRows(conn, expenditureId, advanceRows, userId, budgetSnapshotsByLine, {
-  financeRequestId,
-  rowIndex: workflowRowIdentity.rowIndex,
-  dashboardRowId: workflowRowIdentity.dashboardRowId,
-  workflowRowRef: workflowRowIdentity.workflowRowRef,
-  sourceRequestId,
-});
-await insertSettlementRows(conn, expenditureId, settlementRows, budgetSnapshotsByLine);
-await insertExpenditureRows(conn, expenditureId, expenditureRows, budgetSnapshotsByLine);
+    await insertIncomeRows(conn, expenditureId, incomeRows);
+    await insertPayeeRows(conn, expenditureId, payeeRows, userId);
+    await insertAdvanceRows(conn, expenditureId, advanceRows, userId, budgetSnapshotsByLine, {
+      financeRequestId,
+      rowIndex: workflowRowIdentity.rowIndex,
+      dashboardRowId: workflowRowIdentity.dashboardRowId,
+      workflowRowRef: workflowRowIdentity.workflowRowRef,
+      sourceRequestId,
+    });
+    await insertSettlementRows(conn, expenditureId, settlementRows, budgetSnapshotsByLine);
+    await insertExpenditureRows(conn, expenditureId, expenditureRows, budgetSnapshotsByLine);
     await insertBillFiles(conn, expenditureId, uploads.billFiles);
+    await insertBillFiles(conn, expenditureId, uploads.paymentProofFiles, 'payment_proof');
     await upsertBulkNeftFile(
       conn,
       expenditureId,
@@ -3232,19 +3291,6 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       }),
     );
 
-    const normalizeSqlDate = (value) => {
-      const text = normalizeText(value);
-      if (!text) return null;
-
-      const date = new Date(text);
-      if (!Number.isNaN(date.getTime())) {
-        return date.toISOString().slice(0, 10);
-      }
-
-      const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
-      return match ? match[1] : null;
-    };
-
     const normalizedPaymentDate = normalizeSqlDate(paymentDetails.date || data.payment_date);
 
     const updatedEntry = {
@@ -3312,7 +3358,12 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     await conn.execute('DELETE FROM expenditure_line_rows WHERE expenditure_id = ?', [normalizedExpenditureId]);
 
     if (Array.isArray(uploads.billFiles) && uploads.billFiles.length) {
-      await conn.execute('DELETE FROM expenditure_request_bills WHERE expenditure_id = ?', [normalizedExpenditureId]);
+      await conn.execute(
+        `DELETE FROM expenditure_request_bills
+          WHERE expenditure_id = ?
+            AND file_category = 'bill'`,
+        [normalizedExpenditureId],
+      );
     }
 
     await insertIncomeRows(conn, normalizedExpenditureId, incomeRows);
@@ -3327,6 +3378,7 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     await insertSettlementRows(conn, normalizedExpenditureId, settlementRows, budgetSnapshotsByLine);
     await insertExpenditureRows(conn, normalizedExpenditureId, expenditureRows, budgetSnapshotsByLine);
     await insertBillFiles(conn, normalizedExpenditureId, uploads.billFiles);
+    await insertBillFiles(conn, normalizedExpenditureId, uploads.paymentProofFiles, 'payment_proof');
     await upsertBulkNeftFile(
       conn,
       normalizedExpenditureId,
@@ -3362,6 +3414,7 @@ export async function getExpenditureDetails(id) {
       settlement_rows: [],
       expenditure_rows: [],
       bill_files: [],
+      payment_proof_files: [],
       bulk_neft_file: null,
     };
   }
@@ -3373,6 +3426,7 @@ export async function getExpenditureDetails(id) {
     settlementRowsResult,
     expenditureRowsResult,
     billFilesResult,
+    paymentProofFilesResult,
     bulkNeftFileResult,
   ] = await Promise.all([
     db.execute(
@@ -3428,6 +3482,16 @@ export async function getExpenditureDetails(id) {
               sort_order, created_at
          FROM expenditure_request_bills
         WHERE expenditure_id = ?
+          AND file_category = 'bill'
+        ORDER BY sort_order ASC, id ASC`,
+      [expenditureId],
+    ),
+    db.execute(
+      `SELECT id, original_name, stored_name, file_path, mime_type, file_size,
+              sort_order, created_at
+         FROM expenditure_request_bills
+        WHERE expenditure_id = ?
+          AND file_category = 'payment_proof'
         ORDER BY sort_order ASC, id ASC`,
       [expenditureId],
     ),
@@ -3447,6 +3511,7 @@ export async function getExpenditureDetails(id) {
   const [settlement_rows] = settlementRowsResult;
   const [expenditure_rows] = expenditureRowsResult;
   const [bill_files] = billFilesResult;
+  const [payment_proof_files] = paymentProofFilesResult;
   const [bulkNeftRows] = bulkNeftFileResult;
 
   return {
@@ -3456,6 +3521,7 @@ export async function getExpenditureDetails(id) {
     settlement_rows,
     expenditure_rows,
     bill_files: bill_files.map(withUploadAccess),
+    payment_proof_files: payment_proof_files.map(withUploadAccess),
     bulk_neft_file: withUploadAccess(bulkNeftRows[0] || null),
   };
 }
@@ -3534,27 +3600,54 @@ export async function listExpenditures({
  * Update scalar fields on an expenditure request (payment tracking, status, etc.).
  * Does NOT re-run budget deduction.
  */
-export async function updateExpenditure(id, data, actor = null) {
-  const ALLOWED = [
-  'description', 'payment_debit_account', 'payment_mode',
-  'payment_ref_no', 'payment_date', 'payment_status',
-];
+export async function updateExpenditure(id, data, actor = null, uploads = {}) {
+  const ALLOWED_UPDATE_COLUMNS = {
+    description: 'description',
+    payment_debit_account: 'payment_debit_account',
+    payment_mode: 'payment_mode',
+    payment_ref_no: 'payment_ref_no',
+    payment_date: 'payment_date',
+    payment_status: 'payment_status',
+  };
 
   const update = Object.fromEntries(
     Object.entries(data)
-      .filter(([k, v]) => ALLOWED.includes(k) && v !== undefined)
+      .filter(([k, v]) => Object.prototype.hasOwnProperty.call(ALLOWED_UPDATE_COLUMNS, k) && v !== undefined)
       .map(([k, v]) => [k, v === '' ? null : v]),
   );
 
-  if (!Object.keys(update).length) return { affectedRows: 0 };
+  if (Object.prototype.hasOwnProperty.call(update, 'payment_date')) {
+    update.payment_date = normalizeSqlDate(update.payment_date);
+  }
 
-  const updateKeys = Object.keys(update);
-  const setClause = updateKeys.map((key) => `${key} = ?`).join(', ');
+  if (Object.prototype.hasOwnProperty.call(update, 'payment_status')) {
+    update.payment_status = normalizePaymentStatus(update.payment_status);
+  }
 
-  const [result] = await db.execute(
-    `UPDATE expenditure_requests SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-    [...updateKeys.map((key) => update[key]), id],
-  );
+  const paymentProofFiles = Array.isArray(uploads.paymentProofFiles)
+    ? uploads.paymentProofFiles
+    : [];
+
+  if (!Object.keys(update).length && !paymentProofFiles.length) {
+    return { affectedRows: 0, payment_proof_files: [] };
+  }
+
+  let result = { affectedRows: 0 };
+
+  if (Object.keys(update).length) {
+    const updateKeys = Object.keys(update);
+    const setClause = updateKeys
+      .map((key) => `${ALLOWED_UPDATE_COLUMNS[key]} = ?`)
+      .join(', ');
+    const updateValues = updateKeys.map((key) => update[key]);
+
+    [result] = await db.execute(
+      `UPDATE expenditure_requests SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [...updateValues, id],
+    );
+  }
+
+  await insertBillFiles(db, id, paymentProofFiles, 'payment_proof');
 
   try {
     await db.execute(
@@ -3569,14 +3662,21 @@ export async function updateExpenditure(id, data, actor = null) {
         normalizeText(actor?.role).toLowerCase()     || null,
         Boolean(actor?.isSuperAdmin) ? 1 : 0,
         'Expenditure request updated',
-        JSON.stringify({ updatedKeys: Object.keys(update) }),
+        JSON.stringify({
+          updatedKeys: Object.keys(update),
+          paymentProofFilesAdded: paymentProofFiles.length,
+        }),
       ],
     );
   } catch (auditErr) {
-    if (auditErr?.code !== 'ER_NO_SUCH_TABLE') throw auditErr;
+    console.warn('Failed to write expenditure edit audit log:', auditErr?.message || auditErr);
   }
 
-  return result;
+  const details = await getExpenditureDetails(id);
+  return {
+    affectedRows: result.affectedRows,
+    payment_proof_files: details.payment_proof_files,
+  };
 }
 
 /**
