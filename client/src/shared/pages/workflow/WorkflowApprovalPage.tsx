@@ -1503,9 +1503,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         data?: PendingPayeeRecord;
       };
 
-      if (response?.status === 'success' && response.data) {
+      if (response?.status === 'success') {
+        const updatedRow = response.data || payload;
         setPendingPayees((prev) =>
-          prev.map((row) => (Number(row.id) === Number(payeeId) ? { ...row, ...response.data } : row)),
+          prev.map((row) => (Number(row.id) === Number(payeeId) ? { ...row, ...updatedRow } : row)),
         );
         return true;
       }
@@ -1810,8 +1811,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     const flow = Array.isArray(record.workflow_state?.flow)
       ? record.workflow_state.flow.map((stage: unknown) => String(stage || '').toLowerCase())
       : [];
+    const proposedAmount = getWorkflowProposedAmount(record);
     const hasChairmanStage =
       flow.includes('chairman') ||
+      proposedAmount > 10000 ||
       currentStage === 'chairman' ||
       combinedStatus.includes('chairman_approved');
     const isPrincipalApproved =
@@ -1826,10 +1829,15 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       combinedStatus.includes('chairman_approved') ||
       combinedStatus.includes('completed') ||
       combinedStatus === 'approved';
+    const isStageOverview = activeStageKey === 'dof' || activeStageKey === 'all' || !activeStageKey;
 
     const principalApprovedIndicator = {
       label: 'Principal Approved',
       className: 'fw-principal-indicator fw-principal-indicator--accepted',
+    };
+    const principalPendingIndicator = {
+      label: 'Principal Pending',
+      className: 'fw-principal-indicator fw-principal-indicator--pending',
     };
     const chairmanIndicator = {
       label: isChairmanApproved ? 'Chairman Approved' : 'Chairman Pending',
@@ -1838,19 +1846,23 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         : 'fw-principal-indicator fw-principal-indicator--pending',
     };
 
-    if (hasChairmanStage && isPrincipalApproved) {
-      if (activeStageKey === 'dof') {
-        return [principalApprovedIndicator, chairmanIndicator];
-      }
-      if (activeStageKey === 'principal') {
+    if (hasChairmanStage) {
+      if (isPrincipalApproved && (isStageOverview || activeStageKey === 'principal')) {
         return [chairmanIndicator];
+      }
+      if (isStageOverview && currentStage === 'principal') {
+        return [principalPendingIndicator];
       }
       return null;
     }
 
     if (activeStageKey === 'principal') return null;
 
-    if (activeStageKey === 'dof' && isPrincipalApproved) {
+    if (isStageOverview && currentStage === 'principal') {
+      return [principalPendingIndicator];
+    }
+
+    if (isStageOverview && isPrincipalApproved) {
       return [principalApprovedIndicator];
     }
 

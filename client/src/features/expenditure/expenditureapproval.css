@@ -583,6 +583,20 @@
   outline: none;
 }
 
+.payee-field--readonly {
+  background: #f8fbff;
+  color: #334155;
+}
+
+.payee-field--readonly:focus {
+  border-color: #d7dee7;
+  box-shadow: none;
+}
+
+.payee-field--readonly:read-only {
+  cursor: default;
+}
+
 .payee-field::placeholder {
   color: #7c8ba1;
 }

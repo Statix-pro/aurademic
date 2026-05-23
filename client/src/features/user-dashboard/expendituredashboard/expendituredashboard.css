@@ -185,11 +185,18 @@
 }
 
 .expenditure-demo-card {
+  position: relative;
   border: 1px solid #cbdff4;
   border-radius: 12px;
   background: linear-gradient(180deg, #0b5fb1 0%, #08579e 100%);
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.05);
   overflow: hidden;
+}
+
+.expenditure-demo-card--closed {
+  box-shadow:
+    inset 5px 0 0 #22c55e,
+    0 6px 14px rgba(15, 23, 42, 0.05);
 }
 
 .expenditure-demo-trigger {
@@ -608,6 +615,7 @@
 }
 
 .expenditure-demo-option {
+  position: relative;
   display: inline-flex;
   flex-direction: row;
   align-items: center;
@@ -808,6 +816,72 @@
 
 .expenditure-demo-option.submitted .expenditure-demo-option__detail-box--amount {
   background: linear-gradient(180deg, #eaf3ff 0%, #dbe9ff 100%);
+}
+
+.expenditure-demo-option--payment-paid {
+  border-color: #42b36b !important;
+  background: #e9f8ee !important;
+  box-shadow: inset 0 0 0 1px rgba(19, 122, 58, 0.14);
+}
+
+.expenditure-demo-option--payment-paid .expenditure-demo-option__detail-box {
+  border-color: #9dd9af;
+  background: #ffffff;
+}
+
+.expenditure-demo-option--payment-paid .expenditure-demo-option__detail-box--ref {
+  background: #f4fcf6;
+  border-color: #7fcd96;
+}
+
+.expenditure-demo-option--payment-paid .expenditure-demo-option__detail-box--amount {
+  background: #dff5e6;
+  border-color: #7fcd96;
+}
+
+.expenditure-demo-option--payment-paid .expenditure-demo-option__detail-ref-value,
+.expenditure-demo-option--payment-paid .expenditure-demo-option__detail-amount-value {
+  color: #106b32;
+}
+
+.expenditure-demo-option--payment-processing {
+  border-color: #73b7e5 !important;
+  background: #e8f4ff !important;
+}
+
+.expenditure-demo-option--payment-processing .expenditure-demo-option__detail-box--ref {
+  background: #f6fbff;
+  border-color: #73b7e5;
+}
+
+.expenditure-demo-option--payment-processing .expenditure-demo-option__detail-box--amount {
+  background: #d7ecff;
+  border-color: #73b7e5;
+}
+
+.expenditure-demo-option--payment-processing .expenditure-demo-option__detail-ref-value,
+.expenditure-demo-option--payment-processing .expenditure-demo-option__detail-amount-value {
+  color: #075985;
+}
+
+.expenditure-demo-option--payment-cancelled {
+  border-color: #ef9a9a !important;
+  background: #fff0f0 !important;
+}
+
+.expenditure-demo-option--payment-cancelled .expenditure-demo-option__detail-box--ref {
+  background: #fffafa;
+  border-color: #ef9a9a;
+}
+
+.expenditure-demo-option--payment-cancelled .expenditure-demo-option__detail-box--amount {
+  background: #ffe0e0;
+  border-color: #ef9a9a;
+}
+
+.expenditure-demo-option--payment-cancelled .expenditure-demo-option__detail-ref-value,
+.expenditure-demo-option--payment-cancelled .expenditure-demo-option__detail-amount-value {
+  color: #a12828;
 }
 
 .expenditure-demo-option.disabled {

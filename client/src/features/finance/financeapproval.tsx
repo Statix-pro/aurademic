@@ -290,6 +290,8 @@ const CREDIT_ACCOUNT_OPTIONS = [
   'ISTE Student Chapter KSRCT | 0751301000023696',
   'KSRCT RPS AICTE Project | 0075133800000643',
   'KSRCT ECE SERB CRG PROJECT | 923010005584584',
+  'K S RANGASAMY COLLEGE OF TECHNOLOGY CONTROLLER OF EXAMINATION | 925010007523846',
+  'KSRCT CONTROLLER OF EXAMINATION | CASH',
 ];
 
 const ANNEXURE_TYPE_OPTIONS = [
@@ -357,6 +359,16 @@ const getSelectedOption = (
   options: Array<OptionType | { label: string; options: OptionType[] }>
 ): OptionType | null =>
   flattenOptions(options).find((opt) => String(opt.value) === String(value)) ?? null;
+
+const getSelectedOptionWithFallback = (
+  value: string,
+  options: Array<OptionType | { label: string; options: OptionType[] }>
+): OptionType | null => {
+  const selected = getSelectedOption(value, options);
+  if (selected) return selected;
+  const normalizedValue = String(value || '').trim();
+  return normalizedValue ? { value: normalizedValue, label: normalizedValue } : null;
+};
 
 const getPrimaryHeadOptions = (): Array<{ label: string; options: OptionType[] }> =>
   BUDGET_HEAD_GROUPS.map((group) => ({
@@ -2783,18 +2795,29 @@ const FinanceApproval: React.FC = () => {
                             Applicant Name
                             {isExternalApplicant && <span style={{ fontSize: '12px', color: '#6c757d', marginLeft: '8px' }}>(External)</span>}
                           </label>
-                          <CustomInput
-                            name="applicantName"
+                          <input
                             type="text"
                             value={isViewMode ? applicantName : (isExternalApplicant ? applicantName : applicantSearchQuery)}
+                            disabled={isViewMode}
                             readOnly={isViewMode}
-                            onChange={(value) => {
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
                               if (isViewMode) return;
                               if (isExternalApplicant) {
-                                setApplicantName(value);
+                                setApplicantName(e.target.value);
                               } else {
-                                handleApplicantSearch(value);
+                                handleApplicantSearch(e.target.value);
                               }
+                            }}
+                            style={{
+                              borderRadius: '12px',
+                              border: '1px solid #e0e0e0',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              transition: 'all 0.3s ease',
+                              outline: 'none',
                             }}
                             onFocus={(e) => {
                               e.currentTarget.style.borderColor = '#0069ab';
@@ -3341,7 +3364,19 @@ const FinanceApproval: React.FC = () => {
                           <CustomDropdown
                             name="primaryHead"
                             options={getPrimaryHeadOptions()}
-                            value={getSelectedOption(primaryHead, getPrimaryHeadOptions())}
+                            value={getSelectedOptionWithFallback(primaryHead, getPrimaryHeadOptions())}
+                            className="mb-0"
+                            styles={{
+                              control: (provided: any, state: any) => ({
+                                ...provided,
+                                boxShadow: state.isFocused ? 'none' : 'none',
+                                padding: '0 2px',
+                              }),
+                              valueContainer: (provided: any) => ({
+                                ...provided,
+                                padding: '0 12px',
+                              }),
+                            }}
                             onChange={(option) => {
                               const selected = option as OptionType | null;
                               setPrimaryHead(selected?.value ? String(selected.value) : '');
@@ -3358,6 +3393,7 @@ const FinanceApproval: React.FC = () => {
                             name="eventSubHead"
                             options={hoacSubheadDropdownOptions}
                             value={getSelectedOption(eventSubHead, hoacSubheadDropdownOptions)}
+                            className="mb-0"
                             onChange={(option) => {
                               const selected = option as OptionType | null;
                               setEventSubHead(selected?.value ? String(selected.value) : '');
@@ -3391,7 +3427,19 @@ const FinanceApproval: React.FC = () => {
                           <CustomDropdown
                             name="primaryHead"
                             options={getPrimaryHeadOptions()}
-                            value={getSelectedOption(primaryHead, getPrimaryHeadOptions())}
+                            value={getSelectedOptionWithFallback(primaryHead, getPrimaryHeadOptions())}
+                            className="mb-0"
+                            styles={{
+                              control: (provided: any, state: any) => ({
+                                ...provided,
+                                boxShadow: state.isFocused ? 'none' : 'none',
+                                padding: '0 2px',
+                              }),
+                              valueContainer: (provided: any) => ({
+                                ...provided,
+                                padding: '0 12px',
+                              }),
+                            }}
                             onChange={(option) => {
                               const selected = option as OptionType | null;
                               setPrimaryHead(selected?.value ? String(selected.value) : '');
@@ -3770,15 +3818,23 @@ const FinanceApproval: React.FC = () => {
                     </div>
                     {showIncomeSection && (
                       <>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", tableLayout: "fixed" }}>
+                          <colgroup>
+                            <col style={{ width: '6%' }} />
+                            <col style={{ width: '26%' }} />
+                            <col style={{ width: '10%' }} />
+                            <col style={{ width: '20%' }} />
+                            <col style={{ width: '23%' }} />
+                            <col style={{ width: '15%' }} />
+                          </colgroup>
                           <thead>
                             <tr style={{ backgroundColor: '#f0f6ff' }}>
                               <th style={{ width: '6%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>S.No</th>
-                              <th style={{ width: '28%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Income Source</th>
-                              <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Amount</th>
+                              <th style={{ width: '26%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Income Source</th>
+                              <th style={{ width: '12%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Amount</th>
                               <th style={{ width: '20%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Status</th>
-                              <th style={{ width: '26%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Remarks</th>
-                              <th style={{ width: '15%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Actions</th>
+                              <th style={{ width: '25%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Remarks</th>
+                              <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Actions</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -3789,12 +3845,22 @@ const FinanceApproval: React.FC = () => {
                                 <React.Fragment key={row.id}>
                                   {/* First Row - Income Details */}
                                   <tr>
-                                    <td style={incomeCellStyle}>{index + 1}</td>
+                                    <td
+                                      rowSpan={2}
+                                      style={{
+                                        ...incomeCellStyle,
+                                        textAlign: 'center',
+                                        verticalAlign: 'middle',
+                                      }}
+                                    >
+                                      {index + 1}
+                                    </td>
 
                                     <td style={incomeCellStyle}>
                                       <CustomDropdown
                                         name={`incomeSource-${row.id}`}
                                         options={toOptions(INCOME_SOURCE_OPTIONS)}
+                                        className="mb-0"
                                         value={getSelectedOption(row.incomeSource, toOptions(INCOME_SOURCE_OPTIONS))}
                                         onChange={(option) => {
                                           const selected = option as OptionType | null;
@@ -3840,6 +3906,7 @@ const FinanceApproval: React.FC = () => {
                                       <CustomDropdown
                                         name={`status-${row.id}`}
                                         options={toOptions(STATUS_OPTIONS)}
+                                        className="mb-0"
                                         value={getSelectedOption(row.status, toOptions(STATUS_OPTIONS))}
                                         onChange={(option) => {
                                           const selected = option as OptionType | null;
@@ -3951,12 +4018,6 @@ const FinanceApproval: React.FC = () => {
                                   {/* Second Row - Credit Account (Reduced width) */}
                                   <tr>
                                     <td
-                                      style={{
-                                        border: '1px solid #e0e0e0',
-                                        backgroundColor: '#fafcff',
-                                      }}
-                                    />
-                                    <td
                                       colSpan={1}
                                       style={{
                                         padding: '8px 12px',
@@ -4035,6 +4096,7 @@ const FinanceApproval: React.FC = () => {
                                           <CustomDropdown
                                             name={`creditAccount-${row.id}`}
                                             options={toOptions(CREDIT_ACCOUNT_OPTIONS)}
+                                            className="mb-0"
                                             value={getSelectedOption(row.creditAccount, toOptions(CREDIT_ACCOUNT_OPTIONS))}
                                             onChange={(option) => {
                                               const selected = option as OptionType | null;
