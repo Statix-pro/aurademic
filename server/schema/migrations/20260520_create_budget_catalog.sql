@@ -4,8 +4,8 @@
 -- Date: 2026-05-20
 -- ============================================
 -- Moves the hardcoded BUDGET_HEAD_GROUPS / SUB_HEAD_BY_BUDGET_HEAD /
--- HOAC_SUBHEAD_OPTIONS / EVENT_SUBHEAD_GROUPS catalogs (client side)
--- into the database so admins can add/edit/remove without redeploys.
+-- HOAC_SUBHEAD_OPTIONS catalogs (client side) into the database so admins
+-- can add/edit/remove without redeploys.
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS `budget_heads` (
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS `budget_sub_heads` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `name` VARCHAR(255) NOT NULL,
     `head_id` INT NULL,
-    `scope` ENUM('head-specific','hoac-shared','event-specific') NOT NULL DEFAULT 'head-specific',
+    `scope` ENUM('head-specific','hoac-shared') NOT NULL DEFAULT 'head-specific',
     `event_type` VARCHAR(100) NULL,
     `group_label` VARCHAR(150) NULL,
     `sort_order` INT DEFAULT 0,

@@ -13,7 +13,7 @@ import {
 import './BudgetCatalogPage.css';
 
 type TabKey = 'heads' | 'sub-heads';
-type Scope = 'head-specific' | 'hoac-shared' | 'event-specific';
+type Scope = 'head-specific' | 'hoac-shared';
 
 interface HeadForm {
     id?: number;
@@ -148,7 +148,6 @@ function BudgetCatalogPage() {
         const scopeRank: Record<Scope, number> = {
             'head-specific': 0,
             'hoac-shared': 1,
-            'event-specific': 2,
         };
         const groups = new Map<string, BudgetSubHead[]>();
         filteredSubs.forEach((subHead) => {
@@ -286,9 +285,6 @@ function BudgetCatalogPage() {
             basePayload.head_id = form.head_id;
         } else {
             basePayload.event_type = form.event_type.trim();
-            if (form.scope === 'event-specific') {
-                basePayload.group_label = form.group_label.trim() || null;
-            }
         }
         try {
             if (id) {
@@ -521,7 +517,6 @@ function BudgetCatalogPage() {
                             <option value="all">All scopes</option>
                             <option value="head-specific">Head-specific</option>
                             <option value="hoac-shared">HOAC shared</option>
-                            <option value="event-specific">Event-specific</option>
                         </Form.Select>
                         <Button onClick={openCreateSub}>
                             <Plus size={16} /> New sub-head
@@ -673,7 +668,6 @@ function BudgetCatalogPage() {
                         >
                             <option value="head-specific">Head-specific</option>
                             <option value="hoac-shared">HOAC shared</option>
-                            <option value="event-specific">Event-specific</option>
                         </Form.Select>
                     </Form.Group>
                     <Form.Group className="mb-3">
@@ -793,21 +787,6 @@ function BudgetCatalogPage() {
                                     ))}
                                 </Form.Select>
                             </Form.Group>
-                            {subModal.data.scope === 'event-specific' && (
-                                <Form.Group className="mb-3">
-                                    <Form.Label>Group label (optional)</Form.Label>
-                                    <Form.Control
-                                        value={subModal.data.group_label}
-                                        onChange={(e) =>
-                                            setSubModal((m) => ({
-                                                ...m,
-                                                data: { ...m.data, group_label: e.target.value },
-                                            }))
-                                        }
-                                        placeholder="e.g. Academic & Professional Development"
-                                    />
-                                </Form.Group>
-                            )}
                         </>
                     )}
                 </Modal.Body>

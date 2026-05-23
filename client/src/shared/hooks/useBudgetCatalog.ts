@@ -17,7 +17,7 @@ export interface BudgetSubHead {
     code: string | null;
     head_id: number | null;
     head_name: string | null;
-    scope: 'head-specific' | 'hoac-shared' | 'event-specific';
+    scope: 'head-specific' | 'hoac-shared';
     event_type: string | null;
     group_label: string | null;
     sort_order: number;
@@ -27,11 +27,6 @@ export interface BudgetSubHead {
 export interface BudgetHeadGroup {
     label: string;
     options: string[];
-}
-
-export interface EventSubHeadGroup {
-    label: string;
-    options: { value: string; label: string }[];
 }
 
 export interface BudgetCatalog {
@@ -147,28 +142,6 @@ export function useBudgetCatalog() {
         [catalog],
     );
 
-    const eventSubHeadGroups = useCallback(
-        (eventType: string): EventSubHeadGroup[] => {
-            if (!catalog || !eventType) return [];
-            const rows = catalog.subHeads.filter(
-                (s) => s.scope === 'event-specific' && s.event_type === eventType,
-            );
-            const byGroup = new Map<string, BudgetSubHead[]>();
-            rows.forEach((r) => {
-                const key = r.group_label || '';
-                if (!byGroup.has(key)) byGroup.set(key, []);
-                byGroup.get(key)!.push(r);
-            });
-            return Array.from(byGroup.entries()).map(([label, items]) => ({
-                label,
-                options: items
-                    .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name))
-                    .map((s) => ({ value: s.name, label: s.name })),
-            }));
-        },
-        [catalog],
-    );
-
     return {
         catalog,
         loading: state.loading,
@@ -176,7 +149,6 @@ export function useBudgetCatalog() {
         budgetHeadGroups,
         subHeadsByHead,
         hoacSubHeads,
-        eventSubHeadGroups,
         refresh: refreshBudgetCatalog,
     };
 }

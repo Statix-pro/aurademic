@@ -1,6 +1,6 @@
 import db from '../../config/connection.js';
 
-const VALID_SCOPES = new Set(['head-specific', 'hoac-shared', 'event-specific']);
+const VALID_SCOPES = new Set(['head-specific', 'hoac-shared']);
 
 const budgetCatalogModel = {
     async getCatalog({ includeInactive = false } = {}) {
@@ -88,8 +88,8 @@ const budgetCatalogModel = {
             err.statusCode = 400;
             throw err;
         }
-        if ((scope === 'hoac-shared' || scope === 'event-specific') && !payload.event_type) {
-            const err = new Error(`event_type is required for ${scope} sub-heads`);
+        if (scope === 'hoac-shared' && !payload.event_type) {
+            const err = new Error('event_type is required for hoac-shared sub-heads');
             err.statusCode = 400;
             throw err;
         }

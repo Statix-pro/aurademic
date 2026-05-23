@@ -17,15 +17,9 @@ export interface BudgetHeadGroup {
     options: string[];
 }
 
-export interface EventSubHeadGroup {
-    label: string;
-    options: { value: string; label: string }[];
-}
-
 export const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [];
 export const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {};
 export const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {};
-export const EVENT_SUBHEAD_GROUPS: Record<string, EventSubHeadGroup[]> = {};
 export const HEAD_TO_GROUP: Record<string, string> = {};
 export const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
 
@@ -77,7 +71,6 @@ export function hydrateBudgetCatalogStore(catalog: BudgetCatalog) {
     BUDGET_HEAD_GROUPS.length = 0;
     clear(SUB_HEAD_BY_BUDGET_HEAD);
     clear(HOAC_SUBHEAD_OPTIONS);
-    clear(EVENT_SUBHEAD_GROUPS);
     clear(HEAD_TO_GROUP);
     clear(ALL_HEADS_BY_NAME);
     clear(ALL_SUB_HEADS_BY_NAME);
@@ -133,17 +126,6 @@ export function hydrateBudgetCatalogStore(catalog: BudgetCatalog) {
                 HOAC_SUBHEAD_OPTIONS[s.event_type] = [];
             }
             HOAC_SUBHEAD_OPTIONS[s.event_type].push(s.name);
-        } else if (s.scope === 'event-specific' && s.event_type) {
-            if (!EVENT_SUBHEAD_GROUPS[s.event_type]) {
-                EVENT_SUBHEAD_GROUPS[s.event_type] = [];
-            }
-            const groupLabel = s.group_label || '';
-            let group = EVENT_SUBHEAD_GROUPS[s.event_type].find((g) => g.label === groupLabel);
-            if (!group) {
-                group = { label: groupLabel, options: [] };
-                EVENT_SUBHEAD_GROUPS[s.event_type].push(group);
-            }
-            group.options.push({ value: s.name, label: s.name });
         }
     });
 

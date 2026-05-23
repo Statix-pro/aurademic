@@ -62,7 +62,7 @@ async function resolveHoacEventType(connection, primaryHead) {
  * @param {string|null} headName - the display name as submitted by the form
  * @param {string|null} subHeadName - the display name as submitted by the form
  * @param {object} [opts]
- * @param {'head-specific'|'hoac-shared'|'event-specific'} [opts.scope]
+ * @param {'head-specific'|'hoac-shared'} [opts.scope]
  *        Defaults to 'head-specific'. For HOAC / event scopes, headName
  *        carries the event_type ("Events & Competitions" / "Meetings & Audits").
  * @returns {Promise<{budget_head_id: number|null, budget_sub_head_id: number|null}>}
@@ -104,14 +104,6 @@ export async function resolveCatalogIds(connection, headName, subHeadName, opts 
         const [rows] = await connection.query(
             `SELECT id FROM budget_sub_heads
              WHERE name = ? AND scope = 'hoac-shared' AND event_type = ?
-             LIMIT 1`,
-            [trimmedSub, trimmedHead],
-        );
-        budget_sub_head_id = rows[0]?.id || null;
-    } else if (scope === 'event-specific' && trimmedSub) {
-        const [rows] = await connection.query(
-            `SELECT id FROM budget_sub_heads
-             WHERE name = ? AND scope = 'event-specific' AND event_type = ?
              LIMIT 1`,
             [trimmedSub, trimmedHead],
         );
