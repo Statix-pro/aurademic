@@ -361,6 +361,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Summer Internship',
     'Grama Saba Meet',
     'Orientation Session',
+    'Celebration',
   ],
   'Cultural & Celebrations': [
     'Celebration Day',
