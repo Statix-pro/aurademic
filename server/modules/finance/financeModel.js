@@ -3214,7 +3214,8 @@ const financeModel = {
         `SELECT id, tag_name, is_active, sort_order
          FROM budget_tags
          WHERE is_active = 1
-         ORDER BY sort_order ASC, tag_name ASC`
+           AND is_deleted = 0
+         ORDER BY tag_name ASC`
       );
       return rows;
     } catch (error) {

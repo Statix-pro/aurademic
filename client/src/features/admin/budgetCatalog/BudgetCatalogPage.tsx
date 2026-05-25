@@ -12,7 +12,7 @@ import {
 } from '../../../shared/hooks/useBudgetCatalog';
 import './BudgetCatalogPage.css';
 
-type TabKey = 'heads' | 'sub-heads';
+type TabKey = 'heads' | 'sub-heads' | 'tags';
 type Scope = 'head-specific' | 'hoac-shared';
 
 interface HeadForm {
@@ -34,7 +34,21 @@ interface SubHeadForm {
     sort_order: number;
 }
 
+interface BudgetTag {
+    id: number;
+    tag_name: string;
+    is_active: number | boolean;
+    sort_order: number;
+}
+
+interface TagForm {
+    id?: number;
+    tag_name: string;
+    sort_order: number;
+}
+
 const EMPTY_HEAD: HeadForm = { name: '', code: '', group_label: '', sort_order: 0 };
+const EMPTY_TAG: TagForm = { tag_name: '', sort_order: 0 };
 const EMPTY_SUB: SubHeadForm = {
     name: '',
     code: '',
@@ -48,6 +62,7 @@ const EMPTY_SUB: SubHeadForm = {
 function BudgetCatalogPage() {
     const [activeTab, setActiveTab] = useState<TabKey>('heads');
     const [catalog, setCatalog] = useState<BudgetCatalog | null>(null);
+    const [tags, setTags] = useState<BudgetTag[]>([]);
     const [loading, setLoading] = useState(true);
     const [alert, setAlert] = useState<{ open: boolean; type: AlertType; title: string; message: string }>({
         open: false,
@@ -75,8 +90,13 @@ function BudgetCatalogPage() {
         open: false,
         data: EMPTY_SUB,
     });
+    const [tagModal, setTagModal] = useState<{ open: boolean; data: TagForm }>({
+        open: false,
+        data: EMPTY_TAG,
+    });
     const [headFilter, setHeadFilter] = useState('');
     const [subFilter, setSubFilter] = useState('');
+    const [tagFilter, setTagFilter] = useState('');
     const [scopeFilter, setScopeFilter] = useState<Scope | 'all'>('all');
 
     const showAlert = (type: AlertType, title: string, message: string) =>
@@ -85,14 +105,21 @@ function BudgetCatalogPage() {
     const load = async () => {
         setLoading(true);
         try {
-            const res = await authenticityUtility.get('/budget-catalog', {
-                params: { includeInactive: true },
-            });
+            const [res, tagRes] = await Promise.all([
+                authenticityUtility.get('/budget-catalog', {
+                    params: { includeInactive: true },
+                }),
+                authenticityUtility.get('/budget-catalog/tags', {
+                    params: { includeInactive: true },
+                }),
+            ]);
             const data = (res.data?.data ?? res.data) as BudgetCatalog;
             setCatalog({
                 heads: Array.isArray(data?.heads) ? data.heads : [],
                 subHeads: Array.isArray(data?.subHeads) ? data.subHeads : [],
             });
+            const tagData = tagRes.data?.data ?? tagRes.data;
+            setTags(Array.isArray(tagData) ? tagData : []);
         } catch (err: any) {
             showAlert('error', 'Load failed', err?.message || 'Could not load budget catalog');
         } finally {
@@ -126,6 +153,14 @@ function BudgetCatalogPage() {
             return hay.includes(q);
         });
     }, [subHeads, subFilter, scopeFilter]);
+
+    const filteredTags = useMemo(() => {
+        const q = tagFilter.trim().toLowerCase();
+        const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
+        return tags
+            .filter((tag) => !q || tag.tag_name.toLowerCase().includes(q))
+            .sort((a, b) => collator.compare(a.tag_name, b.tag_name));
+    }, [tags, tagFilter]);
 
     const groupedHeads = useMemo(() => {
         const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
@@ -370,6 +405,72 @@ function BudgetCatalogPage() {
         }
     };
 
+    // -------- Tag CRUD --------
+    const openCreateTag = () =>
+        setTagModal({ open: true, data: { ...EMPTY_TAG } });
+    const openEditTag = (tag: BudgetTag) =>
+        setTagModal({
+            open: true,
+            data: {
+                id: tag.id,
+                tag_name: tag.tag_name,
+                sort_order: tag.sort_order,
+            },
+        });
+
+    const submitTag = async () => {
+        const { id, ...form } = tagModal.data;
+        const payload = {
+            ...form,
+            tag_name: form.tag_name.trim(),
+        };
+        if (!payload.tag_name) {
+            showAlert('error', 'Validation', 'Tag name is required');
+            return;
+        }
+        try {
+            if (id) {
+                await authenticityUtility.patch(`/budget-catalog/tags/${id}`, payload);
+                showAlert('success', 'Updated', 'Budget tag updated');
+            } else {
+                await authenticityUtility.post('/budget-catalog/tags', payload);
+                showAlert('success', 'Created', 'Budget tag created');
+            }
+            setTagModal({ open: false, data: EMPTY_TAG });
+            await refreshAll();
+        } catch (err: any) {
+            showAlert('error', 'Failed', err?.response?.data?.message || err?.message || 'Save failed');
+        }
+    };
+
+    const deleteTag = async (tag: BudgetTag) => {
+        setDeleteConfirm({
+            open: true,
+            title: 'Delete tag',
+            message: `Delete tag "${tag.tag_name}"? Existing records keep their saved tag text.`,
+            onConfirm: async () => {
+                try {
+                    await authenticityUtility.delete(`/budget-catalog/tags/${tag.id}`);
+                    showAlert('success', 'Deleted', 'Budget tag deleted from catalog');
+                    await refreshAll();
+                } catch (err: any) {
+                    showAlert('error', 'Failed', err?.response?.data?.message || 'Delete failed');
+                }
+            },
+        });
+    };
+
+    const toggleTagActive = async (tag: BudgetTag) => {
+        try {
+            await authenticityUtility.patch(`/budget-catalog/tags/${tag.id}`, {
+                is_active: tag.is_active ? 0 : 1,
+            });
+            await refreshAll();
+        } catch (err: any) {
+            showAlert('error', 'Failed', err?.response?.data?.message || 'Update failed');
+        }
+    };
+
     const headOptions = heads.filter((h) => h.is_active);
     const headSelectOptions = useMemo(() => {
         const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
@@ -424,6 +525,9 @@ function BudgetCatalogPage() {
                 </Nav.Item>
                 <Nav.Item>
                     <Nav.Link eventKey="sub-heads">Sub-heads ({subHeads.length})</Nav.Link>
+                </Nav.Item>
+                <Nav.Item>
+                    <Nav.Link eventKey="tags">Tags ({tags.length})</Nav.Link>
                 </Nav.Item>
             </Nav>
 
@@ -504,7 +608,7 @@ function BudgetCatalogPage() {
                         </tbody>
                     </Table>
                 </>
-            ) : (
+            ) : activeTab === 'sub-heads' ? (
                 <>
                     <div className="d-flex gap-2 mb-3 flex-wrap">
                         <Form.Control
@@ -605,6 +709,70 @@ function BudgetCatalogPage() {
                                 <tr>
                                     <td colSpan={6} className="text-center text-muted py-4">
                                         No sub-heads found.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </Table>
+                </>
+            ) : (
+                <>
+                    <div className="d-flex gap-2 mb-3">
+                        <Form.Control
+                            placeholder="Search tags..."
+                            value={tagFilter}
+                            onChange={(e) => setTagFilter(e.target.value)}
+                            style={{ maxWidth: 320 }}
+                        />
+                        <Button onClick={openCreateTag}>
+                            <Plus size={16} /> New tag
+                        </Button>
+                    </div>
+                    <Table hover bordered size="sm">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Active</th>
+                                <th style={{ width: 130 }}>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredTags.map((tag) => (
+                                <tr key={tag.id}>
+                                    <td>{tag.tag_name}</td>
+                                    <td>
+                                        <Form.Check
+                                            type="switch"
+                                            checked={!!tag.is_active}
+                                            onChange={() => toggleTagActive(tag)}
+                                        />
+                                    </td>
+                                    <td>
+                                        <Button
+                                            size="sm"
+                                            variant="light"
+                                            className="budget-catalog-icon-btn me-2 d-inline-flex align-items-center justify-content-center"
+                                            onClick={() => openEditTag(tag)}
+                                            title="Edit"
+                                        >
+                                            <Pencil size={16} color="#0d6efd" />
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="light"
+                                            className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
+                                            onClick={() => deleteTag(tag)}
+                                            title="Delete"
+                                        >
+                                            <Trash2 size={16} color="#dc3545" />
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {filteredTags.length === 0 && (
+                                <tr>
+                                    <td colSpan={3} className="text-center text-muted py-4">
+                                        No tags found.
                                     </td>
                                 </tr>
                             )}
@@ -799,6 +967,31 @@ function BudgetCatalogPage() {
                         Cancel
                     </Button>
                     <Button onClick={submitSub}>Save</Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* TAG MODAL */}
+            <Modal show={tagModal.open} onHide={() => setTagModal({ open: false, data: EMPTY_TAG })}>
+                <Modal.Header closeButton>
+                    <Modal.Title>{tagModal.data.id ? 'Edit tag' : 'New tag'}</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Name</Form.Label>
+                        <Form.Control
+                            value={tagModal.data.tag_name}
+                            onChange={(e) =>
+                                setTagModal((m) => ({ ...m, data: { ...m.data, tag_name: e.target.value } }))
+                            }
+                            placeholder="e.g. Laboratory"
+                        />
+                    </Form.Group>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => setTagModal({ open: false, data: EMPTY_TAG })}>
+                        Cancel
+                    </Button>
+                    <Button onClick={submitTag}>Save</Button>
                 </Modal.Footer>
             </Modal>
 
