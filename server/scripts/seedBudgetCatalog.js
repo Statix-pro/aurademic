@@ -243,9 +243,9 @@ export const SUB_HEAD_BY_HEAD = {
     ],
     'Club Activities': ['Flash Mob', 'Fun Events', 'Road show', 'Wall Painting'],
     'College Events': [
-        'Annual Day', 'Dakshaa', 'Founder Day', 'Graduation Day',
-        'Orientation Session', 'Science Day', 'Student Induction Programme',
-        'Womens Day',
+        'Alumni Induction Day', 'Annual Day', 'Dakshaa', 'Founder Day',
+        'Graduation Day', 'Orientation Session', 'Science Day',
+        'Student Induction Programme', 'Womens Day',
     ],
     'Conferences & Conclaves': [
         'Conclave', 'Consumables', 'Convention', 'Industry Interaction',
