@@ -247,6 +247,7 @@ const FALLBACK_TAG_OPTIONS: SelectOption[] = [
   { value: 'Innovation', label: 'Innovation' },
   { value: 'Start-up', label: 'Start-up' },
   { value: 'Entrepreneurship', label: 'Entrepreneurship' },
+  { value: 'CoE Claims', label: 'CoE Claims' },
 ];
 
 const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
@@ -833,6 +834,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
     'Workshop'],
 
   'College Events': [
+    'Alumni Induction Day',
     'Annual Day',
     'Dakshaa',
     'Founder Day',
@@ -3294,7 +3296,11 @@ const FinanceApproval: React.FC = () => {
   const handleViewModeFocusCapture = (event: React.FocusEvent<HTMLDivElement>) => {
     if (!isViewMode) return;
     const target = event.target as HTMLElement | null;
-    if (!target || target.closest('[data-readonly-applicant-card="true"]')) return;
+    if (
+      !target ||
+      target.closest('[data-readonly-applicant-card="true"]') ||
+      target.closest('[data-workflow-stage-remark-input="true"]')
+    ) return;
     if (target.matches('input, textarea, select, button, [tabindex]')) {
       target.blur();
     }
@@ -3303,7 +3309,11 @@ const FinanceApproval: React.FC = () => {
   const handleViewModeKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!isViewMode) return;
     const target = event.target as HTMLElement | null;
-    if (!target || target.closest('[data-readonly-applicant-card="true"]')) return;
+    if (
+      !target ||
+      target.closest('[data-readonly-applicant-card="true"]') ||
+      target.closest('[data-workflow-stage-remark-input="true"]')
+    ) return;
     if (target.matches('input, textarea, select, button, [tabindex]') && event.key !== 'Tab') {
       event.preventDefault();
       event.stopPropagation();
@@ -4969,6 +4979,7 @@ const FinanceApproval: React.FC = () => {
                       const isCurrentStageEditable = canEditStageRemark && loadedCurrentStage === entryStage;
                       return (
                         <textarea
+                          data-workflow-stage-remark-input={isCurrentStageEditable ? 'true' : undefined}
                           value={isCurrentStageEditable ? stageRemarkInput : (entry.remarks || '')}
                           readOnly={!isCurrentStageEditable}
                           onChange={(event) => {

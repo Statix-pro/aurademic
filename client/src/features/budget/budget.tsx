@@ -437,6 +437,7 @@ const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
   ],
 
   'College Events': [
+    'Alumni Induction Day',
     'Annual Day',
     'Dakshaa',
     'Founder Day',
@@ -666,6 +667,7 @@ const FALLBACK_TAG_OPTIONS: SelectOption[] = [
   { value: 'Innovation', label: 'Innovation' },
   { value: 'Start-up', label: 'Start-up' },
   { value: 'Entrepreneurship', label: 'Entrepreneurship' },
+  { value: 'CoE Claims', label: 'CoE Claims' },
 ];
 
 
