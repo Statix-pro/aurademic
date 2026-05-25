@@ -36,9 +36,6 @@ CREATE TABLE IF NOT EXISTS `budget_sub_heads` (
     `is_deleted` TINYINT(1) NOT NULL DEFAULT 0,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT `fk_subhead_head`
-        FOREIGN KEY (`head_id`) REFERENCES `budget_heads`(`id`)
-        ON DELETE CASCADE ON UPDATE CASCADE,
     INDEX `idx_subhead_scope` (`scope`),
     INDEX `idx_subhead_head` (`head_id`),
     INDEX `idx_subhead_event_type` (`event_type`),
