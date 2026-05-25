@@ -4,6 +4,15 @@ const VALID_SCOPES = new Set(['head-specific', 'hoac-shared']);
 
 const normalizeText = (value) => String(value ?? '').trim();
 const nullableText = (value) => normalizeText(value) || null;
+const toCodeSlug = (value) => normalizeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+const catalogCode = (name, id) => {
+    const slug = toCodeSlug(name) || 'catalog';
+    return `${slug}-${id}`;
+};
 const toPositiveInt = (value) => {
     const num = Number(value);
     return Number.isInteger(num) && num > 0 ? num : null;
@@ -46,11 +55,15 @@ const budgetCatalogModel = {
         if (!normalizedName || !normalizedGroupLabel) {
             throw badRequest('name and group_label are required');
         }
-        const normalizedCode = nullableText(code);
+        let normalizedCode = nullableText(code);
         const [result] = await db.query(
             'INSERT INTO budget_heads (name, code, group_label, sort_order) VALUES (?, ?, ?, ?)',
             [normalizedName, normalizedCode, normalizedGroupLabel, sort_order],
         );
+        if (!normalizedCode) {
+            normalizedCode = catalogCode(normalizedName, result.insertId);
+            await db.query('UPDATE budget_heads SET code = ? WHERE id = ?', [normalizedCode, result.insertId]);
+        }
         return { id: result.insertId, name: normalizedName, code: normalizedCode, group_label: normalizedGroupLabel, sort_order, is_active: 1 };
     },
 
@@ -124,13 +137,14 @@ const budgetCatalogModel = {
             throw badRequest('name is required');
         }
         const scope = this.validateSubHeadPayload(payload);
+        let code = nullableText(payload.code);
         const [result] = await db.query(
             `INSERT INTO budget_sub_heads
              (name, code, head_id, scope, event_type, group_label, sort_order)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [
                 name,
-                nullableText(payload.code),
+                code,
                 scope === 'head-specific' ? toPositiveInt(payload.head_id) : null,
                 scope,
                 scope === 'head-specific' ? null : normalizeText(payload.event_type),
@@ -138,7 +152,11 @@ const budgetCatalogModel = {
                 payload.sort_order ?? 0,
             ],
         );
-        return { id: result.insertId, ...payload, name, scope, is_active: 1 };
+        if (!code) {
+            code = catalogCode(name, result.insertId);
+            await db.query('UPDATE budget_sub_heads SET code = ? WHERE id = ?', [code, result.insertId]);
+        }
+        return { id: result.insertId, ...payload, name, code, scope, is_active: 1 };
     },
 
     async createSubHeadsBulk(payload) {
@@ -197,7 +215,9 @@ const budgetCatalogModel = {
                         Number(payload.sort_order || 0) + index,
                     ],
                 );
-                created.push({ id: result.insertId, name });
+                const code = catalogCode(name, result.insertId);
+                await connection.query('UPDATE budget_sub_heads SET code = ? WHERE id = ?', [code, result.insertId]);
+                created.push({ id: result.insertId, name, code });
             }
             await connection.commit();
             return { created, skipped };
