@@ -80,6 +80,7 @@ const FALLBACK_TAG_OPTIONS: SelectOption[] = [
   { value: 'Innovation', label: 'Innovation' },
   { value: 'Start-up', label: 'Start-up' },
   { value: 'Entrepreneurship', label: 'Entrepreneurship' },
+  { value: 'CoE Claims', label: 'CoE Claims' },
 ];
 
 const BUDGET_FIELD_LAYER = 1;
