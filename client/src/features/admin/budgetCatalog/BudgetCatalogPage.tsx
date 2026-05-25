@@ -519,7 +519,7 @@ function BudgetCatalogPage() {
                 </Button>
             </div>
 
-            <Nav variant="tabs" activeKey={activeTab} onSelect={(k) => k && setActiveTab(k as TabKey)} className="mb-3">
+            <Nav variant="tabs" activeKey={activeTab} onSelect={(k) => k && setActiveTab(k as TabKey)} className="mb-3 budget-catalog-tabs">
                 <Nav.Item>
                     <Nav.Link eventKey="heads">Heads ({heads.length})</Nav.Link>
                 </Nav.Item>
@@ -635,8 +635,7 @@ function BudgetCatalogPage() {
                             <tr>
                                 <th>Name</th>
                                 <th>Scope</th>
-                                <th>Parent / Event</th>
-                                <th>Group</th>
+                                <th>Parent head</th>
                                 <th>Active</th>
                                 <th style={{ width: 130 }}>Actions</th>
                             </tr>
@@ -645,7 +644,7 @@ function BudgetCatalogPage() {
                             {groupedSubs.map((group) => (
                                 <React.Fragment key={group.group}>
                                     <tr className="budget-catalog-group-row">
-                                        <td colSpan={6}>{group.group}</td>
+                                        <td colSpan={5}>{group.group}</td>
                                     </tr>
                                     {group.items.map((s) => (
                                         <tr key={s.id}>
@@ -673,7 +672,6 @@ function BudgetCatalogPage() {
                                                     ? s.head_name || '—'
                                                     : s.event_type || '—'}
                                             </td>
-                                            <td>{s.group_label || '—'}</td>
                                             <td>
                                                 <Form.Check
                                                     type="switch"
@@ -707,7 +705,7 @@ function BudgetCatalogPage() {
                             ))}
                             {groupedSubs.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="text-center text-muted py-4">
+                                    <td colSpan={5} className="text-center text-muted py-4">
                                         No sub-heads found.
                                     </td>
                                 </tr>
