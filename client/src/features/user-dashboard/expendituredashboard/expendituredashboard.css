@@ -167,6 +167,168 @@
   padding: 20px;
 }
 
+/* KPI Stats Containers */
+.expenditure-stats-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* Individual Card Styling */
+.expenditure-stats-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+}
+
+.expenditure-stats-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(10, 37, 64, 0.08);
+}
+
+.expenditure-stats-card:focus {
+  outline: none;
+}
+
+/* Icons */
+.expenditure-stats-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.expenditure-stats-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.expenditure-stats-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.expenditure-stats-number {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.expenditure-stats-amount {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+/* Color Accents (Cards) */
+.expenditure-stats-card.total .expenditure-stats-icon-wrap {
+  background: #eef2f6;
+  color: #475569;
+}
+.expenditure-stats-card.total:hover {
+  border-color: #94a3b8;
+}
+
+.expenditure-stats-card.pending .expenditure-stats-icon-wrap {
+  background: #fef3c7;
+  color: #d97706;
+}
+.expenditure-stats-card.pending:hover {
+  border-color: #f59e0b;
+}
+
+.expenditure-stats-card.return .expenditure-stats-icon-wrap {
+  background: #ffedd5;
+  color: #ea580c;
+}
+.expenditure-stats-card.return:hover {
+  border-color: #f97316;
+}
+
+.expenditure-stats-card.approved .expenditure-stats-icon-wrap {
+  background: #d1fae5;
+  color: #059669;
+}
+.expenditure-stats-card.approved:hover {
+  border-color: #10b981;
+}
+
+.expenditure-stats-card.pending-payment .expenditure-stats-icon-wrap {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+.expenditure-stats-card.pending-payment:hover {
+  border-color: #6366f1;
+}
+
+.expenditure-stats-card.closed .expenditure-stats-icon-wrap {
+  background: #ccfbf1;
+  color: #0d9488;
+}
+.expenditure-stats-card.closed:hover {
+  border-color: #14b8a6;
+}
+
+/* Active Filter States */
+.expenditure-stats-card.active {
+  border-width: 1.5px;
+  box-shadow: 0 8px 24px rgba(10, 37, 64, 0.1);
+}
+
+.expenditure-stats-card.total.active {
+  border-color: #475569;
+  background: #f8fafc;
+}
+
+.expenditure-stats-card.pending.active {
+  border-color: #d97706;
+  background: #fffbeb;
+}
+
+.expenditure-stats-card.return.active {
+  border-color: #ea580c;
+  background: #fff7ed;
+}
+
+.expenditure-stats-card.approved.active {
+  border-color: #059669;
+  background: #f0fdf4;
+}
+
+.expenditure-stats-card.pending-payment.active {
+  border-color: #4f46e5;
+  background: #eef2ff;
+}
+
+.expenditure-stats-card.closed.active {
+  border-color: #0d9488;
+  background: #f0fdfa;
+}
+
 /* Demo expandable card */
 .expenditure-demo-wrap {
   margin-bottom: 24px;
