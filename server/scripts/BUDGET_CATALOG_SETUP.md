@@ -2,7 +2,7 @@
 
 Moves hardcoded budget heads / sub-heads from the client into the DB so admins can edit them from `/admin/budget-catalog` without code changes.
 
-Three SQL files do the work:
+SQL files do the work:
 
 | File | Purpose |
 |---|---|
@@ -10,6 +10,8 @@ Three SQL files do the work:
 | `server/schema/migrations/20260520_seed_budget_catalog.sql` | Inserts ~75 heads and ~600 sub-heads (conditional inserts, safe to re-run) |
 | `server/schema/migrations/20260521_add_catalog_refs_to_workflow_tables.sql` | Adds nullable catalog ID columns to Budget / Finance / Expenditure workflow tables and backfills old rows |
 | `server/schema/migrations/20260522_add_catalog_deleted_flags.sql` | Adds hidden/deleted flags so delete can hide from UI while toggle stays reversible |
+| `server/schema/migrations/20260525_add_budget_tags_deleted_flag.sql` | Adds hidden/deleted flag for editable budget tags |
+| `server/schema/migrations/20260525_add_coe_claims_tag.sql` | Adds the CoE Claims tag |
 
 Both are pure SQL — no Node needed at the target machine.
 
@@ -30,7 +32,11 @@ mysql -u root -p research < server/schema/migrations/20260521_add_catalog_refs_t
 # 4. Add catalog deleted flags
 mysql -u root -p research < server/schema/migrations/20260522_add_catalog_deleted_flags.sql
 
-# 5. Start the app
+# 5. Add budget tag deleted flag + latest tag seed
+mysql -u root -p research < server/schema/migrations/20260525_add_budget_tags_deleted_flag.sql
+mysql -u root -p research < server/schema/migrations/20260525_add_coe_claims_tag.sql
+
+# 6. Start the app
 npm run dev
 ```
 
@@ -42,7 +48,7 @@ Open <http://localhost:3000/admin/budget-catalog> as a super-admin to verify the
 
 ## Prod (AnyDesk / server without Node)
 
-Copy the four `.sql` files to the prod machine, then:
+Copy the SQL files to the prod machine, then:
 
 ```bash
 # 1. Schema
@@ -56,17 +62,22 @@ mysql -u <prod_user> -p <prod_db> < 20260521_add_catalog_refs_to_workflow_tables
 
 # 4. Deleted flags for hide-vs-toggle behavior
 mysql -u <prod_user> -p <prod_db> < 20260522_add_catalog_deleted_flags.sql
+
+# 5. Budget tag deleted flag + latest tag seed
+mysql -u <prod_user> -p <prod_db> < 20260525_add_budget_tags_deleted_flag.sql
+mysql -u <prod_user> -p <prod_db> < 20260525_add_coe_claims_tag.sql
 ```
 
 Then deploy the new server + client build so `/api/budget-catalog` and the admin page exist.
 Do not deploy the new server before the third migration; the runtime now reads the new nullable ID columns.
-Apply the fourth migration before exposing the delete/hide UI so the new `is_deleted` flag exists.
+Apply the deleted-flag migrations before exposing the delete/hide UI so the new `is_deleted` flags exist.
 
 ### Verify
 
 ```sql
 SELECT COUNT(*) FROM budget_heads;       -- ~75
 SELECT COUNT(*) FROM budget_sub_heads;   -- ~600+
+SELECT COUNT(*) FROM budget_tags WHERE is_deleted = 0;
 SELECT COUNT(*) FROM budget_proposal_lines WHERE budget_head_id IS NOT NULL;
 SELECT COUNT(*) FROM finance_budget_breakup WHERE budget_head_id IS NOT NULL;
 SELECT COUNT(*) FROM expenditure_advance_rows WHERE budget_head_id IS NOT NULL;

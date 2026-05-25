@@ -49,6 +49,62 @@ const budgetCatalogModel = {
         return { heads, subHeads };
     },
 
+    async getTags({ includeInactive = false } = {}) {
+        const query = includeInactive
+            ? `SELECT id, tag_name, is_active, sort_order
+                 FROM budget_tags
+                WHERE is_deleted = 0
+                ORDER BY tag_name`
+            : `SELECT id, tag_name, is_active, sort_order
+                 FROM budget_tags
+                WHERE is_active = 1 AND is_deleted = 0
+                ORDER BY tag_name ASC`;
+        const [rows] = await db.query(query);
+        return rows;
+    },
+
+    async createTag({ tag_name, sort_order = 0 }) {
+        const normalizedName = normalizeText(tag_name);
+        if (!normalizedName) {
+            throw badRequest('tag_name is required');
+        }
+        const [result] = await db.query(
+            'INSERT INTO budget_tags (tag_name, sort_order) VALUES (?, ?)',
+            [normalizedName, sort_order],
+        );
+        return { id: result.insertId, tag_name: normalizedName, sort_order, is_active: 1 };
+    },
+
+    async updateTag(id, data) {
+        const allowed = ['tag_name', 'sort_order', 'is_active'];
+        const fields = [];
+        const params = [];
+        for (const key of allowed) {
+            if (data[key] !== undefined) {
+                if (key === 'tag_name' && !normalizeText(data[key])) {
+                    throw badRequest('tag_name is required');
+                }
+                fields.push(`${key} = ?`);
+                params.push(key === 'tag_name' ? normalizeText(data[key]) : data[key]);
+            }
+        }
+        if (fields.length === 0) return false;
+        params.push(id);
+        const [result] = await db.query(
+            `UPDATE budget_tags SET ${fields.join(', ')} WHERE id = ? AND is_deleted = 0`,
+            params,
+        );
+        return result.affectedRows > 0;
+    },
+
+    async softDeleteTag(id) {
+        const [result] = await db.query(
+            'UPDATE budget_tags SET is_active = 0, is_deleted = 1 WHERE id = ?',
+            [id],
+        );
+        return result.affectedRows > 0;
+    },
+
     async createHead({ name, code = null, group_label, sort_order = 0 }) {
         const normalizedName = normalizeText(name);
         const normalizedGroupLabel = normalizeText(group_label);

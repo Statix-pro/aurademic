@@ -22,6 +22,53 @@ const budgetCatalogController = {
         }
     },
 
+    async getTags(req, res) {
+        try {
+            const includeInactive = String(req.query.includeInactive || '').toLowerCase() === 'true';
+            const data = await budgetCatalogModel.getTags({ includeInactive });
+            return res.json({ success: true, data });
+        } catch (error) {
+            return handleError(res, error, 'Failed to fetch budget tags');
+        }
+    },
+
+    async createTag(req, res) {
+        try {
+            const { tag_name } = req.body || {};
+            if (isBlank(tag_name)) {
+                return res.status(400).json({ success: false, message: 'tag_name is required' });
+            }
+            const tag = await budgetCatalogModel.createTag(req.body || {});
+            return res.status(201).json({ success: true, data: tag });
+        } catch (error) {
+            return handleError(res, error, 'Failed to create budget tag');
+        }
+    },
+
+    async updateTag(req, res) {
+        try {
+            const success = await budgetCatalogModel.updateTag(req.params.id, req.body || {});
+            if (!success) {
+                return res.status(404).json({ success: false, message: 'Budget tag not found' });
+            }
+            return res.json({ success: true });
+        } catch (error) {
+            return handleError(res, error, 'Failed to update budget tag');
+        }
+    },
+
+    async deleteTag(req, res) {
+        try {
+            const success = await budgetCatalogModel.softDeleteTag(req.params.id);
+            if (!success) {
+                return res.status(404).json({ success: false, message: 'Budget tag not found' });
+            }
+            return res.json({ success: true });
+        } catch (error) {
+            return handleError(res, error, 'Failed to delete budget tag');
+        }
+    },
+
     async createHead(req, res) {
         try {
             const { name, group_label } = req.body || {};

@@ -45,6 +45,11 @@ router.get('/', (req, res, next) => {
 }, budgetCatalogController.getCatalog);
 
 // Write: super admin only
+router.get('/tags', superAdminMiddleware, budgetCatalogController.getTags);
+router.post('/tags', superAdminMiddleware, budgetCatalogController.createTag);
+router.patch('/tags/:id', superAdminMiddleware, budgetCatalogController.updateTag);
+router.delete('/tags/:id', superAdminMiddleware, budgetCatalogController.deleteTag);
+
 router.post('/heads', superAdminMiddleware, budgetCatalogController.createHead);
 router.patch('/heads/:id', superAdminMiddleware, budgetCatalogController.updateHead);
 router.delete('/heads/:id', superAdminMiddleware, budgetCatalogController.deleteHead);
