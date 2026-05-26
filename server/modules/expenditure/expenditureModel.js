@@ -871,7 +871,7 @@ async function insertExpenditureRef(
       const storageSequence = Number(sequenceRow?.next_sequence || 1);
 
       await conn.execute(
-        `REPLACE INTO expenditure_request_refs
+        `INSERT INTO expenditure_request_refs
            (expenditure_request_id, ref_year, ref_sequence, request_ref)
          VALUES (?, ?, ?, ?)`,
         [expenditureId, year, storageSequence, ref],
@@ -883,6 +883,9 @@ async function insertExpenditureRef(
     }
   } catch (err) {
     if (err?.code === 'ER_NO_SUCH_TABLE') return null;
+    if (err?.code === 'ER_DUP_ENTRY') {
+      throw new Error('Expenditure already exists for this workflow row.');
+    }
     throw err;
   }
 }
@@ -951,24 +954,41 @@ export async function getApprovedBudgets({ userId, userEmail, financeRequestId, 
       budgetLineIds: financeRows.map((row) => row.budget_line_id),
     });
 
-    return financeRows.map((r) => {
+    const groupedByHeadSubHead = new Map();
+
+    financeRows.forEach((r) => {
       const totalAmount = toMoney(r.total_amount);
       const usedAmount = toMoney(usageByLineId.get(toPositiveInt(r.budget_line_id)));
+      const head = normalizeText(r.head);
+      const subHead = normalizeText(r.sub_head);
+      if (!head || !subHead) return;
 
-      return {
+      const key = `${head.toLowerCase()}::${subHead.toLowerCase()}`;
+      const existing = groupedByHeadSubHead.get(key);
+
+      if (existing) {
+        existing.totalAmount = toMoney(existing.totalAmount + totalAmount);
+        existing.usedAmount = toMoney(existing.usedAmount + usedAmount);
+        existing.remainingAmount = toMoney(Math.max(0, existing.totalAmount - existing.usedAmount));
+        return;
+      }
+
+      groupedByHeadSubHead.set(key, {
         budgetLineId: toPositiveInt(r.budget_line_id),
         budgetProposalId: toPositiveInt(r.budget_proposal_id),
         proposalRef: normalizeText(r.proposal_ref),
         fiscalYear: Number(r.fiscal_year) || new Date().getFullYear(),
-        head: normalizeText(r.head),
-        subHead: normalizeText(r.sub_head),
+        head,
+        subHead,
         totalAmount,
         usedAmount,
         remainingAmount: toMoney(Math.max(0, totalAmount - usedAmount)),
         beneficiaryType: normalizeText(r.beneficiary_type),
         beneficiaryValue: normalizeText(r.beneficiary_value),
-      };
-    }).filter((row) => row.head && row.subHead);
+      });
+    });
+
+    return Array.from(groupedByHeadSubHead.values());
   } catch (error) {
     if (error?.code === 'ER_NO_SUCH_TABLE') return [];
     throw error;
@@ -2361,7 +2381,7 @@ async function insertAdvanceRows(
         subHead,
         advIds.budget_head_id,
         advIds.budget_sub_head_id,
-        budgetSnapshot ? budgetSnapshot.budgetAmount : budgetAmount,
+        budgetAmount,
         preAdvanceAmount,
         advanceAmount,
         budgetSnapshot ? budgetSnapshot.availableAmountSnapshot : null,
@@ -2406,7 +2426,7 @@ async function insertSettlementRows(conn, expenditureId, rows = [], budgetSnapsh
         subHead,
         setIds.budget_head_id,
         setIds.budget_sub_head_id,
-        budgetSnapshot ? budgetSnapshot.budgetAmount : budgetAmount,
+        budgetAmount,
         advanceAmount,
         settlementAmount,
         budgetSnapshot ? budgetSnapshot.availableAmountSnapshot : null,
@@ -2451,7 +2471,7 @@ async function insertExpenditureRows(conn, expenditureId, rows = [], budgetSnaps
         subHead,
         lineIds.budget_head_id,
         lineIds.budget_sub_head_id,
-        budgetSnapshot ? budgetSnapshot.budgetAmount : budgetAmount,
+        budgetAmount,
         expenditureInput,
         autoSumAmount,
         budgetSnapshot ? budgetSnapshot.availableAmountSnapshot : null,

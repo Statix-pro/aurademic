@@ -931,6 +931,7 @@ const ExpenditureApproval: React.FC = () => {
   >(null);
   const [wfActionComment, setWfActionComment] = useState("");
   const [wfActionSubmitting, setWfActionSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasDofApprovalForPaymentStatus, setHasDofApprovalForPaymentStatus] =
     useState<boolean>(false);
   const [financeApprovedAmount, setFinanceApprovedAmount] = useState<number>(
@@ -3851,6 +3852,8 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
   };
 
   const performSubmit = async (): Promise<void> => {
+  if (isSubmitting) return;
+  setIsSubmitting(true);
   try {
     if (isReadOnlyView) {
         showAlert(
@@ -4215,10 +4218,13 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
   } catch (error) {
       console.error("Expenditure submit error:", error);
       showAlert(getSubmitErrorMessage(error), "error");
+  } finally {
+      setIsSubmitting(false);
   }
 };
 
   const handleSubmit = async (): Promise<void> => {
+    if (isSubmitting) return;
     const settlementNotice = getSettlementAdjustmentNotice();
 
     if (settlementNotice) {
@@ -7015,12 +7021,13 @@ const handleBeneficiarySearch = async (query: string) => {
             <div className="expenditure-submit-buttons">
               <button
                 className="btn-submit"
+                disabled={isSubmitting}
               onClick={(e) => {
                 e.preventDefault();
                 handleSubmit();
               }}
           >
-            {submitActionLabel}
+            {isSubmitting ? "Submitting..." : submitActionLabel}
           </button>
         </div>
       )}
