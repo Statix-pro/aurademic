@@ -2175,9 +2175,19 @@ const workflowRowRefFromState = (() => {
 
     return rows.map((row) => {
       const budgetLineId = Number(row.budgetLineId || 0) || null;
+      const normalizedHead = normalizeBudgetToken(row.budgetHead);
+      const normalizedSubHead = normalizeBudgetToken(row.subHead);
       const matchedBudget = budgetLineId
         ? approvedBudgetOptions.find(
-            (budget) => Number(budget.budgetLineId || 0) === budgetLineId,
+            (budget) =>
+              Number(budget.budgetLineId || 0) === budgetLineId &&
+              normalizeBudgetToken(budget.head) === normalizedHead &&
+              normalizeBudgetToken(budget.subHead) === normalizedSubHead,
+          )
+          || approvedBudgetOptions.find(
+            (budget) =>
+              normalizeBudgetToken(budget.head) === normalizedHead &&
+              normalizeBudgetToken(budget.subHead) === normalizedSubHead,
           )
         : null;
 
