@@ -384,7 +384,10 @@ export async function buildBudgetList(options) {
 
     sql += ` WHERE ${where.join(' AND ')}
            GROUP BY bp.id, md.name, md.code, me.name, me.code, met.name, met.code
-           ORDER BY bp.created_at DESC
+           ORDER BY
+             CASE WHEN LOWER(TRIM(bp.status)) = 're_submitted' THEN 0 ELSE 1 END,
+             MAX(bp.updated_at) DESC,
+             bp.created_at DESC
            LIMIT ? OFFSET ? `;
 
     params.push(Number(pLimit), Number(pOffset));

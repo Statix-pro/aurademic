@@ -269,6 +269,11 @@
   padding: 14px 24px;
 }
 
+.fw-item--resubmitted {
+  border-left: 6px solid #f59e0b;
+  background: linear-gradient(90deg, #fffbeb 0, #ffffff 120px);
+}
+
 .fw-item--clickable {
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
@@ -781,6 +786,11 @@
 .fw-log-decision--submitted {
   background: #e0f2fe;
   color: #075985;
+}
+
+.fw-log-decision--resubmitted {
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .fw-log-role {

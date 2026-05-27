@@ -1047,6 +1047,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     return String(record.workflow_state?.lastDecision || record.lastDecision || '').toLowerCase();
   }, []);
 
+  const isResubmittedRecord = useCallback((record: Record<string, any>) => {
+    return getRecordWorkflowDecision(record) === 'resubmitted';
+  }, [getRecordWorkflowDecision]);
+
   const applyWorkflowDecisionLocally = useCallback(
     (recordId: number | string, decision: WorkflowDecision, nextStage?: string | null) => {
       const normalizedNextStage = String(nextStage || '').trim().toLowerCase();
@@ -2013,12 +2017,25 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   ]);
 
   const filteredRows = useMemo(() => {
+    const prioritizeResubmitted = (items: Record<string, any>[]) => {
+      if (statusFilter !== 'pending') return items;
+      return [...items].sort((a, b) => {
+        const aResubmitted = isResubmittedRecord(a);
+        const bResubmitted = isResubmittedRecord(b);
+        if (aResubmitted !== bResubmitted) return aResubmitted ? -1 : 1;
+
+        const aTime = Date.parse(String(a.workflow_state?.resubmittedAt || a.resubmittedAt || a.updated_at || a.created_at || '')) || 0;
+        const bTime = Date.parse(String(b.workflow_state?.resubmittedAt || b.resubmittedAt || b.updated_at || b.created_at || '')) || 0;
+        return bTime - aTime;
+      });
+    };
+
     if (statusFilter === 'total') {
       return searchScopedRows;
     }
 
-    return searchScopedRows.filter((record) => resolveStatusCategory(record) === statusFilter);
-  }, [searchScopedRows, statusFilter, resolveStatusCategory]);
+    return prioritizeResubmitted(searchScopedRows.filter((record) => resolveStatusCategory(record) === statusFilter));
+  }, [isResubmittedRecord, searchScopedRows, statusFilter, resolveStatusCategory]);
 
   const totalPages = Math.max(1, Math.ceil((totalRows || 0) / (limit || 20)));
 
@@ -2605,10 +2622,12 @@ const proposalFilteredRows = useMemo(() => {
                     
                     const tag = getWorkflowRecordTag(record);
 
+                    const isResubmitted = isResubmittedRecord(record);
+
                     return (
                       <div key={timelineKey} className="fw-item-wrap">
                         <div
-                          className={`fw-item fw-item--clickable ${archivingIds.has(recordId) ? 'fw-item--archiving' : ''}`}
+                          className={`fw-item fw-item--clickable ${isResubmitted ? 'fw-item--resubmitted' : ''} ${archivingIds.has(recordId) ? 'fw-item--archiving' : ''}`}
                           role="button"
                           tabIndex={0}
                           onClick={() => navigate(getRecordRoute(recordId, 'view'), { state: { isActionablePending } })}
@@ -3310,7 +3329,7 @@ const proposalFilteredRows = useMemo(() => {
                         </span>
                       )}
                       {subtitleText && (
-                        <span className="fw-log-feedback">Note: {subtitleText}</span>
+                        <span className="fw-log-feedback">Remarks: {subtitleText}</span>
                       )}
                       {hasExpandedSubtitle && (
                         <button

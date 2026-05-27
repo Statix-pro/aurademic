@@ -25,6 +25,7 @@ import updatesRoutes from './modules/events/updates/updatesRoutes.js';
 import documentsRoutes from './modules/events/documents/documentsRoutes.js';
 import accessControlRoutes from './modules/accessControl/accessControlRoutes.js';
 import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
+import budgetCatalogRoutes from './modules/budgetCatalog/budgetCatalogRoutes.js';
 
 // Finance page
 import financePageRoutes from './modules/finance/financeRoutes.js';
@@ -151,6 +152,7 @@ app.use('/api/updates', updatesRoutes);
 app.use('/api/documents', documentsRoutes);
 app.use('/api/access-control', accessControlRoutes);
 app.use('/api/master-data', masterDataRoutes);
+app.use('/api/budget-catalog', budgetCatalogRoutes);
 
 /* ================= 404 HANDLER ================= */
 

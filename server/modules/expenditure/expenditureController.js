@@ -1256,18 +1256,25 @@ const expenditureController = {
         return sendError(res, 409, 'Only returned requests can be resubmitted');
       }
 
+      const resubmissionComment = normalizeText(req.body?.feedback || req.body?.comment || req.body?.remarks);
+      if (!resubmissionComment) {
+        return sendError(res, 400, 'Resubmission comments are required');
+      }
+
+      const resubmitMetadata = {
+        origin: 'resubmit',
+        requestId: null,
+        moduleMetaVersion: 1,
+        moduleMeta: {
+          trigger: 'applicant_resubmit',
+          beneficiaryType: normalizeText(record.beneficiary_type) || null,
+        },
+      };
+
       const restartResult = await workflowService.startWorkflow({
         moduleKey: 'expenditure',
         recordId: expenditureId,
-        metadata: {
-          origin: 'resubmit',
-          requestId: null,
-          moduleMetaVersion: 1,
-          moduleMeta: {
-            trigger: 'applicant_resubmit',
-            beneficiaryType: normalizeText(record.beneficiary_type) || null,
-          },
-        },
+        metadata: resubmitMetadata,
       });
 
       const resubmittedAt = new Date().toISOString();
@@ -1281,6 +1288,21 @@ const expenditureController = {
         resubmittedAt,
         updatedAt: resubmittedAt,
         resolvedAt: null,
+      });
+      await workflowService.logWorkflowResubmission({
+        moduleKey: 'expenditure',
+        recordId: expenditureId,
+        stage: restartResult.state?.currentStage || workflowState.currentStage || 'level1',
+        feedback: resubmissionComment,
+        actor: resolveActor(req),
+        snapshotBefore: workflowState,
+        metadata: {
+          ...resubmitMetadata,
+          moduleMeta: {
+            ...resubmitMetadata.moduleMeta,
+            route: 'POST /api/expenditure/:id/resubmit',
+          },
+        },
       });
 
       return res.status(200).json({

@@ -375,6 +375,11 @@ select.adminbudget-control {
   padding: 14px 24px;
 }
 
+.adminbudget-item--resubmitted {
+  border-left: 6px solid #f59e0b;
+  background: linear-gradient(90deg, #fffbeb 0, #ffffff 128px);
+}
+
 .adminbudget-item--archiving {
   animation: adminbudgetArchiveOut 0.28s ease forwards;
   pointer-events: none;
@@ -1081,6 +1086,11 @@ select.adminbudget-control {
 .log-decision--returned {
   background: #fef9c3;
   color: #854d0e;
+}
+
+.log-decision--resubmitted {
+  background: #ffedd5;
+  color: #c2410c;
 }
 
 .log-decision--submitted {
