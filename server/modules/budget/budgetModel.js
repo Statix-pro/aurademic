@@ -979,7 +979,13 @@ export async function getProposalDetailsByIds(proposalIds = []) {
 export async function update(
   proposalId,
   payload,
-  { skipEditStateValidation = false, editedByUserId = null, editedByEmail = null, editedByRole = null } = {}
+  {
+    skipEditStateValidation = false,
+    editedByUserId = null,
+    editedByEmail = null,
+    editedByRole = null,
+    resubmissionRemarks = null,
+  } = {}
 ) {
   const proposal = await getBudgetById(proposalId);
 
@@ -1080,6 +1086,10 @@ export async function update(
     const approvalFlowString = formatApprovalFlowString(flow);
     const initialStage = getInitialApprovalStage(flow);
     const isReturnedState = proposal.status && proposal.status.endsWith('_returned');
+    const normalizedResubmissionRemarks = normalizeText(resubmissionRemarks);
+    if (isReturnedState && !normalizedResubmissionRemarks) {
+      throw new Error('Resubmission remarks are required');
+    }
     const nextCurrentStage =
       ['draft', 'submitted'].includes(proposal.status) || isReturnedState
         ? initialStage
@@ -1209,6 +1219,19 @@ export async function update(
           }
         }
       }
+    }
+
+    if (isReturnedState) {
+      const actorUserId = Number.isInteger(Number(editedByUserId)) ? Number(editedByUserId) : 0;
+      const actorEmail = normalizeText(editedByEmail);
+
+      await conn.execute(
+        `INSERT INTO budget_proposal_approvals(
+            budget_proposal_id, role, approver_user_id, approver_email,
+            decision, feedback, allows_edit
+          ) VALUES(?, 'applicant', ?, ?, 'resubmitted', ?, 0)`,
+        [proposalId, actorUserId, actorEmail, normalizedResubmissionRemarks]
+      );
     }
 
     const maxLineCount = Math.max(previousLines.length, incomingLines.length);

@@ -931,6 +931,9 @@ const ExpenditureApproval: React.FC = () => {
   >(null);
   const [wfActionComment, setWfActionComment] = useState("");
   const [wfActionSubmitting, setWfActionSubmitting] = useState(false);
+  const [resubmitPopupOpen, setResubmitPopupOpen] = useState(false);
+  const [resubmitComment, setResubmitComment] = useState("");
+  const [resubmitSubmitting, setResubmitSubmitting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasDofApprovalForPaymentStatus, setHasDofApprovalForPaymentStatus] =
     useState<boolean>(false);
@@ -3861,7 +3864,13 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     return 0;
   };
 
-  const performSubmit = async (): Promise<void> => {
+  const closeResubmitPopup = (force = false) => {
+    if (resubmitSubmitting && !force) return;
+    setResubmitPopupOpen(false);
+    setResubmitComment("");
+  };
+
+  const performSubmit = async (resubmissionComment?: string): Promise<void> => {
   if (isSubmitting) return;
   setIsSubmitting(true);
   try {
@@ -4132,9 +4141,15 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       isReturnedWorkflowRequest;
 
     if (shouldResubmitAfterSave) {
+      const comment = String(resubmissionComment || "").trim();
+      if (!comment) {
+        showAlert("Please enter resubmission comments.", "warning");
+        return;
+      }
+
       const resubmitResult = (await authenticityUtility.post(
         `/expenditure/${submittedRequestIdFromState}/resubmit`,
-        {},
+        { feedback: comment },
       )) as { status?: string; message?: string };
 
         if (resubmitResult.status !== "success") {
@@ -4145,6 +4160,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         );
         return;
       }
+      closeResubmitPopup(true);
     }
 
     const submittedAmount =
@@ -4233,8 +4249,19 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
   }
 };
 
-  const handleSubmit = async (): Promise<void> => {
+  const handleSubmit = async (resubmissionComment?: string): Promise<void> => {
     if (isSubmitting) return;
+    const shouldResubmitAfterSave =
+      isEditingExistingRequest &&
+      Boolean(submittedRequestIdFromState) &&
+      isReturnedWorkflowRequest;
+
+    if (shouldResubmitAfterSave && resubmissionComment === undefined) {
+      setResubmitComment("");
+      setResubmitPopupOpen(true);
+      return;
+    }
+
     const settlementNotice = getSettlementAdjustmentNotice();
 
     if (settlementNotice) {
@@ -4246,13 +4273,29 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         "Continue",
         () => {
           closeAlert();
-          void performSubmit();
+          void performSubmit(resubmissionComment);
         },
       );
       return;
     }
 
-    await performSubmit();
+    await performSubmit(resubmissionComment);
+};
+
+  const submitResubmissionWithComment = async () => {
+    if (resubmitSubmitting) return;
+    const comment = resubmitComment.trim();
+    if (!comment) {
+      showAlert("Please enter resubmission comments.", "warning");
+      return;
+    }
+
+    setResubmitSubmitting(true);
+    try {
+      await handleSubmit(comment);
+    } finally {
+      setResubmitSubmitting(false);
+    }
   };
 
   const closeWfActionPopup = () => {
@@ -7175,6 +7218,52 @@ const handleBeneficiarySearch = async (query: string) => {
                     : "Enter rejection comments"
                 }
                 disabled={wfActionSubmitting}
+                autoFocus
+              />
+            </div>
+          </CustomModal>
+
+          <CustomModal
+            show={resubmitPopupOpen}
+            onHide={resubmitSubmitting ? () => {} : closeResubmitPopup}
+            title="Resubmit Item - Comments"
+            size="sm"
+            centered
+            backdrop={resubmitSubmitting ? "static" : true}
+            keyboard={!resubmitSubmitting}
+            hideCloseButton={resubmitSubmitting}
+            footer={
+              <div className="d-flex justify-content-end gap-2 w-100" data-readonly-action-bar="true">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => closeResubmitPopup()}
+                  disabled={resubmitSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  onClick={submitResubmissionWithComment}
+                  disabled={resubmitSubmitting}
+                >
+                  {resubmitSubmitting ? "Resubmitting..." : "Resubmit"}
+                </button>
+              </div>
+            }
+          >
+            <div className="p-2" data-readonly-action-bar="true">
+              <label className="form-label fw-semibold">
+                Comments <span className="text-danger">*</span>
+              </label>
+              <textarea
+                className="form-control"
+                rows={4}
+                value={resubmitComment}
+                onChange={(event) => setResubmitComment(event.target.value)}
+                placeholder="Enter resubmission comments"
+                disabled={resubmitSubmitting}
                 autoFocus
               />
             </div>

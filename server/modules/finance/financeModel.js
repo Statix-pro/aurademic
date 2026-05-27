@@ -3888,7 +3888,15 @@ const financeModel = {
     const [rows] = await tx.query(
       `${financeSelectSql}
        ${whereClause}
-       ORDER BY fr.created_at DESC
+       ORDER BY
+         CASE
+           WHEN ${WORKFLOW_STATUS_SQL_EXPR} = 'in_progress'
+            AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.lastDecision')), '') = 'resubmitted'
+           THEN 0
+           ELSE 1
+         END,
+         COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.resubmittedAt')), '') DESC,
+         fr.created_at DESC
        LIMIT ? OFFSET ?`,
       [statusStageScope, statusStageScope, ...whereParams, limit, offset]
     );

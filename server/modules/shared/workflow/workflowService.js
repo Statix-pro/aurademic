@@ -757,6 +757,54 @@ export async function getTimeline({ moduleKey, recordId }) {
   }));
 }
 
+export async function logWorkflowResubmission({
+  moduleKey,
+  recordId,
+  stage,
+  feedback = null,
+  actor = {},
+  snapshotBefore = null,
+  metadata = {},
+}) {
+  const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
+  const normalizedRecordId = toPositiveInt(recordId);
+  const normalizedStage = normalizeText(stage).toLowerCase() || 'level1';
+
+  if (!normalizedModuleKey || !normalizedRecordId) {
+    throw new WorkflowError('Invalid module or record ID', 400, 'INVALID_RESUBMIT_LOG_REQUEST');
+  }
+
+  const actorUserId = toPositiveInt(actor?.userId || actor?.id);
+  const actorEmail = normalizeText(actor?.email).toLowerCase() || null;
+  const actorRole = normalizeText(actor?.role).toLowerCase() || null;
+
+  await db.query(
+    `INSERT INTO workflow_actions (
+        module_key,
+        record_id,
+        stage,
+        decision,
+        feedback,
+        actor_user_id,
+        actor_email,
+        actor_role,
+        snapshot_before,
+        meta
+      ) VALUES (?, ?, ?, 'resubmitted', ?, ?, ?, ?, ?, ?)`,
+    [
+      normalizedModuleKey,
+      normalizedRecordId,
+      normalizedStage,
+      normalizeText(feedback) || null,
+      actorUserId,
+      actorEmail,
+      actorRole,
+      JSON.stringify(snapshotBefore || {}),
+      JSON.stringify(validateWorkflowMeta(metadata)),
+    ]
+  );
+}
+
 export async function getWorkflowMetadata({ moduleKey, actor }) {
   const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
   const normalizedActor = normalizeActorPayload(actor);
@@ -850,5 +898,6 @@ export default {
   listQueue,
   getTimeline,
   getWorkflow,
+  logWorkflowResubmission,
   getWorkflowMetadata,
 };

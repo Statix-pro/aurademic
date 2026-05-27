@@ -456,6 +456,12 @@ export async function update(req, res) {
       editedByUserId: userId,
       editedByEmail: userEmail,
       editedByRole: userRole,
+      resubmissionRemarks: normalizeText(
+        payload.resubmission_remarks ||
+        payload.resubmissionRemarks ||
+        payload.feedback ||
+        payload.remarks
+      ),
     });
 
     return res.json({
