@@ -1415,6 +1415,31 @@ const Budget: React.FC = () => {
 
   const showTagDropdown = !!beneficiaryType?.trim();
   const isBudgetFormLocked = isViewMode || !isEditable;
+  const normalizedProposalStatus = proposalStatus.toLowerCase();
+  const normalizedProposalStage = proposalStage.toLowerCase();
+  const isFinalApprovedStatus =
+    normalizedProposalStatus === 'approved' ||
+    normalizedProposalStatus === 'completed' ||
+    normalizedProposalStatus === 'principal_approved';
+  const isTerminalProposalStatus =
+    isFinalApprovedStatus ||
+    ['rejected', 'archived', 'archive'].some((token) => normalizedProposalStatus.includes(token));
+  const stageApprovedStatusMap: Record<string, string[]> = {
+    level1: ['level1_approved', 'hod_approved', 'coordinator_approved', 'ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
+    ithead: ['ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
+    dof: ['dof_approved', 'principal_approved', 'completed'],
+    principal: ['principal_approved', 'completed'],
+  };
+  const isCurrentStageAlreadyApproved = (stageApprovedStatusMap[normalizedProposalStage] || [])
+    .some((statusToken) => normalizedProposalStatus === statusToken);
+  const canShowAdminActions =
+    !isSuperAdmin(user) &&
+    !isEditMode &&
+    Boolean(normalizedProposalStage) &&
+    !['completed', 'approved', 'archived', 'rejected'].includes(normalizedProposalStage) &&
+    !isTerminalProposalStatus &&
+    !isCurrentStageAlreadyApproved &&
+    canProcessStage(proposalStage);
 
   return (
     <div className="budgetPage">
@@ -2686,7 +2711,7 @@ const Budget: React.FC = () => {
       </fieldset>
 
       {/* ADMIN ACTION BUTTONS */}
-      {(new URLSearchParams(location.search).get('admin') === 'true' || canProcessStage(proposalStage)) && !isSuperAdmin(user) && !isEditMode && (
+      {canShowAdminActions && (
         <div
           className="budget-admin-actions"
           style={{
