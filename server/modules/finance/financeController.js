@@ -231,8 +231,23 @@ const hasFinanceStagePermission = (req, stage) => {
 
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
   const normalizedPermissions = permissions.map((permission) => normalizeText(permission).toLowerCase());
+  if (
+    normalizedPermissions.includes('finance.workflow.*') ||
+    normalizedPermissions.includes(`finance.workflow.${normalizedStage}`)
+  ) {
+    return true;
+  }
 
-  return normalizedPermissions.includes(`finance.workflow.${normalizedStage}`);
+  const roles = Array.isArray(req.user?.roles)
+    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
+    : [];
+  const stageRoleMap = {
+    dof: ['dof'],
+    principal: ['principal'],
+    chairman: ['chairman'],
+  };
+
+  return (stageRoleMap[normalizedStage] || []).some((role) => roles.includes(role));
 };
 
 const hasFinanceWorkflowEditorAccess = (req) =>
@@ -499,6 +514,14 @@ const financeController = {
         });
       }
 
+      const resubmissionComment = normalizeText(req.body?.feedback || req.body?.comment || req.body?.remarks);
+      if (!resubmissionComment) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Resubmission comments are required',
+        });
+      }
+
       const financeMeta = {
         unplannedBudgetEnabled: Boolean(finance.unplanned_budget_enabled),
         unplannedBudgetAmount:
@@ -508,20 +531,22 @@ const financeController = {
         unplannedBudgetDescription: normalizeText(finance.unplanned_budget_description) || null,
       };
 
+      const resubmitMetadata = {
+        origin: 'resubmit',
+        requestId: null,
+        moduleMetaVersion: 1,
+        moduleMeta: {
+          trigger: 'applicant_resubmit',
+          amountBand: Number(finance.total_budget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+          beneficiaryType: normalizeText(finance.beneficiary_type) || null,
+          financeMeta,
+        },
+      };
+
       const restartResult = await workflowService.startWorkflow({
         moduleKey: 'finance',
         recordId: financeId,
-        metadata: {
-          origin: 'resubmit',
-          requestId: null,
-          moduleMetaVersion: 1,
-          moduleMeta: {
-            trigger: 'applicant_resubmit',
-            amountBand: Number(finance.total_budget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
-            beneficiaryType: normalizeText(finance.beneficiary_type) || null,
-            financeMeta,
-          },
-        },
+        metadata: resubmitMetadata,
       });
 
       const resubmittedAt = new Date().toISOString();
@@ -535,6 +560,21 @@ const financeController = {
         resubmittedAt,
         updatedAt: resubmittedAt,
         resolvedAt: null,
+      });
+      await workflowService.logWorkflowResubmission({
+        moduleKey: 'finance',
+        recordId: financeId,
+        stage: restartResult.state?.currentStage || workflowState.currentStage || 'level1',
+        feedback: resubmissionComment,
+        actor: normalizeActor(req),
+        snapshotBefore: workflowState,
+        metadata: {
+          ...resubmitMetadata,
+          moduleMeta: {
+            ...resubmitMetadata.moduleMeta,
+            route: 'POST /api/finance-requests/:id/resubmit',
+          },
+        },
       });
 
       return res.status(200).json({

@@ -33,6 +33,11 @@ import "./expenditureapproval.css";
 import KSRCTLogo from "../../shared/assets/images/ksrct_logo.png";
 
 import authenticityUtility from "../../shared/utils/authenticityUtility";
+import { useBudgetCatalog } from "../../shared/hooks/useBudgetCatalog";
+import {
+  SUB_HEAD_BY_BUDGET_HEAD,
+  subscribeBudgetCatalog,
+} from "../../shared/hooks/budgetCatalogStore";
 import CustomTagInput from "../../shared/components/ui/CustomTagInput";
 import CustomDropdown, {
   OptionType,
@@ -341,74 +346,6 @@ const SUBCATEGORY_OPTIONS: Record<string, string[]> = {
   Club: ["Coding Club", "Robotics Club", "Cultural Club", "Sports Club"],
 };
 
-const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
-  {
-    label: "Non-Recurring",
-    options: [
-      "Civil Infrastructure",
-      "Electrical Infrastructure",
-      "IT Infrastructure",
-      "Furniture & Fixtures",
-      "Vehicles",
-      "Equipment",
-      "Accessories & Kits",
-    ],
-  },
-  {
-    label: "Recurring",
-    options: [],
-  },
-  {
-    label: "Maintenance & Spares",
-    options: ["Maintenance Charges", "Spares", "Annual Maintenance Charges"],
-  },
-  {
-    label: "Operational",
-    options: [
-      "Consumables",
-      "Software",
-      "Membership & Subscriptions",
-      "Student Essentials",
-      "Printing & Stationery",
-      "Postal Expenses",
-      "Local Conveyance",
-      "Operational Expenses",
-    ],
-  },
-  {
-    label: "Events & Engagement",
-    options: ["Events & Competitions", "Meetings & Audits"],
-  },
-  {
-    label: "Academics",
-    options: [
-      "Faculty Empowerment",
-      "Staff Empowerment",
-      "Student Empowerment",
-      "Student Capacity Building",
-      "Learning Resources",
-      "Accreditation Expenses",
-      "Professional Body Expenses",
-      "Awards & Recognition",
-    ],
-  },
-  {
-    label: "Branding & Outreach",
-    options: ["Advertisement & Branding", "Public Relations", "Admissions"],
-  },
-  {
-    label: "General",
-    options: [
-      "Research & Development",
-      "Government Funded Projects",
-      "Government Funded Events",
-      "Administrative Expenses",
-      "Salary",
-      "Bills & Payments",
-      "Miscellaneous Expenses",
-    ],
-  },
-];
 const INCOME_SOURCE_OPTIONS = [
   "Government Funding",
   "Registration Fees",
@@ -514,139 +451,12 @@ const PAYMENT_MODE_OPTIONS = [
   "IMPS",
   "Cheque",
   "Cash",
-  "G-Pay",
-  "PhonePe",
+  "UPI",
   "Internal Transfer",
+  "Not Applicable",
 ];
 const PAYMENT_STATUS_OPTIONS = ["Paid", "Pending", "Processing", "Cancelled"];
 const BULK_NEFT_TEMPLATE_VERSION = "2026-04-11";
-const EVENT_SUBHEAD_GROUPS: Record<
-  string,
-  Array<{ label: string; options: OptionType[] }>
-> = {
-  "Events & Competitions": [
-    {
-      label: "Academic & Professional Development",
-      options: toOptions([
-        "Seminar",
-        "Webinar",
-        "Guest Lecture",
-        "Workshop",
-        "Hands-on Training",
-        "FDP (Faculty Development Programme)",
-        "STTP (Short-Term Training Programme)",
-        ]),
-    },
-    {
-      label: "Conferences & Conclaves",
-      options: toOptions([
-        "National Conference",
-        "International Conference",
-        "Conclave",
-        "Convention",
-        ]),
-    },
-    {
-      label: "Industry & Networking",
-      options: toOptions([
-        "Industry Visit",
-        "Expert Visit",
-        "Networking Event",
-        "Industry Interaction",
-        "MoU Signing",
-        ]),
-    },
-    {
-      label: "Association & Institutional Activities",
-      options: toOptions([
-        "Association Function",
-        "Alumni Meeting",
-        "Alumni Interaction",
-        "Parents Meeting",
-        ]),
-    },
-    {
-      label: "Outreach Event",
-      options: toOptions([
-        "School Visit",
-        "Awareness Program",
-        "Campaigns",
-        "Mini Marathon",
-        "Celebration",
-        ]),
-    },
-    {
-      label: "Competitions & Innovation",
-      options: toOptions([
-        "Hackathons",
-        "Competitions",
-        "Club Activities",
-        "Project Expo",
-        "Ideathon",
-        "Start-up meet",
-        "Mentoring Sessions",
-        ]),
-    },
-    {
-      label: "Cultural & Celebrations",
-      options: toOptions([
-        "Annual Day",
-        "Sports Day",
-        "Graduation Day",
-        "Science Day",
-        "Womens Day",
-        "Celebration Day",
-        "Festival Celebrations",
-        "Dakshaa",
-        "Harmonicks",
-        ]),
-    },
-    {
-      label: "Sports & Student Engagement",
-      options: toOptions([
-        "Sports Meet",
-        "Sports Day (Engagement)",
-        "Camp",
-        "Rally",
-        "Student Induction Programme",
-        "Orientation Session",
-        ]),
-    },
-  ],
-  "Meetings & Audits": [
-    {
-      label: "Institutional Governance",
-      options: toOptions([
-        "Governing Body Meeting",
-        "Research Advisory Board Meeting",
-        "Finance Committee Meeting",
-        "Result Passing Board Meeting",
-        "Examination Committee Meeting",
-        "Placement Meeting",
-        "Network Meeting",
-        "IQAC Meeting",
-      ]),
-    },
-    {
-      label: "Academic Governance",
-      options: toOptions([
-        "Academic Council Meeting",
-        "Standing Committee Meeting",
-        "Board of Studies Meeting",
-        "DAB Meeting",
-      ]),
-    },
-    {
-      label: "Audits",
-      options: toOptions([
-        "Academic Audit",
-        "Administrative Audit",
-        "Energy & Green Audit",
-        "Government Meetings",
-      ]),
-    },
-  ],
-};
 
 const flattenOptions = (
   options: Array<OptionType | { label: string; options: OptionType[] }>,
@@ -763,422 +573,6 @@ const getSelectedOption = (
   flattenOptions(options).find((opt) => String(opt.value) === String(value)) ??
   null;
 
-const PRIMARY_HEAD_OPTIONS: Array<{ label: string; options: OptionType[] }> =
-  BUDGET_HEAD_GROUPS.map((group) => ({
-    label: group.label,
-    options: toOptions(group.options),
-  }));
-const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
-  "Civil Infrastructure": [
-    "Construction Works",
-    "Partition Works",
-    "False Ceiling Works",
-    "Plumbing Works",
-    "Canopy",
-  ],
-
-  "Electrical Infrastructure": [
-    "Electrical Wiring",
-    "Lights & Fans",
-    "Lift Installation",
-    "Air Conditioner",
-    "UPS Inverter",
-    "Battery",
-  ],
-
-  "IT Infrastructure": [
-    "Hardwares",
-    "Softwares",
-    "Hard Disks",
-    "Monitors",
-    "Wi-fi Router",
-    "Network Materials",
-    "Laptops",
-    "Interactive Displays",
-    "Desktops",
-    "CCTV Materials",
-    "Television",
-    "Projectors",
-    "Printers",
-    "Mobiles & Tablet",
-    "Mic & Speakers",
-    "Amplifiers",
-    "A/V Equipment",
-    "Intercom",
-    "Xerox Machine",
-  ],
-
-  "Furniture & Fixtures": [
-    "Chair",
-    "Faculty Table",
-    "Computer Table",
-    "Discussion Table",
-    "Work Table",
-    "Wooden Cup Boards",
-  ],
-
-  Vehicles: ["Two Wheeler", "Light Motor Vehicle", "Heavy Motor Vehicle"],
-
-  Equipment: [
-    "Lab Equipment",
-    "Consultancy Equipment",
-    "Research Equipment",
-    "Equipment Upgrade",
-  ],
-
-  "Accessories & Kits": [
-    "Power Tools",
-    "Weighing Machine",
-    "Drilling Machine",
-    "Drone Kit",
-  ],
-
-  "Maintenance Charges": [
-    "Building Maintenance",
-    "Computer Maintenance",
-    "Electrical Maintenance",
-    "Furniture Maintenance",
-    "Plumbing Maintenance",
-    "Vehicle Maintenance",
-    "Garden Maintenance",
-    "Equipment Maintenance",
-    "Infrastructure Maintenance",
-    "AC Maintenance",
-    "UPS Maintenance",
-    "Lift Maintenance",
-    "Printer Maintenance",
-    "Painting",
-  ],
-
-  Spares: ["Printer Donors", "SMPS", "Chargers"],
-
-  "Annual Maintenance Charges": [
-    "Equipment Maintenance",
-    "Software Maintenance",
-  ],
-
-  Consumables: [
-    "Chemicals",
-    "Glasswares",
-    "Plasticwares",
-    "Electrical Components",
-    "Electronic Components",
-    "Mechanical Components",
-    "Construction Materials",
-    "Cutting Tools",
-    "Oils & Lubricants",
-    "Metals & Alloys",
-    "Carpentary Items",
-    "Others",
-  ],
-
-  Software: [
-    "Plagiarism",
-    "Grammer Check",
-    "Grievance",
-    "Programming",
-    "Modelling",
-    "Analysis",
-    "Antivirus",
-    "Firewall",
-    "Graphical Design",
-    "AI Tools",
-    "Others",
-  ],
-
-  "Membership & Subscriptions": [
-    "Professional Body fees",
-    "Membership fees",
-    "Annual Membership fee",
-    "Journals",
-    "Magazines",
-    "Newspaper",
-    "DELNET",
-    "E-Resources",
-    "Data Subscription Charges",
-  ],
-
-  "Student Essentials": ["Note Books", "Log Books", "ID Card", "Others"],
-
-  "Printing & Stationery": [
-    "Banner",
-    "Pamphlet",
-    "Brochure",
-    "Vinyl Boards",
-    "Certificates",
-    "Diary",
-    "Calendar",
-    "Visitng Card",
-    "Seal/ Stamp Pad",
-    "Pen/ Pencil/ Eraser",
-    "Stapler/ Punching Machine",
-    "Files/ Folders",
-    "Entry Registers",
-    "Print Sheets",
-    "Others",
-  ],
-
-  "Postal Expenses": [
-    "Frieght Charges",
-    "Postal Charges",
-    "Courier Charges",
-    "Others",
-  ],
-
-  "Local Conveyance": [
-    "Travel Expense",
-    "Food & Refreshment",
-    "Beta",
-    "Others",
-  ],
-
-  "Operational Expenses": [
-    "Water Bottle",
-    "Food & Refreshment",
-    "Pooja Expenses",
-    "Accessories",
-    "Legal stamp paper",
-    "Miscellaneous",
-  ],
-
-  "Events & Competitions": [
-    "Remuneration",
-    "Refund",
-    "Travel",
-    "Accommodation",
-    "Memento & Gifts",
-    "Food & Refreshment",
-    "A/V Arrangements",
-    "Stationary",
-    "Printing",
-    "Prizes",
-    "Publication Charges",
-    "Promotions",
-    "Decorations",
-    "Event Logistics",
-    "Registration Kit",
-    "Give away",
-    "T-Shirt",
-    "Bag",
-    "Consumables",
-    "Others",
-    ],
-
-  "Meetings & Audits": [
-    "Remuneration",
-    "Travel",
-    "Accommodation",
-    "Memento & Gifts",
-    "Food & Refreshment",
-    "Stationary",
-    "Printing",
-    "Others",
-  ],
-
-  "Faculty Empowerment": [
-    "Registration fee",
-    "Travel Allowance",
-    "Food & Refreshment",
-    "Accommodation",
-    "Daily Allowance",
-    "Membership Fees",
-    "Incentives",
-    "Leadership Meet",
-    "Faculty Welfare",
-  ],
-
-  "Staff Empowerment": [
-    "Registration fee",
-    "Travel Allowance",
-    "Food & Refreshment",
-    "Accommodation",
-    "Daily Allowance",
-    "Incentives",
-    "Staff Welfare",
-  ],
-
-  "Student Empowerment": [
-    "Registration fee",
-    "Travel Support",
-    "Food & Refreshment",
-    "Accommodation",
-    "Certification Costs",
-    "Medical Expense",
-    "Incentives",
-    "Prizes",
-    "Student Welfare",
-    "Student Uniform",
-  ],
-  "Awards & Recognition": [
-    "Accommodation",
-    "Registration fee",
-    "Food & Refreshment",
-    "Driver Beta",
-    "Travel Allowance",
-    "Daily Allowance",
-    "Printing",
-    "Stationery",
-    "Others",
-  ],
-
-  "Student Capacity Building": [
-    "Skill Development Training",
-    "ApptitudeTraining",
-    "Higher Education Coaching",
-    "Competitive Exam Coaching",
-    "Placement Training",
-    "Placement Drives",
-    "One Credit Course",
-    "Value Added Course",
-    "Certification Programs",
-    "Internship",
-    "International Connect",
-    "Exposure Visit",
-    "Language Proficiency Courses",
-    "Others",
-  ],
-
-  "Learning Resources": ["Text Books", "E-Resources"],
-
-  "Accreditation Expenses": [
-    "NAAC Fees",
-    "NBA Fees",
-    "NAAC Inspection",
-    "NBA Inspection",
-  ],
-
-  "Advertisement & Branding": ["News Paper Advertisement", "Digital Promotion"],
-
-  "Public Relations": [
-    "Press & Media",
-    "Promotions",
-    "Branding",
-    "Corporate Gift",
-  ],
-
-  Admissions: [
-    "Stalls",
-    "School Visits",
-    "Field Visits",
-    "Student Directory",
-    "Consultant Charges",
-  ],
-
-  "Research & Development": [
-    "Seed Fund (Product Development)",
-    "Seed Fund (IPR Charges)",
-    "Seed Fund (Travel)",
-    "Institute Research Fellowship",
-    "Research Grant",
-    "Publication Support",
-    "Consultancy",
-    "Research Cenre Renewal",
-    "HI Contribution",
-  ],
-
-  "Government Funded Projects": [
-    "Manpower",
-    "Equipment",
-    "Consumables",
-    "IT Infrastructure",
-    "Travel",
-    "Printing",
-    "Stationery",
-    "Miscellaneous",
-    "Overhead Expenses",
-    "Food & Refreshment",
-    "Incidental Expenses",
-    "Administrative Expenses",
-    "Accommodation",
-    "Honorarium",
-    "Accessories & Peripherals",
-    "Memento & Gifts",
-    "Publicity & Promotion",
-    "Software & Licenses",
-    ],
-
-  "Government Funded Events": [
-    "A/V Arrangements",
-    "Accessories",
-    "Accommodation",
-    "Auditing Charge",
-    "Bag",
-    "Consumables",
-    "Decorations",
-    "Driver Bata",
-    "Event Logistics",
-    "Food & Refreshment",
-    "Honorarium",
-    "Memento & Gifts",
-    "Miscellaneous",
-    "Printing",
-    "Prizes",
-    "Promotions",
-    "Publication Charges",
-    "Registration fee",
-    "Registration Kit",
-    "Remuneration",
-    "Sitting Fees",
-    "Stationery",
-    "T-shirt",
-    "Travel",
-    ],
-
-  "Administrative Expenses": [
-    "AICTE Fees",
-    "Affiliation Fees",
-    "Anna University Fees",
-    "DOTE Fees",
-    "Consortium Fees",
-    "Inspection Expenses",
-    "Autonomous Charges",
-    "DTCP Approval",
-    "Licenses & Taxes",
-    "Spirit License",
-    "License Renewal",
-    "Insurance Charges",
-    "Water Charges",
-    "Stamp Charges",
-    "Flag Day Expenses",
-    "Fee Fixation Expenses",
-    "Scholarship Expenses",
-    "International Travel",
-    "Testing Charges",
-  ],
-
-  Salary: [
-    "Monthly Salary",
-    "Provident Fund",
-    "Emoluments",
-    "Professional Payments",
-    "Wages",
-  ],
-
-  "Bills & Payments": [
-    "Electricity Charges",
-    "Internet Charges",
-    "Telephone Charges",
-  ],
-
-  "Miscellaneous Expenses": [
-    "Bank Charges",
-    "Bank Interest",
-    "Loan Processing Charges",
-    "Generator & Fuel",
-    "Guest House",
-    "Fire Extinguisher",
-    "General Expenses",
-    "Sewage Treatment",
-    "Farm Expenses",
-    "Laundry Service",
-    "House Keeping",
-    "RO Mineral Water",
-    "Audit Fees",
-    "Office Expenses",
-    "Fire Extinguisher",
-    "First Aid Kit Expenses",
-  ],
-};
 
 const BUDGET_SELECT_STYLES = {
   control: (base: any, state: any) => ({
@@ -1409,6 +803,9 @@ const mapFinanceBeneficiaryTypeToExpenditureCategory = (
 };
 
 const ExpenditureApproval: React.FC = () => {
+  useBudgetCatalog();
+  const [, setCatalogVersion] = useState(0);
+  useEffect(() => subscribeBudgetCatalog(() => setCatalogVersion((n) => n + 1)), []);
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -1534,6 +931,10 @@ const ExpenditureApproval: React.FC = () => {
   >(null);
   const [wfActionComment, setWfActionComment] = useState("");
   const [wfActionSubmitting, setWfActionSubmitting] = useState(false);
+  const [resubmitPopupOpen, setResubmitPopupOpen] = useState(false);
+  const [resubmitComment, setResubmitComment] = useState("");
+  const [resubmitSubmitting, setResubmitSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasDofApprovalForPaymentStatus, setHasDofApprovalForPaymentStatus] =
     useState<boolean>(false);
   const [financeApprovedAmount, setFinanceApprovedAmount] = useState<number>(
@@ -2777,9 +2178,19 @@ const workflowRowRefFromState = (() => {
 
     return rows.map((row) => {
       const budgetLineId = Number(row.budgetLineId || 0) || null;
+      const normalizedHead = normalizeBudgetToken(row.budgetHead);
+      const normalizedSubHead = normalizeBudgetToken(row.subHead);
       const matchedBudget = budgetLineId
         ? approvedBudgetOptions.find(
-            (budget) => Number(budget.budgetLineId || 0) === budgetLineId,
+            (budget) =>
+              Number(budget.budgetLineId || 0) === budgetLineId &&
+              normalizeBudgetToken(budget.head) === normalizedHead &&
+              normalizeBudgetToken(budget.subHead) === normalizedSubHead,
+          )
+          || approvedBudgetOptions.find(
+            (budget) =>
+              normalizeBudgetToken(budget.head) === normalizedHead &&
+              normalizeBudgetToken(budget.subHead) === normalizedSubHead,
           )
         : null;
 
@@ -4453,7 +3864,15 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     return 0;
   };
 
-  const performSubmit = async (): Promise<void> => {
+  const closeResubmitPopup = (force = false) => {
+    if (resubmitSubmitting && !force) return;
+    setResubmitPopupOpen(false);
+    setResubmitComment("");
+  };
+
+  const performSubmit = async (resubmissionComment?: string): Promise<void> => {
+  if (isSubmitting) return;
+  setIsSubmitting(true);
   try {
     if (isReadOnlyView) {
         showAlert(
@@ -4722,9 +4141,15 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       isReturnedWorkflowRequest;
 
     if (shouldResubmitAfterSave) {
+      const comment = String(resubmissionComment || "").trim();
+      if (!comment) {
+        showAlert("Please enter resubmission comments.", "warning");
+        return;
+      }
+
       const resubmitResult = (await authenticityUtility.post(
         `/expenditure/${submittedRequestIdFromState}/resubmit`,
-        {},
+        { feedback: comment },
       )) as { status?: string; message?: string };
 
         if (resubmitResult.status !== "success") {
@@ -4735,6 +4160,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         );
         return;
       }
+      closeResubmitPopup(true);
     }
 
     const submittedAmount =
@@ -4818,10 +4244,24 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
   } catch (error) {
       console.error("Expenditure submit error:", error);
       showAlert(getSubmitErrorMessage(error), "error");
+  } finally {
+      setIsSubmitting(false);
   }
 };
 
-  const handleSubmit = async (): Promise<void> => {
+  const handleSubmit = async (resubmissionComment?: string): Promise<void> => {
+    if (isSubmitting) return;
+    const shouldResubmitAfterSave =
+      isEditingExistingRequest &&
+      Boolean(submittedRequestIdFromState) &&
+      isReturnedWorkflowRequest;
+
+    if (shouldResubmitAfterSave && resubmissionComment === undefined) {
+      setResubmitComment("");
+      setResubmitPopupOpen(true);
+      return;
+    }
+
     const settlementNotice = getSettlementAdjustmentNotice();
 
     if (settlementNotice) {
@@ -4833,13 +4273,29 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         "Continue",
         () => {
           closeAlert();
-          void performSubmit();
+          void performSubmit(resubmissionComment);
         },
       );
       return;
     }
 
-    await performSubmit();
+    await performSubmit(resubmissionComment);
+};
+
+  const submitResubmissionWithComment = async () => {
+    if (resubmitSubmitting) return;
+    const comment = resubmitComment.trim();
+    if (!comment) {
+      showAlert("Please enter resubmission comments.", "warning");
+      return;
+    }
+
+    setResubmitSubmitting(true);
+    try {
+      await handleSubmit(comment);
+    } finally {
+      setResubmitSubmitting(false);
+    }
   };
 
   const closeWfActionPopup = () => {
@@ -7618,12 +7074,13 @@ const handleBeneficiarySearch = async (query: string) => {
             <div className="expenditure-submit-buttons">
               <button
                 className="btn-submit"
+                disabled={isSubmitting}
               onClick={(e) => {
                 e.preventDefault();
                 handleSubmit();
               }}
           >
-            {submitActionLabel}
+            {isSubmitting ? "Submitting..." : submitActionLabel}
           </button>
         </div>
       )}
@@ -7761,6 +7218,52 @@ const handleBeneficiarySearch = async (query: string) => {
                     : "Enter rejection comments"
                 }
                 disabled={wfActionSubmitting}
+                autoFocus
+              />
+            </div>
+          </CustomModal>
+
+          <CustomModal
+            show={resubmitPopupOpen}
+            onHide={resubmitSubmitting ? () => {} : closeResubmitPopup}
+            title="Resubmit Item - Comments"
+            size="sm"
+            centered
+            backdrop={resubmitSubmitting ? "static" : true}
+            keyboard={!resubmitSubmitting}
+            hideCloseButton={resubmitSubmitting}
+            footer={
+              <div className="d-flex justify-content-end gap-2 w-100" data-readonly-action-bar="true">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => closeResubmitPopup()}
+                  disabled={resubmitSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  onClick={submitResubmissionWithComment}
+                  disabled={resubmitSubmitting}
+                >
+                  {resubmitSubmitting ? "Resubmitting..." : "Resubmit"}
+                </button>
+              </div>
+            }
+          >
+            <div className="p-2" data-readonly-action-bar="true">
+              <label className="form-label fw-semibold">
+                Comments <span className="text-danger">*</span>
+              </label>
+              <textarea
+                className="form-control"
+                rows={4}
+                value={resubmitComment}
+                onChange={(event) => setResubmitComment(event.target.value)}
+                placeholder="Enter resubmission comments"
+                disabled={resubmitSubmitting}
                 autoFocus
               />
             </div>

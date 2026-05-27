@@ -7,6 +7,10 @@
  */
 
 import db from '../../config/connection.js';
+import {
+  resolveCatalogIds,
+  resolvePrimaryHeadIds,
+} from '../budgetCatalog/budgetCatalogResolver.js';
 import { searchApplicant as searchEmployeeApplicants } from '../shared/budget/userResolvers.js';
 import { normalizeBeneficiaryType, beneficiaryTypeToEntityTypeCode } from '../shared/budget/budgetUtils.js';
 
@@ -14,8 +18,29 @@ import { normalizeBeneficiaryType, beneficiaryTypeToEntityTypeCode } from '../sh
 
 const normalizeText = (v) => String(v || '').trim();
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
+const EXPENDITURE_REQUEST_COLUMN_EXISTS_CACHE = new Map();
 
 const isBeneficiaryOrgValue = (value) => BENEFICIARY_ORG_OPTIONS.includes(normalizeText(value));
+
+const hasExpenditureRequestColumn = async (columnName, { tx = db } = {}) => {
+  const normalizedColumn = normalizeText(columnName);
+  if (!normalizedColumn) return false;
+  if (EXPENDITURE_REQUEST_COLUMN_EXISTS_CACHE.has(normalizedColumn)) {
+    return EXPENDITURE_REQUEST_COLUMN_EXISTS_CACHE.get(normalizedColumn) === true;
+  }
+
+  const [rows] = await tx.query(
+    `SELECT COUNT(*) AS count
+       FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'expenditure_requests'
+        AND COLUMN_NAME = ?`,
+    [normalizedColumn],
+  );
+  const exists = Number(rows?.[0]?.count || 0) > 0;
+  EXPENDITURE_REQUEST_COLUMN_EXISTS_CACHE.set(normalizedColumn, exists);
+  return exists;
+};
 
 const resolveCanonicalPayeeName = (payeeName, accountName) => {
   const normalizedPayeeName = normalizeText(payeeName);
@@ -408,6 +433,7 @@ function validateWorkflowRowFlow(requestType, rowHistory = [], {
   requestedAdvance = 0,
   requestedSettlement = 0,
   requestedExpenditure = 0,
+  allowZeroSettlement = false,
 } = {}) {
   if (!rowHistory.length) return;
 
@@ -451,17 +477,43 @@ function validateWorkflowRowFlow(requestType, rowHistory = [], {
     if (hasSettlement) {
       throw new Error('Settlement already exists for this row.');
     }
-    if (requestedSettlement <= 0) {
+    if (requestedSettlement < 0 || (requestedSettlement === 0 && !allowZeroSettlement)) {
       throw new Error('Settlement amount must be greater than 0');
     }
   }
 }
+
+const hasExplicitMoneyValue = (row = {}, keys = []) =>
+  keys.some((key) => {
+    if (!Object.prototype.hasOwnProperty.call(row, key)) return false;
+    const value = row[key];
+    return value !== null && value !== undefined && String(value).trim() !== '';
+  });
+
+const hasBudgetLineSelection = (row = {}) => (
+  Boolean(toPositiveInt(row.budgetLineId || row.budget_line_id)) ||
+  Boolean(sanitizeRowValue(row.budgetHead || row.budget_head)) ||
+  Boolean(sanitizeRowValue(row.subHead || row.sub_head))
+);
+
+const hasSettlementRowsForClosure = (rows = []) =>
+  Array.isArray(rows) &&
+  rows.some((row) =>
+    hasExplicitMoneyValue(row, ['settlement', 'settlement_amount', 'settlementamount']) &&
+    hasBudgetLineSelection(row)
+  );
 
 async function getCumulativeAdvanceSummary(connOrDb, {
   userId,
   budgetLineId,
   head,
   subHead,
+  // NEW: catalog IDs. When present, matching prefers IDs over text so
+  // renames in the catalog don't break the cumulative count. LEGACY: when
+  // IDs are null (older rows pre-dating the catalog), match by normalized
+  // text on snapshot columns.
+  budgetHeadId = null,
+  budgetSubHeadId = null,
   financeRequestId = null,
   rowIndex = null,
   sourceRequestId = null,
@@ -532,15 +584,26 @@ async function getCumulativeAdvanceSummary(connOrDb, {
   const exclusionClause = excludedExpenditureId ? 'AND er.id <> ?' : '';
   const exclusionParams = excludedExpenditureId ? [excludedExpenditureId] : [];
 
+  const headIdVal = toPositiveInt(budgetHeadId);
+  const subIdVal = toPositiveInt(budgetSubHeadId);
+
   let rowMatchClause = 'ar.budget_line_id = ?';
   let legacyMatchClause = '1 = 0';
   let rowMatchParams = [lineId];
   let legacyMatchParams = [];
 
   if (lineId && normalizedHead && normalizedSubHead) {
+    const nullLineIdMatch = headIdVal && subIdVal
+      ? `OR (
+          ar.budget_line_id IS NULL
+          AND ar.budget_head_id = ?
+          AND ar.budget_sub_head_id = ?
+        )`
+      : '';
     rowMatchClause = `
       (
         ar.budget_line_id = ?
+        ${nullLineIdMatch}
         OR (
           ar.budget_line_id IS NULL
           AND LOWER(TRIM(ar.budget_head)) = ?
@@ -548,17 +611,34 @@ async function getCumulativeAdvanceSummary(connOrDb, {
         )
       )
     `;
-    rowMatchParams = [lineId, normalizedHead, normalizedSubHead];
+    rowMatchParams = nullLineIdMatch
+      ? [lineId, headIdVal, subIdVal, normalizedHead, normalizedSubHead]
+      : [lineId, normalizedHead, normalizedSubHead];
     if (hasLegacyBudgetLine) {
       legacyMatchClause = 'er.budget_line_id = ?';
       legacyMatchParams = [lineId];
     }
   } else if (!lineId) {
-    rowMatchClause = `
-      LOWER(TRIM(ar.budget_head)) = ?
-      AND LOWER(TRIM(ar.sub_head)) = ?
-    `;
-    rowMatchParams = [normalizedHead, normalizedSubHead];
+    // NEW: prefer ID match; fall back to text for un-backfilled rows.
+    if (headIdVal && subIdVal) {
+      rowMatchClause = `
+        (
+          (ar.budget_head_id = ? AND ar.budget_sub_head_id = ?)
+          OR (
+            ar.budget_head_id IS NULL
+            AND LOWER(TRIM(ar.budget_head)) = ?
+            AND LOWER(TRIM(ar.sub_head)) = ?
+          )
+        )
+      `;
+      rowMatchParams = [headIdVal, subIdVal, normalizedHead, normalizedSubHead];
+    } else {
+      rowMatchClause = `
+        LOWER(TRIM(ar.budget_head)) = ?
+        AND LOWER(TRIM(ar.sub_head)) = ?
+      `;
+      rowMatchParams = [normalizedHead, normalizedSubHead];
+    }
     if (hasLegacyHead && hasLegacySubHead) {
       legacyMatchClause = `
         LOWER(TRIM(er.head)) = ?
@@ -812,7 +892,7 @@ async function insertExpenditureRef(
       const storageSequence = Number(sequenceRow?.next_sequence || 1);
 
       await conn.execute(
-        `REPLACE INTO expenditure_request_refs
+        `INSERT INTO expenditure_request_refs
            (expenditure_request_id, ref_year, ref_sequence, request_ref)
          VALUES (?, ?, ?, ?)`,
         [expenditureId, year, storageSequence, ref],
@@ -824,6 +904,9 @@ async function insertExpenditureRef(
     }
   } catch (err) {
     if (err?.code === 'ER_NO_SUCH_TABLE') return null;
+    if (err?.code === 'ER_DUP_ENTRY') {
+      throw new Error('Expenditure already exists for this workflow row.');
+    }
     throw err;
   }
 }
@@ -892,24 +975,41 @@ export async function getApprovedBudgets({ userId, userEmail, financeRequestId, 
       budgetLineIds: financeRows.map((row) => row.budget_line_id),
     });
 
-    return financeRows.map((r) => {
+    const groupedByHeadSubHead = new Map();
+
+    financeRows.forEach((r) => {
       const totalAmount = toMoney(r.total_amount);
       const usedAmount = toMoney(usageByLineId.get(toPositiveInt(r.budget_line_id)));
+      const head = normalizeText(r.head);
+      const subHead = normalizeText(r.sub_head);
+      if (!head || !subHead) return;
 
-      return {
+      const key = `${head.toLowerCase()}::${subHead.toLowerCase()}`;
+      const existing = groupedByHeadSubHead.get(key);
+
+      if (existing) {
+        existing.totalAmount = toMoney(existing.totalAmount + totalAmount);
+        existing.usedAmount = toMoney(existing.usedAmount + usedAmount);
+        existing.remainingAmount = toMoney(Math.max(0, existing.totalAmount - existing.usedAmount));
+        return;
+      }
+
+      groupedByHeadSubHead.set(key, {
         budgetLineId: toPositiveInt(r.budget_line_id),
         budgetProposalId: toPositiveInt(r.budget_proposal_id),
         proposalRef: normalizeText(r.proposal_ref),
         fiscalYear: Number(r.fiscal_year) || new Date().getFullYear(),
-        head: normalizeText(r.head),
-        subHead: normalizeText(r.sub_head),
+        head,
+        subHead,
         totalAmount,
         usedAmount,
         remainingAmount: toMoney(Math.max(0, totalAmount - usedAmount)),
         beneficiaryType: normalizeText(r.beneficiary_type),
         beneficiaryValue: normalizeText(r.beneficiary_value),
-      };
-    }).filter((row) => row.head && row.subHead);
+      });
+    });
+
+    return Array.from(groupedByHeadSubHead.values());
   } catch (error) {
     if (error?.code === 'ER_NO_SUCH_TABLE') return [];
     throw error;
@@ -927,6 +1027,8 @@ export async function getAdvanceSummary({
   budgetLineId,
   head,
   subHead,
+  budgetHeadId = null,
+  budgetSubHeadId = null,
   financeRequestId = null,
   rowIndex = null,
   sourceRequestId = null,
@@ -938,6 +1040,8 @@ export async function getAdvanceSummary({
     budgetLineId,
     head,
     subHead,
+    budgetHeadId,
+    budgetSubHeadId,
     financeRequestId,
     rowIndex,
     sourceRequestId,
@@ -1904,11 +2008,16 @@ async function createExpenditureLegacy(data, userId) {
     }
 
     // ── 3. Pre-advance (first time = 0, subsequent = prior total) ──────────
+    // NEW: prefer catalog IDs for matching; falls back to text for
+    // un-backfilled legacy rows.
+    const preAdvanceIds = await resolveCatalogIds(conn, lineRow.head, lineRow.sub_head);
     const { preAdvance } = await getCumulativeAdvanceSummary(conn, {
       userId,
       budgetLineId,
       head: lineRow.head,
       subHead: lineRow.sub_head,
+      budgetHeadId: preAdvanceIds.budget_head_id,
+      budgetSubHeadId: preAdvanceIds.budget_sub_head_id,
     });
 
     // ── 4. Resolve department from employee ─────────────────────────────────
@@ -1956,6 +2065,21 @@ async function createExpenditureLegacy(data, userId) {
       payment_status:       'Pending',
       overall_status:       'pending',
     };
+
+    const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', { tx: conn });
+    const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', { tx: conn });
+    if (hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn) {
+      // NEW: resolve catalog IDs for the header head + event sub-head and add
+      // them to the entry. Keeps text snapshot AND stable IDs in sync.
+      // LEGACY: nulls allowed — text remains authoritative for those rows.
+      const advHeaderIds = await resolvePrimaryHeadIds(
+        conn,
+        entry.primary_head,
+        entry.event_sub_head,
+      );
+      if (hasPrimaryHeadIdColumn) entry.primary_head_id = advHeaderIds.primary_head_id;
+      if (hasEventSubHeadIdColumn) entry.event_sub_head_id = advHeaderIds.event_sub_head_id;
+    }
 
     const filteredEntry = Object.fromEntries(
       Object.entries(entry).filter(([, value]) => value !== null && value !== undefined),
@@ -2235,6 +2359,10 @@ async function insertAdvanceRows(
     const advanceAmount = toMoney(row.advance || row.advance_amount);
     if (!budgetHead && !subHead && advanceAmount === 0) continue;
 
+    // NEW: resolve catalog IDs and pass to summary so cumulative match
+    // prefers IDs over text. Block resolves both row-level IDs and
+    // available_amount_snapshot in the INSERT just below.
+    const earlyResolvedIds = await resolveCatalogIds(conn, budgetHead, subHead);
     const uid = toPositiveInt(userId);
     if (uid && (budgetLineId || (budgetHead && subHead))) {
       const summary = await getCumulativeAdvanceSummary(conn, {
@@ -2242,6 +2370,8 @@ async function insertAdvanceRows(
         budgetLineId,
         head: budgetHead,
         subHead,
+        budgetHeadId: earlyResolvedIds.budget_head_id,
+        budgetSubHeadId: earlyResolvedIds.budget_sub_head_id,
         financeRequestId: workflowRowIdentity.financeRequestId,
         rowIndex: workflowRowIdentity.rowIndex,
         sourceRequestId: workflowRowIdentity.sourceRequestId,
@@ -2252,20 +2382,27 @@ async function insertAdvanceRows(
       preAdvanceAmount = moneyOrNull(summary.preAdvance);
     }
 
+    // NEW: catalog IDs alongside snapshot text — reuse `earlyResolvedIds`
+    // computed above so the insert and the cumulative-summary query agree.
+    const advIds = earlyResolvedIds;
+
     await conn.execute(
        `INSERT INTO expenditure_advance_rows
           (expenditure_id, finance_budget_breakup_id, budget_proposal_id, budget_line_id,
-           amount_source, budget_head, sub_head, budget_amount, pre_advance_amount,
+           amount_source, budget_head, sub_head, budget_head_id, budget_sub_head_id,
+           budget_amount, pre_advance_amount,
            advance_amount, available_amount_snapshot, remaining_amount_snapshot,
            unplanned_available_snapshot, sort_order)
-       VALUES (?, NULL, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+       VALUES (?, NULL, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
       [
         expenditureId,
         budgetProposalId,
         budgetLineId,
         budgetHead,
         subHead,
-        budgetSnapshot ? budgetSnapshot.budgetAmount : budgetAmount,
+        advIds.budget_head_id,
+        advIds.budget_sub_head_id,
+        budgetAmount,
         preAdvanceAmount,
         advanceAmount,
         budgetSnapshot ? budgetSnapshot.availableAmountSnapshot : null,
@@ -2291,20 +2428,26 @@ async function insertSettlementRows(conn, expenditureId, rows = [], budgetSnapsh
     const settlementAmount = toMoney(row.settlement || row.settlement_amount);
     if (!budgetHead && !subHead && settlementAmount === 0) continue;
 
+    // NEW: catalog IDs alongside snapshot text.
+    const setIds = await resolveCatalogIds(conn, budgetHead, subHead);
+
     await conn.execute(
        `INSERT INTO expenditure_settlement_rows
           (expenditure_id, finance_budget_breakup_id, budget_proposal_id, budget_line_id,
-           amount_source, budget_head, sub_head, budget_amount, advance_amount,
+           amount_source, budget_head, sub_head, budget_head_id, budget_sub_head_id,
+           budget_amount, advance_amount,
            settlement_amount, available_amount_snapshot, remaining_amount_snapshot,
            unplanned_available_snapshot, sort_order)
-       VALUES (?, NULL, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+       VALUES (?, NULL, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
       [
         expenditureId,
         budgetProposalId,
         budgetLineId,
         budgetHead,
         subHead,
-        budgetSnapshot ? budgetSnapshot.budgetAmount : budgetAmount,
+        setIds.budget_head_id,
+        setIds.budget_sub_head_id,
+        budgetAmount,
         advanceAmount,
         settlementAmount,
         budgetSnapshot ? budgetSnapshot.availableAmountSnapshot : null,
@@ -2330,20 +2473,26 @@ async function insertExpenditureRows(conn, expenditureId, rows = [], budgetSnaps
     const autoSumAmount = toMoney(row.autoSum || row.auto_sum_amount || row.expenditure);
     if (!budgetHead && !subHead && autoSumAmount === 0 && !expenditureInput) continue;
 
+    // NEW: catalog IDs alongside snapshot text.
+    const lineIds = await resolveCatalogIds(conn, budgetHead, subHead);
+
     await conn.execute(
        `INSERT INTO expenditure_line_rows
           (expenditure_id, finance_budget_breakup_id, budget_proposal_id, budget_line_id,
-           amount_source, budget_head, sub_head, budget_amount, expenditure_input,
+           amount_source, budget_head, sub_head, budget_head_id, budget_sub_head_id,
+           budget_amount, expenditure_input,
            auto_sum_amount, available_amount_snapshot, remaining_amount_snapshot,
            unplanned_available_snapshot, sort_order)
-       VALUES (?, NULL, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+       VALUES (?, NULL, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
       [
         expenditureId,
         budgetProposalId,
         budgetLineId,
         budgetHead,
         subHead,
-        budgetSnapshot ? budgetSnapshot.budgetAmount : budgetAmount,
+        lineIds.budget_head_id,
+        lineIds.budget_sub_head_id,
+        budgetAmount,
         expenditureInput,
         autoSumAmount,
         budgetSnapshot ? budgetSnapshot.availableAmountSnapshot : null,
@@ -2482,8 +2631,11 @@ async function assertWorkflowRowsHaveApprovedBudgetLines(
       rowNumber: index + 1,
       budgetLineId: toPositiveInt(row.budgetLineId || row.budget_line_id),
       amount: getAmountForWorkflowRow(requestType, row),
+      hasExplicitAmount: requestType === 'Settlement'
+        ? hasExplicitMoneyValue(row, ['settlement', 'settlement_amount', 'settlementamount'])
+        : getAmountForWorkflowRow(requestType, row) > 0,
     }))
-    .filter((row) => row.amount > 0);
+    .filter((row) => row.hasExplicitAmount && (requestType === 'Settlement' || row.amount > 0));
 
   if (!filledRows.length) return;
 
@@ -2522,32 +2674,33 @@ async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeReques
   excludeExpenditureId = null,
 } = {}) {
   const normalizedFinanceRequestId = toPositiveInt(financeRequestId);
-  const filledRows = (Array.isArray(expenditureRows) ? expenditureRows : [])
-    .map((row, index) => ({
+  const filledRows = [];
+  for (const [index, row] of (Array.isArray(expenditureRows) ? expenditureRows : []).entries()) {
+    const budgetHead = normalizeText(row.budgetHead || row.budget_head);
+    const ids = await resolveCatalogIds(conn, budgetHead, row.subHead || row.sub_head);
+    filledRows.push({
       rowNumber: index + 1,
-      budgetHead: normalizeText(row.budgetHead || row.budget_head),
-      headKey: normalizeBudgetHeadKey(row.budgetHead || row.budget_head),
+      budgetHead,
+      headKey: normalizeBudgetHeadKey(budgetHead),
+      budgetHeadId: toPositiveInt(ids.budget_head_id),
       amount: getAmountForWorkflowRow('Expenditure', row),
-    }))
-    .filter((row) => row.amount > 0);
+    });
+  }
+  const amountRows = filledRows.filter((row) => row.amount > 0);
 
-  if (!normalizedFinanceRequestId || !filledRows.length) return;
+  if (!normalizedFinanceRequestId || !amountRows.length) return;
 
-  const missingHeadRows = filledRows.filter((row) => !row.headKey).map((row) => row.rowNumber);
+  const missingHeadRows = amountRows.filter((row) => !row.headKey).map((row) => row.rowNumber);
   if (missingHeadRows.length) {
     throw new Error(
       `Please select a valid approved budget head for row ${missingHeadRows.join(', ')}`,
     );
   }
 
-  const requestedByHead = new Map();
-  for (const row of filledRows) {
-    requestedByHead.set(row.headKey, toMoney((requestedByHead.get(row.headKey) || 0) + row.amount));
-  }
-
   const [approvedRows] = await conn.execute(
     `SELECT
        fbb.budget_line_id,
+       COALESCE(fbb.budget_head_id, bpl.budget_head_id) AS budget_head_id,
        COALESCE(NULLIF(TRIM(fbb.budget_head), ''), bpl.budget_head, '') AS budget_head,
        ${FINANCE_BREAKUP_APPROVED_BASE_SQL} AS approved_amount
      FROM finance_budget_breakup fbb
@@ -2559,19 +2712,45 @@ async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeReques
 
   const approvedByHead = new Map();
   const lineIdsByHead = new Map();
+  const canonicalKeyByAlias = new Map();
+
+  const addAlias = (alias, canonicalKey) => {
+    if (alias && canonicalKey && !canonicalKeyByAlias.has(alias)) {
+      canonicalKeyByAlias.set(alias, canonicalKey);
+    }
+  };
 
   for (const row of approvedRows) {
-    const headKey = normalizeBudgetHeadKey(row.budget_head);
-    if (!headKey || !requestedByHead.has(headKey)) continue;
+    const catalogHeadId = toPositiveInt(row.budget_head_id);
+    const textHeadKey = normalizeBudgetHeadKey(row.budget_head);
+    const canonicalKey = catalogHeadId ? `id:${catalogHeadId}` : `text:${textHeadKey}`;
+    if (!canonicalKey) continue;
 
-    approvedByHead.set(headKey, toMoney((approvedByHead.get(headKey) || 0) + toMoney(row.approved_amount)));
+    addAlias(canonicalKey, canonicalKey);
+    const legacyTextKey = textHeadKey ? `text:${textHeadKey}` : '';
+    if (legacyTextKey) addAlias(legacyTextKey, canonicalKey);
+
+    approvedByHead.set(canonicalKey, toMoney((approvedByHead.get(canonicalKey) || 0) + toMoney(row.approved_amount)));
 
     const lineId = toPositiveInt(row.budget_line_id);
     if (lineId) {
-      if (!lineIdsByHead.has(headKey)) {
-        lineIdsByHead.set(headKey, new Set());
+      if (!lineIdsByHead.has(canonicalKey)) {
+        lineIdsByHead.set(canonicalKey, new Set());
       }
-      lineIdsByHead.get(headKey).add(lineId);
+      lineIdsByHead.get(canonicalKey).add(lineId);
+    }
+  }
+
+  const requestedByHead = new Map();
+  const headLabelByKey = new Map();
+  const rowKeyByNumber = new Map();
+  for (const row of amountRows) {
+    const rawKey = row.budgetHeadId ? `id:${row.budgetHeadId}` : `text:${row.headKey}`;
+    const canonicalKey = canonicalKeyByAlias.get(rawKey) || rawKey;
+    rowKeyByNumber.set(row.rowNumber, canonicalKey);
+    requestedByHead.set(canonicalKey, toMoney((requestedByHead.get(canonicalKey) || 0) + row.amount));
+    if (!headLabelByKey.has(canonicalKey)) {
+      headLabelByKey.set(canonicalKey, row.budgetHead || row.headKey);
     }
   }
 
@@ -2592,16 +2771,18 @@ async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeReques
     const remainingAmount = toMoney(Math.max(0, approvedAmount - usedAmount));
 
     if (approvedAmount <= 0) {
-      const rowNumbers = filledRows.filter((row) => row.headKey === headKey).map((row) => row.rowNumber);
+      const rowNumbers = amountRows
+        .filter((row) => rowKeyByNumber.get(row.rowNumber) === headKey)
+        .map((row) => row.rowNumber);
       throw new Error(
         `Please select a valid approved budget head for row ${rowNumbers.join(', ')}`,
       );
     }
 
     if (requestedAmount > remainingAmount) {
-      const firstRow = filledRows.find((row) => row.headKey === headKey);
+      const firstRow = amountRows.find((row) => rowKeyByNumber.get(row.rowNumber) === headKey);
       throw new Error(
-        `Requested expenditure ${requestedAmount.toFixed(2)} exceeds remaining budget ${remainingAmount.toFixed(2)} for "${firstRow?.budgetHead || headKey}"`,
+        `Requested expenditure ${requestedAmount.toFixed(2)} exceeds remaining budget ${remainingAmount.toFixed(2)} for "${firstRow?.budgetHead || headLabelByKey.get(headKey) || headKey}"`,
       );
     }
   }
@@ -2840,17 +3021,20 @@ const incomeRows = Array.isArray(data.income_rows)
       rowIndex: workflowRowIdentity.rowIndex,
       sourceRequestId,
     });
+    const allowZeroSettlement = requestType === 'Settlement' && hasSettlementRowsForClosure(settlementRows);
 
     validateWorkflowRowFlow(requestType, workflowRowHistory, {
       requestedAdvance: advanceTotal,
       requestedSettlement: settlementTotal,
       requestedExpenditure: expenditureTotal,
+      allowZeroSettlement,
     });
 
     if (requestType === 'Advance') {
       await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, advanceTotal);
     } else if (requestType === 'Expenditure') {
       await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, expenditureTotal);
+      await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows);
     } else if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,
@@ -2932,6 +3116,20 @@ const incomeRows = Array.isArray(data.income_rows)
       created_by: uid,
       overall_status: 'pending',
     };
+
+    const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', { tx: conn });
+    const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', { tx: conn });
+    if (hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn) {
+      // NEW: resolve and attach catalog IDs (Phase 2 of catalog ref hardening).
+      // LEGACY: nulls when the catalog has no matching name.
+      const headerIds = await resolvePrimaryHeadIds(
+        conn,
+        entry.primary_head,
+        entry.event_sub_head,
+      );
+      if (hasPrimaryHeadIdColumn) entry.primary_head_id = headerIds.primary_head_id;
+      if (hasEventSubHeadIdColumn) entry.event_sub_head_id = headerIds.event_sub_head_id;
+    }
 
     const filteredEntry = Object.fromEntries(
       Object.entries(entry).filter(([, value]) => value !== null && value !== undefined && value !== ''),
@@ -3115,11 +3313,12 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       rowIndex: workflowRowIdentity.rowIndex,
       sourceRequestId,
     });
+    const allowZeroSettlement = requestType === 'Settlement' && hasSettlementRowsForClosure(settlementRows);
 
     if (requestType === 'Advance' && advanceTotal <= 0) {
       throw new Error('Advance amount must be greater than 0');
     }
-    if (requestType === 'Settlement' && settlementTotal <= 0) {
+    if (requestType === 'Settlement' && (settlementTotal < 0 || (settlementTotal === 0 && !allowZeroSettlement))) {
       throw new Error('Settlement amount must be greater than 0');
     }
     if (requestType === 'Expenditure' && expenditureTotal <= 0) {
@@ -3153,6 +3352,9 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, advanceTotal);
     } else if (requestType === 'Expenditure') {
       await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, expenditureTotal);
+      await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows, {
+        excludeExpenditureId: normalizedExpenditureId,
+      });
     } else if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,
@@ -3228,8 +3430,23 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       total_amount: totalAmount,
     };
 
+    const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', { tx: conn });
+    const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', { tx: conn });
+    if (hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn) {
+      const headerIds = await resolvePrimaryHeadIds(
+        conn,
+        updatedEntry.primary_head,
+        updatedEntry.event_sub_head,
+      );
+      if (hasPrimaryHeadIdColumn) updatedEntry.primary_head_id = headerIds.primary_head_id;
+      if (hasEventSubHeadIdColumn) updatedEntry.event_sub_head_id = headerIds.event_sub_head_id;
+    }
+
+    const nullableCatalogIdKeys = new Set(['primary_head_id', 'event_sub_head_id']);
     const filteredUpdateEntry = Object.fromEntries(
-      Object.entries(updatedEntry).filter(([, value]) => value !== null && value !== undefined && value !== ''),
+      Object.entries(updatedEntry).filter(([key, value]) =>
+        nullableCatalogIdKeys.has(key) || (value !== null && value !== undefined && value !== ''),
+      ),
     );
 
     if (Object.keys(filteredUpdateEntry).length) {
@@ -4439,7 +4656,15 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
      LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
      LEFT JOIN master_employees emp ON emp.id = er.employee_id
      ${whereClause}
-     ORDER BY er.created_at DESC
+     ORDER BY
+       CASE
+         WHEN ${WORKFLOW_STATUS_SQL_EXPR} = 'in_progress'
+          AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '') = 'resubmitted'
+         THEN 0
+         ELSE 1
+       END,
+       COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.resubmittedAt')), '') DESC,
+       er.created_at DESC
      LIMIT ? OFFSET ?`,
     [statusStageScope, statusStageScope, ...whereParams, limit, offset]
   );

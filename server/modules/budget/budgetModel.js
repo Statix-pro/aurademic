@@ -1,4 +1,5 @@
 import db from '../../config/connection.js';
+import { resolveCatalogIds } from '../budgetCatalog/budgetCatalogResolver.js';
 import {
   VALID_MONTHS as SHARED_VALID_MONTHS,
   APPROVAL_FLOW as SHARED_APPROVAL_FLOW,
@@ -86,7 +87,8 @@ export async function getBudgetTags() {
       `SELECT id, tag_name, is_active, sort_order
          FROM budget_tags
          WHERE is_active = 1
-         ORDER BY sort_order ASC, tag_name ASC`
+           AND is_deleted = 0
+         ORDER BY tag_name ASC`
     );
     return rows;
   } catch (error) {
@@ -977,7 +979,13 @@ export async function getProposalDetailsByIds(proposalIds = []) {
 export async function update(
   proposalId,
   payload,
-  { skipEditStateValidation = false, editedByUserId = null, editedByEmail = null, editedByRole = null } = {}
+  {
+    skipEditStateValidation = false,
+    editedByUserId = null,
+    editedByEmail = null,
+    editedByRole = null,
+    resubmissionRemarks = null,
+  } = {}
 ) {
   const proposal = await getBudgetById(proposalId);
 
@@ -1078,6 +1086,10 @@ export async function update(
     const approvalFlowString = formatApprovalFlowString(flow);
     const initialStage = getInitialApprovalStage(flow);
     const isReturnedState = proposal.status && proposal.status.endsWith('_returned');
+    const normalizedResubmissionRemarks = normalizeText(resubmissionRemarks);
+    if (isReturnedState && !normalizedResubmissionRemarks) {
+      throw new Error('Resubmission remarks are required');
+    }
     const nextCurrentStage =
       ['draft', 'submitted'].includes(proposal.status) || isReturnedState
         ? initialStage
@@ -1207,6 +1219,19 @@ export async function update(
           }
         }
       }
+    }
+
+    if (isReturnedState) {
+      const actorUserId = Number.isInteger(Number(editedByUserId)) ? Number(editedByUserId) : 0;
+      const actorEmail = normalizeText(editedByEmail);
+
+      await conn.execute(
+        `INSERT INTO budget_proposal_approvals(
+            budget_proposal_id, role, approver_user_id, approver_email,
+            decision, feedback, allows_edit
+          ) VALUES(?, 'applicant', ?, ?, 'resubmitted', ?, 0)`,
+        [proposalId, actorUserId, actorEmail, normalizedResubmissionRemarks]
+      );
     }
 
     const maxLineCount = Math.max(previousLines.length, incomingLines.length);
@@ -1673,22 +1698,37 @@ async function insertBudgetLine(proposalId, line, conn) {
   const quantity = Number(line.quantity) || 1;
   const lineTotal = unitAmount * quantity;
 
+  // NEW: resolve stable catalog IDs. Stored alongside the snapshot text so
+  // future renames in the catalog don't break workflow matching.
+  // LEGACY: if the submitted head/sub_head doesn't exist in the catalog
+  // (older data import, custom entries), IDs come back as null and the
+  // existing text columns continue to drive matching as before.
+  const { budget_head_id, budget_sub_head_id } = await resolveCatalogIds(
+    conn,
+    line.budget_head,
+    line.sub_head,
+  );
+
   const [result] = await conn.execute(
     `INSERT INTO budget_proposal_lines(
           budget_proposal_id,
           budget_head,
           sub_head,
+          budget_head_id,
+          budget_sub_head_id,
           unit_amount,
           approved_unit_amount,
           quantity,
           line_total,
           approved_line_total,
           line_description
-        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       proposalId,
       line.budget_head,
       line.sub_head || '',
+      budget_head_id,
+      budget_sub_head_id,
       unitAmount,
       unitAmount,
       quantity,

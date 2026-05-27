@@ -135,6 +135,15 @@ const getRoleLabel = (role: string) => {
   return map[role.toLowerCase()] || role.charAt(0).toUpperCase() + role.slice(1);
 };
 
+const isResubmittedBudgetItem = (item: BudgetRequestItem) =>
+  String(item.status || "").toLowerCase() === "re_submitted";
+
+const getBudgetSortTime = (item: BudgetRequestItem) => {
+  const raw = (item as any).updated_date || (item as any).updated_at || item.created_date || (item as any).created_at;
+  const parsed = raw ? Date.parse(String(raw)) : 0;
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const AdminBudget: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -721,7 +730,15 @@ const AdminBudget: React.FC = () => {
     setLocalStatsFilter(statusFilter === "all" ? "total" : statusFilter);
   }, [statusFilter]);
 
-  const currentItems = baseFilteredData;
+  const currentItems = useMemo(() => {
+    if (statusFilter !== "pending") return baseFilteredData;
+    return [...baseFilteredData].sort((a, b) => {
+      const aResubmitted = isResubmittedBudgetItem(a);
+      const bResubmitted = isResubmittedBudgetItem(b);
+      if (aResubmitted !== bResubmitted) return aResubmitted ? -1 : 1;
+      return getBudgetSortTime(b) - getBudgetSortTime(a);
+    });
+  }, [baseFilteredData, statusFilter]);
   const totalItemsCount = pagination.total;
   const totalPagesCount = pagination.pages;
   const safeCurrentPage = pagination.page;
@@ -1012,6 +1029,8 @@ const AdminBudget: React.FC = () => {
       principal: "Principal",
       admin: "Admin",
       super_admin: "Super Admin",
+      applicant: "Applicant",
+      user: "Applicant",
     };
     return map[normalized] || (role ? role.toUpperCase() : "Approver");
   };
@@ -1158,7 +1177,7 @@ const AdminBudget: React.FC = () => {
       const decidedAt = app.decided_at || app.decidedAt || app.decided_at_formatted;
       const decidedAtMs = parseDateMsForLog(decidedAt);
       const feedbackNote = feedback && !feedback.startsWith("__archive_meta__:")
-        ? `Note: ${feedback}`
+        ? `Remarks: ${feedback}`
         : "";
       const actorPrefix =
         decision === "approved"
@@ -1479,6 +1498,7 @@ const AdminBudget: React.FC = () => {
                         {currentItems.map((item) => {
                           const canProcessCurrentStage = canProcessStage(item.current_stage);
                           const normalizedStatus = (item.status || "").toLowerCase();
+                          const isResubmitted = isResubmittedBudgetItem(item);
                           const isArchivedStatus = ["archived", "archive"].some((token) => normalizedStatus.includes(token));
                           const isRejectedStatus = normalizedStatus.includes("rejected");
                           const isReturnedStatus = normalizedStatus.includes("returned");
@@ -1494,7 +1514,7 @@ const AdminBudget: React.FC = () => {
                           return (
                             <div className="adminbudget-item-wrap" key={item.id}>
                               <div
-                                className={`adminbudget-item adminbudget-item--clickable ${archivingIds.has(item.id) ? "adminbudget-item--archiving" : ""
+                                className={`adminbudget-item adminbudget-item--clickable ${isResubmitted ? "adminbudget-item--resubmitted" : ""} ${archivingIds.has(item.id) ? "adminbudget-item--archiving" : ""
                                   }`}
                                 role="button"
                                 tabIndex={0}
