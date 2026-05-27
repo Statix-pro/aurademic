@@ -913,6 +913,9 @@ const FinanceApproval: React.FC = () => {
   const [wfActionType, setWfActionType] = useState<'returned' | 'rejected' | null>(null);
   const [wfActionComment, setWfActionComment] = useState('');
   const [wfActionSubmitting, setWfActionSubmitting] = useState(false);
+  const [resubmitPopupOpen, setResubmitPopupOpen] = useState(false);
+  const [resubmitComment, setResubmitComment] = useState('');
+  const [resubmitSubmitting, setResubmitSubmitting] = useState(false);
 
   useEffect(() => {
     setExpandedTimelineDetails({});
@@ -1661,9 +1664,22 @@ const FinanceApproval: React.FC = () => {
     return missing;
   };
 
-  const handleSubmit = async (): Promise<void> => {
+  const closeResubmitPopup = (force = false) => {
+    if (resubmitSubmitting && !force) return;
+    setResubmitPopupOpen(false);
+    setResubmitComment('');
+  };
+
+  const handleSubmit = async (resubmissionComment?: string): Promise<void> => {
     try {
       if (isViewMode) {
+        return;
+      }
+
+      const shouldResubmitAfterSave = isEditMode && loadedWorkflowStatus === 'returned' && !isAdminWorkflowContext;
+      if (shouldResubmitAfterSave && resubmissionComment === undefined) {
+        setResubmitComment('');
+        setResubmitPopupOpen(true);
         return;
       }
 
@@ -1896,12 +1912,21 @@ const FinanceApproval: React.FC = () => {
         return;
       }
 
-      if (isEditMode && loadedWorkflowStatus === 'returned' && !isAdminWorkflowContext) {
-        const resubmitResult = await authenticityUtility.post(`/finance-requests/${id}/resubmit`, {}) as { status?: string; message?: string };
+      if (shouldResubmitAfterSave) {
+        const comment = normalizeText(resubmissionComment);
+        if (!comment) {
+          showAlert('Please enter resubmission comments.', 'warning');
+          return;
+        }
+
+        const resubmitResult = await authenticityUtility.post(`/finance-requests/${id}/resubmit`, {
+          feedback: comment,
+        }) as { status?: string; message?: string };
         if (resubmitResult.status !== 'success') {
           showAlert(resubmitResult.message || 'Finance request updated, but resubmission failed', 'error');
           return;
         }
+        closeResubmitPopup(true);
       }
 
       const responseId = isEditMode ? id : (result as any).data?.id;
@@ -1924,6 +1949,22 @@ const FinanceApproval: React.FC = () => {
     } catch (error) {
       console.error('Finance submit error:', error);
       showAlert(getFinanceSubmitErrorMessage(error), 'error');
+    }
+  };
+
+  const submitResubmissionWithComment = async () => {
+    if (resubmitSubmitting) return;
+    const comment = resubmitComment.trim();
+    if (!comment) {
+      showAlert('Please enter resubmission comments.', 'warning');
+      return;
+    }
+
+    setResubmitSubmitting(true);
+    try {
+      await handleSubmit(comment);
+    } finally {
+      setResubmitSubmitting(false);
     }
   };
 
@@ -4452,7 +4493,7 @@ const FinanceApproval: React.FC = () => {
           {!showPreview && !isViewMode && (
             <button
               type="button"
-              onClick={handleSubmit}
+              onClick={() => handleSubmit()}
               style={{
                 backgroundColor: '#0069ab',
                 color: '#fff',
@@ -5145,6 +5186,52 @@ const FinanceApproval: React.FC = () => {
           rows={4}
           placeholder="Enter comments (required)..."
           className="form-control"
+        />
+      </CustomModal>
+
+      <CustomModal
+        show={resubmitPopupOpen}
+        onHide={resubmitSubmitting ? (() => { }) : closeResubmitPopup}
+        title="Resubmit Item - Comments"
+        size="sm"
+        centered
+        backdrop={resubmitSubmitting ? 'static' : true}
+        keyboard={!resubmitSubmitting}
+        hideCloseButton={resubmitSubmitting}
+        footer={
+          <div className="d-flex justify-content-end gap-2 w-100">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={() => closeResubmitPopup()}
+              disabled={resubmitSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              onClick={submitResubmissionWithComment}
+              disabled={resubmitSubmitting}
+            >
+              {resubmitSubmitting ? 'Resubmitting...' : 'Resubmit'}
+            </button>
+          </div>
+        }
+      >
+        {proposalRef && (
+          <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
+            Reference: <b>{proposalRef}</b>
+          </div>
+        )}
+        <textarea
+          value={resubmitComment}
+          onChange={(e) => setResubmitComment(e.target.value)}
+          disabled={resubmitSubmitting}
+          rows={4}
+          placeholder="Enter resubmission comments (required)..."
+          className="form-control"
+          autoFocus
         />
       </CustomModal>
 

@@ -4656,7 +4656,15 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
      LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
      LEFT JOIN master_employees emp ON emp.id = er.employee_id
      ${whereClause}
-     ORDER BY er.created_at DESC
+     ORDER BY
+       CASE
+         WHEN ${WORKFLOW_STATUS_SQL_EXPR} = 'in_progress'
+          AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '') = 'resubmitted'
+         THEN 0
+         ELSE 1
+       END,
+       COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.resubmittedAt')), '') DESC,
+       er.created_at DESC
      LIMIT ? OFFSET ?`,
     [statusStageScope, statusStageScope, ...whereParams, limit, offset]
   );

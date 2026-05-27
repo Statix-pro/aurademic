@@ -457,6 +457,8 @@ const Budget: React.FC = () => {
   const [actionPopupOpen, setActionPopupOpen] = useState(false);
   const [actionType, setActionType] = useState<'return' | 'reject' | null>(null);
   const [actionComment, setActionComment] = useState('');
+  const [resubmitPopupOpen, setResubmitPopupOpen] = useState(false);
+  const [resubmitRemarks, setResubmitRemarks] = useState('');
   const [showGuidelines, setShowGuidelines] = useState(false);
   const openGuidelines = () => setShowGuidelines(true);
   const closeGuidelines = () => setShowGuidelines(false);
@@ -763,10 +765,18 @@ const Budget: React.FC = () => {
 
 
 
-  const handleSubmitBudget = async () => {
+  const handleSubmitBudget = async (submittedRemarks?: string) => {
     if (isSubmitting) {
       return;
     }
+    const isReturnedResubmit =
+      isEditMode && (proposalStatus || '').toLowerCase().endsWith('_returned');
+    const normalizedResubmitRemarks = normalizeText(submittedRemarks);
+    if (isReturnedResubmit && submittedRemarks !== undefined && !normalizedResubmitRemarks) {
+      showAlert('Remarks are required to resubmit this budget.', 'warning');
+      return;
+    }
+
     if (!budgetLines.length) {
       showAlert('Please add at least one budget line.', 'warning');
       return;
@@ -859,6 +869,17 @@ const Budget: React.FC = () => {
       return;
     }
 
+    if (isReturnedResubmit && submittedRemarks === undefined) {
+      setResubmitRemarks('');
+      setResubmitPopupOpen(true);
+      return;
+    }
+
+    if (isReturnedResubmit && !normalizedResubmitRemarks) {
+      showAlert('Remarks are required to resubmit this budget.', 'warning');
+      return;
+    }
+
     const formattedLines = budgetLines.map((line) => ({
       budget_head: line.budgetHead?.trim(),
       sub_head: line.subHead?.trim(),
@@ -887,6 +908,7 @@ const Budget: React.FC = () => {
       applicant_entity: applicantEntity?.trim() || null,
       budget_tag: selectedTag?.trim(),
       lines: formattedLines,
+      ...(isReturnedResubmit ? { resubmission_remarks: normalizedResubmitRemarks } : {}),
     };
 
     try {
@@ -919,6 +941,11 @@ const Budget: React.FC = () => {
         throw new Error(result.message || 'Submission failed on server');
       }
 
+      if (isReturnedResubmit) {
+        setResubmitPopupOpen(false);
+        setResubmitRemarks('');
+      }
+
       const isDirectDoFApproval =
         !isEditMode && String(result.data?.currentStage || '').toLowerCase() === 'completed';
 
@@ -926,7 +953,9 @@ const Budget: React.FC = () => {
         isPrivilegedReviewer
           ? 'Budget updated successfully!'
           : isEditMode
-            ? `Budget updated successfully!`
+            ? isReturnedResubmit
+              ? 'Budget resubmitted successfully!'
+              : 'Budget updated successfully!'
             : (
               <>
                 {isDirectDoFApproval ? 'Budget approved successfully!' : 'Budget submitted successfully!'}
@@ -2836,7 +2865,7 @@ const Budget: React.FC = () => {
           <button
             type="submit"
             className="submitBudgetBtn"
-            onClick={handleSubmitBudget}
+            onClick={() => handleSubmitBudget()}
             disabled={isSubmitting}
             style={{
               padding: "12px 40px",
@@ -2960,6 +2989,85 @@ const Budget: React.FC = () => {
                 }}
               >
                 Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {resubmitPopupOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 999999,
+            padding: 16,
+          }}
+          onClick={() => {
+            if (!isSubmitting) setResubmitPopupOpen(false);
+          }}
+        >
+          <div
+            style={{
+              width: 'min(520px, 95vw)',
+              background: '#fff',
+              borderRadius: 12,
+              padding: 18,
+              boxShadow: '0 10px 35px rgba(0,0,0,0.25)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h5 style={{ margin: 0, marginBottom: 10 }}>Resubmit Budget - Remarks</h5>
+
+            <textarea
+              value={resubmitRemarks}
+              onChange={(e) => setResubmitRemarks(e.target.value)}
+              rows={4}
+              placeholder="Enter resubmission remarks (required)..."
+              style={{
+                width: '100%',
+                borderRadius: 10,
+                border: '1px solid #e0e0e0',
+                padding: '10px 12px',
+                outline: 'none',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+              }}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
+              <button
+                type="button"
+                onClick={() => setResubmitPopupOpen(false)}
+                disabled={isSubmitting}
+                style={{
+                  border: '1px solid #ddd',
+                  background: '#fff',
+                  borderRadius: 10,
+                  padding: '8px 14px',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSubmitBudget(resubmitRemarks)}
+                disabled={isSubmitting}
+                style={{
+                  border: 'none',
+                  background: '#f59e0b',
+                  color: '#fff',
+                  borderRadius: 10,
+                  padding: '8px 14px',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isSubmitting ? 'Submitting...' : 'Resubmit'}
               </button>
             </div>
           </div>
