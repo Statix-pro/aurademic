@@ -433,6 +433,7 @@ function validateWorkflowRowFlow(requestType, rowHistory = [], {
   requestedAdvance = 0,
   requestedSettlement = 0,
   requestedExpenditure = 0,
+  allowZeroSettlement = false,
 } = {}) {
   if (!rowHistory.length) return;
 
@@ -476,11 +477,31 @@ function validateWorkflowRowFlow(requestType, rowHistory = [], {
     if (hasSettlement) {
       throw new Error('Settlement already exists for this row.');
     }
-    if (requestedSettlement <= 0) {
+    if (requestedSettlement < 0 || (requestedSettlement === 0 && !allowZeroSettlement)) {
       throw new Error('Settlement amount must be greater than 0');
     }
   }
 }
+
+const hasExplicitMoneyValue = (row = {}, keys = []) =>
+  keys.some((key) => {
+    if (!Object.prototype.hasOwnProperty.call(row, key)) return false;
+    const value = row[key];
+    return value !== null && value !== undefined && String(value).trim() !== '';
+  });
+
+const hasBudgetLineSelection = (row = {}) => (
+  Boolean(toPositiveInt(row.budgetLineId || row.budget_line_id)) ||
+  Boolean(sanitizeRowValue(row.budgetHead || row.budget_head)) ||
+  Boolean(sanitizeRowValue(row.subHead || row.sub_head))
+);
+
+const hasSettlementRowsForClosure = (rows = []) =>
+  Array.isArray(rows) &&
+  rows.some((row) =>
+    hasExplicitMoneyValue(row, ['settlement', 'settlement_amount', 'settlementamount']) &&
+    hasBudgetLineSelection(row)
+  );
 
 async function getCumulativeAdvanceSummary(connOrDb, {
   userId,
@@ -2610,8 +2631,11 @@ async function assertWorkflowRowsHaveApprovedBudgetLines(
       rowNumber: index + 1,
       budgetLineId: toPositiveInt(row.budgetLineId || row.budget_line_id),
       amount: getAmountForWorkflowRow(requestType, row),
+      hasExplicitAmount: requestType === 'Settlement'
+        ? hasExplicitMoneyValue(row, ['settlement', 'settlement_amount', 'settlementamount'])
+        : getAmountForWorkflowRow(requestType, row) > 0,
     }))
-    .filter((row) => row.amount > 0);
+    .filter((row) => row.hasExplicitAmount && (requestType === 'Settlement' || row.amount > 0));
 
   if (!filledRows.length) return;
 
@@ -2997,11 +3021,13 @@ const incomeRows = Array.isArray(data.income_rows)
       rowIndex: workflowRowIdentity.rowIndex,
       sourceRequestId,
     });
+    const allowZeroSettlement = requestType === 'Settlement' && hasSettlementRowsForClosure(settlementRows);
 
     validateWorkflowRowFlow(requestType, workflowRowHistory, {
       requestedAdvance: advanceTotal,
       requestedSettlement: settlementTotal,
       requestedExpenditure: expenditureTotal,
+      allowZeroSettlement,
     });
 
     if (requestType === 'Advance') {
@@ -3287,11 +3313,12 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       rowIndex: workflowRowIdentity.rowIndex,
       sourceRequestId,
     });
+    const allowZeroSettlement = requestType === 'Settlement' && hasSettlementRowsForClosure(settlementRows);
 
     if (requestType === 'Advance' && advanceTotal <= 0) {
       throw new Error('Advance amount must be greater than 0');
     }
-    if (requestType === 'Settlement' && settlementTotal <= 0) {
+    if (requestType === 'Settlement' && (settlementTotal < 0 || (settlementTotal === 0 && !allowZeroSettlement))) {
       throw new Error('Settlement amount must be greater than 0');
     }
     if (requestType === 'Expenditure' && expenditureTotal <= 0) {

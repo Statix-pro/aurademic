@@ -475,6 +475,26 @@ const createIncomeRow = (): IncomeRow => ({
 const normalizeText = (value: string | null | undefined): string =>
   String(value || '').trim();
 
+const isFinanceBeneficiarySelectionComplete = (
+  beneficiaryType: string | null | undefined,
+  beneficiaryValue: string | null | undefined
+): boolean => {
+  const normalizedType = normalizeText(beneficiaryType);
+  if (!normalizedType) return false;
+  if (normalizedType === 'Institution') return true;
+  return Boolean(normalizeText(beneficiaryValue));
+};
+
+const hasFinanceWorkflowStagePermission = (permissions: string[], stage: string): boolean => {
+  const normalizedStage = normalizeText(stage).toLowerCase();
+  if (!normalizedStage) return false;
+  return permissions.some((permission) => {
+    const normalizedPermission = normalizeText(permission).toLowerCase();
+    return normalizedPermission === 'finance.workflow.*' ||
+      normalizedPermission === `finance.workflow.${normalizedStage}`;
+  });
+};
+
 const normalizeBudgetGroupKey = (budgetHead: unknown, subHead: unknown): string =>
   `${normalizeText(String(budgetHead || '')).toLowerCase()}|${normalizeText(String(subHead || '')).toLowerCase()}`;
 
@@ -1247,8 +1267,9 @@ const FinanceApproval: React.FC = () => {
     const normalizedSubHead =
       (extraDropdownVisible ? normalizeText(eventSubHead) : '') || normalizeText(subHead);
     const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(normalizedHead, normalizedSubHead);
+    const hasBeneficiarySelection = isFinanceBeneficiarySelectionComplete(beneficiaryType, beneficiaryValue);
 
-    if (!normalizedHead || (!headOnlyMatch && !normalizedSubHead)) {
+    if (!hasBeneficiarySelection || !normalizedHead || (!headOnlyMatch && !normalizedSubHead)) {
       setBudgetLineMetaByRow((prev) => ({
         ...prev,
         [rowIndex]: {
@@ -2150,6 +2171,7 @@ const FinanceApproval: React.FC = () => {
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [loadedWorkflowStatus, setLoadedWorkflowStatus] = useState<string>('');
   const [loadedCurrentStage, setLoadedCurrentStage] = useState<string>('');
+  const [workflowPermittedStages, setWorkflowPermittedStages] = useState<string[]>([]);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -2159,6 +2181,48 @@ const FinanceApproval: React.FC = () => {
   const isViewMode = Boolean(id && !isEditMode);
   const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
   const isApprovalMode = isViewMode && isAdminWorkflowContext;
+
+  useEffect(() => {
+    if (!isApprovalMode) {
+      setWorkflowPermittedStages([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadWorkflowMeta = async () => {
+      try {
+        const response = await authenticityUtility.get('/finance-requests/workflow/meta') as {
+          status?: string;
+          data?: {
+            permittedStages?: unknown[];
+          };
+        };
+
+        if (cancelled || response?.status !== 'success') {
+          return;
+        }
+
+        const permittedStages = Array.isArray(response.data?.permittedStages)
+          ? response.data.permittedStages
+            .map((stage) => normalizeText(String(stage || '')).toLowerCase())
+            .filter(Boolean)
+          : [];
+
+        setWorkflowPermittedStages(permittedStages);
+      } catch (error) {
+        if (!cancelled) {
+          setWorkflowPermittedStages([]);
+        }
+      }
+    };
+
+    loadWorkflowMeta();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isApprovalMode]);
 
   const normalizedWorkflowStatus = String(
     loadedWorkflowStatus || ''
@@ -2194,7 +2258,8 @@ const FinanceApproval: React.FC = () => {
     // Super admin cannot approve/reject — only the respective head can
     if (isSuperAdminUser) return false;
     const userPermissions = normalizeFinancePermissionKeys(user);
-    if (userPermissions.includes(`finance.workflow.${loadedCurrentStage}`)) return true;
+    if (hasFinanceWorkflowStagePermission(userPermissions, loadedCurrentStage)) return true;
+    if (workflowPermittedStages.includes(loadedCurrentStage)) return true;
 
     const stageRoleFallback: Record<string, string[]> = {
       dof: ['dof'],
@@ -2572,6 +2637,16 @@ const FinanceApproval: React.FC = () => {
     const normalizedBeneficiaryType = normalizeText(beneficiaryType);
     const normalizedBeneficiaryValue = normalizeText(beneficiaryValue);
     const normalizedFinanceId = isEditMode && id ? String(id) : '';
+    const hasBeneficiarySelection = isFinanceBeneficiarySelectionComplete(
+      normalizedBeneficiaryType,
+      normalizedBeneficiaryValue
+    );
+
+    if (!hasBeneficiarySelection) {
+      availabilityFetchKeyByRowRef.current = {};
+      setBudgetLineMetaByRow((prev) => (Object.keys(prev).length > 0 ? {} : prev));
+      return;
+    }
 
     budgetRows.forEach((row, index) => {
       const normalizedHead = normalizeText(primaryHead) || normalizeText(row.category);

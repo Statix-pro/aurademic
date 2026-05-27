@@ -231,8 +231,23 @@ const hasFinanceStagePermission = (req, stage) => {
 
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
   const normalizedPermissions = permissions.map((permission) => normalizeText(permission).toLowerCase());
+  if (
+    normalizedPermissions.includes('finance.workflow.*') ||
+    normalizedPermissions.includes(`finance.workflow.${normalizedStage}`)
+  ) {
+    return true;
+  }
 
-  return normalizedPermissions.includes(`finance.workflow.${normalizedStage}`);
+  const roles = Array.isArray(req.user?.roles)
+    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
+    : [];
+  const stageRoleMap = {
+    dof: ['dof'],
+    principal: ['principal'],
+    chairman: ['chairman'],
+  };
+
+  return (stageRoleMap[normalizedStage] || []).some((role) => roles.includes(role));
 };
 
 const hasFinanceWorkflowEditorAccess = (req) =>
