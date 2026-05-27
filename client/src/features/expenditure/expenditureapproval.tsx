@@ -451,9 +451,9 @@ const PAYMENT_MODE_OPTIONS = [
   "IMPS",
   "Cheque",
   "Cash",
-  "G-Pay",
-  "PhonePe",
+  "UPI",
   "Internal Transfer",
+  "Not Applicable",
 ];
 const PAYMENT_STATUS_OPTIONS = ["Paid", "Pending", "Processing", "Cancelled"];
 const BULK_NEFT_TEMPLATE_VERSION = "2026-04-11";
