@@ -2563,7 +2563,9 @@ const financeModel = {
       if (hasAnnexuresInput) {
         const firstAnnexure = annexures[0] || null;
         if (hasAnnexureTypeColumn) {
-          updateData.annexure_type = firstAnnexure ? firstAnnexure.annexure_type || null : null;
+          updateData.annexure_type = firstAnnexure
+            ? firstAnnexure.annexure_type || null
+            : (normalizeText(updateData.annexure_type) || null);
         }
         if (hasAnnexureFileNameColumn) {
           updateData.annexure_file_name = firstAnnexure

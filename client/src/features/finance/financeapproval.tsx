@@ -1876,7 +1876,7 @@ const FinanceApproval: React.FC = () => {
         income_type: primaryIncomeRow?.incomeSource || '',
         income_status: primaryIncomeRow?.creditAccount || '',
         income_amount_type: primaryIncomeRow?.contribution || '',
-        annexure_type: primaryAnnexure?.annexure_type || null,
+        annexure_type: primaryAnnexure?.annexure_type || (isAnnexureNotApplicable ? annexureType : null),
         annexure_file_name: primaryAnnexure?.original_name || null,
         annexure_storage_name: primaryAnnexure?.stored_name || null,
         annexure_file_path: primaryAnnexure?.file_path || null,
@@ -2470,7 +2470,7 @@ const FinanceApproval: React.FC = () => {
             size: row?.file_size !== null && row?.file_size !== undefined ? Number(row.file_size) : null,
           }));
         });
-        setAnnexureType(String((effectiveAnnexures[0] as any)?.annexure_type || ''));
+        setAnnexureType(String((effectiveAnnexures[0] as any)?.annexure_type || record.annexure_type || ''));
         if (annexureFileInputRef.current) {
           annexureFileInputRef.current.value = '';
         }
@@ -4444,6 +4444,8 @@ const FinanceApproval: React.FC = () => {
                 width: '100%',
                 maxWidth: '1200px',
                 boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+                pointerEvents: canEditStageRemark ? 'auto' : undefined,
+                userSelect: canEditStageRemark ? 'auto' : undefined,
               }}
             >
               <h5 style={{ margin: '0 0 16px', fontSize: '16px', color: '#0069ab', fontWeight: 600 }}>
