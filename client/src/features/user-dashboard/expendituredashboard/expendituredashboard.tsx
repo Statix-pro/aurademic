@@ -3,6 +3,7 @@ import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import "./expendituredashboard.css";
 import AddPayeeModal, { AddPayeeModalPayee } from '../../../shared/components/AddPayeeModal';
 import {
+  Info,
   Eye,
   Edit2,
   Trash2,
@@ -137,6 +138,34 @@ interface WorkflowRow {
   latestWorkflowState?: unknown;
   latestWorkflowStatus?: string;
   approvalLevel: number;
+}
+
+interface ExpenditureStatusUpdate {
+  id: number | string;
+  stage?: string | null;
+  role?: string | null;
+  status?: string | null;
+  decision?: string | null;
+  comment?: string | null;
+  feedback?: string | null;
+  summary?: string | null;
+  createdAt?: string | null;
+  decidedAt?: string | null;
+  userName?: string | null;
+  actorEmail?: string | null;
+  actorRole?: string | null;
+  isAdmin?: number | boolean | null;
+}
+
+interface ExpenditureLogEvent {
+  key: string;
+  badge: string;
+  title: string;
+  subtitle: string;
+  actorLabel: string;
+  actorValue: string;
+  actorBadgeLabel: string;
+  dateLabel: string;
 }
 
 const formatFY = (fyStart: number) => `${fyStart}-${String(fyStart + 1).slice(-2)}`;
@@ -361,6 +390,9 @@ const ExpenditureDashboard: React.FC = () => {
     title: "",
     message: "",
   });
+  const [activeInfoId, setActiveInfoId] = useState<number | null>(null);
+  const [loadingInfoId, setLoadingInfoId] = useState<number | null>(null);
+  const [statusUpdatesById, setStatusUpdatesById] = useState<Record<number, ExpenditureStatusUpdate[]>>({});
   const [showAddPayeeModal, setShowAddPayeeModal] = useState(false);
   const [isSubmittingPayee, setIsSubmittingPayee] = useState(false);
 
@@ -624,6 +656,143 @@ const ExpenditureDashboard: React.FC = () => {
 
   const formatAmount = (amount: number) =>
     `₹${Number(amount || 0).toLocaleString("en-IN")}`;
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const formatLogLabel = (value?: string | null) => {
+    const normalized = normalizeText(value);
+    if (!normalized) return "-";
+    return normalized.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  const getStageBadgeLabel = (stage?: string | null, actorRole?: string | null) => {
+    const stageToken = normalizeText(stage).toLowerCase();
+    const actorRoleToken = normalizeText(actorRole).toLowerCase();
+
+    if (stageToken === "submitted") return "Submitted";
+    if (stageToken === "level1") {
+      if (["coordinator", "entity_approver"].includes(actorRoleToken)) return "Coordinator";
+      return "HOD";
+    }
+    if (stageToken === "dof") return "DoF";
+    if (stageToken === "principal") return "Principal";
+    return formatLogLabel(stage);
+  };
+
+  const buildExpenditureLogEvents = (
+    item: ExpenditureItem,
+    updates: ExpenditureStatusUpdate[],
+  ): ExpenditureLogEvent[] => {
+    const formatActorIdentity = (
+      name?: string | null,
+      email?: string | null,
+      fallback?: string | null,
+    ) => {
+      const normalizedName = normalizeText(name);
+      const normalizedEmail = normalizeText(email);
+      const normalizedFallback = normalizeText(fallback);
+
+      if (normalizedName && normalizedEmail && normalizedName.toLowerCase() !== normalizedEmail.toLowerCase()) {
+        return `${normalizedName} (${normalizedEmail})`;
+      }
+      return normalizedName || normalizedEmail || normalizedFallback || "-";
+    };
+
+    return [...updates]
+      .sort((left, right) => {
+        const leftMs = Date.parse(normalizeText(left.createdAt || left.decidedAt)) || 0;
+        const rightMs = Date.parse(normalizeText(right.createdAt || right.decidedAt)) || 0;
+        if (leftMs !== rightMs) return leftMs - rightMs;
+        return Number(left.id || 0) - Number(right.id || 0);
+      })
+      .map((update, index) => {
+        const decision = normalizeText(update.decision || update.status).toLowerCase();
+        const isSubmitted = decision.includes("submitted");
+        const isReturned = decision.includes("returned");
+        const isRejected = decision.includes("rejected");
+        const isApproved = decision.includes("approved") || decision.includes("completed");
+        const isUpdated = decision === "updated";
+        const isAdmin = Boolean(update.isAdmin) ||
+          ["admin", "super_admin", "superadmin"].includes(normalizeText(update.actorRole).toLowerCase());
+        const stage = getStageBadgeLabel(update.stage || update.role, update.actorRole);
+
+        let badge = "UPDATED";
+        let title = "Request updated";
+        let actorLabel = "Updated By";
+
+        if (isSubmitted) {
+          badge = "SUBMITTED";
+          title = "Request submitted";
+          actorLabel = "Submitted By";
+        } else if (isReturned) {
+          badge = "RETURNED";
+          title = "Request returned";
+        } else if (isRejected) {
+          badge = "REJECTED";
+          title = "Request rejected";
+        } else if (isApproved) {
+          badge = "APPROVED";
+          title = "Request approved";
+        }
+
+        return {
+          key: `${update.id}-${index}`,
+          badge,
+          title,
+          subtitle: normalizeText(update.summary || update.feedback || update.comment) || "Status update",
+          actorLabel,
+          actorValue: formatActorIdentity(update.userName, update.actorEmail, update.actorRole || item.applicantname),
+          actorBadgeLabel: isUpdated && isAdmin ? "SUPERADMIN" : stage,
+          dateLabel: formatDateTime(update.createdAt || update.decidedAt || item.createdat),
+        };
+      });
+  };
+
+  const fetchStatusUpdates = async (requestId: number) => {
+    if (statusUpdatesById[requestId]) return;
+
+    try {
+      setLoadingInfoId(requestId);
+      const response = await authenticityUtility.get(`/expenditure/${requestId}/status-updates`) as {
+        status?: string;
+        data?: ExpenditureStatusUpdate[];
+      };
+
+      setStatusUpdatesById((prev) => ({
+        ...prev,
+        [requestId]: response.status === "success" ? response.data || [] : [],
+      }));
+    } catch (error) {
+      console.error("Failed to fetch expenditure status updates", error);
+      setStatusUpdatesById((prev) => ({ ...prev, [requestId]: [] }));
+    } finally {
+      setLoadingInfoId((prev) => (prev === requestId ? null : prev));
+    }
+  };
+
+  const handleInfoClick = async (requestId: number | null | undefined) => {
+    const normalizedRequestId = Number(requestId || 0);
+    if (!normalizedRequestId) return;
+
+    if (activeInfoId === normalizedRequestId) {
+      setActiveInfoId(null);
+      return;
+    }
+
+    setActiveInfoId(normalizedRequestId);
+    await fetchStatusUpdates(normalizedRequestId);
+  };
 
   const closeDialog = () => {
     setDialogConfig((prev) => ({
@@ -1427,6 +1596,7 @@ const ExpenditureDashboard: React.FC = () => {
   const fetchDashboard = async (preferredOpenCardId?: string | null) => {
     try {
       setLoading(true);
+      setStatusUpdatesById({});
 
       const fyStart = Number.parseInt(financialYear.split("-")[0], 10);
 
@@ -1506,6 +1676,13 @@ const ExpenditureDashboard: React.FC = () => {
       fetchDashboard();
     }
   }, [location.state, financialYear, navigate]);
+
+  const activeInfoItem = activeInfoId !== null
+    ? data.find((item) => item.id === activeInfoId) ?? null
+    : null;
+  const activeStatusUpdates = activeInfoId !== null ? statusUpdatesById[activeInfoId] || [] : [];
+  const activeLogEvents = activeInfoItem ? buildExpenditureLogEvents(activeInfoItem, activeStatusUpdates) : [];
+
   return (
     <section className="expenditure-page">
       <div className="expenditure-container">
@@ -1968,6 +2145,18 @@ const ExpenditureDashboard: React.FC = () => {
                                           </button>
                                         )}
 
+                                        {hasProposal && (
+                                          <button
+                                            type="button"
+                                            className="expenditure-demo-row__icon-btn"
+                                            onClick={() => handleInfoClick(row.latestRequestId)}
+                                            title="Logs"
+                                            aria-label="View request logs"
+                                          >
+                                            <Info size={14} />
+                                          </button>
+                                        )}
+
                                         {hasProposal && (() => {
                                           const rowStatusLabel = getRowWorkflowLabel(row);
 
@@ -2136,6 +2325,14 @@ const ExpenditureDashboard: React.FC = () => {
                             </button>
                             <button
                               type="button"
+                              title="Info"
+                              className="expenditure-action-global"
+                              onClick={() => handleInfoClick(item.id)}
+                            >
+                              <Info size={16} />
+                            </button>
+                            <button
+                              type="button"
                               title="Edit"
                               className="expenditure-action-global"
                               disabled={!isEditableWorkflowStatus(getRequestWorkflowStatus(item))}
@@ -2227,6 +2424,70 @@ const ExpenditureDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {activeInfoItem && (
+        <div className="expenditure-log-overlay" onClick={() => setActiveInfoId(null)}>
+          <div className="expenditure-log-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="expenditure-log-header">Submission Logs</div>
+            <div className="expenditure-log-body">
+              <div className="expenditure-log-summary">
+                <div className="expenditure-log-summary-row">
+                  <span className="expenditure-log-label">Request:</span>
+                  <span className="expenditure-log-value">
+                    {activeInfoItem.requestref || `#EX-${new Date(activeInfoItem.createdat).getFullYear()}-${String(activeInfoItem.id).padStart(4, "0")}`}
+                  </span>
+                </div>
+                <div className="expenditure-log-summary-row">
+                  <span className="expenditure-log-label">Submitted:</span>
+                  <span className="expenditure-log-value">{formatDateTime(activeInfoItem.createdat)}</span>
+                </div>
+              </div>
+
+              <div className="expenditure-log-timeline">
+                {loadingInfoId === activeInfoItem.id ? (
+                  <div className="expenditure-log-empty">Loading updates...</div>
+                ) : activeLogEvents.length > 0 ? (
+                  activeLogEvents.map((event) => (
+                    <div
+                      key={event.key}
+                      className={`expenditure-log-entry${event.actorBadgeLabel ? " expenditure-log-entry--stage" : ""}`}
+                    >
+                      <div className="expenditure-log-entry-top">
+                        <div className="expenditure-log-entry-title">
+                          <span className={`expenditure-log-badge expenditure-log-badge--${event.badge.toLowerCase()}`}>
+                            {event.badge}
+                          </span>
+                          <span className="expenditure-log-title-text">{event.title}</span>
+                        </div>
+                        {event.actorBadgeLabel && (
+                          <span className="expenditure-log-stage-pill">{event.actorBadgeLabel}</span>
+                        )}
+                      </div>
+                      <div className="expenditure-log-role">{event.subtitle}</div>
+                      <div className="expenditure-log-actor-line">
+                        <strong>{event.actorLabel}:</strong> {event.actorValue}
+                      </div>
+                      <div className="expenditure-log-date">{event.dateLabel}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="expenditure-log-empty">No updates found.</div>
+                )}
+              </div>
+
+              <div className="expenditure-log-footer">
+                <button
+                  type="button"
+                  className="expenditure-log-close-btn"
+                  onClick={() => setActiveInfoId(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Modal
         show={dialogConfig.show}

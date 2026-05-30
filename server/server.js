@@ -26,6 +26,7 @@ import documentsRoutes from './modules/events/documents/documentsRoutes.js';
 import accessControlRoutes from './modules/accessControl/accessControlRoutes.js';
 import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
 import budgetCatalogRoutes from './modules/budgetCatalog/budgetCatalogRoutes.js';
+import accountOptionsRoutes from './modules/accountOptions/accountOptionsRoutes.js';
 
 // Finance page
 import financePageRoutes from './modules/finance/financeRoutes.js';
@@ -153,6 +154,7 @@ app.use('/api/documents', documentsRoutes);
 app.use('/api/access-control', accessControlRoutes);
 app.use('/api/master-data', masterDataRoutes);
 app.use('/api/budget-catalog', budgetCatalogRoutes);
+app.use('/api/account-options', accountOptionsRoutes);
 
 /* ================= 404 HANDLER ================= */
 

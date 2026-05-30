@@ -23,6 +23,10 @@ import CustomToggle from '../../shared/components/ui/CustomToggle';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 import CustomModal from '../../shared/components/ui/CustomModal';
 import {
+  AccountOption,
+  fetchAccountOptions,
+} from '../../shared/utils/accountOptionsApi';
+import {
   formatDMY,
   numberToIndianWords,
   formatWorkflowTimestamp,
@@ -272,29 +276,6 @@ const toOptions = (items: string[]): OptionType[] =>
 
 const CONTRIBUTION_OPTIONS = ['Full', 'Partial'];
 const STATUS_OPTIONS = ['Credited', 'Reimbursement'];
-const CREDIT_ACCOUNT_OPTIONS = [
-  'PRINCIPAL GNERAL A/C | 0751301000015840',
-  'KSRCT-PRINCIPAL COMMON A/C | 0751301000264891',
-  'PRINCIPAL SCHOLARSHIP A/C | 0751301000001328',
-  'PRINCIPAL KSRCT ASSOCIATION ACCOUNT | 0751301000028594',
-  'STAFF CLUB A/C | 0751301000005664',
-  'SOCIETY OF AUTOMOTIVE ENGINEERS (SAE) CLUB KSRCTA/C | 0751301000021422',
-  'KSRCT IETE CHAPTER A/C | 0751301000265626',
-  'KSRCT CIVIL SERB NPDF | 0751301000264860',
-  'KSRCT CIVIL SERB NPDF 2 | 0751301000265593',
-  'K S RANGASAMY COLLEGE OF TECHNOLOGY AUTONOMOUS | 0751302000000224',
-  'KSRCT-CNST A/C | 0751301000045784',
-  'CSI CHAPTER BRANCH OF KSRCT A/C | 0751301000185368',
-  'KSRCT NSS CORPUS FUND | 0751301000047863',
-  'PRINCIPAL NSS UNIT KSRCT | 0751301000004545',
-  'IEEE Student KSRCT | 0751301000059822',
-  'ISTE Student Chapter KSRCT | 0751301000023696',
-  'KSRCT RPS AICTE Project | 0075133800000643',
-  'KSRCT ECE SERB CRG PROJECT | 923010005584584',
-  'K S RANGASAMY COLLEGE OF TECHNOLOGY CONTROLLER OF EXAMINATIONS | 925010007523846',
-  'KSRCT CONTROLLER OF EXAMINATIONS | CASH',
-];
-
 const ANNEXURE_TYPE_OPTIONS = [
   'Proforma Invoice',
   'Invoice',
@@ -840,6 +821,7 @@ const FinanceApproval: React.FC = () => {
   ]);
   const [showIncomeSection, setShowIncomeSection] = useState<boolean>(false);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([createIncomeRow()]);
+  const [accountOptions, setAccountOptions] = useState<AccountOption[]>([]);
   const [budgetLineMetaByRow, setBudgetLineMetaByRow] = useState<Record<number, BudgetLineMeta>>({});
   const [statusUpdates, setStatusUpdates] = useState<any[]>([]);
   const [proposalRef, setProposalRef] = useState<string>('');
@@ -1437,6 +1419,25 @@ const FinanceApproval: React.FC = () => {
           : row
       )
     );
+
+  const accountDropdownOptions = accountOptions.map((account) => ({
+    value: account.name,
+    label: account.name,
+    id: account.id,
+  }));
+
+  const loadAccountOptionsFromApi = async () => {
+    try {
+      setAccountOptions(await fetchAccountOptions());
+    } catch (error) {
+      console.error('Failed to load account options', error);
+    }
+  };
+
+  useEffect(() => {
+    void loadAccountOptionsFromApi();
+  }, []);
+
   const createAnnexureRowId = () => `annexure-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
 
   const handleAnnexureFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -4220,9 +4221,9 @@ const FinanceApproval: React.FC = () => {
                                         <div style={{ flex: 1 }}>
                                           <CustomDropdown
                                             name={`creditAccount-${row.id}`}
-                                            options={toOptions(CREDIT_ACCOUNT_OPTIONS)}
+                                            options={accountDropdownOptions}
                                             className="mb-0"
-                                            value={getSelectedOption(row.creditAccount, toOptions(CREDIT_ACCOUNT_OPTIONS))}
+                                            value={getSelectedOption(row.creditAccount, accountDropdownOptions)}
                                             onChange={(option) => {
                                               const selected = option as OptionType | null;
                                               handleIncomeRowChange(row.id, "creditAccount", selected?.value ? String(selected.value) : "");
