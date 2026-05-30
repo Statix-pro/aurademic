@@ -1555,6 +1555,164 @@
   transform: translateY(-1px);
 }
 
+.expenditure-log-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(15, 23, 42, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.expenditure-log-modal {
+  width: min(720px, 100%);
+  max-height: min(82vh, 760px);
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.expenditure-log-header {
+  padding: 18px 22px;
+  background: #0069ab;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.expenditure-log-body {
+  padding: 18px 22px 20px;
+  overflow-y: auto;
+}
+
+.expenditure-log-summary {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid #e5edf5;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.expenditure-log-summary-row,
+.expenditure-log-entry-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.expenditure-log-label {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.expenditure-log-value {
+  color: #0f172a;
+  font-weight: 700;
+  text-align: right;
+}
+
+.expenditure-log-timeline {
+  display: grid;
+  gap: 12px;
+}
+
+.expenditure-log-entry {
+  border: 1px solid #e5edf5;
+  border-radius: 8px;
+  padding: 13px;
+  background: #ffffff;
+}
+
+.expenditure-log-entry-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.expenditure-log-badge {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #ffffff;
+  background: #64748b;
+}
+
+.expenditure-log-badge--submitted {
+  background: #0069ab;
+}
+
+.expenditure-log-badge--approved {
+  background: #15803d;
+}
+
+.expenditure-log-badge--returned {
+  background: #d97706;
+}
+
+.expenditure-log-badge--rejected {
+  background: #dc2626;
+}
+
+.expenditure-log-badge--updated {
+  background: #475569;
+}
+
+.expenditure-log-title-text {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.expenditure-log-stage-pill {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0069ab;
+  background: #eaf5ff;
+}
+
+.expenditure-log-role,
+.expenditure-log-actor-line,
+.expenditure-log-date,
+.expenditure-log-empty {
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.expenditure-log-date {
+  text-align: right;
+  color: #475569;
+  font-weight: 600;
+}
+
+.expenditure-log-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.expenditure-log-close-btn {
+  border: 0;
+  border-radius: 8px;
+  background: #0069ab;
+  color: #ffffff;
+  padding: 9px 18px;
+  font-weight: 700;
+}
+
 .expenditure-dialog-modal .modal-dialog {
   max-width: 420px;
 }

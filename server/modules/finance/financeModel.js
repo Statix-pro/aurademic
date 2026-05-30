@@ -2943,6 +2943,51 @@ const financeModel = {
 
   async getStatusUpdates(financeId) {
     try {
+      const [requestRows] = await db.query(
+        `SELECT
+          fr.id AS finance_id,
+          fr.created_by AS user_id,
+          fr.created_at,
+          COALESCE(
+            NULLIF(
+              TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))),
+              ''
+            ),
+            NULLIF(TRIM(fr.applicant_name), ''),
+            u.name,
+            fr.email
+          ) AS user_name,
+          COALESCE(NULLIF(TRIM(u.email), ''), NULLIF(TRIM(fr.email), '')) AS actor_email
+         FROM finance_requests fr
+         LEFT JOIN users u ON u.id = fr.created_by
+         LEFT JOIN master_employees emp
+           ON emp.email COLLATE utf8mb4_unicode_ci =
+              COALESCE(NULLIF(TRIM(u.email), ''), NULLIF(TRIM(fr.email), '')) COLLATE utf8mb4_unicode_ci
+         WHERE fr.id = ?
+         LIMIT 1`,
+        [financeId]
+      );
+
+      const submissionRows = requestRows.map((row) => ({
+        id: -Number(financeId),
+        finance_id: row.finance_id,
+        user_id: row.user_id,
+        role: 'submitted',
+        stage: 'submitted',
+        status: 'submitted',
+        decision: 'submitted',
+        comment: 'Initial finance request submitted',
+        feedback: 'Initial finance request submitted',
+        created_at: row.created_at,
+        decided_at: row.created_at,
+        user_name: row.user_name,
+        actor_email: row.actor_email,
+        actor_role: 'user',
+        snapshot_before: null,
+        meta: null,
+        details: null,
+      }));
+
       const [workflowRows] = await db.query(
         `SELECT
           wa.id,
@@ -3020,7 +3065,7 @@ const financeModel = {
         }
       }
 
-      const merged = [...workflowRows, ...editRows].sort((left, right) => {
+      const merged = [...submissionRows, ...workflowRows, ...editRows].sort((left, right) => {
         const leftTime = new Date(left.decided_at || left.created_at || 0).getTime();
         const rightTime = new Date(right.decided_at || right.created_at || 0).getTime();
 

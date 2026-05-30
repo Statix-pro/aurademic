@@ -548,7 +548,11 @@ const FinanceCard: React.FC = () => {
       return normalizedFallback || '-';
     };
 
-    const events: FinanceLogEvent[] = [{
+    const hasSubmittedUpdate = updates.some((update) =>
+      String(update.decision || update.status || '').toLowerCase().includes('submitted')
+    );
+
+    const events: FinanceLogEvent[] = hasSubmittedUpdate ? [] : [{
       key: `created-${item.id}`,
       badge: 'SUBMITTED',
       title: 'Proposal created',

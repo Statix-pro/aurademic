@@ -49,6 +49,10 @@ import AddPayeeModal, {
   AddPayeeModalPayee,
 } from "../../shared/components/AddPayeeModal";
 import { useAuth } from "../../contexts/AuthContext";
+import {
+  AccountOption,
+  fetchAccountOptions,
+} from "../../shared/utils/accountOptionsApi";
 
 interface SelectOption {
   value: string;
@@ -357,29 +361,6 @@ const toOptions = (items: string[]): OptionType[] =>
   items.map((item) => ({ value: item, label: item }));
 const CONTRIBUTION_OPTIONS = ["Full", "Partial"];
 const STATUS_OPTIONS = ["Credited", "Reimbursement"];
-const CREDIT_ACCOUNT_OPTIONS = [
-  "PRINCIPAL GNERAL A/C | 0751301000015840",
-  "KSRCT-PRINCIPAL COMMON A/C | 0751301000264891",
-  "PRINCIPAL SCHOLARSHIP A/C | 0751301000001328",
-  "PRINCIPAL KSRCT ASSOCIATION ACCOUNT | 0751301000028594",
-  "STAFF CLUB A/C | 0751301000005664",
-  "SOCIETY OF AUTOMOTIVE ENGINEERS (SAE) CLUB KSRCTA/C | 0751301000021422",
-  "KSRCT IETE CHAPTER A/C | 0751301000265626",
-  "KSRCT CIVIL SERB NPDF | 0751301000264860",
-  "KSRCT CIVIL SERB NPDF 2 | 0751301000265593",
-  "K S RANGASAMY COLLEGE OF TECHNOLOGY AUTONOMOUS | 0751302000000224",
-  "KSRCT-CNST A/C | 0751301000045784",
-  "CSI CHAPTER BRANCH OF KSRCT A/C | 0751301000185368",
-  "KSRCT NSS CORPUS FUND | 0751301000047863",
-  "PRINCIPAL NSS UNIT KSRCT | 0751301000004545",
-  "IEEE Student KSRCT | 0751301000059822",
-  "ISTE Student Chapter KSRCT | 0751301000023696",
-  "KSRCT RPS AICTE Project | 0075133800000643",
-  "KSRCT ECE SERB CRG PROJECT | 923010005584584",
-  "K S RANGASAMY COLLEGE OF TECHNOLOGY CONTROLLER OF EXAMINATIONS | 925010007523846",
-  "KSRCT CONTROLLER OF EXAMINATIONS | CASH",
-];
-const DEBIT_ACCOUNT_OPTIONS = CREDIT_ACCOUNT_OPTIONS;
 const CATEGORY_TYPE_OPTIONS = [
   "Faculty",
   "Staff",
@@ -572,7 +553,6 @@ const getSelectedOption = (
 ): OptionType | null =>
   flattenOptions(options).find((opt) => String(opt.value) === String(value)) ??
   null;
-
 
 const BUDGET_SELECT_STYLES = {
   control: (base: any, state: any) => ({
@@ -969,6 +949,7 @@ const ExpenditureApproval: React.FC = () => {
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([
     createIncomeRow(),
   ]);
+  const [accountOptions, setAccountOptions] = useState<AccountOption[]>([]);
   const [payeeRows, setPayeeRows] = useState<PayeeRow[]>([createPayeeRow()]);
   const [activePayeeLookupRowId, setActivePayeeLookupRowId] = useState<
     string | null
@@ -2127,6 +2108,78 @@ const workflowRowRefFromState = (() => {
     }));
   };
 
+  const getApprovedBudgetHeadSearchOptions = (): OptionType[] => {
+    const options: OptionType[] = [];
+    const seen = new Set<string>();
+
+    approvedBudgetOptions.forEach((budget) => {
+      const head = String(budget.head || "").trim();
+      const subHead = String(budget.subHead || "").trim();
+      if (!head) return;
+
+      const headKey = `head::${normalizeBudgetToken(head)}`;
+      if (!seen.has(headKey)) {
+        seen.add(headKey);
+        options.push({
+          value: `head::${head}`,
+          label: head,
+          budgetHead: head,
+          subHead: "",
+        });
+      }
+
+      if (!subHead) return;
+      const subKey = `sub::${normalizeBudgetToken(head)}::${normalizeBudgetToken(subHead)}`;
+      if (seen.has(subKey)) return;
+      seen.add(subKey);
+      options.push({
+        value: `sub::${head}::${subHead}`,
+        label: `${subHead} (${head})`,
+        budgetHead: head,
+        subHead,
+        budgetLineId: budget.budgetLineId,
+        budgetProposalId: budget.budgetProposalId,
+      });
+    });
+
+    return options;
+  };
+
+  const getApprovedBudgetHeadSelectedOption = (
+    budgetHead: string | number,
+    subHead: string | number,
+  ): OptionType | null => {
+    const options = getApprovedBudgetHeadSearchOptions();
+    const normalizedHead = normalizeBudgetToken(budgetHead);
+    const normalizedSubHead = normalizeBudgetToken(subHead);
+
+    if (normalizedHead && normalizedSubHead) {
+      const matchedSubHead = options.find(
+        (option) =>
+          normalizeBudgetToken(option.budgetHead) === normalizedHead &&
+          normalizeBudgetToken(option.subHead) === normalizedSubHead,
+      );
+      if (matchedSubHead) return matchedSubHead;
+    }
+
+    return (
+      options.find(
+        (option) =>
+          normalizeBudgetToken(option.budgetHead) === normalizedHead &&
+          !normalizeBudgetToken(option.subHead),
+      ) || null
+    );
+  };
+
+  const filterApprovedBudgetHeadOption = (candidate: any, input: string) => {
+    const query = normalizeBudgetToken(input);
+    if (!query) return true;
+    const option = candidate?.data || {};
+    return [option.label, option.budgetHead, option.subHead]
+      .map((value) => normalizeBudgetToken(value))
+      .some((value) => value.includes(query));
+  };
+
   const getApprovedSubHeadOptionsForAdvance = (
     budgetHead: string | number,
   ): OptionType[] => {
@@ -2414,6 +2467,39 @@ const workflowRowRefFromState = (() => {
     );
   };
 
+  const handleAdvanceBudgetHeadSearchChange = async (
+    rowId: string,
+    selected: OptionType | null,
+  ) => {
+    const budgetHeadValue = String(selected?.budgetHead || selected?.value || "")
+      .replace(/^head::/, "")
+      .trim();
+    const subHeadValue = String(selected?.subHead || "").trim();
+
+    if (!subHeadValue) {
+      handleAdvanceBudgetHeadChange(rowId, budgetHeadValue);
+      return;
+    }
+
+    const selectedBudget = findApprovedBudgetOption(budgetHeadValue, subHeadValue);
+    updateAdvanceRow(rowId, (row) => ({
+      ...row,
+      budgetHead: budgetHeadValue,
+      subHead: subHeadValue,
+      budget: getApprovedBudgetAmount(selectedBudget),
+      preAdvance: "",
+      budgetLineId: selectedBudget?.budgetLineId ?? null,
+      budgetProposalId: selectedBudget?.budgetProposalId ?? null,
+    }));
+
+    await loadPreAdvanceSummary(
+      rowId,
+      selectedBudget?.budgetLineId ?? null,
+      budgetHeadValue,
+      subHeadValue,
+    );
+  };
+
   const handleSettlementBudgetHeadChange = (
     rowId: string,
     budgetHeadValue: string,
@@ -2448,6 +2534,31 @@ const workflowRowRefFromState = (() => {
     }));
   };
 
+  const handleSettlementBudgetHeadSearchChange = (
+    rowId: string,
+    selected: OptionType | null,
+  ) => {
+    const budgetHeadValue = String(selected?.budgetHead || selected?.value || "")
+      .replace(/^head::/, "")
+      .trim();
+    const subHeadValue = String(selected?.subHead || "").trim();
+
+    if (!subHeadValue) {
+      handleSettlementBudgetHeadChange(rowId, budgetHeadValue);
+      return;
+    }
+
+    const selectedBudget = findApprovedBudgetOption(budgetHeadValue, subHeadValue);
+    updateSettlementRow(rowId, (row) => ({
+      ...row,
+      budgetHead: budgetHeadValue,
+      subHead: subHeadValue,
+      budget: getApprovedBudgetAmount(selectedBudget),
+      budgetLineId: selectedBudget?.budgetLineId ?? null,
+      budgetProposalId: selectedBudget?.budgetProposalId ?? null,
+    }));
+  };
+
   const handleExpenditureBudgetHeadChange = (
     rowId: string,
     budgetHeadValue: string,
@@ -2475,6 +2586,31 @@ const workflowRowRefFromState = (() => {
 
     updateExpenditureRow(rowId, (currentRow) => ({
       ...currentRow,
+      subHead: subHeadValue,
+      budget: getApprovedBudgetAmount(selectedBudget),
+      budgetLineId: selectedBudget?.budgetLineId ?? null,
+      budgetProposalId: selectedBudget?.budgetProposalId ?? null,
+    }));
+  };
+
+  const handleExpenditureBudgetHeadSearchChange = (
+    rowId: string,
+    selected: OptionType | null,
+  ) => {
+    const budgetHeadValue = String(selected?.budgetHead || selected?.value || "")
+      .replace(/^head::/, "")
+      .trim();
+    const subHeadValue = String(selected?.subHead || "").trim();
+
+    if (!subHeadValue) {
+      handleExpenditureBudgetHeadChange(rowId, budgetHeadValue);
+      return;
+    }
+
+    const selectedBudget = findApprovedBudgetOption(budgetHeadValue, subHeadValue);
+    updateExpenditureRow(rowId, (row) => ({
+      ...row,
+      budgetHead: budgetHeadValue,
       subHead: subHeadValue,
       budget: getApprovedBudgetAmount(selectedBudget),
       budgetLineId: selectedBudget?.budgetLineId ?? null,
@@ -3035,6 +3171,24 @@ const evaluateArithmeticExpression = (input: string) => {
     );
   };
 
+  const accountDropdownOptions = accountOptions.map((account) => ({
+    value: account.name,
+    label: account.name,
+    id: account.id,
+  }));
+
+  const loadAccountOptionsFromApi = async () => {
+    try {
+      setAccountOptions(await fetchAccountOptions());
+    } catch (error) {
+      console.error("Failed to load account options", error);
+    }
+  };
+
+  useEffect(() => {
+    void loadAccountOptionsFromApi();
+  }, []);
+
   const totalBudget = budgetRows.reduce(
     (sum, row) => sum + Number(row.amount || 0),
     0,
@@ -3203,19 +3357,19 @@ const evaluateArithmeticExpression = (input: string) => {
         {showDebitAccountDropdown && (
           <CustomDropdown
             name="debitAccount"
-            options={toOptions(DEBIT_ACCOUNT_OPTIONS)}
-                      value={getSelectedOption(
-                        paymentDetails.debitAccount,
-                        toOptions(DEBIT_ACCOUNT_OPTIONS),
-                      )}
-                      onChange={(option) =>
-                        setPaymentDetails({
-                          ...paymentDetails,
-                          debitAccount: String(
-                            (option as OptionType)?.value || "",
-                          ),
-                        })
-                      }
+            options={accountDropdownOptions}
+            value={getSelectedOption(
+              paymentDetails.debitAccount,
+              accountDropdownOptions,
+            )}
+            onChange={(option) =>
+              setPaymentDetails({
+                ...paymentDetails,
+                debitAccount: String(
+                  (option as OptionType)?.value || "",
+                ),
+              })
+            }
             placeholder="Select debit account"
             className="mb-0"
           />
@@ -3535,10 +3689,10 @@ const evaluateArithmeticExpression = (input: string) => {
                 {showDebitAccountDropdown && (
                   <CustomDropdown
                     name="debitAccount"
-                    options={toOptions(DEBIT_ACCOUNT_OPTIONS)}
+                    options={accountDropdownOptions}
                     value={getSelectedOption(
                       paymentDetails.debitAccount,
-                      toOptions(DEBIT_ACCOUNT_OPTIONS),
+                      accountDropdownOptions,
                     )}
                     onChange={(option) =>
                       setPaymentDetails({
@@ -5739,17 +5893,18 @@ const handleBeneficiarySearch = async (query: string) => {
                         >
                           <CustomDropdown
                             className="mb-0"
-                            options={getApprovedBudgetHeadsForAdvance()}
-                            value={getSelectedOption(
+                            options={getApprovedBudgetHeadSearchOptions()}
+                            value={getApprovedBudgetHeadSelectedOption(
                               row.budgetHead,
-                              getApprovedBudgetHeadsForAdvance(),
+                              row.subHead,
                             )}
-                            onChange={(option) => {
-                              const val = String(
-                                (option as OptionType)?.value || "",
-                              );
-                              handleAdvanceBudgetHeadChange(row.id, val);
-                            }}
+                            onChange={(option) =>
+                              void handleAdvanceBudgetHeadSearchChange(
+                                row.id,
+                                option as OptionType | null,
+                              )
+                            }
+                            filterOption={filterApprovedBudgetHeadOption}
                             placeholder={
                               isApprovedBudgetLoading
                                 ? "Loading..."
@@ -6144,17 +6299,18 @@ const handleBeneficiarySearch = async (query: string) => {
                       >
                         <CustomDropdown
                           className="mb-0"
-                          options={getApprovedBudgetHeadsForAdvance()}
-                          value={getSelectedOption(
+                          options={getApprovedBudgetHeadSearchOptions()}
+                          value={getApprovedBudgetHeadSelectedOption(
                             row.budgetHead,
-                            getApprovedBudgetHeadsForAdvance(),
+                            row.subHead,
                           )}
-                          onChange={(option) => {
-                            const val = String(
-                              (option as OptionType)?.value || "",
-                            );
-                            handleSettlementBudgetHeadChange(row.id, val);
-                          }}
+                          onChange={(option) =>
+                            handleSettlementBudgetHeadSearchChange(
+                              row.id,
+                              option as OptionType | null,
+                            )
+                          }
+                          filterOption={filterApprovedBudgetHeadOption}
                           placeholder={
                             isApprovedBudgetLoading
                               ? "Loading..."
@@ -6521,17 +6677,18 @@ const handleBeneficiarySearch = async (query: string) => {
                         >
                   <CustomDropdown
                     className="mb-0"
-                    options={getApprovedBudgetHeadsForAdvance()}
-                            value={getSelectedOption(
+                    options={getApprovedBudgetHeadSearchOptions()}
+                            value={getApprovedBudgetHeadSelectedOption(
                               row.budgetHead,
-                              getApprovedBudgetHeadsForAdvance(),
+                              row.subHead,
                             )}
-                    onChange={(option) => {
-                              const val = String(
-                                (option as OptionType)?.value || "",
-                              );
-                      handleExpenditureBudgetHeadChange(row.id, val);
-                    }}
+                    onChange={(option) =>
+                      handleExpenditureBudgetHeadSearchChange(
+                        row.id,
+                        option as OptionType | null,
+                      )
+                    }
+                    filterOption={filterApprovedBudgetHeadOption}
                             placeholder={
                               isApprovedBudgetLoading
                                 ? "Loading..."

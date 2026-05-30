@@ -1160,15 +1160,34 @@ const financeController = {
         });
       }
 
-      const rawTimeline = await workflowService.getTimeline({
-        moduleKey: 'finance',
-        recordId: financeId,
-      });
+      const rawTimeline = await financeModel.getStatusUpdates(financeId);
       const timeline = filterEntriesForCurrentCycle(rawTimeline, finance);
+      const timelineCompatible = timeline.map((row) => ({
+        id: row.id,
+        moduleKey: 'finance',
+        recordId: row.finance_id,
+        stage: row.stage || row.role || null,
+        decision: row.decision || row.status || null,
+        feedback: row.feedback ?? row.comment ?? null,
+        actorUserId: row.user_id || null,
+        actorEmail: row.actor_email || null,
+        actorRole: row.actor_role || null,
+        decidedAt: row.decided_at || row.created_at || null,
+        snapshotBefore: row.snapshot_before || null,
+        meta: row.meta || null,
+        summary: row.summary ?? row.comment ?? row.feedback ?? null,
+        details: row.details ?? null,
+        isAdmin: row.is_admin ?? null,
+        role: row.role || null,
+        status: row.status || null,
+        comment: row.comment ?? row.feedback ?? null,
+        createdAt: row.created_at || null,
+        userName: row.user_name || null,
+      }));
 
       return res.status(200).json({
         status: 'success',
-        data: timeline,
+        data: timelineCompatible,
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in getFinanceTimeline');

@@ -3857,6 +3857,51 @@ export async function getCurrentEmployee(userId) {
 // ─── Timeline / status history ────────────────────────────────────────────────
 
 export async function getStatusUpdates(expenditureId) {
+  const [requestRows] = await db.execute(
+    `SELECT
+       er.id AS expenditure_id,
+       er.created_by AS user_id,
+       er.created_at,
+       COALESCE(
+         NULLIF(TRIM(CONCAT(
+           COALESCE(emp.title,''),' ',
+           COALESCE(emp.first_name,''),' ',
+           COALESCE(emp.last_name,'')
+         )),''),
+         NULLIF(TRIM(er.applicant_name), ''),
+         u.name,
+         er.email
+       ) AS actor_name,
+       COALESCE(NULLIF(TRIM(u.email), ''), NULLIF(TRIM(er.email), '')) AS actor_email
+     FROM expenditure_requests er
+     LEFT JOIN users u ON u.id = er.created_by
+     LEFT JOIN master_employees emp
+       ON emp.email COLLATE utf8mb4_unicode_ci =
+          COALESCE(NULLIF(TRIM(u.email), ''), NULLIF(TRIM(er.email), '')) COLLATE utf8mb4_unicode_ci
+     WHERE er.id = ?
+     LIMIT 1`,
+    [expenditureId],
+  );
+
+  const submissionRows = requestRows.map((row) => ({
+    id: -Number(expenditureId),
+    expenditure_id: row.expenditure_id,
+    user_id: row.user_id,
+    stage: 'submitted',
+    status: 'submitted',
+    decision: 'submitted',
+    comment: 'Initial expenditure request submitted',
+    feedback: 'Initial expenditure request submitted',
+    created_at: row.created_at,
+    decided_at: row.created_at,
+    actor_email: row.actor_email,
+    actor_role: 'user',
+    actor_name: row.actor_name,
+    snapshot_before: null,
+    meta: null,
+    details: null,
+  }));
+
   const [workflowRows] = await db.execute(
     `SELECT
        wa.id,
@@ -3900,7 +3945,7 @@ export async function getStatusUpdates(expenditureId) {
     if (err?.code !== 'ER_NO_SUCH_TABLE') throw err;
   }
 
-  return [...workflowRows, ...editRows].sort((a, b) => {
+  return [...submissionRows, ...workflowRows, ...editRows].sort((a, b) => {
     const ta = new Date(a.decided_at || a.created_at || 0).getTime();
     const tb = new Date(b.decided_at || b.created_at || 0).getTime();
     return ta !== tb ? ta - tb : (Number(a.id) || 0) - (Number(b.id) || 0);

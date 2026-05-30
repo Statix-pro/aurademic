@@ -10,9 +10,16 @@ import {
     BudgetSubHead,
     refreshBudgetCatalog,
 } from '../../../shared/hooks/useBudgetCatalog';
+import {
+    AccountOption,
+    createAccountOption,
+    deleteAccountOption,
+    fetchAccountOptions,
+    updateAccountOption,
+} from '../../../shared/utils/accountOptionsApi';
 import './BudgetCatalogPage.css';
 
-type TabKey = 'heads' | 'sub-heads' | 'tags';
+type TabKey = 'heads' | 'sub-heads' | 'tags' | 'accounts';
 type Scope = 'head-specific' | 'hoac-shared';
 
 interface HeadForm {
@@ -47,8 +54,14 @@ interface TagForm {
     sort_order: number;
 }
 
+interface AccountForm {
+    id?: number;
+    name: string;
+}
+
 const EMPTY_HEAD: HeadForm = { name: '', code: '', group_label: '', sort_order: 0 };
 const EMPTY_TAG: TagForm = { tag_name: '', sort_order: 0 };
+const EMPTY_ACCOUNT: AccountForm = { name: '' };
 const EMPTY_SUB: SubHeadForm = {
     name: '',
     code: '',
@@ -63,6 +76,7 @@ function BudgetCatalogPage() {
     const [activeTab, setActiveTab] = useState<TabKey>('heads');
     const [catalog, setCatalog] = useState<BudgetCatalog | null>(null);
     const [tags, setTags] = useState<BudgetTag[]>([]);
+    const [accounts, setAccounts] = useState<AccountOption[]>([]);
     const [loading, setLoading] = useState(true);
     const [alert, setAlert] = useState<{ open: boolean; type: AlertType; title: string; message: string }>({
         open: false,
@@ -94,9 +108,14 @@ function BudgetCatalogPage() {
         open: false,
         data: EMPTY_TAG,
     });
+    const [accountModal, setAccountModal] = useState<{ open: boolean; data: AccountForm }>({
+        open: false,
+        data: EMPTY_ACCOUNT,
+    });
     const [headFilter, setHeadFilter] = useState('');
     const [subFilter, setSubFilter] = useState('');
     const [tagFilter, setTagFilter] = useState('');
+    const [accountFilter, setAccountFilter] = useState('');
     const [scopeFilter, setScopeFilter] = useState<Scope | 'all'>('all');
 
     const showAlert = (type: AlertType, title: string, message: string) =>
@@ -105,13 +124,14 @@ function BudgetCatalogPage() {
     const load = async () => {
         setLoading(true);
         try {
-            const [res, tagRes] = await Promise.all([
+            const [res, tagRes, accountRes] = await Promise.all([
                 authenticityUtility.get('/budget-catalog', {
                     params: { includeInactive: true },
                 }),
                 authenticityUtility.get('/budget-catalog/tags', {
                     params: { includeInactive: true },
                 }),
+                fetchAccountOptions(),
             ]);
             const data = (res.data?.data ?? res.data) as BudgetCatalog;
             setCatalog({
@@ -120,6 +140,7 @@ function BudgetCatalogPage() {
             });
             const tagData = tagRes.data?.data ?? tagRes.data;
             setTags(Array.isArray(tagData) ? tagData : []);
+            setAccounts(accountRes);
         } catch (err: any) {
             showAlert('error', 'Load failed', err?.message || 'Could not load budget catalog');
         } finally {
@@ -161,6 +182,14 @@ function BudgetCatalogPage() {
             .filter((tag) => !q || tag.tag_name.toLowerCase().includes(q))
             .sort((a, b) => collator.compare(a.tag_name, b.tag_name));
     }, [tags, tagFilter]);
+
+    const filteredAccounts = useMemo(() => {
+        const q = accountFilter.trim().toLowerCase();
+        const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
+        return accounts
+            .filter((account) => !q || account.name.toLowerCase().includes(q))
+            .sort((a, b) => collator.compare(a.name, b.name));
+    }, [accounts, accountFilter]);
 
     const groupedHeads = useMemo(() => {
         const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
@@ -471,6 +500,52 @@ function BudgetCatalogPage() {
         }
     };
 
+    // -------- Account CRUD --------
+    const openCreateAccount = () =>
+        setAccountModal({ open: true, data: { ...EMPTY_ACCOUNT } });
+
+    const openEditAccount = (account: AccountOption) =>
+        setAccountModal({ open: true, data: { id: account.id, name: account.name } });
+
+    const submitAccount = async () => {
+        const name = accountModal.data.name.trim();
+        if (!name) {
+            showAlert('error', 'Validation', 'Account name is required');
+            return;
+        }
+
+        try {
+            if (accountModal.data.id) {
+                await updateAccountOption(accountModal.data.id, name);
+                showAlert('success', 'Updated', 'Account option updated');
+            } else {
+                await createAccountOption(name);
+                showAlert('success', 'Created', 'Account option created');
+            }
+            setAccountModal({ open: false, data: EMPTY_ACCOUNT });
+            setAccounts(await fetchAccountOptions());
+        } catch (err: any) {
+            showAlert('error', 'Failed', err?.response?.data?.message || err?.message || 'Save failed');
+        }
+    };
+
+    const deleteAccount = async (account: AccountOption) => {
+        setDeleteConfirm({
+            open: true,
+            title: 'Delete account',
+            message: `Delete account "${account.name}"? Finance and Expenditure records keep their saved account text.`,
+            onConfirm: async () => {
+                try {
+                    await deleteAccountOption(account.id);
+                    showAlert('success', 'Deleted', 'Account option deleted');
+                    setAccounts(await fetchAccountOptions());
+                } catch (err: any) {
+                    showAlert('error', 'Failed', err?.response?.data?.message || err?.message || 'Delete failed');
+                }
+            },
+        });
+    };
+
     const headOptions = heads.filter((h) => h.is_active);
     const headSelectOptions = useMemo(() => {
         const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
@@ -528,6 +603,9 @@ function BudgetCatalogPage() {
                 </Nav.Item>
                 <Nav.Item>
                     <Nav.Link eventKey="tags">Tags ({tags.length})</Nav.Link>
+                </Nav.Item>
+                <Nav.Item>
+                    <Nav.Link eventKey="accounts">Accounts ({accounts.length})</Nav.Link>
                 </Nav.Item>
             </Nav>
 
@@ -713,7 +791,7 @@ function BudgetCatalogPage() {
                         </tbody>
                     </Table>
                 </>
-            ) : (
+            ) : activeTab === 'tags' ? (
                 <>
                     <div className="d-flex gap-2 mb-3">
                         <Form.Control
@@ -771,6 +849,62 @@ function BudgetCatalogPage() {
                                 <tr>
                                     <td colSpan={3} className="text-center text-muted py-4">
                                         No tags found.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </Table>
+                </>
+            ) : (
+                <>
+                    <div className="d-flex gap-2 mb-3">
+                        <Form.Control
+                            placeholder="Search accounts..."
+                            value={accountFilter}
+                            onChange={(e) => setAccountFilter(e.target.value)}
+                            style={{ maxWidth: 360 }}
+                        />
+                        <Button onClick={openCreateAccount}>
+                            <Plus size={16} /> New account
+                        </Button>
+                    </div>
+                    <Table hover bordered size="sm">
+                        <thead>
+                            <tr>
+                                <th>Account</th>
+                                <th style={{ width: 90 }}>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredAccounts.map((account) => (
+                                <tr key={account.id}>
+                                    <td>{account.name}</td>
+                                    <td>
+                                        <Button
+                                            size="sm"
+                                            variant="light"
+                                            className="budget-catalog-icon-btn d-inline-flex align-items-center justify-content-center me-2"
+                                            onClick={() => openEditAccount(account)}
+                                            title="Edit"
+                                        >
+                                            <Pencil size={16} />
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="light"
+                                            className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
+                                            onClick={() => deleteAccount(account)}
+                                            title="Delete"
+                                        >
+                                            <Trash2 size={16} color="#dc3545" />
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {filteredAccounts.length === 0 && (
+                                <tr>
+                                    <td colSpan={2} className="text-center text-muted py-4">
+                                        No accounts found.
                                     </td>
                                 </tr>
                             )}
@@ -990,6 +1124,31 @@ function BudgetCatalogPage() {
                         Cancel
                     </Button>
                     <Button onClick={submitTag}>Save</Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* ACCOUNT MODAL */}
+            <Modal show={accountModal.open} onHide={() => setAccountModal({ open: false, data: EMPTY_ACCOUNT })}>
+                <Modal.Header closeButton>
+                    <Modal.Title>{accountModal.data.id ? 'Edit account' : 'New account'}</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Account</Form.Label>
+                        <Form.Control
+                            value={accountModal.data.name}
+                            onChange={(e) =>
+                                setAccountModal((m) => ({ ...m, data: { ...m.data, name: e.target.value } }))
+                            }
+                            placeholder="Account name | account number"
+                        />
+                    </Form.Group>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => setAccountModal({ open: false, data: EMPTY_ACCOUNT })}>
+                        Cancel
+                    </Button>
+                    <Button onClick={submitAccount}>Save</Button>
                 </Modal.Footer>
             </Modal>
 
