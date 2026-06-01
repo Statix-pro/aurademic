@@ -158,8 +158,13 @@ function BudgetCatalogPage() {
                     setAccountsTableExists(false);
                     setAccounts([]);
                 } else {
-                    setAccountsTableExists(false);
+                    setAccountsTableExists(true);
                     setAccounts([]);
+                    showAlert(
+                        'warning',
+                        'Accounts load failed',
+                        err?.response?.data?.message || err?.message || 'Could not load account options'
+                    );
                 }
             }
         } catch (err: any) {

@@ -20,9 +20,15 @@ export const fetchAccountOptions = async (): Promise<AccountOption[]> => {
   const response = await authenticityUtility.get("/account-options") as {
     success?: boolean;
     data?: unknown;
+    message?: string;
+    error?: string;
   };
 
-  return response.success === true ? normalizeAccountOptions(response.data) : [];
+  if (response.success === true) {
+    return normalizeAccountOptions(response.data);
+  }
+
+  throw new Error(response.message || response.error || "Failed to load account options");
 };
 
 export const createAccountOption = async (name: string): Promise<AccountOption> => {

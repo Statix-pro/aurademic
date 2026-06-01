@@ -25,8 +25,15 @@ const toMoney = (value) => {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 };
 
+const parseBoolean = (value) => {
+  if (typeof value === 'boolean') return value;
+  const normalized = normalizeText(value).toLowerCase();
+  if (!normalized) return false;
+  return ['1', 'true', 'yes', 'y', 'on'].includes(normalized);
+};
+
 const resolveUnplannedBudgetMeta = (source = {}) => {
-  const enabled = Boolean(source.unplanned_budget_enabled);
+  const enabled = parseBoolean(source.unplanned_budget_enabled);
   const amount = enabled ? toMoney(source.unplanned_budget_amount) : 0;
   return {
     unplannedBudgetEnabled: enabled,
@@ -191,8 +198,8 @@ const handleError = (res, err, fallback) => {
   console.error(fallback, err);
   return res.status(500).json({
     success: false,
-    message: err.message || fallback,
-    error: err.message || fallback,
+    message: fallback,
+    error: fallback,
   });
 };
 
