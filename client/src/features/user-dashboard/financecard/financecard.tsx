@@ -548,9 +548,10 @@ const FinanceCard: React.FC = () => {
       return normalizedFallback || '-';
     };
 
-    const hasSubmittedUpdate = updates.some((update) =>
-      String(update.decision || update.status || '').toLowerCase().includes('submitted')
-    );
+    const hasSubmittedUpdate = updates.some((update) => {
+      const decision = String(update.decision || update.status || '').trim().toLowerCase();
+      return decision === 'submitted';
+    });
 
     const events: FinanceLogEvent[] = hasSubmittedUpdate ? [] : [{
       key: `created-${item.id}`,
@@ -667,13 +668,14 @@ const FinanceCard: React.FC = () => {
     try {
       setLoadingInfoId(requestId);
       const response = await authenticityUtility.get(`/finance-requests/${requestId}/status-updates`) as {
-        status: string;
+        status?: string;
+        success?: boolean;
         data?: FinanceStatusUpdate[];
       };
 
       setStatusUpdatesById((prev) => ({
         ...prev,
-        [requestId]: response.status === 'success' ? (response.data || []) : [],
+        [requestId]: response.success === true || response.status === 'success' ? (response.data || []) : [],
       }));
     } catch (error) {
       console.error('Failed to fetch finance status updates', error);

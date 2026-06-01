@@ -37,6 +37,11 @@ CREATE TABLE IF NOT EXISTS expenditure_requests (
   is_budget_proposed ENUM('Yes','No') NOT NULL DEFAULT 'No',
   proposed_amount DECIMAL(15,2) NULL,
   balance_amount DECIMAL(15,2) NULL,
+  unplanned_budget_enabled TINYINT(1) NOT NULL DEFAULT 0,
+  unplanned_budget_amount DECIMAL(15,2) NULL,
+  unplanned_budget_head VARCHAR(255) NULL,
+  unplanned_budget_sub_head VARCHAR(255) NULL,
+  unplanned_budget_description VARCHAR(500) NULL,
 
   -- mirror finance income summary fields
   income_type VARCHAR(100) NULL,

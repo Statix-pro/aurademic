@@ -822,6 +822,7 @@ const FinanceApproval: React.FC = () => {
   const [showIncomeSection, setShowIncomeSection] = useState<boolean>(false);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([createIncomeRow()]);
   const [accountOptions, setAccountOptions] = useState<AccountOption[]>([]);
+  const [accountOptionsError, setAccountOptionsError] = useState<string>('');
   const [budgetLineMetaByRow, setBudgetLineMetaByRow] = useState<Record<number, BudgetLineMeta>>({});
   const [statusUpdates, setStatusUpdates] = useState<any[]>([]);
   const [proposalRef, setProposalRef] = useState<string>('');
@@ -1426,16 +1427,26 @@ const FinanceApproval: React.FC = () => {
     id: account.id,
   }));
 
-  const loadAccountOptionsFromApi = async () => {
+  const loadAccountOptionsFromApi = async (isMounted = () => true) => {
     try {
-      setAccountOptions(await fetchAccountOptions());
+      const options = await fetchAccountOptions();
+      if (!isMounted()) return;
+      setAccountOptions(options);
+      setAccountOptionsError('');
     } catch (error) {
       console.error('Failed to load account options', error);
+      if (!isMounted()) return;
+      setAccountOptions([]);
+      setAccountOptionsError('Credit account options could not be loaded. Please refresh or contact admin.');
     }
   };
 
   useEffect(() => {
-    void loadAccountOptionsFromApi();
+    let mounted = true;
+    void loadAccountOptionsFromApi(() => mounted);
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const createAnnexureRowId = () => `annexure-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
@@ -2781,6 +2792,7 @@ const FinanceApproval: React.FC = () => {
     if (
       !target ||
       target.closest('[data-readonly-applicant-card="true"]') ||
+      target.closest('[data-readonly-workflow-modal="true"]') ||
       target.closest('[data-workflow-stage-remark-input="true"]')
     ) return;
     if (target.matches('input, textarea, select, button, [tabindex]')) {
@@ -2794,6 +2806,7 @@ const FinanceApproval: React.FC = () => {
     if (
       !target ||
       target.closest('[data-readonly-applicant-card="true"]') ||
+      target.closest('[data-readonly-workflow-modal="true"]') ||
       target.closest('[data-workflow-stage-remark-input="true"]')
     ) return;
     if (target.matches('input, textarea, select, button, [tabindex]') && event.key !== 'Tab') {
@@ -4230,6 +4243,11 @@ const FinanceApproval: React.FC = () => {
                                             }}
                                             placeholder="Select"
                                           />
+                                          {accountOptionsError && (
+                                            <div className="text-danger small mt-1">
+                                              {accountOptionsError}
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     </td>
@@ -5157,7 +5175,7 @@ const FinanceApproval: React.FC = () => {
         keyboard={!wfActionSubmitting}
         hideCloseButton={wfActionSubmitting}
         footer={
-          <div className="d-flex justify-content-end gap-2 w-100">
+          <div className="d-flex justify-content-end gap-2 w-100" data-readonly-workflow-modal="true">
             <button
               type="button"
               className="btn btn-sm btn-outline-secondary"
@@ -5177,19 +5195,21 @@ const FinanceApproval: React.FC = () => {
           </div>
         }
       >
-        {proposalRef && (
-          <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
-            Reference: <b>{proposalRef}</b>
-          </div>
-        )}
-        <textarea
-          value={wfActionComment}
-          onChange={(e) => setWfActionComment(e.target.value)}
-          disabled={wfActionSubmitting}
-          rows={4}
-          placeholder="Enter comments (required)..."
-          className="form-control"
-        />
+        <div data-readonly-workflow-modal="true">
+          {proposalRef && (
+            <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
+              Reference: <b>{proposalRef}</b>
+            </div>
+          )}
+          <textarea
+            value={wfActionComment}
+            onChange={(e) => setWfActionComment(e.target.value)}
+            disabled={wfActionSubmitting}
+            rows={4}
+            placeholder="Enter comments (required)..."
+            className="form-control"
+          />
+        </div>
       </CustomModal>
 
       <CustomModal

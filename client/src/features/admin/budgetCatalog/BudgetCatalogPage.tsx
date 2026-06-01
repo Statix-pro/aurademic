@@ -56,12 +56,13 @@ interface TagForm {
 
 interface AccountForm {
     id?: number;
-    name: string;
+    accountName: string;
+    accountNumber: string;
 }
 
 const EMPTY_HEAD: HeadForm = { name: '', code: '', group_label: '', sort_order: 0 };
 const EMPTY_TAG: TagForm = { tag_name: '', sort_order: 0 };
-const EMPTY_ACCOUNT: AccountForm = { name: '' };
+const EMPTY_ACCOUNT: AccountForm = { accountName: '', accountNumber: '' };
 const EMPTY_SUB: SubHeadForm = {
     name: '',
     code: '',
@@ -77,6 +78,7 @@ function BudgetCatalogPage() {
     const [catalog, setCatalog] = useState<BudgetCatalog | null>(null);
     const [tags, setTags] = useState<BudgetTag[]>([]);
     const [accounts, setAccounts] = useState<AccountOption[]>([]);
+    const [accountsTableExists, setAccountsTableExists] = useState(true);
     const [loading, setLoading] = useState(true);
     const [alert, setAlert] = useState<{ open: boolean; type: AlertType; title: string; message: string }>({
         open: false,
@@ -124,14 +126,13 @@ function BudgetCatalogPage() {
     const load = async () => {
         setLoading(true);
         try {
-            const [res, tagRes, accountRes] = await Promise.all([
+            const [res, tagRes] = await Promise.all([
                 authenticityUtility.get('/budget-catalog', {
                     params: { includeInactive: true },
                 }),
                 authenticityUtility.get('/budget-catalog/tags', {
                     params: { includeInactive: true },
                 }),
-                fetchAccountOptions(),
             ]);
             const data = (res.data?.data ?? res.data) as BudgetCatalog;
             setCatalog({
@@ -140,7 +141,27 @@ function BudgetCatalogPage() {
             });
             const tagData = tagRes.data?.data ?? tagRes.data;
             setTags(Array.isArray(tagData) ? tagData : []);
-            setAccounts(accountRes);
+
+            try {
+                const accountRes = await fetchAccountOptions();
+                setAccounts(accountRes);
+                setAccountsTableExists(true);
+            } catch (err: any) {
+                console.warn('Failed to load account options, checking if table is missing:', err);
+                const isTableMissing =
+                    err?.response?.status === 404 ||
+                    err?.response?.data?.code === 'TABLE_NOT_FOUND' ||
+                    err?.response?.data?.message?.toLowerCase().includes('does not exist') ||
+                    err?.response?.data?.error?.toLowerCase().includes('does not exist');
+
+                if (isTableMissing) {
+                    setAccountsTableExists(false);
+                    setAccounts([]);
+                } else {
+                    setAccountsTableExists(false);
+                    setAccounts([]);
+                }
+            }
         } catch (err: any) {
             showAlert('error', 'Load failed', err?.message || 'Could not load budget catalog');
         } finally {
@@ -151,6 +172,12 @@ function BudgetCatalogPage() {
     useEffect(() => {
         load();
     }, []);
+
+    useEffect(() => {
+        if (!accountsTableExists && activeTab === 'accounts') {
+            setActiveTab('heads');
+        }
+    }, [accountsTableExists, activeTab]);
 
     const heads = catalog?.heads ?? [];
     const subHeads = catalog?.subHeads ?? [];
@@ -501,25 +528,52 @@ function BudgetCatalogPage() {
     };
 
     // -------- Account CRUD --------
+    const parseAccountNameNumber = (combinedName: string): { accountName: string; accountNumber: string } => {
+        if (!combinedName) return { accountName: '', accountNumber: '' };
+        const parts = combinedName.split('|');
+        if (parts.length >= 2) {
+            return {
+                accountName: parts.slice(0, -1).join('|').trim(),
+                accountNumber: parts[parts.length - 1].trim()
+            };
+        }
+        return {
+            accountName: combinedName.trim(),
+            accountNumber: ''
+        };
+    };
+
     const openCreateAccount = () =>
         setAccountModal({ open: true, data: { ...EMPTY_ACCOUNT } });
 
-    const openEditAccount = (account: AccountOption) =>
-        setAccountModal({ open: true, data: { id: account.id, name: account.name } });
+    const openEditAccount = (account: AccountOption) => {
+        const { accountName, accountNumber } = parseAccountNameNumber(account.name);
+        setAccountModal({
+            open: true,
+            data: {
+                id: account.id,
+                accountName,
+                accountNumber,
+            },
+        });
+    };
 
     const submitAccount = async () => {
-        const name = accountModal.data.name.trim();
-        if (!name) {
+        const accountName = accountModal.data.accountName.trim();
+        const accountNumber = accountModal.data.accountNumber.trim();
+        if (!accountName) {
             showAlert('error', 'Validation', 'Account name is required');
             return;
         }
 
+        const combinedName = accountNumber ? `${accountName} | ${accountNumber}` : accountName;
+
         try {
             if (accountModal.data.id) {
-                await updateAccountOption(accountModal.data.id, name);
+                await updateAccountOption(accountModal.data.id, combinedName);
                 showAlert('success', 'Updated', 'Account option updated');
             } else {
-                await createAccountOption(name);
+                await createAccountOption(combinedName);
                 showAlert('success', 'Created', 'Account option created');
             }
             setAccountModal({ open: false, data: EMPTY_ACCOUNT });
@@ -604,9 +658,11 @@ function BudgetCatalogPage() {
                 <Nav.Item>
                     <Nav.Link eventKey="tags">Tags ({tags.length})</Nav.Link>
                 </Nav.Item>
-                <Nav.Item>
-                    <Nav.Link eventKey="accounts">Accounts ({accounts.length})</Nav.Link>
-                </Nav.Item>
+                {accountsTableExists && (
+                    <Nav.Item>
+                        <Nav.Link eventKey="accounts">Accounts ({accounts.length})</Nav.Link>
+                    </Nav.Item>
+                )}
             </Nav>
 
             {loading ? (
@@ -653,24 +709,26 @@ function BudgetCatalogPage() {
                                                 />
                                             </td>
                                             <td>
-                                                <Button
-                                                    size="sm"
-                                                    variant="light"
-                                                    className="budget-catalog-icon-btn me-2 d-inline-flex align-items-center justify-content-center"
-                                                    onClick={() => openEditHead(h)}
-                                                    title="Edit"
-                                                >
-                                                    <Pencil size={16} color="#0d6efd" />
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="light"
-                                                    className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
-                                                    onClick={() => deleteHead(h)}
-                                                    title="Delete"
-                                                >
-                                                    <Trash2 size={16} color="#dc3545" />
-                                                </Button>
+                                                <div className="d-flex align-items-center gap-2">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="light"
+                                                        className="budget-catalog-icon-btn d-inline-flex align-items-center justify-content-center"
+                                                        onClick={() => openEditHead(h)}
+                                                        title="Edit"
+                                                    >
+                                                        <Pencil size={16} color="#0d6efd" />
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="light"
+                                                        className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
+                                                        onClick={() => deleteHead(h)}
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 size={16} color="#dc3545" />
+                                                    </Button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -758,24 +816,26 @@ function BudgetCatalogPage() {
                                                 />
                                             </td>
                                             <td>
-                                                <Button
-                                                    size="sm"
-                                                    variant="light"
-                                                    className="budget-catalog-icon-btn me-2 d-inline-flex align-items-center justify-content-center"
-                                                    onClick={() => openEditSub(s)}
-                                                    title="Edit"
-                                                >
-                                                    <Pencil size={16} color="#0d6efd" />
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="light"
-                                                    className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
-                                                    onClick={() => deleteSub(s)}
-                                                    title="Delete"
-                                                >
-                                                    <Trash2 size={16} color="#dc3545" />
-                                                </Button>
+                                                <div className="d-flex align-items-center gap-2">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="light"
+                                                        className="budget-catalog-icon-btn d-inline-flex align-items-center justify-content-center"
+                                                        onClick={() => openEditSub(s)}
+                                                        title="Edit"
+                                                    >
+                                                        <Pencil size={16} color="#0d6efd" />
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="light"
+                                                        className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
+                                                        onClick={() => deleteSub(s)}
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 size={16} color="#dc3545" />
+                                                    </Button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -824,24 +884,26 @@ function BudgetCatalogPage() {
                                         />
                                     </td>
                                     <td>
-                                        <Button
-                                            size="sm"
-                                            variant="light"
-                                            className="budget-catalog-icon-btn me-2 d-inline-flex align-items-center justify-content-center"
-                                            onClick={() => openEditTag(tag)}
-                                            title="Edit"
-                                        >
-                                            <Pencil size={16} color="#0d6efd" />
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="light"
-                                            className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
-                                            onClick={() => deleteTag(tag)}
-                                            title="Delete"
-                                        >
-                                            <Trash2 size={16} color="#dc3545" />
-                                        </Button>
+                                        <div className="d-flex align-items-center gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="light"
+                                                className="budget-catalog-icon-btn d-inline-flex align-items-center justify-content-center"
+                                                onClick={() => openEditTag(tag)}
+                                                title="Edit"
+                                            >
+                                                <Pencil size={16} color="#0d6efd" />
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="light"
+                                                className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
+                                                onClick={() => deleteTag(tag)}
+                                                title="Delete"
+                                            >
+                                                <Trash2 size={16} color="#dc3545" />
+                                            </Button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -872,7 +934,7 @@ function BudgetCatalogPage() {
                         <thead>
                             <tr>
                                 <th>Account</th>
-                                <th style={{ width: 90 }}>Actions</th>
+                                <th style={{ width: 130 }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -880,24 +942,26 @@ function BudgetCatalogPage() {
                                 <tr key={account.id}>
                                     <td>{account.name}</td>
                                     <td>
-                                        <Button
-                                            size="sm"
-                                            variant="light"
-                                            className="budget-catalog-icon-btn d-inline-flex align-items-center justify-content-center me-2"
-                                            onClick={() => openEditAccount(account)}
-                                            title="Edit"
-                                        >
-                                            <Pencil size={16} />
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="light"
-                                            className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
-                                            onClick={() => deleteAccount(account)}
-                                            title="Delete"
-                                        >
-                                            <Trash2 size={16} color="#dc3545" />
-                                        </Button>
+                                        <div className="d-flex align-items-center gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="light"
+                                                className="budget-catalog-icon-btn d-inline-flex align-items-center justify-content-center"
+                                                onClick={() => openEditAccount(account)}
+                                                title="Edit"
+                                            >
+                                                <Pencil size={16} />
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="light"
+                                                className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
+                                                onClick={() => deleteAccount(account)}
+                                                title="Delete"
+                                            >
+                                                <Trash2 size={16} color="#dc3545" />
+                                            </Button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -1134,13 +1198,23 @@ function BudgetCatalogPage() {
                 </Modal.Header>
                 <Modal.Body>
                     <Form.Group className="mb-3">
-                        <Form.Label>Account</Form.Label>
+                        <Form.Label>Account Name</Form.Label>
                         <Form.Control
-                            value={accountModal.data.name}
+                            value={accountModal.data.accountName}
                             onChange={(e) =>
-                                setAccountModal((m) => ({ ...m, data: { ...m.data, name: e.target.value } }))
+                                setAccountModal((m) => ({ ...m, data: { ...m.data, accountName: e.target.value } }))
                             }
-                            placeholder="Account name | account number"
+                            placeholder="e.g. PRINCIPAL GENERAL A/C"
+                        />
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Account Number / Type</Form.Label>
+                        <Form.Control
+                            value={accountModal.data.accountNumber}
+                            onChange={(e) =>
+                                setAccountModal((m) => ({ ...m, data: { ...m.data, accountNumber: e.target.value } }))
+                            }
+                            placeholder="e.g. 0751301000015840 or CASH"
                         />
                     </Form.Group>
                 </Modal.Body>

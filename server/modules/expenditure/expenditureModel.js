@@ -90,6 +90,31 @@ const toMoney = (v) => {
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
 };
 
+const normalizeUnplannedBudgetPayload = (payload = {}) => {
+  const enabled = Boolean(payload?.unplanned_budget_enabled);
+  const amount = enabled ? toMoney(payload?.unplanned_budget_amount) : 0;
+  const head = enabled ? normalizeText(payload?.unplanned_budget_head) : '';
+  const subHead = enabled ? normalizeText(payload?.unplanned_budget_sub_head) : '';
+  const description = enabled
+    ? normalizeText(payload?.unplanned_budget_description) || [head, subHead].filter(Boolean).join(' - ')
+    : '';
+
+  if (enabled && amount <= 0) {
+    throw new Error('Please enter a valid Unplanned Budget amount.');
+  }
+  if (enabled && (!head || !subHead)) {
+    throw new Error('Please select Unplanned Budget head and sub head.');
+  }
+
+  return {
+    enabled,
+    amount,
+    head,
+    subHead,
+    description,
+  };
+};
+
 const normalizeFinanceRequestRefBase = (requestRef, { financeRequestId = null, requestDate = null } = {}) => {
   const normalizedRef = normalizeText(requestRef);
   const structuredMatch = normalizedRef.match(/^#?F[-_](\d{4})[-_](\d+)$/i);
@@ -953,19 +978,21 @@ export async function getApprovedBudgets({ userId, userEmail, financeRequestId, 
       `SELECT
          fbb.budget_line_id,
          COALESCE(fbb.budget_proposal_id, bpl.budget_proposal_id)          AS budget_proposal_id,
-         COALESCE(bp.proposal_ref, '')                                     AS proposal_ref,
+         COALESCE(frr.request_ref, '')                                     AS finance_request_ref,
          bp.fiscal_year,
          COALESCE(NULLIF(TRIM(fbb.budget_head), ''), bpl.budget_head, '')  AS head,
          COALESCE(NULLIF(TRIM(fbb.sub_head), ''), bpl.sub_head, '')        AS sub_head,
-         ${FINANCE_BREAKUP_APPROVED_BASE_SQL}                               AS total_amount,
+         COALESCE(fbb.approved_amount, 0)                                   AS total_amount,
          fr.beneficiary_type,
          fr.beneficiary_value
        FROM finance_budget_breakup fbb
        JOIN finance_requests fr ON fr.id = fbb.finance_id
+       LEFT JOIN finance_request_refs frr ON frr.finance_request_id = fr.id
        LEFT JOIN budget_proposal_lines bpl ON bpl.id = fbb.budget_line_id
        LEFT JOIN budget_proposals bp
          ON bp.id = COALESCE(fbb.budget_proposal_id, bpl.budget_proposal_id)
        WHERE fbb.finance_id = ?
+        AND COALESCE(fbb.approved_amount, 0) > 0
        ORDER BY fbb.sort_order ASC, fbb.id ASC`,
       [financeId],
     );
@@ -997,7 +1024,7 @@ export async function getApprovedBudgets({ userId, userEmail, financeRequestId, 
       groupedByHeadSubHead.set(key, {
         budgetLineId: toPositiveInt(r.budget_line_id),
         budgetProposalId: toPositiveInt(r.budget_proposal_id),
-        proposalRef: normalizeText(r.proposal_ref),
+        financeRequestRef: normalizeText(r.finance_request_ref),
         fiscalYear: Number(r.fiscal_year) || new Date().getFullYear(),
         head,
         subHead,
@@ -1794,6 +1821,11 @@ const EXPENDITURE_SELECT = `
     er.primary_head,
     er.event_sub_head,
     er.is_budget_proposed,
+    er.unplanned_budget_enabled,
+    er.unplanned_budget_amount,
+    er.unplanned_budget_head,
+    er.unplanned_budget_sub_head,
+    er.unplanned_budget_description,
     er.advance_total_amount,
     er.settlement_total_amount,
     er.expenditure_total_amount,
@@ -2172,6 +2204,11 @@ export async function createExpenditure(data, userId) {
     primary_head: normalizeText(data.primary_head) || 'General',
     event_sub_head: normalizeText(data.event_sub_head) || null,
     request_type: 'Advance',
+    unplanned_budget_enabled: Boolean(data.unplanned_budget_enabled),
+    unplanned_budget_amount: data.unplanned_budget_amount ?? null,
+    unplanned_budget_head: data.unplanned_budget_head ?? null,
+    unplanned_budget_sub_head: data.unplanned_budget_sub_head ?? null,
+    unplanned_budget_description: data.unplanned_budget_description ?? null,
     advance_rows: [
       {
         budget_line_id: budgetLineId,
@@ -3013,7 +3050,8 @@ const incomeRows = Array.isArray(data.income_rows)
     const advanceTotal = advanceRows.reduce((sum, row) => sum + toMoney(row.advance || row.advance_amount), 0);
     const settlementTotal = settlementRows.reduce((sum, row) => sum + toMoney(row.settlement || row.settlement_amount), 0);
     const expenditureTotal = expenditureRows.reduce((sum, row) => sum + toMoney(row.autoSum || row.expenditure || row.auto_sum_amount), 0);
-    const totalAmount = toMoney(advanceTotal + settlementTotal + expenditureTotal);
+    const normalizedUnplanned = normalizeUnplannedBudgetPayload(data);
+    const totalAmount = toMoney(advanceTotal + settlementTotal + expenditureTotal + normalizedUnplanned.amount);
     const workflowRowHistory = await getWorkflowRowHistory(conn, {
       financeRequestId,
       workflowRowRef: workflowRowIdentity.workflowRowRef,
@@ -3087,6 +3125,11 @@ const incomeRows = Array.isArray(data.income_rows)
       is_budget_proposed: normalizeText(data.is_budget_proposed) === 'Yes' ? 'Yes' : 'No',
       proposed_amount: moneyOrNull(data.proposed_amount),
       balance_amount: moneyOrNull(data.balance_amount),
+      unplanned_budget_enabled: normalizedUnplanned.enabled ? 1 : 0,
+      unplanned_budget_amount: normalizedUnplanned.enabled ? normalizedUnplanned.amount : null,
+      unplanned_budget_head: normalizedUnplanned.enabled ? normalizedUnplanned.head : null,
+      unplanned_budget_sub_head: normalizedUnplanned.enabled ? normalizedUnplanned.subHead : null,
+      unplanned_budget_description: normalizedUnplanned.enabled ? normalizedUnplanned.description : null,
       income_type: normalizeText(data.income_type) || null,
       income_status: normalizeText(data.income_status) || null,
       income_amount_type: normalizeText(data.income_amount_type) || null,
@@ -3304,7 +3347,8 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     const advanceTotal = advanceRows.reduce((sum, row) => sum + toMoney(row.advance || row.advance_amount), 0);
     const settlementTotal = settlementRows.reduce((sum, row) => sum + toMoney(row.settlement || row.settlement_amount), 0);
     const expenditureTotal = expenditureRows.reduce((sum, row) => sum + toMoney(row.autoSum || row.expenditure || row.auto_sum_amount), 0);
-    const totalAmount = toMoney(advanceTotal + settlementTotal + expenditureTotal);
+    const normalizedUnplanned = normalizeUnplannedBudgetPayload(data);
+    const totalAmount = toMoney(advanceTotal + settlementTotal + expenditureTotal + normalizedUnplanned.amount);
 
     const workflowRowHistory = await getWorkflowRowHistory(conn, {
       financeRequestId,
@@ -3412,6 +3456,11 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       is_budget_proposed: normalizeText(data.is_budget_proposed) === 'Yes' ? 'Yes' : 'No',
       proposed_amount: moneyOrNull(data.proposed_amount),
       balance_amount: moneyOrNull(data.balance_amount),
+      unplanned_budget_enabled: normalizedUnplanned.enabled ? 1 : 0,
+      unplanned_budget_amount: normalizedUnplanned.enabled ? normalizedUnplanned.amount : null,
+      unplanned_budget_head: normalizedUnplanned.enabled ? normalizedUnplanned.head : null,
+      unplanned_budget_sub_head: normalizedUnplanned.enabled ? normalizedUnplanned.subHead : null,
+      unplanned_budget_description: normalizedUnplanned.enabled ? normalizedUnplanned.description : null,
       income_type: normalizeText(data.income_type) || null,
       income_status: normalizeText(data.income_status) || null,
       income_amount_type: normalizeText(data.income_amount_type) || null,
@@ -3442,7 +3491,14 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       if (hasEventSubHeadIdColumn) updatedEntry.event_sub_head_id = headerIds.event_sub_head_id;
     }
 
-    const nullableCatalogIdKeys = new Set(['primary_head_id', 'event_sub_head_id']);
+    const nullableCatalogIdKeys = new Set([
+      'primary_head_id',
+      'event_sub_head_id',
+      'unplanned_budget_amount',
+      'unplanned_budget_head',
+      'unplanned_budget_sub_head',
+      'unplanned_budget_description',
+    ]);
     const filteredUpdateEntry = Object.fromEntries(
       Object.entries(updatedEntry).filter(([key, value]) =>
         nullableCatalogIdKeys.has(key) || (value !== null && value !== undefined && value !== ''),
@@ -3910,6 +3966,8 @@ export async function getStatusUpdates(expenditureId) {
        wa.decision   AS status,
        wa.feedback   AS comment,
        wa.decided_at AS created_at,
+       wa.snapshot_before,
+       wa.meta,
        wa.actor_email,
        wa.actor_role,
        COALESCE(
