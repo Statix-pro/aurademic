@@ -337,21 +337,21 @@ const financeController = {
       const hasApplicant = data.employee_id || data.applicant_name;
       if (!hasApplicant || !data.request_date || !data.beneficiary_type || !data.primary_head) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Missing required fields (employee_id or applicant_name, request_date, beneficiary_type, primary_head)',
         });
       }
 
       if (!Array.isArray(data.budget_rows) || data.budget_rows.length === 0) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'At least one budget row is required',
         });
       }
 
       if (!userId) {
         return res.status(401).json({
-          status: 'error',
+          success: false,
           message: 'Invalid user context',
         });
       }
@@ -402,7 +402,7 @@ const financeController = {
       }
 
       return res.status(201).json({
-        status: 'success',
+        success: true,
         message: 'Finance request created successfully',
         data: { id: financeId },
       });
@@ -440,7 +440,7 @@ const financeController = {
 
       if (!isCreator && !isWorkflowEditor) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'You are not allowed to update this request',
         });
       }
@@ -454,14 +454,14 @@ const financeController = {
 
       if (isCreator && !isWorkflowEditor && !isApplicantEditable) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'This request is not editable in current workflow state',
         });
       }
 
       if (isWorkflowEditor && isTerminalWorkflow && !isSuperAdminRequest(req)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'This request is not editable in current workflow state',
         });
       }
@@ -470,13 +470,13 @@ const financeController = {
 
       if (result.affectedRows > 0) {
         return res.status(200).json({
-          status: 'success',
+          success: true,
           message: 'Finance request updated successfully',
         });
       }
 
       return res.status(400).json({
-        status: 'error',
+        success: false,
         message: 'No changes applied',
       });
     } catch (error) {
@@ -491,7 +491,7 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -499,14 +499,14 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
 
       if (!userId || toPositiveInt(finance.created_by) !== userId) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'Only applicant can resubmit this request',
         });
       }
@@ -514,7 +514,7 @@ const financeController = {
       const workflowState = finance.workflow_state || null;
       if (!workflowState || normalizeText(workflowState.status).toLowerCase() !== 'returned') {
         return res.status(409).json({
-          status: 'error',
+          success: false,
           message: 'Only returned requests can be resubmitted',
         });
       }
@@ -522,7 +522,7 @@ const financeController = {
       const resubmissionComment = normalizeText(req.body?.feedback || req.body?.comment || req.body?.remarks);
       if (!resubmissionComment) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Resubmission comments are required',
         });
       }
@@ -583,7 +583,7 @@ const financeController = {
       });
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: 'Finance request resubmitted successfully',
       });
     } catch (error) {
@@ -599,7 +599,7 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -607,14 +607,14 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
 
       if (!isSuperAdmin && (!userId || toPositiveInt(finance.created_by) !== userId)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'Only applicant can delete this request',
         });
       }
@@ -630,14 +630,14 @@ const financeController = {
         ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(workflowStatus)
       ) {
         return res.status(409).json({
-          status: 'error',
+          success: false,
           message: 'This request can no longer be deleted',
         });
       }
 
       if (!isSuperAdmin && hasStartedApproval) {
         return res.status(409).json({
-          status: 'error',
+          success: false,
           message: 'This request can only be deleted before Level-1 approval',
         });
       }
@@ -645,7 +645,7 @@ const financeController = {
       await financeModel.deleteFinanceRequest(financeId, normalizeActor(req));
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: 'Finance request deleted successfully',
       });
     } catch (error) {
@@ -658,7 +658,7 @@ const financeController = {
       const financeId = toPositiveInt(req.params.id);
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -666,7 +666,7 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
@@ -690,7 +690,7 @@ const financeController = {
         console.error('Failed to fetch finance status updates:', statusError);
       }
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: sanitizeFinanceRecordForUser(req, {
           ...finance,
           budget,
@@ -715,7 +715,7 @@ const financeController = {
       });
 
       return res.json({
-        status: 'success',
+        success: true,
         data: rows.map(row => sanitizeFinanceRecordForUser(req, row)),
       });
     } catch (error) {
@@ -730,14 +730,14 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
 
       if (!Array.isArray(rows) || rows.length === 0) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Budget breakup data is required',
         });
       }
@@ -745,7 +745,7 @@ const financeController = {
       const exists = await financeModel.doesFinanceExist(financeId);
       if (!exists) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
@@ -753,7 +753,7 @@ const financeController = {
       await financeModel.addBudgetBreakup(financeId, rows);
 
       return res.status(201).json({
-        status: 'success',
+        success: true,
         message: 'Budget breakup added successfully',
       });
     } catch (error) {
@@ -766,7 +766,7 @@ const financeController = {
       const financeId = toPositiveInt(req.params.id);
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -774,7 +774,7 @@ const financeController = {
       const budget = await financeModel.getBudgetBreakup(financeId);
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: budget,
       });
     } catch (error) {
@@ -787,7 +787,7 @@ const financeController = {
       const tags = await financeModel.getBudgetTags();
       return res.status(200).json({
         success: true,
-        status: 'success',
+        success: true,
         data: tags,
       });
     } catch (error) {
@@ -801,7 +801,7 @@ const financeController = {
       const units = await financeModel.getOrgUnitsByType(type);
       return res.status(200).json({
         success: true,
-        status: 'success',
+        success: true,
         data: units,
         count: units.length,
       });
@@ -824,7 +824,7 @@ const financeController = {
 
       return res.status(200).json({
         success: true,
-        status: 'success',
+        success: true,
         data: {
           all: units,
           grouped,
@@ -855,14 +855,14 @@ const financeController = {
 
       if (!userId) {
         return res.status(401).json({
-          status: 'error',
+          success: false,
           message: 'Invalid user context',
         });
       }
 
       if (!budgetHead || (!headOnlyMatch && !subHead)) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: headOnlyMatch
             ? 'budget_head is required'
             : 'budget_head and sub_head are required',
@@ -884,7 +884,7 @@ const financeController = {
       });
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: availability,
       });
     } catch (error) {
@@ -902,7 +902,7 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -911,7 +911,7 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
@@ -967,7 +967,7 @@ const financeController = {
       }
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: `Workflow ${result.decision} at stage ${result.stage}`,
         data: {
           previousState: result.previousState,
@@ -985,7 +985,7 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -993,14 +993,14 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
 
       if (!canAccessFinanceRecord(req, finance)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'Access denied',
         });
       }
@@ -1017,7 +1017,7 @@ const financeController = {
 
         if (!hasFinanceStagePermission(req, archivedStage)) {
           return res.status(403).json({
-            status: 'error',
+            success: false,
             message: archivedStage
               ? `Only ${archivedStage.toUpperCase()} stage users (or super admin) can unarchive this request`
               : 'You are not allowed to unarchive this request',
@@ -1027,13 +1027,13 @@ const financeController = {
         const restoreResult = await financeModel.restoreWorkflowSnapshotFromLatestArchive(financeId);
         if (!restoreResult.restored) {
           return res.status(409).json({
-            status: 'error',
+            success: false,
             message: restoreResult.reason || 'Unable to unarchive this request',
           });
         }
 
         return res.status(200).json({
-          status: 'success',
+          success: true,
           message: 'Finance request unarchived successfully',
           data: {
             workflow_state: restoreResult.restoredState,
@@ -1061,7 +1061,7 @@ const financeController = {
         );
 
         return res.status(200).json({
-          status: 'success',
+          success: true,
           message: 'Finance request archived successfully',
           data: {
             previousState: forcedArchiveResult.previousState,
@@ -1087,7 +1087,7 @@ const financeController = {
       });
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: 'Finance request archived successfully',
         data: {
           previousState: archiveResult.previousState,
@@ -1126,7 +1126,7 @@ const financeController = {
       });
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: queue.items.map((row) => sanitizeFinanceRecordForUser(req, row)),
         pagination: {
           total: queue.total,
@@ -1146,7 +1146,7 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -1154,14 +1154,14 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
 
       if (!canAccessFinanceRecord(req, finance)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'Access denied',
         });
       }
@@ -1211,7 +1211,7 @@ const financeController = {
       ]);
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: {
           ...metadata,
           availableBeneficiaryTypes,
@@ -1290,7 +1290,7 @@ const financeController = {
 
       if (!userEmail) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'User email not found',
         });
       }
@@ -1299,7 +1299,7 @@ const financeController = {
 
       if (!employee) {
         return res.status(200).json({
-          status: 'success',
+          success: true,
           data: {
             name: req.user?.name || '',
             email: userEmail,
@@ -1309,7 +1309,7 @@ const financeController = {
       }
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: employee,
       });
     } catch (error) {
@@ -1322,7 +1322,7 @@ const financeController = {
       const file = req.file;
       if (!file) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'No file uploaded',
         });
       }
@@ -1332,7 +1332,7 @@ const financeController = {
           fs.promises.unlink(file.path).catch(() => {});
         }
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Only PDF files with a size less than 2MB are allowed.',
         });
       }
@@ -1362,7 +1362,7 @@ const financeController = {
       await fs.promises.rename(sourcePath, finalPath);
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: 'Annexure uploaded successfully',
         data: {
           originalName: file.originalname,
@@ -1400,7 +1400,7 @@ const financeController = {
           await fs.promises.unlink(uploadedFilePath).catch(() => {});
         }
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -1410,7 +1410,7 @@ const financeController = {
           await fs.promises.unlink(uploadedFilePath).catch(() => {});
         }
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'No file uploaded',
         });
       }
@@ -1426,7 +1426,7 @@ const financeController = {
           await fs.promises.unlink(uploadedFilePath).catch(() => {});
         }
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Only PDF files with a size less than 2MB are allowed.',
         });
       }
@@ -1437,7 +1437,7 @@ const financeController = {
           await fs.promises.unlink(uploadedFilePath).catch(() => {});
         }
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
@@ -1447,7 +1447,7 @@ const financeController = {
           await fs.promises.unlink(uploadedFilePath).catch(() => {});
         }
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'You do not have access to upload this document',
         });
       }
@@ -1457,7 +1457,7 @@ const financeController = {
           await fs.promises.unlink(uploadedFilePath).catch(() => {});
         }
         return res.status(409).json({
-          status: 'error',
+          success: false,
           message: 'Principal document is only available for proposals above 10000 at principal stage or after principal approval',
         });
       }
@@ -1507,7 +1507,7 @@ const financeController = {
       }
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: 'Principal document uploaded successfully',
         data: {
           originalName: originalName || file.originalname || null,
@@ -1537,14 +1537,14 @@ const financeController = {
       const financeId = toPositiveInt(req.params.id);
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
 
       if (!canManagePrincipalDocumentsRequest(req)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'You do not have access to delete this document',
         });
       }
@@ -1552,14 +1552,14 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
 
       if (!isEligibleForPrincipalDocument(finance)) {
         return res.status(409).json({
-          status: 'error',
+          success: false,
           message: 'Principal document is only available for proposals above 10000 at principal stage or after principal approval',
         });
       }
@@ -1567,7 +1567,7 @@ const financeController = {
       const document = await financeModel.getPrincipalDocument(financeId);
       if (!document) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Principal document not found',
         });
       }
@@ -1578,7 +1578,7 @@ const financeController = {
       await fs.promises.unlink(resolvedPath).catch(() => {});
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: 'Principal document deleted successfully',
       });
     } catch (error) {
@@ -1592,7 +1592,7 @@ const financeController = {
       const rows = await financeModel.searchApplicant(query);
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: rows,
       });
     } catch (error) {

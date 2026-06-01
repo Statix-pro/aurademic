@@ -4390,7 +4390,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
     const approvedFinanceLimit = Number(financeApprovedAmount || 0);
     if (approvedFinanceLimit > 0) {
-      if (activeTab === "Advance" && totalAdvanceAmount > approvedFinanceLimit) {
+      if (activeTab === "Advance" && totalAdvanceDisplayAmount > approvedFinanceLimit) {
         showAlert(
           `Total advance amount cannot exceed the approved finance amount of Rs ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
           "warning",
@@ -4398,7 +4398,15 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         return;
       }
 
-      if (activeTab === "Expenditure" && totalExpenditureAmount > approvedFinanceLimit) {
+      if (activeTab === "Settlement" && totalSettlementDisplayAmount > approvedFinanceLimit) {
+        showAlert(
+          `Total settlement amount cannot exceed the approved finance amount of Rs ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
+          "warning",
+        );
+        return;
+      }
+
+      if (activeTab === "Expenditure" && totalExpenditureDisplayAmount > approvedFinanceLimit) {
         showAlert(
           `Total expenditure amount cannot exceed the approved finance amount of Rs ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
           "warning",
@@ -6500,13 +6508,12 @@ const handleBeneficiarySearch = async (query: string) => {
                           <div
                             style={{
                               display: "flex",
-                              alignItems: "center",
+                              flexDirection: "column",
                               gap: "8px",
                             }}
                           >
                             <span
                               style={{
-                                minWidth: "154px",
                                 color: "#364152",
                                 fontSize: "1rem",
                                 fontWeight: 500,
@@ -6546,13 +6553,12 @@ const handleBeneficiarySearch = async (query: string) => {
                           <div
                             style={{
                               display: "flex",
-                              alignItems: "center",
+                              flexDirection: "column",
                               gap: "8px",
                             }}
                           >
                             <span
                               style={{
-                                minWidth: "72px",
                                 color: "#364152",
                                 fontSize: "1rem",
                                 fontWeight: 500,

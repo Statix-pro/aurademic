@@ -91,7 +91,7 @@ const toMoney = (v) => {
 };
 
 const normalizeUnplannedBudgetPayload = (payload = {}) => {
-  const enabled = Boolean(payload?.unplanned_budget_enabled);
+  const enabled = parseBoolean(payload?.unplanned_budget_enabled);
   const amount = enabled ? toMoney(payload?.unplanned_budget_amount) : 0;
   const head = enabled ? normalizeText(payload?.unplanned_budget_head) : '';
   const subHead = enabled ? normalizeText(payload?.unplanned_budget_sub_head) : '';
@@ -982,7 +982,7 @@ export async function getApprovedBudgets({ userId, userEmail, financeRequestId, 
          bp.fiscal_year,
          COALESCE(NULLIF(TRIM(fbb.budget_head), ''), bpl.budget_head, '')  AS head,
          COALESCE(NULLIF(TRIM(fbb.sub_head), ''), bpl.sub_head, '')        AS sub_head,
-         COALESCE(fbb.approved_amount, 0)                                   AS total_amount,
+         ${FINANCE_BREAKUP_APPROVED_BASE_SQL}                               AS total_amount,
          fr.beneficiary_type,
          fr.beneficiary_value
        FROM finance_budget_breakup fbb
@@ -992,7 +992,6 @@ export async function getApprovedBudgets({ userId, userEmail, financeRequestId, 
        LEFT JOIN budget_proposals bp
          ON bp.id = COALESCE(fbb.budget_proposal_id, bpl.budget_proposal_id)
        WHERE fbb.finance_id = ?
-        AND COALESCE(fbb.approved_amount, 0) > 0
        ORDER BY fbb.sort_order ASC, fbb.id ASC`,
       [financeId],
     );
