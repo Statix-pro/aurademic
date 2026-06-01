@@ -259,6 +259,7 @@ CREATE TABLE IF NOT EXISTS expenditure_advance_rows (
   budget_amount DECIMAL(15,2) NULL,
   pre_advance_amount DECIMAL(15,2) NULL,
   advance_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+  tentative_settlement_date DATE NULL,
 
   available_amount_snapshot DECIMAL(15,2) NULL,
   remaining_amount_snapshot DECIMAL(15,2) NULL,

@@ -1766,12 +1766,8 @@ const ExpenditureDashboard: React.FC = () => {
           />
 
           <div className="expenditure-body">
-            {/* <div className="expenditure-stats-container">
-              <button
-                type="button"
-                className={`expenditure-stats-card total ${selectedStatusFilter === "all" ? "active" : ""}`}
-                onClick={() => setSelectedStatusFilter("all")}
-              >
+            <div className="expenditure-stats-container">
+              <div className="expenditure-stats-card total">
                 <div className="expenditure-stats-icon-wrap">
                   <FileText size={20} className="expenditure-stats-icon" />
                 </div>
@@ -1780,13 +1776,9 @@ const ExpenditureDashboard: React.FC = () => {
                   <span className="expenditure-stats-number">{stats.total}</span>
                   <span className="expenditure-stats-amount">{formatAmount(stats.totalAmount)}</span>
                 </div>
-              </button>
+              </div>
 
-              <button
-                type="button"
-                className={`expenditure-stats-card pending ${selectedStatusFilter === "pending" ? "active" : ""}`}
-                onClick={() => setSelectedStatusFilter("pending")}
-              >
+              <div className="expenditure-stats-card pending">
                 <div className="expenditure-stats-icon-wrap">
                   <Clock size={20} className="expenditure-stats-icon" />
                 </div>
@@ -1795,13 +1787,9 @@ const ExpenditureDashboard: React.FC = () => {
                   <span className="expenditure-stats-number">{stats.pending}</span>
                   <span className="expenditure-stats-amount">{formatAmount(stats.pendingAmount)}</span>
                 </div>
-              </button>
+              </div>
 
-              <button
-                type="button"
-                className={`expenditure-stats-card return ${selectedStatusFilter === "return" ? "active" : ""}`}
-                onClick={() => setSelectedStatusFilter("return")}
-              >
+              <div className="expenditure-stats-card return">
                 <div className="expenditure-stats-icon-wrap">
                   <RotateCcw size={20} className="expenditure-stats-icon" />
                 </div>
@@ -1810,13 +1798,9 @@ const ExpenditureDashboard: React.FC = () => {
                   <span className="expenditure-stats-number">{stats.returned}</span>
                   <span className="expenditure-stats-amount">{formatAmount(stats.returnedAmount)}</span>
                 </div>
-              </button>
+              </div>
 
-              <button
-                type="button"
-                className={`expenditure-stats-card approved ${selectedStatusFilter === "approved" ? "active" : ""}`}
-                onClick={() => setSelectedStatusFilter("approved")}
-              >
+              <div className="expenditure-stats-card approved">
                 <div className="expenditure-stats-icon-wrap">
                   <CheckCircle2 size={20} className="expenditure-stats-icon" />
                 </div>
@@ -1825,13 +1809,9 @@ const ExpenditureDashboard: React.FC = () => {
                   <span className="expenditure-stats-number">{stats.approved}</span>
                   <span className="expenditure-stats-amount">{formatAmount(stats.approvedAmount)}</span>
                 </div>
-              </button>
+              </div>
 
-              <button
-                type="button"
-                className={`expenditure-stats-card pending-payment ${selectedStatusFilter === "pending_payment" ? "active" : ""}`}
-                onClick={() => setSelectedStatusFilter("pending_payment")}
-              >
+              <div className="expenditure-stats-card pending-payment">
                 <div className="expenditure-stats-icon-wrap">
                   <CreditCard size={20} className="expenditure-stats-icon" />
                 </div>
@@ -1840,13 +1820,9 @@ const ExpenditureDashboard: React.FC = () => {
                   <span className="expenditure-stats-number">{stats.pendingPayment}</span>
                   <span className="expenditure-stats-amount">{formatAmount(stats.pendingPaymentAmount)}</span>
                 </div>
-              </button>
+              </div>
 
-              <button
-                type="button"
-                className={`expenditure-stats-card closed ${selectedStatusFilter === "closed" ? "active" : ""}`}
-                onClick={() => setSelectedStatusFilter("closed")}
-              >
+              <div className="expenditure-stats-card closed">
                 <div className="expenditure-stats-icon-wrap">
                   <Lock size={20} className="expenditure-stats-icon" />
                 </div>
@@ -1855,8 +1831,8 @@ const ExpenditureDashboard: React.FC = () => {
                   <span className="expenditure-stats-number">{stats.closed}</span>
                   <span className="expenditure-stats-amount">{formatAmount(stats.closedAmount)}</span>
                 </div>
-              </button>
-            </div> */}
+              </div>
+            </div>
 
             <div className="expenditure-demo-wrap">
               {filteredProposalCards.map((card) => {

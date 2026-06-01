@@ -2219,6 +2219,12 @@ export async function createExpenditure(data, userId) {
         budgetHead: normalizeText(data.head) || null,
         sub_head: normalizeText(data.sub_head) || null,
         subHead: normalizeText(data.sub_head) || null,
+        tentative_settlement_date: normalizeSqlDate(
+          data.tentative_settlement_date || data.tentativeSettlementDate,
+        ),
+        tentativeSettlementDate: normalizeSqlDate(
+          data.tentative_settlement_date || data.tentativeSettlementDate,
+        ),
         advance_amount: amount,
         advance: amount,
       },
@@ -2394,6 +2400,9 @@ async function insertAdvanceRows(
     const budgetSnapshot = budgetSnapshotsByLine.get(budgetLineId) || null;
     let preAdvanceAmount = moneyOrNull(row.preAdvance || row.pre_advance_amount);
     const advanceAmount = toMoney(row.advance || row.advance_amount);
+    const tentativeSettlementDate = normalizeSqlDate(
+      row.tentativeSettlementDate || row.tentative_settlement_date,
+    );
     if (!budgetHead && !subHead && advanceAmount === 0) continue;
 
     // NEW: resolve catalog IDs and pass to summary so cumulative match
@@ -2428,9 +2437,10 @@ async function insertAdvanceRows(
           (expenditure_id, finance_budget_breakup_id, budget_proposal_id, budget_line_id,
            amount_source, budget_head, sub_head, budget_head_id, budget_sub_head_id,
            budget_amount, pre_advance_amount,
-           advance_amount, available_amount_snapshot, remaining_amount_snapshot,
+           advance_amount, tentative_settlement_date,
+           available_amount_snapshot, remaining_amount_snapshot,
            unplanned_available_snapshot, sort_order)
-       VALUES (?, NULL, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+       VALUES (?, NULL, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
       [
         expenditureId,
         budgetProposalId,
@@ -2442,6 +2452,7 @@ async function insertAdvanceRows(
         budgetAmount,
         preAdvanceAmount,
         advanceAmount,
+        tentativeSettlementDate,
         budgetSnapshot ? budgetSnapshot.availableAmountSnapshot : null,
         budgetSnapshot ? budgetSnapshot.remainingAmountSnapshot : null,
         sortOrder,
@@ -3617,6 +3628,7 @@ export async function getExpenditureDetails(id) {
     db.execute(
       `SELECT id, finance_budget_breakup_id, budget_proposal_id, budget_line_id, amount_source,
               budget_head, sub_head, budget_amount, pre_advance_amount, advance_amount,
+              tentative_settlement_date,
               available_amount_snapshot, remaining_amount_snapshot, unplanned_available_snapshot,
               sort_order, created_at, updated_at
          FROM expenditure_advance_rows

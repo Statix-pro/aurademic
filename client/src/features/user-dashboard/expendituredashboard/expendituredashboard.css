@@ -184,21 +184,10 @@
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: left;
   position: relative;
   overflow: hidden;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
-}
-
-.expenditure-stats-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(10, 37, 64, 0.08);
-}
-
-.expenditure-stats-card:focus {
-  outline: none;
 }
 
 /* Icons */
@@ -249,84 +238,30 @@
   background: #eef2f6;
   color: #475569;
 }
-.expenditure-stats-card.total:hover {
-  border-color: #94a3b8;
-}
 
 .expenditure-stats-card.pending .expenditure-stats-icon-wrap {
   background: #fef3c7;
   color: #d97706;
-}
-.expenditure-stats-card.pending:hover {
-  border-color: #f59e0b;
 }
 
 .expenditure-stats-card.return .expenditure-stats-icon-wrap {
   background: #ffedd5;
   color: #ea580c;
 }
-.expenditure-stats-card.return:hover {
-  border-color: #f97316;
-}
 
 .expenditure-stats-card.approved .expenditure-stats-icon-wrap {
   background: #d1fae5;
   color: #059669;
-}
-.expenditure-stats-card.approved:hover {
-  border-color: #10b981;
 }
 
 .expenditure-stats-card.pending-payment .expenditure-stats-icon-wrap {
   background: #e0e7ff;
   color: #4f46e5;
 }
-.expenditure-stats-card.pending-payment:hover {
-  border-color: #6366f1;
-}
 
 .expenditure-stats-card.closed .expenditure-stats-icon-wrap {
   background: #ccfbf1;
   color: #0d9488;
-}
-.expenditure-stats-card.closed:hover {
-  border-color: #14b8a6;
-}
-
-/* Active Filter States */
-.expenditure-stats-card.active {
-  border-width: 1.5px;
-  box-shadow: 0 8px 24px rgba(10, 37, 64, 0.1);
-}
-
-.expenditure-stats-card.total.active {
-  border-color: #475569;
-  background: #f8fafc;
-}
-
-.expenditure-stats-card.pending.active {
-  border-color: #d97706;
-  background: #fffbeb;
-}
-
-.expenditure-stats-card.return.active {
-  border-color: #ea580c;
-  background: #fff7ed;
-}
-
-.expenditure-stats-card.approved.active {
-  border-color: #059669;
-  background: #f0fdf4;
-}
-
-.expenditure-stats-card.pending-payment.active {
-  border-color: #4f46e5;
-  background: #eef2ff;
-}
-
-.expenditure-stats-card.closed.active {
-  border-color: #0d9488;
-  background: #f0fdfa;
 }
 
 /* Demo expandable card */

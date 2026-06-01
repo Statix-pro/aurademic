@@ -297,6 +297,7 @@ interface AdvanceFormRow {
   budget: string;
   preAdvance: string;
   advance: string;
+  tentativeSettlementDate: string;
   budgetLineId?: number | null;
   budgetProposalId?: number | null;
 }
@@ -745,6 +746,7 @@ const createAdvanceRow = (): AdvanceFormRow => ({
   budget: "",
   preAdvance: "0",
   advance: "",
+  tentativeSettlementDate: "",
   budgetLineId: null,
   budgetProposalId: null,
 });
@@ -1318,6 +1320,9 @@ const ExpenditureApproval: React.FC = () => {
               budget: String(row?.budget_amount ?? ""),
               preAdvance: String(row?.pre_advance_amount ?? ""),
               advance: String(row?.advance_amount ?? ""),
+              tentativeSettlementDate: normalizeDateForInput(
+                String(row?.tentative_settlement_date || ""),
+              ),
               budgetLineId: row?.budget_line_id ?? null,
               budgetProposalId: row?.budget_proposal_id ?? null,
             }))
@@ -1550,11 +1555,15 @@ const ExpenditureApproval: React.FC = () => {
         setIsApprovedBudgetLoading(true);
         const budgetUrl = `/expenditure/budget/approved?finance_request_id=${resolvedFinanceRequestId}`;
         const response = (await authenticityUtility.get(budgetUrl)) as {
-          status: string;
+          status?: string;
+          success?: boolean;
           data?: ApprovedBudgetOption[];
         };
 
-        if (!isCancelled && response.status === "success") {
+        if (
+          !isCancelled &&
+          (response.success === true || response.status === "success")
+        ) {
           const normalizedRows = (
             Array.isArray(response.data) ? response.data : []
           )
@@ -3228,6 +3237,19 @@ const evaluateArithmeticExpression = (input: string) => {
   setAdvanceRows(updatedRows);
 };
 
+  const handleAdvanceTentativeSettlementDateChange = (
+    rowId: string | number,
+    value: string,
+  ) => {
+    setAdvanceRows((rows) =>
+      rows.map((row) =>
+        row.id === rowId
+          ? { ...row, tentativeSettlementDate: value }
+          : row,
+      ),
+    );
+  };
+
   const handleExpenditureAmountChange = (
     rowId: string | number,
     value: string,
@@ -4342,6 +4364,28 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
           "warning",
       );
       return;
+    }
+
+    if (activeTab === "Advance") {
+      const missingTentativeDateRows = advanceRows
+        .map((row, index) => ({
+          row,
+          rowNumber: index + 1,
+        }))
+        .filter(
+          ({ row }) =>
+            Number(String(row.advance || "").replace(/,/g, "").trim()) > 0 &&
+            !String(row.tentativeSettlementDate || "").trim(),
+        )
+        .map(({ rowNumber }) => rowNumber);
+
+      if (missingTentativeDateRows.length > 0) {
+        showAlert(
+          `Please select Tentative Date of Settlement for Advance row ${missingTentativeDateRows.join(", ")}.`,
+          "warning",
+        );
+        return;
+      }
     }
 
     const approvedFinanceLimit = Number(financeApprovedAmount || 0);
@@ -6448,7 +6492,52 @@ const handleBeneficiarySearch = async (query: string) => {
                           </div>
                         </td>
                         <td
-                          colSpan={2}
+                          style={{
+                            padding: "12px 16px",
+                            border: "1px solid #e0e0e0",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                          >
+                            <span
+                              style={{
+                                minWidth: "154px",
+                                color: "#364152",
+                                fontSize: "1rem",
+                                fontWeight: 500,
+                              }}
+                            >
+                              Tentative Date of Settlement
+                            </span>
+                            <input
+                              type="date"
+                              value={row.tentativeSettlementDate}
+                              onChange={(e) =>
+                                handleAdvanceTentativeSettlementDateChange(
+                                  row.id,
+                                  e.target.value,
+                                )
+                              }
+                              style={{
+                                border: "1px solid #d7dee7",
+                                borderRadius: "12px",
+                                padding: "10px 15px",
+                                fontSize: "0.95rem",
+                                width: "100%",
+                                height: "45px",
+                                backgroundColor: "#f8fbff",
+                                color: "#2a3f5e",
+                                outline: "none",
+                              }}
+                            />
+                          </div>
+                        </td>
+                        <td
                           style={{
                             padding: "12px 16px",
                             border: "1px solid #e0e0e0",
