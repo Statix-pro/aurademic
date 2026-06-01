@@ -485,7 +485,7 @@ const expenditureController = {
       if (head) budgets = budgets.filter((budget) => budget.head.toLowerCase().includes(head));
       if (subHead) budgets = budgets.filter((budget) => budget.subHead.toLowerCase().includes(subHead));
 
-      return res.json({ status: 'success', data: budgets });
+      return res.json({ success: true, data: budgets });
     } catch (err) {
       return handleError(res, err, 'Error fetching approved budgets');
     }
