@@ -35,6 +35,7 @@ import KSRCTLogo from "../../shared/assets/images/ksrct_logo.png";
 import authenticityUtility from "../../shared/utils/authenticityUtility";
 import { useBudgetCatalog } from "../../shared/hooks/useBudgetCatalog";
 import {
+  BUDGET_HEAD_GROUPS,
   SUB_HEAD_BY_BUDGET_HEAD,
   subscribeBudgetCatalog,
 } from "../../shared/hooks/budgetCatalogStore";
@@ -210,6 +211,13 @@ interface WorkflowStateSnapshot {
   status?: string;
   lastDecision?: string;
   currentStage?: string;
+  expenditureMeta?: {
+    unplannedBudgetEnabled?: boolean;
+    unplannedBudgetAmount?: number | string | null;
+    unplannedBudgetHead?: string | null;
+    unplannedBudgetSubHead?: string | null;
+    unplannedBudgetDescription?: string | null;
+  };
 }
 interface BillFileRecord {
   id?: number;
@@ -223,7 +231,7 @@ interface BillFileRecord {
 interface ApprovedBudgetOption {
   budgetLineId: number | null;
   budgetProposalId: number | null;
-  proposalRef: string;
+  financeRequestRef: string;
   fiscalYear: number;
   head: string;
   subHead: string;
@@ -263,7 +271,9 @@ const normalizeApprovedBudgetOption = (
     budgetLineId: Number(row.budgetLineId ?? row.budget_line_id) || null,
     budgetProposalId:
       Number(row.budgetProposalId ?? row.budget_proposal_id) || null,
-    proposalRef: String(row.proposalRef ?? row.proposal_ref ?? "").trim(),
+    financeRequestRef: String(
+      row.financeRequestRef ?? row.finance_request_ref ?? "",
+    ).trim(),
     fiscalYear:
       Number(row.fiscalYear ?? row.fiscal_year) || new Date().getFullYear(),
     head,
@@ -945,6 +955,15 @@ const ExpenditureApproval: React.FC = () => {
   const [budgetRows, setBudgetRows] = useState([
     { category: "", head: "", amount: "" },
   ]);
+  const [showUnplannedBudget, setShowUnplannedBudget] =
+    useState<boolean>(false);
+  const [unplannedBudgetAmount, setUnplannedBudgetAmount] =
+    useState<string>("");
+  const [unplannedBudgetHead, setUnplannedBudgetHead] = useState<string>("");
+  const [unplannedBudgetSubHead, setUnplannedBudgetSubHead] =
+    useState<string>("");
+  const [unplannedBudgetDescription, setUnplannedBudgetDescription] =
+    useState<string>("");
   const [showIncomeSection, setShowIncomeSection] = useState<boolean>(false);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([
     createIncomeRow(),
@@ -1395,6 +1414,52 @@ const ExpenditureApproval: React.FC = () => {
         }
         setPrimaryHead(String(record.primary_head || ""));
         setEventSubHead(String(record.event_sub_head || ""));
+        {
+          const workflowExpenditureMeta =
+            (workflowState?.expenditureMeta as Record<string, unknown> | undefined) ||
+            {};
+          const recordUnplannedBudgetEnabled =
+            record.unplanned_budget_enabled ??
+            workflowExpenditureMeta.unplannedBudgetEnabled ??
+            false;
+          const recordUnplannedBudgetAmount =
+            record.unplanned_budget_amount ??
+            workflowExpenditureMeta.unplannedBudgetAmount ??
+            "";
+          const hasUnplannedBudgetAmount =
+            recordUnplannedBudgetAmount !== null &&
+            recordUnplannedBudgetAmount !== undefined &&
+            String(recordUnplannedBudgetAmount).trim() !== "" &&
+            Number(recordUnplannedBudgetAmount) > 0;
+          const recordUnplannedBudgetDescription =
+            record.unplanned_budget_description ??
+            workflowExpenditureMeta.unplannedBudgetDescription ??
+            "";
+          const recordUnplannedBudgetHead =
+            record.unplanned_budget_head ??
+            workflowExpenditureMeta.unplannedBudgetHead ??
+            "";
+          const recordUnplannedBudgetSubHead =
+            record.unplanned_budget_sub_head ??
+            workflowExpenditureMeta.unplannedBudgetSubHead ??
+            "";
+          setShowUnplannedBudget(
+            Boolean(recordUnplannedBudgetEnabled || hasUnplannedBudgetAmount),
+          );
+          setUnplannedBudgetAmount(
+            recordUnplannedBudgetAmount !== null &&
+              recordUnplannedBudgetAmount !== undefined
+              ? String(recordUnplannedBudgetAmount)
+              : "",
+          );
+          setUnplannedBudgetHead(String(recordUnplannedBudgetHead || ""));
+          setUnplannedBudgetSubHead(
+            String(recordUnplannedBudgetSubHead || ""),
+          );
+          setUnplannedBudgetDescription(
+            String(recordUnplannedBudgetDescription || ""),
+          );
+        }
         setIsBudgetProposed(String(record.is_budget_proposed || ""));
         setDebitStatus(
           String(record.debit_status || "") as
@@ -2112,7 +2177,7 @@ const workflowRowRefFromState = (() => {
     const options: OptionType[] = [];
     const seen = new Set<string>();
 
-    approvedBudgetOptions.forEach((budget) => {
+    approvedBudgetOptions.forEach((budget, index) => {
       const head = String(budget.head || "").trim();
       const subHead = String(budget.subHead || "").trim();
       if (!head) return;
@@ -2129,11 +2194,11 @@ const workflowRowRefFromState = (() => {
       }
 
       if (!subHead) return;
-      const subKey = `sub::${normalizeBudgetToken(head)}::${normalizeBudgetToken(subHead)}`;
+      const subKey = `sub::${normalizeBudgetToken(head)}::${normalizeBudgetToken(subHead)}::${budget.budgetLineId || budget.budgetProposalId || index}`;
       if (seen.has(subKey)) return;
       seen.add(subKey);
       options.push({
-        value: `sub::${head}::${subHead}`,
+        value: `sub::${budget.budgetLineId || budget.budgetProposalId || index}::${head}::${subHead}`,
         label: `${subHead} (${head})`,
         budgetHead: head,
         subHead,
@@ -2147,34 +2212,33 @@ const workflowRowRefFromState = (() => {
 
   const getApprovedBudgetHeadSelectedOption = (
     budgetHead: string | number,
-    subHead: string | number,
+    _subHead: string | number,
+    budgetLineId?: number | string | null,
   ): OptionType | null => {
     const options = getApprovedBudgetHeadSearchOptions();
+    const parsedBudgetLineId = parsePositiveIntLike(budgetLineId);
     const normalizedHead = normalizeBudgetToken(budgetHead);
-    const normalizedSubHead = normalizeBudgetToken(subHead);
+    let selectedHead = normalizedHead;
 
-    if (normalizedHead && normalizedSubHead) {
-      const matchedSubHead = options.find(
-        (option) =>
-          normalizeBudgetToken(option.budgetHead) === normalizedHead &&
-          normalizeBudgetToken(option.subHead) === normalizedSubHead,
+    if (!selectedHead && parsedBudgetLineId) {
+      const matchedByLineId = approvedBudgetOptions.find(
+        (option) => parsePositiveIntLike(option.budgetLineId) === parsedBudgetLineId,
       );
-      if (matchedSubHead) return matchedSubHead;
+      selectedHead = normalizeBudgetToken(matchedByLineId?.head);
     }
 
-    return (
-      options.find(
-        (option) =>
-          normalizeBudgetToken(option.budgetHead) === normalizedHead &&
-          !normalizeBudgetToken(option.subHead),
-      ) || null
-    );
+    return options.find(
+      (option) =>
+        normalizeBudgetToken(option.budgetHead) === selectedHead &&
+        !normalizeBudgetToken(option.subHead),
+    ) || null;
   };
 
   const filterApprovedBudgetHeadOption = (candidate: any, input: string) => {
     const query = normalizeBudgetToken(input);
-    if (!query) return true;
     const option = candidate?.data || {};
+    const subHead = normalizeBudgetToken(option.subHead);
+    if (!query) return !subHead;
     return [option.label, option.budgetHead, option.subHead]
       .map((value) => normalizeBudgetToken(value))
       .some((value) => value.includes(query));
@@ -2185,21 +2249,57 @@ const workflowRowRefFromState = (() => {
   ): OptionType[] => {
     const normalizedHead = normalizeBudgetToken(budgetHead);
     if (!normalizedHead) return [];
-    const approvedSubHeads: string[] = approvedBudgetOptions
+    return approvedBudgetOptions
       .filter((budget) => normalizeBudgetToken(budget.head) === normalizedHead)
-      .map((budget) => String(budget.subHead || "").trim())
-      .filter(Boolean);
+      .map((budget, index) => {
+        const subHead = String(budget.subHead || "").trim();
+        return {
+          value: `sub::${budget.budgetLineId || budget.budgetProposalId || index}::${subHead}`,
+          label: subHead,
+          budgetHead: budget.head,
+          subHead,
+          budgetLineId: budget.budgetLineId,
+          budgetProposalId: budget.budgetProposalId,
+        };
+      })
+      .filter((option) => Boolean(option.subHead));
+  };
 
-    return Array.from(new Set(approvedSubHeads)).map((subHead) => ({
-      value: subHead,
-      label: subHead,
-    }));
+  const getApprovedSubHeadSelectedOption = (
+    budgetHead: string | number,
+    subHead: string | number,
+    budgetLineId?: number | string | null,
+  ): OptionType | null => {
+    const options = getApprovedSubHeadOptionsForAdvance(budgetHead);
+    const parsedBudgetLineId = parsePositiveIntLike(budgetLineId);
+    if (parsedBudgetLineId) {
+      const matchedByLineId = options.find(
+        (option) => parsePositiveIntLike(option.budgetLineId) === parsedBudgetLineId,
+      );
+      if (matchedByLineId) return matchedByLineId;
+    }
+
+    const normalizedSubHead = normalizeBudgetToken(subHead);
+    return (
+      options.find(
+        (option) => normalizeBudgetToken(option.subHead) === normalizedSubHead,
+      ) || null
+    );
   };
 
   const findApprovedBudgetOption = (
     budgetHead: string | number,
     subHead: string | number,
+    budgetLineId?: number | string | null,
   ) => {
+    const parsedBudgetLineId = parsePositiveIntLike(budgetLineId);
+    if (parsedBudgetLineId) {
+      const byLineId = approvedBudgetOptions.find(
+        (budget) => parsePositiveIntLike(budget.budgetLineId) === parsedBudgetLineId,
+      );
+      if (byLineId) return byLineId;
+    }
+
     const normalizedHead = normalizeBudgetToken(budgetHead);
     const normalizedSubHead = normalizeBudgetToken(subHead);
     if (!normalizedHead || !normalizedSubHead) return null;
@@ -2215,6 +2315,109 @@ const workflowRowRefFromState = (() => {
 
   const getApprovedBudgetAmount = (budget: ApprovedBudgetOption | null) =>
     budget ? String(budget.totalAmount ?? "") : "";
+
+  const getCatalogBudgetHeadSearchOptions = (): OptionType[] => {
+    const options: OptionType[] = [];
+    const seen = new Set<string>();
+
+    BUDGET_HEAD_GROUPS.forEach((group) => {
+      group.options.forEach((head) => {
+        const normalizedHead = normalizeBudgetToken(head);
+        if (!normalizedHead) return;
+
+        const headKey = `head::${normalizedHead}`;
+        if (!seen.has(headKey)) {
+          seen.add(headKey);
+          options.push({
+            value: `head::${head}`,
+            label: head,
+            budgetHead: head,
+            subHead: "",
+          });
+        }
+
+        (SUB_HEAD_BY_BUDGET_HEAD[head] || []).forEach((subHead) => {
+          const normalizedSubHead = normalizeBudgetToken(subHead);
+          if (!normalizedSubHead) return;
+          const subKey = `sub::${normalizedHead}::${normalizedSubHead}`;
+          if (seen.has(subKey)) return;
+          seen.add(subKey);
+          options.push({
+            value: `sub::${head}::${subHead}`,
+            label: `${subHead} (${head})`,
+            budgetHead: head,
+            subHead,
+          });
+        });
+      });
+    });
+
+    return options;
+  };
+
+  const getCatalogBudgetHeadSelectedOption = (
+    budgetHead: string | number,
+  ): OptionType | null => {
+    const normalizedHead = normalizeBudgetToken(budgetHead);
+    if (!normalizedHead) return null;
+
+    return getCatalogBudgetHeadSearchOptions().find(
+      (option) =>
+        normalizeBudgetToken(option.budgetHead) === normalizedHead &&
+        !normalizeBudgetToken(option.subHead),
+    ) || null;
+  };
+
+  const getCatalogSubHeadOptions = (budgetHead: string | number): OptionType[] =>
+    (SUB_HEAD_BY_BUDGET_HEAD[String(budgetHead)] || [])
+      .filter(Boolean)
+      .map((subHead) => ({
+        value: subHead,
+        label: subHead,
+        budgetHead: String(budgetHead),
+        subHead,
+      }));
+
+  const getCatalogSubHeadSelectedOption = (
+    budgetHead: string | number,
+    subHead: string | number,
+  ): OptionType | null => {
+    const normalizedSubHead = normalizeBudgetToken(subHead);
+    if (!normalizedSubHead) return null;
+
+    return getCatalogSubHeadOptions(budgetHead).find(
+      (option) => normalizeBudgetToken(option.subHead) === normalizedSubHead,
+    ) || null;
+  };
+
+  const getUnplannedBudgetDescription = (
+    head = unplannedBudgetHead,
+    subHead = unplannedBudgetSubHead,
+  ): string =>
+    [head, subHead]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .join(" - ");
+
+  const handleUnplannedBudgetHeadChange = (selected: OptionType | null) => {
+    const head = String(selected?.budgetHead || selected?.value || "")
+      .replace(/^head::/, "")
+      .trim();
+    const subHead = String(selected?.subHead || "").trim();
+
+    setUnplannedBudgetHead(head);
+    setUnplannedBudgetSubHead(subHead);
+    setUnplannedBudgetDescription(getUnplannedBudgetDescription(head, subHead));
+  };
+
+  const handleUnplannedBudgetSubHeadChange = (selected: OptionType | null) => {
+    const subHead = String(selected?.subHead || "").trim();
+
+    setUnplannedBudgetSubHead(subHead);
+    setUnplannedBudgetDescription(
+      getUnplannedBudgetDescription(unplannedBudgetHead, subHead),
+    );
+  };
 
   const hydrateRowsFromApprovedBudgets = <
     T extends {
@@ -2254,6 +2457,7 @@ const workflowRowRefFromState = (() => {
         budgetHead: row.budgetHead || matchedBudget.head,
         subHead: row.subHead || matchedBudget.subHead,
         budget: getApprovedBudgetAmount(matchedBudget),
+        budgetLineId: row.budgetLineId ?? matchedBudget.budgetLineId,
         budgetProposalId:
           row.budgetProposalId ?? matchedBudget.budgetProposalId,
       };
@@ -2394,6 +2598,29 @@ const workflowRowRefFromState = (() => {
     return sum + (Number.isFinite(amount) ? amount : 0);
   }, 0);
 
+  const rawUnplannedBudgetAmount = Number(
+    String(unplannedBudgetAmount || "")
+      .replace(/,/g, "")
+      .trim(),
+  );
+  const unplannedBudgetTotal =
+    showUnplannedBudget && Number.isFinite(rawUnplannedBudgetAmount)
+      ? rawUnplannedBudgetAmount
+      : 0;
+  const hasUnplannedBudgetPreview =
+    showUnplannedBudget ||
+    (Number.isFinite(rawUnplannedBudgetAmount) && rawUnplannedBudgetAmount > 0);
+  const unplannedBudgetDisplayLabel =
+    getUnplannedBudgetDescription() || unplannedBudgetDescription;
+  const totalAdvanceDisplayAmount =
+    totalAdvanceAmount + (activeTab === "Advance" ? unplannedBudgetTotal : 0);
+  const totalSettlementDisplayAmount =
+    totalSettlementAmount +
+    (activeTab === "Settlement" ? unplannedBudgetTotal : 0);
+  const totalExpenditureDisplayAmount =
+    totalExpenditureAmount +
+    (activeTab === "Expenditure" ? unplannedBudgetTotal : 0);
+
   const getPayeeTransactionTotal = (rows: PayeeRow[]): number =>
     rows.reduce((sum, row) => {
       const amount = parseAmountValue(row.amount);
@@ -2441,6 +2668,7 @@ const workflowRowRefFromState = (() => {
   const handleAdvanceSubHeadChange = async (
     rowId: string,
     subHeadValue: string,
+    selected?: OptionType | null,
   ) => {
     const row = advanceRows.find((entry) => entry.id === rowId);
     const budgetHeadValue = String(row?.budgetHead || "").trim();
@@ -2448,6 +2676,7 @@ const workflowRowRefFromState = (() => {
     const selectedBudget = findApprovedBudgetOption(
       budgetHeadValue,
       subHeadValue,
+      selected?.budgetLineId,
     );
 
     updateAdvanceRow(rowId, (currentRow) => ({
@@ -2481,7 +2710,11 @@ const workflowRowRefFromState = (() => {
       return;
     }
 
-    const selectedBudget = findApprovedBudgetOption(budgetHeadValue, subHeadValue);
+    const selectedBudget = findApprovedBudgetOption(
+      budgetHeadValue,
+      subHeadValue,
+      selected?.budgetLineId,
+    );
     updateAdvanceRow(rowId, (row) => ({
       ...row,
       budgetHead: budgetHeadValue,
@@ -2517,12 +2750,14 @@ const workflowRowRefFromState = (() => {
   const handleSettlementSubHeadChange = (
     rowId: string,
     subHeadValue: string,
+    selected?: OptionType | null,
   ) => {
     const row = settlementRows.find((entry) => entry.id === rowId);
     const budgetHeadValue = String(row?.budgetHead || "").trim();
     const selectedBudget = findApprovedBudgetOption(
       budgetHeadValue,
       subHeadValue,
+      selected?.budgetLineId,
     );
 
     updateSettlementRow(rowId, (currentRow) => ({
@@ -2548,7 +2783,11 @@ const workflowRowRefFromState = (() => {
       return;
     }
 
-    const selectedBudget = findApprovedBudgetOption(budgetHeadValue, subHeadValue);
+    const selectedBudget = findApprovedBudgetOption(
+      budgetHeadValue,
+      subHeadValue,
+      selected?.budgetLineId,
+    );
     updateSettlementRow(rowId, (row) => ({
       ...row,
       budgetHead: budgetHeadValue,
@@ -2576,12 +2815,14 @@ const workflowRowRefFromState = (() => {
   const handleExpenditureSubHeadChange = (
     rowId: string,
     subHeadValue: string,
+    selected?: OptionType | null,
   ) => {
     const row = expenditureSubRows.find((entry) => entry.id === rowId);
     const budgetHeadValue = String(row?.budgetHead || "").trim();
     const selectedBudget = findApprovedBudgetOption(
       budgetHeadValue,
       subHeadValue,
+      selected?.budgetLineId,
     );
 
     updateExpenditureRow(rowId, (currentRow) => ({
@@ -2607,7 +2848,11 @@ const workflowRowRefFromState = (() => {
       return;
     }
 
-    const selectedBudget = findApprovedBudgetOption(budgetHeadValue, subHeadValue);
+    const selectedBudget = findApprovedBudgetOption(
+      budgetHeadValue,
+      subHeadValue,
+      selected?.budgetLineId,
+    );
     updateExpenditureRow(rowId, (row) => ({
       ...row,
       budgetHead: budgetHeadValue,
@@ -3877,9 +4122,9 @@ const getSelectedWorkflowBudgetLineId = (): number | null =>
 const getActiveTabTransactionAmount = (
     tab: "Advance" | "Settlement" | "Expenditure",
 ): number => {
-    if (tab === "Advance") return totalAdvanceAmount;
-    if (tab === "Settlement") return totalSettlementAmount;
-  return totalExpenditureAmount;
+    if (tab === "Advance") return totalAdvanceDisplayAmount;
+    if (tab === "Settlement") return totalSettlementDisplayAmount;
+  return totalExpenditureDisplayAmount;
 };
 
 const getWorkflowRowEnteredAmount = (
@@ -4050,6 +4295,17 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
           "warning",
         );
       return;
+    }
+
+    if (showUnplannedBudget) {
+      if (!unplannedBudgetHead.trim() || !unplannedBudgetSubHead.trim()) {
+        showAlert("Please select Unplanned Budget head and sub head.", "warning");
+        return;
+      }
+      if (!(unplannedBudgetTotal > 0)) {
+        showAlert("Please enter a valid Unplanned Budget amount.", "warning");
+        return;
+      }
     }
 
     const workflowRows = getRowsForActiveTab();
@@ -4234,6 +4490,19 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       isbudgetproposed: isBudgetProposed,
       proposedamount: amountProposed || null,
       balanceamount: getComputedBalanceAmount() || null,
+      unplanned_budget_enabled: showUnplannedBudget,
+      unplanned_budget_amount: showUnplannedBudget
+        ? Number(unplannedBudgetAmount || 0)
+        : null,
+      unplanned_budget_head: showUnplannedBudget
+        ? unplannedBudgetHead.trim() || null
+        : null,
+      unplanned_budget_sub_head: showUnplannedBudget
+        ? unplannedBudgetSubHead.trim() || null
+        : null,
+      unplanned_budget_description: showUnplannedBudget
+        ? getUnplannedBudgetDescription().trim() || null
+        : null,
       incometype: primaryIncomeRow?.incomeSource || null,
       incomestatus: primaryIncomeRow?.creditAccount || null,
       incomeamounttype: primaryIncomeRow?.contribution || null,
@@ -4319,11 +4588,11 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
     const submittedAmount =
         activeTab === "Advance"
-        ? totalAdvanceAmount
+        ? totalAdvanceDisplayAmount
           : activeTab === "Settlement"
-          ? totalSettlementAmount
+          ? totalSettlementDisplayAmount
             : activeTab === "Expenditure"
-            ? totalExpenditureAmount
+            ? totalExpenditureDisplayAmount
             : 0;
 
       const savedRequestId = parsePositiveIntLike(
@@ -4333,7 +4602,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         normalizedResult.data?.requestRef || "",
       ).trim();
     const financeIdLabel = `Finance ID: ${resolvedFinanceRequestId}`;
-    const proposalRefLabel = `Proposal Ref: ${String(
+    const financeRefLabel = `Finance Ref: ${String(
         (
           location.state as {
             financeProposal?: { proposalId?: unknown };
@@ -4355,10 +4624,10 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
     showAlert(
       <div style={{ lineHeight: 1.6 }}>
-        <div>{moduleLabel}</div>
+          <div>{moduleLabel}</div>
         <div>{financeIdLabel}</div>
-          {proposalRefLabel.trim() !== "Proposal Ref:" && (
-            <div>{proposalRefLabel}</div>
+          {financeRefLabel.trim() !== "Finance Ref:" && (
+            <div>{financeRefLabel}</div>
           )}
         {requestLabel && <div>{requestLabel}</div>}
       </div>,
@@ -4643,6 +4912,11 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       setDebitStatus("");
       setBalanceAmount("");
       setIsBudgetProposed("");
+      setShowUnplannedBudget(false);
+      setUnplannedBudgetAmount("");
+      setUnplannedBudgetHead("");
+      setUnplannedBudgetSubHead("");
+      setUnplannedBudgetDescription("");
       setBudgetRows([{ category: "", head: "", amount: "" }]);
       setAmountProposed("");
       setShowIncomeSection(false);
@@ -5776,6 +6050,115 @@ const handleBeneficiarySearch = async (query: string) => {
             </div>
           </div>
 
+          <div
+            style={{
+              backgroundColor: "#fff",
+              padding: "18px 24px",
+              borderRadius: "16px",
+              marginBottom: "20px",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "16px",
+                flexWrap: "wrap",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "14px",
+                    color: "#495057",
+                    fontWeight: 600,
+                  }}
+                >
+                  Unplanned Budget
+                </span>
+                <CustomToggle
+                  name="unplannedBudgetToggle"
+                  label=""
+                  checked={showUnplannedBudget}
+                  onChange={(checked) => setShowUnplannedBudget(checked)}
+                />
+              </div>
+
+              {hasUnplannedBudgetPreview && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(220px, 1fr) minmax(220px, 1fr) minmax(140px, 180px)",
+                    gap: "12px",
+                    flex: "1 1 760px",
+                  }}
+                >
+                  <CustomDropdown
+                    className="mb-0"
+                    options={getCatalogBudgetHeadSearchOptions()}
+                    value={getCatalogBudgetHeadSelectedOption(
+                      unplannedBudgetHead,
+                    )}
+                    onChange={(option) =>
+                      handleUnplannedBudgetHeadChange(
+                        option as OptionType | null,
+                      )
+                    }
+                    filterOption={filterApprovedBudgetHeadOption}
+                    placeholder="Select Head"
+                  />
+                  <CustomDropdown
+                    className="mb-0"
+                    options={getCatalogSubHeadOptions(
+                      unplannedBudgetHead,
+                    )}
+                    value={getCatalogSubHeadSelectedOption(
+                      unplannedBudgetHead,
+                      unplannedBudgetSubHead,
+                    )}
+                    onChange={(option) =>
+                      handleUnplannedBudgetSubHeadChange(
+                        option as OptionType | null,
+                      )
+                    }
+                    placeholder="Select Sub Head"
+                    isDisabled={!unplannedBudgetHead}
+                  />
+                  <input
+                    type="text"
+                    value={unplannedBudgetAmount}
+                    onChange={(e) =>
+                      setUnplannedBudgetAmount(
+                        e.target.value.replace(/[^\d.]/g, ""),
+                      )
+                    }
+                    placeholder="₹ 0"
+                    style={{
+                      border: "1px solid #d7dee7",
+                      borderRadius: "12px",
+                      padding: "10px 14px",
+                      fontSize: "0.95rem",
+                      height: "45px",
+                      backgroundColor: "#fcfdff",
+                      color: "#2a3f5e",
+                      textAlign: "center",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
         {activeTab === "Advance" && (
           <div
             style={{
@@ -5897,6 +6280,7 @@ const handleBeneficiarySearch = async (query: string) => {
                             value={getApprovedBudgetHeadSelectedOption(
                               row.budgetHead,
                               row.subHead,
+                              row.budgetLineId,
                             )}
                             onChange={(option) =>
                               void handleAdvanceBudgetHeadSearchChange(
@@ -5923,17 +6307,15 @@ const handleBeneficiarySearch = async (query: string) => {
                             options={getApprovedSubHeadOptionsForAdvance(
                               row.budgetHead,
                             )}
-                            value={getSelectedOption(
+                            value={getApprovedSubHeadSelectedOption(
+                              row.budgetHead,
                               row.subHead,
-                              getApprovedSubHeadOptionsForAdvance(
-                                row.budgetHead,
-                              ),
+                              row.budgetLineId,
                             )}
                             onChange={async (option) => {
-                              const val = String(
-                                (option as OptionType)?.value || "",
-                              );
-                              await handleAdvanceSubHeadChange(row.id, val);
+                              const selected = option as OptionType | null;
+                              const val = String(selected?.subHead || "");
+                              await handleAdvanceSubHeadChange(row.id, val, selected);
                             }}
                             placeholder="Select Sub Head"
                             isDisabled={!row.budgetHead}
@@ -6119,6 +6501,38 @@ const handleBeneficiarySearch = async (query: string) => {
                   ))}
                 </tbody>
                 <tfoot>
+                  {hasUnplannedBudgetPreview && (
+                    <tr style={{ backgroundColor: "#fafcff" }}>
+                      <td
+                        colSpan={3}
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          fontWeight: 600,
+                          color: "#0069ab",
+                        }}
+                      >
+                        Unplanned Budget:{" "}
+                        {unplannedBudgetDisplayLabel || "\u00A0"}
+                      </td>
+                      <td
+                        colSpan={2}
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          textAlign: "right",
+                          fontWeight: 600,
+                          color: "#0069ab",
+                        }}
+                      >
+                        ₹{" "}
+                        {unplannedBudgetTotal.toLocaleString("en-IN", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </td>
+                    </tr>
+                  )}
                   <tr style={{ backgroundColor: "#f0f6ff" }}>
                     <td
                       colSpan={5}
@@ -6132,7 +6546,7 @@ const handleBeneficiarySearch = async (query: string) => {
                       }}
                     >
                       Total Advance: ₹{" "}
-                      {totalAdvanceAmount.toLocaleString("en-IN", {
+                      {totalAdvanceDisplayAmount.toLocaleString("en-IN", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
@@ -6160,7 +6574,7 @@ const handleBeneficiarySearch = async (query: string) => {
               >
                 <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
                 <span style={{ fontWeight: 600 }}>
-                  {numberToIndianWords(totalAdvanceAmount)}
+                  {numberToIndianWords(totalAdvanceDisplayAmount)}
                 </span>
               </div>
             </div>
@@ -6303,6 +6717,7 @@ const handleBeneficiarySearch = async (query: string) => {
                           value={getApprovedBudgetHeadSelectedOption(
                             row.budgetHead,
                             row.subHead,
+                            row.budgetLineId,
                           )}
                           onChange={(option) =>
                             handleSettlementBudgetHeadSearchChange(
@@ -6331,15 +6746,15 @@ const handleBeneficiarySearch = async (query: string) => {
                           options={getApprovedSubHeadOptionsForAdvance(
                             row.budgetHead,
                           )}
-                          value={getSelectedOption(
+                          value={getApprovedSubHeadSelectedOption(
+                            row.budgetHead,
                             row.subHead,
-                            getApprovedSubHeadOptionsForAdvance(row.budgetHead),
+                            row.budgetLineId,
                           )}
                           onChange={(option) => {
-                            const val = String(
-                              (option as OptionType)?.value || "",
-                            );
-                            handleSettlementSubHeadChange(row.id, val);
+                            const selected = option as OptionType | null;
+                            const val = String(selected?.subHead || "");
+                            handleSettlementSubHeadChange(row.id, val, selected);
                           }}
                           placeholder="Select Sub Head"
                           isDisabled={!row.budgetHead}
@@ -6498,6 +6913,37 @@ const handleBeneficiarySearch = async (query: string) => {
                   ))}
                 </tbody>
                 <tfoot>
+  {hasUnplannedBudgetPreview && (
+    <tr style={{ backgroundColor: "#fafcff" }}>
+      <td
+        colSpan={4}
+        style={{
+          padding: "12px",
+          border: "1px solid #e0e0e0",
+          fontWeight: 600,
+          color: "#0069ab",
+        }}
+      >
+        Unplanned Budget: {unplannedBudgetDisplayLabel || "\u00A0"}
+      </td>
+      <td
+        style={{
+          padding: "12px",
+          border: "1px solid #e0e0e0",
+          fontWeight: 600,
+          color: "#0069ab",
+          textAlign: "center",
+        }}
+      >
+        ₹{" "}
+        {unplannedBudgetTotal.toLocaleString("en-IN", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}
+      </td>
+      <td style={{ border: "1px solid #e0e0e0" }}></td>
+    </tr>
+  )}
   <tr style={{ backgroundColor: "#f0f6ff" }}>
     <td
       colSpan={4}
@@ -6522,7 +6968,7 @@ const handleBeneficiarySearch = async (query: string) => {
       }}
     >
                       ₹{" "}
-                      {totalSettlementAmount.toLocaleString("en-IN", {
+                      {totalSettlementDisplayAmount.toLocaleString("en-IN", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })}
@@ -6551,7 +6997,7 @@ const handleBeneficiarySearch = async (query: string) => {
                >
                 <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
                 <span style={{ fontWeight: 600 }}>
-                  {numberToIndianWords(totalSettlementAmount)}
+                  {numberToIndianWords(totalSettlementDisplayAmount)}
                 </span>
               </div>
             </div>
@@ -6681,6 +7127,7 @@ const handleBeneficiarySearch = async (query: string) => {
                             value={getApprovedBudgetHeadSelectedOption(
                               row.budgetHead,
                               row.subHead,
+                              row.budgetLineId,
                             )}
                     onChange={(option) =>
                       handleExpenditureBudgetHeadSearchChange(
@@ -6710,17 +7157,15 @@ const handleBeneficiarySearch = async (query: string) => {
                             options={getApprovedSubHeadOptionsForAdvance(
                               row.budgetHead,
                             )}
-                            value={getSelectedOption(
+                            value={getApprovedSubHeadSelectedOption(
+                              row.budgetHead,
                               row.subHead,
-                              getApprovedSubHeadOptionsForAdvance(
-                                row.budgetHead,
-                              ),
+                              row.budgetLineId,
                             )}
                     onChange={(option) => {
-                              const val = String(
-                                (option as OptionType)?.value || "",
-                              );
-                      handleExpenditureSubHeadChange(row.id, val);
+                              const selected = option as OptionType | null;
+                              const val = String(selected?.subHead || "");
+                      handleExpenditureSubHeadChange(row.id, val, selected);
                     }}
                     placeholder="Select Sub Head"
                     isDisabled={!row.budgetHead}
@@ -6952,6 +7397,39 @@ const handleBeneficiarySearch = async (query: string) => {
           ))}
         </tbody>
                 <tfoot>
+                  {hasUnplannedBudgetPreview && (
+                    <tr style={{ backgroundColor: "#fafcff" }}>
+                      <td
+                        colSpan={3}
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          fontWeight: 600,
+                          color: "#0069ab",
+                        }}
+                      >
+                        Unplanned Budget:{" "}
+                        {unplannedBudgetDisplayLabel || "\u00A0"}
+                      </td>
+                      <td
+                        colSpan={2}
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          textAlign: "right",
+                          paddingRight: "18px",
+                          fontWeight: 600,
+                          color: "#0069ab",
+                        }}
+                      >
+                        ₹{" "}
+                        {unplannedBudgetTotal.toLocaleString("en-IN", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </td>
+                    </tr>
+                  )}
                   <tr style={{ backgroundColor: "#f0f6ff" }}>
                     <td
                       colSpan={5}
@@ -6965,12 +7443,10 @@ const handleBeneficiarySearch = async (query: string) => {
                       }}
                     >
                       Total Expenditure: &#8377;{" "}
-                      {expenditureSubRows
-                        .reduce(
-                          (sum, r) => sum + (parseFloat(r.autoSum) || 0),
-                          0,
-                        )
-                        .toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      {totalExpenditureDisplayAmount.toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
             </td>
           </tr>
         </tfoot>
@@ -6995,12 +7471,7 @@ const handleBeneficiarySearch = async (query: string) => {
       >
         <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
                 <span style={{ fontWeight: 600 }}>
-                  {numberToIndianWords(
-                    expenditureSubRows.reduce(
-                      (sum, r) => sum + (parseFloat(r.autoSum) || 0),
-                      0,
-                    ),
-                  )}
+                  {numberToIndianWords(totalExpenditureDisplayAmount)}
                 </span>
       </div>
     </div>

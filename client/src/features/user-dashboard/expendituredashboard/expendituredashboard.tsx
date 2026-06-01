@@ -766,12 +766,13 @@ const ExpenditureDashboard: React.FC = () => {
       setLoadingInfoId(requestId);
       const response = await authenticityUtility.get(`/expenditure/${requestId}/status-updates`) as {
         status?: string;
+        success?: boolean;
         data?: ExpenditureStatusUpdate[];
       };
 
       setStatusUpdatesById((prev) => ({
         ...prev,
-        [requestId]: response.status === "success" ? response.data || [] : [],
+        [requestId]: response.success === true || response.status === "success" ? response.data || [] : [],
       }));
     } catch (error) {
       console.error("Failed to fetch expenditure status updates", error);

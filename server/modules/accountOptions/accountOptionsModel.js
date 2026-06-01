@@ -26,37 +26,25 @@ const accountOptionsModel = {
       throw error;
     }
 
-    const [existingRows] = await db.query(
-      `SELECT id
-         FROM account_options
-        WHERE LOWER(TRIM(account_name)) = LOWER(TRIM(?))
-        LIMIT 1`,
-      [normalizedAccountName],
-    );
-
-    if (existingRows.length > 0) {
-      const id = existingRows[0].id;
-      await db.query(
-        `UPDATE account_options
-            SET account_name = ?,
-                is_active = 1,
-                is_deleted = 0,
-                updated_by = ?
-          WHERE id = ?`,
-        [normalizedAccountName, toPositiveInt(actorUserId), id],
-      );
-      return { id, name: normalizedAccountName };
-    }
-
-    const [sortRows] = await db.query(
-      'SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_sort_order FROM account_options',
-    );
     const [result] = await db.query(
       `INSERT INTO account_options (account_name, sort_order, created_by, updated_by)
-       VALUES (?, ?, ?, ?)`,
+       VALUES (
+         ?,
+         (SELECT next_sort_order FROM (
+           SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_sort_order
+             FROM account_options
+         ) AS sort_source),
+         ?,
+         ?
+       )
+       ON DUPLICATE KEY UPDATE
+         id = LAST_INSERT_ID(id),
+         account_name = VALUES(account_name),
+         is_active = 1,
+         is_deleted = 0,
+         updated_by = VALUES(updated_by)`,
       [
         normalizedAccountName,
-        Number(sortRows?.[0]?.next_sort_order || 1),
         toPositiveInt(actorUserId),
         toPositiveInt(actorUserId),
       ],

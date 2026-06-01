@@ -3,18 +3,30 @@ import accountOptionsModel from './accountOptionsModel.js';
 const getActorUserId = (req) => Number.parseInt(req.user?.id, 10) || null;
 
 const sendError = (res, error, fallbackMessage) => {
-  const statusCode = Number(error?.statusCode || error?.status || 500);
+  let statusCode = Number(error?.statusCode || error?.status || 500);
+  let code = error?.code;
+  let message = error?.message || fallbackMessage;
+
+  if (error && (error.code === 'ER_NO_SUCH_TABLE' || error.errno === 1146)) {
+    statusCode = 404;
+    code = 'TABLE_NOT_FOUND';
+    message = 'Table account_options does not exist';
+  }
+
   return res.status(statusCode).json({
-    status: 'error',
-    message: error?.message || fallbackMessage,
+    success: false,
+    code,
+    message,
+    error: message,
   });
 };
+
 
 const accountOptionsController = {
   async listAccountOptions(_req, res) {
     try {
       const options = await accountOptionsModel.listAccountOptions();
-      return res.json({ status: 'success', data: options });
+      return res.json({ success: true, data: options });
     } catch (error) {
       return sendError(res, error, 'Failed to load account options');
     }
@@ -27,7 +39,7 @@ const accountOptionsController = {
         accountName,
         actorUserId: getActorUserId(req),
       });
-      return res.status(201).json({ status: 'success', data: option });
+      return res.status(201).json({ success: true, data: option });
     } catch (error) {
       return sendError(res, error, 'Failed to add account option');
     }
@@ -43,12 +55,13 @@ const accountOptionsController = {
 
       if (!option) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Account option not found',
+          error: 'Account option not found',
         });
       }
 
-      return res.json({ status: 'success', data: option });
+      return res.json({ success: true, data: option });
     } catch (error) {
       return sendError(res, error, 'Failed to update account option');
     }
@@ -62,13 +75,14 @@ const accountOptionsController = {
 
       if (!deleted) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Account option not found',
+          error: 'Account option not found',
         });
       }
 
       return res.json({
-        status: 'success',
+        success: true,
         message: 'Account option deleted',
       });
     } catch (error) {

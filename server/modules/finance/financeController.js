@@ -290,8 +290,9 @@ const unwrapFinanceModelError = (message = '') =>
 const handleWorkflowError = (res, error, fallbackMessage) => {
   if (error instanceof WorkflowError) {
     return res.status(error.statusCode || 400).json({
-      status: 'error',
+      success: false,
       message: error.message,
+      error: error.message,
       code: error.code,
     });
   }
@@ -299,16 +300,18 @@ const handleWorkflowError = (res, error, fallbackMessage) => {
   if (isHandledFinanceDomainError(error)) {
     const message = unwrapFinanceModelError(error?.message);
     return res.status(409).json({
-      status: 'error',
+      success: false,
       message: message || 'Finance request cannot be processed due to budget validation',
+      error: message || 'Finance request cannot be processed due to budget validation',
       code: 'FINANCE_BUDGET_VALIDATION_FAILED',
     });
   }
 
   console.error(fallbackMessage, error);
   return res.status(500).json({
-    status: 'error',
+    success: false,
     message: error.message || fallbackMessage,
+    error: error.message || fallbackMessage,
   });
 };
 
@@ -415,16 +418,18 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
+          error: 'Invalid finance request ID',
         });
       }
 
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
+          error: 'Finance request not found',
         });
       }
 
@@ -668,8 +673,9 @@ const financeController = {
 
       if (!canAccessFinanceRecord(req, finance)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'Access denied',
+          error: 'Access denied',
         });
       }
 
@@ -1186,7 +1192,7 @@ const financeController = {
       }));
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: timelineCompatible,
       });
     } catch (error) {
@@ -1221,23 +1227,26 @@ const financeController = {
       const financeId = toPositiveInt(req.params.id);
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
+          error: 'Invalid finance request ID',
         });
       }
 
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
+          error: 'Finance request not found',
         });
       }
 
       if (!canAccessFinanceRecord(req, finance)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'Access denied',
+          error: 'Access denied',
         });
       }
 
@@ -1267,7 +1276,7 @@ const financeController = {
       }));
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: timelineCompatible,
       });
     } catch (error) {

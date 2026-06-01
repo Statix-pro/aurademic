@@ -20,6 +20,38 @@ const BULK_NEFT_TEMPLATE_DOWNLOAD_NAME = 'bulk-neft-template.xls';
 const normalizeText = (value) => String(value || '').trim();
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
 
+const toMoney = (value) => {
+  const parsed = Number(String(value ?? '').replace(/,/g, ''));
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+};
+
+const resolveUnplannedBudgetMeta = (source = {}) => {
+  const enabled = Boolean(source.unplanned_budget_enabled);
+  const amount = enabled ? toMoney(source.unplanned_budget_amount) : 0;
+  return {
+    unplannedBudgetEnabled: enabled,
+    unplannedBudgetAmount: enabled ? amount : null,
+    unplannedBudgetHead: normalizeText(source.unplanned_budget_head) || null,
+    unplannedBudgetSubHead: normalizeText(source.unplanned_budget_sub_head) || null,
+    unplannedBudgetDescription: normalizeText(source.unplanned_budget_description) || null,
+  };
+};
+
+const sumRowsByKeys = (rows, keys = []) =>
+  (Array.isArray(rows) ? rows : []).reduce((sum, row) => {
+    const value = keys.map((key) => row?.[key]).find((candidate) => normalizeText(candidate));
+    return sum + toMoney(value);
+  }, 0);
+
+const calculateSubmittedExpenditureTotal = (payload = {}) => {
+  const plannedTotal =
+    sumRowsByKeys(payload.advance_rows || payload.advancerows, ['advance', 'advance_amount']) +
+    sumRowsByKeys(payload.settlement_rows || payload.settlementrows, ['settlement', 'settlement_amount']) +
+    sumRowsByKeys(payload.expenditure_rows || payload.expenditurerows, ['autoSum', 'auto_sum_amount', 'expenditure']);
+  const unplanned = resolveUnplannedBudgetMeta(payload);
+  return plannedTotal + (unplanned.unplannedBudgetEnabled ? toMoney(unplanned.unplannedBudgetAmount) : 0);
+};
+
 const resolveCanonicalPayeeName = (payeeName, accountName) => {
   const normalizedPayeeName = normalizeText(payeeName);
   const normalizedAccountName = normalizeText(accountName);
@@ -142,7 +174,7 @@ const resolveActor = (req) => {
 };
 
 const sendError = (res, status, message) =>
-  res.status(status).json({ status: 'error', message });
+  res.status(status).json({ success: false, message, error: message });
 
 const unwrapTransactionMessage = (message = '') =>
   normalizeText(message).replace(/^Transaction failed:\s*/i, '');
@@ -150,13 +182,18 @@ const unwrapTransactionMessage = (message = '') =>
 const handleError = (res, err, fallback) => {
   if (err instanceof WorkflowError) {
     return res.status(err.statusCode || 400).json({
-      status: 'error',
+      success: false,
       message: err.message,
+      error: err.message,
       code: err.code,
     });
   }
   console.error(fallback, err);
-  return res.status(500).json({ status: 'error', message: err.message || fallback });
+  return res.status(500).json({
+    success: false,
+    message: err.message || fallback,
+    error: err.message || fallback,
+  });
 };
 
 const parseRequestPayload = (req) => {
@@ -223,6 +260,21 @@ const normalizeIncomingPayload = (payload = {}) => {
   }
   if (normalized.balanceamount && !normalized.balance_amount) {
     normalized.balance_amount = normalized.balanceamount;
+  }
+  if (normalized.unplannedbudgetenabled !== undefined && normalized.unplanned_budget_enabled === undefined) {
+    normalized.unplanned_budget_enabled = normalized.unplannedbudgetenabled;
+  }
+  if (normalized.unplannedbudgetamount !== undefined && normalized.unplanned_budget_amount === undefined) {
+    normalized.unplanned_budget_amount = normalized.unplannedbudgetamount;
+  }
+  if (normalized.unplannedbudgethead !== undefined && normalized.unplanned_budget_head === undefined) {
+    normalized.unplanned_budget_head = normalized.unplannedbudgethead;
+  }
+  if (normalized.unplannedbudgetsubhead !== undefined && normalized.unplanned_budget_sub_head === undefined) {
+    normalized.unplanned_budget_sub_head = normalized.unplannedbudgetsubhead;
+  }
+  if (normalized.unplannedbudgetdescription !== undefined && normalized.unplanned_budget_description === undefined) {
+    normalized.unplanned_budget_description = normalized.unplannedbudgetdescription;
   }
   if (normalized.debitstatus && !normalized.debit_status) {
     normalized.debit_status = normalized.debitstatus;
@@ -702,6 +754,8 @@ const expenditureController = {
       const uploads = getExpenditureUploads(req);
 
       const result = await expenditureModel.createExpenditureRequest(payload, userId, uploads);
+      const submittedTotal = calculateSubmittedExpenditureTotal(payload);
+      const expenditureMeta = resolveUnplannedBudgetMeta(payload);
 
       try {
         await workflowService.startWorkflow({
@@ -714,6 +768,8 @@ const expenditureController = {
             moduleMeta: {
               trigger: 'create_expenditure_request',
               beneficiaryType: normalizeText(payload.beneficiary_type) || null,
+              amountBand: submittedTotal > 10000 ? 'gt_10k' : 'lte_10k',
+              expenditureMeta,
             },
           },
         });
@@ -1268,6 +1324,8 @@ const expenditureController = {
         moduleMeta: {
           trigger: 'applicant_resubmit',
           beneficiaryType: normalizeText(record.beneficiary_type) || null,
+          amountBand: Number(record.total_amount || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+          expenditureMeta: resolveUnplannedBudgetMeta(record),
         },
       };
 
@@ -1356,7 +1414,7 @@ const expenditureController = {
       }));
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: timelineCompatible,
       });
     } catch (err) {
@@ -1399,7 +1457,7 @@ const expenditureController = {
       }));
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: timelineCompatible,
       });
     } catch (err) {
