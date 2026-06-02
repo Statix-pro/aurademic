@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS expenditure_requests (
   advance_total_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   settlement_total_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   expenditure_total_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+  settlement_remarks VARCHAR(500) NULL,
+  expenditure_remarks VARCHAR(500) NULL,
   total_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   approved_total_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
 

@@ -1006,8 +1006,12 @@ const FinanceApproval: React.FC = () => {
   const handleApplicantSearch = async (query: string) => {
     setApplicantSearchQuery(query);
     try {
-      const response = await authenticityUtility.get(`/finance-requests/search-applicant?q=${encodeURIComponent(query)}`) as { status: string; data: Array<{ employee_id: number; name: string; designation: string; department: string; email: string; mobile: string; employee_type: string }> };
-      if (response.status === 'success') {
+      const response = await authenticityUtility.get(`/finance-requests/search-applicant?q=${encodeURIComponent(query)}`) as {
+        success?: boolean;
+        status?: string;
+        data?: Array<{ employee_id: number; name: string; designation: string; department: string; email: string; mobile: string; employee_type: string }>;
+      };
+      if (response.success === true || response.status === 'success') {
         setApplicantSearchResults(response.data || []);
         setShowApplicantDropdown(true);
       }
@@ -1532,6 +1536,9 @@ const FinanceApproval: React.FC = () => {
   const unplannedBudgetTotal = showUnplannedBudget ? Number(unplannedBudgetAmount || 0) : 0;
   const hasUnplannedBudgetPreview = showUnplannedBudget || Number(unplannedBudgetAmount || 0) > 0;
   const totalBudget = budgetRows.reduce((sum, row) => sum + Number(row.amount || 0), 0) + unplannedBudgetTotal;
+  const totalIncome = incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+  const amountRequestedFromManagement = Math.max(totalBudget - totalIncome, 0);
+  const shouldShowManagementRequestAmount = showIncomeSection && amountRequestedFromManagement > 0;
   const actionCell: CSSProperties = {
     display: 'flex',
     justifyContent: 'center',
@@ -2246,13 +2253,15 @@ const FinanceApproval: React.FC = () => {
     const loadWorkflowMeta = async () => {
       try {
         const response = await authenticityUtility.get('/finance-requests/workflow/meta') as {
+          success?: boolean;
           status?: string;
           data?: {
             permittedStages?: unknown[];
           };
         };
 
-        if (cancelled || response?.status !== 'success') {
+        const isSuccessResponse = response?.success === true || response?.status === 'success';
+        if (cancelled || !isSuccessResponse) {
           return;
         }
 
@@ -2376,12 +2385,14 @@ const FinanceApproval: React.FC = () => {
       try {
         setIsLoading(true);
         const response = await authenticityUtility.get(`/finance-requests/${requestId}`) as {
+          success?: boolean;
           status?: string;
           data?: any;
           message?: string;
         };
 
-        if (response?.status !== 'success' || !response?.data || cancelled) {
+        const isSuccessResponse = response?.success === true || response?.status === 'success';
+        if (!isSuccessResponse || !response?.data || cancelled) {
           return;
         }
 
@@ -2558,6 +2569,7 @@ const FinanceApproval: React.FC = () => {
     const loadLoggedInApplicant = async () => {
       try {
         const response = await authenticityUtility.get('/finance-requests/me') as {
+          success?: boolean;
           status?: string;
           data?: {
             employee_id?: number | null;
@@ -2569,7 +2581,8 @@ const FinanceApproval: React.FC = () => {
           };
         };
 
-        if (cancelled || response?.status !== 'success' || !response?.data) {
+        const isSuccessResponse = response?.success === true || response?.status === 'success';
+        if (cancelled || !isSuccessResponse || !response?.data) {
           return;
         }
 
@@ -4260,10 +4273,39 @@ const FinanceApproval: React.FC = () => {
                             <tr style={{ backgroundColor: '#f0f6ff' }}>
                               <td colSpan={2} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>Total Income</td>
                               <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
-                                ₹ {incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)}
+                                ₹ {totalIncome}
                               </td>
                               <td colSpan={3} style={{ border: '1px solid #e0e0e0' }}></td>
                             </tr>
+                            {shouldShowManagementRequestAmount && (
+                              <tr style={{ backgroundColor: '#fff8e8' }}>
+                                <td
+                                  colSpan={2}
+                                  style={{
+                                    padding: '12px',
+                                    border: '1px solid #e0e0e0',
+                                    textAlign: 'right',
+                                    paddingRight: '15px',
+                                    fontWeight: '600',
+                                    color: '#7a4b00',
+                                  }}
+                                >
+                                  Amount requested from Management
+                                </td>
+                                <td
+                                  style={{
+                                    padding: '12px',
+                                    border: '1px solid #e0e0e0',
+                                    fontWeight: '600',
+                                    color: '#7a4b00',
+                                    textAlign: 'center',
+                                  }}
+                                >
+                                  ₹ {amountRequestedFromManagement}
+                                </td>
+                                <td colSpan={3} style={{ border: '1px solid #e0e0e0' }}></td>
+                              </tr>
+                            )}
                           </tfoot>
                         </table>
 
@@ -4271,7 +4313,7 @@ const FinanceApproval: React.FC = () => {
                         <div style={{ marginTop: "10px", padding: "10px 14px", borderRadius: "10px", backgroundColor: "#f0f6ff", border: "1px solid #cfe2ff", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", fontSize: "0.9rem", color: "#0b3d75", textAlign: "center", width: "100%" }}>
                           <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
                           <span style={{ fontWeight: 600 }}>
-                            {numberToIndianWords(incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)).replace(/\b\w/g, l => l.toUpperCase()).replace(/[^\s][A-Z]/g, l => l.toLowerCase())}
+                            {numberToIndianWords(totalIncome).replace(/\b\w/g, l => l.toUpperCase()).replace(/[^\s][A-Z]/g, l => l.toLowerCase())}
                           </span>
                         </div>
                       </>
@@ -4949,6 +4991,22 @@ const FinanceApproval: React.FC = () => {
                           </React.Fragment>
                         ))}
                       </tbody>
+                      {shouldShowManagementRequestAmount && (
+                        <tfoot>
+                          <tr style={{ backgroundColor: '#f8f8f8', fontWeight: 'bold' }}>
+                            <td
+                              colSpan={3}
+                              style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}
+                            >
+                              Amount requested from Management
+                            </td>
+                            <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>
+                              ₹ {amountRequestedFromManagement}
+                            </td>
+                            <td style={{ padding: '3px 4px', border: '1px solid #000' }} />
+                          </tr>
+                        </tfoot>
+                      )}
                     </table>
                   ) : (
                     <div style={{ textAlign: 'center', fontSize: '14px' }}>Income: Not Applicable</div>
