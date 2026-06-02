@@ -297,7 +297,6 @@ interface AdvanceFormRow {
   budget: string;
   preAdvance: string;
   advance: string;
-  tentativeSettlementDate: string;
   budgetLineId?: number | null;
   budgetProposalId?: number | null;
 }
@@ -449,6 +448,8 @@ const PAYMENT_MODE_OPTIONS = [
 ];
 const PAYMENT_STATUS_OPTIONS = ["Paid", "Pending", "Processing", "Cancelled"];
 const BULK_NEFT_TEMPLATE_VERSION = "2026-04-11";
+const isCashPaymentMode = (mode: unknown) =>
+  String(mode || "").trim().toLowerCase() === "cash";
 
 const flattenOptions = (
   options: Array<OptionType | { label: string; options: OptionType[] }>,
@@ -746,7 +747,6 @@ const createAdvanceRow = (): AdvanceFormRow => ({
   budget: "",
   preAdvance: "0",
   advance: "",
-  tentativeSettlementDate: "",
   budgetLineId: null,
   budgetProposalId: null,
 });
@@ -1043,6 +1043,7 @@ const ExpenditureApproval: React.FC = () => {
     createSettlementRow(),
   ]);
   const [settlementRemarks, setSettlementRemarks] = useState("");
+  const [advanceTentativeSettlementDate, setAdvanceTentativeSettlementDate] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [categoryType, setCategoryType] = useState<string>("");
@@ -1322,9 +1323,6 @@ const ExpenditureApproval: React.FC = () => {
               budget: String(row?.budget_amount ?? ""),
               preAdvance: String(row?.pre_advance_amount ?? ""),
               advance: String(row?.advance_amount ?? ""),
-              tentativeSettlementDate: normalizeDateForInput(
-                String(row?.tentative_settlement_date || ""),
-              ),
               budgetLineId: row?.budget_line_id ?? null,
               budgetProposalId: row?.budget_proposal_id ?? null,
             }))
@@ -1357,6 +1355,7 @@ const ExpenditureApproval: React.FC = () => {
           : [];
         setSettlementRemarks(String(record.settlement_remarks || ""));
         setExpenditureRemarks(String(record.expenditure_remarks || ""));
+        setAdvanceTentativeSettlementDate(normalizeDateForInput(String(record.tentative_settlement_date || "")));
 
         const mapPayeeRows = Array.isArray(record.payee_rows)
           ? record.payee_rows.map((row: any, index: number) => ({
@@ -2662,6 +2661,14 @@ const workflowRowRefFromState = (() => {
     ].some((value) => String(value || "").trim() !== "");
   };
 
+  const isPayeeRowReadyForAdd = (row: PayeeRow): boolean => {
+    const hasTransactionFields = Boolean(row.amount && row.mode);
+    if (!hasTransactionFields) return false;
+    if (isCashPaymentMode(row.mode)) return true;
+    if (!row.payeeName) return false;
+    return Boolean(row.accountNo && row.bankName && row.ifsc && row.branchName);
+  };
+
   const handleAdvanceBudgetHeadChange = (
     rowId: string,
     budgetHeadValue: string,
@@ -3241,19 +3248,6 @@ const evaluateArithmeticExpression = (input: string) => {
   setAdvanceRows(updatedRows);
 };
 
-  const handleAdvanceTentativeSettlementDateChange = (
-    rowId: string | number,
-    value: string,
-  ) => {
-    setAdvanceRows((rows) =>
-      rows.map((row) =>
-        row.id === rowId
-          ? { ...row, tentativeSettlementDate: value }
-          : row,
-      ),
-    );
-  };
-
   const handleExpenditureAmountChange = (
     rowId: string | number,
     value: string,
@@ -3696,7 +3690,14 @@ const evaluateArithmeticExpression = (input: string) => {
               </tr>
             </thead>
             <tbody>
-              {payeeRows.map((row, index) => (
+              {payeeRows.map((row, index) => {
+                const isCashMode = isCashPaymentMode(row.mode);
+                const bankFieldClassName = `payee-field payee-field--readonly ${
+                  isCashMode ? "payee-field--disabled" : ""
+                }`;
+                const isReadyForAdd = isPayeeRowReadyForAdd(row);
+
+                return (
                 <tr key={row.id}>
                   <td className="payee-sno-cell">{index + 1}</td>
                   <td>
@@ -3704,10 +3705,13 @@ const evaluateArithmeticExpression = (input: string) => {
                       <div className="payee-details-grid">
                         <div className="payee-field-wrap">
                           <input
-                            className="payee-field payee-field--readonly"
+                            className={`payee-field payee-field--readonly ${
+                              isCashMode ? "payee-field--disabled" : ""
+                            }`}
                             placeholder="Accountant Name"
                             value={row.payeeName}
                             onChange={(e) => {
+                              if (isCashMode) return;
                               handlePayeeLookupInputChange(
                                 row.id,
                                 "payeeName",
@@ -3715,45 +3719,52 @@ const evaluateArithmeticExpression = (input: string) => {
                               );
                             }}
                             onFocus={() =>
-                              handlePayeeLookupFocus(row, "payeeName")
+                              !isCashMode && handlePayeeLookupFocus(row, "payeeName")
                             }
                             onBlur={handlePayeeLookupBlur}
+                            readOnly={isCashMode}
+                            disabled={isCashMode}
+                            tabIndex={isCashMode ? -1 : undefined}
                           />
-                          {renderPayeeLookupDropdown(row.id, "payeeName")}
+                          {!isCashMode && renderPayeeLookupDropdown(row.id, "payeeName")}
                         </div>
                         <div className="payee-field-wrap">
                           <input
-                            className="payee-field payee-field--readonly"
+                            className={bankFieldClassName}
                             placeholder="Account No."
                             value={row.accountNo}
                             readOnly
+                            disabled={isCashMode}
                             tabIndex={-1}
                           />
                         </div>
                         <div className="payee-field-wrap">
                           <input
-                            className="payee-field payee-field--readonly"
+                            className={bankFieldClassName}
                             placeholder="Bank Name"
                             value={row.bankName}
                             readOnly
+                            disabled={isCashMode}
                             tabIndex={-1}
                           />
                         </div>
                         <div className="payee-field-wrap">
                           <input
-                            className="payee-field payee-field--readonly"
+                            className={bankFieldClassName}
                             placeholder="IFSC"
                             value={row.ifsc}
                             readOnly
+                            disabled={isCashMode}
                             tabIndex={-1}
                           />
                         </div>
                         <div className="payee-field-wrap payee-field-wrap-full">
                           <input
-                            className="payee-field payee-field--readonly"
+                            className={bankFieldClassName}
                             placeholder="Branch Name"
                             value={row.branchName}
                             readOnly
+                            disabled={isCashMode}
                             tabIndex={-1}
                           />
                         </div>
@@ -3780,17 +3791,34 @@ const evaluateArithmeticExpression = (input: string) => {
                           )}
                         onChange={(opt) => {
                           const selected = opt as OptionType | null;
+                          const nextMode = selected?.value
+                            ? String(selected.value)
+                            : "";
                             const updated = payeeRows.map((r) =>
                               r.id === row.id
                                 ? {
                                     ...r,
-                                    mode: selected?.value
-                                      ? String(selected.value)
-                                      : "",
+                                    mode: nextMode,
+                                    ...(isCashPaymentMode(nextMode)
+                                      ? {
+                                          payeeId: null,
+                                          payeeName: "",
+                                          accountNo: "",
+                                          bankName: "",
+                                          ifsc: "",
+                                          branchName: "",
+                                          accountName: "",
+                                          accountType: "",
+                                          url: "",
+                                        }
+                                      : {}),
                                   }
                                 : r,
                             );
                           setPayeeRows(updated);
+                          if (isCashPaymentMode(nextMode)) {
+                            closePayeeLookup();
+                          }
                         }}
                         placeholder="Mode *"
                       />
@@ -3867,49 +3895,23 @@ const evaluateArithmeticExpression = (input: string) => {
                       {index === payeeRows.length - 1 && (
                         <button
                           className="payee-row-btn"
-                          disabled={
-                            !row.payeeName ||
-                            !row.accountNo ||
-                            !row.bankName ||
-                            !row.ifsc ||
-                            !row.branchName ||
-                            !row.amount ||
-                            !row.mode
-                          }
+                          disabled={!isReadyForAdd}
                           onClick={(e) => {
                             e.preventDefault();
                             addPayeeRow();
                           }}
                           title={
-                            !row.payeeName ||
-                            !row.accountNo ||
-                            !row.bankName ||
-                            !row.ifsc ||
-                            !row.branchName ||
-                            !row.amount ||
-                            !row.mode
+                            !isReadyForAdd
                               ? "Please fill all fields to add a new row"
                               : "Add Row"
                           }
                           style={{
                             opacity:
-                              !row.payeeName ||
-                              !row.accountNo ||
-                              !row.bankName ||
-                              !row.ifsc ||
-                              !row.branchName ||
-                              !row.amount ||
-                              !row.mode
+                              !isReadyForAdd
                                 ? 0.5
                                 : 1,
                             cursor:
-                              !row.payeeName ||
-                              !row.accountNo ||
-                              !row.bankName ||
-                              !row.ifsc ||
-                              !row.branchName ||
-                              !row.amount ||
-                              !row.mode
+                              !isReadyForAdd
                                 ? "not-allowed"
                                 : "pointer",
                           }}
@@ -3932,7 +3934,8 @@ const evaluateArithmeticExpression = (input: string) => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -4371,21 +4374,9 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     }
 
     if (activeTab === "Advance") {
-      const missingTentativeDateRows = advanceRows
-        .map((row, index) => ({
-          row,
-          rowNumber: index + 1,
-        }))
-        .filter(
-          ({ row }) =>
-            Number(String(row.advance || "").replace(/,/g, "").trim()) > 0 &&
-            !String(row.tentativeSettlementDate || "").trim(),
-        )
-        .map(({ rowNumber }) => rowNumber);
-
-      if (missingTentativeDateRows.length > 0) {
+      if (!String(advanceTentativeSettlementDate || "").trim()) {
         showAlert(
-          `Please select Tentative Date of Settlement for Advance row ${missingTentativeDateRows.join(", ")}.`,
+          "Please select a Tentative Date of Settlement.",
           "warning",
         );
         return;
@@ -4439,6 +4430,17 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     if (missingModeRowIndex !== -1) {
       showAlert(
         `Please select a transaction mode for Payee row ${missingModeRowIndex + 1} before submitting.`,
+        "warning",
+      );
+      return;
+    }
+
+    const incompletePayeeRowIndex = effectivePayeeRows.findIndex(
+      (row) => !isPayeeRowReadyForAdd(row),
+    );
+    if (incompletePayeeRowIndex !== -1) {
+      showAlert(
+        `Please fill required payee details for Payee row ${incompletePayeeRowIndex + 1}.`,
         "warning",
       );
       return;
@@ -4563,6 +4565,8 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         activeTab === "Settlement" ? settlementRemarks.trim() || null : null,
       expenditure_remarks:
         activeTab === "Expenditure" ? expenditureRemarks.trim() || null : null,
+      tentative_settlement_date:
+        activeTab === "Advance" ? advanceTentativeSettlementDate || null : null,
       incometype: primaryIncomeRow?.incomeSource || null,
       incomestatus: primaryIncomeRow?.creditAccount || null,
       incomeamounttype: primaryIncomeRow?.contribution || null,
@@ -6464,6 +6468,7 @@ const handleBeneficiarySearch = async (query: string) => {
                       </tr>
                       <tr>
                         <td
+                          colSpan={2}
                           style={{
                             padding: "12px 16px",
                             border: "1px solid #e0e0e0",
@@ -6527,51 +6532,6 @@ const handleBeneficiarySearch = async (query: string) => {
                                 fontWeight: 500,
                               }}
                             >
-                              Tentative Date of Settlement
-                            </span>
-                            <input
-                              type="date"
-                              value={row.tentativeSettlementDate}
-                              onChange={(e) =>
-                                handleAdvanceTentativeSettlementDateChange(
-                                  row.id,
-                                  e.target.value,
-                                )
-                              }
-                              style={{
-                                border: "1px solid #d7dee7",
-                                borderRadius: "12px",
-                                padding: "10px 15px",
-                                fontSize: "0.95rem",
-                                width: "100%",
-                                height: "45px",
-                                backgroundColor: "#f8fbff",
-                                color: "#2a3f5e",
-                                outline: "none",
-                              }}
-                            />
-                          </div>
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px 16px",
-                            border: "1px solid #e0e0e0",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "8px",
-                            }}
-                          >
-                            <span
-                              style={{
-                                color: "#364152",
-                                fontSize: "1rem",
-                                fontWeight: 500,
-                              }}
-                            >
                               Advance
                             </span>
                             <input
@@ -6591,9 +6551,8 @@ const handleBeneficiarySearch = async (query: string) => {
                                 fontSize: "0.95rem",
                                 width: "100%",
                                 height: "45px",
-                                backgroundColor: "#f8fbff",
+                                backgroundColor: "#ffffff",
                                 color: "#2a3f5e",
-                                textAlign: "center",
                                 outline: "none",
                               }}
                             />
@@ -6679,6 +6638,42 @@ const handleBeneficiarySearch = async (query: string) => {
                 <span style={{ fontWeight: 600 }}>
                   {numberToIndianWords(totalAdvanceDisplayAmount)}
                 </span>
+              </div>
+
+              <div
+                style={{
+                  marginTop: "14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
+                <label
+                  style={{
+                    fontWeight: 600,
+                    color: "#2a3f5e",
+                    fontSize: "0.95rem",
+                  }}
+                >
+                  Tentative Date of Settlement <span style={{ color: "red" }}>*</span>
+                </label>
+                <input
+                  type="date"
+                  value={advanceTentativeSettlementDate}
+                  onChange={(e) => setAdvanceTentativeSettlementDate(e.target.value)}
+                  style={{
+                    border: "1px solid #d7dee7",
+                    borderRadius: "12px",
+                    padding: "12px 14px",
+                    fontSize: "0.95rem",
+                    width: "100%",
+                    height: "48px",
+                    backgroundColor: "#fcfdff",
+                    color: "#2a3f5e",
+                    outline: "none",
+                    fontFamily: "inherit",
+                  }}
+                />
               </div>
             </div>
           </div>
