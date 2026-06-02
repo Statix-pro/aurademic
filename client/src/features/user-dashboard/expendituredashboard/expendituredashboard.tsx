@@ -39,6 +39,7 @@ interface ExpenditureItem {
 }
 
 type WorkflowModule = "Advance" | "Settlement" | "Expenditure";
+type StatusFilterKey = "all" | "pending" | "return" | "approved" | "pending_payment" | "closed";
 
 interface ExpenditureDialogConfig {
   show: boolean;
@@ -369,6 +370,139 @@ const buildWorkflowRequestRefMap = (requests: ExpenditureItem[]) => {
 const getRequestStatusLabel = (item: ExpenditureItem) =>
   getWorkflowApprovalLabel(parseWorkflowState(item.workflow_state));
 
+const matchesStatusFilter = (item: ExpenditureItem, filter: StatusFilterKey) => {
+  if (filter === "all") return true;
+
+  const statusLabel = getRequestStatusLabel(item);
+  const isPaid = normalizeStatus(item.payment_status) === "paid";
+
+  if (filter === "pending") {
+    return statusLabel === "Pending" || statusLabel === "Resubmitted";
+  }
+  if (filter === "return") {
+    return statusLabel === "Returned";
+  }
+  if (filter === "approved") {
+    return statusLabel === "Approved";
+  }
+  if (filter === "pending_payment") {
+    return statusLabel === "Approved" && !isPaid;
+  }
+  if (filter === "closed") {
+    return statusLabel === "Approved" && isPaid;
+  }
+
+  return true;
+};
+
+const getWorkflowRowOptionStatus = (
+  row: WorkflowRow,
+  module: WorkflowModule | "Advance2",
+) => {
+  if (module === "Advance2") return row.advanceStatus2 || "";
+  if (module === "Advance") return row.advanceStatus || "";
+  if (module === "Settlement") return row.settlementStatus || "";
+  return row.expenditureStatus || "";
+};
+
+const getWorkflowRowOptionPaymentStatus = (
+  row: WorkflowRow,
+  module: WorkflowModule | "Advance2",
+) => {
+  if (module === "Advance2") return row.advancePaymentStatus2 || "";
+  if (module === "Advance") return row.advancePaymentStatus || "";
+  if (module === "Settlement") return row.settlementPaymentStatus || "";
+  return row.expenditurePaymentStatus || "";
+};
+
+const getWorkflowRowOptionRequestRef = (
+  row: WorkflowRow,
+  module: WorkflowModule | "Advance2",
+) => {
+  if (module === "Advance2") return row.advanceRequestRef2 || "";
+  if (module === "Advance") return row.advanceRequestRef || "";
+  if (module === "Settlement") return row.settlementRequestRef || "";
+  return row.expenditureRequestRef || "";
+};
+
+const getWorkflowRowOptionAmount = (
+  row: WorkflowRow,
+  module: WorkflowModule | "Advance2",
+) => {
+  if (module === "Advance2") return Number(row.advanceAmount2 || 0);
+  if (module === "Advance") return Number(row.advanceAmount || 0);
+  if (module === "Settlement") return Number(row.settlementAmount || 0);
+  return Number(row.expenditureAmount || 0);
+};
+
+const getWorkflowStatusCategory = (status: unknown) => {
+  const normalized = normalizeStatus(status);
+  if (normalized === "returned") return "Returned";
+  if (normalized === "rejected") return "Rejected";
+  if (normalized === "resubmitted") return "Resubmitted";
+  if (["approved", "completed", "principal_approved"].includes(normalized)) {
+    return "Approved";
+  }
+  return "Pending";
+};
+
+const matchesWorkflowRowOptionStatusFilter = (
+  row: WorkflowRow,
+  module: WorkflowModule | "Advance2",
+  filter: StatusFilterKey,
+) => {
+  if (filter === "all") return true;
+
+  const hasRequest =
+    Boolean(getWorkflowRowOptionRequestRef(row, module)) ||
+    getWorkflowRowOptionAmount(row, module) > 0;
+  if (!hasRequest) return filter === "pending";
+
+  const statusCategory = getWorkflowStatusCategory(
+    getWorkflowRowOptionStatus(row, module),
+  );
+  const isPaid = normalizeStatus(getWorkflowRowOptionPaymentStatus(row, module)) === "paid";
+
+  if (filter === "pending") {
+    return statusCategory === "Pending" || statusCategory === "Resubmitted";
+  }
+  if (filter === "return") {
+    return statusCategory === "Returned";
+  }
+  if (filter === "approved") {
+    return statusCategory === "Approved";
+  }
+  if (filter === "pending_payment") {
+    return statusCategory === "Approved" && !isPaid;
+  }
+  if (filter === "closed") {
+    return statusCategory === "Approved" && isPaid;
+  }
+
+  return true;
+};
+
+const matchesWorkflowRowStatusFilter = (row: WorkflowRow, filter: StatusFilterKey) => {
+  if (filter === "all") return true;
+
+  const modules: Array<WorkflowModule | "Advance2"> = [
+    "Advance",
+    "Advance2",
+    "Settlement",
+    "Expenditure",
+  ];
+  const hasSubmitted = modules.some(
+    (module) =>
+      Boolean(getWorkflowRowOptionRequestRef(row, module)) ||
+      getWorkflowRowOptionAmount(row, module) > 0,
+  );
+
+  if (!hasSubmitted) return filter === "pending";
+  return modules.some((module) =>
+    matchesWorkflowRowOptionStatusFilter(row, module, filter),
+  );
+};
+
 const ExpenditureDashboard: React.FC = () => {
   const [data, setData] = useState<ExpenditureItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -382,7 +516,7 @@ const ExpenditureDashboard: React.FC = () => {
   const [financeIdQuery, setFinanceIdQuery] = useState<string>("");
   const [financialYear, setFinancialYear] = useState<string>(getDefaultFilterFY());
   const [selectedBeneficiary, setSelectedBeneficiary] = useState<string>("all");
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("all");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<StatusFilterKey>("pending");
   const [proposalCards, setProposalCards] = useState<ExpenditureProposalCard[]>([]);
   const [cardRows, setCardRows] = useState<Record<string, WorkflowRow[]>>({});
   const [dialogConfig, setDialogConfig] = useState<ExpenditureDialogConfig>({
@@ -501,7 +635,7 @@ const ExpenditureDashboard: React.FC = () => {
     ];
   }, [data]);
 
-  const filteredProposalCards = useMemo(() => {
+  const searchFilteredProposalCards = useMemo(() => {
     const financeIdsByBeneficiary =
       selectedBeneficiary === "all"
         ? null
@@ -560,6 +694,29 @@ const ExpenditureDashboard: React.FC = () => {
     });
   }, [cardRows, data, proposalCards, normalizedFinanceIdQuery, selectedBeneficiary]);
 
+  const filteredCardRows = useMemo(() => {
+    const next: Record<string, WorkflowRow[]> = {};
+
+    searchFilteredProposalCards.forEach((card) => {
+      const rows = cardRows[card.financeRequestId] ?? [];
+      next[card.financeRequestId] =
+        selectedStatusFilter === "all"
+          ? rows
+          : rows.filter((row) => matchesWorkflowRowStatusFilter(row, selectedStatusFilter));
+    });
+
+    return next;
+  }, [cardRows, searchFilteredProposalCards, selectedStatusFilter]);
+
+  const filteredProposalCards = useMemo(
+    () =>
+      searchFilteredProposalCards.filter((card) => {
+        if (selectedStatusFilter === "all") return true;
+        return (filteredCardRows[card.financeRequestId] ?? []).length > 0;
+      }),
+    [filteredCardRows, searchFilteredProposalCards, selectedStatusFilter],
+  );
+
   const stats = useMemo(() => {
     const beneficiaryFilteredData = data.filter((item) => {
       if (selectedBeneficiary === "all") return true;
@@ -584,19 +741,16 @@ const ExpenditureDashboard: React.FC = () => {
       total++;
       totalAmount += Number(item.amount || 0);
 
-      const statusLabel = getRequestStatusLabel(item);
-      const isPaid = normalizeStatus(item.payment_status) === "paid";
-
-      if (statusLabel === "Pending" || statusLabel === "Resubmitted") {
+      if (matchesStatusFilter(item, "pending")) {
         pending++;
         pendingAmount += Number(item.amount || 0);
-      } else if (statusLabel === "Returned") {
+      } else if (matchesStatusFilter(item, "return")) {
         returned++;
         returnedAmount += Number(item.amount || 0);
-      } else if (statusLabel === "Approved") {
+      } else if (matchesStatusFilter(item, "approved")) {
         approved++;
         approvedAmount += Number(item.amount || 0);
-        if (isPaid) {
+        if (matchesStatusFilter(item, "closed")) {
           closed++;
           closedAmount += Number(item.amount || 0);
         } else {
@@ -622,6 +776,57 @@ const ExpenditureDashboard: React.FC = () => {
     };
   }, [data, selectedBeneficiary]);
 
+  const kpiCards = [
+    {
+      key: "all" as const,
+      className: "total",
+      label: "Total",
+      value: stats.total,
+      amount: stats.totalAmount,
+      icon: <FileText size={20} className="expenditure-stats-icon" />,
+    },
+    {
+      key: "pending" as const,
+      className: "pending",
+      label: "Pending",
+      value: stats.pending,
+      amount: stats.pendingAmount,
+      icon: <Clock size={20} className="expenditure-stats-icon" />,
+    },
+    {
+      key: "return" as const,
+      className: "return",
+      label: "Return",
+      value: stats.returned,
+      amount: stats.returnedAmount,
+      icon: <RotateCcw size={20} className="expenditure-stats-icon" />,
+    },
+    {
+      key: "approved" as const,
+      className: "approved",
+      label: "Approved",
+      value: stats.approved,
+      amount: stats.approvedAmount,
+      icon: <CheckCircle2 size={20} className="expenditure-stats-icon" />,
+    },
+    {
+      key: "pending_payment" as const,
+      className: "pending-payment",
+      label: "Pending (Payment)",
+      value: stats.pendingPayment,
+      amount: stats.pendingPaymentAmount,
+      icon: <CreditCard size={20} className="expenditure-stats-icon" />,
+    },
+    {
+      key: "closed" as const,
+      className: "closed",
+      label: "Closed",
+      value: stats.closed,
+      amount: stats.closedAmount,
+      icon: <Lock size={20} className="expenditure-stats-icon" />,
+    },
+  ];
+
   const filteredData = useMemo(() => {
     const visibleFinanceIds = new Set(filteredProposalCards.map((card) => card.financeRequestId));
     return data.filter((item) => {
@@ -629,28 +834,7 @@ const ExpenditureDashboard: React.FC = () => {
         return false;
       }
 
-      if (selectedStatusFilter === "all") return true;
-
-      const statusLabel = getRequestStatusLabel(item);
-      const isPaid = normalizeStatus(item.payment_status) === "paid";
-
-      if (selectedStatusFilter === "pending") {
-        return statusLabel === "Pending" || statusLabel === "Resubmitted";
-      }
-      if (selectedStatusFilter === "return") {
-        return statusLabel === "Returned";
-      }
-      if (selectedStatusFilter === "approved") {
-        return statusLabel === "Approved";
-      }
-      if (selectedStatusFilter === "pending_payment") {
-        return statusLabel === "Approved" && !isPaid;
-      }
-      if (selectedStatusFilter === "closed") {
-        return statusLabel === "Approved" && isPaid;
-      }
-
-      return true;
+      return matchesStatusFilter(item, selectedStatusFilter);
     });
   }, [data, filteredProposalCards, selectedStatusFilter]);
 
@@ -1767,71 +1951,31 @@ const ExpenditureDashboard: React.FC = () => {
 
           <div className="expenditure-body">
             <div className="expenditure-stats-container">
-              <div className="expenditure-stats-card total">
-                <div className="expenditure-stats-icon-wrap">
-                  <FileText size={20} className="expenditure-stats-icon" />
-                </div>
-                <div className="expenditure-stats-info">
-                  <span className="expenditure-stats-label">Total</span>
-                  <span className="expenditure-stats-number">{stats.total}</span>
-                  <span className="expenditure-stats-amount">{formatAmount(stats.totalAmount)}</span>
-                </div>
-              </div>
+              {kpiCards.map((card) => {
+                const isActive = selectedStatusFilter === card.key;
 
-              <div className="expenditure-stats-card pending">
-                <div className="expenditure-stats-icon-wrap">
-                  <Clock size={20} className="expenditure-stats-icon" />
-                </div>
-                <div className="expenditure-stats-info">
-                  <span className="expenditure-stats-label">Pending</span>
-                  <span className="expenditure-stats-number">{stats.pending}</span>
-                  <span className="expenditure-stats-amount">{formatAmount(stats.pendingAmount)}</span>
-                </div>
-              </div>
-
-              <div className="expenditure-stats-card return">
-                <div className="expenditure-stats-icon-wrap">
-                  <RotateCcw size={20} className="expenditure-stats-icon" />
-                </div>
-                <div className="expenditure-stats-info">
-                  <span className="expenditure-stats-label">Return</span>
-                  <span className="expenditure-stats-number">{stats.returned}</span>
-                  <span className="expenditure-stats-amount">{formatAmount(stats.returnedAmount)}</span>
-                </div>
-              </div>
-
-              <div className="expenditure-stats-card approved">
-                <div className="expenditure-stats-icon-wrap">
-                  <CheckCircle2 size={20} className="expenditure-stats-icon" />
-                </div>
-                <div className="expenditure-stats-info">
-                  <span className="expenditure-stats-label">Approved</span>
-                  <span className="expenditure-stats-number">{stats.approved}</span>
-                  <span className="expenditure-stats-amount">{formatAmount(stats.approvedAmount)}</span>
-                </div>
-              </div>
-
-              <div className="expenditure-stats-card pending-payment">
-                <div className="expenditure-stats-icon-wrap">
-                  <CreditCard size={20} className="expenditure-stats-icon" />
-                </div>
-                <div className="expenditure-stats-info">
-                  <span className="expenditure-stats-label">Pending (Payment)</span>
-                  <span className="expenditure-stats-number">{stats.pendingPayment}</span>
-                  <span className="expenditure-stats-amount">{formatAmount(stats.pendingPaymentAmount)}</span>
-                </div>
-              </div>
-
-              <div className="expenditure-stats-card closed">
-                <div className="expenditure-stats-icon-wrap">
-                  <Lock size={20} className="expenditure-stats-icon" />
-                </div>
-                <div className="expenditure-stats-info">
-                  <span className="expenditure-stats-label">Closed</span>
-                  <span className="expenditure-stats-number">{stats.closed}</span>
-                  <span className="expenditure-stats-amount">{formatAmount(stats.closedAmount)}</span>
-                </div>
-              </div>
+                return (
+                  <button
+                    key={card.key}
+                    type="button"
+                    className={`expenditure-stats-card ${card.className} ${
+                      isActive ? "active" : ""
+                    }`}
+                    onClick={() => setSelectedStatusFilter(card.key)}
+                    aria-pressed={isActive}
+                    aria-label={`Filter expenditure requests by ${card.label}`}
+                  >
+                    <div className="expenditure-stats-icon-wrap">
+                      {card.icon}
+                    </div>
+                    <div className="expenditure-stats-info">
+                      <span className="expenditure-stats-label">{card.label}</span>
+                      <span className="expenditure-stats-number">{card.value}</span>
+                      <span className="expenditure-stats-amount">{formatAmount(card.amount)}</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="expenditure-demo-wrap">
@@ -1839,7 +1983,7 @@ const ExpenditureDashboard: React.FC = () => {
                 const isCardOpen = openCardId === card.financeRequestId;
                 const cardExpenditureAmount = Number(card.expenditureAmount || 0);
                 const cardBalanceAmount = Math.max(Number(card.balanceAmount || 0), 0);
-                const rows = cardRows[card.financeRequestId] ?? [];
+                const rows = filteredCardRows[card.financeRequestId] ?? [];
                 const canAddRow = cardBalanceAmount > 0;
                 const isFullyClosed = isFinanceCardFullyClosed(rows);
 

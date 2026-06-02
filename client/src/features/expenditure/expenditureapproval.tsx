@@ -1042,6 +1042,7 @@ const ExpenditureApproval: React.FC = () => {
   const [settlementRows, setSettlementRows] = useState<SettlementFormRow[]>([
     createSettlementRow(),
   ]);
+  const [settlementRemarks, setSettlementRemarks] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [categoryType, setCategoryType] = useState<string>("");
@@ -1086,6 +1087,7 @@ const ExpenditureApproval: React.FC = () => {
   const [expenditureSubRows, setExpenditureSubRows] = useState<
     ExpenditureFormRow[]
   >([createExpenditureRow()]);
+  const [expenditureRemarks, setExpenditureRemarks] = useState("");
   const [activeTab, setActiveTab] = useState<
     "Advance" | "Settlement" | "Expenditure" | null
   >(launchModuleFromState);
@@ -1353,6 +1355,8 @@ const ExpenditureApproval: React.FC = () => {
               budgetProposalId: row?.budget_proposal_id ?? null,
             }))
           : [];
+        setSettlementRemarks(String(record.settlement_remarks || ""));
+        setExpenditureRemarks(String(record.expenditure_remarks || ""));
 
         const mapPayeeRows = Array.isArray(record.payee_rows)
           ? record.payee_rows.map((row: any, index: number) => ({
@@ -2483,10 +2487,10 @@ const workflowRowRefFromState = (() => {
 
   const getBudgetDisplayValue = (rowBudget: string) => {
     if (rowBudget !== "") {
-      return `Rs ${Number(rowBudget || 0).toLocaleString("en-IN")}`;
+      return `₹ ${Number(rowBudget || 0).toLocaleString("en-IN")}`;
     }
 
-    return "";
+    return "₹ 0";
   };
 
   const updateAdvanceRow = (
@@ -4205,7 +4209,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
   if (exceededLimit && activeTab) {
     showAlert(
-        `Total payee transaction amount cannot exceed the ${activeTab.toLowerCase()} amount of Rs ${workflowAmount.toLocaleString("en-IN")}.`,
+        `Total payee transaction amount cannot exceed the ${activeTab.toLowerCase()} amount of ₹ ${workflowAmount.toLocaleString("en-IN")}.`,
         "warning",
     );
   }
@@ -4229,7 +4233,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         message: (
           <div style={{ lineHeight: 1.6 }}>
             <div>
-              Settlement is Rs{" "}
+              Settlement is ₹{" "}
               {returnedAmount.toLocaleString("en-IN", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
@@ -4247,7 +4251,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       message: (
         <div style={{ lineHeight: 1.6 }}>
           <div>
-            Settlement is Rs{" "}
+            Settlement is ₹{" "}
             {difference.toLocaleString("en-IN", {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
@@ -4392,7 +4396,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     if (approvedFinanceLimit > 0) {
       if (activeTab === "Advance" && totalAdvanceDisplayAmount > approvedFinanceLimit) {
         showAlert(
-          `Total advance amount cannot exceed the approved finance amount of Rs ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
+          `Total advance amount cannot exceed the approved finance amount of ₹ ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
           "warning",
         );
         return;
@@ -4400,7 +4404,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
       if (activeTab === "Settlement" && totalSettlementDisplayAmount > approvedFinanceLimit) {
         showAlert(
-          `Total settlement amount cannot exceed the approved finance amount of Rs ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
+          `Total settlement amount cannot exceed the approved finance amount of ₹ ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
           "warning",
         );
         return;
@@ -4408,7 +4412,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
       if (activeTab === "Expenditure" && totalExpenditureDisplayAmount > approvedFinanceLimit) {
         showAlert(
-          `Total expenditure amount cannot exceed the approved finance amount of Rs ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
+          `Total expenditure amount cannot exceed the approved finance amount of ₹ ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
           "warning",
         );
         return;
@@ -4449,13 +4453,13 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
     if (normalizedTotalPayeeTransactionAmount !== normalizedWorkflowAmount) {
       showAlert(
-          `${activeTab} amount is Rs ${normalizedWorkflowAmount.toLocaleString(
+          `${activeTab} amount is ₹ ${normalizedWorkflowAmount.toLocaleString(
             "en-IN",
             {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
             },
-          )} and total payee transaction amount is Rs ${normalizedTotalPayeeTransactionAmount.toLocaleString(
+          )} and total payee transaction amount is ₹ ${normalizedTotalPayeeTransactionAmount.toLocaleString(
             "en-IN",
             {
           minimumFractionDigits: 2,
@@ -4555,6 +4559,10 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       unplanned_budget_description: showUnplannedBudget
         ? getUnplannedBudgetDescription().trim() || null
         : null,
+      settlement_remarks:
+        activeTab === "Settlement" ? settlementRemarks.trim() || null : null,
+      expenditure_remarks:
+        activeTab === "Expenditure" ? expenditureRemarks.trim() || null : null,
       incometype: primaryIncomeRow?.incomeSource || null,
       incomestatus: primaryIncomeRow?.creditAccount || null,
       incomeamounttype: primaryIncomeRow?.contribution || null,
@@ -6865,7 +6873,6 @@ const handleBeneficiarySearch = async (query: string) => {
                       >
                         <input
                           type="text"
-                          placeholder="<Fetch>"
                           value={getBudgetDisplayValue(row.budget)}
                           readOnly
                           style={{
@@ -7075,7 +7082,7 @@ const handleBeneficiarySearch = async (query: string) => {
 
               <div
                 style={{
-                  marginTop: "10px",
+                  marginTop: "14px",
                   padding: "10px 14px",
                   borderRadius: "10px",
                   backgroundColor: "#f0f6ff",
@@ -7277,7 +7284,6 @@ const handleBeneficiarySearch = async (query: string) => {
                         >
                   <input
                     type="text"
-                    placeholder="<Fetch>"
                     value={getBudgetDisplayValue(row.budget)}
                     readOnly
                     style={{
@@ -7549,7 +7555,7 @@ const handleBeneficiarySearch = async (query: string) => {
 
       <div
         style={{
-          marginTop: "10px",
+          marginTop: "14px",
           padding: "10px 14px",
           borderRadius: "10px",
           backgroundColor: "#f0f6ff",
@@ -7792,6 +7798,63 @@ const handleBeneficiarySearch = async (query: string) => {
     )}
   </div>
 )}
+
+          {/* Remarks Section */}
+          {(activeTab === "Settlement" || activeTab === "Expenditure") && (
+            <div
+              style={{
+                backgroundColor: "#fff",
+                padding: "30px",
+                borderRadius: "20px",
+                marginTop: "20px",
+                boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
+                <label
+                  style={{
+                    fontWeight: 600,
+                    color: "#2a3f5e",
+                    fontSize: "0.95rem",
+                  }}
+                >
+                  Remarks
+                </label>
+                <textarea
+                  value={activeTab === "Settlement" ? settlementRemarks : expenditureRemarks}
+                  onChange={(event) => {
+                    if (activeTab === "Settlement") {
+                      setSettlementRemarks(event.target.value);
+                    } else {
+                      setExpenditureRemarks(event.target.value);
+                    }
+                  }}
+                  placeholder="Enter remarks (optional)"
+                  rows={3}
+                  style={{
+                    border: "1px solid #d7dee7",
+                    borderRadius: "12px",
+                    padding: "12px 14px",
+                    fontSize: "0.95rem",
+                    width: "100%",
+                    minHeight: "90px",
+                    resize: "vertical",
+                    backgroundColor: "#fcfdff",
+                    color: "#2a3f5e",
+                    outline: "none",
+                    fontFamily: "inherit",
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Submit Button Section */}
           {!isReadOnlyView && (
             <div className="expenditure-submit-buttons">

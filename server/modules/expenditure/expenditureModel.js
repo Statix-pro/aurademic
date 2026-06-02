@@ -1828,6 +1828,8 @@ const EXPENDITURE_SELECT = `
     er.advance_total_amount,
     er.settlement_total_amount,
     er.expenditure_total_amount,
+    er.settlement_remarks,
+    er.expenditure_remarks,
     er.total_amount,
     CASE
       WHEN LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
@@ -3164,6 +3166,8 @@ const incomeRows = Array.isArray(data.income_rows)
       advance_total_amount: toMoney(advanceTotal),
       settlement_total_amount: toMoney(settlementTotal),
       expenditure_total_amount: toMoney(expenditureTotal),
+      settlement_remarks: requestType === 'Settlement' ? normalizeText(data.settlement_remarks) || null : null,
+      expenditure_remarks: requestType === 'Expenditure' ? normalizeText(data.expenditure_remarks) || null : null,
       total_amount: totalAmount,
       approved_total_amount: 0.00,
       created_by: uid,
@@ -3486,6 +3490,8 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       advance_total_amount: toMoney(advanceTotal),
       settlement_total_amount: toMoney(settlementTotal),
       expenditure_total_amount: toMoney(expenditureTotal),
+      settlement_remarks: requestType === 'Settlement' ? normalizeText(data.settlement_remarks) || null : null,
+      expenditure_remarks: requestType === 'Expenditure' ? normalizeText(data.expenditure_remarks) || null : null,
       total_amount: totalAmount,
     };
 
@@ -3508,6 +3514,8 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       'unplanned_budget_head',
       'unplanned_budget_sub_head',
       'unplanned_budget_description',
+      'settlement_remarks',
+      'expenditure_remarks',
     ]);
     const filteredUpdateEntry = Object.fromEntries(
       Object.entries(updatedEntry).filter(([key, value]) =>

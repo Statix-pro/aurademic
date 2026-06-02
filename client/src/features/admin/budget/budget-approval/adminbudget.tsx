@@ -1546,7 +1546,7 @@ const AdminBudget: React.FC = () => {
                                           {displayAmountLabel}
                                         </p>
                                         <p className="adminbudget-amount" style={{ margin: 0, fontSize: "1.1rem" }}>
-                                          Rs {displayAmountValue.toLocaleString("en-IN")}
+                                          ₹ {displayAmountValue.toLocaleString("en-IN")}
                                         </p>
                                       </div>
                                     </div>

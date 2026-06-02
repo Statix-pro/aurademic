@@ -188,6 +188,21 @@
   position: relative;
   overflow: hidden;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+  width: 100%;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+.expenditure-stats-card:hover {
+  border-color: #b9d8f5;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.expenditure-stats-card:focus-visible {
+  outline: 3px solid rgba(0, 105, 171, 0.2);
+  outline-offset: 2px;
 }
 
 /* Icons */
@@ -239,9 +254,19 @@
   color: #475569;
 }
 
+.expenditure-stats-card.total.active {
+  border-color: #94a3b8;
+  box-shadow: 0 8px 20px rgba(71, 85, 105, 0.14);
+}
+
 .expenditure-stats-card.pending .expenditure-stats-icon-wrap {
   background: #fef3c7;
   color: #d97706;
+}
+
+.expenditure-stats-card.pending.active {
+  border-color: #f59e0b;
+  box-shadow: 0 8px 20px rgba(217, 119, 6, 0.16);
 }
 
 .expenditure-stats-card.return .expenditure-stats-icon-wrap {
@@ -249,9 +274,19 @@
   color: #ea580c;
 }
 
+.expenditure-stats-card.return.active {
+  border-color: #fb923c;
+  box-shadow: 0 8px 20px rgba(234, 88, 12, 0.16);
+}
+
 .expenditure-stats-card.approved .expenditure-stats-icon-wrap {
   background: #d1fae5;
   color: #059669;
+}
+
+.expenditure-stats-card.approved.active {
+  border-color: #34d399;
+  box-shadow: 0 8px 20px rgba(5, 150, 105, 0.16);
 }
 
 .expenditure-stats-card.pending-payment .expenditure-stats-icon-wrap {
@@ -259,9 +294,19 @@
   color: #4f46e5;
 }
 
+.expenditure-stats-card.pending-payment.active {
+  border-color: #818cf8;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.16);
+}
+
 .expenditure-stats-card.closed .expenditure-stats-icon-wrap {
   background: #ccfbf1;
   color: #0d9488;
+}
+
+.expenditure-stats-card.closed.active {
+  border-color: #2dd4bf;
+  box-shadow: 0 8px 20px rgba(13, 148, 136, 0.16);
 }
 
 /* Demo expandable card */
