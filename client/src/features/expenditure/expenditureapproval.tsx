@@ -1138,9 +1138,16 @@ const ExpenditureApproval: React.FC = () => {
       try {
         const response = (await authenticityUtility.get(
           `/expenditure/finance-context/${resolvedFinanceRequestId}`,
-        )) as { status: string; data?: FinanceRequestContext };
+        )) as {
+          success?: boolean;
+          status?: string;
+          data?: FinanceRequestContext;
+        };
 
-        if (isCancelled || response.status !== "success" || !response.data) {
+        const isSuccessResponse =
+          response?.success === true || response?.status === "success";
+
+        if (isCancelled || !isSuccessResponse || !response.data) {
           return;
         }
 
@@ -1253,11 +1260,15 @@ const ExpenditureApproval: React.FC = () => {
         const response = (await authenticityUtility.get(
           `/expenditure/${submittedRequestIdFromState}`,
         )) as {
-          status: string;
+          success?: boolean;
+          status?: string;
           data?: any;
         };
 
-        if (isCancelled || response.status !== "success" || !response.data) {
+        const isSuccessResponse =
+          response?.success === true || response?.status === "success";
+
+        if (isCancelled || !isSuccessResponse || !response.data) {
           return;
         }
 
@@ -2560,9 +2571,13 @@ const workflowRowRefFromState = (() => {
 
       const response = (await authenticityUtility.get(
         `/expenditure/advance-summary?${query.toString()}`,
-      )) as { status: string; data?: { preAdvance?: number } };
+      )) as {
+        success?: boolean;
+        status?: string;
+        data?: { preAdvance?: number };
+      };
 
-      if (response.status === "success") {
+      if (response.success === true || response.status === "success") {
         const preAdvance = Number(response.data?.preAdvance || 0);
         updateAdvanceRow(rowId, (row) => ({
           ...row,
@@ -3296,7 +3311,8 @@ const evaluateArithmeticExpression = (input: string) => {
       const response = (await authenticityUtility.get(
         `/expenditure/search-applicant?q=${encodeURIComponent(query)}`,
       )) as {
-        status: string;
+        success?: boolean;
+        status?: string;
         data: Array<{
           employee_id: number;
           name: string;
@@ -3307,7 +3323,7 @@ const evaluateArithmeticExpression = (input: string) => {
           employee_type: string;
         }>;
       };
-      if (response.status === "success") {
+      if (response.success === true || response.status === "success") {
         setApplicantSearchResults(response.data || []);
         setShowApplicantDropdown(true);
       }
@@ -4609,15 +4625,18 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         })
       : await authenticityUtility.postFile(endpoint, formData);
     const normalizedResult = result as {
-      status: string;
+      success?: boolean;
+      status?: string;
       message?: string;
       data?: {
         expenditureId?: unknown;
         requestRef?: unknown;
       };
     };
+    const isSubmitSuccess =
+      normalizedResult.success === true || normalizedResult.status === "success";
 
-      if (normalizedResult.status !== "success") {
+      if (!isSubmitSuccess) {
         showAlert(normalizedResult.message || "Submission failed", "error");
       return;
     }
@@ -4637,9 +4656,9 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       const resubmitResult = (await authenticityUtility.post(
         `/expenditure/${submittedRequestIdFromState}/resubmit`,
         { feedback: comment },
-      )) as { status?: string; message?: string };
+      )) as { success?: boolean; status?: string; message?: string };
 
-        if (resubmitResult.status !== "success") {
+        if (resubmitResult.success !== true && resubmitResult.status !== "success") {
         showAlert(
             resubmitResult.message ||
               "Request updated, but resubmission failed",
@@ -4927,12 +4946,15 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
             }
           : undefined,
       )) as {
+        success?: boolean;
         status?: string;
         message?: string;
         data?: { payment_proof_files?: BillFileRecord[] };
       };
+      const isPaymentUpdateSuccess =
+        response.success === true || response.status === "success";
 
-      if (response.status !== "success") {
+      if (!isPaymentUpdateSuccess) {
         showAlert(
           response.message || "Unable to update payment status",
           "error",
@@ -5052,7 +5074,7 @@ const handleBeneficiarySearch = async (query: string) => {
       const response = (await (authenticityUtility as any).get(
         `/expenditure/search-applicant?q=${encodeURIComponent(query)}${typeParam}`,
       )) as any;
-      if (response.status === "success") {
+      if (response?.success === true || response?.status === "success") {
       setBeneficiarySearchResults(response.data);
       setShowBeneficiaryDropdown(true);
     }
@@ -5101,9 +5123,17 @@ const handleBeneficiarySearch = async (query: string) => {
         gstin: payee.gstin || null,
         tds_details: payee.tdsDetails || null,
         tds_section: payee.tdsSection || null,
-      })) as { status: string; message?: string; data?: PayeeLookupResult };
+      })) as {
+        success?: boolean;
+        status?: string;
+        message?: string;
+        data?: PayeeLookupResult;
+      };
 
-      if (response.status !== "success" || !response.data) {
+      if (
+        (response.success !== true && response.status !== "success") ||
+        !response.data
+      ) {
         showAlert(response.message || "Unable to save payee", "error");
         return;
       }

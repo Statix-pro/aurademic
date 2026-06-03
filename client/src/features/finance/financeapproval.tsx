@@ -1827,6 +1827,7 @@ const FinanceApproval: React.FC = () => {
           const formData = new FormData();
           formData.append('file', row.file);
           const uploadResponse = await authenticityUtility.postFile('/finance-requests/annexure/upload', formData) as {
+            success?: boolean;
             status?: string;
             data?: {
               originalName?: string;
@@ -1837,8 +1838,10 @@ const FinanceApproval: React.FC = () => {
             };
             message?: string;
           };
+          const isUploadSuccess =
+            uploadResponse?.success === true || uploadResponse?.status === 'success';
 
-          if (uploadResponse?.status !== 'success' || !uploadResponse?.data) {
+          if (!isUploadSuccess || !uploadResponse?.data) {
             showAlert(uploadResponse?.message || 'Failed to upload annexure file', 'error');
             return;
           }
@@ -1924,9 +1927,13 @@ const FinanceApproval: React.FC = () => {
 
       const result = (isEditMode && id
         ? await authenticityUtility.put(`/finance-requests/${id}`, payload)
-        : await authenticityUtility.post('/finance-requests', payload)) as { status: string; message?: string };
+        : await authenticityUtility.post('/finance-requests', payload)) as {
+          success?: boolean;
+          status?: string;
+          message?: string;
+        };
 
-      if (result.status !== 'success') {
+      if (result.success !== true && result.status !== 'success') {
         showAlert(result.message || 'Submission failed', 'error');
         return;
       }
@@ -1940,8 +1947,8 @@ const FinanceApproval: React.FC = () => {
 
         const resubmitResult = await authenticityUtility.post(`/finance-requests/${id}/resubmit`, {
           feedback: comment,
-        }) as { status?: string; message?: string };
-        if (resubmitResult.status !== 'success') {
+        }) as { success?: boolean; status?: string; message?: string };
+        if (resubmitResult.success !== true && resubmitResult.status !== 'success') {
           showAlert(resubmitResult.message || 'Finance request updated, but resubmission failed', 'error');
           return;
         }
@@ -2078,7 +2085,9 @@ const FinanceApproval: React.FC = () => {
     try {
       setIsLoading(true);
       const response = await authenticityUtility.postFile(`/finance-requests/${id}/principal-document`, formData) as any;
-      if (response?.status !== 'success') {
+      const isUploadSuccess =
+        response?.success === true || response?.status === 'success';
+      if (!isUploadSuccess) {
         showAlert(response?.message || 'Failed to upload principal document', 'error');
         return false;
       }
@@ -2628,7 +2637,7 @@ const FinanceApproval: React.FC = () => {
       const response = await (authenticityUtility as any).get(
         `finance-requests/search-applicant?q=${encodeURIComponent(query)}${typeParam}`
       ) as any;
-      if (response.status === 'success') {
+      if (response?.success === true || response?.status === 'success') {
         setBeneficiarySearchResults(response.data);
         setShowBeneficiaryDropdown(true);
       }
