@@ -4500,6 +4500,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
   const isAllStage = normalizedStage === 'all';
   const statusStageScope = isAllProposals || isAllStage ? 'all' : normalizedStage;
   const searchTerm = normalizeText(filters.q || filters.search);
+  const fiscalYear = toPositiveInt(filters.fiscalYear || filters.fiscal_year);
 
   const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
   const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
@@ -4507,6 +4508,39 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
 
   const whereParts = [`LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'`];
   const whereParams = [];
+
+  if (fiscalYear) {
+    whereParts.push(`(
+      EXISTS (
+        SELECT 1
+          FROM expenditure_advance_rows ar_fy
+          JOIN budget_proposals bp_fy ON bp_fy.id = ar_fy.budget_proposal_id
+         WHERE ar_fy.expenditure_id = er.id
+           AND bp_fy.fiscal_year = ?
+      )
+      OR EXISTS (
+        SELECT 1
+          FROM expenditure_settlement_rows sr_fy
+          JOIN budget_proposals bp_fy ON bp_fy.id = sr_fy.budget_proposal_id
+         WHERE sr_fy.expenditure_id = er.id
+           AND bp_fy.fiscal_year = ?
+      )
+      OR EXISTS (
+        SELECT 1
+          FROM expenditure_line_rows lr_fy
+          JOIN budget_proposals bp_fy ON bp_fy.id = lr_fy.budget_proposal_id
+         WHERE lr_fy.expenditure_id = er.id
+           AND bp_fy.fiscal_year = ?
+      )
+      OR (
+        NOT EXISTS (SELECT 1 FROM expenditure_advance_rows ar_any WHERE ar_any.expenditure_id = er.id AND ar_any.budget_proposal_id IS NOT NULL)
+        AND NOT EXISTS (SELECT 1 FROM expenditure_settlement_rows sr_any WHERE sr_any.expenditure_id = er.id AND sr_any.budget_proposal_id IS NOT NULL)
+        AND NOT EXISTS (SELECT 1 FROM expenditure_line_rows lr_any WHERE lr_any.expenditure_id = er.id AND lr_any.budget_proposal_id IS NOT NULL)
+        AND YEAR(COALESCE(er.request_date, er.created_at)) = ?
+      )
+    )`);
+    whereParams.push(fiscalYear, fiscalYear, fiscalYear, fiscalYear);
+  }
 
   if (workflowStatus === 'all') {
     if (isAllProposals || isAllStage) {
@@ -4839,6 +4873,47 @@ export async function listAvailableBeneficiaryTypes({ tx = db } = {}) {
   }
 
   return Array.from(dedup.values());
+}
+
+export async function listAvailableFiscalYears({ tx = db } = {}) {
+  const [rows] = await tx.query(
+    `SELECT DISTINCT fiscal_year
+       FROM (
+         SELECT bp.fiscal_year AS fiscal_year
+           FROM expenditure_advance_rows ar
+           JOIN budget_proposals bp ON bp.id = ar.budget_proposal_id
+           JOIN expenditure_requests er ON er.id = ar.expenditure_id
+          WHERE LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+            AND bp.fiscal_year IS NOT NULL
+         UNION
+         SELECT bp.fiscal_year AS fiscal_year
+           FROM expenditure_settlement_rows sr
+           JOIN budget_proposals bp ON bp.id = sr.budget_proposal_id
+           JOIN expenditure_requests er ON er.id = sr.expenditure_id
+          WHERE LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+            AND bp.fiscal_year IS NOT NULL
+         UNION
+         SELECT bp.fiscal_year AS fiscal_year
+           FROM expenditure_line_rows lr
+           JOIN budget_proposals bp ON bp.id = lr.budget_proposal_id
+           JOIN expenditure_requests er ON er.id = lr.expenditure_id
+          WHERE LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+            AND bp.fiscal_year IS NOT NULL
+         UNION
+         SELECT YEAR(COALESCE(er.request_date, er.created_at)) AS fiscal_year
+           FROM expenditure_requests er
+          WHERE LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+            AND NOT EXISTS (SELECT 1 FROM expenditure_advance_rows ar WHERE ar.expenditure_id = er.id AND ar.budget_proposal_id IS NOT NULL)
+            AND NOT EXISTS (SELECT 1 FROM expenditure_settlement_rows sr WHERE sr.expenditure_id = er.id AND sr.budget_proposal_id IS NOT NULL)
+            AND NOT EXISTS (SELECT 1 FROM expenditure_line_rows lr WHERE lr.expenditure_id = er.id AND lr.budget_proposal_id IS NOT NULL)
+       ) years
+      WHERE fiscal_year IS NOT NULL
+      ORDER BY fiscal_year DESC`
+  );
+
+  return (rows || [])
+    .map((row) => toPositiveInt(row?.fiscal_year))
+    .filter(Boolean);
 }
 
 export async function hardDeleteExpenditureRequest(id) {

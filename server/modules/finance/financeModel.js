@@ -652,6 +652,12 @@ const buildFinanceSelectSql = ({
     ${WORKFLOW_STATUS_SQL_EXPR} AS workflow_status,
     ${WORKFLOW_STAGE_SQL_EXPR} AS workflow_stage,
     (
+      SELECT MIN(bp.fiscal_year)
+        FROM finance_budget_breakup fbb
+        JOIN budget_proposals bp ON bp.id = fbb.budget_proposal_id
+       WHERE fbb.finance_id = fr.id
+    ) AS fiscal_year,
+    (
       SELECT wa.decision
         FROM workflow_actions wa
        WHERE wa.module_key = 'finance'
@@ -1083,6 +1089,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   beneficiaryValue = null,
   departmentId = null,
   beneficiaryEntityId = null,
+  fiscalYear = null,
 } = {}) => {
   const normalizedUserId = toPositiveInt(userId);
   const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
@@ -1090,6 +1097,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   const normalizedSubHead = normalizeSubHeadForLookup(subHead);
   const normalizedPreferredBudgetLineId = toPositiveInt(preferredBudgetLineId);
   const normalizedExcludeFinanceId = toPositiveInt(excludeFinanceId);
+  const normalizedFiscalYear = toPositiveInt(fiscalYear);
   const applyHeadOnlyMatch = Boolean(headOnlyMatch) || shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead, normalizedSubHead);
   // NEW: resolve the currently selected catalog labels to IDs, then use those
   // IDs against approved budget lines. LEGACY: if either side has no ID, text
@@ -1231,6 +1239,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
        GROUP BY fbb.budget_line_id
      ) frbr ON frbr.budget_line_id = bpl.id
      WHERE (${ownerScopeSql})
+       AND (? IS NULL OR bp.fiscal_year = ?)
        AND (
          LOWER(TRIM(bp.status)) IN ('completed', 'approved', 'principal_approved')
          OR LOWER(TRIM(bp.current_stage)) = 'completed'
@@ -1247,6 +1256,8 @@ const resolveBudgetAvailabilityForUser = async (conn, {
       normalizedExcludeFinanceId,
       normalizedExcludeFinanceId,
       ...ownerScopeParams,
+      normalizedFiscalYear,
+      normalizedFiscalYear,
     ]
   );
 
@@ -3339,6 +3350,7 @@ const financeModel = {
     beneficiaryValue = null,
     departmentId = null,
     beneficiaryEntityId = null,
+    fiscalYear = null,
   }) {
     const conn = await db.getConnection();
     try {
@@ -3354,6 +3366,7 @@ const financeModel = {
         beneficiaryValue,
         departmentId,
         beneficiaryEntityId,
+        fiscalYear,
       });
       return availability;
     } finally {
@@ -3710,6 +3723,7 @@ const financeModel = {
       ? requestedStatusCategory
       : '';
     const searchTerm = normalizeText(filters.q || filters.search);
+    const fiscalYear = toPositiveInt(filters.fiscalYear || filters.fiscal_year);
 
     const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
     const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
@@ -3719,6 +3733,27 @@ const financeModel = {
     const whereParams = [];
 
     whereParts.push(FINANCE_NOT_DELETED_CONDITION_SQL);
+
+    if (fiscalYear) {
+      whereParts.push(`(
+        EXISTS (
+          SELECT 1
+            FROM finance_budget_breakup fbb_fy
+            JOIN budget_proposals bp_fy ON bp_fy.id = fbb_fy.budget_proposal_id
+           WHERE fbb_fy.finance_id = fr.id
+             AND bp_fy.fiscal_year = ?
+        )
+        OR (
+          NOT EXISTS (
+            SELECT 1
+              FROM finance_budget_breakup fbb_any
+             WHERE fbb_any.finance_id = fr.id
+          )
+          AND YEAR(COALESCE(fr.request_date, fr.created_at)) = ?
+        )
+      )`);
+      whereParams.push(fiscalYear, fiscalYear);
+    }
 
     if (workflowStatus === 'all') {
       if (isAllProposals) {
@@ -4032,6 +4067,35 @@ const financeModel = {
     }
 
     return Array.from(dedup.values());
+  },
+
+  async listAvailableFiscalYears({ tx = db } = {}) {
+    const [rows] = await tx.query(
+      `SELECT DISTINCT fiscal_year
+         FROM (
+           SELECT bp.fiscal_year AS fiscal_year
+             FROM finance_budget_breakup fbb
+             JOIN budget_proposals bp ON bp.id = fbb.budget_proposal_id
+             JOIN finance_requests fr ON fr.id = fbb.finance_id
+            WHERE ${FINANCE_NOT_DELETED_CONDITION_SQL}
+              AND bp.fiscal_year IS NOT NULL
+           UNION
+           SELECT YEAR(COALESCE(fr.request_date, fr.created_at)) AS fiscal_year
+             FROM finance_requests fr
+            WHERE ${FINANCE_NOT_DELETED_CONDITION_SQL}
+              AND NOT EXISTS (
+                SELECT 1
+                  FROM finance_budget_breakup fbb
+                 WHERE fbb.finance_id = fr.id
+              )
+         ) years
+        WHERE fiscal_year IS NOT NULL
+        ORDER BY fiscal_year DESC`
+    );
+
+    return (rows || [])
+      .map((row) => toPositiveInt(row?.fiscal_year))
+      .filter(Boolean);
   },
 
   async getFinanceOwner(recordId) {

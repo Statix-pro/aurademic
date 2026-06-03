@@ -3,7 +3,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import './financecard.css';
 import { Eye, Edit2, Briefcase, Clock, XCircle, CheckCircle, Archive, Search, Info, Trash2, FileText, Download, RotateCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import Select from 'react-select';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -23,6 +22,8 @@ interface FinanceCardItem {
   approved_total_amount?: number | string | null;
   overall_status: string;
   workflow_status?: string;
+  fiscal_year?: number | string | null;
+  fiscalYear?: number | string | null;
   created_at: string;
   updated_at?: string;
   beneficiary_name?: string;
@@ -77,16 +78,19 @@ interface FinanceLogEvent {
 
 const FinanceCard: React.FC = () => {
   const { user } = useAuth();
+  const formatFiscalYearValue = (startYear: number) => `${startYear}-${String(startYear + 1).slice(-2)}`;
+  const getCurrentFiscalYear = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    return formatFiscalYearValue(month >= 4 ? year : year - 1);
+  };
+  const getCurrentFiscalYearStart = () => Number.parseInt(getCurrentFiscalYear().split('-')[0], 10);
   const [data, setData] = useState<FinanceCardItem[]>([]);
   const [filteredData, setFilteredData] = useState<FinanceCardItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    return String(month >= 4 ? year : year - 1);
-  });
+  const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(() => getCurrentFiscalYear());
   const [selectedBeneficiary, setSelectedBeneficiary] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -155,15 +159,16 @@ const FinanceCard: React.FC = () => {
     return month >= 4 ? year : year - 1;
   };
 
-  const getCurrentFiscalYear = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    return String(month >= 4 ? year : year - 1);
+  const getItemFiscalYear = (item: FinanceCardItem) => {
+    const explicitYear = Number.parseInt(String(item.fiscal_year ?? item.fiscalYear ?? ''), 10);
+    if (Number.isFinite(explicitYear) && explicitYear > 0) {
+      return formatFiscalYearValue(explicitYear);
+    }
+
+    return formatFiscalYearValue(getFiscalYear(item.created_at));
   };
 
-  const formatFiscalYearLabel = (startYear: string) =>
-    `FY ${startYear}-${String(Number(startYear) + 1).slice(-2)}`;
+  const formatFiscalYearLabel = (fiscalYear: string) => `FY ${fiscalYear}`;
 
   const getWorkflowStatus = (item: FinanceCardItem) =>
     String(item.workflow_state?.status || item.workflow_status || item.overall_status || '').toLowerCase();
@@ -768,7 +773,7 @@ const FinanceCard: React.FC = () => {
     }
 
     if (selectedFiscalYear !== 'all') {
-      result = result.filter(item => getFiscalYear(item.created_at).toString() === selectedFiscalYear);
+      result = result.filter(item => getItemFiscalYear(item) === selectedFiscalYear);
     }
 
     if (selectedBeneficiary !== 'all') {
@@ -805,13 +810,15 @@ const FinanceCard: React.FC = () => {
   ] as const;
 
   const currentFiscalYear = getCurrentFiscalYear();
+  const currentFiscalYearStart = getCurrentFiscalYearStart();
   const fiscalYears = Array.from(
-    new Set(data.map((item) => getFiscalYear(item.created_at).toString()).filter(Boolean))
+    new Set([
+      ...data.map((item) => getItemFiscalYear(item)).filter(Boolean),
+      currentFiscalYear,
+      formatFiscalYearValue(currentFiscalYearStart - 1),
+    ])
   )
-    .concat(currentFiscalYear)
-    .filter((fy, index, array) => array.indexOf(fy) === index)
-    .sort()
-    .reverse();
+    .sort((a, b) => Number.parseInt(b.split('-')[0], 10) - Number.parseInt(a.split('-')[0], 10));
   const beneficiaryTypes = Array.from(
     new Set(
       data
@@ -832,7 +839,6 @@ const FinanceCard: React.FC = () => {
       value: fy,
       label: formatFiscalYearLabel(fy),
     })),
-    { value: 'all', label: 'All Years' },
   ];
   const beneficiaryTypeOptions = [
     { value: 'all', label: 'All Beneficiaries' },
@@ -841,72 +847,6 @@ const FinanceCard: React.FC = () => {
       label: type,
     })),
   ];
-  const selectStyles = {
-    control: (base: any, state: any) => ({
-      ...base,
-      minHeight: '46px',
-      height: '46px',
-      borderRadius: '12px',
-      borderColor: state.isFocused ? '#0069ab' : '#d7dee8',
-      boxShadow: state.isFocused ? '0 0 0 3px rgba(0, 105, 171, 0.12)' : 'none',
-      backgroundColor: '#ffffff',
-      fontSize: '0.95rem',
-      cursor: 'pointer',
-      '&:hover': {
-        borderColor: '#c7d6e4',
-      },
-    }),
-    valueContainer: (base: any) => ({
-      ...base,
-      padding: '0 14px',
-    }),
-    input: (base: any) => ({
-      ...base,
-      margin: 0,
-      padding: 0,
-    }),
-    placeholder: (base: any) => ({
-      ...base,
-      color: '#334155',
-    }),
-    singleValue: (base: any) => ({
-      ...base,
-      color: '#334155',
-    }),
-    indicatorsContainer: (base: any) => ({
-      ...base,
-      height: '44px',
-    }),
-    dropdownIndicator: (base: any, state: any) => ({
-      ...base,
-      color: state.isFocused ? '#0069ab' : '#708299',
-      padding: '0 14px',
-      transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-      transition: 'transform 0.18s ease',
-      '&:hover': {
-        color: '#0069ab',
-      },
-    }),
-    indicatorSeparator: () => ({ display: 'none' }),
-    menu: (base: any) => ({
-      ...base,
-      borderRadius: '12px',
-      overflow: 'hidden',
-      zIndex: 20,
-      boxShadow: '0 14px 30px rgba(15, 23, 42, 0.12)',
-    }),
-    option: (base: any, state: any) => ({
-      ...base,
-      padding: '10px 14px',
-      backgroundColor: state.isSelected
-        ? '#0069ab'
-        : state.isFocused
-          ? 'rgba(0, 105, 171, 0.08)'
-          : '#fff',
-      color: state.isSelected ? '#fff' : '#334155',
-      cursor: 'pointer',
-    }),
-  } as const;
   const handlePdfPreviewClick = (requestId: number) => {
     navigate(`/finance/${requestId}`, {
       state: {
@@ -948,36 +888,48 @@ const FinanceCard: React.FC = () => {
 
                 <div className="filter-group">
                   <div className="filter-item">
-                    <Select
-                      value={
-                        fiscalYearOptions.find((option) => option.value === (selectedFiscalYear || currentFiscalYear)) ||
-                        fiscalYearOptions.find((option) => option.value === currentFiscalYear) ||
-                        fiscalYearOptions[0]
-                      }
-                      onChange={(option: any) => setSelectedFiscalYear(option?.value || currentFiscalYear)}
-                      options={fiscalYearOptions}
-                      isSearchable={false}
-                      isClearable={false}
-                      placeholder={formatFiscalYearLabel(currentFiscalYear)}
-                      menuPlacement="auto"
-                      styles={selectStyles}
-                    />
+                    <select
+                      className="financecard-financial-year"
+                      value={selectedFiscalYear || currentFiscalYear}
+                      onChange={(event) => setSelectedFiscalYear(event.target.value || currentFiscalYear)}
+                      aria-label="Select financial year"
+                    >
+                      {fiscalYearOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="filter-item">
-                    <Select
-                      value={beneficiaryTypeOptions.find((option) => option.value === selectedBeneficiary) || beneficiaryTypeOptions[0]}
-                      onChange={(option: any) => setSelectedBeneficiary(option?.value || 'all')}
-                      options={beneficiaryTypeOptions}
-                      isSearchable={false}
-                      isClearable={false}
-                      placeholder="All Types"
-                      menuPlacement="auto"
-                      styles={selectStyles}
-                    />
+                    <select
+                      className="financecard-beneficiary-filter"
+                      value={selectedBeneficiary}
+                      onChange={(event) => setSelectedBeneficiary(event.target.value || 'all')}
+                      aria-label="Select beneficiary type"
+                    >
+                      {beneficiaryTypeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
-                <button className="financecard-add-btn" onClick={() => navigate('/finance/new')}>
+                <button
+                  className="financecard-add-btn"
+                  onClick={() =>
+                    navigate('/finance/new', {
+                      state: {
+                        fiscalYear:
+                          selectedFiscalYear && selectedFiscalYear !== 'all'
+                            ? selectedFiscalYear
+                            : currentFiscalYear,
+                      },
+                    })
+                  }
+                >
                   Add +
                 </button>
               </div>

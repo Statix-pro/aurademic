@@ -65,6 +65,27 @@ const resolveTagValue = (value: unknown, options: SelectOption[]) => {
   return matched?.value || normalized;
 };
 
+const getCurrentFiscalYearStart = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  return String(month >= 4 ? year : year - 1);
+};
+
+const normalizeFiscalYearStart = (value: unknown): string => {
+  const raw = String(value ?? '').trim();
+  if (!raw || raw.toLowerCase() === 'all') return '';
+  const startYear = Number.parseInt(raw.split('-')[0], 10);
+  return Number.isFinite(startYear) && startYear > 0 ? String(startYear) : '';
+};
+
+const parseFinanceBoolean = (value: unknown): boolean => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+};
+
 const normalizeFinanceRoleCodes = (user: any): string[] => {
   const extractRoleToken = (value: any): string => {
     if (typeof value === 'string') return value.trim();
@@ -1252,6 +1273,15 @@ const FinanceApproval: React.FC = () => {
 
     return Math.max(0, baseAvailable - reservedByPreviousRows);
   };
+
+  const handleUnplannedBudgetToggle = (checked: boolean): void => {
+    setShowUnplannedBudget(checked);
+    if (!checked) {
+      setUnplannedBudgetAmount('');
+      setUnplannedBudgetDescription('');
+    }
+  };
+
   const fetchBudgetAvailability = async (rowIndex: number, budgetHead: string, subHead: string) => {
     const normalizedHead = normalizeText(primaryHead) || normalizeText(budgetHead);
     const normalizedSubHead =
@@ -1280,8 +1310,10 @@ const FinanceApproval: React.FC = () => {
           finance_id: isEditMode && id ? id : undefined,
           beneficiary_type: beneficiaryType || undefined,
           beneficiary_value: beneficiaryValue || undefined,
+          fiscal_year: budgetAvailabilityFiscalYear || undefined,
         },
       }) as {
+        success?: boolean;
         status: string;
         data?: {
           selected?: {
@@ -1931,6 +1963,12 @@ const FinanceApproval: React.FC = () => {
           success?: boolean;
           status?: string;
           message?: string;
+          data?: {
+            id?: number | string;
+            requestRef?: string | null;
+            request_ref?: string | null;
+            proposal_ref?: string | null;
+          };
         };
 
       if (result.success !== true && result.status !== 'success') {
@@ -1955,8 +1993,12 @@ const FinanceApproval: React.FC = () => {
         closeResubmitPopup(true);
       }
 
-      const responseId = isEditMode ? id : (result as any).data?.id;
-      const refNo = responseId ? `#F-${new Date().getFullYear()}-${String(responseId).padStart(4, '0')}` : '';
+      const refNo = normalizeText(
+        result.data?.requestRef ||
+        result.data?.request_ref ||
+        result.data?.proposal_ref ||
+        proposalRef
+      );
 
       showAlert(
         <div>
@@ -2250,6 +2292,9 @@ const FinanceApproval: React.FC = () => {
   const isViewMode = Boolean(id && !isEditMode);
   const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
   const isApprovalMode = isViewMode && isAdminWorkflowContext;
+  const routeFiscalYearStart = normalizeFiscalYearStart((location.state as any)?.fiscalYear);
+  const budgetAvailabilityFiscalYear =
+    routeFiscalYearStart || (!isEditMode && !isViewMode ? getCurrentFiscalYearStart() : '');
 
   useEffect(() => {
     if (!isApprovalMode) {
@@ -2441,10 +2486,8 @@ const FinanceApproval: React.FC = () => {
           ).trim()
         );
         const workflowFinanceMeta = record.workflow_state?.financeMeta || {};
-        const recordUnplannedBudgetEnabled =
-          record.unplanned_budget_enabled ??
-          workflowFinanceMeta.unplannedBudgetEnabled ??
-          false;
+        const rawRecordUnplannedBudgetEnabled =
+          record.unplanned_budget_enabled ?? workflowFinanceMeta.unplannedBudgetEnabled;
         const recordUnplannedBudgetAmount =
           record.unplanned_budget_amount ??
           workflowFinanceMeta.unplannedBudgetAmount ??
@@ -2458,13 +2501,22 @@ const FinanceApproval: React.FC = () => {
           record.unplanned_budget_description ??
           workflowFinanceMeta.unplannedBudgetDescription ??
           '';
-        setShowUnplannedBudget(Boolean(recordUnplannedBudgetEnabled || hasUnplannedBudgetAmount));
+        const hasExplicitUnplannedFlag =
+          rawRecordUnplannedBudgetEnabled !== null &&
+          rawRecordUnplannedBudgetEnabled !== undefined &&
+          String(rawRecordUnplannedBudgetEnabled).trim() !== '';
+        const isUnplannedBudgetEnabled = hasExplicitUnplannedFlag
+          ? parseFinanceBoolean(rawRecordUnplannedBudgetEnabled)
+          : hasUnplannedBudgetAmount;
+        setShowUnplannedBudget(isUnplannedBudgetEnabled);
         setUnplannedBudgetAmount(
-          recordUnplannedBudgetAmount !== null && recordUnplannedBudgetAmount !== undefined
+          isUnplannedBudgetEnabled &&
+            recordUnplannedBudgetAmount !== null &&
+            recordUnplannedBudgetAmount !== undefined
             ? String(recordUnplannedBudgetAmount)
             : ''
         );
-        setUnplannedBudgetDescription(String(recordUnplannedBudgetDescription || ''));
+        setUnplannedBudgetDescription(isUnplannedBudgetEnabled ? String(recordUnplannedBudgetDescription || '') : '');
         setBeneficiaryType(record.beneficiary_type || '');
         setBeneficiaryValue(record.beneficiary_value || '');
         setPrimaryHead(record.primary_head || '');
@@ -2744,6 +2796,7 @@ const FinanceApproval: React.FC = () => {
         normalizedBeneficiaryType,
         normalizedBeneficiaryValue,
         normalizedFinanceId,
+        budgetAvailabilityFiscalYear,
       ].join('|');
       nextFetchKeys[index] = fetchKey;
       if (availabilityFetchKeyByRowRef.current[index] === fetchKey) {
@@ -2754,7 +2807,7 @@ const FinanceApproval: React.FC = () => {
     });
 
     availabilityFetchKeyByRowRef.current = nextFetchKeys;
-  }, [budgetRows, primaryHead, eventSubHead, extraDropdownVisible, beneficiaryType, beneficiaryValue, isEditMode, id]);
+  }, [budgetRows, primaryHead, eventSubHead, extraDropdownVisible, beneficiaryType, beneficiaryValue, isEditMode, id, budgetAvailabilityFiscalYear]);
   const firstBudgetRowAutoSyncRef = useRef<{ category: string; head: string }>({ category: '', head: '' });
   useEffect(() => {
     if (!primaryHead) return;
@@ -3575,7 +3628,7 @@ const FinanceApproval: React.FC = () => {
                             name="unplannedBudgetToggle"
                             label=""
                             checked={showUnplannedBudget}
-                            onChange={(checked) => setShowUnplannedBudget(checked)}
+                            onChange={handleUnplannedBudgetToggle}
                           />
                         </div>
                       </div>
@@ -3620,7 +3673,7 @@ const FinanceApproval: React.FC = () => {
                             name="unplannedBudgetToggle"
                             label=""
                             checked={showUnplannedBudget}
-                            onChange={(checked) => setShowUnplannedBudget(checked)}
+                            onChange={handleUnplannedBudgetToggle}
                           />
                         </div>
                       </div>

@@ -401,10 +401,16 @@ const financeController = {
         throw workflowError;
       }
 
+      const createdFinance = await financeModel.getFinanceRequestById(financeId);
+
       return res.status(201).json({
         success: true,
         message: 'Finance request created successfully',
-        data: { id: financeId },
+        data: {
+          id: financeId,
+          requestRef: createdFinance?.proposal_ref || null,
+          proposal_ref: createdFinance?.proposal_ref || null,
+        },
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in createFinanceRequest');
@@ -472,6 +478,11 @@ const financeController = {
         return res.status(200).json({
           success: true,
           message: 'Finance request updated successfully',
+          data: {
+            id: financeId,
+            requestRef: finance.proposal_ref || null,
+            proposal_ref: finance.proposal_ref || null,
+          },
         });
       }
 
@@ -849,6 +860,7 @@ const financeController = {
       const beneficiaryEntityId = toPositiveInt(
         req.query?.beneficiary_entity_id || req.query?.beneficiaryEntityId
       );
+      const fiscalYear = toPositiveInt(req.query?.fiscal_year || req.query?.fiscalYear);
       const headOnlyMatch = ['1', 'true', 'yes', 'on'].includes(
         normalizeText(req.query?.head_only_match).toLowerCase()
       );
@@ -881,6 +893,7 @@ const financeController = {
         beneficiaryValue,
         departmentId,
         beneficiaryEntityId,
+        fiscalYear,
       });
 
       return res.status(200).json({
@@ -1102,7 +1115,7 @@ const financeController = {
   async getFinanceQueue(req, res) {
     try {
       const stage = normalizeText(req.params.stage).toLowerCase();
-      const { page, limit, workflowStatus, statusCategory, level1Role, q, allProposals } = req.query;
+      const { page, limit, workflowStatus, statusCategory, level1Role, q, allProposals, fiscalYear } = req.query;
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
       const effectiveLevel1Role = stage === 'level1'
         ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
@@ -1119,6 +1132,7 @@ const financeController = {
           limit,
           workflowStatus,
           statusCategory,
+          fiscalYear,
           level1Role: effectiveLevel1Role,
           q,
           allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
@@ -1202,12 +1216,13 @@ const financeController = {
 
   async getWorkflowMeta(req, res) {
     try {
-      const [metadata, availableBeneficiaryTypes] = await Promise.all([
+      const [metadata, availableBeneficiaryTypes, availableFiscalYears] = await Promise.all([
         workflowService.getWorkflowMetadata({
           moduleKey: 'finance',
           actor: normalizeActor(req),
         }),
         financeModel.listAvailableBeneficiaryTypes(),
+        financeModel.listAvailableFiscalYears(),
       ]);
 
       return res.status(200).json({
@@ -1215,6 +1230,7 @@ const financeController = {
         data: {
           ...metadata,
           availableBeneficiaryTypes,
+          availableFiscalYears,
         },
       });
     } catch (error) {

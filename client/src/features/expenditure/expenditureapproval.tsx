@@ -4752,6 +4752,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
             submittedAmount,
             submittedRequestId: savedRequestId ?? undefined,
             financeRequestId: resolvedFinanceRequestId ?? undefined,
+            fiscalYear: (location.state as { fiscalYear?: unknown } | null)?.fiscalYear,
             financeProposal:
                 (location.state as { financeProposal?: unknown } | null)
                   ?.financeProposal ?? null,
@@ -6511,7 +6512,6 @@ const handleBeneficiarySearch = async (query: string) => {
                       </tr>
                       <tr>
                         <td
-                          colSpan={2}
                           style={{
                             padding: "12px 16px",
                             border: "1px solid #e0e0e0",
@@ -6546,6 +6546,7 @@ const handleBeneficiarySearch = async (query: string) => {
                                 padding: "10px 15px",
                                 fontSize: "0.95rem",
                                 width: "100%",
+                                maxWidth: "100%",
                                 height: "45px",
                                 backgroundColor: "#f3f5f7",
                                 color: "#51627d",
@@ -6556,6 +6557,7 @@ const handleBeneficiarySearch = async (query: string) => {
                           </div>
                         </td>
                         <td
+                          colSpan={2}
                           style={{
                             padding: "12px 16px",
                             border: "1px solid #e0e0e0",
@@ -6563,8 +6565,9 @@ const handleBeneficiarySearch = async (query: string) => {
                         >
                           <div
                             style={{
-                              display: "flex",
-                              flexDirection: "column",
+                              display: "grid",
+                              gridTemplateColumns: "minmax(90px, auto) minmax(160px, 1fr)",
+                              alignItems: "center",
                               gap: "8px",
                             }}
                           >

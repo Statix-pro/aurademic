@@ -1052,12 +1052,13 @@ const expenditureController = {
 
   async getWorkflowMeta(req, res) {
     try {
-      const [metadata, availableBeneficiaryTypes] = await Promise.all([
+      const [metadata, availableBeneficiaryTypes, availableFiscalYears] = await Promise.all([
         workflowService.getWorkflowMetadata({
           moduleKey: 'expenditure',
           actor: resolveActor(req),
         }),
         expenditureModel.listAvailableBeneficiaryTypes(),
+        expenditureModel.listAvailableFiscalYears(),
       ]);
 
       return res.status(200).json({
@@ -1065,6 +1066,7 @@ const expenditureController = {
         data: {
           ...metadata,
           availableBeneficiaryTypes,
+          availableFiscalYears,
         },
       });
     } catch (err) {
@@ -1075,7 +1077,7 @@ const expenditureController = {
   async getExpenditureQueue(req, res) {
     try {
       const stage = normalizeText(req.params.stage).toLowerCase();
-      const { page, limit, workflowStatus, statusCategory, level1Role, q, allProposals } = req.query;
+      const { page, limit, workflowStatus, statusCategory, level1Role, q, allProposals, fiscalYear } = req.query;
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
       const effectiveLevel1Role = stage === 'level1'
         ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
@@ -1092,6 +1094,7 @@ const expenditureController = {
           limit,
           workflowStatus,
           statusCategory,
+          fiscalYear,
           level1Role: effectiveLevel1Role,
           q,
           allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
