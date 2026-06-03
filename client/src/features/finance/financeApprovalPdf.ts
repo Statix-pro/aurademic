@@ -714,7 +714,7 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
           'Rs. ' + Number(row.amount || 0),
         ],
         [
-          { content: `Unplanned Budget: ${unplannedBudgetDescription || ''}`, colSpan: 2, styles: { fontStyle: 'bold', overflow: 'linebreak' } },
+          { content: `Unplanned Expenditure: ${unplannedBudgetDescription || ''}`, colSpan: 2, styles: { fontStyle: 'bold', overflow: 'linebreak' } },
           'Rs. ' + Number(unplannedBudgetAmount || 0),
         ]
       ];

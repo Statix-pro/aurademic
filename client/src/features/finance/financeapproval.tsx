@@ -1691,7 +1691,7 @@ const FinanceApproval: React.FC = () => {
 
   const handleSubmit = async (resubmissionComment?: string): Promise<void> => {
     try {
-      if (isViewMode) {
+      if (isViewMode && !canSuperAdminEditTerminalFinance) {
         return;
       }
 
@@ -1753,11 +1753,11 @@ const FinanceApproval: React.FC = () => {
       }
       if (showUnplannedBudget) {
         if (!hasFilledText(unplannedBudgetDescription)) {
-          showAlert('Please enter Unplanned Budget description.', 'warning');
+          showAlert('Please enter Unplanned Expenditure description.', 'warning');
           return;
         }
         if (!(Number(unplannedBudgetAmount || 0) > 0)) {
-          showAlert('Please enter a valid Unplanned Budget amount.', 'warning');
+          showAlert('Please enter a valid Unplanned Expenditure amount.', 'warning');
           return;
         }
       }
@@ -2311,6 +2311,10 @@ const FinanceApproval: React.FC = () => {
     Array.isArray(user?.roles) &&
     user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
   );
+  const canSuperAdminEditTerminalFinance =
+    isSuperAdminUser &&
+    isViewMode &&
+    ['approved', 'completed'].includes(normalizedWorkflowStatus);
 
   const routeStateIsActionablePending = (location.state as any)?.isActionablePending;
   const hideWorkflowActionsForFinalStatus =
@@ -2809,7 +2813,7 @@ const FinanceApproval: React.FC = () => {
   });
 
   const handleViewModeFocusCapture = (event: React.FocusEvent<HTMLDivElement>) => {
-    if (!isViewMode) return;
+    if (!isViewMode || canSuperAdminEditTerminalFinance) return;
     const target = event.target as HTMLElement | null;
     if (
       !target ||
@@ -2823,7 +2827,7 @@ const FinanceApproval: React.FC = () => {
   };
 
   const handleViewModeKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!isViewMode) return;
+    if (!isViewMode || canSuperAdminEditTerminalFinance) return;
     const target = event.target as HTMLElement | null;
     if (
       !target ||
@@ -2847,7 +2851,7 @@ const FinanceApproval: React.FC = () => {
 
       {!showPreview && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
-          <div style={isViewMode ? { pointerEvents: 'none', userSelect: 'none' } : undefined}>
+          <div style={isViewMode && !canSuperAdminEditTerminalFinance ? { pointerEvents: 'none', userSelect: 'none' } : undefined}>
             {/* Applicant Details Section */}
             <div data-readonly-applicant-card="true" style={{
               backgroundColor: '#fff',
@@ -3566,7 +3570,7 @@ const FinanceApproval: React.FC = () => {
                         </div>
 
                         <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
-                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>Unplanned Budget</span>
+                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>Unplanned Expenditure</span>
                           <CustomToggle
                             name="unplannedBudgetToggle"
                             label=""
@@ -3611,7 +3615,7 @@ const FinanceApproval: React.FC = () => {
                           />
                         </div>
                         <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
-                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>Unplanned Budget</span>
+                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>Unplanned Expenditure</span>
                           <CustomToggle
                             name="unplannedBudgetToggle"
                             label=""
@@ -3831,14 +3835,14 @@ const FinanceApproval: React.FC = () => {
                     {hasUnplannedBudgetPreview && (
                       <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
                         <td colSpan={2} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', fontWeight: '600', color: '#0069ab', backgroundColor: '#fafcff' }}>
-                          Unplanned Budget
+                          Unplanned Expenditure
                         </td>
                         <td colSpan={1} style={{ padding: '12px', border: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
                           <input
                             type="text"
                             value={unplannedBudgetDescription}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => setUnplannedBudgetDescription(e.target.value)}
-                            placeholder="Enter unplanned budget description"
+                            placeholder="Enter unplanned expenditure description"
                             style={{
                               border: '1px solid #e0e0e0',
                               borderRadius: '8px',
@@ -4562,7 +4566,7 @@ const FinanceApproval: React.FC = () => {
             </div>
           )}
 
-          {!showPreview && !isViewMode && (
+          {!showPreview && (!isViewMode || canSuperAdminEditTerminalFinance) && (
             <button
               type="button"
               onClick={() => handleSubmit()}
@@ -4588,7 +4592,11 @@ const FinanceApproval: React.FC = () => {
                 e.currentTarget.style.backgroundColor = '#0069ab';
               }}
             >
-              {isLoading ? 'Submitting...' : isEditMode ? 'Update Form' : 'Submit Form'}
+              {isLoading
+                ? 'Submitting...'
+                : (isEditMode || canSuperAdminEditTerminalFinance)
+                  ? 'Update Form'
+                  : 'Submit Form'}
             </button>
           )}
 
@@ -4938,7 +4946,7 @@ const FinanceApproval: React.FC = () => {
                       ))}
                       {hasUnplannedBudgetPreview && (
                         <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
-                          <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'left', fontWeight: 'bold' }}>Unplanned Budget:{unplannedBudgetDescription || '\u00A0'}</td>
+                          <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'left', fontWeight: 'bold' }}>Unplanned Expenditure:{unplannedBudgetDescription || '\u00A0'}</td>
                           <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹  {Number(unplannedBudgetAmount || 0)}</td>
                         </tr>
                       )}

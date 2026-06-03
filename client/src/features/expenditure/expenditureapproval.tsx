@@ -2339,56 +2339,65 @@ const workflowRowRefFromState = (() => {
   const getApprovedBudgetAmount = (budget: ApprovedBudgetOption | null) =>
     budget ? String(budget.totalAmount ?? "") : "";
 
-  const getCatalogBudgetHeadSearchOptions = (): OptionType[] => {
-    const options: OptionType[] = [];
-    const seen = new Set<string>();
+  const getUnplannedBudgetHeadOptions = (): OptionType[] => {
+    const amountByHead = new Map<string, { head: string; amount: number }>();
 
-    BUDGET_HEAD_GROUPS.forEach((group) => {
-      group.options.forEach((head) => {
-        const normalizedHead = normalizeBudgetToken(head);
-        if (!normalizedHead) return;
+    approvedBudgetOptions.forEach((budget) => {
+      const head = String(budget.head || "").trim();
+      const amount = Number(budget.totalAmount || 0);
+      if (!head || !(amount > 0)) return;
 
-        const headKey = `head::${normalizedHead}`;
-        if (!seen.has(headKey)) {
-          seen.add(headKey);
-          options.push({
-            value: `head::${head}`,
-            label: head,
-            budgetHead: head,
-            subHead: "",
-          });
-        }
-
-        (SUB_HEAD_BY_BUDGET_HEAD[head] || []).forEach((subHead) => {
-          const normalizedSubHead = normalizeBudgetToken(subHead);
-          if (!normalizedSubHead) return;
-          const subKey = `sub::${normalizedHead}::${normalizedSubHead}`;
-          if (seen.has(subKey)) return;
-          seen.add(subKey);
-          options.push({
-            value: `sub::${head}::${subHead}`,
-            label: `${subHead} (${head})`,
-            budgetHead: head,
-            subHead,
-          });
-        });
+      const key = normalizeBudgetToken(head);
+      const current = amountByHead.get(key);
+      amountByHead.set(key, {
+        head: current?.head || head,
+        amount: (current?.amount || 0) + amount,
       });
     });
 
-    return options;
+    return Array.from(amountByHead.values()).map(({ head, amount }) => ({
+      value: `head::${head}`,
+      label: head,
+      budgetHead: head,
+      subHead: "",
+      approvedAmount: amount,
+    }));
   };
 
-  const getCatalogBudgetHeadSelectedOption = (
+  const getUnplannedBudgetHeadAmount = (budgetHead: string | number): number => {
+    const normalizedHead = normalizeBudgetToken(budgetHead);
+    if (!normalizedHead) return 0;
+
+    return approvedBudgetOptions.reduce((sum, budget) => {
+      if (normalizeBudgetToken(budget.head) !== normalizedHead) return sum;
+      const amount = Number(budget.totalAmount || 0);
+      return sum + (Number.isFinite(amount) ? amount : 0);
+    }, 0);
+  };
+
+  const getUnplannedBudgetAmountPlaceholder = (): string => {
+    const amount = getUnplannedBudgetHeadAmount(unplannedBudgetHead);
+    return amount > 0
+      ? `₹ ${amount.toLocaleString("en-IN")}`
+      : "₹ 0";
+  };
+
+  const getUnplannedBudgetHeadSelectedOption = (
     budgetHead: string | number,
   ): OptionType | null => {
     const normalizedHead = normalizeBudgetToken(budgetHead);
     if (!normalizedHead) return null;
 
-    return getCatalogBudgetHeadSearchOptions().find(
+    return getUnplannedBudgetHeadOptions().find(
       (option) =>
         normalizeBudgetToken(option.budgetHead) === normalizedHead &&
         !normalizeBudgetToken(option.subHead),
-    ) || null;
+    ) || {
+      value: `head::${budgetHead}`,
+      label: String(budgetHead),
+      budgetHead: String(budgetHead),
+      subHead: "",
+    };
   };
 
   const getCatalogSubHeadOptions = (budgetHead: string | number): OptionType[] =>
@@ -4287,21 +4296,25 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     if (activeTab === "Settlement") {
       return Math.max(
         0,
-        financeApprovedAmount - totalSettlementAmount - totalExpenditureAmount,
+        financeApprovedAmount -
+          totalSettlementDisplayAmount -
+          totalExpenditureAmount,
       );
     }
 
     if (activeTab === "Advance") {
       return Math.max(
         0,
-        financeApprovedAmount - totalAdvanceAmount - totalExpenditureAmount,
+        financeApprovedAmount - totalAdvanceDisplayAmount - totalExpenditureAmount,
       );
     }
 
     if (activeTab === "Expenditure") {
       return Math.max(
         0,
-        financeApprovedAmount - totalAdvanceAmount - totalExpenditureAmount,
+        financeApprovedAmount -
+          totalAdvanceAmount -
+          totalExpenditureDisplayAmount,
       );
     }
 
@@ -4344,11 +4357,11 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
     if (showUnplannedBudget) {
       if (!unplannedBudgetHead.trim() || !unplannedBudgetSubHead.trim()) {
-        showAlert("Please select Unplanned Budget head and sub head.", "warning");
+        showAlert("Please select Unplanned Expenditure head and sub head.", "warning");
         return;
       }
       if (!(unplannedBudgetTotal > 0)) {
-        showAlert("Please enter a valid Unplanned Budget amount.", "warning");
+        showAlert("Please enter a valid Unplanned Expenditure amount.", "warning");
         return;
       }
     }
@@ -6177,7 +6190,7 @@ const handleBeneficiarySearch = async (query: string) => {
                     fontWeight: 600,
                   }}
                 >
-                  Unplanned Budget
+                  Unplanned Expenditure
                 </span>
                 <CustomToggle
                   name="unplannedBudgetToggle"
@@ -6198,8 +6211,8 @@ const handleBeneficiarySearch = async (query: string) => {
                 >
                   <CustomDropdown
                     className="mb-0"
-                    options={getCatalogBudgetHeadSearchOptions()}
-                    value={getCatalogBudgetHeadSelectedOption(
+                    options={getUnplannedBudgetHeadOptions()}
+                    value={getUnplannedBudgetHeadSelectedOption(
                       unplannedBudgetHead,
                     )}
                     onChange={(option) =>
@@ -6235,7 +6248,7 @@ const handleBeneficiarySearch = async (query: string) => {
                         e.target.value.replace(/[^\d.]/g, ""),
                       )
                     }
-                    placeholder="₹ 0"
+                    placeholder={getUnplannedBudgetAmountPlaceholder()}
                     style={{
                       border: "1px solid #d7dee7",
                       borderRadius: "12px",
@@ -6604,7 +6617,7 @@ const handleBeneficiarySearch = async (query: string) => {
                           color: "#0069ab",
                         }}
                       >
-                        Unplanned Budget:{" "}
+                        Unplanned Expenditure:{" "}
                         {unplannedBudgetDisplayLabel || "\u00A0"}
                       </td>
                       <td
@@ -7051,7 +7064,7 @@ const handleBeneficiarySearch = async (query: string) => {
           color: "#0069ab",
         }}
       >
-        Unplanned Budget: {unplannedBudgetDisplayLabel || "\u00A0"}
+        Unplanned Expenditure: {unplannedBudgetDisplayLabel || "\u00A0"}
       </td>
       <td
         style={{
@@ -7534,7 +7547,7 @@ const handleBeneficiarySearch = async (query: string) => {
                           color: "#0069ab",
                         }}
                       >
-                        Unplanned Budget:{" "}
+                        Unplanned Expenditure:{" "}
                         {unplannedBudgetDisplayLabel || "\u00A0"}
                       </td>
                       <td
