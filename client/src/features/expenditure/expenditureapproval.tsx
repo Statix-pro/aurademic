@@ -694,6 +694,27 @@ const createPayeeRow = (): PayeeRow => ({
   tdsSection: "",
 });
 
+const getCashPayeeResetFields = (): Partial<PayeeRow> => ({
+  payeeId: null,
+  approvalStatus: "",
+  payeeName: "",
+  bankName: "",
+  accountNo: "",
+  ifsc: "",
+  branchName: "",
+  url: "",
+  accountName: "",
+  panNumber: "",
+  accountType: "",
+  beneficiaryType: undefined,
+  beneficiaryOrg: "",
+  organizationType: "",
+  msme: "",
+  gstin: "",
+  tdsDetails: "",
+  tdsSection: "",
+});
+
 const BENEFICIARY_ORG_OPTIONS = ["KSRCT", "KSREI", "External"] as const;
 
 const normalizePayeeText = (value: unknown): string =>
@@ -3825,17 +3846,7 @@ const evaluateArithmeticExpression = (input: string) => {
                                     ...r,
                                     mode: nextMode,
                                     ...(isCashPaymentMode(nextMode)
-                                      ? {
-                                          payeeId: null,
-                                          payeeName: "",
-                                          accountNo: "",
-                                          bankName: "",
-                                          ifsc: "",
-                                          branchName: "",
-                                          accountName: "",
-                                          accountType: "",
-                                          url: "",
-                                        }
+                                      ? getCashPayeeResetFields()
                                       : {}),
                                   }
                                 : r,
@@ -4298,14 +4309,16 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         0,
         financeApprovedAmount -
           totalSettlementDisplayAmount -
-          totalExpenditureAmount,
+          totalExpenditureDisplayAmount,
       );
     }
 
     if (activeTab === "Advance") {
       return Math.max(
         0,
-        financeApprovedAmount - totalAdvanceDisplayAmount - totalExpenditureAmount,
+        financeApprovedAmount -
+          totalAdvanceDisplayAmount -
+          totalExpenditureDisplayAmount,
       );
     }
 
@@ -4313,7 +4326,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       return Math.max(
         0,
         financeApprovedAmount -
-          totalAdvanceAmount -
+          totalAdvanceDisplayAmount -
           totalExpenditureDisplayAmount,
       );
     }
@@ -4505,34 +4518,35 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     const primaryIncomeRow = showIncomeSection ? incomeRows[0] : undefined;
 
     const normalizedPayeeRows = effectivePayeeRows.map((row) => {
+      const isCashMode = isCashPaymentMode(row.mode);
         const canonicalPayeeName = resolveCanonicalPayeeName(
-          row.payeeName,
-          row.accountName,
+          isCashMode ? "" : row.payeeName,
+          isCashMode ? "" : row.accountName,
         );
 
       return {
-        payee_id: row.payeeId ?? null,
+        payee_id: isCashMode ? null : row.payeeId ?? null,
         payee_name: canonicalPayeeName,
-          bank_name: row.bankName?.trim() || "",
-          account_no: row.accountNo?.trim() || "",
-          ifsc: row.ifsc?.trim().toUpperCase() || "",
-          branch_name: row.branchName?.trim() || "",
-          url: row.url?.trim() || "",
+          bank_name: isCashMode ? "" : row.bankName?.trim() || "",
+          account_no: isCashMode ? "" : row.accountNo?.trim() || "",
+          ifsc: isCashMode ? "" : row.ifsc?.trim().toUpperCase() || "",
+          branch_name: isCashMode ? "" : row.branchName?.trim() || "",
+          url: isCashMode ? "" : row.url?.trim() || "",
           amount: row.amount?.trim() || "",
           mode: row.mode?.trim() || "",
         account_name: canonicalPayeeName,
-          pan_number: row.panNumber?.trim() || "",
-          account_type: row.accountType?.trim() || "",
-          beneficiary_type: row.beneficiaryType || "individual",
-          beneficiary_org: resolveCanonicalBeneficiaryOrg(
+          pan_number: isCashMode ? "" : row.panNumber?.trim() || "",
+          account_type: isCashMode ? "" : row.accountType?.trim() || "",
+          beneficiary_type: isCashMode ? "" : row.beneficiaryType || "individual",
+          beneficiary_org: isCashMode ? "" : resolveCanonicalBeneficiaryOrg(
             row.beneficiaryOrg,
             row.payeeName,
           ),
-          organization_type: row.organizationType?.trim() || "",
-          msme: row.msme?.trim() || "",
-          gstin: row.gstin?.trim() || "",
-          tds_details: row.tdsDetails?.trim() || "",
-          tds_section: row.tdsSection?.trim() || "",
+          organization_type: isCashMode ? "" : row.organizationType?.trim() || "",
+          msme: isCashMode ? "" : row.msme?.trim() || "",
+          gstin: isCashMode ? "" : row.gstin?.trim() || "",
+          tds_details: isCashMode ? "" : row.tdsDetails?.trim() || "",
+          tds_section: isCashMode ? "" : row.tdsSection?.trim() || "",
       };
     });
 
@@ -5024,10 +5038,14 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       setAdvanceRows([createAdvanceRow()]);
       setSettlementRows([createSettlementRow()]);
       setExpenditureSubRows([createExpenditureRow()]);
+      setSettlementRemarks("");
+      setExpenditureRemarks("");
+      setAdvanceTentativeSettlementDate("");
       setPayeeRows([createPayeeRow()]);
       setShowBulkNEFT(false);
       setBulkNeftFile(null);
       setUploadedPayeeBills([]);
+      setExistingPayeeBills([]);
       setUploadedPaymentProofs([]);
       setExistingPaymentProofs([]);
       if (bulkNeftInputRef.current) {

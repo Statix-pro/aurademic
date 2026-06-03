@@ -2206,7 +2206,7 @@ export async function createExpenditure(data, userId) {
     primary_head: normalizeText(data.primary_head) || 'General',
     event_sub_head: normalizeText(data.event_sub_head) || null,
     request_type: 'Advance',
-    unplanned_budget_enabled: Boolean(data.unplanned_budget_enabled),
+    unplanned_budget_enabled: parseBoolean(data.unplanned_budget_enabled),
     unplanned_budget_amount: data.unplanned_budget_amount ?? null,
     unplanned_budget_head: data.unplanned_budget_head ?? null,
     unplanned_budget_sub_head: data.unplanned_budget_sub_head ?? null,
@@ -4536,7 +4536,10 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
         NOT EXISTS (SELECT 1 FROM expenditure_advance_rows ar_any WHERE ar_any.expenditure_id = er.id AND ar_any.budget_proposal_id IS NOT NULL)
         AND NOT EXISTS (SELECT 1 FROM expenditure_settlement_rows sr_any WHERE sr_any.expenditure_id = er.id AND sr_any.budget_proposal_id IS NOT NULL)
         AND NOT EXISTS (SELECT 1 FROM expenditure_line_rows lr_any WHERE lr_any.expenditure_id = er.id AND lr_any.budget_proposal_id IS NOT NULL)
-        AND YEAR(COALESCE(er.request_date, er.created_at)) = ?
+        AND (
+          YEAR(COALESCE(er.request_date, er.created_at))
+            - (MONTH(COALESCE(er.request_date, er.created_at)) < 4)
+        ) = ?
       )
     )`);
     whereParams.push(fiscalYear, fiscalYear, fiscalYear, fiscalYear);
@@ -4900,7 +4903,10 @@ export async function listAvailableFiscalYears({ tx = db } = {}) {
           WHERE LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
             AND bp.fiscal_year IS NOT NULL
          UNION
-         SELECT YEAR(COALESCE(er.request_date, er.created_at)) AS fiscal_year
+         SELECT (
+                  YEAR(COALESCE(er.request_date, er.created_at))
+                    - (MONTH(COALESCE(er.request_date, er.created_at)) < 4)
+                ) AS fiscal_year
            FROM expenditure_requests er
           WHERE LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
             AND NOT EXISTS (SELECT 1 FROM expenditure_advance_rows ar WHERE ar.expenditure_id = er.id AND ar.budget_proposal_id IS NOT NULL)

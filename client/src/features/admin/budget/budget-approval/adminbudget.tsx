@@ -366,7 +366,7 @@ const AdminBudget: React.FC = () => {
     const fetchFiscalYears = async () => {
       try {
         const response: any = await authenticityUtility.get("/adminbudget/fiscal-years");
-        if (response?.success && Array.isArray(response.data)) {
+        if (response?.success && Array.isArray(response.data) && response.data.length > 0) {
           setAvailableFiscalYears(response.data);
         }
       } catch (error) {

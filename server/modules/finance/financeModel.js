@@ -3749,7 +3749,10 @@ const financeModel = {
               FROM finance_budget_breakup fbb_any
              WHERE fbb_any.finance_id = fr.id
           )
-          AND YEAR(COALESCE(fr.request_date, fr.created_at)) = ?
+          AND (
+            YEAR(COALESCE(fr.request_date, fr.created_at))
+              - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+          ) = ?
         )
       )`);
       whereParams.push(fiscalYear, fiscalYear);
@@ -4080,7 +4083,10 @@ const financeModel = {
             WHERE ${FINANCE_NOT_DELETED_CONDITION_SQL}
               AND bp.fiscal_year IS NOT NULL
            UNION
-           SELECT YEAR(COALESCE(fr.request_date, fr.created_at)) AS fiscal_year
+           SELECT (
+                    YEAR(COALESCE(fr.request_date, fr.created_at))
+                      - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+                  ) AS fiscal_year
              FROM finance_requests fr
             WHERE ${FINANCE_NOT_DELETED_CONDITION_SQL}
               AND NOT EXISTS (
