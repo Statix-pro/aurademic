@@ -3281,3 +3281,17 @@ export async function getProposalDataForExport(proposalId) {
     approvals,
   };
 }
+
+export async function listAvailableFiscalYears() {
+  const [rows] = await db.execute(
+    `SELECT DISTINCT fiscal_year
+       FROM budget_proposals
+      WHERE fiscal_year IS NOT NULL
+        AND LOWER(TRIM(status)) <> 'deleted'
+      ORDER BY fiscal_year DESC`
+  );
+
+  return (rows || [])
+    .map((row) => Number.parseInt(row?.fiscal_year, 10))
+    .filter((year) => Number.isInteger(year) && year > 0);
+}

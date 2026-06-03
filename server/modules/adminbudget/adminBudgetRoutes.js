@@ -73,6 +73,7 @@ router.put('/freeze-config', canManageFreeze, AdminBudgetController.upsertFreeze
 // Admin budget page workflow endpoints (moved from /budget/* usage)
 router.get('/faculty', AdminBudgetController.getFacultyDetails);
 router.get('/departments', AdminBudgetController.getAllDepartments);
+router.get('/fiscal-years', canViewAnyBudgetStats, AdminBudgetController.getAvailableFiscalYears);
 router.get('/search-applicant', AdminBudgetController.searchApplicant);
 router.get('/tags', AdminBudgetController.getBudgetTags);
 router.get('/org-units', AdminBudgetController.getAllOrgUnits);

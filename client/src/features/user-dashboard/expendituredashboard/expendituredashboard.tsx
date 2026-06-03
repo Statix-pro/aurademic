@@ -3,6 +3,7 @@ import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import "./expendituredashboard.css";
 import AddPayeeModal, { AddPayeeModalPayee } from '../../../shared/components/AddPayeeModal';
 import {
+  Info,
   Eye,
   Edit2,
   Trash2,
@@ -38,6 +39,7 @@ interface ExpenditureItem {
 }
 
 type WorkflowModule = "Advance" | "Settlement" | "Expenditure";
+type StatusFilterKey = "all" | "pending" | "return" | "approved" | "pending_payment" | "closed";
 
 interface ExpenditureDialogConfig {
   show: boolean;
@@ -57,6 +59,7 @@ interface DashboardReturnState {
   submittedAmount?: number;
   submittedRequestId?: number;
   financeRequestId?: number;
+  fiscalYear?: string;
   viewOnly?: boolean;
   financeProposal?: {
     proposalId: string;
@@ -137,6 +140,34 @@ interface WorkflowRow {
   latestWorkflowState?: unknown;
   latestWorkflowStatus?: string;
   approvalLevel: number;
+}
+
+interface ExpenditureStatusUpdate {
+  id: number | string;
+  stage?: string | null;
+  role?: string | null;
+  status?: string | null;
+  decision?: string | null;
+  comment?: string | null;
+  feedback?: string | null;
+  summary?: string | null;
+  createdAt?: string | null;
+  decidedAt?: string | null;
+  userName?: string | null;
+  actorEmail?: string | null;
+  actorRole?: string | null;
+  isAdmin?: number | boolean | null;
+}
+
+interface ExpenditureLogEvent {
+  key: string;
+  badge: string;
+  title: string;
+  subtitle: string;
+  actorLabel: string;
+  actorValue: string;
+  actorBadgeLabel: string;
+  dateLabel: string;
 }
 
 const formatFY = (fyStart: number) => `${fyStart}-${String(fyStart + 1).slice(-2)}`;
@@ -340,6 +371,139 @@ const buildWorkflowRequestRefMap = (requests: ExpenditureItem[]) => {
 const getRequestStatusLabel = (item: ExpenditureItem) =>
   getWorkflowApprovalLabel(parseWorkflowState(item.workflow_state));
 
+const matchesStatusFilter = (item: ExpenditureItem, filter: StatusFilterKey) => {
+  if (filter === "all") return true;
+
+  const statusLabel = getRequestStatusLabel(item);
+  const isPaid = normalizeStatus(item.payment_status) === "paid";
+
+  if (filter === "pending") {
+    return statusLabel === "Pending" || statusLabel === "Resubmitted";
+  }
+  if (filter === "return") {
+    return statusLabel === "Returned";
+  }
+  if (filter === "approved") {
+    return statusLabel === "Approved";
+  }
+  if (filter === "pending_payment") {
+    return statusLabel === "Approved" && !isPaid;
+  }
+  if (filter === "closed") {
+    return statusLabel === "Approved" && isPaid;
+  }
+
+  return true;
+};
+
+const getWorkflowRowOptionStatus = (
+  row: WorkflowRow,
+  module: WorkflowModule | "Advance2",
+) => {
+  if (module === "Advance2") return row.advanceStatus2 || "";
+  if (module === "Advance") return row.advanceStatus || "";
+  if (module === "Settlement") return row.settlementStatus || "";
+  return row.expenditureStatus || "";
+};
+
+const getWorkflowRowOptionPaymentStatus = (
+  row: WorkflowRow,
+  module: WorkflowModule | "Advance2",
+) => {
+  if (module === "Advance2") return row.advancePaymentStatus2 || "";
+  if (module === "Advance") return row.advancePaymentStatus || "";
+  if (module === "Settlement") return row.settlementPaymentStatus || "";
+  return row.expenditurePaymentStatus || "";
+};
+
+const getWorkflowRowOptionRequestRef = (
+  row: WorkflowRow,
+  module: WorkflowModule | "Advance2",
+) => {
+  if (module === "Advance2") return row.advanceRequestRef2 || "";
+  if (module === "Advance") return row.advanceRequestRef || "";
+  if (module === "Settlement") return row.settlementRequestRef || "";
+  return row.expenditureRequestRef || "";
+};
+
+const getWorkflowRowOptionAmount = (
+  row: WorkflowRow,
+  module: WorkflowModule | "Advance2",
+) => {
+  if (module === "Advance2") return Number(row.advanceAmount2 || 0);
+  if (module === "Advance") return Number(row.advanceAmount || 0);
+  if (module === "Settlement") return Number(row.settlementAmount || 0);
+  return Number(row.expenditureAmount || 0);
+};
+
+const getWorkflowStatusCategory = (status: unknown) => {
+  const normalized = normalizeStatus(status);
+  if (normalized === "returned") return "Returned";
+  if (normalized === "rejected") return "Rejected";
+  if (normalized === "resubmitted") return "Resubmitted";
+  if (["approved", "completed", "principal_approved"].includes(normalized)) {
+    return "Approved";
+  }
+  return "Pending";
+};
+
+const matchesWorkflowRowOptionStatusFilter = (
+  row: WorkflowRow,
+  module: WorkflowModule | "Advance2",
+  filter: StatusFilterKey,
+) => {
+  if (filter === "all") return true;
+
+  const hasRequest =
+    Boolean(getWorkflowRowOptionRequestRef(row, module)) ||
+    getWorkflowRowOptionAmount(row, module) > 0;
+  if (!hasRequest) return filter === "pending";
+
+  const statusCategory = getWorkflowStatusCategory(
+    getWorkflowRowOptionStatus(row, module),
+  );
+  const isPaid = normalizeStatus(getWorkflowRowOptionPaymentStatus(row, module)) === "paid";
+
+  if (filter === "pending") {
+    return statusCategory === "Pending" || statusCategory === "Resubmitted";
+  }
+  if (filter === "return") {
+    return statusCategory === "Returned";
+  }
+  if (filter === "approved") {
+    return statusCategory === "Approved";
+  }
+  if (filter === "pending_payment") {
+    return statusCategory === "Approved" && !isPaid;
+  }
+  if (filter === "closed") {
+    return statusCategory === "Approved" && isPaid;
+  }
+
+  return true;
+};
+
+const matchesWorkflowRowStatusFilter = (row: WorkflowRow, filter: StatusFilterKey) => {
+  if (filter === "all") return true;
+
+  const modules: Array<WorkflowModule | "Advance2"> = [
+    "Advance",
+    "Advance2",
+    "Settlement",
+    "Expenditure",
+  ];
+  const hasSubmitted = modules.some(
+    (module) =>
+      Boolean(getWorkflowRowOptionRequestRef(row, module)) ||
+      getWorkflowRowOptionAmount(row, module) > 0,
+  );
+
+  if (!hasSubmitted) return filter === "pending";
+  return modules.some((module) =>
+    matchesWorkflowRowOptionStatusFilter(row, module, filter),
+  );
+};
+
 const ExpenditureDashboard: React.FC = () => {
   const [data, setData] = useState<ExpenditureItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -353,7 +517,7 @@ const ExpenditureDashboard: React.FC = () => {
   const [financeIdQuery, setFinanceIdQuery] = useState<string>("");
   const [financialYear, setFinancialYear] = useState<string>(getDefaultFilterFY());
   const [selectedBeneficiary, setSelectedBeneficiary] = useState<string>("all");
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("all");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<StatusFilterKey>("pending");
   const [proposalCards, setProposalCards] = useState<ExpenditureProposalCard[]>([]);
   const [cardRows, setCardRows] = useState<Record<string, WorkflowRow[]>>({});
   const [dialogConfig, setDialogConfig] = useState<ExpenditureDialogConfig>({
@@ -361,6 +525,9 @@ const ExpenditureDashboard: React.FC = () => {
     title: "",
     message: "",
   });
+  const [activeInfoId, setActiveInfoId] = useState<number | null>(null);
+  const [loadingInfoId, setLoadingInfoId] = useState<number | null>(null);
+  const [statusUpdatesById, setStatusUpdatesById] = useState<Record<number, ExpenditureStatusUpdate[]>>({});
   const [showAddPayeeModal, setShowAddPayeeModal] = useState(false);
   const [isSubmittingPayee, setIsSubmittingPayee] = useState(false);
 
@@ -416,9 +583,9 @@ const ExpenditureDashboard: React.FC = () => {
           payee.beneficiaryType === "organization"
             ? normalizeText(payee.tdsSection) || null
             : null,
-      }) as { status?: string; message?: string };
+      }) as { success?: boolean; status?: string; message?: string };
 
-      if (response.status !== "success") {
+      if (response.success !== true && response.status !== "success") {
         throw new Error(response.message || "Unable to send payee for approval");
       }
 
@@ -469,7 +636,7 @@ const ExpenditureDashboard: React.FC = () => {
     ];
   }, [data]);
 
-  const filteredProposalCards = useMemo(() => {
+  const searchFilteredProposalCards = useMemo(() => {
     const financeIdsByBeneficiary =
       selectedBeneficiary === "all"
         ? null
@@ -528,6 +695,29 @@ const ExpenditureDashboard: React.FC = () => {
     });
   }, [cardRows, data, proposalCards, normalizedFinanceIdQuery, selectedBeneficiary]);
 
+  const filteredCardRows = useMemo(() => {
+    const next: Record<string, WorkflowRow[]> = {};
+
+    searchFilteredProposalCards.forEach((card) => {
+      const rows = cardRows[card.financeRequestId] ?? [];
+      next[card.financeRequestId] =
+        selectedStatusFilter === "all"
+          ? rows
+          : rows.filter((row) => matchesWorkflowRowStatusFilter(row, selectedStatusFilter));
+    });
+
+    return next;
+  }, [cardRows, searchFilteredProposalCards, selectedStatusFilter]);
+
+  const filteredProposalCards = useMemo(
+    () =>
+      searchFilteredProposalCards.filter((card) => {
+        if (selectedStatusFilter === "all") return true;
+        return (filteredCardRows[card.financeRequestId] ?? []).length > 0;
+      }),
+    [filteredCardRows, searchFilteredProposalCards, selectedStatusFilter],
+  );
+
   const stats = useMemo(() => {
     const beneficiaryFilteredData = data.filter((item) => {
       if (selectedBeneficiary === "all") return true;
@@ -552,19 +742,16 @@ const ExpenditureDashboard: React.FC = () => {
       total++;
       totalAmount += Number(item.amount || 0);
 
-      const statusLabel = getRequestStatusLabel(item);
-      const isPaid = normalizeStatus(item.payment_status) === "paid";
-
-      if (statusLabel === "Pending" || statusLabel === "Resubmitted") {
+      if (matchesStatusFilter(item, "pending")) {
         pending++;
         pendingAmount += Number(item.amount || 0);
-      } else if (statusLabel === "Returned") {
+      } else if (matchesStatusFilter(item, "return")) {
         returned++;
         returnedAmount += Number(item.amount || 0);
-      } else if (statusLabel === "Approved") {
+      } else if (matchesStatusFilter(item, "approved")) {
         approved++;
         approvedAmount += Number(item.amount || 0);
-        if (isPaid) {
+        if (matchesStatusFilter(item, "closed")) {
           closed++;
           closedAmount += Number(item.amount || 0);
         } else {
@@ -590,6 +777,57 @@ const ExpenditureDashboard: React.FC = () => {
     };
   }, [data, selectedBeneficiary]);
 
+  const kpiCards = [
+    {
+      key: "all" as const,
+      className: "total",
+      label: "Total",
+      value: stats.total,
+      amount: stats.totalAmount,
+      icon: <FileText size={20} className="expenditure-stats-icon" />,
+    },
+    {
+      key: "pending" as const,
+      className: "pending",
+      label: "Pending",
+      value: stats.pending,
+      amount: stats.pendingAmount,
+      icon: <Clock size={20} className="expenditure-stats-icon" />,
+    },
+    {
+      key: "return" as const,
+      className: "return",
+      label: "Return",
+      value: stats.returned,
+      amount: stats.returnedAmount,
+      icon: <RotateCcw size={20} className="expenditure-stats-icon" />,
+    },
+    {
+      key: "approved" as const,
+      className: "approved",
+      label: "Approved",
+      value: stats.approved,
+      amount: stats.approvedAmount,
+      icon: <CheckCircle2 size={20} className="expenditure-stats-icon" />,
+    },
+    {
+      key: "pending_payment" as const,
+      className: "pending-payment",
+      label: "Pending (Payment)",
+      value: stats.pendingPayment,
+      amount: stats.pendingPaymentAmount,
+      icon: <CreditCard size={20} className="expenditure-stats-icon" />,
+    },
+    {
+      key: "closed" as const,
+      className: "closed",
+      label: "Closed",
+      value: stats.closed,
+      amount: stats.closedAmount,
+      icon: <Lock size={20} className="expenditure-stats-icon" />,
+    },
+  ];
+
   const filteredData = useMemo(() => {
     const visibleFinanceIds = new Set(filteredProposalCards.map((card) => card.financeRequestId));
     return data.filter((item) => {
@@ -597,33 +835,150 @@ const ExpenditureDashboard: React.FC = () => {
         return false;
       }
 
-      if (selectedStatusFilter === "all") return true;
-
-      const statusLabel = getRequestStatusLabel(item);
-      const isPaid = normalizeStatus(item.payment_status) === "paid";
-
-      if (selectedStatusFilter === "pending") {
-        return statusLabel === "Pending" || statusLabel === "Resubmitted";
-      }
-      if (selectedStatusFilter === "return") {
-        return statusLabel === "Returned";
-      }
-      if (selectedStatusFilter === "approved") {
-        return statusLabel === "Approved";
-      }
-      if (selectedStatusFilter === "pending_payment") {
-        return statusLabel === "Approved" && !isPaid;
-      }
-      if (selectedStatusFilter === "closed") {
-        return statusLabel === "Approved" && isPaid;
-      }
-
-      return true;
+      return matchesStatusFilter(item, selectedStatusFilter);
     });
   }, [data, filteredProposalCards, selectedStatusFilter]);
 
   const formatAmount = (amount: number) =>
     `₹${Number(amount || 0).toLocaleString("en-IN")}`;
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const formatLogLabel = (value?: string | null) => {
+    const normalized = normalizeText(value);
+    if (!normalized) return "-";
+    return normalized.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  const getStageBadgeLabel = (stage?: string | null, actorRole?: string | null) => {
+    const stageToken = normalizeText(stage).toLowerCase();
+    const actorRoleToken = normalizeText(actorRole).toLowerCase();
+
+    if (stageToken === "submitted") return "Submitted";
+    if (stageToken === "level1") {
+      if (["coordinator", "entity_approver"].includes(actorRoleToken)) return "Coordinator";
+      return "HOD";
+    }
+    if (stageToken === "dof") return "DoF";
+    if (stageToken === "principal") return "Principal";
+    return formatLogLabel(stage);
+  };
+
+  const buildExpenditureLogEvents = (
+    item: ExpenditureItem,
+    updates: ExpenditureStatusUpdate[],
+  ): ExpenditureLogEvent[] => {
+    const formatActorIdentity = (
+      name?: string | null,
+      email?: string | null,
+      fallback?: string | null,
+    ) => {
+      const normalizedName = normalizeText(name);
+      const normalizedEmail = normalizeText(email);
+      const normalizedFallback = normalizeText(fallback);
+
+      if (normalizedName && normalizedEmail && normalizedName.toLowerCase() !== normalizedEmail.toLowerCase()) {
+        return `${normalizedName} (${normalizedEmail})`;
+      }
+      return normalizedName || normalizedEmail || normalizedFallback || "-";
+    };
+
+    return [...updates]
+      .sort((left, right) => {
+        const leftMs = Date.parse(normalizeText(left.createdAt || left.decidedAt)) || 0;
+        const rightMs = Date.parse(normalizeText(right.createdAt || right.decidedAt)) || 0;
+        if (leftMs !== rightMs) return leftMs - rightMs;
+        return Number(left.id || 0) - Number(right.id || 0);
+      })
+      .map((update, index) => {
+        const decision = normalizeText(update.decision || update.status).toLowerCase();
+        const isSubmitted = decision.includes("submitted");
+        const isReturned = decision.includes("returned");
+        const isRejected = decision.includes("rejected");
+        const isApproved = decision.includes("approved") || decision.includes("completed");
+        const isUpdated = decision === "updated";
+        const isAdmin = Boolean(update.isAdmin) ||
+          ["admin", "super_admin", "superadmin"].includes(normalizeText(update.actorRole).toLowerCase());
+        const stage = getStageBadgeLabel(update.stage || update.role, update.actorRole);
+
+        let badge = "UPDATED";
+        let title = "Request updated";
+        let actorLabel = "Updated By";
+
+        if (isSubmitted) {
+          badge = "SUBMITTED";
+          title = "Request submitted";
+          actorLabel = "Submitted By";
+        } else if (isReturned) {
+          badge = "RETURNED";
+          title = "Request returned";
+        } else if (isRejected) {
+          badge = "REJECTED";
+          title = "Request rejected";
+        } else if (isApproved) {
+          badge = "APPROVED";
+          title = "Request approved";
+        }
+
+        return {
+          key: `${update.id}-${index}`,
+          badge,
+          title,
+          subtitle: normalizeText(update.summary || update.feedback || update.comment) || "Status update",
+          actorLabel,
+          actorValue: formatActorIdentity(update.userName, update.actorEmail, update.actorRole || item.applicantname),
+          actorBadgeLabel: isUpdated && isAdmin ? "SUPERADMIN" : stage,
+          dateLabel: formatDateTime(update.createdAt || update.decidedAt || item.createdat),
+        };
+      });
+  };
+
+  const fetchStatusUpdates = async (requestId: number) => {
+    if (statusUpdatesById[requestId]) return;
+
+    try {
+      setLoadingInfoId(requestId);
+      const response = await authenticityUtility.get(`/expenditure/${requestId}/status-updates`) as {
+        status?: string;
+        success?: boolean;
+        data?: ExpenditureStatusUpdate[];
+      };
+
+      setStatusUpdatesById((prev) => ({
+        ...prev,
+        [requestId]: response.success === true || response.status === "success" ? response.data || [] : [],
+      }));
+    } catch (error) {
+      console.error("Failed to fetch expenditure status updates", error);
+      setStatusUpdatesById((prev) => ({ ...prev, [requestId]: [] }));
+    } finally {
+      setLoadingInfoId((prev) => (prev === requestId ? null : prev));
+    }
+  };
+
+  const handleInfoClick = async (requestId: number | null | undefined) => {
+    const normalizedRequestId = Number(requestId || 0);
+    if (!normalizedRequestId) return;
+
+    if (activeInfoId === normalizedRequestId) {
+      setActiveInfoId(null);
+      return;
+    }
+
+    setActiveInfoId(normalizedRequestId);
+    await fetchStatusUpdates(normalizedRequestId);
+  };
 
   const closeDialog = () => {
     setDialogConfig((prev) => ({
@@ -769,6 +1124,7 @@ const ExpenditureDashboard: React.FC = () => {
         submittedRequestId: targetRequestId ?? undefined,
         sourceRequestId: row.requestId ?? undefined,
         financeRequestId: Number(card.financeRequestId),
+        fiscalYear: financialYear,
         financeProposal: {
           proposalId: card.proposalId,
           applicantName: card.applicantName,
@@ -1401,11 +1757,12 @@ const ExpenditureDashboard: React.FC = () => {
         try {
           setLoading(true);
           const result = await authenticityUtility.delete(`/expenditure/${requestId}`) as {
+            success?: boolean;
             status?: string;
             message?: string;
           };
 
-          if (result?.status !== "success") {
+          if (result?.success !== true && result?.status !== "success") {
             throw new Error(result?.message || "Failed to delete expenditure request");
           }
 
@@ -1427,6 +1784,7 @@ const ExpenditureDashboard: React.FC = () => {
   const fetchDashboard = async (preferredOpenCardId?: string | null) => {
     try {
       setLoading(true);
+      setStatusUpdatesById({});
 
       const fyStart = Number.parseInt(financialYear.split("-")[0], 10);
 
@@ -1497,6 +1855,12 @@ const ExpenditureDashboard: React.FC = () => {
   useEffect(() => {
     const state = location.state as DashboardReturnState | null;
 
+    const stateFiscalYear = normalizeText(state?.fiscalYear ?? "");
+    if (stateFiscalYear && stateFiscalYear !== financialYear) {
+      setFinancialYear(stateFiscalYear);
+      return;
+    }
+
     const financeId = normalizeText(state?.financeRequestId ?? "");
 
     if (financeId) {
@@ -1506,6 +1870,13 @@ const ExpenditureDashboard: React.FC = () => {
       fetchDashboard();
     }
   }, [location.state, financialYear, navigate]);
+
+  const activeInfoItem = activeInfoId !== null
+    ? data.find((item) => item.id === activeInfoId) ?? null
+    : null;
+  const activeStatusUpdates = activeInfoId !== null ? statusUpdatesById[activeInfoId] || [] : [];
+  const activeLogEvents = activeInfoItem ? buildExpenditureLogEvents(activeInfoItem, activeStatusUpdates) : [];
+
   return (
     <section className="expenditure-page">
       <div className="expenditure-container">
@@ -1588,104 +1959,40 @@ const ExpenditureDashboard: React.FC = () => {
           />
 
           <div className="expenditure-body">
-            {/* <div className="expenditure-stats-container">
-              <button
-                type="button"
-                className={`expenditure-stats-card total ${selectedStatusFilter === "all" ? "active" : ""}`}
-                onClick={() => setSelectedStatusFilter("all")}
-              >
-                <div className="expenditure-stats-icon-wrap">
-                  <FileText size={20} className="expenditure-stats-icon" />
-                </div>
-                <div className="expenditure-stats-info">
-                  <span className="expenditure-stats-label">Total</span>
-                  <span className="expenditure-stats-number">{stats.total}</span>
-                  <span className="expenditure-stats-amount">{formatAmount(stats.totalAmount)}</span>
-                </div>
-              </button>
+            <div className="expenditure-stats-container">
+              {kpiCards.map((card) => {
+                const isActive = selectedStatusFilter === card.key;
 
-              <button
-                type="button"
-                className={`expenditure-stats-card pending ${selectedStatusFilter === "pending" ? "active" : ""}`}
-                onClick={() => setSelectedStatusFilter("pending")}
-              >
-                <div className="expenditure-stats-icon-wrap">
-                  <Clock size={20} className="expenditure-stats-icon" />
-                </div>
-                <div className="expenditure-stats-info">
-                  <span className="expenditure-stats-label">Pending</span>
-                  <span className="expenditure-stats-number">{stats.pending}</span>
-                  <span className="expenditure-stats-amount">{formatAmount(stats.pendingAmount)}</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className={`expenditure-stats-card return ${selectedStatusFilter === "return" ? "active" : ""}`}
-                onClick={() => setSelectedStatusFilter("return")}
-              >
-                <div className="expenditure-stats-icon-wrap">
-                  <RotateCcw size={20} className="expenditure-stats-icon" />
-                </div>
-                <div className="expenditure-stats-info">
-                  <span className="expenditure-stats-label">Return</span>
-                  <span className="expenditure-stats-number">{stats.returned}</span>
-                  <span className="expenditure-stats-amount">{formatAmount(stats.returnedAmount)}</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className={`expenditure-stats-card approved ${selectedStatusFilter === "approved" ? "active" : ""}`}
-                onClick={() => setSelectedStatusFilter("approved")}
-              >
-                <div className="expenditure-stats-icon-wrap">
-                  <CheckCircle2 size={20} className="expenditure-stats-icon" />
-                </div>
-                <div className="expenditure-stats-info">
-                  <span className="expenditure-stats-label">Approved</span>
-                  <span className="expenditure-stats-number">{stats.approved}</span>
-                  <span className="expenditure-stats-amount">{formatAmount(stats.approvedAmount)}</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className={`expenditure-stats-card pending-payment ${selectedStatusFilter === "pending_payment" ? "active" : ""}`}
-                onClick={() => setSelectedStatusFilter("pending_payment")}
-              >
-                <div className="expenditure-stats-icon-wrap">
-                  <CreditCard size={20} className="expenditure-stats-icon" />
-                </div>
-                <div className="expenditure-stats-info">
-                  <span className="expenditure-stats-label">Pending (Payment)</span>
-                  <span className="expenditure-stats-number">{stats.pendingPayment}</span>
-                  <span className="expenditure-stats-amount">{formatAmount(stats.pendingPaymentAmount)}</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className={`expenditure-stats-card closed ${selectedStatusFilter === "closed" ? "active" : ""}`}
-                onClick={() => setSelectedStatusFilter("closed")}
-              >
-                <div className="expenditure-stats-icon-wrap">
-                  <Lock size={20} className="expenditure-stats-icon" />
-                </div>
-                <div className="expenditure-stats-info">
-                  <span className="expenditure-stats-label">Closed</span>
-                  <span className="expenditure-stats-number">{stats.closed}</span>
-                  <span className="expenditure-stats-amount">{formatAmount(stats.closedAmount)}</span>
-                </div>
-              </button>
-            </div> */}
+                return (
+                  <button
+                    key={card.key}
+                    type="button"
+                    className={`expenditure-stats-card ${card.className} ${
+                      isActive ? "active" : ""
+                    }`}
+                    onClick={() => setSelectedStatusFilter(card.key)}
+                    aria-pressed={isActive}
+                    aria-label={`Filter expenditure requests by ${card.label}`}
+                  >
+                    <div className="expenditure-stats-icon-wrap">
+                      {card.icon}
+                    </div>
+                    <div className="expenditure-stats-info">
+                      <span className="expenditure-stats-label">{card.label}</span>
+                      <span className="expenditure-stats-number">{card.value}</span>
+                      <span className="expenditure-stats-amount">{formatAmount(card.amount)}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
 
             <div className="expenditure-demo-wrap">
               {filteredProposalCards.map((card) => {
                 const isCardOpen = openCardId === card.financeRequestId;
                 const cardExpenditureAmount = Number(card.expenditureAmount || 0);
                 const cardBalanceAmount = Math.max(Number(card.balanceAmount || 0), 0);
-                const rows = cardRows[card.financeRequestId] ?? [];
+                const rows = filteredCardRows[card.financeRequestId] ?? [];
                 const canAddRow = cardBalanceAmount > 0;
                 const isFullyClosed = isFinanceCardFullyClosed(rows);
 
@@ -1968,6 +2275,18 @@ const ExpenditureDashboard: React.FC = () => {
                                           </button>
                                         )}
 
+                                        {hasProposal && (
+                                          <button
+                                            type="button"
+                                            className="expenditure-demo-row__icon-btn"
+                                            onClick={() => handleInfoClick(row.latestRequestId)}
+                                            title="Logs"
+                                            aria-label="View request logs"
+                                          >
+                                            <Info size={14} />
+                                          </button>
+                                        )}
+
                                         {hasProposal && (() => {
                                           const rowStatusLabel = getRowWorkflowLabel(row);
 
@@ -2136,6 +2455,14 @@ const ExpenditureDashboard: React.FC = () => {
                             </button>
                             <button
                               type="button"
+                              title="Info"
+                              className="expenditure-action-global"
+                              onClick={() => handleInfoClick(item.id)}
+                            >
+                              <Info size={16} />
+                            </button>
+                            <button
+                              type="button"
                               title="Edit"
                               className="expenditure-action-global"
                               disabled={!isEditableWorkflowStatus(getRequestWorkflowStatus(item))}
@@ -2227,6 +2554,70 @@ const ExpenditureDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {activeInfoItem && (
+        <div className="expenditure-log-overlay" onClick={() => setActiveInfoId(null)}>
+          <div className="expenditure-log-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="expenditure-log-header">Submission Logs</div>
+            <div className="expenditure-log-body">
+              <div className="expenditure-log-summary">
+                <div className="expenditure-log-summary-row">
+                  <span className="expenditure-log-label">Request:</span>
+                  <span className="expenditure-log-value">
+                    {activeInfoItem.requestref || `#EX-${new Date(activeInfoItem.createdat).getFullYear()}-${String(activeInfoItem.id).padStart(4, "0")}`}
+                  </span>
+                </div>
+                <div className="expenditure-log-summary-row">
+                  <span className="expenditure-log-label">Submitted:</span>
+                  <span className="expenditure-log-value">{formatDateTime(activeInfoItem.createdat)}</span>
+                </div>
+              </div>
+
+              <div className="expenditure-log-timeline">
+                {loadingInfoId === activeInfoItem.id ? (
+                  <div className="expenditure-log-empty">Loading updates...</div>
+                ) : activeLogEvents.length > 0 ? (
+                  activeLogEvents.map((event) => (
+                    <div
+                      key={event.key}
+                      className={`expenditure-log-entry${event.actorBadgeLabel ? " expenditure-log-entry--stage" : ""}`}
+                    >
+                      <div className="expenditure-log-entry-top">
+                        <div className="expenditure-log-entry-title">
+                          <span className={`expenditure-log-badge expenditure-log-badge--${event.badge.toLowerCase()}`}>
+                            {event.badge}
+                          </span>
+                          <span className="expenditure-log-title-text">{event.title}</span>
+                        </div>
+                        {event.actorBadgeLabel && (
+                          <span className="expenditure-log-stage-pill">{event.actorBadgeLabel}</span>
+                        )}
+                      </div>
+                      <div className="expenditure-log-role">{event.subtitle}</div>
+                      <div className="expenditure-log-actor-line">
+                        <strong>{event.actorLabel}:</strong> {event.actorValue}
+                      </div>
+                      <div className="expenditure-log-date">{event.dateLabel}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="expenditure-log-empty">No updates found.</div>
+                )}
+              </div>
+
+              <div className="expenditure-log-footer">
+                <button
+                  type="button"
+                  className="expenditure-log-close-btn"
+                  onClick={() => setActiveInfoId(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Modal
         show={dialogConfig.show}

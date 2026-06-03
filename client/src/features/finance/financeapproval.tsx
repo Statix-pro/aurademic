@@ -23,6 +23,10 @@ import CustomToggle from '../../shared/components/ui/CustomToggle';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 import CustomModal from '../../shared/components/ui/CustomModal';
 import {
+  AccountOption,
+  fetchAccountOptions,
+} from '../../shared/utils/accountOptionsApi';
+import {
   formatDMY,
   numberToIndianWords,
   formatWorkflowTimestamp,
@@ -59,6 +63,27 @@ const resolveTagValue = (value: unknown, options: SelectOption[]) => {
   );
 
   return matched?.value || normalized;
+};
+
+const getCurrentFiscalYearStart = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  return String(month >= 4 ? year : year - 1);
+};
+
+const normalizeFiscalYearStart = (value: unknown): string => {
+  const raw = String(value ?? '').trim();
+  if (!raw || raw.toLowerCase() === 'all') return '';
+  const startYear = Number.parseInt(raw.split('-')[0], 10);
+  return Number.isFinite(startYear) && startYear > 0 ? String(startYear) : '';
+};
+
+const parseFinanceBoolean = (value: unknown): boolean => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
 };
 
 const normalizeFinanceRoleCodes = (user: any): string[] => {
@@ -272,29 +297,6 @@ const toOptions = (items: string[]): OptionType[] =>
 
 const CONTRIBUTION_OPTIONS = ['Full', 'Partial'];
 const STATUS_OPTIONS = ['Credited', 'Reimbursement'];
-const CREDIT_ACCOUNT_OPTIONS = [
-  'PRINCIPAL GNERAL A/C | 0751301000015840',
-  'KSRCT-PRINCIPAL COMMON A/C | 0751301000264891',
-  'PRINCIPAL SCHOLARSHIP A/C | 0751301000001328',
-  'PRINCIPAL KSRCT ASSOCIATION ACCOUNT | 0751301000028594',
-  'STAFF CLUB A/C | 0751301000005664',
-  'SOCIETY OF AUTOMOTIVE ENGINEERS (SAE) CLUB KSRCTA/C | 0751301000021422',
-  'KSRCT IETE CHAPTER A/C | 0751301000265626',
-  'KSRCT CIVIL SERB NPDF | 0751301000264860',
-  'KSRCT CIVIL SERB NPDF 2 | 0751301000265593',
-  'K S RANGASAMY COLLEGE OF TECHNOLOGY AUTONOMOUS | 0751302000000224',
-  'KSRCT-CNST A/C | 0751301000045784',
-  'CSI CHAPTER BRANCH OF KSRCT A/C | 0751301000185368',
-  'KSRCT NSS CORPUS FUND | 0751301000047863',
-  'PRINCIPAL NSS UNIT KSRCT | 0751301000004545',
-  'IEEE Student KSRCT | 0751301000059822',
-  'ISTE Student Chapter KSRCT | 0751301000023696',
-  'KSRCT RPS AICTE Project | 0075133800000643',
-  'KSRCT ECE SERB CRG PROJECT | 923010005584584',
-  'K S RANGASAMY COLLEGE OF TECHNOLOGY CONTROLLER OF EXAMINATIONS | 925010007523846',
-  'KSRCT CONTROLLER OF EXAMINATIONS | CASH',
-];
-
 const ANNEXURE_TYPE_OPTIONS = [
   'Proforma Invoice',
   'Invoice',
@@ -840,6 +842,8 @@ const FinanceApproval: React.FC = () => {
   ]);
   const [showIncomeSection, setShowIncomeSection] = useState<boolean>(false);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([createIncomeRow()]);
+  const [accountOptions, setAccountOptions] = useState<AccountOption[]>([]);
+  const [accountOptionsError, setAccountOptionsError] = useState<string>('');
   const [budgetLineMetaByRow, setBudgetLineMetaByRow] = useState<Record<number, BudgetLineMeta>>({});
   const [statusUpdates, setStatusUpdates] = useState<any[]>([]);
   const [proposalRef, setProposalRef] = useState<string>('');
@@ -1023,8 +1027,12 @@ const FinanceApproval: React.FC = () => {
   const handleApplicantSearch = async (query: string) => {
     setApplicantSearchQuery(query);
     try {
-      const response = await authenticityUtility.get(`/finance-requests/search-applicant?q=${encodeURIComponent(query)}`) as { status: string; data: Array<{ employee_id: number; name: string; designation: string; department: string; email: string; mobile: string; employee_type: string }> };
-      if (response.status === 'success') {
+      const response = await authenticityUtility.get(`/finance-requests/search-applicant?q=${encodeURIComponent(query)}`) as {
+        success?: boolean;
+        status?: string;
+        data?: Array<{ employee_id: number; name: string; designation: string; department: string; email: string; mobile: string; employee_type: string }>;
+      };
+      if (response.success === true || response.status === 'success') {
         setApplicantSearchResults(response.data || []);
         setShowApplicantDropdown(true);
       }
@@ -1265,6 +1273,15 @@ const FinanceApproval: React.FC = () => {
 
     return Math.max(0, baseAvailable - reservedByPreviousRows);
   };
+
+  const handleUnplannedBudgetToggle = (checked: boolean): void => {
+    setShowUnplannedBudget(checked);
+    if (!checked) {
+      setUnplannedBudgetAmount('');
+      setUnplannedBudgetDescription('');
+    }
+  };
+
   const fetchBudgetAvailability = async (rowIndex: number, budgetHead: string, subHead: string) => {
     const normalizedHead = normalizeText(primaryHead) || normalizeText(budgetHead);
     const normalizedSubHead =
@@ -1293,8 +1310,10 @@ const FinanceApproval: React.FC = () => {
           finance_id: isEditMode && id ? id : undefined,
           beneficiary_type: beneficiaryType || undefined,
           beneficiary_value: beneficiaryValue || undefined,
+          fiscal_year: budgetAvailabilityFiscalYear || undefined,
         },
       }) as {
+        success?: boolean;
         status: string;
         data?: {
           selected?: {
@@ -1437,6 +1456,35 @@ const FinanceApproval: React.FC = () => {
           : row
       )
     );
+
+  const accountDropdownOptions = accountOptions.map((account) => ({
+    value: account.name,
+    label: account.name,
+    id: account.id,
+  }));
+
+  const loadAccountOptionsFromApi = async (isMounted = () => true) => {
+    try {
+      const options = await fetchAccountOptions();
+      if (!isMounted()) return;
+      setAccountOptions(options);
+      setAccountOptionsError('');
+    } catch (error) {
+      console.error('Failed to load account options', error);
+      if (!isMounted()) return;
+      setAccountOptions([]);
+      setAccountOptionsError('Credit account options could not be loaded. Please refresh or contact admin.');
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    void loadAccountOptionsFromApi(() => mounted);
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const createAnnexureRowId = () => `annexure-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
 
   const handleAnnexureFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -1520,6 +1568,9 @@ const FinanceApproval: React.FC = () => {
   const unplannedBudgetTotal = showUnplannedBudget ? Number(unplannedBudgetAmount || 0) : 0;
   const hasUnplannedBudgetPreview = showUnplannedBudget || Number(unplannedBudgetAmount || 0) > 0;
   const totalBudget = budgetRows.reduce((sum, row) => sum + Number(row.amount || 0), 0) + unplannedBudgetTotal;
+  const totalIncome = incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+  const amountRequestedFromManagement = Math.max(totalBudget - totalIncome, 0);
+  const shouldShowManagementRequestAmount = showIncomeSection && amountRequestedFromManagement > 0;
   const actionCell: CSSProperties = {
     display: 'flex',
     justifyContent: 'center',
@@ -1672,7 +1723,7 @@ const FinanceApproval: React.FC = () => {
 
   const handleSubmit = async (resubmissionComment?: string): Promise<void> => {
     try {
-      if (isViewMode) {
+      if (isViewMode && !canSuperAdminEditTerminalFinance) {
         return;
       }
 
@@ -1734,11 +1785,11 @@ const FinanceApproval: React.FC = () => {
       }
       if (showUnplannedBudget) {
         if (!hasFilledText(unplannedBudgetDescription)) {
-          showAlert('Please enter Unplanned Budget description.', 'warning');
+          showAlert('Please enter Unplanned Expenditure description.', 'warning');
           return;
         }
         if (!(Number(unplannedBudgetAmount || 0) > 0)) {
-          showAlert('Please enter a valid Unplanned Budget amount.', 'warning');
+          showAlert('Please enter a valid Unplanned Expenditure amount.', 'warning');
           return;
         }
       }
@@ -1808,6 +1859,7 @@ const FinanceApproval: React.FC = () => {
           const formData = new FormData();
           formData.append('file', row.file);
           const uploadResponse = await authenticityUtility.postFile('/finance-requests/annexure/upload', formData) as {
+            success?: boolean;
             status?: string;
             data?: {
               originalName?: string;
@@ -1818,8 +1870,10 @@ const FinanceApproval: React.FC = () => {
             };
             message?: string;
           };
+          const isUploadSuccess =
+            uploadResponse?.success === true || uploadResponse?.status === 'success';
 
-          if (uploadResponse?.status !== 'success' || !uploadResponse?.data) {
+          if (!isUploadSuccess || !uploadResponse?.data) {
             showAlert(uploadResponse?.message || 'Failed to upload annexure file', 'error');
             return;
           }
@@ -1905,9 +1959,19 @@ const FinanceApproval: React.FC = () => {
 
       const result = (isEditMode && id
         ? await authenticityUtility.put(`/finance-requests/${id}`, payload)
-        : await authenticityUtility.post('/finance-requests', payload)) as { status: string; message?: string };
+        : await authenticityUtility.post('/finance-requests', payload)) as {
+          success?: boolean;
+          status?: string;
+          message?: string;
+          data?: {
+            id?: number | string;
+            requestRef?: string | null;
+            request_ref?: string | null;
+            proposal_ref?: string | null;
+          };
+        };
 
-      if (result.status !== 'success') {
+      if (result.success !== true && result.status !== 'success') {
         showAlert(result.message || 'Submission failed', 'error');
         return;
       }
@@ -1921,16 +1985,20 @@ const FinanceApproval: React.FC = () => {
 
         const resubmitResult = await authenticityUtility.post(`/finance-requests/${id}/resubmit`, {
           feedback: comment,
-        }) as { status?: string; message?: string };
-        if (resubmitResult.status !== 'success') {
+        }) as { success?: boolean; status?: string; message?: string };
+        if (resubmitResult.success !== true && resubmitResult.status !== 'success') {
           showAlert(resubmitResult.message || 'Finance request updated, but resubmission failed', 'error');
           return;
         }
         closeResubmitPopup(true);
       }
 
-      const responseId = isEditMode ? id : (result as any).data?.id;
-      const refNo = responseId ? `#F-${new Date().getFullYear()}-${String(responseId).padStart(4, '0')}` : '';
+      const refNo = normalizeText(
+        result.data?.requestRef ||
+        result.data?.request_ref ||
+        result.data?.proposal_ref ||
+        proposalRef
+      );
 
       showAlert(
         <div>
@@ -2059,7 +2127,9 @@ const FinanceApproval: React.FC = () => {
     try {
       setIsLoading(true);
       const response = await authenticityUtility.postFile(`/finance-requests/${id}/principal-document`, formData) as any;
-      if (response?.status !== 'success') {
+      const isUploadSuccess =
+        response?.success === true || response?.status === 'success';
+      if (!isUploadSuccess) {
         showAlert(response?.message || 'Failed to upload principal document', 'error');
         return false;
       }
@@ -2222,6 +2292,9 @@ const FinanceApproval: React.FC = () => {
   const isViewMode = Boolean(id && !isEditMode);
   const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
   const isApprovalMode = isViewMode && isAdminWorkflowContext;
+  const routeFiscalYearStart = normalizeFiscalYearStart((location.state as any)?.fiscalYear);
+  const budgetAvailabilityFiscalYear =
+    routeFiscalYearStart || (!isEditMode && !isViewMode ? getCurrentFiscalYearStart() : '');
 
   useEffect(() => {
     if (!isApprovalMode) {
@@ -2234,13 +2307,15 @@ const FinanceApproval: React.FC = () => {
     const loadWorkflowMeta = async () => {
       try {
         const response = await authenticityUtility.get('/finance-requests/workflow/meta') as {
+          success?: boolean;
           status?: string;
           data?: {
             permittedStages?: unknown[];
           };
         };
 
-        if (cancelled || response?.status !== 'success') {
+        const isSuccessResponse = response?.success === true || response?.status === 'success';
+        if (cancelled || !isSuccessResponse) {
           return;
         }
 
@@ -2281,6 +2356,10 @@ const FinanceApproval: React.FC = () => {
     Array.isArray(user?.roles) &&
     user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
   );
+  const canSuperAdminEditTerminalFinance =
+    isSuperAdminUser &&
+    isViewMode &&
+    ['approved', 'completed'].includes(normalizedWorkflowStatus);
 
   const routeStateIsActionablePending = (location.state as any)?.isActionablePending;
   const hideWorkflowActionsForFinalStatus =
@@ -2364,12 +2443,14 @@ const FinanceApproval: React.FC = () => {
       try {
         setIsLoading(true);
         const response = await authenticityUtility.get(`/finance-requests/${requestId}`) as {
+          success?: boolean;
           status?: string;
           data?: any;
           message?: string;
         };
 
-        if (response?.status !== 'success' || !response?.data || cancelled) {
+        const isSuccessResponse = response?.success === true || response?.status === 'success';
+        if (!isSuccessResponse || !response?.data || cancelled) {
           return;
         }
 
@@ -2405,10 +2486,8 @@ const FinanceApproval: React.FC = () => {
           ).trim()
         );
         const workflowFinanceMeta = record.workflow_state?.financeMeta || {};
-        const recordUnplannedBudgetEnabled =
-          record.unplanned_budget_enabled ??
-          workflowFinanceMeta.unplannedBudgetEnabled ??
-          false;
+        const rawRecordUnplannedBudgetEnabled =
+          record.unplanned_budget_enabled ?? workflowFinanceMeta.unplannedBudgetEnabled;
         const recordUnplannedBudgetAmount =
           record.unplanned_budget_amount ??
           workflowFinanceMeta.unplannedBudgetAmount ??
@@ -2422,13 +2501,22 @@ const FinanceApproval: React.FC = () => {
           record.unplanned_budget_description ??
           workflowFinanceMeta.unplannedBudgetDescription ??
           '';
-        setShowUnplannedBudget(Boolean(recordUnplannedBudgetEnabled || hasUnplannedBudgetAmount));
+        const hasExplicitUnplannedFlag =
+          rawRecordUnplannedBudgetEnabled !== null &&
+          rawRecordUnplannedBudgetEnabled !== undefined &&
+          String(rawRecordUnplannedBudgetEnabled).trim() !== '';
+        const isUnplannedBudgetEnabled = hasExplicitUnplannedFlag
+          ? parseFinanceBoolean(rawRecordUnplannedBudgetEnabled)
+          : hasUnplannedBudgetAmount;
+        setShowUnplannedBudget(isUnplannedBudgetEnabled);
         setUnplannedBudgetAmount(
-          recordUnplannedBudgetAmount !== null && recordUnplannedBudgetAmount !== undefined
+          isUnplannedBudgetEnabled &&
+            recordUnplannedBudgetAmount !== null &&
+            recordUnplannedBudgetAmount !== undefined
             ? String(recordUnplannedBudgetAmount)
             : ''
         );
-        setUnplannedBudgetDescription(String(recordUnplannedBudgetDescription || ''));
+        setUnplannedBudgetDescription(isUnplannedBudgetEnabled ? String(recordUnplannedBudgetDescription || '') : '');
         setBeneficiaryType(record.beneficiary_type || '');
         setBeneficiaryValue(record.beneficiary_value || '');
         setPrimaryHead(record.primary_head || '');
@@ -2546,6 +2634,7 @@ const FinanceApproval: React.FC = () => {
     const loadLoggedInApplicant = async () => {
       try {
         const response = await authenticityUtility.get('/finance-requests/me') as {
+          success?: boolean;
           status?: string;
           data?: {
             employee_id?: number | null;
@@ -2557,7 +2646,8 @@ const FinanceApproval: React.FC = () => {
           };
         };
 
-        if (cancelled || response?.status !== 'success' || !response?.data) {
+        const isSuccessResponse = response?.success === true || response?.status === 'success';
+        if (cancelled || !isSuccessResponse || !response?.data) {
           return;
         }
 
@@ -2603,7 +2693,7 @@ const FinanceApproval: React.FC = () => {
       const response = await (authenticityUtility as any).get(
         `finance-requests/search-applicant?q=${encodeURIComponent(query)}${typeParam}`
       ) as any;
-      if (response.status === 'success') {
+      if (response?.success === true || response?.status === 'success') {
         setBeneficiarySearchResults(response.data);
         setShowBeneficiaryDropdown(true);
       }
@@ -2706,6 +2796,7 @@ const FinanceApproval: React.FC = () => {
         normalizedBeneficiaryType,
         normalizedBeneficiaryValue,
         normalizedFinanceId,
+        budgetAvailabilityFiscalYear,
       ].join('|');
       nextFetchKeys[index] = fetchKey;
       if (availabilityFetchKeyByRowRef.current[index] === fetchKey) {
@@ -2716,7 +2807,7 @@ const FinanceApproval: React.FC = () => {
     });
 
     availabilityFetchKeyByRowRef.current = nextFetchKeys;
-  }, [budgetRows, primaryHead, eventSubHead, extraDropdownVisible, beneficiaryType, beneficiaryValue, isEditMode, id]);
+  }, [budgetRows, primaryHead, eventSubHead, extraDropdownVisible, beneficiaryType, beneficiaryValue, isEditMode, id, budgetAvailabilityFiscalYear]);
   const firstBudgetRowAutoSyncRef = useRef<{ category: string; head: string }>({ category: '', head: '' });
   useEffect(() => {
     if (!primaryHead) return;
@@ -2775,11 +2866,12 @@ const FinanceApproval: React.FC = () => {
   });
 
   const handleViewModeFocusCapture = (event: React.FocusEvent<HTMLDivElement>) => {
-    if (!isViewMode) return;
+    if (!isViewMode || canSuperAdminEditTerminalFinance) return;
     const target = event.target as HTMLElement | null;
     if (
       !target ||
       target.closest('[data-readonly-applicant-card="true"]') ||
+      target.closest('[data-readonly-workflow-modal="true"]') ||
       target.closest('[data-workflow-stage-remark-input="true"]')
     ) return;
     if (target.matches('input, textarea, select, button, [tabindex]')) {
@@ -2788,11 +2880,12 @@ const FinanceApproval: React.FC = () => {
   };
 
   const handleViewModeKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!isViewMode) return;
+    if (!isViewMode || canSuperAdminEditTerminalFinance) return;
     const target = event.target as HTMLElement | null;
     if (
       !target ||
       target.closest('[data-readonly-applicant-card="true"]') ||
+      target.closest('[data-readonly-workflow-modal="true"]') ||
       target.closest('[data-workflow-stage-remark-input="true"]')
     ) return;
     if (target.matches('input, textarea, select, button, [tabindex]') && event.key !== 'Tab') {
@@ -2811,7 +2904,7 @@ const FinanceApproval: React.FC = () => {
 
       {!showPreview && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
-          <div style={isViewMode ? { pointerEvents: 'none', userSelect: 'none' } : undefined}>
+          <div style={isViewMode && !canSuperAdminEditTerminalFinance ? { pointerEvents: 'none', userSelect: 'none' } : undefined}>
             {/* Applicant Details Section */}
             <div data-readonly-applicant-card="true" style={{
               backgroundColor: '#fff',
@@ -3530,12 +3623,12 @@ const FinanceApproval: React.FC = () => {
                         </div>
 
                         <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
-                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>Unplanned Budget</span>
+                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>Unplanned Expenditure</span>
                           <CustomToggle
                             name="unplannedBudgetToggle"
                             label=""
                             checked={showUnplannedBudget}
-                            onChange={(checked) => setShowUnplannedBudget(checked)}
+                            onChange={handleUnplannedBudgetToggle}
                           />
                         </div>
                       </div>
@@ -3575,12 +3668,12 @@ const FinanceApproval: React.FC = () => {
                           />
                         </div>
                         <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
-                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>Unplanned Budget</span>
+                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>Unplanned Expenditure</span>
                           <CustomToggle
                             name="unplannedBudgetToggle"
                             label=""
                             checked={showUnplannedBudget}
-                            onChange={(checked) => setShowUnplannedBudget(checked)}
+                            onChange={handleUnplannedBudgetToggle}
                           />
                         </div>
                       </div>
@@ -3795,14 +3888,14 @@ const FinanceApproval: React.FC = () => {
                     {hasUnplannedBudgetPreview && (
                       <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
                         <td colSpan={2} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', fontWeight: '600', color: '#0069ab', backgroundColor: '#fafcff' }}>
-                          Unplanned Budget
+                          Unplanned Expenditure
                         </td>
                         <td colSpan={1} style={{ padding: '12px', border: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
                           <input
                             type="text"
                             value={unplannedBudgetDescription}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => setUnplannedBudgetDescription(e.target.value)}
-                            placeholder="Enter unplanned budget description"
+                            placeholder="Enter unplanned expenditure description"
                             style={{
                               border: '1px solid #e0e0e0',
                               borderRadius: '8px',
@@ -4220,15 +4313,20 @@ const FinanceApproval: React.FC = () => {
                                         <div style={{ flex: 1 }}>
                                           <CustomDropdown
                                             name={`creditAccount-${row.id}`}
-                                            options={toOptions(CREDIT_ACCOUNT_OPTIONS)}
+                                            options={accountDropdownOptions}
                                             className="mb-0"
-                                            value={getSelectedOption(row.creditAccount, toOptions(CREDIT_ACCOUNT_OPTIONS))}
+                                            value={getSelectedOption(row.creditAccount, accountDropdownOptions)}
                                             onChange={(option) => {
                                               const selected = option as OptionType | null;
                                               handleIncomeRowChange(row.id, "creditAccount", selected?.value ? String(selected.value) : "");
                                             }}
                                             placeholder="Select"
                                           />
+                                          {accountOptionsError && (
+                                            <div className="text-danger small mt-1">
+                                              {accountOptionsError}
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     </td>
@@ -4241,10 +4339,39 @@ const FinanceApproval: React.FC = () => {
                             <tr style={{ backgroundColor: '#f0f6ff' }}>
                               <td colSpan={2} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>Total Income</td>
                               <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
-                                ₹ {incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)}
+                                ₹ {totalIncome}
                               </td>
                               <td colSpan={3} style={{ border: '1px solid #e0e0e0' }}></td>
                             </tr>
+                            {shouldShowManagementRequestAmount && (
+                              <tr style={{ backgroundColor: '#fff8e8' }}>
+                                <td
+                                  colSpan={2}
+                                  style={{
+                                    padding: '12px',
+                                    border: '1px solid #e0e0e0',
+                                    textAlign: 'right',
+                                    paddingRight: '15px',
+                                    fontWeight: '600',
+                                    color: '#7a4b00',
+                                  }}
+                                >
+                                  Amount requested from Management
+                                </td>
+                                <td
+                                  style={{
+                                    padding: '12px',
+                                    border: '1px solid #e0e0e0',
+                                    fontWeight: '600',
+                                    color: '#7a4b00',
+                                    textAlign: 'center',
+                                  }}
+                                >
+                                  ₹ {amountRequestedFromManagement}
+                                </td>
+                                <td colSpan={3} style={{ border: '1px solid #e0e0e0' }}></td>
+                              </tr>
+                            )}
                           </tfoot>
                         </table>
 
@@ -4252,7 +4379,7 @@ const FinanceApproval: React.FC = () => {
                         <div style={{ marginTop: "10px", padding: "10px 14px", borderRadius: "10px", backgroundColor: "#f0f6ff", border: "1px solid #cfe2ff", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", fontSize: "0.9rem", color: "#0b3d75", textAlign: "center", width: "100%" }}>
                           <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
                           <span style={{ fontWeight: 600 }}>
-                            {numberToIndianWords(incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)).replace(/\b\w/g, l => l.toUpperCase()).replace(/[^\s][A-Z]/g, l => l.toLowerCase())}
+                            {numberToIndianWords(totalIncome).replace(/\b\w/g, l => l.toUpperCase()).replace(/[^\s][A-Z]/g, l => l.toLowerCase())}
                           </span>
                         </div>
                       </>
@@ -4492,7 +4619,7 @@ const FinanceApproval: React.FC = () => {
             </div>
           )}
 
-          {!showPreview && !isViewMode && (
+          {!showPreview && (!isViewMode || canSuperAdminEditTerminalFinance) && (
             <button
               type="button"
               onClick={() => handleSubmit()}
@@ -4518,7 +4645,11 @@ const FinanceApproval: React.FC = () => {
                 e.currentTarget.style.backgroundColor = '#0069ab';
               }}
             >
-              {isLoading ? 'Submitting...' : isEditMode ? 'Update Form' : 'Submit Form'}
+              {isLoading
+                ? 'Submitting...'
+                : (isEditMode || canSuperAdminEditTerminalFinance)
+                  ? 'Update Form'
+                  : 'Submit Form'}
             </button>
           )}
 
@@ -4868,7 +4999,7 @@ const FinanceApproval: React.FC = () => {
                       ))}
                       {hasUnplannedBudgetPreview && (
                         <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
-                          <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'left', fontWeight: 'bold' }}>Unplanned Budget:{unplannedBudgetDescription || '\u00A0'}</td>
+                          <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'left', fontWeight: 'bold' }}>Unplanned Expenditure:{unplannedBudgetDescription || '\u00A0'}</td>
                           <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹  {Number(unplannedBudgetAmount || 0)}</td>
                         </tr>
                       )}
@@ -4930,6 +5061,22 @@ const FinanceApproval: React.FC = () => {
                           </React.Fragment>
                         ))}
                       </tbody>
+                      {shouldShowManagementRequestAmount && (
+                        <tfoot>
+                          <tr style={{ backgroundColor: '#f8f8f8', fontWeight: 'bold' }}>
+                            <td
+                              colSpan={3}
+                              style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}
+                            >
+                              Amount requested from Management
+                            </td>
+                            <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>
+                              ₹ {amountRequestedFromManagement}
+                            </td>
+                            <td style={{ padding: '3px 4px', border: '1px solid #000' }} />
+                          </tr>
+                        </tfoot>
+                      )}
                     </table>
                   ) : (
                     <div style={{ textAlign: 'center', fontSize: '14px' }}>Income: Not Applicable</div>
@@ -5156,7 +5303,7 @@ const FinanceApproval: React.FC = () => {
         keyboard={!wfActionSubmitting}
         hideCloseButton={wfActionSubmitting}
         footer={
-          <div className="d-flex justify-content-end gap-2 w-100">
+          <div className="d-flex justify-content-end gap-2 w-100" data-readonly-workflow-modal="true">
             <button
               type="button"
               className="btn btn-sm btn-outline-secondary"
@@ -5176,19 +5323,21 @@ const FinanceApproval: React.FC = () => {
           </div>
         }
       >
-        {proposalRef && (
-          <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
-            Reference: <b>{proposalRef}</b>
-          </div>
-        )}
-        <textarea
-          value={wfActionComment}
-          onChange={(e) => setWfActionComment(e.target.value)}
-          disabled={wfActionSubmitting}
-          rows={4}
-          placeholder="Enter comments (required)..."
-          className="form-control"
-        />
+        <div data-readonly-workflow-modal="true">
+          {proposalRef && (
+            <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
+              Reference: <b>{proposalRef}</b>
+            </div>
+          )}
+          <textarea
+            value={wfActionComment}
+            onChange={(e) => setWfActionComment(e.target.value)}
+            disabled={wfActionSubmitting}
+            rows={4}
+            placeholder="Enter comments (required)..."
+            className="form-control"
+          />
+        </div>
       </CustomModal>
 
       <CustomModal

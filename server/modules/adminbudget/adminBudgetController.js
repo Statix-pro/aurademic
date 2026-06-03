@@ -271,6 +271,22 @@ export async function getAllDepartments(req, res) {
   }
 }
 
+export async function getAvailableFiscalYears(req, res) {
+  try {
+    const years = await AdminBudgetModel.listAvailableFiscalYears();
+    return res.json({
+      success: true,
+      data: years,
+    });
+  } catch (error) {
+    console.error('Admin budget fiscal years error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch fiscal years',
+    });
+  }
+}
+
 export async function get(req, res) {
   try {
     const proposalId = Number.parseInt(req.params.id, 10);

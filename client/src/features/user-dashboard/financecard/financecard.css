@@ -175,7 +175,9 @@
   min-width: 160px;
 }
 
-.filter-item select {
+.filter-item select,
+.financecard-financial-year,
+.financecard-beneficiary-filter {
   height: 46px;
   padding: 10px 38px 10px 14px;
   border-radius: 12px;
@@ -187,16 +189,26 @@
   cursor: pointer;
   outline: none;
   min-width: 145px;
+  flex: 0 0 auto;
   appearance: none;
+  -webkit-appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23707f95' d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 14px center;
   background-size: 10px 6px;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.filter-item select:focus {
+.filter-item select:focus,
+.financecard-financial-year:focus,
+.financecard-beneficiary-filter:focus {
   border-color: #0069ab;
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.12);
+}
+
+.financecard-financial-year,
+.financecard-beneficiary-filter {
+  min-width: 160px;
 }
 
 /* Search Box */
