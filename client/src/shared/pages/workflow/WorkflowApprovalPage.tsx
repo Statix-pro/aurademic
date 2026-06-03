@@ -976,7 +976,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryOptionsFromMeta, enableLevel1RoleTabs]);
 
   const fiscalYearOptions = useMemo(
-    () => normalizeWorkflowFiscalYearOptions(meta?.availableFiscalYears || getWorkflowFiscalYearOptions(), getRunningFiscalYearStart()),
+    () => normalizeWorkflowFiscalYearOptions(meta?.availableFiscalYears?.length ? meta.availableFiscalYears : getWorkflowFiscalYearOptions(), getRunningFiscalYearStart()),
     [meta?.availableFiscalYears]
   );
 
