@@ -144,6 +144,28 @@ const getBudgetSortTime = (item: BudgetRequestItem) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const getBudgetWorkflowFiscalYearStart = () => {
+  const d = new Date();
+  // FY starts in February (month 1). If month is 0 (January), it's the previous year.
+  return d.getMonth() < 1 ? d.getFullYear() - 1 : d.getFullYear();
+};
+
+const getBudgetWorkflowFiscalYearOptions = () => {
+  const runningYear = getBudgetWorkflowFiscalYearStart();
+  return [runningYear, runningYear - 1];
+};
+
+const normalizeFiscalYearOptions = (years: unknown[], fallbackYear: number) => {
+  const normalized = new Set<number>([fallbackYear]);
+  years.forEach((value) => {
+    const year = Number.parseInt(String(value), 10);
+    if (Number.isInteger(year) && year > 0) {
+      normalized.add(year);
+    }
+  });
+  return Array.from(normalized).sort((a, b) => b - a);
+};
+
 const AdminBudget: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -161,11 +183,8 @@ const AdminBudget: React.FC = () => {
   const [beneficiaryFilter, setBeneficiaryFilter] = useState("All Beneficiary");
   const [departmentFilter, setDepartmentFilter] = useState<string>("");
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
-  const [fiscalYear, setFiscalYear] = useState<number>(() => {
-    const d = new Date();
-    // FY starts in February (month 1). If month is 0 (January), it's the previous year.
-    return d.getMonth() < 1 ? d.getFullYear() - 1 : d.getFullYear();
-  });
+  const [fiscalYear, setFiscalYear] = useState<number>(() => getBudgetWorkflowFiscalYearStart());
+  const [availableFiscalYears, setAvailableFiscalYears] = useState<number[]>(() => getBudgetWorkflowFiscalYearOptions());
   const [freezeDate, setFreezeDate] = useState<string>(() => `${new Date().getFullYear()}-02-01`);
   const [isTimeFrozen, setIsTimeFrozen] = useState<boolean>(false);
   const [freezeLoading, setFreezeLoading] = useState<boolean>(false);
@@ -231,6 +250,11 @@ const AdminBudget: React.FC = () => {
   const activeQueueTab = useMemo(
     () => queueTabs.find((tab) => tab.key === activeQueueTabKey) || null,
     [queueTabs, activeQueueTabKey]
+  );
+
+  const fiscalYearOptions = useMemo(
+    () => normalizeFiscalYearOptions(availableFiscalYears, getBudgetWorkflowFiscalYearStart()),
+    [availableFiscalYears]
   );
 
   const fetchKpiStats = useCallback(async () => {
@@ -336,6 +360,21 @@ const AdminBudget: React.FC = () => {
     };
 
     fetchAssignments();
+  }, []);
+
+  useEffect(() => {
+    const fetchFiscalYears = async () => {
+      try {
+        const response: any = await authenticityUtility.get("/adminbudget/fiscal-years");
+        if (response?.success && Array.isArray(response.data) && response.data.length > 0) {
+          setAvailableFiscalYears(response.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch budget fiscal years:", error);
+      }
+    };
+
+    fetchFiscalYears();
   }, []);
 
   useEffect(() => {
@@ -1349,7 +1388,7 @@ const AdminBudget: React.FC = () => {
                       onChange={(e) => setFiscalYear(Number(e.target.value))}
                       title="Fiscal Year"
                     >
-                      {[2024, 2025, 2026].map((year) => (
+                      {fiscalYearOptions.map((year) => (
                         <option key={year} value={year}>
                           FY {year}-{String(year + 1).slice(2)}
                         </option>
@@ -1546,7 +1585,7 @@ const AdminBudget: React.FC = () => {
                                           {displayAmountLabel}
                                         </p>
                                         <p className="adminbudget-amount" style={{ margin: 0, fontSize: "1.1rem" }}>
-                                          Rs {displayAmountValue.toLocaleString("en-IN")}
+                                          ₹ {displayAmountValue.toLocaleString("en-IN")}
                                         </p>
                                       </div>
                                     </div>

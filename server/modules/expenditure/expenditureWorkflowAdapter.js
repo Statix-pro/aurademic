@@ -65,6 +65,21 @@ const expenditureWorkflowAdapter = {
                 value.unplannedBudgetAmount !== null
                   ? Number(value.unplannedBudgetAmount)
                   : null,
+              unplannedBudgetHead:
+                value.unplannedBudgetHead !== undefined &&
+                value.unplannedBudgetHead !== null
+                  ? String(value.unplannedBudgetHead).trim()
+                  : null,
+              unplannedBudgetSubHead:
+                value.unplannedBudgetSubHead !== undefined &&
+                value.unplannedBudgetSubHead !== null
+                  ? String(value.unplannedBudgetSubHead).trim()
+                  : null,
+              unplannedBudgetDescription:
+                value.unplannedBudgetDescription !== undefined &&
+                value.unplannedBudgetDescription !== null
+                  ? String(value.unplannedBudgetDescription).trim()
+                  : null,
             }
           : null;
 

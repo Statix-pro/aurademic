@@ -307,12 +307,13 @@ const PayeeDetailModal: React.FC<{
     if (!silent) setLoading(true);
     try {
       const response = await authenticityUtility.get(`${apiBasePath}/payees/${targetPayeeId}`) as {
+        success?: boolean;
         status?: string;
         data?: PendingPayeeRecord;
         message?: string;
       };
 
-      if (response?.status === 'success' && response.data) {
+      if ((response?.success === true || response?.status === 'success') && response.data) {
         setPayee(response.data);
         setDraft(createDraftFromPayee(response.data));
         setError('');
@@ -733,12 +734,13 @@ const PayeeFormModal: React.FC<{
     if (!silent) setLoading(true);
     try {
       const response = await authenticityUtility.get(`${apiBasePath}/payees/${targetPayeeId}`) as {
+        success?: boolean;
         status?: string;
         data?: PendingPayeeRecord;
         message?: string;
       };
 
-      if (response?.status === 'success' && response.data) {
+      if ((response?.success === true || response?.status === 'success') && response.data) {
         setPayee(response.data);
         const nextDraft = createDraftFromPayee(response.data);
         setDraft(nextDraft);

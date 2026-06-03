@@ -652,6 +652,12 @@ const buildFinanceSelectSql = ({
     ${WORKFLOW_STATUS_SQL_EXPR} AS workflow_status,
     ${WORKFLOW_STAGE_SQL_EXPR} AS workflow_stage,
     (
+      SELECT MIN(bp.fiscal_year)
+        FROM finance_budget_breakup fbb
+        JOIN budget_proposals bp ON bp.id = fbb.budget_proposal_id
+       WHERE fbb.finance_id = fr.id
+    ) AS fiscal_year,
+    (
       SELECT wa.decision
         FROM workflow_actions wa
        WHERE wa.module_key = 'finance'
@@ -782,6 +788,10 @@ const buildFinanceUpdateAudit = ({
   incomeRowsChanged = false,
   actor = null,
 }) => {
+  const nextValue = (key) =>
+    Object.prototype.hasOwnProperty.call(updateData, key)
+      ? updateData[key]
+      : previousRecord[key];
   const nextRecord = {
     request_date: updateData.request_date ?? previousRecord.request_date,
     description: updateData.description ?? previousRecord.description,
@@ -792,9 +802,9 @@ const buildFinanceUpdateAudit = ({
     event_sub_head: updateData.event_sub_head ?? previousRecord.event_sub_head,
     proposed_amount: updateData.proposed_amount ?? previousRecord.proposed_amount,
     balance_amount: updateData.balance_amount ?? previousRecord.balance_amount,
-    unplanned_budget_enabled: updateData.unplanned_budget_enabled ?? previousRecord.unplanned_budget_enabled,
-    unplanned_budget_amount: updateData.unplanned_budget_amount ?? previousRecord.unplanned_budget_amount,
-    unplanned_budget_description: updateData.unplanned_budget_description ?? previousRecord.unplanned_budget_description,
+    unplanned_budget_enabled: nextValue('unplanned_budget_enabled'),
+    unplanned_budget_amount: nextValue('unplanned_budget_amount'),
+    unplanned_budget_description: nextValue('unplanned_budget_description'),
     annexure_type: updateData.annexure_type ?? previousRecord.annexure_type,
     annexure_file_name: updateData.annexure_file_name ?? previousRecord.annexure_file_name,
     annexure_storage_name: updateData.annexure_storage_name ?? previousRecord.annexure_storage_name,
@@ -820,9 +830,9 @@ const buildFinanceUpdateAudit = ({
     { storageKey: 'event_sub_head', label: 'Event sub head' },
     { storageKey: 'proposed_amount', label: 'Proposed amount', valueType: 'money' },
     { storageKey: 'balance_amount', label: 'Balance amount', valueType: 'money' },
-    { storageKey: 'unplanned_budget_enabled', label: 'Unplanned budget enabled' },
-    { storageKey: 'unplanned_budget_amount', label: 'Unplanned budget amount', valueType: 'money' },
-    { storageKey: 'unplanned_budget_description', label: 'Unplanned budget description' },
+    { storageKey: 'unplanned_budget_enabled', label: 'Unplanned expenditure enabled' },
+    { storageKey: 'unplanned_budget_amount', label: 'Unplanned expenditure amount', valueType: 'money' },
+    { storageKey: 'unplanned_budget_description', label: 'Unplanned expenditure description' },
     { storageKey: 'annexure_type', label: 'Annexure type' },
     { storageKey: 'annexure_file_name', label: 'Annexure file name' },
     { storageKey: 'annexure_storage_name', label: 'Annexure storage name' },
@@ -1079,6 +1089,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   beneficiaryValue = null,
   departmentId = null,
   beneficiaryEntityId = null,
+  fiscalYear = null,
 } = {}) => {
   const normalizedUserId = toPositiveInt(userId);
   const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
@@ -1086,6 +1097,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   const normalizedSubHead = normalizeSubHeadForLookup(subHead);
   const normalizedPreferredBudgetLineId = toPositiveInt(preferredBudgetLineId);
   const normalizedExcludeFinanceId = toPositiveInt(excludeFinanceId);
+  const normalizedFiscalYear = toPositiveInt(fiscalYear);
   const applyHeadOnlyMatch = Boolean(headOnlyMatch) || shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead, normalizedSubHead);
   // NEW: resolve the currently selected catalog labels to IDs, then use those
   // IDs against approved budget lines. LEGACY: if either side has no ID, text
@@ -1227,6 +1239,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
        GROUP BY fbb.budget_line_id
      ) frbr ON frbr.budget_line_id = bpl.id
      WHERE (${ownerScopeSql})
+       AND (? IS NULL OR bp.fiscal_year = ?)
        AND (
          LOWER(TRIM(bp.status)) IN ('completed', 'approved', 'principal_approved')
          OR LOWER(TRIM(bp.current_stage)) = 'completed'
@@ -1243,6 +1256,8 @@ const resolveBudgetAvailabilityForUser = async (conn, {
       normalizedExcludeFinanceId,
       normalizedExcludeFinanceId,
       ...ownerScopeParams,
+      normalizedFiscalYear,
+      normalizedFiscalYear,
     ]
   );
 
@@ -2159,6 +2174,23 @@ const getFinanceBreakupTotal = async (conn, financeId) => {
   return toMoney(rows?.[0]?.total);
 };
 
+const calculateApprovedFinanceTotalsSnapshot = async (conn, financeId, unplannedPayload = {}) => {
+  const normalizedUnplanned = normalizeUnplannedBudgetPayload(unplannedPayload);
+  const [rows] = await conn.query(
+    `SELECT
+       COALESCE(SUM(COALESCE(NULLIF(approved_amount, 0), amount, 0)), 0) AS approved_total,
+       COALESCE(SUM(COALESCE(remaining_amount_snapshot, 0)), 0) AS balance_total
+     FROM finance_budget_breakup
+     WHERE finance_id = ?`,
+    [financeId]
+  );
+
+  return {
+    approvedTotalAmount: toMoney(toMoney(rows?.[0]?.approved_total) + normalizedUnplanned.amount),
+    balanceAmount: toMoney(toMoney(rows?.[0]?.balance_total) + normalizedUnplanned.amount),
+  };
+};
+
 const financeModel = {
   async createFinanceRequest(financeData, userId, userEmail = null) {
     const connection = await db.getConnection();
@@ -2376,6 +2408,7 @@ const financeModel = {
            ${annexureMimeTypeSelectSql},
            ${annexureFileSizeSelectSql},
            fr.total_budget,
+           fr.approved_total_amount,
            fr.income_type,
            fr.income_status,
            fr.income_amount_type,
@@ -2626,6 +2659,30 @@ const financeModel = {
           }
         );
         updateData.total_budget = totalBudget;
+      }
+
+      const shouldRecalculateApprovedTotals =
+        toMoney(existingRecord.approved_total_amount) > 0 &&
+        (hasBudgetRowsInput ||
+          Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled') ||
+          Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount'));
+      if (shouldRecalculateApprovedTotals) {
+        const approvedTotals = await calculateApprovedFinanceTotalsSnapshot(
+          connection,
+          id,
+          {
+            unplanned_budget_enabled:
+              Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled')
+                ? updateData.unplanned_budget_enabled
+                : existingRecord.unplanned_budget_enabled,
+            unplanned_budget_amount:
+              Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount')
+                ? updateData.unplanned_budget_amount
+                : existingRecord.unplanned_budget_amount,
+          },
+        );
+        updateData.approved_total_amount = approvedTotals.approvedTotalAmount;
+        updateData.balance_amount = approvedTotals.balanceAmount;
       }
 
       if (hasIncomeRowsInput) {
@@ -2943,6 +3000,51 @@ const financeModel = {
 
   async getStatusUpdates(financeId) {
     try {
+      const [requestRows] = await db.query(
+        `SELECT
+          fr.id AS finance_id,
+          fr.created_by AS user_id,
+          fr.created_at,
+          COALESCE(
+            NULLIF(
+              TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))),
+              ''
+            ),
+            NULLIF(TRIM(fr.applicant_name), ''),
+            u.name,
+            fr.email
+          ) AS user_name,
+          COALESCE(NULLIF(TRIM(u.email), ''), NULLIF(TRIM(fr.email), '')) AS actor_email
+         FROM finance_requests fr
+         LEFT JOIN users u ON u.id = fr.created_by
+         LEFT JOIN master_employees emp
+           ON emp.email COLLATE utf8mb4_unicode_ci =
+              COALESCE(NULLIF(TRIM(u.email), ''), NULLIF(TRIM(fr.email), '')) COLLATE utf8mb4_unicode_ci
+         WHERE fr.id = ?
+         LIMIT 1`,
+        [financeId]
+      );
+
+      const submissionRows = requestRows.map((row) => ({
+        id: -Number(financeId),
+        finance_id: row.finance_id,
+        user_id: row.user_id,
+        role: 'submitted',
+        stage: 'submitted',
+        status: 'submitted',
+        decision: 'submitted',
+        comment: 'Initial finance request submitted',
+        feedback: 'Initial finance request submitted',
+        created_at: row.created_at,
+        decided_at: row.created_at,
+        user_name: row.user_name,
+        actor_email: row.actor_email,
+        actor_role: 'user',
+        snapshot_before: null,
+        meta: null,
+        details: null,
+      }));
+
       const [workflowRows] = await db.query(
         `SELECT
           wa.id,
@@ -3020,7 +3122,7 @@ const financeModel = {
         }
       }
 
-      const merged = [...workflowRows, ...editRows].sort((left, right) => {
+      const merged = [...submissionRows, ...workflowRows, ...editRows].sort((left, right) => {
         const leftTime = new Date(left.decided_at || left.created_at || 0).getTime();
         const rightTime = new Date(right.decided_at || right.created_at || 0).getTime();
 
@@ -3248,6 +3350,7 @@ const financeModel = {
     beneficiaryValue = null,
     departmentId = null,
     beneficiaryEntityId = null,
+    fiscalYear = null,
   }) {
     const conn = await db.getConnection();
     try {
@@ -3263,6 +3366,7 @@ const financeModel = {
         beneficiaryValue,
         departmentId,
         beneficiaryEntityId,
+        fiscalYear,
       });
       return availability;
     } finally {
@@ -3619,6 +3723,7 @@ const financeModel = {
       ? requestedStatusCategory
       : '';
     const searchTerm = normalizeText(filters.q || filters.search);
+    const fiscalYear = toPositiveInt(filters.fiscalYear || filters.fiscal_year);
 
     const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
     const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
@@ -3628,6 +3733,30 @@ const financeModel = {
     const whereParams = [];
 
     whereParts.push(FINANCE_NOT_DELETED_CONDITION_SQL);
+
+    if (fiscalYear) {
+      whereParts.push(`(
+        EXISTS (
+          SELECT 1
+            FROM finance_budget_breakup fbb_fy
+            JOIN budget_proposals bp_fy ON bp_fy.id = fbb_fy.budget_proposal_id
+           WHERE fbb_fy.finance_id = fr.id
+             AND bp_fy.fiscal_year = ?
+        )
+        OR (
+          NOT EXISTS (
+            SELECT 1
+              FROM finance_budget_breakup fbb_any
+             WHERE fbb_any.finance_id = fr.id
+          )
+          AND (
+            YEAR(COALESCE(fr.request_date, fr.created_at))
+              - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+          ) = ?
+        )
+      )`);
+      whereParams.push(fiscalYear, fiscalYear);
+    }
 
     if (workflowStatus === 'all') {
       if (isAllProposals) {
@@ -3941,6 +4070,38 @@ const financeModel = {
     }
 
     return Array.from(dedup.values());
+  },
+
+  async listAvailableFiscalYears({ tx = db } = {}) {
+    const [rows] = await tx.query(
+      `SELECT DISTINCT fiscal_year
+         FROM (
+           SELECT bp.fiscal_year AS fiscal_year
+             FROM finance_budget_breakup fbb
+             JOIN budget_proposals bp ON bp.id = fbb.budget_proposal_id
+             JOIN finance_requests fr ON fr.id = fbb.finance_id
+            WHERE ${FINANCE_NOT_DELETED_CONDITION_SQL}
+              AND bp.fiscal_year IS NOT NULL
+           UNION
+           SELECT (
+                    YEAR(COALESCE(fr.request_date, fr.created_at))
+                      - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+                  ) AS fiscal_year
+             FROM finance_requests fr
+            WHERE ${FINANCE_NOT_DELETED_CONDITION_SQL}
+              AND NOT EXISTS (
+                SELECT 1
+                  FROM finance_budget_breakup fbb
+                 WHERE fbb.finance_id = fr.id
+              )
+         ) years
+        WHERE fiscal_year IS NOT NULL
+        ORDER BY fiscal_year DESC`
+    );
+
+    return (rows || [])
+      .map((row) => toPositiveInt(row?.fiscal_year))
+      .filter(Boolean);
   },
 
   async getFinanceOwner(recordId) {

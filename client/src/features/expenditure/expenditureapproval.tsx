@@ -35,6 +35,7 @@ import KSRCTLogo from "../../shared/assets/images/ksrct_logo.png";
 import authenticityUtility from "../../shared/utils/authenticityUtility";
 import { useBudgetCatalog } from "../../shared/hooks/useBudgetCatalog";
 import {
+  BUDGET_HEAD_GROUPS,
   SUB_HEAD_BY_BUDGET_HEAD,
   subscribeBudgetCatalog,
 } from "../../shared/hooks/budgetCatalogStore";
@@ -49,6 +50,10 @@ import AddPayeeModal, {
   AddPayeeModalPayee,
 } from "../../shared/components/AddPayeeModal";
 import { useAuth } from "../../contexts/AuthContext";
+import {
+  AccountOption,
+  fetchAccountOptions,
+} from "../../shared/utils/accountOptionsApi";
 
 interface SelectOption {
   value: string;
@@ -206,6 +211,13 @@ interface WorkflowStateSnapshot {
   status?: string;
   lastDecision?: string;
   currentStage?: string;
+  expenditureMeta?: {
+    unplannedBudgetEnabled?: boolean;
+    unplannedBudgetAmount?: number | string | null;
+    unplannedBudgetHead?: string | null;
+    unplannedBudgetSubHead?: string | null;
+    unplannedBudgetDescription?: string | null;
+  };
 }
 interface BillFileRecord {
   id?: number;
@@ -219,7 +231,7 @@ interface BillFileRecord {
 interface ApprovedBudgetOption {
   budgetLineId: number | null;
   budgetProposalId: number | null;
-  proposalRef: string;
+  financeRequestRef: string;
   fiscalYear: number;
   head: string;
   subHead: string;
@@ -259,7 +271,9 @@ const normalizeApprovedBudgetOption = (
     budgetLineId: Number(row.budgetLineId ?? row.budget_line_id) || null,
     budgetProposalId:
       Number(row.budgetProposalId ?? row.budget_proposal_id) || null,
-    proposalRef: String(row.proposalRef ?? row.proposal_ref ?? "").trim(),
+    financeRequestRef: String(
+      row.financeRequestRef ?? row.finance_request_ref ?? "",
+    ).trim(),
     fiscalYear:
       Number(row.fiscalYear ?? row.fiscal_year) || new Date().getFullYear(),
     head,
@@ -357,29 +371,6 @@ const toOptions = (items: string[]): OptionType[] =>
   items.map((item) => ({ value: item, label: item }));
 const CONTRIBUTION_OPTIONS = ["Full", "Partial"];
 const STATUS_OPTIONS = ["Credited", "Reimbursement"];
-const CREDIT_ACCOUNT_OPTIONS = [
-  "PRINCIPAL GNERAL A/C | 0751301000015840",
-  "KSRCT-PRINCIPAL COMMON A/C | 0751301000264891",
-  "PRINCIPAL SCHOLARSHIP A/C | 0751301000001328",
-  "PRINCIPAL KSRCT ASSOCIATION ACCOUNT | 0751301000028594",
-  "STAFF CLUB A/C | 0751301000005664",
-  "SOCIETY OF AUTOMOTIVE ENGINEERS (SAE) CLUB KSRCTA/C | 0751301000021422",
-  "KSRCT IETE CHAPTER A/C | 0751301000265626",
-  "KSRCT CIVIL SERB NPDF | 0751301000264860",
-  "KSRCT CIVIL SERB NPDF 2 | 0751301000265593",
-  "K S RANGASAMY COLLEGE OF TECHNOLOGY AUTONOMOUS | 0751302000000224",
-  "KSRCT-CNST A/C | 0751301000045784",
-  "CSI CHAPTER BRANCH OF KSRCT A/C | 0751301000185368",
-  "KSRCT NSS CORPUS FUND | 0751301000047863",
-  "PRINCIPAL NSS UNIT KSRCT | 0751301000004545",
-  "IEEE Student KSRCT | 0751301000059822",
-  "ISTE Student Chapter KSRCT | 0751301000023696",
-  "KSRCT RPS AICTE Project | 0075133800000643",
-  "KSRCT ECE SERB CRG PROJECT | 923010005584584",
-  "K S RANGASAMY COLLEGE OF TECHNOLOGY CONTROLLER OF EXAMINATIONS | 925010007523846",
-  "KSRCT CONTROLLER OF EXAMINATIONS | CASH",
-];
-const DEBIT_ACCOUNT_OPTIONS = CREDIT_ACCOUNT_OPTIONS;
 const CATEGORY_TYPE_OPTIONS = [
   "Faculty",
   "Staff",
@@ -457,6 +448,8 @@ const PAYMENT_MODE_OPTIONS = [
 ];
 const PAYMENT_STATUS_OPTIONS = ["Paid", "Pending", "Processing", "Cancelled"];
 const BULK_NEFT_TEMPLATE_VERSION = "2026-04-11";
+const isCashPaymentMode = (mode: unknown) =>
+  String(mode || "").trim().toLowerCase() === "cash";
 
 const flattenOptions = (
   options: Array<OptionType | { label: string; options: OptionType[] }>,
@@ -572,7 +565,6 @@ const getSelectedOption = (
 ): OptionType | null =>
   flattenOptions(options).find((opt) => String(opt.value) === String(value)) ??
   null;
-
 
 const BUDGET_SELECT_STYLES = {
   control: (base: any, state: any) => ({
@@ -694,6 +686,27 @@ const createPayeeRow = (): PayeeRow => ({
   panNumber: "",
   accountType: "",
   beneficiaryType: "individual",
+  beneficiaryOrg: "",
+  organizationType: "",
+  msme: "",
+  gstin: "",
+  tdsDetails: "",
+  tdsSection: "",
+});
+
+const getCashPayeeResetFields = (): Partial<PayeeRow> => ({
+  payeeId: null,
+  approvalStatus: "",
+  payeeName: "",
+  bankName: "",
+  accountNo: "",
+  ifsc: "",
+  branchName: "",
+  url: "",
+  accountName: "",
+  panNumber: "",
+  accountType: "",
+  beneficiaryType: undefined,
   beneficiaryOrg: "",
   organizationType: "",
   msme: "",
@@ -965,10 +978,20 @@ const ExpenditureApproval: React.FC = () => {
   const [budgetRows, setBudgetRows] = useState([
     { category: "", head: "", amount: "" },
   ]);
+  const [showUnplannedBudget, setShowUnplannedBudget] =
+    useState<boolean>(false);
+  const [unplannedBudgetAmount, setUnplannedBudgetAmount] =
+    useState<string>("");
+  const [unplannedBudgetHead, setUnplannedBudgetHead] = useState<string>("");
+  const [unplannedBudgetSubHead, setUnplannedBudgetSubHead] =
+    useState<string>("");
+  const [unplannedBudgetDescription, setUnplannedBudgetDescription] =
+    useState<string>("");
   const [showIncomeSection, setShowIncomeSection] = useState<boolean>(false);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([
     createIncomeRow(),
   ]);
+  const [accountOptions, setAccountOptions] = useState<AccountOption[]>([]);
   const [payeeRows, setPayeeRows] = useState<PayeeRow[]>([createPayeeRow()]);
   const [activePayeeLookupRowId, setActivePayeeLookupRowId] = useState<
     string | null
@@ -1040,6 +1063,8 @@ const ExpenditureApproval: React.FC = () => {
   const [settlementRows, setSettlementRows] = useState<SettlementFormRow[]>([
     createSettlementRow(),
   ]);
+  const [settlementRemarks, setSettlementRemarks] = useState("");
+  const [advanceTentativeSettlementDate, setAdvanceTentativeSettlementDate] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [categoryType, setCategoryType] = useState<string>("");
@@ -1084,6 +1109,7 @@ const ExpenditureApproval: React.FC = () => {
   const [expenditureSubRows, setExpenditureSubRows] = useState<
     ExpenditureFormRow[]
   >([createExpenditureRow()]);
+  const [expenditureRemarks, setExpenditureRemarks] = useState("");
   const [activeTab, setActiveTab] = useState<
     "Advance" | "Settlement" | "Expenditure" | null
   >(launchModuleFromState);
@@ -1133,9 +1159,16 @@ const ExpenditureApproval: React.FC = () => {
       try {
         const response = (await authenticityUtility.get(
           `/expenditure/finance-context/${resolvedFinanceRequestId}`,
-        )) as { status: string; data?: FinanceRequestContext };
+        )) as {
+          success?: boolean;
+          status?: string;
+          data?: FinanceRequestContext;
+        };
 
-        if (isCancelled || response.status !== "success" || !response.data) {
+        const isSuccessResponse =
+          response?.success === true || response?.status === "success";
+
+        if (isCancelled || !isSuccessResponse || !response.data) {
           return;
         }
 
@@ -1248,11 +1281,15 @@ const ExpenditureApproval: React.FC = () => {
         const response = (await authenticityUtility.get(
           `/expenditure/${submittedRequestIdFromState}`,
         )) as {
-          status: string;
+          success?: boolean;
+          status?: string;
           data?: any;
         };
 
-        if (isCancelled || response.status !== "success" || !response.data) {
+        const isSuccessResponse =
+          response?.success === true || response?.status === "success";
+
+        if (isCancelled || !isSuccessResponse || !response.data) {
           return;
         }
 
@@ -1348,6 +1385,9 @@ const ExpenditureApproval: React.FC = () => {
               budgetProposalId: row?.budget_proposal_id ?? null,
             }))
           : [];
+        setSettlementRemarks(String(record.settlement_remarks || ""));
+        setExpenditureRemarks(String(record.expenditure_remarks || ""));
+        setAdvanceTentativeSettlementDate(normalizeDateForInput(String(record.tentative_settlement_date || "")));
 
         const mapPayeeRows = Array.isArray(record.payee_rows)
           ? record.payee_rows.map((row: any, index: number) => ({
@@ -1414,6 +1454,52 @@ const ExpenditureApproval: React.FC = () => {
         }
         setPrimaryHead(String(record.primary_head || ""));
         setEventSubHead(String(record.event_sub_head || ""));
+        {
+          const workflowExpenditureMeta =
+            (workflowState?.expenditureMeta as Record<string, unknown> | undefined) ||
+            {};
+          const recordUnplannedBudgetEnabled =
+            record.unplanned_budget_enabled ??
+            workflowExpenditureMeta.unplannedBudgetEnabled ??
+            false;
+          const recordUnplannedBudgetAmount =
+            record.unplanned_budget_amount ??
+            workflowExpenditureMeta.unplannedBudgetAmount ??
+            "";
+          const hasUnplannedBudgetAmount =
+            recordUnplannedBudgetAmount !== null &&
+            recordUnplannedBudgetAmount !== undefined &&
+            String(recordUnplannedBudgetAmount).trim() !== "" &&
+            Number(recordUnplannedBudgetAmount) > 0;
+          const recordUnplannedBudgetDescription =
+            record.unplanned_budget_description ??
+            workflowExpenditureMeta.unplannedBudgetDescription ??
+            "";
+          const recordUnplannedBudgetHead =
+            record.unplanned_budget_head ??
+            workflowExpenditureMeta.unplannedBudgetHead ??
+            "";
+          const recordUnplannedBudgetSubHead =
+            record.unplanned_budget_sub_head ??
+            workflowExpenditureMeta.unplannedBudgetSubHead ??
+            "";
+          setShowUnplannedBudget(
+            Boolean(recordUnplannedBudgetEnabled || hasUnplannedBudgetAmount),
+          );
+          setUnplannedBudgetAmount(
+            recordUnplannedBudgetAmount !== null &&
+              recordUnplannedBudgetAmount !== undefined
+              ? String(recordUnplannedBudgetAmount)
+              : "",
+          );
+          setUnplannedBudgetHead(String(recordUnplannedBudgetHead || ""));
+          setUnplannedBudgetSubHead(
+            String(recordUnplannedBudgetSubHead || ""),
+          );
+          setUnplannedBudgetDescription(
+            String(recordUnplannedBudgetDescription || ""),
+          );
+        }
         setIsBudgetProposed(String(record.is_budget_proposed || ""));
         setDebitStatus(
           String(record.debit_status || "") as
@@ -1504,11 +1590,15 @@ const ExpenditureApproval: React.FC = () => {
         setIsApprovedBudgetLoading(true);
         const budgetUrl = `/expenditure/budget/approved?finance_request_id=${resolvedFinanceRequestId}`;
         const response = (await authenticityUtility.get(budgetUrl)) as {
-          status: string;
+          status?: string;
+          success?: boolean;
           data?: ApprovedBudgetOption[];
         };
 
-        if (!isCancelled && response.status === "success") {
+        if (
+          !isCancelled &&
+          (response.success === true || response.status === "success")
+        ) {
           const normalizedRows = (
             Array.isArray(response.data) ? response.data : []
           )
@@ -2127,26 +2217,133 @@ const workflowRowRefFromState = (() => {
     }));
   };
 
+  const getApprovedBudgetHeadSearchOptions = (): OptionType[] => {
+    const options: OptionType[] = [];
+    const seen = new Set<string>();
+
+    approvedBudgetOptions.forEach((budget, index) => {
+      const head = String(budget.head || "").trim();
+      const subHead = String(budget.subHead || "").trim();
+      if (!head) return;
+
+      const headKey = `head::${normalizeBudgetToken(head)}`;
+      if (!seen.has(headKey)) {
+        seen.add(headKey);
+        options.push({
+          value: `head::${head}`,
+          label: head,
+          budgetHead: head,
+          subHead: "",
+        });
+      }
+
+      if (!subHead) return;
+      const subKey = `sub::${normalizeBudgetToken(head)}::${normalizeBudgetToken(subHead)}::${budget.budgetLineId || budget.budgetProposalId || index}`;
+      if (seen.has(subKey)) return;
+      seen.add(subKey);
+      options.push({
+        value: `sub::${budget.budgetLineId || budget.budgetProposalId || index}::${head}::${subHead}`,
+        label: `${subHead} (${head})`,
+        budgetHead: head,
+        subHead,
+        budgetLineId: budget.budgetLineId,
+        budgetProposalId: budget.budgetProposalId,
+      });
+    });
+
+    return options;
+  };
+
+  const getApprovedBudgetHeadSelectedOption = (
+    budgetHead: string | number,
+    _subHead: string | number,
+    budgetLineId?: number | string | null,
+  ): OptionType | null => {
+    const options = getApprovedBudgetHeadSearchOptions();
+    const parsedBudgetLineId = parsePositiveIntLike(budgetLineId);
+    const normalizedHead = normalizeBudgetToken(budgetHead);
+    let selectedHead = normalizedHead;
+
+    if (!selectedHead && parsedBudgetLineId) {
+      const matchedByLineId = approvedBudgetOptions.find(
+        (option) => parsePositiveIntLike(option.budgetLineId) === parsedBudgetLineId,
+      );
+      selectedHead = normalizeBudgetToken(matchedByLineId?.head);
+    }
+
+    return options.find(
+      (option) =>
+        normalizeBudgetToken(option.budgetHead) === selectedHead &&
+        !normalizeBudgetToken(option.subHead),
+    ) || null;
+  };
+
+  const filterApprovedBudgetHeadOption = (candidate: any, input: string) => {
+    const query = normalizeBudgetToken(input);
+    const option = candidate?.data || {};
+    const subHead = normalizeBudgetToken(option.subHead);
+    if (!query) return !subHead;
+    return [option.label, option.budgetHead, option.subHead]
+      .map((value) => normalizeBudgetToken(value))
+      .some((value) => value.includes(query));
+  };
+
   const getApprovedSubHeadOptionsForAdvance = (
     budgetHead: string | number,
   ): OptionType[] => {
     const normalizedHead = normalizeBudgetToken(budgetHead);
     if (!normalizedHead) return [];
-    const approvedSubHeads: string[] = approvedBudgetOptions
+    return approvedBudgetOptions
       .filter((budget) => normalizeBudgetToken(budget.head) === normalizedHead)
-      .map((budget) => String(budget.subHead || "").trim())
-      .filter(Boolean);
+      .map((budget, index) => {
+        const subHead = String(budget.subHead || "").trim();
+        return {
+          value: `sub::${budget.budgetLineId || budget.budgetProposalId || index}::${subHead}`,
+          label: subHead,
+          budgetHead: budget.head,
+          subHead,
+          budgetLineId: budget.budgetLineId,
+          budgetProposalId: budget.budgetProposalId,
+        };
+      })
+      .filter((option) => Boolean(option.subHead));
+  };
 
-    return Array.from(new Set(approvedSubHeads)).map((subHead) => ({
-      value: subHead,
-      label: subHead,
-    }));
+  const getApprovedSubHeadSelectedOption = (
+    budgetHead: string | number,
+    subHead: string | number,
+    budgetLineId?: number | string | null,
+  ): OptionType | null => {
+    const options = getApprovedSubHeadOptionsForAdvance(budgetHead);
+    const parsedBudgetLineId = parsePositiveIntLike(budgetLineId);
+    if (parsedBudgetLineId) {
+      const matchedByLineId = options.find(
+        (option) => parsePositiveIntLike(option.budgetLineId) === parsedBudgetLineId,
+      );
+      if (matchedByLineId) return matchedByLineId;
+    }
+
+    const normalizedSubHead = normalizeBudgetToken(subHead);
+    return (
+      options.find(
+        (option) => normalizeBudgetToken(option.subHead) === normalizedSubHead,
+      ) || null
+    );
   };
 
   const findApprovedBudgetOption = (
     budgetHead: string | number,
     subHead: string | number,
+    budgetLineId?: number | string | null,
   ) => {
+    const parsedBudgetLineId = parsePositiveIntLike(budgetLineId);
+    if (parsedBudgetLineId) {
+      const byLineId = approvedBudgetOptions.find(
+        (budget) => parsePositiveIntLike(budget.budgetLineId) === parsedBudgetLineId,
+      );
+      if (byLineId) return byLineId;
+    }
+
     const normalizedHead = normalizeBudgetToken(budgetHead);
     const normalizedSubHead = normalizeBudgetToken(subHead);
     if (!normalizedHead || !normalizedSubHead) return null;
@@ -2162,6 +2359,118 @@ const workflowRowRefFromState = (() => {
 
   const getApprovedBudgetAmount = (budget: ApprovedBudgetOption | null) =>
     budget ? String(budget.totalAmount ?? "") : "";
+
+  const getUnplannedBudgetHeadOptions = (): OptionType[] => {
+    const amountByHead = new Map<string, { head: string; amount: number }>();
+
+    approvedBudgetOptions.forEach((budget) => {
+      const head = String(budget.head || "").trim();
+      const amount = Number(budget.totalAmount || 0);
+      if (!head || !(amount > 0)) return;
+
+      const key = normalizeBudgetToken(head);
+      const current = amountByHead.get(key);
+      amountByHead.set(key, {
+        head: current?.head || head,
+        amount: (current?.amount || 0) + amount,
+      });
+    });
+
+    return Array.from(amountByHead.values()).map(({ head, amount }) => ({
+      value: `head::${head}`,
+      label: head,
+      budgetHead: head,
+      subHead: "",
+      approvedAmount: amount,
+    }));
+  };
+
+  const getUnplannedBudgetHeadAmount = (budgetHead: string | number): number => {
+    const normalizedHead = normalizeBudgetToken(budgetHead);
+    if (!normalizedHead) return 0;
+
+    return approvedBudgetOptions.reduce((sum, budget) => {
+      if (normalizeBudgetToken(budget.head) !== normalizedHead) return sum;
+      const amount = Number(budget.totalAmount || 0);
+      return sum + (Number.isFinite(amount) ? amount : 0);
+    }, 0);
+  };
+
+  const getUnplannedBudgetAmountPlaceholder = (): string => {
+    const amount = getUnplannedBudgetHeadAmount(unplannedBudgetHead);
+    return amount > 0
+      ? `₹ ${amount.toLocaleString("en-IN")}`
+      : "₹ 0";
+  };
+
+  const getUnplannedBudgetHeadSelectedOption = (
+    budgetHead: string | number,
+  ): OptionType | null => {
+    const normalizedHead = normalizeBudgetToken(budgetHead);
+    if (!normalizedHead) return null;
+
+    return getUnplannedBudgetHeadOptions().find(
+      (option) =>
+        normalizeBudgetToken(option.budgetHead) === normalizedHead &&
+        !normalizeBudgetToken(option.subHead),
+    ) || {
+      value: `head::${budgetHead}`,
+      label: String(budgetHead),
+      budgetHead: String(budgetHead),
+      subHead: "",
+    };
+  };
+
+  const getCatalogSubHeadOptions = (budgetHead: string | number): OptionType[] =>
+    (SUB_HEAD_BY_BUDGET_HEAD[String(budgetHead)] || [])
+      .filter(Boolean)
+      .map((subHead) => ({
+        value: subHead,
+        label: subHead,
+        budgetHead: String(budgetHead),
+        subHead,
+      }));
+
+  const getCatalogSubHeadSelectedOption = (
+    budgetHead: string | number,
+    subHead: string | number,
+  ): OptionType | null => {
+    const normalizedSubHead = normalizeBudgetToken(subHead);
+    if (!normalizedSubHead) return null;
+
+    return getCatalogSubHeadOptions(budgetHead).find(
+      (option) => normalizeBudgetToken(option.subHead) === normalizedSubHead,
+    ) || null;
+  };
+
+  const getUnplannedBudgetDescription = (
+    head = unplannedBudgetHead,
+    subHead = unplannedBudgetSubHead,
+  ): string =>
+    [head, subHead]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .join(" - ");
+
+  const handleUnplannedBudgetHeadChange = (selected: OptionType | null) => {
+    const head = String(selected?.budgetHead || selected?.value || "")
+      .replace(/^head::/, "")
+      .trim();
+    const subHead = String(selected?.subHead || "").trim();
+
+    setUnplannedBudgetHead(head);
+    setUnplannedBudgetSubHead(subHead);
+    setUnplannedBudgetDescription(getUnplannedBudgetDescription(head, subHead));
+  };
+
+  const handleUnplannedBudgetSubHeadChange = (selected: OptionType | null) => {
+    const subHead = String(selected?.subHead || "").trim();
+
+    setUnplannedBudgetSubHead(subHead);
+    setUnplannedBudgetDescription(
+      getUnplannedBudgetDescription(unplannedBudgetHead, subHead),
+    );
+  };
 
   const hydrateRowsFromApprovedBudgets = <
     T extends {
@@ -2201,6 +2510,7 @@ const workflowRowRefFromState = (() => {
         budgetHead: row.budgetHead || matchedBudget.head,
         subHead: row.subHead || matchedBudget.subHead,
         budget: getApprovedBudgetAmount(matchedBudget),
+        budgetLineId: row.budgetLineId ?? matchedBudget.budgetLineId,
         budgetProposalId:
           row.budgetProposalId ?? matchedBudget.budgetProposalId,
       };
@@ -2217,10 +2527,10 @@ const workflowRowRefFromState = (() => {
 
   const getBudgetDisplayValue = (rowBudget: string) => {
     if (rowBudget !== "") {
-      return `Rs ${Number(rowBudget || 0).toLocaleString("en-IN")}`;
+      return `₹ ${Number(rowBudget || 0).toLocaleString("en-IN")}`;
     }
 
-    return "";
+    return "₹ 0";
   };
 
   const updateAdvanceRow = (
@@ -2291,9 +2601,13 @@ const workflowRowRefFromState = (() => {
 
       const response = (await authenticityUtility.get(
         `/expenditure/advance-summary?${query.toString()}`,
-      )) as { status: string; data?: { preAdvance?: number } };
+      )) as {
+        success?: boolean;
+        status?: string;
+        data?: { preAdvance?: number };
+      };
 
-      if (response.status === "success") {
+      if (response.success === true || response.status === "success") {
         const preAdvance = Number(response.data?.preAdvance || 0);
         updateAdvanceRow(rowId, (row) => ({
           ...row,
@@ -2341,6 +2655,29 @@ const workflowRowRefFromState = (() => {
     return sum + (Number.isFinite(amount) ? amount : 0);
   }, 0);
 
+  const rawUnplannedBudgetAmount = Number(
+    String(unplannedBudgetAmount || "")
+      .replace(/,/g, "")
+      .trim(),
+  );
+  const unplannedBudgetTotal =
+    showUnplannedBudget && Number.isFinite(rawUnplannedBudgetAmount)
+      ? rawUnplannedBudgetAmount
+      : 0;
+  const hasUnplannedBudgetPreview =
+    showUnplannedBudget ||
+    (Number.isFinite(rawUnplannedBudgetAmount) && rawUnplannedBudgetAmount > 0);
+  const unplannedBudgetDisplayLabel =
+    getUnplannedBudgetDescription() || unplannedBudgetDescription;
+  const totalAdvanceDisplayAmount =
+    totalAdvanceAmount + (activeTab === "Advance" ? unplannedBudgetTotal : 0);
+  const totalSettlementDisplayAmount =
+    totalSettlementAmount +
+    (activeTab === "Settlement" ? unplannedBudgetTotal : 0);
+  const totalExpenditureDisplayAmount =
+    totalExpenditureAmount +
+    (activeTab === "Expenditure" ? unplannedBudgetTotal : 0);
+
   const getPayeeTransactionTotal = (rows: PayeeRow[]): number =>
     rows.reduce((sum, row) => {
       const amount = parseAmountValue(row.amount);
@@ -2369,6 +2706,14 @@ const workflowRowRefFromState = (() => {
     ].some((value) => String(value || "").trim() !== "");
   };
 
+  const isPayeeRowReadyForAdd = (row: PayeeRow): boolean => {
+    const hasTransactionFields = Boolean(row.amount && row.mode);
+    if (!hasTransactionFields) return false;
+    if (isCashPaymentMode(row.mode)) return true;
+    if (!row.payeeName) return false;
+    return Boolean(row.accountNo && row.bankName && row.ifsc && row.branchName);
+  };
+
   const handleAdvanceBudgetHeadChange = (
     rowId: string,
     budgetHeadValue: string,
@@ -2388,6 +2733,7 @@ const workflowRowRefFromState = (() => {
   const handleAdvanceSubHeadChange = async (
     rowId: string,
     subHeadValue: string,
+    selected?: OptionType | null,
   ) => {
     const row = advanceRows.find((entry) => entry.id === rowId);
     const budgetHeadValue = String(row?.budgetHead || "").trim();
@@ -2395,10 +2741,48 @@ const workflowRowRefFromState = (() => {
     const selectedBudget = findApprovedBudgetOption(
       budgetHeadValue,
       subHeadValue,
+      selected?.budgetLineId,
     );
 
     updateAdvanceRow(rowId, (currentRow) => ({
       ...currentRow,
+      subHead: subHeadValue,
+      budget: getApprovedBudgetAmount(selectedBudget),
+      preAdvance: "",
+      budgetLineId: selectedBudget?.budgetLineId ?? null,
+      budgetProposalId: selectedBudget?.budgetProposalId ?? null,
+    }));
+
+    await loadPreAdvanceSummary(
+      rowId,
+      selectedBudget?.budgetLineId ?? null,
+      budgetHeadValue,
+      subHeadValue,
+    );
+  };
+
+  const handleAdvanceBudgetHeadSearchChange = async (
+    rowId: string,
+    selected: OptionType | null,
+  ) => {
+    const budgetHeadValue = String(selected?.budgetHead || selected?.value || "")
+      .replace(/^head::/, "")
+      .trim();
+    const subHeadValue = String(selected?.subHead || "").trim();
+
+    if (!subHeadValue) {
+      handleAdvanceBudgetHeadChange(rowId, budgetHeadValue);
+      return;
+    }
+
+    const selectedBudget = findApprovedBudgetOption(
+      budgetHeadValue,
+      subHeadValue,
+      selected?.budgetLineId,
+    );
+    updateAdvanceRow(rowId, (row) => ({
+      ...row,
+      budgetHead: budgetHeadValue,
       subHead: subHeadValue,
       budget: getApprovedBudgetAmount(selectedBudget),
       preAdvance: "",
@@ -2431,16 +2815,47 @@ const workflowRowRefFromState = (() => {
   const handleSettlementSubHeadChange = (
     rowId: string,
     subHeadValue: string,
+    selected?: OptionType | null,
   ) => {
     const row = settlementRows.find((entry) => entry.id === rowId);
     const budgetHeadValue = String(row?.budgetHead || "").trim();
     const selectedBudget = findApprovedBudgetOption(
       budgetHeadValue,
       subHeadValue,
+      selected?.budgetLineId,
     );
 
     updateSettlementRow(rowId, (currentRow) => ({
       ...currentRow,
+      subHead: subHeadValue,
+      budget: getApprovedBudgetAmount(selectedBudget),
+      budgetLineId: selectedBudget?.budgetLineId ?? null,
+      budgetProposalId: selectedBudget?.budgetProposalId ?? null,
+    }));
+  };
+
+  const handleSettlementBudgetHeadSearchChange = (
+    rowId: string,
+    selected: OptionType | null,
+  ) => {
+    const budgetHeadValue = String(selected?.budgetHead || selected?.value || "")
+      .replace(/^head::/, "")
+      .trim();
+    const subHeadValue = String(selected?.subHead || "").trim();
+
+    if (!subHeadValue) {
+      handleSettlementBudgetHeadChange(rowId, budgetHeadValue);
+      return;
+    }
+
+    const selectedBudget = findApprovedBudgetOption(
+      budgetHeadValue,
+      subHeadValue,
+      selected?.budgetLineId,
+    );
+    updateSettlementRow(rowId, (row) => ({
+      ...row,
+      budgetHead: budgetHeadValue,
       subHead: subHeadValue,
       budget: getApprovedBudgetAmount(selectedBudget),
       budgetLineId: selectedBudget?.budgetLineId ?? null,
@@ -2465,16 +2880,47 @@ const workflowRowRefFromState = (() => {
   const handleExpenditureSubHeadChange = (
     rowId: string,
     subHeadValue: string,
+    selected?: OptionType | null,
   ) => {
     const row = expenditureSubRows.find((entry) => entry.id === rowId);
     const budgetHeadValue = String(row?.budgetHead || "").trim();
     const selectedBudget = findApprovedBudgetOption(
       budgetHeadValue,
       subHeadValue,
+      selected?.budgetLineId,
     );
 
     updateExpenditureRow(rowId, (currentRow) => ({
       ...currentRow,
+      subHead: subHeadValue,
+      budget: getApprovedBudgetAmount(selectedBudget),
+      budgetLineId: selectedBudget?.budgetLineId ?? null,
+      budgetProposalId: selectedBudget?.budgetProposalId ?? null,
+    }));
+  };
+
+  const handleExpenditureBudgetHeadSearchChange = (
+    rowId: string,
+    selected: OptionType | null,
+  ) => {
+    const budgetHeadValue = String(selected?.budgetHead || selected?.value || "")
+      .replace(/^head::/, "")
+      .trim();
+    const subHeadValue = String(selected?.subHead || "").trim();
+
+    if (!subHeadValue) {
+      handleExpenditureBudgetHeadChange(rowId, budgetHeadValue);
+      return;
+    }
+
+    const selectedBudget = findApprovedBudgetOption(
+      budgetHeadValue,
+      subHeadValue,
+      selected?.budgetLineId,
+    );
+    updateExpenditureRow(rowId, (row) => ({
+      ...row,
+      budgetHead: budgetHeadValue,
       subHead: subHeadValue,
       budget: getApprovedBudgetAmount(selectedBudget),
       budgetLineId: selectedBudget?.budgetLineId ?? null,
@@ -2895,7 +3341,8 @@ const evaluateArithmeticExpression = (input: string) => {
       const response = (await authenticityUtility.get(
         `/expenditure/search-applicant?q=${encodeURIComponent(query)}`,
       )) as {
-        status: string;
+        success?: boolean;
+        status?: string;
         data: Array<{
           employee_id: number;
           name: string;
@@ -2906,7 +3353,7 @@ const evaluateArithmeticExpression = (input: string) => {
           employee_type: string;
         }>;
       };
-      if (response.status === "success") {
+      if (response.success === true || response.status === "success") {
         setApplicantSearchResults(response.data || []);
         setShowApplicantDropdown(true);
       }
@@ -3034,6 +3481,24 @@ const evaluateArithmeticExpression = (input: string) => {
       prev.map((row) => (row.id === id ? { ...row, [field]: value } : row)),
     );
   };
+
+  const accountDropdownOptions = accountOptions.map((account) => ({
+    value: account.name,
+    label: account.name,
+    id: account.id,
+  }));
+
+  const loadAccountOptionsFromApi = async () => {
+    try {
+      setAccountOptions(await fetchAccountOptions());
+    } catch (error) {
+      console.error("Failed to load account options", error);
+    }
+  };
+
+  useEffect(() => {
+    void loadAccountOptionsFromApi();
+  }, []);
 
   const totalBudget = budgetRows.reduce(
     (sum, row) => sum + Number(row.amount || 0),
@@ -3203,19 +3668,19 @@ const evaluateArithmeticExpression = (input: string) => {
         {showDebitAccountDropdown && (
           <CustomDropdown
             name="debitAccount"
-            options={toOptions(DEBIT_ACCOUNT_OPTIONS)}
-                      value={getSelectedOption(
-                        paymentDetails.debitAccount,
-                        toOptions(DEBIT_ACCOUNT_OPTIONS),
-                      )}
-                      onChange={(option) =>
-                        setPaymentDetails({
-                          ...paymentDetails,
-                          debitAccount: String(
-                            (option as OptionType)?.value || "",
-                          ),
-                        })
-                      }
+            options={accountDropdownOptions}
+            value={getSelectedOption(
+              paymentDetails.debitAccount,
+              accountDropdownOptions,
+            )}
+            onChange={(option) =>
+              setPaymentDetails({
+                ...paymentDetails,
+                debitAccount: String(
+                  (option as OptionType)?.value || "",
+                ),
+              })
+            }
             placeholder="Select debit account"
             className="mb-0"
           />
@@ -3271,7 +3736,14 @@ const evaluateArithmeticExpression = (input: string) => {
               </tr>
             </thead>
             <tbody>
-              {payeeRows.map((row, index) => (
+              {payeeRows.map((row, index) => {
+                const isCashMode = isCashPaymentMode(row.mode);
+                const bankFieldClassName = `payee-field payee-field--readonly ${
+                  isCashMode ? "payee-field--disabled" : ""
+                }`;
+                const isReadyForAdd = isPayeeRowReadyForAdd(row);
+
+                return (
                 <tr key={row.id}>
                   <td className="payee-sno-cell">{index + 1}</td>
                   <td>
@@ -3279,10 +3751,13 @@ const evaluateArithmeticExpression = (input: string) => {
                       <div className="payee-details-grid">
                         <div className="payee-field-wrap">
                           <input
-                            className="payee-field payee-field--readonly"
+                            className={`payee-field payee-field--readonly ${
+                              isCashMode ? "payee-field--disabled" : ""
+                            }`}
                             placeholder="Accountant Name"
                             value={row.payeeName}
                             onChange={(e) => {
+                              if (isCashMode) return;
                               handlePayeeLookupInputChange(
                                 row.id,
                                 "payeeName",
@@ -3290,45 +3765,52 @@ const evaluateArithmeticExpression = (input: string) => {
                               );
                             }}
                             onFocus={() =>
-                              handlePayeeLookupFocus(row, "payeeName")
+                              !isCashMode && handlePayeeLookupFocus(row, "payeeName")
                             }
                             onBlur={handlePayeeLookupBlur}
+                            readOnly={isCashMode}
+                            disabled={isCashMode}
+                            tabIndex={isCashMode ? -1 : undefined}
                           />
-                          {renderPayeeLookupDropdown(row.id, "payeeName")}
+                          {!isCashMode && renderPayeeLookupDropdown(row.id, "payeeName")}
                         </div>
                         <div className="payee-field-wrap">
                           <input
-                            className="payee-field payee-field--readonly"
+                            className={bankFieldClassName}
                             placeholder="Account No."
                             value={row.accountNo}
                             readOnly
+                            disabled={isCashMode}
                             tabIndex={-1}
                           />
                         </div>
                         <div className="payee-field-wrap">
                           <input
-                            className="payee-field payee-field--readonly"
+                            className={bankFieldClassName}
                             placeholder="Bank Name"
                             value={row.bankName}
                             readOnly
+                            disabled={isCashMode}
                             tabIndex={-1}
                           />
                         </div>
                         <div className="payee-field-wrap">
                           <input
-                            className="payee-field payee-field--readonly"
+                            className={bankFieldClassName}
                             placeholder="IFSC"
                             value={row.ifsc}
                             readOnly
+                            disabled={isCashMode}
                             tabIndex={-1}
                           />
                         </div>
                         <div className="payee-field-wrap payee-field-wrap-full">
                           <input
-                            className="payee-field payee-field--readonly"
+                            className={bankFieldClassName}
                             placeholder="Branch Name"
                             value={row.branchName}
                             readOnly
+                            disabled={isCashMode}
                             tabIndex={-1}
                           />
                         </div>
@@ -3355,17 +3837,24 @@ const evaluateArithmeticExpression = (input: string) => {
                           )}
                         onChange={(opt) => {
                           const selected = opt as OptionType | null;
+                          const nextMode = selected?.value
+                            ? String(selected.value)
+                            : "";
                             const updated = payeeRows.map((r) =>
                               r.id === row.id
                                 ? {
                                     ...r,
-                                    mode: selected?.value
-                                      ? String(selected.value)
-                                      : "",
+                                    mode: nextMode,
+                                    ...(isCashPaymentMode(nextMode)
+                                      ? getCashPayeeResetFields()
+                                      : {}),
                                   }
                                 : r,
                             );
                           setPayeeRows(updated);
+                          if (isCashPaymentMode(nextMode)) {
+                            closePayeeLookup();
+                          }
                         }}
                         placeholder="Mode *"
                       />
@@ -3442,49 +3931,23 @@ const evaluateArithmeticExpression = (input: string) => {
                       {index === payeeRows.length - 1 && (
                         <button
                           className="payee-row-btn"
-                          disabled={
-                            !row.payeeName ||
-                            !row.accountNo ||
-                            !row.bankName ||
-                            !row.ifsc ||
-                            !row.branchName ||
-                            !row.amount ||
-                            !row.mode
-                          }
+                          disabled={!isReadyForAdd}
                           onClick={(e) => {
                             e.preventDefault();
                             addPayeeRow();
                           }}
                           title={
-                            !row.payeeName ||
-                            !row.accountNo ||
-                            !row.bankName ||
-                            !row.ifsc ||
-                            !row.branchName ||
-                            !row.amount ||
-                            !row.mode
+                            !isReadyForAdd
                               ? "Please fill all fields to add a new row"
                               : "Add Row"
                           }
                           style={{
                             opacity:
-                              !row.payeeName ||
-                              !row.accountNo ||
-                              !row.bankName ||
-                              !row.ifsc ||
-                              !row.branchName ||
-                              !row.amount ||
-                              !row.mode
+                              !isReadyForAdd
                                 ? 0.5
                                 : 1,
                             cursor:
-                              !row.payeeName ||
-                              !row.accountNo ||
-                              !row.bankName ||
-                              !row.ifsc ||
-                              !row.branchName ||
-                              !row.amount ||
-                              !row.mode
+                              !isReadyForAdd
                                 ? "not-allowed"
                                 : "pointer",
                           }}
@@ -3507,7 +3970,8 @@ const evaluateArithmeticExpression = (input: string) => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -3535,10 +3999,10 @@ const evaluateArithmeticExpression = (input: string) => {
                 {showDebitAccountDropdown && (
                   <CustomDropdown
                     name="debitAccount"
-                    options={toOptions(DEBIT_ACCOUNT_OPTIONS)}
+                    options={accountDropdownOptions}
                     value={getSelectedOption(
                       paymentDetails.debitAccount,
-                      toOptions(DEBIT_ACCOUNT_OPTIONS),
+                      accountDropdownOptions,
                     )}
                     onChange={(option) =>
                       setPaymentDetails({
@@ -3723,9 +4187,9 @@ const getSelectedWorkflowBudgetLineId = (): number | null =>
 const getActiveTabTransactionAmount = (
     tab: "Advance" | "Settlement" | "Expenditure",
 ): number => {
-    if (tab === "Advance") return totalAdvanceAmount;
-    if (tab === "Settlement") return totalSettlementAmount;
-  return totalExpenditureAmount;
+    if (tab === "Advance") return totalAdvanceDisplayAmount;
+    if (tab === "Settlement") return totalSettlementDisplayAmount;
+  return totalExpenditureDisplayAmount;
 };
 
 const getWorkflowRowEnteredAmount = (
@@ -3784,7 +4248,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
   if (exceededLimit && activeTab) {
     showAlert(
-        `Total payee transaction amount cannot exceed the ${activeTab.toLowerCase()} amount of Rs ${workflowAmount.toLocaleString("en-IN")}.`,
+        `Total payee transaction amount cannot exceed the ${activeTab.toLowerCase()} amount of ₹ ${workflowAmount.toLocaleString("en-IN")}.`,
         "warning",
     );
   }
@@ -3808,7 +4272,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         message: (
           <div style={{ lineHeight: 1.6 }}>
             <div>
-              Settlement is Rs{" "}
+              Settlement is ₹{" "}
               {returnedAmount.toLocaleString("en-IN", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
@@ -3826,7 +4290,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       message: (
         <div style={{ lineHeight: 1.6 }}>
           <div>
-            Settlement is Rs{" "}
+            Settlement is ₹{" "}
             {difference.toLocaleString("en-IN", {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
@@ -3843,21 +4307,27 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     if (activeTab === "Settlement") {
       return Math.max(
         0,
-        financeApprovedAmount - totalSettlementAmount - totalExpenditureAmount,
+        financeApprovedAmount -
+          totalSettlementDisplayAmount -
+          totalExpenditureDisplayAmount,
       );
     }
 
     if (activeTab === "Advance") {
       return Math.max(
         0,
-        financeApprovedAmount - totalAdvanceAmount - totalExpenditureAmount,
+        financeApprovedAmount -
+          totalAdvanceDisplayAmount -
+          totalExpenditureDisplayAmount,
       );
     }
 
     if (activeTab === "Expenditure") {
       return Math.max(
         0,
-        financeApprovedAmount - totalAdvanceAmount - totalExpenditureAmount,
+        financeApprovedAmount -
+          totalAdvanceDisplayAmount -
+          totalExpenditureDisplayAmount,
       );
     }
 
@@ -3898,6 +4368,17 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       return;
     }
 
+    if (showUnplannedBudget) {
+      if (!unplannedBudgetHead.trim() || !unplannedBudgetSubHead.trim()) {
+        showAlert("Please select Unplanned Expenditure head and sub head.", "warning");
+        return;
+      }
+      if (!(unplannedBudgetTotal > 0)) {
+        showAlert("Please enter a valid Unplanned Expenditure amount.", "warning");
+        return;
+      }
+    }
+
     const workflowRows = getRowsForActiveTab();
     const selectedWorkflowRow =
         workflowRows.find(
@@ -3934,19 +4415,37 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       return;
     }
 
+    if (activeTab === "Advance") {
+      if (!String(advanceTentativeSettlementDate || "").trim()) {
+        showAlert(
+          "Please select a Tentative Date of Settlement.",
+          "warning",
+        );
+        return;
+      }
+    }
+
     const approvedFinanceLimit = Number(financeApprovedAmount || 0);
     if (approvedFinanceLimit > 0) {
-      if (activeTab === "Advance" && totalAdvanceAmount > approvedFinanceLimit) {
+      if (activeTab === "Advance" && totalAdvanceDisplayAmount > approvedFinanceLimit) {
         showAlert(
-          `Total advance amount cannot exceed the approved finance amount of Rs ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
+          `Total advance amount cannot exceed the approved finance amount of ₹ ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
           "warning",
         );
         return;
       }
 
-      if (activeTab === "Expenditure" && totalExpenditureAmount > approvedFinanceLimit) {
+      if (activeTab === "Settlement" && totalSettlementDisplayAmount > approvedFinanceLimit) {
         showAlert(
-          `Total expenditure amount cannot exceed the approved finance amount of Rs ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
+          `Total settlement amount cannot exceed the approved finance amount of ₹ ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
+          "warning",
+        );
+        return;
+      }
+
+      if (activeTab === "Expenditure" && totalExpenditureDisplayAmount > approvedFinanceLimit) {
+        showAlert(
+          `Total expenditure amount cannot exceed the approved finance amount of ₹ ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
           "warning",
         );
         return;
@@ -3978,6 +4477,17 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       return;
     }
 
+    const incompletePayeeRowIndex = effectivePayeeRows.findIndex(
+      (row) => !isPayeeRowReadyForAdd(row),
+    );
+    if (incompletePayeeRowIndex !== -1) {
+      showAlert(
+        `Please fill required payee details for Payee row ${incompletePayeeRowIndex + 1}.`,
+        "warning",
+      );
+      return;
+    }
+
     const normalizedTotalPayeeTransactionAmount = Number(
       getPayeeTransactionTotal(effectivePayeeRows).toFixed(2),
     );
@@ -3987,13 +4497,13 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
     if (normalizedTotalPayeeTransactionAmount !== normalizedWorkflowAmount) {
       showAlert(
-          `${activeTab} amount is Rs ${normalizedWorkflowAmount.toLocaleString(
+          `${activeTab} amount is ₹ ${normalizedWorkflowAmount.toLocaleString(
             "en-IN",
             {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
             },
-          )} and total payee transaction amount is Rs ${normalizedTotalPayeeTransactionAmount.toLocaleString(
+          )} and total payee transaction amount is ₹ ${normalizedTotalPayeeTransactionAmount.toLocaleString(
             "en-IN",
             {
           minimumFractionDigits: 2,
@@ -4008,34 +4518,35 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     const primaryIncomeRow = showIncomeSection ? incomeRows[0] : undefined;
 
     const normalizedPayeeRows = effectivePayeeRows.map((row) => {
+      const isCashMode = isCashPaymentMode(row.mode);
         const canonicalPayeeName = resolveCanonicalPayeeName(
-          row.payeeName,
-          row.accountName,
+          isCashMode ? "" : row.payeeName,
+          isCashMode ? "" : row.accountName,
         );
 
       return {
-        payee_id: row.payeeId ?? null,
+        payee_id: isCashMode ? null : row.payeeId ?? null,
         payee_name: canonicalPayeeName,
-          bank_name: row.bankName?.trim() || "",
-          account_no: row.accountNo?.trim() || "",
-          ifsc: row.ifsc?.trim().toUpperCase() || "",
-          branch_name: row.branchName?.trim() || "",
-          url: row.url?.trim() || "",
+          bank_name: isCashMode ? "" : row.bankName?.trim() || "",
+          account_no: isCashMode ? "" : row.accountNo?.trim() || "",
+          ifsc: isCashMode ? "" : row.ifsc?.trim().toUpperCase() || "",
+          branch_name: isCashMode ? "" : row.branchName?.trim() || "",
+          url: isCashMode ? "" : row.url?.trim() || "",
           amount: row.amount?.trim() || "",
           mode: row.mode?.trim() || "",
         account_name: canonicalPayeeName,
-          pan_number: row.panNumber?.trim() || "",
-          account_type: row.accountType?.trim() || "",
-          beneficiary_type: row.beneficiaryType || "individual",
-          beneficiary_org: resolveCanonicalBeneficiaryOrg(
+          pan_number: isCashMode ? "" : row.panNumber?.trim() || "",
+          account_type: isCashMode ? "" : row.accountType?.trim() || "",
+          beneficiary_type: isCashMode ? "" : row.beneficiaryType || "individual",
+          beneficiary_org: isCashMode ? "" : resolveCanonicalBeneficiaryOrg(
             row.beneficiaryOrg,
             row.payeeName,
           ),
-          organization_type: row.organizationType?.trim() || "",
-          msme: row.msme?.trim() || "",
-          gstin: row.gstin?.trim() || "",
-          tds_details: row.tdsDetails?.trim() || "",
-          tds_section: row.tdsSection?.trim() || "",
+          organization_type: isCashMode ? "" : row.organizationType?.trim() || "",
+          msme: isCashMode ? "" : row.msme?.trim() || "",
+          gstin: isCashMode ? "" : row.gstin?.trim() || "",
+          tds_details: isCashMode ? "" : row.tdsDetails?.trim() || "",
+          tds_section: isCashMode ? "" : row.tdsSection?.trim() || "",
       };
     });
 
@@ -4080,6 +4591,25 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       isbudgetproposed: isBudgetProposed,
       proposedamount: amountProposed || null,
       balanceamount: getComputedBalanceAmount() || null,
+      unplanned_budget_enabled: showUnplannedBudget,
+      unplanned_budget_amount: showUnplannedBudget
+        ? Number(unplannedBudgetAmount || 0)
+        : null,
+      unplanned_budget_head: showUnplannedBudget
+        ? unplannedBudgetHead.trim() || null
+        : null,
+      unplanned_budget_sub_head: showUnplannedBudget
+        ? unplannedBudgetSubHead.trim() || null
+        : null,
+      unplanned_budget_description: showUnplannedBudget
+        ? getUnplannedBudgetDescription().trim() || null
+        : null,
+      settlement_remarks:
+        activeTab === "Settlement" ? settlementRemarks.trim() || null : null,
+      expenditure_remarks:
+        activeTab === "Expenditure" ? expenditureRemarks.trim() || null : null,
+      tentative_settlement_date:
+        activeTab === "Advance" ? advanceTentativeSettlementDate || null : null,
       incometype: primaryIncomeRow?.incomeSource || null,
       incomestatus: primaryIncomeRow?.creditAccount || null,
       incomeamounttype: primaryIncomeRow?.contribution || null,
@@ -4122,15 +4652,18 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         })
       : await authenticityUtility.postFile(endpoint, formData);
     const normalizedResult = result as {
-      status: string;
+      success?: boolean;
+      status?: string;
       message?: string;
       data?: {
         expenditureId?: unknown;
         requestRef?: unknown;
       };
     };
+    const isSubmitSuccess =
+      normalizedResult.success === true || normalizedResult.status === "success";
 
-      if (normalizedResult.status !== "success") {
+      if (!isSubmitSuccess) {
         showAlert(normalizedResult.message || "Submission failed", "error");
       return;
     }
@@ -4150,9 +4683,9 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       const resubmitResult = (await authenticityUtility.post(
         `/expenditure/${submittedRequestIdFromState}/resubmit`,
         { feedback: comment },
-      )) as { status?: string; message?: string };
+      )) as { success?: boolean; status?: string; message?: string };
 
-        if (resubmitResult.status !== "success") {
+        if (resubmitResult.success !== true && resubmitResult.status !== "success") {
         showAlert(
             resubmitResult.message ||
               "Request updated, but resubmission failed",
@@ -4165,11 +4698,11 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
     const submittedAmount =
         activeTab === "Advance"
-        ? totalAdvanceAmount
+        ? totalAdvanceDisplayAmount
           : activeTab === "Settlement"
-          ? totalSettlementAmount
+          ? totalSettlementDisplayAmount
             : activeTab === "Expenditure"
-            ? totalExpenditureAmount
+            ? totalExpenditureDisplayAmount
             : 0;
 
       const savedRequestId = parsePositiveIntLike(
@@ -4179,7 +4712,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         normalizedResult.data?.requestRef || "",
       ).trim();
     const financeIdLabel = `Finance ID: ${resolvedFinanceRequestId}`;
-    const proposalRefLabel = `Proposal Ref: ${String(
+    const financeRefLabel = `Finance Ref: ${String(
         (
           location.state as {
             financeProposal?: { proposalId?: unknown };
@@ -4201,10 +4734,10 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
     showAlert(
       <div style={{ lineHeight: 1.6 }}>
-        <div>{moduleLabel}</div>
+          <div>{moduleLabel}</div>
         <div>{financeIdLabel}</div>
-          {proposalRefLabel.trim() !== "Proposal Ref:" && (
-            <div>{proposalRefLabel}</div>
+          {financeRefLabel.trim() !== "Finance Ref:" && (
+            <div>{financeRefLabel}</div>
           )}
         {requestLabel && <div>{requestLabel}</div>}
       </div>,
@@ -4233,6 +4766,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
             submittedAmount,
             submittedRequestId: savedRequestId ?? undefined,
             financeRequestId: resolvedFinanceRequestId ?? undefined,
+            fiscalYear: (location.state as { fiscalYear?: unknown } | null)?.fiscalYear,
             financeProposal:
                 (location.state as { financeProposal?: unknown } | null)
                   ?.financeProposal ?? null,
@@ -4440,12 +4974,15 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
             }
           : undefined,
       )) as {
+        success?: boolean;
         status?: string;
         message?: string;
         data?: { payment_proof_files?: BillFileRecord[] };
       };
+      const isPaymentUpdateSuccess =
+        response.success === true || response.status === "success";
 
-      if (response.status !== "success") {
+      if (!isPaymentUpdateSuccess) {
         showAlert(
           response.message || "Unable to update payment status",
           "error",
@@ -4489,6 +5026,11 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       setDebitStatus("");
       setBalanceAmount("");
       setIsBudgetProposed("");
+      setShowUnplannedBudget(false);
+      setUnplannedBudgetAmount("");
+      setUnplannedBudgetHead("");
+      setUnplannedBudgetSubHead("");
+      setUnplannedBudgetDescription("");
       setBudgetRows([{ category: "", head: "", amount: "" }]);
       setAmountProposed("");
       setShowIncomeSection(false);
@@ -4496,10 +5038,14 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       setAdvanceRows([createAdvanceRow()]);
       setSettlementRows([createSettlementRow()]);
       setExpenditureSubRows([createExpenditureRow()]);
+      setSettlementRemarks("");
+      setExpenditureRemarks("");
+      setAdvanceTentativeSettlementDate("");
       setPayeeRows([createPayeeRow()]);
       setShowBulkNEFT(false);
       setBulkNeftFile(null);
       setUploadedPayeeBills([]);
+      setExistingPayeeBills([]);
       setUploadedPaymentProofs([]);
       setExistingPaymentProofs([]);
       if (bulkNeftInputRef.current) {
@@ -4560,7 +5106,7 @@ const handleBeneficiarySearch = async (query: string) => {
       const response = (await (authenticityUtility as any).get(
         `/expenditure/search-applicant?q=${encodeURIComponent(query)}${typeParam}`,
       )) as any;
-      if (response.status === "success") {
+      if (response?.success === true || response?.status === "success") {
       setBeneficiarySearchResults(response.data);
       setShowBeneficiaryDropdown(true);
     }
@@ -4609,9 +5155,17 @@ const handleBeneficiarySearch = async (query: string) => {
         gstin: payee.gstin || null,
         tds_details: payee.tdsDetails || null,
         tds_section: payee.tdsSection || null,
-      })) as { status: string; message?: string; data?: PayeeLookupResult };
+      })) as {
+        success?: boolean;
+        status?: string;
+        message?: string;
+        data?: PayeeLookupResult;
+      };
 
-      if (response.status !== "success" || !response.data) {
+      if (
+        (response.success !== true && response.status !== "success") ||
+        !response.data
+      ) {
         showAlert(response.message || "Unable to save payee", "error");
         return;
       }
@@ -5622,6 +6176,115 @@ const handleBeneficiarySearch = async (query: string) => {
             </div>
           </div>
 
+          <div
+            style={{
+              backgroundColor: "#fff",
+              padding: "18px 24px",
+              borderRadius: "16px",
+              marginBottom: "20px",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "16px",
+                flexWrap: "wrap",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "14px",
+                    color: "#495057",
+                    fontWeight: 600,
+                  }}
+                >
+                  Unplanned Expenditure
+                </span>
+                <CustomToggle
+                  name="unplannedBudgetToggle"
+                  label=""
+                  checked={showUnplannedBudget}
+                  onChange={(checked) => setShowUnplannedBudget(checked)}
+                />
+              </div>
+
+              {hasUnplannedBudgetPreview && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(220px, 1fr) minmax(220px, 1fr) minmax(140px, 180px)",
+                    gap: "12px",
+                    flex: "1 1 760px",
+                  }}
+                >
+                  <CustomDropdown
+                    className="mb-0"
+                    options={getUnplannedBudgetHeadOptions()}
+                    value={getUnplannedBudgetHeadSelectedOption(
+                      unplannedBudgetHead,
+                    )}
+                    onChange={(option) =>
+                      handleUnplannedBudgetHeadChange(
+                        option as OptionType | null,
+                      )
+                    }
+                    filterOption={filterApprovedBudgetHeadOption}
+                    placeholder="Select Head"
+                  />
+                  <CustomDropdown
+                    className="mb-0"
+                    options={getCatalogSubHeadOptions(
+                      unplannedBudgetHead,
+                    )}
+                    value={getCatalogSubHeadSelectedOption(
+                      unplannedBudgetHead,
+                      unplannedBudgetSubHead,
+                    )}
+                    onChange={(option) =>
+                      handleUnplannedBudgetSubHeadChange(
+                        option as OptionType | null,
+                      )
+                    }
+                    placeholder="Select Sub Head"
+                    isDisabled={!unplannedBudgetHead}
+                  />
+                  <input
+                    type="text"
+                    value={unplannedBudgetAmount}
+                    onChange={(e) =>
+                      setUnplannedBudgetAmount(
+                        e.target.value.replace(/[^\d.]/g, ""),
+                      )
+                    }
+                    placeholder={getUnplannedBudgetAmountPlaceholder()}
+                    style={{
+                      border: "1px solid #d7dee7",
+                      borderRadius: "12px",
+                      padding: "10px 14px",
+                      fontSize: "0.95rem",
+                      height: "45px",
+                      backgroundColor: "#fcfdff",
+                      color: "#2a3f5e",
+                      textAlign: "center",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
         {activeTab === "Advance" && (
           <div
             style={{
@@ -5739,17 +6402,19 @@ const handleBeneficiarySearch = async (query: string) => {
                         >
                           <CustomDropdown
                             className="mb-0"
-                            options={getApprovedBudgetHeadsForAdvance()}
-                            value={getSelectedOption(
+                            options={getApprovedBudgetHeadSearchOptions()}
+                            value={getApprovedBudgetHeadSelectedOption(
                               row.budgetHead,
-                              getApprovedBudgetHeadsForAdvance(),
+                              row.subHead,
+                              row.budgetLineId,
                             )}
-                            onChange={(option) => {
-                              const val = String(
-                                (option as OptionType)?.value || "",
-                              );
-                              handleAdvanceBudgetHeadChange(row.id, val);
-                            }}
+                            onChange={(option) =>
+                              void handleAdvanceBudgetHeadSearchChange(
+                                row.id,
+                                option as OptionType | null,
+                              )
+                            }
+                            filterOption={filterApprovedBudgetHeadOption}
                             placeholder={
                               isApprovedBudgetLoading
                                 ? "Loading..."
@@ -5768,17 +6433,15 @@ const handleBeneficiarySearch = async (query: string) => {
                             options={getApprovedSubHeadOptionsForAdvance(
                               row.budgetHead,
                             )}
-                            value={getSelectedOption(
+                            value={getApprovedSubHeadSelectedOption(
+                              row.budgetHead,
                               row.subHead,
-                              getApprovedSubHeadOptionsForAdvance(
-                                row.budgetHead,
-                              ),
+                              row.budgetLineId,
                             )}
                             onChange={async (option) => {
-                              const val = String(
-                                (option as OptionType)?.value || "",
-                              );
-                              await handleAdvanceSubHeadChange(row.id, val);
+                              const selected = option as OptionType | null;
+                              const val = String(selected?.subHead || "");
+                              await handleAdvanceSubHeadChange(row.id, val, selected);
                             }}
                             placeholder="Select Sub Head"
                             isDisabled={!row.budgetHead}
@@ -5901,6 +6564,7 @@ const handleBeneficiarySearch = async (query: string) => {
                                 padding: "10px 15px",
                                 fontSize: "0.95rem",
                                 width: "100%",
+                                maxWidth: "100%",
                                 height: "45px",
                                 backgroundColor: "#f3f5f7",
                                 color: "#51627d",
@@ -5919,14 +6583,14 @@ const handleBeneficiarySearch = async (query: string) => {
                         >
                           <div
                             style={{
-                              display: "flex",
+                              display: "grid",
+                              gridTemplateColumns: "minmax(90px, auto) minmax(160px, 1fr)",
                               alignItems: "center",
                               gap: "8px",
                             }}
                           >
                             <span
                               style={{
-                                minWidth: "72px",
                                 color: "#364152",
                                 fontSize: "1rem",
                                 fontWeight: 500,
@@ -5951,9 +6615,8 @@ const handleBeneficiarySearch = async (query: string) => {
                                 fontSize: "0.95rem",
                                 width: "100%",
                                 height: "45px",
-                                backgroundColor: "#f8fbff",
+                                backgroundColor: "#ffffff",
                                 color: "#2a3f5e",
-                                textAlign: "center",
                                 outline: "none",
                               }}
                             />
@@ -5964,6 +6627,38 @@ const handleBeneficiarySearch = async (query: string) => {
                   ))}
                 </tbody>
                 <tfoot>
+                  {hasUnplannedBudgetPreview && (
+                    <tr style={{ backgroundColor: "#fafcff" }}>
+                      <td
+                        colSpan={3}
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          fontWeight: 600,
+                          color: "#0069ab",
+                        }}
+                      >
+                        Unplanned Expenditure:{" "}
+                        {unplannedBudgetDisplayLabel || "\u00A0"}
+                      </td>
+                      <td
+                        colSpan={2}
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          textAlign: "right",
+                          fontWeight: 600,
+                          color: "#0069ab",
+                        }}
+                      >
+                        ₹{" "}
+                        {unplannedBudgetTotal.toLocaleString("en-IN", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </td>
+                    </tr>
+                  )}
                   <tr style={{ backgroundColor: "#f0f6ff" }}>
                     <td
                       colSpan={5}
@@ -5977,7 +6672,7 @@ const handleBeneficiarySearch = async (query: string) => {
                       }}
                     >
                       Total Advance: ₹{" "}
-                      {totalAdvanceAmount.toLocaleString("en-IN", {
+                      {totalAdvanceDisplayAmount.toLocaleString("en-IN", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
@@ -6005,8 +6700,44 @@ const handleBeneficiarySearch = async (query: string) => {
               >
                 <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
                 <span style={{ fontWeight: 600 }}>
-                  {numberToIndianWords(totalAdvanceAmount)}
+                  {numberToIndianWords(totalAdvanceDisplayAmount)}
                 </span>
+              </div>
+
+              <div
+                style={{
+                  marginTop: "14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
+                <label
+                  style={{
+                    fontWeight: 600,
+                    color: "#2a3f5e",
+                    fontSize: "0.95rem",
+                  }}
+                >
+                  Tentative Date of Settlement <span style={{ color: "red" }}>*</span>
+                </label>
+                <input
+                  type="date"
+                  value={advanceTentativeSettlementDate}
+                  onChange={(e) => setAdvanceTentativeSettlementDate(e.target.value)}
+                  style={{
+                    border: "1px solid #d7dee7",
+                    borderRadius: "12px",
+                    padding: "12px 14px",
+                    fontSize: "0.95rem",
+                    width: "100%",
+                    height: "48px",
+                    backgroundColor: "#fcfdff",
+                    color: "#2a3f5e",
+                    outline: "none",
+                    fontFamily: "inherit",
+                  }}
+                />
               </div>
             </div>
           </div>
@@ -6144,17 +6875,19 @@ const handleBeneficiarySearch = async (query: string) => {
                       >
                         <CustomDropdown
                           className="mb-0"
-                          options={getApprovedBudgetHeadsForAdvance()}
-                          value={getSelectedOption(
+                          options={getApprovedBudgetHeadSearchOptions()}
+                          value={getApprovedBudgetHeadSelectedOption(
                             row.budgetHead,
-                            getApprovedBudgetHeadsForAdvance(),
+                            row.subHead,
+                            row.budgetLineId,
                           )}
-                          onChange={(option) => {
-                            const val = String(
-                              (option as OptionType)?.value || "",
-                            );
-                            handleSettlementBudgetHeadChange(row.id, val);
-                          }}
+                          onChange={(option) =>
+                            handleSettlementBudgetHeadSearchChange(
+                              row.id,
+                              option as OptionType | null,
+                            )
+                          }
+                          filterOption={filterApprovedBudgetHeadOption}
                           placeholder={
                             isApprovedBudgetLoading
                               ? "Loading..."
@@ -6175,15 +6908,15 @@ const handleBeneficiarySearch = async (query: string) => {
                           options={getApprovedSubHeadOptionsForAdvance(
                             row.budgetHead,
                           )}
-                          value={getSelectedOption(
+                          value={getApprovedSubHeadSelectedOption(
+                            row.budgetHead,
                             row.subHead,
-                            getApprovedSubHeadOptionsForAdvance(row.budgetHead),
+                            row.budgetLineId,
                           )}
                           onChange={(option) => {
-                            const val = String(
-                              (option as OptionType)?.value || "",
-                            );
-                            handleSettlementSubHeadChange(row.id, val);
+                            const selected = option as OptionType | null;
+                            const val = String(selected?.subHead || "");
+                            handleSettlementSubHeadChange(row.id, val, selected);
                           }}
                           placeholder="Select Sub Head"
                           isDisabled={!row.budgetHead}
@@ -6199,7 +6932,6 @@ const handleBeneficiarySearch = async (query: string) => {
                       >
                         <input
                           type="text"
-                          placeholder="<Fetch>"
                           value={getBudgetDisplayValue(row.budget)}
                           readOnly
                           style={{
@@ -6342,6 +7074,37 @@ const handleBeneficiarySearch = async (query: string) => {
                   ))}
                 </tbody>
                 <tfoot>
+  {hasUnplannedBudgetPreview && (
+    <tr style={{ backgroundColor: "#fafcff" }}>
+      <td
+        colSpan={4}
+        style={{
+          padding: "12px",
+          border: "1px solid #e0e0e0",
+          fontWeight: 600,
+          color: "#0069ab",
+        }}
+      >
+        Unplanned Expenditure: {unplannedBudgetDisplayLabel || "\u00A0"}
+      </td>
+      <td
+        style={{
+          padding: "12px",
+          border: "1px solid #e0e0e0",
+          fontWeight: 600,
+          color: "#0069ab",
+          textAlign: "center",
+        }}
+      >
+        ₹{" "}
+        {unplannedBudgetTotal.toLocaleString("en-IN", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}
+      </td>
+      <td style={{ border: "1px solid #e0e0e0" }}></td>
+    </tr>
+  )}
   <tr style={{ backgroundColor: "#f0f6ff" }}>
     <td
       colSpan={4}
@@ -6366,7 +7129,7 @@ const handleBeneficiarySearch = async (query: string) => {
       }}
     >
                       ₹{" "}
-                      {totalSettlementAmount.toLocaleString("en-IN", {
+                      {totalSettlementDisplayAmount.toLocaleString("en-IN", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })}
@@ -6378,7 +7141,7 @@ const handleBeneficiarySearch = async (query: string) => {
 
               <div
                 style={{
-                  marginTop: "10px",
+                  marginTop: "14px",
                   padding: "10px 14px",
                   borderRadius: "10px",
                   backgroundColor: "#f0f6ff",
@@ -6395,7 +7158,7 @@ const handleBeneficiarySearch = async (query: string) => {
                >
                 <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
                 <span style={{ fontWeight: 600 }}>
-                  {numberToIndianWords(totalSettlementAmount)}
+                  {numberToIndianWords(totalSettlementDisplayAmount)}
                 </span>
               </div>
             </div>
@@ -6521,17 +7284,19 @@ const handleBeneficiarySearch = async (query: string) => {
                         >
                   <CustomDropdown
                     className="mb-0"
-                    options={getApprovedBudgetHeadsForAdvance()}
-                            value={getSelectedOption(
+                    options={getApprovedBudgetHeadSearchOptions()}
+                            value={getApprovedBudgetHeadSelectedOption(
                               row.budgetHead,
-                              getApprovedBudgetHeadsForAdvance(),
+                              row.subHead,
+                              row.budgetLineId,
                             )}
-                    onChange={(option) => {
-                              const val = String(
-                                (option as OptionType)?.value || "",
-                              );
-                      handleExpenditureBudgetHeadChange(row.id, val);
-                    }}
+                    onChange={(option) =>
+                      handleExpenditureBudgetHeadSearchChange(
+                        row.id,
+                        option as OptionType | null,
+                      )
+                    }
+                    filterOption={filterApprovedBudgetHeadOption}
                             placeholder={
                               isApprovedBudgetLoading
                                 ? "Loading..."
@@ -6553,17 +7318,15 @@ const handleBeneficiarySearch = async (query: string) => {
                             options={getApprovedSubHeadOptionsForAdvance(
                               row.budgetHead,
                             )}
-                            value={getSelectedOption(
+                            value={getApprovedSubHeadSelectedOption(
+                              row.budgetHead,
                               row.subHead,
-                              getApprovedSubHeadOptionsForAdvance(
-                                row.budgetHead,
-                              ),
+                              row.budgetLineId,
                             )}
                     onChange={(option) => {
-                              const val = String(
-                                (option as OptionType)?.value || "",
-                              );
-                      handleExpenditureSubHeadChange(row.id, val);
+                              const selected = option as OptionType | null;
+                              const val = String(selected?.subHead || "");
+                      handleExpenditureSubHeadChange(row.id, val, selected);
                     }}
                     placeholder="Select Sub Head"
                     isDisabled={!row.budgetHead}
@@ -6580,7 +7343,6 @@ const handleBeneficiarySearch = async (query: string) => {
                         >
                   <input
                     type="text"
-                    placeholder="<Fetch>"
                     value={getBudgetDisplayValue(row.budget)}
                     readOnly
                     style={{
@@ -6795,6 +7557,39 @@ const handleBeneficiarySearch = async (query: string) => {
           ))}
         </tbody>
                 <tfoot>
+                  {hasUnplannedBudgetPreview && (
+                    <tr style={{ backgroundColor: "#fafcff" }}>
+                      <td
+                        colSpan={3}
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          fontWeight: 600,
+                          color: "#0069ab",
+                        }}
+                      >
+                        Unplanned Expenditure:{" "}
+                        {unplannedBudgetDisplayLabel || "\u00A0"}
+                      </td>
+                      <td
+                        colSpan={2}
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          textAlign: "right",
+                          paddingRight: "18px",
+                          fontWeight: 600,
+                          color: "#0069ab",
+                        }}
+                      >
+                        ₹{" "}
+                        {unplannedBudgetTotal.toLocaleString("en-IN", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </td>
+                    </tr>
+                  )}
                   <tr style={{ backgroundColor: "#f0f6ff" }}>
                     <td
                       colSpan={5}
@@ -6808,12 +7603,10 @@ const handleBeneficiarySearch = async (query: string) => {
                       }}
                     >
                       Total Expenditure: &#8377;{" "}
-                      {expenditureSubRows
-                        .reduce(
-                          (sum, r) => sum + (parseFloat(r.autoSum) || 0),
-                          0,
-                        )
-                        .toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      {totalExpenditureDisplayAmount.toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
             </td>
           </tr>
         </tfoot>
@@ -6821,7 +7614,7 @@ const handleBeneficiarySearch = async (query: string) => {
 
       <div
         style={{
-          marginTop: "10px",
+          marginTop: "14px",
           padding: "10px 14px",
           borderRadius: "10px",
           backgroundColor: "#f0f6ff",
@@ -6838,12 +7631,7 @@ const handleBeneficiarySearch = async (query: string) => {
       >
         <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
                 <span style={{ fontWeight: 600 }}>
-                  {numberToIndianWords(
-                    expenditureSubRows.reduce(
-                      (sum, r) => sum + (parseFloat(r.autoSum) || 0),
-                      0,
-                    ),
-                  )}
+                  {numberToIndianWords(totalExpenditureDisplayAmount)}
                 </span>
       </div>
     </div>
@@ -7069,6 +7857,63 @@ const handleBeneficiarySearch = async (query: string) => {
     )}
   </div>
 )}
+
+          {/* Remarks Section */}
+          {(activeTab === "Settlement" || activeTab === "Expenditure") && (
+            <div
+              style={{
+                backgroundColor: "#fff",
+                padding: "30px",
+                borderRadius: "20px",
+                marginTop: "20px",
+                boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
+                <label
+                  style={{
+                    fontWeight: 600,
+                    color: "#2a3f5e",
+                    fontSize: "0.95rem",
+                  }}
+                >
+                  Remarks
+                </label>
+                <textarea
+                  value={activeTab === "Settlement" ? settlementRemarks : expenditureRemarks}
+                  onChange={(event) => {
+                    if (activeTab === "Settlement") {
+                      setSettlementRemarks(event.target.value);
+                    } else {
+                      setExpenditureRemarks(event.target.value);
+                    }
+                  }}
+                  placeholder="Enter remarks (optional)"
+                  rows={3}
+                  style={{
+                    border: "1px solid #d7dee7",
+                    borderRadius: "12px",
+                    padding: "12px 14px",
+                    fontSize: "0.95rem",
+                    width: "100%",
+                    minHeight: "90px",
+                    resize: "vertical",
+                    backgroundColor: "#fcfdff",
+                    color: "#2a3f5e",
+                    outline: "none",
+                    fontFamily: "inherit",
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Submit Button Section */}
           {!isReadOnlyView && (
             <div className="expenditure-submit-buttons">

@@ -37,6 +37,11 @@ CREATE TABLE IF NOT EXISTS expenditure_requests (
   is_budget_proposed ENUM('Yes','No') NOT NULL DEFAULT 'No',
   proposed_amount DECIMAL(15,2) NULL,
   balance_amount DECIMAL(15,2) NULL,
+  unplanned_budget_enabled TINYINT(1) NOT NULL DEFAULT 0,
+  unplanned_budget_amount DECIMAL(15,2) NULL,
+  unplanned_budget_head VARCHAR(255) NULL,
+  unplanned_budget_sub_head VARCHAR(255) NULL,
+  unplanned_budget_description VARCHAR(500) NULL,
 
   -- mirror finance income summary fields
   income_type VARCHAR(100) NULL,
@@ -57,6 +62,8 @@ CREATE TABLE IF NOT EXISTS expenditure_requests (
   advance_total_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   settlement_total_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   expenditure_total_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+  settlement_remarks VARCHAR(500) NULL,
+  expenditure_remarks VARCHAR(500) NULL,
   total_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
   approved_total_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
 
@@ -254,6 +261,7 @@ CREATE TABLE IF NOT EXISTS expenditure_advance_rows (
   budget_amount DECIMAL(15,2) NULL,
   pre_advance_amount DECIMAL(15,2) NULL,
   advance_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+
 
   available_amount_snapshot DECIMAL(15,2) NULL,
   remaining_amount_snapshot DECIMAL(15,2) NULL,
