@@ -49,6 +49,27 @@ const formatStageLabel = (stage: string, labels: Record<string, string> = {}) =>
 };
 
 const FINANCE_HOD_BENEFICIARY_OPTIONS = ['All Beneficiary', 'Faculty', 'Staff', 'Department'];
+
+const getRunningFiscalYearStart = () => {
+  const now = new Date();
+  return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+};
+
+const getWorkflowFiscalYearOptions = () => {
+  const running = getRunningFiscalYearStart();
+  return [running, running - 1];
+};
+
+const normalizeWorkflowFiscalYearOptions = (years: unknown[], fallbackYear: number) => {
+  const normalized = new Set<number>([fallbackYear]);
+  years.forEach((value) => {
+    const year = Number.parseInt(String(value), 10);
+    if (Number.isInteger(year) && year > 0) {
+      normalized.add(year);
+    }
+  });
+  return Array.from(normalized).sort((a, b) => b - a);
+};
 const FINANCE_COORDINATOR_BENEFICIARY_OPTIONS = [
   'All Beneficiary',
   'Centre',
@@ -784,10 +805,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     );
   }, [showAlert]);
   // Filter states
-  const [fiscalYear, setFiscalYear] = useState<number>(() => {
-    const d = new Date();
-    return d.getMonth() < 1 ? d.getFullYear() - 1 : d.getFullYear();
-  });
+  const [fiscalYear, setFiscalYear] = useState<number>(() => getRunningFiscalYearStart());
   const [beneficiaryFilter, setBeneficiaryFilter] = useState<string>("All Beneficiary");
   const [secondaryFilter, setSecondaryFilter] = useState<string>('');
   const [amountFilter, setAmountFilter] = useState<FinanceAmountFilter>('');
@@ -956,6 +974,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     return beneficiaryOptionsFromMeta;
   }, [activeStage, activeWorkflowTab?.level1Role, beneficiaryOptionsFromMeta, enableLevel1RoleTabs]);
+
+  const fiscalYearOptions = useMemo(
+    () => normalizeWorkflowFiscalYearOptions(meta?.availableFiscalYears || getWorkflowFiscalYearOptions(), getRunningFiscalYearStart()),
+    [meta?.availableFiscalYears]
+  );
 
   const getRecordId = useCallback(
     (record: Record<string, any>) => {
@@ -2423,7 +2446,7 @@ const proposalFilteredRows = useMemo(() => {
                 onChange={(e) => setFiscalYear(Number(e.target.value))}
                 title="Fiscal Year"
               >
-                {[2024, 2025, 2026].map((year) => (
+                {fiscalYearOptions.map((year) => (
                   <option key={year} value={year}>
                     FY {year}-{String(year + 1).slice(2)}
                   </option>

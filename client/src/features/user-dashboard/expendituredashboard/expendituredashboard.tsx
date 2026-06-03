@@ -59,6 +59,7 @@ interface DashboardReturnState {
   submittedAmount?: number;
   submittedRequestId?: number;
   financeRequestId?: number;
+  fiscalYear?: string;
   viewOnly?: boolean;
   financeProposal?: {
     proposalId: string;
@@ -1123,6 +1124,7 @@ const ExpenditureDashboard: React.FC = () => {
         submittedRequestId: targetRequestId ?? undefined,
         sourceRequestId: row.requestId ?? undefined,
         financeRequestId: Number(card.financeRequestId),
+        fiscalYear: financialYear,
         financeProposal: {
           proposalId: card.proposalId,
           applicantName: card.applicantName,
@@ -1852,6 +1854,12 @@ const ExpenditureDashboard: React.FC = () => {
   };
   useEffect(() => {
     const state = location.state as DashboardReturnState | null;
+
+    const stateFiscalYear = normalizeText(state?.fiscalYear ?? "");
+    if (stateFiscalYear && stateFiscalYear !== financialYear) {
+      setFinancialYear(stateFiscalYear);
+      return;
+    }
 
     const financeId = normalizeText(state?.financeRequestId ?? "");
 

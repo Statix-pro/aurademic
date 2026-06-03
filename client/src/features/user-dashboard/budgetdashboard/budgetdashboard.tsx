@@ -722,12 +722,6 @@ const BudgetDashboard: React.FC = () => {
     });
   };
 
-  const canAddForCurrentFY = () => {
-    const selectedFY = parseInt(financialYear.split("-")[0]);
-    const runningFY = getRunningFYStart();
-    return selectedFY >= runningFY;
-  };
-
   const handleDelete = async (id: number) => {
     showAlert(
       "Are you sure you want to delete this proposal?",
@@ -948,8 +942,6 @@ const BudgetDashboard: React.FC = () => {
                 <button
                   className="budgetdashboard-add-btn"
                   onClick={() => navigate("/budget/new", { state: { fiscalYear: financialYear } })}
-                  disabled={!canAddForCurrentFY()}
-                  style={{ opacity: canAddForCurrentFY() ? 1 : 0.5 }}
                 >
                   Add +
                 </button>
