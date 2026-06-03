@@ -904,6 +904,7 @@ export default function MasterDataPage() {
             Retired: "badge-inactive",
             Resigned: "badge-inactive",
             Terminated: "badge-inactive",
+            Relieved: "badge-inactive",
             "On Leave": "bg-warning",
         };
         return (
@@ -1579,7 +1580,7 @@ export default function MasterDataPage() {
                     <option value="Active">Active</option>
                     <option value="Retired">Retired</option>
                     <option value="Resigned">Resigned</option>
-                    <option value="Terminated">Terminated</option>
+                    <option value="Relieved">Relieved</option>
                     <option value="On Leave">On Leave</option>
                 </Form.Select>
                 <Button className="btn-add" onClick={() => openEmpModal()}>
@@ -1932,7 +1933,7 @@ export default function MasterDataPage() {
                                         <option value="Resigned">Resigned</option>
                                         <option value="On Leave">On Leave</option>
                                         <option value="Deputation">Deputation</option>
-                                        <option value="Terminated">Terminated</option>
+                                        <option value="Relieved">Relieved</option>
                                         <option value="Deceased">Deceased</option>
                                     </Form.Select>
                                 </Form.Group>

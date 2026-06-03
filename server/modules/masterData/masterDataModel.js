@@ -526,7 +526,7 @@ const masterDataModel = {
     async deleteEmployee(id) {
         try {
             const [result] = await db.query(
-                "UPDATE master_employees SET status = 'Terminated' WHERE id = ?",
+                "UPDATE master_employees SET status = 'Relieved' WHERE id = ?",
                 [id]
             );
             return result.affectedRows > 0;
@@ -542,7 +542,7 @@ const masterDataModel = {
         SELECT id, erp_id, title, first_name, last_name, email, mobile,
           CONCAT(COALESCE(title, ''), ' ', first_name, ' ', COALESCE(last_name, '')) AS full_name
         FROM master_employees
-        WHERE status != 'Terminated'
+        WHERE status != 'Relieved'
       `;
             const params = [];
 

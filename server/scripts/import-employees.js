@@ -45,10 +45,10 @@ const STATUS_MAP = {
     'Active': 'Active',
     'Long Leave': 'On Leave',
     'Medical Leave': 'On Leave',
-    'Relieved': 'Resigned',
+    'Relieved': 'Relieved',
     'Retired': 'Retired',
     'Resigned': 'Resigned',
-    'Terminated': 'Terminated',
+    'Terminated': 'Relieved',
     'Deputation': 'Deputation',
 };
 

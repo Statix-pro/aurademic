@@ -782,6 +782,10 @@ const buildFinanceUpdateAudit = ({
   incomeRowsChanged = false,
   actor = null,
 }) => {
+  const nextValue = (key) =>
+    Object.prototype.hasOwnProperty.call(updateData, key)
+      ? updateData[key]
+      : previousRecord[key];
   const nextRecord = {
     request_date: updateData.request_date ?? previousRecord.request_date,
     description: updateData.description ?? previousRecord.description,
@@ -792,9 +796,9 @@ const buildFinanceUpdateAudit = ({
     event_sub_head: updateData.event_sub_head ?? previousRecord.event_sub_head,
     proposed_amount: updateData.proposed_amount ?? previousRecord.proposed_amount,
     balance_amount: updateData.balance_amount ?? previousRecord.balance_amount,
-    unplanned_budget_enabled: updateData.unplanned_budget_enabled ?? previousRecord.unplanned_budget_enabled,
-    unplanned_budget_amount: updateData.unplanned_budget_amount ?? previousRecord.unplanned_budget_amount,
-    unplanned_budget_description: updateData.unplanned_budget_description ?? previousRecord.unplanned_budget_description,
+    unplanned_budget_enabled: nextValue('unplanned_budget_enabled'),
+    unplanned_budget_amount: nextValue('unplanned_budget_amount'),
+    unplanned_budget_description: nextValue('unplanned_budget_description'),
     annexure_type: updateData.annexure_type ?? previousRecord.annexure_type,
     annexure_file_name: updateData.annexure_file_name ?? previousRecord.annexure_file_name,
     annexure_storage_name: updateData.annexure_storage_name ?? previousRecord.annexure_storage_name,
@@ -820,9 +824,9 @@ const buildFinanceUpdateAudit = ({
     { storageKey: 'event_sub_head', label: 'Event sub head' },
     { storageKey: 'proposed_amount', label: 'Proposed amount', valueType: 'money' },
     { storageKey: 'balance_amount', label: 'Balance amount', valueType: 'money' },
-    { storageKey: 'unplanned_budget_enabled', label: 'Unplanned budget enabled' },
-    { storageKey: 'unplanned_budget_amount', label: 'Unplanned budget amount', valueType: 'money' },
-    { storageKey: 'unplanned_budget_description', label: 'Unplanned budget description' },
+    { storageKey: 'unplanned_budget_enabled', label: 'Unplanned expenditure enabled' },
+    { storageKey: 'unplanned_budget_amount', label: 'Unplanned expenditure amount', valueType: 'money' },
+    { storageKey: 'unplanned_budget_description', label: 'Unplanned expenditure description' },
     { storageKey: 'annexure_type', label: 'Annexure type' },
     { storageKey: 'annexure_file_name', label: 'Annexure file name' },
     { storageKey: 'annexure_storage_name', label: 'Annexure storage name' },
@@ -2159,6 +2163,23 @@ const getFinanceBreakupTotal = async (conn, financeId) => {
   return toMoney(rows?.[0]?.total);
 };
 
+const calculateApprovedFinanceTotalsSnapshot = async (conn, financeId, unplannedPayload = {}) => {
+  const normalizedUnplanned = normalizeUnplannedBudgetPayload(unplannedPayload);
+  const [rows] = await conn.query(
+    `SELECT
+       COALESCE(SUM(COALESCE(NULLIF(approved_amount, 0), amount, 0)), 0) AS approved_total,
+       COALESCE(SUM(COALESCE(remaining_amount_snapshot, 0)), 0) AS balance_total
+     FROM finance_budget_breakup
+     WHERE finance_id = ?`,
+    [financeId]
+  );
+
+  return {
+    approvedTotalAmount: toMoney(toMoney(rows?.[0]?.approved_total) + normalizedUnplanned.amount),
+    balanceAmount: toMoney(toMoney(rows?.[0]?.balance_total) + normalizedUnplanned.amount),
+  };
+};
+
 const financeModel = {
   async createFinanceRequest(financeData, userId, userEmail = null) {
     const connection = await db.getConnection();
@@ -2376,6 +2397,7 @@ const financeModel = {
            ${annexureMimeTypeSelectSql},
            ${annexureFileSizeSelectSql},
            fr.total_budget,
+           fr.approved_total_amount,
            fr.income_type,
            fr.income_status,
            fr.income_amount_type,
@@ -2626,6 +2648,30 @@ const financeModel = {
           }
         );
         updateData.total_budget = totalBudget;
+      }
+
+      const shouldRecalculateApprovedTotals =
+        toMoney(existingRecord.approved_total_amount) > 0 &&
+        (hasBudgetRowsInput ||
+          Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled') ||
+          Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount'));
+      if (shouldRecalculateApprovedTotals) {
+        const approvedTotals = await calculateApprovedFinanceTotalsSnapshot(
+          connection,
+          id,
+          {
+            unplanned_budget_enabled:
+              Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled')
+                ? updateData.unplanned_budget_enabled
+                : existingRecord.unplanned_budget_enabled,
+            unplanned_budget_amount:
+              Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount')
+                ? updateData.unplanned_budget_amount
+                : existingRecord.unplanned_budget_amount,
+          },
+        );
+        updateData.approved_total_amount = approvedTotals.approvedTotalAmount;
+        updateData.balance_amount = approvedTotals.balanceAmount;
       }
 
       if (hasIncomeRowsInput) {

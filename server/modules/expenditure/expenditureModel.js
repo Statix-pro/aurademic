@@ -100,10 +100,10 @@ const normalizeUnplannedBudgetPayload = (payload = {}) => {
     : '';
 
   if (enabled && amount <= 0) {
-    throw new Error('Please enter a valid Unplanned Budget amount.');
+    throw new Error('Please enter a valid Unplanned Expenditure amount.');
   }
   if (enabled && (!head || !subHead)) {
-    throw new Error('Please select Unplanned Budget head and sub head.');
+    throw new Error('Please select Unplanned Expenditure head and sub head.');
   }
 
   return {
@@ -2837,7 +2837,7 @@ async function assertRequestTotalWithinApprovedFinanceAmount(conn, financeReques
 
   if (
     !normalizedFinanceRequestId ||
-    !['Advance', 'Expenditure'].includes(normalizedRequestType) ||
+    !['Advance', 'Settlement', 'Expenditure'].includes(normalizedRequestType) ||
     normalizedRequestedAmount <= 0
   ) {
     return;
@@ -3056,6 +3056,13 @@ const incomeRows = Array.isArray(data.income_rows)
     const settlementTotal = settlementRows.reduce((sum, row) => sum + toMoney(row.settlement || row.settlement_amount), 0);
     const expenditureTotal = expenditureRows.reduce((sum, row) => sum + toMoney(row.autoSum || row.expenditure || row.auto_sum_amount), 0);
     const normalizedUnplanned = normalizeUnplannedBudgetPayload(data);
+    const activeRequestTotal = toMoney(
+      (requestType === 'Advance'
+        ? advanceTotal
+        : requestType === 'Settlement'
+          ? settlementTotal
+          : expenditureTotal) + normalizedUnplanned.amount,
+    );
     const totalAmount = toMoney(advanceTotal + settlementTotal + expenditureTotal + normalizedUnplanned.amount);
     const workflowRowHistory = await getWorkflowRowHistory(conn, {
       financeRequestId,
@@ -3067,16 +3074,20 @@ const incomeRows = Array.isArray(data.income_rows)
     const allowZeroSettlement = requestType === 'Settlement' && hasSettlementRowsForClosure(settlementRows);
 
     validateWorkflowRowFlow(requestType, workflowRowHistory, {
-      requestedAdvance: advanceTotal,
-      requestedSettlement: settlementTotal,
-      requestedExpenditure: expenditureTotal,
+      requestedAdvance: requestType === 'Advance' ? activeRequestTotal : advanceTotal,
+      requestedSettlement: requestType === 'Settlement' ? activeRequestTotal : settlementTotal,
+      requestedExpenditure: requestType === 'Expenditure' ? activeRequestTotal : expenditureTotal,
       allowZeroSettlement,
     });
 
-    if (requestType === 'Advance') {
-      await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, advanceTotal);
-    } else if (requestType === 'Expenditure') {
-      await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, expenditureTotal);
+    await assertRequestTotalWithinApprovedFinanceAmount(
+      conn,
+      financeRequestId,
+      requestType,
+      activeRequestTotal,
+    );
+
+    if (requestType === 'Expenditure') {
       await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows);
     } else if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
@@ -3356,6 +3367,13 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     const settlementTotal = settlementRows.reduce((sum, row) => sum + toMoney(row.settlement || row.settlement_amount), 0);
     const expenditureTotal = expenditureRows.reduce((sum, row) => sum + toMoney(row.autoSum || row.expenditure || row.auto_sum_amount), 0);
     const normalizedUnplanned = normalizeUnplannedBudgetPayload(data);
+    const activeRequestTotal = toMoney(
+      (requestType === 'Advance'
+        ? advanceTotal
+        : requestType === 'Settlement'
+          ? settlementTotal
+          : expenditureTotal) + normalizedUnplanned.amount,
+    );
     const totalAmount = toMoney(advanceTotal + settlementTotal + expenditureTotal + normalizedUnplanned.amount);
 
     const workflowRowHistory = await getWorkflowRowHistory(conn, {
@@ -3367,13 +3385,13 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     });
     const allowZeroSettlement = requestType === 'Settlement' && hasSettlementRowsForClosure(settlementRows);
 
-    if (requestType === 'Advance' && advanceTotal <= 0) {
+    if (requestType === 'Advance' && activeRequestTotal <= 0) {
       throw new Error('Advance amount must be greater than 0');
     }
-    if (requestType === 'Settlement' && (settlementTotal < 0 || (settlementTotal === 0 && !allowZeroSettlement))) {
+    if (requestType === 'Settlement' && (activeRequestTotal < 0 || (activeRequestTotal === 0 && !allowZeroSettlement))) {
       throw new Error('Settlement amount must be greater than 0');
     }
-    if (requestType === 'Expenditure' && expenditureTotal <= 0) {
+    if (requestType === 'Expenditure' && activeRequestTotal <= 0) {
       throw new Error('Expenditure amount must be greater than 0');
     }
 
@@ -3400,10 +3418,14 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       }
     }
 
-    if (requestType === 'Advance') {
-      await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, advanceTotal);
-    } else if (requestType === 'Expenditure') {
-      await assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, expenditureTotal);
+    await assertRequestTotalWithinApprovedFinanceAmount(
+      conn,
+      financeRequestId,
+      requestType,
+      activeRequestTotal,
+    );
+
+    if (requestType === 'Expenditure') {
       await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows, {
         excludeExpenditureId: normalizedExpenditureId,
       });
