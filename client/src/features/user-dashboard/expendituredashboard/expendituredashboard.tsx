@@ -582,9 +582,9 @@ const ExpenditureDashboard: React.FC = () => {
           payee.beneficiaryType === "organization"
             ? normalizeText(payee.tdsSection) || null
             : null,
-      }) as { status?: string; message?: string };
+      }) as { success?: boolean; status?: string; message?: string };
 
-      if (response.status !== "success") {
+      if (response.success !== true && response.status !== "success") {
         throw new Error(response.message || "Unable to send payee for approval");
       }
 
@@ -1755,11 +1755,12 @@ const ExpenditureDashboard: React.FC = () => {
         try {
           setLoading(true);
           const result = await authenticityUtility.delete(`/expenditure/${requestId}`) as {
+            success?: boolean;
             status?: string;
             message?: string;
           };
 
-          if (result?.status !== "success") {
+          if (result?.success !== true && result?.status !== "success") {
             throw new Error(result?.message || "Failed to delete expenditure request");
           }
 

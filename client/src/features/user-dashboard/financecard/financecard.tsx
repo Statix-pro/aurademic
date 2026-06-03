@@ -310,6 +310,7 @@ const FinanceCard: React.FC = () => {
     setPrincipalDocBusyId(item.id);
     try {
       const response = await authenticityUtility.postFile(`/finance-requests/${item.id}/principal-document`, formData) as {
+        success?: boolean;
         status?: string;
         message?: string;
         data?: {
@@ -320,8 +321,10 @@ const FinanceCard: React.FC = () => {
           size?: number;
         };
       };
+      const isUploadSuccess =
+        response?.success === true || response?.status === 'success';
 
-      if (response?.status !== 'success') {
+      if (!isUploadSuccess) {
         window.alert(response?.message || 'Failed to upload principal document');
         return;
       }
@@ -362,11 +365,12 @@ const FinanceCard: React.FC = () => {
     setPrincipalDocBusyId(item.id);
     try {
       const response = await authenticityUtility.delete(`/finance-requests/${item.id}/principal-document`) as {
+        success?: boolean;
         status?: string;
         message?: string;
       };
 
-      if (response?.status !== 'success') {
+      if (response?.success !== true && response?.status !== 'success') {
         window.alert(response?.message || 'Failed to delete principal document');
         return;
       }
@@ -733,8 +737,12 @@ const FinanceCard: React.FC = () => {
     if (!confirmed) return;
 
     try {
-      const response = await authenticityUtility.delete(`/finance-requests/${item.id}`) as { status?: string; message?: string };
-      if (response.status !== 'success') {
+      const response = await authenticityUtility.delete(`/finance-requests/${item.id}`) as {
+        success?: boolean;
+        status?: string;
+        message?: string;
+      };
+      if (response.success !== true && response.status !== 'success') {
         window.alert(response.message || 'Failed to delete finance request');
         return;
       }

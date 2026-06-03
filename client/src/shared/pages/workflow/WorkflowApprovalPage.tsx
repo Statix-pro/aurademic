@@ -689,6 +689,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     setPrincipalDocumentBusyId(recordId);
     try {
       const response = await authenticityUtility.postFile(`/finance-requests/${recordId}/principal-document`, formData) as {
+        success?: boolean;
         status?: string;
         message?: string;
         data?: {
@@ -699,8 +700,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
           size?: number;
         };
       };
+      const isUploadSuccess =
+        response?.success === true || response?.status === 'success';
 
-      if (response?.status !== 'success') {
+      if (!isUploadSuccess) {
         showAlert(response?.message || 'Failed to upload principal document', 'error');
         return false;
       }
@@ -747,11 +750,12 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         setPrincipalDocumentBusyId(recordId);
         try {
           const response = await authenticityUtility.delete(`/finance-requests/${recordId}/principal-document`) as {
+            success?: boolean;
             status?: string;
             message?: string;
           };
 
-          if (response?.status !== 'success') {
+          if (response?.success !== true && response?.status !== 'success') {
             showAlert(response?.message || 'Failed to delete principal document', 'error');
             return;
           }
@@ -1436,9 +1440,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     try {
       const response = await authenticityUtility.get(`${config.apiBasePath}/payees`, {
         params: { status: 'all', limit: 200 },
-      }) as { status?: string; data?: PendingPayeeRecord[] };
+      }) as { success?: boolean; status?: string; data?: PendingPayeeRecord[] };
 
-      if (response?.status === 'success') {
+      if (response?.success === true || response?.status === 'success') {
         setPendingPayees(Array.isArray(response.data) ? response.data : []);
       } else {
         setPendingPayees([]);
@@ -1469,9 +1473,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       const response = await authenticityUtility.patch(`${config.apiBasePath}/payees/${payeeId}/approval`, {
         decision,
         rejection_reason: rejectionReason || null,
-      }) as { status?: string; message?: string };
+      }) as { success?: boolean; status?: string; message?: string };
 
-      if (response?.status === 'success') {
+      if (response?.success === true || response?.status === 'success') {
         setPendingPayees((prev) =>
           prev.map((row) =>
             Number(row.id) === Number(payeeId)
@@ -1505,9 +1509,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         status?: string;
         message?: string;
         data?: PendingPayeeRecord;
+        success?: boolean;
       };
 
-      if (response?.status === 'success') {
+      if (response?.success === true || response?.status === 'success') {
         const updatedRow = response.data || payload;
         setPendingPayees((prev) =>
           prev.map((row) => (Number(row.id) === Number(payeeId) ? { ...row, ...updatedRow } : row)),
@@ -1533,11 +1538,12 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       async () => {
         try {
           const response = await authenticityUtility.delete(`${config.apiBasePath}/payees/${payeeId}`) as {
+            success?: boolean;
             status?: string;
             message?: string;
           };
 
-          if (response?.status === 'success') {
+          if (response?.success === true || response?.status === 'success') {
             setPendingPayees((prev) => prev.filter((row) => Number(row.id) !== Number(payeeId)));
             return;
           }
