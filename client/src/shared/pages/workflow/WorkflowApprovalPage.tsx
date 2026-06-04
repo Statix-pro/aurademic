@@ -565,6 +565,16 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [deleteId, setDeleteId] = useState<number | string | null>(null);
   const [deleteRef, setDeleteRef] = useState<string>('');
   const [deleteCountdown, setDeleteCountdown] = useState<number>(5);
+  const [carryForwardPopupOpen, setCarryForwardPopupOpen] = useState(false);
+  const [carryForwardRecordId, setCarryForwardRecordId] = useState<number | string | null>(null);
+  const [carryForwardRef, setCarryForwardRef] = useState('');
+  const [carryForwardSourceYear, setCarryForwardSourceYear] = useState<number>(getRunningFiscalYearStart());
+  const [carryForwardTargetYear, setCarryForwardTargetYear] = useState<number>(getRunningFiscalYearStart() + 1);
+  const [carryForwardAvailableAmount, setCarryForwardAvailableAmount] = useState<number>(0);
+  const [carryForwardAmount, setCarryForwardAmount] = useState<string>('');
+  const [carryForwardRemarks, setCarryForwardRemarks] = useState<string>('');
+  const [carryForwardLoading, setCarryForwardLoading] = useState<boolean>(false);
+  const [carryForwardSubmitting, setCarryForwardSubmitting] = useState<boolean>(false);
   const [proposalTypeFilter, setProposalTypeFilter] = useState<'all' | 'advance' | 'expenditure' | 'settlement'>('all');
   const [pendingPayees, setPendingPayees] = useState<PendingPayeeRecord[]>([]);
   const [pendingPayeesLoading, setPendingPayeesLoading] = useState<boolean>(false);
@@ -2181,7 +2191,111 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     isArchived ? 'Unarchive' : 'Archive',
     'Cancel'
   );
-  };
+};
+
+  const closeCarryForwardPopup = useCallback(() => {
+    if (carryForwardSubmitting) return;
+    setCarryForwardPopupOpen(false);
+    setCarryForwardRecordId(null);
+    setCarryForwardRef('');
+    setCarryForwardAvailableAmount(0);
+    setCarryForwardAmount('');
+    setCarryForwardRemarks('');
+    setCarryForwardLoading(false);
+  }, [carryForwardSubmitting]);
+
+  const openCarryForwardPopup = useCallback(async (record: Record<string, any>) => {
+    const recordId = getRecordId(record);
+    if (recordId === undefined || recordId === null) {
+      setError('Unable to carry forward this row because record id is missing.');
+      return;
+    }
+
+    const proposalRef = getRecordProposalRef(record);
+    setCarryForwardRecordId(recordId);
+    setCarryForwardRef(proposalRef);
+    setCarryForwardPopupOpen(true);
+    setCarryForwardLoading(true);
+    setCarryForwardAmount('');
+    setCarryForwardRemarks('');
+
+    try {
+      const response: any = await authenticityUtility.get(`${config.apiBasePath}/${recordId}/carry-forward`);
+      const data = response?.data || response;
+      const sourceYear = Number(data?.sourceFiscalYear || data?.source_fiscal_year || getRunningFiscalYearStart());
+      const balance = Number(data?.balanceAmount || data?.balance_amount || 0);
+      setCarryForwardSourceYear(sourceYear);
+      setCarryForwardTargetYear(sourceYear + 1);
+      setCarryForwardAvailableAmount(Number.isFinite(balance) ? Math.max(balance, 0) : 0);
+      setCarryForwardAmount(Number.isFinite(balance) && balance > 0 ? String(balance) : '');
+    } catch (error: any) {
+      closeCarryForwardPopup();
+      showAlert(
+        error?.response?.data?.message || error?.message || 'Unable to load carry-forward details.',
+        'error'
+      );
+    } finally {
+      setCarryForwardLoading(false);
+    }
+  }, [closeCarryForwardPopup, config.apiBasePath, getRecordId, getRecordProposalRef, showAlert]);
+
+  const submitCarryForward = useCallback(async () => {
+    if (!carryForwardRecordId || carryForwardSubmitting) return;
+
+    const amount = Number(carryForwardAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showAlert('Enter a valid carry-forward amount.', 'warning');
+      return;
+    }
+    if (amount > carryForwardAvailableAmount) {
+      showAlert('Carry-forward amount cannot exceed the available balance.', 'warning');
+      return;
+    }
+    if (!carryForwardRemarks.trim()) {
+      showAlert('Carry-forward remarks are required.', 'warning');
+      return;
+    }
+
+    setCarryForwardSubmitting(true);
+    try {
+      const response: any = await authenticityUtility.post(
+        `${config.apiBasePath}/${carryForwardRecordId}/carry-forward`,
+        {
+          targetFiscalYear: carryForwardTargetYear,
+          amount,
+          remarks: carryForwardRemarks.trim(),
+        }
+      );
+
+      if (response?.success !== true && response?.status !== 'success') {
+        throw new Error(response?.message || 'Unable to create carry-forward allocation.');
+      }
+
+      closeCarryForwardPopup();
+      showAlert('Carry-forward allocation created successfully.', 'success');
+      await loadQueue(activeStage, page);
+    } catch (error: any) {
+      showAlert(
+        error?.response?.data?.message || error?.message || 'Unable to create carry-forward allocation.',
+        'error'
+      );
+    } finally {
+      setCarryForwardSubmitting(false);
+    }
+  }, [
+    activeStage,
+    carryForwardAmount,
+    carryForwardAvailableAmount,
+    carryForwardRecordId,
+    carryForwardRemarks,
+    carryForwardSubmitting,
+    carryForwardTargetYear,
+    closeCarryForwardPopup,
+    config.apiBasePath,
+    loadQueue,
+    page,
+    showAlert,
+  ]);
 
   const handlePdfPreviewClick = useCallback(
     (recordId: number | string, isActionablePending?: boolean) => {
@@ -2999,6 +3113,21 @@ const proposalFilteredRows = useMemo(() => {
                                   )
                                 )}
 
+                                {config.moduleKey === 'finance' && !isArchived && statusCategory === 'approved' && (
+                                  <button
+                                    className="fw-action-btn fw-action-btn--download"
+                                    title="Carry Forward Balance"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openCarryForwardPopup(record);
+                                    }}
+                                    disabled={actingRecordId === recordId}
+                                    style={{ background: '#f0fdf4', color: '#15803d' }}
+                                  >
+                                    <CreditCard size={18} />
+                                  </button>
+                                )}
+
                                 {(isSuperAdminView || !isApproved) && (
                                   <button
                                     className="fw-action-btn fw-action-btn--archive"
@@ -3170,6 +3299,88 @@ const proposalFilteredRows = useMemo(() => {
           </div>
         </div>
       )}
+      <CustomModal
+        show={carryForwardPopupOpen}
+        onHide={carryForwardSubmitting ? (() => {}) : closeCarryForwardPopup}
+        title="Carry Forward Balance"
+        size="lg"
+        centered
+        backdrop={carryForwardSubmitting ? "static" : true}
+        keyboard={!carryForwardSubmitting}
+        hideCloseButton={carryForwardSubmitting}
+        footer={
+          <div className="d-flex justify-content-end gap-2 w-100">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={closeCarryForwardPopup}
+              disabled={carryForwardSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-success"
+              onClick={submitCarryForward}
+              disabled={carryForwardLoading || carryForwardSubmitting}
+            >
+              {carryForwardSubmitting ? "Saving..." : "Carry Forward"}
+            </button>
+          </div>
+        }
+      >
+        <div style={{ fontSize: 13, color: "#666", marginBottom: 10 }}>
+          Reference: <b>{carryForwardRef}</b>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Source FY</span>
+            <input
+              className="form-control"
+              value={`FY ${carryForwardSourceYear}-${String(carryForwardSourceYear + 1).slice(2)}`}
+              disabled
+            />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Target FY</span>
+            <input
+              className="form-control"
+              type="number"
+              min={carryForwardSourceYear + 1}
+              value={carryForwardTargetYear}
+              onChange={(event) => setCarryForwardTargetYear(Number(event.target.value))}
+              disabled={carryForwardLoading || carryForwardSubmitting}
+            />
+          </label>
+        </div>
+        <div style={{ marginBottom: 12, color: "#475569", fontSize: 13 }}>
+          Available balance: <b>{formatAmount(carryForwardAvailableAmount)}</b>
+        </div>
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Carry-forward amount</span>
+          <input
+            className="form-control"
+            type="number"
+            min="0"
+            max={carryForwardAvailableAmount}
+            step="0.01"
+            value={carryForwardAmount}
+            onChange={(event) => setCarryForwardAmount(event.target.value)}
+            disabled={carryForwardLoading || carryForwardSubmitting}
+          />
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Remarks</span>
+          <textarea
+            className="form-control"
+            rows={4}
+            value={carryForwardRemarks}
+            onChange={(event) => setCarryForwardRemarks(event.target.value)}
+            disabled={carryForwardLoading || carryForwardSubmitting}
+            placeholder="Reason for carrying this balance into the next FY"
+          />
+        </label>
+      </CustomModal>
          <AlertModal
   show={alertConfig.show}
   onHide={closeAlert}

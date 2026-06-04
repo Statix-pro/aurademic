@@ -1643,6 +1643,113 @@ const resolveReferenceFiscalYearFromBudgetRows = (budgetRows = [], requestDate =
   return fallbackDate.getFullYear() - (fallbackDate.getMonth() < 3 ? 1 : 0);
 };
 
+const resolveFinanceSourceFiscalYear = async (conn, financeId, requestDate = null, createdAt = null) => {
+  const normalizedFinanceId = toPositiveInt(financeId);
+  if (normalizedFinanceId) {
+    const [rows] = await conn.query(
+      `SELECT MIN(bp.fiscal_year) AS fiscal_year
+         FROM finance_budget_breakup fbb
+         JOIN budget_proposals bp ON bp.id = fbb.budget_proposal_id
+        WHERE fbb.finance_id = ?`,
+      [normalizedFinanceId]
+    );
+    const linkedYear = toPositiveInt(rows?.[0]?.fiscal_year);
+    if (linkedYear) {
+      return linkedYear;
+    }
+  }
+
+  const fallbackDate = requestDate || createdAt;
+  return resolveReferenceFiscalYearFromBudgetRows([], fallbackDate);
+};
+
+const ensureFinanceCarryForwardTable = async (conn) => {
+  await conn.query(
+    `CREATE TABLE IF NOT EXISTS finance_carry_forward_allocations (
+      id INT NOT NULL AUTO_INCREMENT,
+      finance_request_id INT NOT NULL,
+      source_fiscal_year INT NOT NULL,
+      target_fiscal_year INT NOT NULL,
+      carry_forward_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+      used_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+      remarks TEXT NULL,
+      status VARCHAR(30) NOT NULL DEFAULT 'active',
+      created_by_user_id INT NULL,
+      created_by_email VARCHAR(255) NULL,
+      created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_finance_cf_active_target (finance_request_id, target_fiscal_year, status),
+      KEY idx_finance_cf_finance (finance_request_id),
+      KEY idx_finance_cf_source_fy (source_fiscal_year),
+      KEY idx_finance_cf_target_fy (target_fiscal_year),
+      CONSTRAINT fk_finance_cf_request
+        FOREIGN KEY (finance_request_id) REFERENCES finance_requests(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  );
+};
+
+const getFinanceUsageSnapshot = async (conn, financeId) => {
+  const [usageRows] = await conn.query(
+    `SELECT
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Advance'
+          AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+         THEN COALESCE(er.advance_total_amount, er.total_amount, 0)
+         ELSE 0
+       END), 0) AS advance_amount,
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Settlement'
+          AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+         THEN COALESCE(er.settlement_total_amount, er.total_amount, 0)
+         ELSE 0
+       END), 0) AS settlement_amount,
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Expenditure'
+          AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+         THEN COALESCE(er.expenditure_total_amount, er.total_amount, 0)
+         ELSE 0
+       END), 0) AS expenditure_amount
+     FROM expenditure_requests er
+     WHERE er.finance_request_id = ?`,
+    [financeId]
+  );
+
+  const advanceAmount = toMoney(usageRows?.[0]?.advance_amount);
+  const settlementAmount = toMoney(usageRows?.[0]?.settlement_amount);
+  const expenditureAmount = toMoney(usageRows?.[0]?.expenditure_amount);
+  const effectiveUsageAmount = settlementAmount > 0 ? settlementAmount : advanceAmount;
+
+  return {
+    advanceAmount,
+    settlementAmount,
+    expenditureAmount,
+    effectiveUsageAmount,
+  };
+};
+
+const getActiveCarryForwardTotal = async (conn, financeId, excludeTargetFiscalYear = null) => {
+  await ensureFinanceCarryForwardTable(conn);
+  const targetYear = toPositiveInt(excludeTargetFiscalYear);
+  const params = [financeId];
+  let targetSql = '';
+  if (targetYear) {
+    targetSql = ' AND target_fiscal_year <> ?';
+    params.push(targetYear);
+  }
+
+  const [rows] = await conn.query(
+    `SELECT COALESCE(SUM(carry_forward_amount), 0) AS total_amount
+       FROM finance_carry_forward_allocations
+      WHERE finance_request_id = ?
+        AND LOWER(TRIM(status)) = 'active'
+        ${targetSql}`,
+    params
+  );
+  return toMoney(rows?.[0]?.total_amount);
+};
+
 const replaceFinanceAnnexures = async (conn, financeId, annexures = []) => {
   let financeFkColumn = 'finance_id';
   try {
@@ -3793,6 +3900,8 @@ const financeModel = {
     const searchTerm = normalizeText(filters.q || filters.search);
     const fiscalYear = toPositiveInt(filters.fiscalYear || filters.fiscal_year);
 
+    await ensureFinanceCarryForwardTable(tx);
+
     const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
     const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
     const offset = (page - 1) * limit;
@@ -3811,6 +3920,13 @@ const financeModel = {
            WHERE fbb_fy.finance_id = fr.id
              AND bp_fy.fiscal_year = ?
         )
+        OR EXISTS (
+          SELECT 1
+            FROM finance_carry_forward_allocations cf_fy
+           WHERE cf_fy.finance_request_id = fr.id
+             AND cf_fy.target_fiscal_year = ?
+             AND LOWER(TRIM(cf_fy.status)) = 'active'
+        )
         OR (
           NOT EXISTS (
             SELECT 1
@@ -3823,7 +3939,7 @@ const financeModel = {
           ) = ?
         )
       )`);
-      whereParams.push(fiscalYear, fiscalYear);
+      whereParams.push(fiscalYear, fiscalYear, fiscalYear);
     }
 
     if (workflowStatus === 'all') {
@@ -4132,6 +4248,7 @@ const financeModel = {
   },
 
   async listAvailableFiscalYears({ tx = db } = {}) {
+    await ensureFinanceCarryForwardTable(tx);
     const [rows] = await tx.query(
       `SELECT DISTINCT fiscal_year
          FROM (
@@ -4153,6 +4270,12 @@ const financeModel = {
                   FROM finance_budget_breakup fbb
                  WHERE fbb.finance_id = fr.id
               )
+           UNION
+           SELECT cf.target_fiscal_year AS fiscal_year
+             FROM finance_carry_forward_allocations cf
+             JOIN finance_requests fr ON fr.id = cf.finance_request_id
+            WHERE ${FINANCE_NOT_DELETED_CONDITION_SQL}
+              AND LOWER(TRIM(cf.status)) = 'active'
          ) years
         WHERE fiscal_year IS NOT NULL
         ORDER BY fiscal_year DESC`
@@ -4161,6 +4284,181 @@ const financeModel = {
     return (rows || [])
       .map((row) => toPositiveInt(row?.fiscal_year))
       .filter(Boolean);
+  },
+
+  async getCarryForwardSummary(recordId, { tx = db } = {}) {
+    const normalizedRecordId = toPositiveInt(recordId);
+    if (!normalizedRecordId) {
+      throw new Error('Invalid finance request ID');
+    }
+
+    await ensureFinanceCarryForwardTable(tx);
+
+    const [rows] = await tx.query(
+      `SELECT
+         fr.id,
+         fr.request_date,
+         fr.created_at,
+         COALESCE(
+           NULLIF(fr.approved_total_amount, 0),
+           NULLIF(fr.total_budget, 0),
+           NULLIF(fr.proposed_amount, 0),
+           0
+         ) AS approved_amount,
+         LOWER(TRIM(COALESCE(fr.overall_status, ''))) AS overall_status,
+         LOWER(TRIM(COALESCE(fr.workflow_status, ''))) AS workflow_status,
+         LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.status')), ''))) AS workflow_state_status
+       FROM finance_requests fr
+       WHERE fr.id = ?
+       LIMIT 1`,
+      [normalizedRecordId]
+    );
+
+    const record = rows?.[0] || null;
+    if (!record) {
+      throw new Error('Finance request not found');
+    }
+
+    const approvedStatuses = new Set(['approved', 'completed']);
+    if (
+      !approvedStatuses.has(normalizeText(record.overall_status).toLowerCase()) &&
+      !approvedStatuses.has(normalizeText(record.workflow_status).toLowerCase()) &&
+      !approvedStatuses.has(normalizeText(record.workflow_state_status).toLowerCase())
+    ) {
+      throw new Error('Only approved finance requests can be carried forward');
+    }
+
+    const sourceFiscalYear = await resolveFinanceSourceFiscalYear(
+      tx,
+      normalizedRecordId,
+      record.request_date,
+      record.created_at
+    );
+    const usage = await getFinanceUsageSnapshot(tx, normalizedRecordId);
+    const activeCarryForwardAmount = await getActiveCarryForwardTotal(tx, normalizedRecordId);
+    const approvedAmount = toMoney(record.approved_amount);
+    const balanceAmount = Math.max(
+      0,
+      toMoney(approvedAmount - usage.effectiveUsageAmount - usage.expenditureAmount - activeCarryForwardAmount)
+    );
+
+    const [allocationRows] = await tx.query(
+      `SELECT
+         id,
+         source_fiscal_year,
+         target_fiscal_year,
+         carry_forward_amount,
+         used_amount,
+         remarks,
+         status,
+         created_by_user_id,
+         created_by_email,
+         created_at
+       FROM finance_carry_forward_allocations
+       WHERE finance_request_id = ?
+       ORDER BY target_fiscal_year DESC, id DESC`,
+      [normalizedRecordId]
+    );
+
+    return {
+      financeRequestId: normalizedRecordId,
+      sourceFiscalYear,
+      approvedAmount,
+      advanceAmount: usage.advanceAmount,
+      settlementAmount: usage.settlementAmount,
+      expenditureAmount: usage.expenditureAmount,
+      activeCarryForwardAmount,
+      balanceAmount,
+      allocations: (allocationRows || []).map((row) => ({
+        id: toPositiveInt(row.id),
+        sourceFiscalYear: toPositiveInt(row.source_fiscal_year),
+        targetFiscalYear: toPositiveInt(row.target_fiscal_year),
+        carryForwardAmount: toMoney(row.carry_forward_amount),
+        usedAmount: toMoney(row.used_amount),
+        remarks: normalizeText(row.remarks),
+        status: normalizeText(row.status).toLowerCase() || 'active',
+        createdByUserId: toPositiveInt(row.created_by_user_id),
+        createdByEmail: normalizeText(row.created_by_email),
+        createdAt: row.created_at || null,
+      })),
+    };
+  },
+
+  async createCarryForwardAllocation(recordId, payload = {}, actor = {}) {
+    const normalizedRecordId = toPositiveInt(recordId);
+    const targetFiscalYear = toPositiveInt(payload.targetFiscalYear || payload.target_fiscal_year);
+    const amount = toMoney(payload.amount || payload.carryForwardAmount || payload.carry_forward_amount);
+    const remarks = normalizeText(payload.remarks);
+
+    if (!normalizedRecordId) {
+      throw new Error('Invalid finance request ID');
+    }
+    if (!targetFiscalYear) {
+      throw new Error('Target fiscal year is required');
+    }
+    if (!(amount > 0)) {
+      throw new Error('Carry-forward amount must be greater than zero');
+    }
+    if (!remarks) {
+      throw new Error('Carry-forward remarks are required');
+    }
+
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      await ensureFinanceCarryForwardTable(conn);
+      const summary = await this.getCarryForwardSummary(normalizedRecordId, { tx: conn });
+
+      if (targetFiscalYear <= summary.sourceFiscalYear) {
+        throw new Error('Target fiscal year must be after the source fiscal year');
+      }
+      if (amount > summary.balanceAmount) {
+        throw new Error(
+          `Carry-forward amount ${amount.toFixed(2)} exceeds available balance ${summary.balanceAmount.toFixed(2)}`
+        );
+      }
+
+      const existingActive = summary.allocations.find(
+        (allocation) =>
+          allocation.targetFiscalYear === targetFiscalYear &&
+          allocation.status === 'active'
+      );
+      if (existingActive) {
+        throw new Error(`Carry-forward is already active for FY ${targetFiscalYear}-${String(targetFiscalYear + 1).slice(2)}`);
+      }
+
+      const [result] = await conn.query(
+        `INSERT INTO finance_carry_forward_allocations
+           (finance_request_id, source_fiscal_year, target_fiscal_year,
+            carry_forward_amount, remarks, status, created_by_user_id, created_by_email)
+         VALUES (?, ?, ?, ?, ?, 'active', ?, ?)`,
+        [
+          normalizedRecordId,
+          summary.sourceFiscalYear,
+          targetFiscalYear,
+          amount,
+          remarks,
+          toPositiveInt(actor?.id || actor?.userId),
+          normalizeText(actor?.email) || null,
+        ]
+      );
+
+      await conn.commit();
+      return {
+        id: result.insertId,
+        financeRequestId: normalizedRecordId,
+        sourceFiscalYear: summary.sourceFiscalYear,
+        targetFiscalYear,
+        carryForwardAmount: amount,
+        balanceBefore: summary.balanceAmount,
+        balanceAfter: Math.max(0, toMoney(summary.balanceAmount - amount)),
+      };
+    } catch (error) {
+      await conn.rollback();
+      throw error;
+    } finally {
+      conn.release();
+    }
   },
 
   async getFinanceOwner(recordId) {

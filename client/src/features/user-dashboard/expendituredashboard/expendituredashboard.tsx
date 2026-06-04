@@ -80,6 +80,9 @@ interface ExpenditureProposalCard {
   totalAmount: number;
   expenditureAmount: number;
   balanceAmount: number;
+  sourceFiscalYear?: number | null;
+  carryForwardAmount?: number;
+  carryForwardTargetYears?: string;
 }
 
 interface ExpenditureDashboardCardApi {
@@ -99,6 +102,12 @@ interface ExpenditureDashboardCardApi {
   expenditure_amount?: number;
   balanceamount?: number;
   balance_amount?: number;
+  sourcefiscalyear?: number;
+  source_fiscal_year?: number;
+  carryforwardamount?: number;
+  carry_forward_amount?: number;
+  carryforwardtargetyears?: string;
+  carry_forward_target_years?: string;
 }
 
 interface WorkflowRow {
@@ -1856,6 +1865,9 @@ const ExpenditureDashboard: React.FC = () => {
             card.expenditureamount ?? card.expenditure_amount ?? 0
           ),
           balanceAmount: Number(card.balanceamount ?? card.balance_amount ?? 0),
+          sourceFiscalYear: Number(card.sourcefiscalyear ?? card.source_fiscal_year) || null,
+          carryForwardAmount: Number(card.carryforwardamount ?? card.carry_forward_amount ?? 0),
+          carryForwardTargetYears: String(card.carryforwardtargetyears ?? card.carry_forward_target_years ?? ""),
         })
       );
 
@@ -2050,6 +2062,12 @@ const ExpenditureDashboard: React.FC = () => {
                 const rows = filteredCardRows[card.financeRequestId] ?? [];
                 const canAddRow = cardBalanceAmount > 0;
                 const isFullyClosed = isFinanceCardFullyClosed(rows);
+                const selectedFiscalYearStart = Number.parseInt(financialYear.split("-")[0], 10);
+                const sourceFiscalYear = Number(card.sourceFiscalYear || 0);
+                const showCarryForwardLabel =
+                  sourceFiscalYear > 0 &&
+                  selectedFiscalYearStart > 0 &&
+                  sourceFiscalYear !== selectedFiscalYearStart;
 
                 return (
                   <div
@@ -2097,6 +2115,16 @@ const ExpenditureDashboard: React.FC = () => {
                           {card.tag && (
                             <span className="expenditure-demo-trigger__meta-tag">
                               {card.tag}
+                            </span>
+                          )}
+                          {sourceFiscalYear > 0 && (
+                            <span className="expenditure-demo-trigger__meta-tag">
+                              Budget FY {formatFY(sourceFiscalYear)}
+                            </span>
+                          )}
+                          {showCarryForwardLabel && Number(card.carryForwardAmount || 0) > 0 && (
+                            <span className="expenditure-demo-trigger__meta-tag">
+                              Carry Forward {formatAmount(card.carryForwardAmount || 0)}
                             </span>
                           )}
                         </div>

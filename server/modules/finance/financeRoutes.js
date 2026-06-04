@@ -74,6 +74,8 @@ router.get('/queue/:stage', canAccessFinanceWorkflow, financeController.getFinan
 // Workflow actions
 router.patch('/:id/approval', canAccessFinanceWorkflow, financeController.approveFinanceWorkflow);
 router.patch('/:id/archive-toggle', canAccessFinanceWorkflow, financeController.toggleArchiveStatus);
+router.get('/:id/carry-forward', canAccessFinanceWorkflow, financeController.getCarryForwardSummary);
+router.post('/:id/carry-forward', canAccessFinanceWorkflow, financeController.createCarryForwardAllocation);
 router.post('/:id/resubmit', financeController.resubmitFinanceRequest);
 router.delete('/:id', canDeleteFinanceRequest, financeController.deleteFinanceRequest);
 

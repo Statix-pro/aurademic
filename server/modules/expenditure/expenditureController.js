@@ -38,6 +38,9 @@ const resolveUnplannedBudgetMeta = (source = {}) => {
   return {
     unplannedBudgetEnabled: enabled,
     unplannedBudgetAmount: enabled ? amount : null,
+    unplannedHeadOfAccount: normalizeText(source.unplanned_head_of_account) || null,
+    unplannedHeadOfAccountBudgetLineId: toPositiveInt(source.unplanned_head_of_account_budget_line_id),
+    unplannedHeadOfAccountBudgetProposalId: toPositiveInt(source.unplanned_head_of_account_budget_proposal_id),
     unplannedBudgetHead: normalizeText(source.unplanned_budget_head) || null,
     unplannedBudgetSubHead: normalizeText(source.unplanned_budget_sub_head) || null,
     unplannedBudgetDescription: normalizeText(source.unplanned_budget_description) || null,
@@ -273,6 +276,15 @@ const normalizeIncomingPayload = (payload = {}) => {
   }
   if (normalized.unplannedbudgetamount !== undefined && normalized.unplanned_budget_amount === undefined) {
     normalized.unplanned_budget_amount = normalized.unplannedbudgetamount;
+  }
+  if (normalized.unplannedheadofaccount !== undefined && normalized.unplanned_head_of_account === undefined) {
+    normalized.unplanned_head_of_account = normalized.unplannedheadofaccount;
+  }
+  if (normalized.unplannedheadofaccountbudgetlineid !== undefined && normalized.unplanned_head_of_account_budget_line_id === undefined) {
+    normalized.unplanned_head_of_account_budget_line_id = normalized.unplannedheadofaccountbudgetlineid;
+  }
+  if (normalized.unplannedheadofaccountbudgetproposalid !== undefined && normalized.unplanned_head_of_account_budget_proposal_id === undefined) {
+    normalized.unplanned_head_of_account_budget_proposal_id = normalized.unplannedheadofaccountbudgetproposalid;
   }
   if (normalized.unplannedbudgethead !== undefined && normalized.unplanned_budget_head === undefined) {
     normalized.unplanned_budget_head = normalized.unplannedbudgethead;
