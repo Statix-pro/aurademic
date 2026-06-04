@@ -518,6 +518,7 @@ const ExpenditureDashboard: React.FC = () => {
   const [financialYear, setFinancialYear] = useState<string>(getDefaultFilterFY());
   const [selectedBeneficiary, setSelectedBeneficiary] = useState<string>("all");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<StatusFilterKey>("pending");
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<"all" | "Advance" | "Expenditure" | "Settlement">("all");
   const [proposalCards, setProposalCards] = useState<ExpenditureProposalCard[]>([]);
   const [cardRows, setCardRows] = useState<Record<string, WorkflowRow[]>>({});
   const [dialogConfig, setDialogConfig] = useState<ExpenditureDialogConfig>({
@@ -700,22 +701,31 @@ const ExpenditureDashboard: React.FC = () => {
 
     searchFilteredProposalCards.forEach((card) => {
       const rows = cardRows[card.financeRequestId] ?? [];
-      next[card.financeRequestId] =
-        selectedStatusFilter === "all"
-          ? rows
-          : rows.filter((row) => matchesWorkflowRowStatusFilter(row, selectedStatusFilter));
+      next[card.financeRequestId] = rows.filter((row) => {
+        const matchesStatus =
+          selectedStatusFilter === "all"
+            ? true
+            : matchesWorkflowRowStatusFilter(row, selectedStatusFilter);
+
+        const matchesType =
+          selectedTypeFilter === "all"
+            ? true
+            : row.primaryChoice === selectedTypeFilter;
+
+        return matchesStatus && matchesType;
+      });
     });
 
     return next;
-  }, [cardRows, searchFilteredProposalCards, selectedStatusFilter]);
+  }, [cardRows, searchFilteredProposalCards, selectedStatusFilter, selectedTypeFilter]);
 
   const filteredProposalCards = useMemo(
     () =>
       searchFilteredProposalCards.filter((card) => {
-        if (selectedStatusFilter === "all") return true;
+        if (selectedStatusFilter === "all" && selectedTypeFilter === "all") return true;
         return (filteredCardRows[card.financeRequestId] ?? []).length > 0;
       }),
-    [filteredCardRows, searchFilteredProposalCards, selectedStatusFilter],
+    [filteredCardRows, searchFilteredProposalCards, selectedStatusFilter, selectedTypeFilter],
   );
 
   const stats = useMemo(() => {
@@ -739,6 +749,11 @@ const ExpenditureDashboard: React.FC = () => {
     let closedAmount = 0;
 
     beneficiaryFilteredData.forEach((item) => {
+      if (selectedTypeFilter !== "all") {
+        const itemType = normalizeModule(item.request_type);
+        if (itemType !== selectedTypeFilter) return;
+      }
+
       total++;
       totalAmount += Number(item.amount || 0);
 
@@ -775,7 +790,7 @@ const ExpenditureDashboard: React.FC = () => {
       pendingPaymentAmount,
       closedAmount,
     };
-  }, [data, selectedBeneficiary]);
+  }, [data, selectedBeneficiary, selectedTypeFilter]);
 
   const kpiCards = [
     {
@@ -813,7 +828,7 @@ const ExpenditureDashboard: React.FC = () => {
     {
       key: "pending_payment" as const,
       className: "pending-payment",
-      label: "Pending (Payment)",
+      label: "Payable",
       value: stats.pendingPayment,
       amount: stats.pendingPaymentAmount,
       icon: <CreditCard size={20} className="expenditure-stats-icon" />,
@@ -835,9 +850,15 @@ const ExpenditureDashboard: React.FC = () => {
         return false;
       }
 
-      return matchesStatusFilter(item, selectedStatusFilter);
+      const matchesStatus = matchesStatusFilter(item, selectedStatusFilter);
+      const matchesType =
+        selectedTypeFilter === "all"
+          ? true
+          : normalizeModule(item.request_type) === selectedTypeFilter;
+
+      return matchesStatus && matchesType;
     });
-  }, [data, filteredProposalCards, selectedStatusFilter]);
+  }, [data, filteredProposalCards, selectedStatusFilter, selectedTypeFilter]);
 
   const formatAmount = (amount: number) =>
     `₹${Number(amount || 0).toLocaleString("en-IN")}`;
@@ -1897,6 +1918,40 @@ const ExpenditureDashboard: React.FC = () => {
             </div>
 
             <div className="expenditure-header-right">
+              <div className="expenditure-proposal-filter-bar">
+                <button
+                  type="button"
+                  className={`expenditure-proposal-filter-btn ${selectedTypeFilter === 'all' ? 'active' : ''}`}
+                  onClick={() => setSelectedTypeFilter('all')}
+                >
+                  All
+                </button>
+
+                <button
+                  type="button"
+                  className={`expenditure-proposal-filter-btn expenditure-proposal-filter-btn--advance ${selectedTypeFilter === 'Advance' ? 'active' : ''}`}
+                  onClick={() => setSelectedTypeFilter('Advance')}
+                >
+                  A
+                </button>
+
+                <button
+                  type="button"
+                  className={`expenditure-proposal-filter-btn expenditure-proposal-filter-btn--expenditure ${selectedTypeFilter === 'Expenditure' ? 'active' : ''}`}
+                  onClick={() => setSelectedTypeFilter('Expenditure')}
+                >
+                  E
+                </button>
+
+                <button
+                  type="button"
+                  className={`expenditure-proposal-filter-btn expenditure-proposal-filter-btn--settlement ${selectedTypeFilter === 'Settlement' ? 'active' : ''}`}
+                  onClick={() => setSelectedTypeFilter('Settlement')}
+                >
+                  S
+                </button>
+              </div>
+
               <div className="expenditure-search-wrap">
                 <Search size={18} className="expenditure-search-icon" />
                 <input

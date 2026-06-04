@@ -895,7 +895,10 @@ const PayeeFormModal: React.FC<{
     };
 
     const updated = await onSave(payeeId, payload);
-    if (!updated) return;
+    if (!updated) {
+      setError('Unable to save payee details. Please check the highlighted fields and try again.');
+      return;
+    }
     const refreshed = createDraftFromPayee({ ...payload, id: payeeId });
     setPayee({ ...payload, id: payeeId });
     setDraft(refreshed);

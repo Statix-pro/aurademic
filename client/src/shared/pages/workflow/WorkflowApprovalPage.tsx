@@ -454,10 +454,18 @@ const buildUpdatedLogSubtitles = (entry: WorkflowTimelineItem) => {
 };
 
 const formatProposalRef = (record: Record<string, any>) => {
+  const fiscalYear = Number.parseInt(String(record?.fiscal_year || record?.fiscalYear || ''), 10);
   const createdAt = record?.created_at ? new Date(record.created_at) : null;
-  const year = createdAt && !Number.isNaN(createdAt.getTime())
-    ? createdAt.getFullYear()
-    : new Date().getFullYear();
+  const requestDate = record?.request_date ? new Date(record.request_date) : null;
+  const fallbackDate =
+    requestDate && !Number.isNaN(requestDate.getTime())
+      ? requestDate
+      : createdAt && !Number.isNaN(createdAt.getTime())
+        ? createdAt
+        : new Date();
+  const year = Number.isFinite(fiscalYear) && fiscalYear > 0
+    ? fiscalYear
+    : fallbackDate.getFullYear() - (fallbackDate.getMonth() < 3 ? 1 : 0);
   const id = Number(record?.id);
   if (!Number.isFinite(id)) return '-';
   return `#F-${year}-${String(id).padStart(4, '0')}`;
@@ -562,6 +570,8 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [pendingPayeesLoading, setPendingPayeesLoading] = useState<boolean>(false);
   const [pendingPayeeActingId, setPendingPayeeActingId] = useState<number | null>(null);
   const [pendingPayeeEditingId, setPendingPayeeEditingId] = useState<number | null>(null);
+  const [previewRecordId, setPreviewRecordId] = useState<number | string | null>(null);
+  const [previewIsActionablePending, setPreviewIsActionablePending] = useState<boolean>(false);
 
   const closeAlert = useCallback(() => {
     setAlertConfig((prev) => ({
@@ -1994,10 +2004,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       filtered = filtered.filter((record) => {
         const tag = getWorkflowRecordTag(record);
         const searchable = [
-          record.id,
           record.applicant_name,
           record.beneficiary_type || record.beneficiaryType,
-          record.proposal_ref,
+          record.proposal_ref || formatProposalRef(record),
           tag,
         ]
           .map((value) => String(value || '').toLowerCase())
@@ -2176,15 +2185,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
   const handlePdfPreviewClick = useCallback(
     (recordId: number | string, isActionablePending?: boolean) => {
-      navigate(getRecordRoute(recordId, 'view'), {
-        state: {
-          openPreview: true,
-          autoDownloadPdf: false,
-          isActionablePending,
-        },
-      });
+      setPreviewRecordId(recordId);
+      setPreviewIsActionablePending(Boolean(isActionablePending));
     },
-    [getRecordRoute, navigate]
+    []
   );
 
   const handlePrincipalDocumentDownload = useCallback((record: Record<string, any>) => {
@@ -2646,7 +2650,7 @@ const proposalFilteredRows = useMemo(() => {
                     const annexureUrl = getWorkflowAnnexureUrl(primaryAnnexure);
                     const annexureTitle = getWorkflowAnnexureTitle(primaryAnnexure);
                     const showWorkflowAnnexureAction =
-                      config.moduleKey === 'finance' &&
+                      (config.moduleKey === 'finance' || config.moduleKey === 'expenditure') &&
                       Boolean(annexureUrl);
                     
                     const tag = getWorkflowRecordTag(record);
@@ -3387,6 +3391,23 @@ const proposalFilteredRows = useMemo(() => {
             </div>
           )}
         </div>
+      </CustomModal>
+
+      <CustomModal
+        show={previewRecordId !== null}
+        onHide={() => setPreviewRecordId(null)}
+        title="Request Print Preview"
+        size="xl"
+        centered
+        className="pdf-popup-preview-modal"
+      >
+        {previewRecordId !== null && (
+          <iframe
+            src={`${getRecordRoute(previewRecordId, 'view')}${getRecordRoute(previewRecordId, 'view').includes('?') ? '&' : '?'}preview=true${previewIsActionablePending ? '&isActionablePending=true' : ''}`}
+            style={{ width: '100%', height: 'calc(100vh - 92px)', border: 'none' }}
+            title="Request Preview"
+          />
+        )}
       </CustomModal>
     </div>
     </>

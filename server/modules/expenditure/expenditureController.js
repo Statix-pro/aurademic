@@ -607,6 +607,7 @@ const expenditureController = {
 
       const payee = await expenditureModel.getPayeeById(id);
       return res.json({
+        success: true,
         status: 'success',
         message: 'Payee updated successfully',
         data: payee,

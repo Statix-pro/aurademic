@@ -86,8 +86,8 @@
 
 .expenditure-search-wrap {
   position: relative;
-  flex: 0 1 340px;
-  max-width: 340px;
+  flex: 0 1 200px;
+  max-width: 200px;
 }
 
 .expenditure-search-icon {
@@ -136,6 +136,56 @@
   flex-shrink: 0;
 }
 
+/* Proposal Type Filter Bar */
+.expenditure-proposal-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.expenditure-proposal-filter-btn {
+  min-width: 42px;
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid #d7dee8;
+  background: #ffffff;
+  color: #0069ab;
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0 14px;
+}
+
+.expenditure-proposal-filter-btn:hover {
+  border-color: #0069ab;
+  background: #f8fbff;
+}
+
+.expenditure-proposal-filter-btn.active {
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+  border-color: #0069ab;
+}
+
+.expenditure-proposal-filter-btn--advance.active {
+  background: #fde9ea;
+  color: #c63d4a;
+  border-color: #f2bcc2;
+}
+
+.expenditure-proposal-filter-btn--expenditure.active {
+  background: #fff4cc;
+  color: #9d7800;
+  border-color: #ecd88f;
+}
+
+.expenditure-proposal-filter-btn--settlement.active {
+  background: #e6f7ea;
+  color: #2f8a57;
+  border-color: #b9e2c6;
+}
+
 .expenditure-financial-year,
 .expenditure-beneficiary-filter {
   height: 46px;
@@ -151,8 +201,15 @@
   cursor: pointer;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
-  min-width: 160px;
   flex: 0 0 auto;
+}
+
+.expenditure-financial-year {
+  min-width: 130px;
+}
+
+.expenditure-beneficiary-filter {
+  min-width: 160px;
 }
 
 .expenditure-financial-year:focus,
@@ -1789,8 +1846,20 @@
   .expenditure-search-wrap,
   .expenditure-filter-group,
   .expenditure-financial-year,
-  .expenditure-beneficiary-filter {
+  .expenditure-beneficiary-filter,
+  .expenditure-proposal-filter-bar {
     width: 100%;
+  }
+
+  .expenditure-proposal-filter-bar {
+    justify-content: flex-start;
+    margin-bottom: 4px;
+  }
+
+  .expenditure-proposal-filter-btn {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
   }
 
   .expenditure-filter-group {

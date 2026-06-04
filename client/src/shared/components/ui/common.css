@@ -105,6 +105,32 @@
 }
 
 /* Custom Modal Overrides */
+.pdf-popup-preview-modal .modal-dialog {
+  max-width: 830px !important;
+  width: 90% !important;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.pdf-popup-preview-modal .modal-content {
+  max-height: calc(100vh - 8px);
+}
+
+.pdf-popup-preview-modal .modal-body {
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.custom-modal .modal-dialog.modal-lg {
+  max-width: 80% !important;
+  width: 80% !important;
+}
+
+.custom-modal .modal-dialog.modal-sm {
+  max-width: 400px !important;
+  width: 400px !important;
+}
+
 .custom-modal .modal-content {
   border: none;
   border-radius: var(--border-radius-lg);

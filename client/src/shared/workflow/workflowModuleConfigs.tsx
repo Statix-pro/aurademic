@@ -65,7 +65,7 @@ export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfi
     getEditRoute: (id) => `/expenditure/${id}/edit?admin=true`,
     enableSuperAdminDelete: true,
     enableLevel1RoleTabs: true,
-    enablePdfPreview: true, 
+    enablePdfPreview: false, 
     enableSuperAdminAllProposals: true,
     enableSecondaryFilter: true,
     deleteEntityLabel: 'expenditure request',
