@@ -5,6 +5,7 @@ import { Eye, Edit2, Briefcase, Clock, XCircle, CheckCircle, Archive, Search, In
 import { useNavigate } from 'react-router-dom';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import { useAuth } from '../../../contexts/AuthContext';
+import CustomModal from '../../../shared/components/ui/CustomModal';
 
 
 interface FinanceCardItem {
@@ -99,6 +100,7 @@ const FinanceCard: React.FC = () => {
   const [loadingInfoId, setLoadingInfoId] = useState<number | null>(null);
   const [showFinanceStatusDetail, setShowFinanceStatusDetail] = useState<Record<number, boolean>>({});
   const [statusUpdatesById, setStatusUpdatesById] = useState<Record<number, FinanceStatusUpdate[]>>({});
+  const [previewRecordId, setPreviewRecordId] = useState<number | null>(null);
   const navigate = useNavigate();
   const principalDocInputRef = useRef<HTMLInputElement | null>(null);
   const [principalDocTargetId, setPrincipalDocTargetId] = useState<number | null>(null);
@@ -848,12 +850,7 @@ const FinanceCard: React.FC = () => {
     })),
   ];
   const handlePdfPreviewClick = (requestId: number) => {
-    navigate(`/finance/${requestId}`, {
-      state: {
-        openPreview: true,
-        autoDownloadPdf: false,
-      },
-    });
+    setPreviewRecordId(requestId);
   };
 
   return (
@@ -1246,6 +1243,22 @@ const FinanceCard: React.FC = () => {
           </div>
         </div>
       )}
+      <CustomModal
+        show={previewRecordId !== null}
+        onHide={() => setPreviewRecordId(null)}
+        title="Request Print Preview"
+        size="xl"
+        centered
+        className="pdf-popup-preview-modal"
+      >
+        {previewRecordId !== null && (
+          <iframe
+            src={`/finance/${previewRecordId}?preview=true`}
+            style={{ width: '100%', height: 'calc(100vh - 92px)', border: 'none' }}
+            title="Request Preview"
+          />
+        )}
+      </CustomModal>
     </>
   );
 };

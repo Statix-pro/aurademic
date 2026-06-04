@@ -308,6 +308,7 @@ const normalizeBudgetRows = (rows = []) => {
       amount: toMoney(parsedAmount),
       budget_line_id: toPositiveInt(row?.budget_line_id),
       budget_proposal_id: toPositiveInt(row?.budget_proposal_id),
+      fiscal_year: toPositiveInt(row?.fiscal_year || row?.fiscalYear),
       available_amount_snapshot: hasAvailableSnapshot ? toMoney(parsedAvailableSnapshot) : null,
       sort_order: index,
     });
@@ -560,6 +561,33 @@ const WORKFLOW_STAGE_SQL_EXPR = `
     NULLIF(LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.currentStage')))), ''),
     NULLIF(LOWER(TRIM(fr.workflow_stage)), ''),
     ''
+  )
+`;
+
+const QUEUE_DISPLAY_REF_SQL_EXPR = `
+  COALESCE(
+    (
+      SELECT frr_display.request_ref
+        FROM finance_request_refs frr_display
+       WHERE frr_display.finance_request_id = fr.id
+       ORDER BY frr_display.id ASC
+       LIMIT 1
+    ),
+    CONCAT(
+      '#F-',
+      COALESCE(
+        (
+          SELECT MIN(bp_ref.fiscal_year)
+            FROM finance_budget_breakup fbb_ref
+            JOIN budget_proposals bp_ref ON bp_ref.id = fbb_ref.budget_proposal_id
+           WHERE fbb_ref.finance_id = fr.id
+        ),
+        YEAR(COALESCE(fr.request_date, fr.created_at))
+          - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+      ),
+      '-',
+      LPAD(fr.id, 4, '0')
+    )
   )
 `;
 
@@ -1363,6 +1391,7 @@ const enrichBudgetRowsWithBudgetRefs = async (
       beneficiaryValue,
       departmentId,
       beneficiaryEntityId,
+      fiscalYear: row.fiscal_year,
     });
 
     const headReservationKey =
@@ -1416,6 +1445,7 @@ const enrichBudgetRowsWithBudgetRefs = async (
           amount: toMoney(allocatedAmount),
           budget_line_id: candidateBudgetLineId,
           budget_proposal_id: toPositiveInt(match.budgetProposalId),
+          fiscal_year: toPositiveInt(match.fiscalYear),
           budget_head_id: toPositiveInt(match.budgetHeadId),
           budget_sub_head_id: toPositiveInt(match.budgetSubHeadId),
           available_amount_snapshot: remainingForLine,
@@ -1468,6 +1498,7 @@ const enrichBudgetRowsWithBudgetRefs = async (
       ...row,
       budget_line_id: selectedBudgetLineId,
       budget_proposal_id: toPositiveInt(selected.budgetProposalId),
+      fiscal_year: toPositiveInt(selected.fiscalYear),
       budget_head_id: toPositiveInt(selected.budgetHeadId),
       budget_sub_head_id: toPositiveInt(selected.budgetSubHeadId),
       available_amount_snapshot: remainingAfterLocalReservations,
@@ -1592,6 +1623,24 @@ const replaceIncomeRows = async (conn, financeId, incomeRows = []) => {
       values
     );
   }
+};
+
+const resolveReferenceFiscalYearFromBudgetRows = (budgetRows = [], requestDate = null) => {
+  const years = Array.from(
+    new Set(
+      budgetRows
+        .map((row) => toPositiveInt(row?.fiscal_year || row?.fiscalYear))
+        .filter(Boolean)
+    )
+  );
+
+  if (years.length > 0) {
+    return Math.min(...years);
+  }
+
+  const dateObj = requestDate ? new Date(requestDate) : new Date();
+  const fallbackDate = Number.isNaN(dateObj.getTime()) ? new Date() : dateObj;
+  return fallbackDate.getFullYear() - (fallbackDate.getMonth() < 3 ? 1 : 0);
 };
 
 const replaceFinanceAnnexures = async (conn, financeId, annexures = []) => {
@@ -1780,10 +1829,12 @@ const getFinanceAnnexuresByFinanceIds = async (financeIds = [], { tx = db } = {}
   }
 };
 
-const insertFinanceRequestReference = async (conn, financeId, requestDate) => {
+const insertFinanceRequestReference = async (conn, financeId, requestDate, referenceFiscalYear = null) => {
   try {
-    const dateObj = requestDate ? new Date(requestDate) : new Date();
-    const refYear = Number.isNaN(dateObj.getTime()) ? new Date().getFullYear() : dateObj.getFullYear();
+    const refYear = resolveReferenceFiscalYearFromBudgetRows(
+      [{ fiscal_year: referenceFiscalYear }],
+      requestDate
+    );
 
     const [existing] = await conn.query(
       'SELECT request_ref FROM finance_request_refs WHERE finance_request_id = ? LIMIT 1',
@@ -1800,14 +1851,22 @@ const insertFinanceRequestReference = async (conn, financeId, requestDate) => {
          last_sequence INT NOT NULL DEFAULT 0,
          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
          PRIMARY KEY (ref_year)
-       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
     );
+
+    const [[existingYearSequence]] = await conn.query(
+      `SELECT COALESCE(MAX(ref_sequence), 0) AS current_max
+         FROM finance_request_refs
+        WHERE ref_year = ?`,
+      [refYear]
+    );
+    const currentMaxSequence = Number(existingYearSequence?.current_max || 0);
 
     await conn.query(
       `INSERT INTO finance_request_ref_tracker (ref_year, last_sequence)
-       VALUES (?, 0)
-       ON DUPLICATE KEY UPDATE ref_year = VALUES(ref_year)`,
-      [refYear]
+       VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE last_sequence = GREATEST(last_sequence, VALUES(last_sequence))`,
+      [refYear, currentMaxSequence]
     );
 
     const [rows] = await conn.query(
@@ -2323,7 +2382,16 @@ const financeModel = {
       }
 
       const [result] = await connection.query('INSERT INTO finance_requests SET ?', [financeEntry]);
-      await insertFinanceRequestReference(connection, result.insertId, financeData.request_date);
+      const referenceFiscalYear = resolveReferenceFiscalYearFromBudgetRows(
+        budgetRows,
+        financeData.request_date
+      );
+      await insertFinanceRequestReference(
+        connection,
+        result.insertId,
+        financeData.request_date,
+        referenceFiscalYear
+      );
       await replaceBudgetRows(connection, result.insertId, budgetRows);
       await replaceIncomeRows(connection, result.insertId, incomeRows);
       await replaceFinanceAnnexures(connection, result.insertId, normalizedAnnexures);
@@ -3826,15 +3894,8 @@ const financeModel = {
       const searchLike = `%${searchTerm}%`;
       whereParts.push(
         `(
-          CAST(fr.id AS CHAR) LIKE ?
-          OR EXISTS (
-            SELECT 1
-              FROM finance_request_refs frr_search
-             WHERE frr_search.finance_request_id = fr.id
-               AND LOWER(COALESCE(frr_search.request_ref, '')) LIKE LOWER(?)
-          )
-          OR LOWER(CONCAT('#F-', YEAR(COALESCE(fr.request_date, fr.created_at)), '-', LPAD(fr.id, 4, '0'))) LIKE LOWER(?)
-          OR LOWER(CONCAT('F-', YEAR(COALESCE(fr.request_date, fr.created_at)), '-', LPAD(fr.id, 4, '0'))) LIKE LOWER(?)
+          LOWER(${QUEUE_DISPLAY_REF_SQL_EXPR}) LIKE LOWER(?)
+          OR LOWER(REPLACE(${QUEUE_DISPLAY_REF_SQL_EXPR}, '#', '')) LIKE LOWER(?)
           OR LOWER(COALESCE(fr.applicant_name, '')) LIKE LOWER(?)
           OR EXISTS (
             SELECT 1
@@ -3856,8 +3917,6 @@ const financeModel = {
         )`
       );
       whereParams.push(
-        searchLike,
-        searchLike,
         searchLike,
         searchLike,
         searchLike,

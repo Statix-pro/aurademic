@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Sidebar from './navbar/navbar';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import KSRCTLogo from '../../assets/images/ksrct_logo.png';
 import { useAuth } from '../../../contexts/AuthContext';
 import './MainLayout.css';
@@ -19,6 +19,17 @@ const getNameInitial = (name?: string): string => {
 const MainLayout = () => {
     const [collapsed, setCollapsed] = useState(true);
     const { user } = useAuth();
+    const location = useLocation();
+
+    const isPreviewMode = new URLSearchParams(location.search).get('preview') === 'true';
+
+    if (isPreviewMode) {
+      return (
+        <main style={{ width: '100%', height: '100vh', overflowY: 'auto', background: '#fff' }}>
+          <Outlet />
+        </main>
+      );
+    }
 
     const userInitial = getNameInitial(user?.name);
 

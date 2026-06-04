@@ -1951,6 +1951,7 @@ const FinanceApproval: React.FC = () => {
             amount: Number(row.amount || 0),
             budget_line_id: headOnlyMatch ? null : (budgetLineMetaByRow[index]?.budgetLineId || null),
             budget_proposal_id: headOnlyMatch ? null : (budgetLineMetaByRow[index]?.budgetProposalId || null),
+            fiscal_year: budgetAvailabilityFiscalYear || null,
             available_amount_snapshot: budgetLineMetaByRow[index]?.availableAmount ?? null,
           };
         }),
@@ -2719,7 +2720,16 @@ const FinanceApproval: React.FC = () => {
   }, [showPreview, applicantName, department, totalBudget]);
 
   useEffect(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const isPreviewParam = queryParams.get("preview") === "true";
     const routeState = location.state as { openPreview?: boolean; autoDownloadPdf?: boolean; isActionablePending?: boolean } | null;
+
+    if (isPreviewParam) {
+      setShowPreview(true);
+      setAutoDownloadPdf(false);
+      return;
+    }
+
     if (!routeState) {
       setShowPreview(false);
       setAutoDownloadPdf(false);
@@ -2731,7 +2741,7 @@ const FinanceApproval: React.FC = () => {
     }
 
     setAutoDownloadPdf(Boolean(routeState.autoDownloadPdf));
-  }, [location.state]);
+  }, [location.state, location.search]);
 
   useEffect(() => {
     autoDownloadTriggeredRef.current = false;
@@ -2896,10 +2906,10 @@ const FinanceApproval: React.FC = () => {
 
   return (
     <div
-      className="finance-approval-body"
+      className={`finance-approval-body${showPreview ? ' finance-approval-body--preview' : ''}`}
       onFocusCapture={handleViewModeFocusCapture}
       onKeyDownCapture={handleViewModeKeyDownCapture}
-      style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}
+      style={{ padding: '0', backgroundColor: showPreview ? '#ffffff' : '#f0f6ff', minHeight: '100vh' }}
     >
 
       {!showPreview && (
@@ -4551,6 +4561,7 @@ const FinanceApproval: React.FC = () => {
         </div>
       )}
 
+      {!showPreview && (
       <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0' }}>
         <div
           style={{
@@ -4710,6 +4721,7 @@ const FinanceApproval: React.FC = () => {
           ) : null}
         </div>
       </div>
+      )}
 
       {showPreview && (() => {
         const getSubmittedDetailUi = () => {
@@ -5247,26 +5259,28 @@ const FinanceApproval: React.FC = () => {
                 flexWrap: 'wrap',
               }}
             >
-              <button
-                type="button"
-                onClick={() => navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard')}
-                style={{
-                  backgroundColor: '#0069ab',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '10px 20px',
-                  borderRadius: '12px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  whiteSpace: 'nowrap',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
-                disabled={isLoading}
-              >
-                Back to Dashboard
-              </button>
+              {new URLSearchParams(location.search).get('preview') !== 'true' && (
+                <button
+                  type="button"
+                  onClick={() => navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard')}
+                  style={{
+                    backgroundColor: '#0069ab',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '12px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    whiteSpace: 'nowrap',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
+                  disabled={isLoading}
+                >
+                  Back to Dashboard
+                </button>
+              )}
 
               <button
                 type="button"

@@ -818,7 +818,21 @@ async function getFinanceRequestRefBase(conn, financeRequestId, requestDate) {
        fr.request_date,
        COALESCE(
          frr.request_ref,
-         CONCAT('#F-', YEAR(COALESCE(fr.request_date, fr.created_at)), '-', LPAD(fr.id, 4, '0'))
+         CONCAT(
+           '#F-',
+           COALESCE(
+             (
+               SELECT MIN(bp_ref.fiscal_year)
+                 FROM finance_budget_breakup fbb_ref
+                 JOIN budget_proposals bp_ref ON bp_ref.id = fbb_ref.budget_proposal_id
+                WHERE fbb_ref.finance_id = fr.id
+             ),
+             YEAR(COALESCE(fr.request_date, fr.created_at))
+               - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+           ),
+           '-',
+           LPAD(fr.id, 4, '0')
+         )
        ) AS request_ref
      FROM finance_requests fr
      LEFT JOIN finance_request_refs frr ON frr.finance_request_id = fr.id
@@ -832,6 +846,18 @@ async function getFinanceRequestRefBase(conn, financeRequestId, requestDate) {
     financeRequestId: normalizedFinanceRequestId,
     requestDate: row?.request_date || requestDate,
   });
+}
+
+function resolveExpenditureRefYear(financeRefBase, requestDate = null) {
+  const refYearMatch = String(financeRefBase || '').match(/^#?F-(\d{4})-/i);
+  const refYear = toPositiveInt(refYearMatch?.[1]);
+  if (refYear) {
+    return refYear;
+  }
+
+  const dateObj = requestDate ? new Date(requestDate) : new Date();
+  const fallbackDate = Number.isNaN(dateObj.getTime()) ? new Date() : dateObj;
+  return fallbackDate.getFullYear() - (fallbackDate.getMonth() < 3 ? 1 : 0);
 }
 
 function getWorkflowRowLetter(sequence) {
@@ -881,10 +907,13 @@ async function insertExpenditureRef(
   } = {},
 ) {
   try {
-    const year = requestDate
-      ? new Date(requestDate).getFullYear()
-      : new Date().getFullYear();
     const normalizedFinanceRequestId = toPositiveInt(financeRequestId);
+    const financeRefBase = await getFinanceRequestRefBase(
+      conn,
+      normalizedFinanceRequestId,
+      requestDate,
+    );
+    const year = resolveExpenditureRefYear(financeRefBase, requestDate);
     const lockName = `expenditure_ref_fy_${year}`;
     const [[{ acquired }]] = await conn.execute(
       'SELECT GET_LOCK(?, 15) AS acquired', [lockName],
@@ -896,11 +925,6 @@ async function insertExpenditureRef(
     }
 
     try {
-      const financeRefBase = await getFinanceRequestRefBase(
-        conn,
-        normalizedFinanceRequestId,
-        requestDate,
-      );
       const { suffix } = resolveExpenditureRefMeta(
         requestType,
         workflowRowHistory,
@@ -4061,6 +4085,19 @@ const WORKFLOW_STAGE_SQL_EXPR = `
   )
 `;
 
+const QUEUE_DISPLAY_REF_SQL_EXPR = `
+  COALESCE(
+    (
+      SELECT err_display.request_ref
+        FROM expenditure_request_refs err_display
+       WHERE err_display.expenditure_request_id = er.id
+       ORDER BY err_display.id ASC
+       LIMIT 1
+    ),
+    CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))
+  )
+`;
+
 const normalizeWorkflowState = (workflowState) => {
   if (!workflowState) return null;
   if (typeof workflowState === 'object' && !Array.isArray(workflowState)) {
@@ -4487,6 +4524,57 @@ export async function getLatestArchiveAction(recordId, { tx = db } = {}) {
   };
 }
 
+export async function getExpenditureBillsByExpenditureIds(expenditureIds = [], { tx = db } = {}) {
+  const normalizedIds = Array.from(
+    new Set(
+      (Array.isArray(expenditureIds) ? expenditureIds : [])
+        .map((value) => toPositiveInt(value))
+        .filter(Boolean)
+    )
+  );
+
+  if (!normalizedIds.length) {
+    return new Map();
+  }
+
+  const placeholders = normalizedIds.map(() => '?').join(', ');
+  const selectSql = `SELECT
+         id,
+         expenditure_id,
+         original_name,
+         stored_name,
+         file_path,
+         mime_type,
+         file_size,
+         sort_order,
+         created_at
+       FROM expenditure_request_bills
+       WHERE expenditure_id IN (${placeholders})
+         AND file_category = 'bill'
+       ORDER BY sort_order ASC, id ASC`;
+
+  const [rows] = await tx.query(selectSql, normalizedIds);
+
+  const resultMap = new Map();
+  for (const row of rows) {
+    const expenditureId = toPositiveInt(row.expenditure_id);
+    if (!resultMap.has(expenditureId)) {
+      resultMap.set(expenditureId, []);
+    }
+    resultMap.get(expenditureId).push(withUploadAccess({
+      id: row.id,
+      original_name: row.original_name,
+      stored_name: row.stored_name,
+      file_path: row.file_path,
+      mime_type: row.mime_type,
+      file_size: row.file_size,
+      sort_order: row.sort_order,
+      created_at: row.created_at,
+    }));
+  }
+  return resultMap;
+}
+
 export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db } = {}) {
   const normalizedStage = normalizeText(stage).toLowerCase();
   const workflowStatus = normalizeText(filters.workflowStatus).toLowerCase() || 'in_progress';
@@ -4611,15 +4699,8 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
     const searchLike = `%${searchTerm}%`;
     whereParts.push(
       `(
-        CAST(er.id AS CHAR) LIKE ?
-        OR EXISTS (
-          SELECT 1
-            FROM expenditure_request_refs err_search
-           WHERE err_search.expenditure_request_id = er.id
-             AND LOWER(COALESCE(err_search.request_ref, '')) LIKE LOWER(?)
-        )
-        OR LOWER(CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))) LIKE LOWER(?)
-        OR LOWER(CONCAT('EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))) LIKE LOWER(?)
+        LOWER(${QUEUE_DISPLAY_REF_SQL_EXPR}) LIKE LOWER(?)
+        OR LOWER(REPLACE(${QUEUE_DISPLAY_REF_SQL_EXPR}, '#', '')) LIKE LOWER(?)
         OR LOWER(COALESCE(er.applicant_name, '')) LIKE LOWER(?)
         OR EXISTS (
           SELECT 1
@@ -4642,8 +4723,6 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
       )`
     );
     whereParams.push(
-      searchLike,
-      searchLike,
       searchLike,
       searchLike,
       searchLike,
@@ -4844,11 +4923,15 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
     [statusStageScope, statusStageScope, ...whereParams, limit, offset]
   );
 
+  const expenditureIds = rows.map((row) => row.id);
+  const billsMap = await getExpenditureBillsByExpenditureIds(expenditureIds, { tx });
+
   return {
     items: rows.map((row) => ({
       ...row,
       workflow_state: normalizeWorkflowState(row.workflow_state),
       level1_route_type: resolveExpenditureLevel1RouteType(row),
+      annexures: billsMap.get(toPositiveInt(row.id)) || [],
     })),
     total: filteredTotal,
     statusCounts,

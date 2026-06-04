@@ -14,6 +14,10 @@
   margin: 0 auto;
 }
 
+.finance-approval-body--preview {
+  background-color: #ffffff;
+}
+
 /* Title Section */
 .finance-title-section {
   text-align: center;
