@@ -616,7 +616,19 @@ const ExpenditureDashboard: React.FC = () => {
   const fyOptions = useMemo(() => {
     const running = getRunningFYStart();
     const defaultStart = Number.parseInt(getDefaultFilterFY().split("-")[0], 10);
-    const starts = Array.from(new Set([defaultStart, running, running - 1])).sort(
+    const cardFiscalYears = proposalCards.flatMap((card) => {
+      const sourceYear =
+        typeof card.sourceFiscalYear === "number" && card.sourceFiscalYear > 0
+          ? [card.sourceFiscalYear]
+          : [];
+      const targetYears = String(card.carryForwardTargetYears || "")
+        .split(",")
+        .map((year) => Number.parseInt(year.trim(), 10))
+        .filter((year) => Number.isInteger(year) && year > 0);
+
+      return [...sourceYear, ...targetYears];
+    });
+    const starts = Array.from(new Set([defaultStart, running, running - 1, ...cardFiscalYears])).sort(
       (a, b) => b - a
     );
 
@@ -627,7 +639,7 @@ const ExpenditureDashboard: React.FC = () => {
         label: `FY ${value}`,
       };
     });
-  }, []);
+  }, [proposalCards]);
 
   const normalizedFinanceIdQuery = financeIdQuery.trim().toLowerCase();
 

@@ -2221,7 +2221,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     try {
       const response: any = await authenticityUtility.get(`${config.apiBasePath}/${recordId}/carry-forward`);
-      const data = response?.data || response;
+      const envelope = response?.data && typeof response.data === 'object' ? response.data : response;
+      if (envelope?.success === false || envelope?.status === 'error') {
+        throw new Error(envelope?.message || 'Unable to load carry-forward details.');
+      }
+      const data = envelope?.data || envelope;
       const sourceYear = Number(data?.sourceFiscalYear || data?.source_fiscal_year || getRunningFiscalYearStart());
       const balance = Number(data?.balanceAmount || data?.balance_amount || 0);
       setCarryForwardSourceYear(sourceYear);
@@ -3113,7 +3117,7 @@ const proposalFilteredRows = useMemo(() => {
                                   )
                                 )}
 
-                                {config.moduleKey === 'finance' && !isArchived && statusCategory === 'approved' && (
+                                {config.moduleKey === 'finance' && isSuperAdminView && !isArchived && statusCategory === 'approved' && (
                                   <button
                                     className="fw-action-btn fw-action-btn--download"
                                     title="Carry Forward Balance"

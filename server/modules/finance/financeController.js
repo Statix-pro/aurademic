@@ -315,6 +315,43 @@ const handleWorkflowError = (res, error, fallbackMessage) => {
   });
 };
 
+const handleCarryForwardError = (res, error, fallbackMessage) => {
+  const message = unwrapFinanceModelError(error?.message) || fallbackMessage;
+  const normalized = normalizeText(message).toLowerCase();
+
+  let statusCode = 500;
+  let code = 'FINANCE_CARRY_FORWARD_FAILED';
+  if (normalized.includes('not found')) {
+    statusCode = 404;
+    code = 'FINANCE_CARRY_FORWARD_NOT_FOUND';
+  } else if (
+    normalized.includes('invalid finance request id') ||
+    normalized.includes('target fiscal year is required') ||
+    normalized.includes('amount must be greater than zero') ||
+    normalized.includes('remarks are required')
+  ) {
+    statusCode = 400;
+    code = 'FINANCE_CARRY_FORWARD_INVALID_REQUEST';
+  } else if (
+    normalized.includes('only approved finance requests') ||
+    normalized.includes('target fiscal year must be after') ||
+    normalized.includes('exceeds available balance') ||
+    normalized.includes('already active')
+  ) {
+    statusCode = 409;
+    code = 'FINANCE_CARRY_FORWARD_CONFLICT';
+  } else {
+    console.error(fallbackMessage, error);
+  }
+
+  return res.status(statusCode).json({
+    success: false,
+    message,
+    error: message,
+    code,
+  });
+};
+
 const sanitizeFinanceRecordForUser = (req, financeRecord) => {
   if (!financeRecord) return financeRecord;
   
@@ -1156,6 +1193,13 @@ const financeController = {
 
   async getCarryForwardSummary(req, res) {
     try {
+      if (!isSuperAdminRequest(req)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only super admin can manage carry-forward allocations',
+        });
+      }
+
       const financeId = toPositiveInt(req.params.id);
       if (!financeId) {
         return res.status(400).json({
@@ -1170,12 +1214,19 @@ const financeController = {
         data: summary,
       });
     } catch (error) {
-      return handleWorkflowError(res, error, 'Error in getCarryForwardSummary');
+      return handleCarryForwardError(res, error, 'Error in getCarryForwardSummary');
     }
   },
 
   async createCarryForwardAllocation(req, res) {
     try {
+      if (!isSuperAdminRequest(req)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only super admin can manage carry-forward allocations',
+        });
+      }
+
       const financeId = toPositiveInt(req.params.id);
       if (!financeId) {
         return res.status(400).json({
@@ -1196,7 +1247,7 @@ const financeController = {
         data: allocation,
       });
     } catch (error) {
-      return handleWorkflowError(res, error, 'Error in createCarryForwardAllocation');
+      return handleCarryForwardError(res, error, 'Error in createCarryForwardAllocation');
     }
   },
 

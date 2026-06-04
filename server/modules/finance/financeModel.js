@@ -1691,23 +1691,29 @@ const ensureFinanceCarryForwardTable = async (conn) => {
 };
 
 const getFinanceUsageSnapshot = async (conn, financeId) => {
+  const finalizedExpenditureStatusSql = `
+    (
+      LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
+      OR LOWER(TRIM(COALESCE(er.workflow_status, ''))) IN ('approved', 'completed')
+      OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
+    )`;
   const [usageRows] = await conn.query(
     `SELECT
        COALESCE(SUM(CASE
          WHEN er.request_type = 'Advance'
-          AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+          AND ${finalizedExpenditureStatusSql}
          THEN COALESCE(er.advance_total_amount, er.total_amount, 0)
          ELSE 0
        END), 0) AS advance_amount,
        COALESCE(SUM(CASE
          WHEN er.request_type = 'Settlement'
-          AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+          AND ${finalizedExpenditureStatusSql}
          THEN COALESCE(er.settlement_total_amount, er.total_amount, 0)
          ELSE 0
        END), 0) AS settlement_amount,
        COALESCE(SUM(CASE
          WHEN er.request_type = 'Expenditure'
-          AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+          AND ${finalizedExpenditureStatusSql}
          THEN COALESCE(er.expenditure_total_amount, er.total_amount, 0)
          ELSE 0
        END), 0) AS expenditure_amount
@@ -4407,6 +4413,18 @@ const financeModel = {
     try {
       await conn.beginTransaction();
       await ensureFinanceCarryForwardTable(conn);
+      const [lockRows] = await conn.query(
+        `SELECT id
+           FROM finance_requests
+          WHERE id = ?
+          LIMIT 1
+          FOR UPDATE`,
+        [normalizedRecordId]
+      );
+      if (!lockRows.length) {
+        throw new Error('Finance request not found');
+      }
+
       const summary = await this.getCarryForwardSummary(normalizedRecordId, { tx: conn });
 
       if (targetFiscalYear <= summary.sourceFiscalYear) {

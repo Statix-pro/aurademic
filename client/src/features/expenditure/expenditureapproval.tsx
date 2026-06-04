@@ -2432,6 +2432,11 @@ const workflowRowRefFromState = (() => {
     );
     if (byHead) return byHead;
 
+    const byLabel = options.find(
+      (option) => normalizeBudgetToken(option.label) === normalizedAccount,
+    );
+    if (byLabel) return byLabel;
+
     return unplannedHeadOfAccount
       ? {
           value: `account::legacy::${unplannedHeadOfAccount}`,
@@ -2444,15 +2449,24 @@ const workflowRowRefFromState = (() => {
       : null;
   };
 
-  const getUnplannedHeadOfAccountAmount = (): number => {
+  const getUnplannedHeadOfAccountAmount = (): number | null => {
     const selected = getUnplannedHeadOfAccountSelectedOption();
+    if (
+      selected &&
+      selected.remainingAmount === undefined &&
+      selected.approvedAmount === undefined
+    ) {
+      return null;
+    }
     const amount = Number(selected?.remainingAmount ?? selected?.approvedAmount ?? 0);
     return Number.isFinite(amount) ? amount : 0;
   };
 
   const getUnplannedBudgetAmountPlaceholder = (): string => {
     const amount = getUnplannedHeadOfAccountAmount();
-    return amount > 0
+    return amount === null
+      ? "Balance unavailable"
+      : amount > 0
       ? `₹ ${amount.toLocaleString("en-IN")}`
       : "₹ 0";
   };
@@ -2522,9 +2536,9 @@ const workflowRowRefFromState = (() => {
   };
 
   const handleUnplannedHeadOfAccountChange = (selected: OptionType | null) => {
-    const head = String(selected?.budgetHead || "").trim();
+    const label = String(selected?.label || selected?.budgetHead || "").trim();
 
-    setUnplannedHeadOfAccount(head);
+    setUnplannedHeadOfAccount(label);
     setUnplannedHeadOfAccountBudgetLineId(
       parsePositiveIntLike(selected?.budgetLineId),
     );
@@ -4452,7 +4466,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         return;
       }
       const selectedHeadBalance = getUnplannedHeadOfAccountAmount();
-      if (unplannedBudgetTotal > selectedHeadBalance) {
+      if (selectedHeadBalance !== null && unplannedBudgetTotal > selectedHeadBalance) {
         showAlert(
           `Unplanned Expenditure amount cannot exceed Head of Accounts balance ₹ ${selectedHeadBalance.toLocaleString("en-IN")}.`,
           "warning",
