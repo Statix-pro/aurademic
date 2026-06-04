@@ -442,6 +442,7 @@ const PAYMENT_MODE_OPTIONS = [
   "IMPS",
   "Cheque",
   "Cash",
+  "Net Banking",
   "UPI",
   "Internal Transfer",
   "Not Applicable",
@@ -449,7 +450,7 @@ const PAYMENT_MODE_OPTIONS = [
 const PAYMENT_STATUS_OPTIONS = ["Paid", "Pending", "Processing", "Cancelled"];
 const BULK_NEFT_TEMPLATE_VERSION = "2026-04-11";
 const isCashPaymentMode = (mode: unknown) =>
-  String(mode || "").trim().toLowerCase() === "cash";
+  ["cash", "net banking"].includes(String(mode || "").trim().toLowerCase());
 
 const flattenOptions = (
   options: Array<OptionType | { label: string; options: OptionType[] }>,
@@ -982,6 +983,12 @@ const ExpenditureApproval: React.FC = () => {
     useState<boolean>(false);
   const [unplannedBudgetAmount, setUnplannedBudgetAmount] =
     useState<string>("");
+  const [unplannedHeadOfAccount, setUnplannedHeadOfAccount] =
+    useState<string>("");
+  const [unplannedHeadOfAccountBudgetLineId, setUnplannedHeadOfAccountBudgetLineId] =
+    useState<number | null>(null);
+  const [unplannedHeadOfAccountBudgetProposalId, setUnplannedHeadOfAccountBudgetProposalId] =
+    useState<number | null>(null);
   const [unplannedBudgetHead, setUnplannedBudgetHead] = useState<string>("");
   const [unplannedBudgetSubHead, setUnplannedBudgetSubHead] =
     useState<string>("");
@@ -1483,6 +1490,18 @@ const ExpenditureApproval: React.FC = () => {
             record.unplanned_budget_sub_head ??
             workflowExpenditureMeta.unplannedBudgetSubHead ??
             "";
+          const recordUnplannedHeadOfAccount =
+            record.unplanned_head_of_account ??
+            workflowExpenditureMeta.unplannedHeadOfAccount ??
+            "";
+          const recordUnplannedHeadOfAccountBudgetLineId =
+            record.unplanned_head_of_account_budget_line_id ??
+            workflowExpenditureMeta.unplannedHeadOfAccountBudgetLineId ??
+            null;
+          const recordUnplannedHeadOfAccountBudgetProposalId =
+            record.unplanned_head_of_account_budget_proposal_id ??
+            workflowExpenditureMeta.unplannedHeadOfAccountBudgetProposalId ??
+            null;
           setShowUnplannedBudget(
             Boolean(recordUnplannedBudgetEnabled || hasUnplannedBudgetAmount),
           );
@@ -1491,6 +1510,15 @@ const ExpenditureApproval: React.FC = () => {
               recordUnplannedBudgetAmount !== undefined
               ? String(recordUnplannedBudgetAmount)
               : "",
+          );
+          setUnplannedHeadOfAccount(
+            String(recordUnplannedHeadOfAccount || ""),
+          );
+          setUnplannedHeadOfAccountBudgetLineId(
+            parsePositiveIntLike(recordUnplannedHeadOfAccountBudgetLineId),
+          );
+          setUnplannedHeadOfAccountBudgetProposalId(
+            parsePositiveIntLike(recordUnplannedHeadOfAccountBudgetProposalId),
           );
           setUnplannedBudgetHead(String(recordUnplannedBudgetHead || ""));
           setUnplannedBudgetSubHead(
@@ -2360,66 +2388,98 @@ const workflowRowRefFromState = (() => {
   const getApprovedBudgetAmount = (budget: ApprovedBudgetOption | null) =>
     budget ? String(budget.totalAmount ?? "") : "";
 
-  const getUnplannedBudgetHeadOptions = (): OptionType[] => {
-    const amountByHead = new Map<string, { head: string; amount: number }>();
+  const getUnplannedHeadOfAccountOptions = (): OptionType[] =>
+    approvedBudgetOptions
+      .map((budget, index) => {
+        const head = String(budget.head || "").trim();
+        const subHead = String(budget.subHead || "").trim();
+        const lineId = parsePositiveIntLike(budget.budgetLineId);
+        if (!head || !lineId) return null;
 
-    approvedBudgetOptions.forEach((budget) => {
-      const head = String(budget.head || "").trim();
-      const amount = Number(budget.totalAmount || 0);
-      if (!head || !(amount > 0)) return;
+        const remainingAmount = Number(budget.remainingAmount || 0);
+        return {
+          value: `account::${lineId}`,
+          label: subHead ? `${head} - ${subHead}` : head,
+          budgetHead: head,
+          subHead,
+          budgetLineId: lineId,
+          budgetProposalId: budget.budgetProposalId,
+          approvedAmount: Number(budget.totalAmount || 0),
+          remainingAmount: Number.isFinite(remainingAmount)
+            ? remainingAmount
+            : 0,
+          optionIndex: index,
+        } as OptionType;
+      })
+      .filter((option): option is OptionType => Boolean(option));
 
-      const key = normalizeBudgetToken(head);
-      const current = amountByHead.get(key);
-      amountByHead.set(key, {
-        head: current?.head || head,
-        amount: (current?.amount || 0) + amount,
-      });
-    });
+  const getUnplannedHeadOfAccountSelectedOption = (): OptionType | null => {
+    const lineId = parsePositiveIntLike(unplannedHeadOfAccountBudgetLineId);
+    const normalizedAccount = normalizeBudgetToken(unplannedHeadOfAccount);
 
-    return Array.from(amountByHead.values()).map(({ head, amount }) => ({
-      value: `head::${head}`,
-      label: head,
-      budgetHead: head,
-      subHead: "",
-      approvedAmount: amount,
-    }));
+    if (!lineId && !normalizedAccount) return null;
+
+    const options = getUnplannedHeadOfAccountOptions();
+    if (lineId) {
+      const byLineId = options.find(
+        (option) => parsePositiveIntLike(option.budgetLineId) === lineId,
+      );
+      if (byLineId) return byLineId;
+    }
+
+    const byHead = options.find(
+      (option) => normalizeBudgetToken(option.budgetHead) === normalizedAccount,
+    );
+    if (byHead) return byHead;
+
+    return unplannedHeadOfAccount
+      ? {
+          value: `account::legacy::${unplannedHeadOfAccount}`,
+          label: unplannedHeadOfAccount,
+          budgetHead: unplannedHeadOfAccount,
+          subHead: "",
+          budgetLineId: lineId,
+          budgetProposalId: unplannedHeadOfAccountBudgetProposalId,
+        }
+      : null;
   };
 
-  const getUnplannedBudgetHeadAmount = (budgetHead: string | number): number => {
-    const normalizedHead = normalizeBudgetToken(budgetHead);
-    if (!normalizedHead) return 0;
-
-    return approvedBudgetOptions.reduce((sum, budget) => {
-      if (normalizeBudgetToken(budget.head) !== normalizedHead) return sum;
-      const amount = Number(budget.totalAmount || 0);
-      return sum + (Number.isFinite(amount) ? amount : 0);
-    }, 0);
+  const getUnplannedHeadOfAccountAmount = (): number => {
+    const selected = getUnplannedHeadOfAccountSelectedOption();
+    const amount = Number(selected?.remainingAmount ?? selected?.approvedAmount ?? 0);
+    return Number.isFinite(amount) ? amount : 0;
   };
 
   const getUnplannedBudgetAmountPlaceholder = (): string => {
-    const amount = getUnplannedBudgetHeadAmount(unplannedBudgetHead);
+    const amount = getUnplannedHeadOfAccountAmount();
     return amount > 0
       ? `₹ ${amount.toLocaleString("en-IN")}`
       : "₹ 0";
   };
 
+  const getUnplannedBudgetHeadOptions = (): Array<
+    OptionType | { label: string; options: OptionType[] }
+  > =>
+    BUDGET_HEAD_GROUPS.map((group) => ({
+      label: group.label,
+      options: group.options.map((head) => ({
+        value: head,
+        label: head,
+        budgetHead: head,
+      })),
+    })).filter((group) => group.options.length > 0);
+
   const getUnplannedBudgetHeadSelectedOption = (
     budgetHead: string | number,
-  ): OptionType | null => {
-    const normalizedHead = normalizeBudgetToken(budgetHead);
-    if (!normalizedHead) return null;
-
-    return getUnplannedBudgetHeadOptions().find(
-      (option) =>
-        normalizeBudgetToken(option.budgetHead) === normalizedHead &&
-        !normalizeBudgetToken(option.subHead),
-    ) || {
-      value: `head::${budgetHead}`,
-      label: String(budgetHead),
-      budgetHead: String(budgetHead),
-      subHead: "",
-    };
-  };
+  ): OptionType | null =>
+    getSelectedOption(budgetHead, getUnplannedBudgetHeadOptions()) ||
+    (budgetHead
+      ? {
+          value: String(budgetHead),
+          label: String(budgetHead),
+          budgetHead: String(budgetHead),
+        }
+      : null);
 
   const getCatalogSubHeadOptions = (budgetHead: string | number): OptionType[] =>
     (SUB_HEAD_BY_BUDGET_HEAD[String(budgetHead)] || [])
@@ -2454,13 +2514,23 @@ const workflowRowRefFromState = (() => {
 
   const handleUnplannedBudgetHeadChange = (selected: OptionType | null) => {
     const head = String(selected?.budgetHead || selected?.value || "")
-      .replace(/^head::/, "")
       .trim();
-    const subHead = String(selected?.subHead || "").trim();
 
     setUnplannedBudgetHead(head);
-    setUnplannedBudgetSubHead(subHead);
-    setUnplannedBudgetDescription(getUnplannedBudgetDescription(head, subHead));
+    setUnplannedBudgetSubHead("");
+    setUnplannedBudgetDescription(getUnplannedBudgetDescription(head, ""));
+  };
+
+  const handleUnplannedHeadOfAccountChange = (selected: OptionType | null) => {
+    const head = String(selected?.budgetHead || "").trim();
+
+    setUnplannedHeadOfAccount(head);
+    setUnplannedHeadOfAccountBudgetLineId(
+      parsePositiveIntLike(selected?.budgetLineId),
+    );
+    setUnplannedHeadOfAccountBudgetProposalId(
+      parsePositiveIntLike(selected?.budgetProposalId),
+    );
   };
 
   const handleUnplannedBudgetSubHeadChange = (selected: OptionType | null) => {
@@ -4369,12 +4439,24 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     }
 
     if (showUnplannedBudget) {
+      if (!unplannedHeadOfAccount.trim() || !unplannedHeadOfAccountBudgetLineId) {
+        showAlert("Please select Head of Accounts for Unplanned Expenditure.", "warning");
+        return;
+      }
       if (!unplannedBudgetHead.trim() || !unplannedBudgetSubHead.trim()) {
-        showAlert("Please select Unplanned Expenditure head and sub head.", "warning");
+        showAlert("Please select Unplanned Expenditure budget head and sub head.", "warning");
         return;
       }
       if (!(unplannedBudgetTotal > 0)) {
         showAlert("Please enter a valid Unplanned Expenditure amount.", "warning");
+        return;
+      }
+      const selectedHeadBalance = getUnplannedHeadOfAccountAmount();
+      if (unplannedBudgetTotal > selectedHeadBalance) {
+        showAlert(
+          `Unplanned Expenditure amount cannot exceed Head of Accounts balance ₹ ${selectedHeadBalance.toLocaleString("en-IN")}.`,
+          "warning",
+        );
         return;
       }
     }
@@ -4594,6 +4676,15 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       unplanned_budget_enabled: showUnplannedBudget,
       unplanned_budget_amount: showUnplannedBudget
         ? Number(unplannedBudgetAmount || 0)
+        : null,
+      unplanned_head_of_account: showUnplannedBudget
+        ? unplannedHeadOfAccount.trim() || null
+        : null,
+      unplanned_head_of_account_budget_line_id: showUnplannedBudget
+        ? unplannedHeadOfAccountBudgetLineId
+        : null,
+      unplanned_head_of_account_budget_proposal_id: showUnplannedBudget
+        ? unplannedHeadOfAccountBudgetProposalId
         : null,
       unplanned_budget_head: showUnplannedBudget
         ? unplannedBudgetHead.trim() || null
@@ -5028,6 +5119,9 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       setIsBudgetProposed("");
       setShowUnplannedBudget(false);
       setUnplannedBudgetAmount("");
+      setUnplannedHeadOfAccount("");
+      setUnplannedHeadOfAccountBudgetLineId(null);
+      setUnplannedHeadOfAccountBudgetProposalId(null);
       setUnplannedBudgetHead("");
       setUnplannedBudgetSubHead("");
       setUnplannedBudgetDescription("");
@@ -6215,7 +6309,18 @@ const handleBeneficiarySearch = async (query: string) => {
                   name="unplannedBudgetToggle"
                   label=""
                   checked={showUnplannedBudget}
-                  onChange={(checked) => setShowUnplannedBudget(checked)}
+                  onChange={(checked) => {
+                    setShowUnplannedBudget(checked);
+                    if (!checked) {
+                      setUnplannedHeadOfAccount("");
+                      setUnplannedHeadOfAccountBudgetLineId(null);
+                      setUnplannedHeadOfAccountBudgetProposalId(null);
+                      setUnplannedBudgetAmount("");
+                      setUnplannedBudgetHead("");
+                      setUnplannedBudgetSubHead("");
+                      setUnplannedBudgetDescription("");
+                    }
+                  }}
                 />
               </div>
 
@@ -6223,11 +6328,23 @@ const handleBeneficiarySearch = async (query: string) => {
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "minmax(220px, 1fr) minmax(220px, 1fr) minmax(140px, 180px)",
+                    gridTemplateColumns: "minmax(240px, 1.1fr) minmax(220px, 1fr) minmax(220px, 1fr) minmax(140px, 180px)",
                     gap: "12px",
-                    flex: "1 1 760px",
+                    flex: "1 1 980px",
                   }}
                 >
+                  <CustomDropdown
+                    className="mb-0"
+                    options={getUnplannedHeadOfAccountOptions()}
+                    value={getUnplannedHeadOfAccountSelectedOption()}
+                    onChange={(option) =>
+                      handleUnplannedHeadOfAccountChange(
+                        option as OptionType | null,
+                      )
+                    }
+                    filterOption={filterApprovedBudgetHeadOption}
+                    placeholder="Head of Accounts"
+                  />
                   <CustomDropdown
                     className="mb-0"
                     options={getUnplannedBudgetHeadOptions()}
@@ -6240,7 +6357,7 @@ const handleBeneficiarySearch = async (query: string) => {
                       )
                     }
                     filterOption={filterApprovedBudgetHeadOption}
-                    placeholder="Select Head"
+                    placeholder="Budget Head"
                   />
                   <CustomDropdown
                     className="mb-0"
@@ -6256,7 +6373,7 @@ const handleBeneficiarySearch = async (query: string) => {
                         option as OptionType | null,
                       )
                     }
-                    placeholder="Select Sub Head"
+                    placeholder="Budget Sub Head"
                     isDisabled={!unplannedBudgetHead}
                   />
                   <input

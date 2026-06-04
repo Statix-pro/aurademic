@@ -1154,6 +1154,52 @@ const financeController = {
     }
   },
 
+  async getCarryForwardSummary(req, res) {
+    try {
+      const financeId = toPositiveInt(req.params.id);
+      if (!financeId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid finance request ID',
+        });
+      }
+
+      const summary = await financeModel.getCarryForwardSummary(financeId);
+      return res.status(200).json({
+        success: true,
+        data: summary,
+      });
+    } catch (error) {
+      return handleWorkflowError(res, error, 'Error in getCarryForwardSummary');
+    }
+  },
+
+  async createCarryForwardAllocation(req, res) {
+    try {
+      const financeId = toPositiveInt(req.params.id);
+      if (!financeId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid finance request ID',
+        });
+      }
+
+      const allocation = await financeModel.createCarryForwardAllocation(
+        financeId,
+        req.body || {},
+        normalizeActor(req)
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: 'Carry-forward allocation created successfully',
+        data: allocation,
+      });
+    } catch (error) {
+      return handleWorkflowError(res, error, 'Error in createCarryForwardAllocation');
+    }
+  },
+
   async getFinanceTimeline(req, res) {
     try {
       const financeId = toPositiveInt(req.params.id);

@@ -93,6 +93,13 @@ const toMoney = (v) => {
 const normalizeUnplannedBudgetPayload = (payload = {}) => {
   const enabled = parseBoolean(payload?.unplanned_budget_enabled);
   const amount = enabled ? toMoney(payload?.unplanned_budget_amount) : 0;
+  const headOfAccount = enabled ? normalizeText(payload?.unplanned_head_of_account) : '';
+  const headOfAccountBudgetLineId = enabled
+    ? toPositiveInt(payload?.unplanned_head_of_account_budget_line_id)
+    : null;
+  const headOfAccountBudgetProposalId = enabled
+    ? toPositiveInt(payload?.unplanned_head_of_account_budget_proposal_id)
+    : null;
   const head = enabled ? normalizeText(payload?.unplanned_budget_head) : '';
   const subHead = enabled ? normalizeText(payload?.unplanned_budget_sub_head) : '';
   const description = enabled
@@ -102,13 +109,19 @@ const normalizeUnplannedBudgetPayload = (payload = {}) => {
   if (enabled && amount <= 0) {
     throw new Error('Please enter a valid Unplanned Expenditure amount.');
   }
+  if (enabled && (!headOfAccount || !headOfAccountBudgetLineId)) {
+    throw new Error('Please select Head of Accounts for Unplanned Expenditure.');
+  }
   if (enabled && (!head || !subHead)) {
-    throw new Error('Please select Unplanned Expenditure head and sub head.');
+    throw new Error('Please select Unplanned Expenditure budget head and sub head.');
   }
 
   return {
     enabled,
     amount,
+    headOfAccount,
+    headOfAccountBudgetLineId,
+    headOfAccountBudgetProposalId,
     head,
     subHead,
     description,
@@ -745,6 +758,25 @@ async function getFinanceRequestBudgetUsageByLine(connOrDb, {
   const lineFilterSql = normalizedBudgetLineIds.length
     ? `WHERE usage_rows.budget_line_id IN (${normalizedBudgetLineIds.map(() => '?').join(', ')})`
     : '';
+  const hasUnplannedHeadOfAccountLineColumn = await hasExpenditureRequestColumn(
+    'unplanned_head_of_account_budget_line_id',
+    { tx: source },
+  );
+  const unplannedUsageUnionSql = hasUnplannedHeadOfAccountLineColumn
+    ? `
+       UNION ALL
+
+       SELECT
+         er.unplanned_head_of_account_budget_line_id AS budget_line_id,
+         er.unplanned_budget_amount AS amount_delta
+       FROM expenditure_requests er
+       WHERE er.finance_request_id = ?
+         AND (? IS NULL OR er.id <> ?)
+         AND er.unplanned_budget_enabled = 1
+         AND er.unplanned_head_of_account_budget_line_id IS NOT NULL
+         AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
+`
+    : '';
 
   const [rows] = await source.execute(
     `SELECT
@@ -771,12 +803,35 @@ async function getFinanceRequestBudgetUsageByLine(connOrDb, {
          AND (? IS NULL OR er.id <> ?)
          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
 
+       ${unplannedUsageUnionSql}
+
     ) AS usage_rows
      ${lineFilterSql}
      GROUP BY usage_rows.budget_line_id`,
     normalizedBudgetLineIds.length
-      ? [financeId, excludedRequestId, excludedRequestId, financeId, excludedRequestId, excludedRequestId, ...normalizedBudgetLineIds]
-      : [financeId, excludedRequestId, excludedRequestId, financeId, excludedRequestId, excludedRequestId],
+      ? [
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+          ...(hasUnplannedHeadOfAccountLineColumn
+            ? [financeId, excludedRequestId, excludedRequestId]
+            : []),
+          ...normalizedBudgetLineIds,
+        ]
+      : [
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+          ...(hasUnplannedHeadOfAccountLineColumn
+            ? [financeId, excludedRequestId, excludedRequestId]
+            : []),
+        ],
   );
 
   return new Map(
@@ -1459,6 +1514,31 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
     return { cards: [], requests: [] };
   }
 
+  await db.execute(
+    `CREATE TABLE IF NOT EXISTS finance_carry_forward_allocations (
+      id INT NOT NULL AUTO_INCREMENT,
+      finance_request_id INT NOT NULL,
+      source_fiscal_year INT NOT NULL,
+      target_fiscal_year INT NOT NULL,
+      carry_forward_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+      used_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+      remarks TEXT NULL,
+      status VARCHAR(30) NOT NULL DEFAULT 'active',
+      created_by_user_id INT NULL,
+      created_by_email VARCHAR(255) NULL,
+      created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_finance_cf_active_target (finance_request_id, target_fiscal_year, status),
+      KEY idx_finance_cf_finance (finance_request_id),
+      KEY idx_finance_cf_source_fy (source_fiscal_year),
+      KEY idx_finance_cf_target_fy (target_fiscal_year),
+      CONSTRAINT fk_finance_cf_request
+        FOREIGN KEY (finance_request_id) REFERENCES finance_requests(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  );
+
   const fyStart = toPositiveInt(fiscalYear);
   const financeParams = [uid];
   const expenditureParams = [uid];
@@ -1468,9 +1548,36 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
   if (fyStart) {
     const fyFrom = `${fyStart}-04-01`;
     const fyTo = `${fyStart + 1}-04-01`;
-    financeFySql = ' AND fr.request_date >= ? AND fr.request_date < ?';
+    financeFySql = ` AND (
+      COALESCE(
+        (
+          SELECT MIN(bp_card.fiscal_year)
+            FROM finance_budget_breakup fbb_card
+            JOIN budget_proposals bp_card ON bp_card.id = fbb_card.budget_proposal_id
+           WHERE fbb_card.finance_id = fr.id
+        ),
+        YEAR(COALESCE(fr.request_date, fr.created_at))
+          - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+      ) = ?
+      OR EXISTS (
+        SELECT 1
+          FROM finance_carry_forward_allocations cf_card
+         WHERE cf_card.finance_request_id = fr.id
+           AND cf_card.target_fiscal_year = ?
+           AND LOWER(TRIM(cf_card.status)) = 'active'
+      )
+      OR EXISTS (
+        SELECT 1
+          FROM expenditure_requests er_fy
+         WHERE er_fy.finance_request_id = fr.id
+           AND er_fy.created_by = ?
+           AND LOWER(TRIM(COALESCE(er_fy.overall_status, 'pending'))) <> 'deleted'
+           AND er_fy.request_date >= ?
+           AND er_fy.request_date < ?
+      )
+    )`;
     expenditureFySql = ' AND er.request_date >= ? AND er.request_date < ?';
-    financeParams.push(fyFrom, fyTo);
+    financeParams.push(fyStart, fyStart, uid, fyFrom, fyTo);
     expenditureParams.push(fyFrom, fyTo);
   }
 
@@ -1498,6 +1605,29 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
          NULLIF(fr.proposed_amount, 0),
          0
        ) AS approved_amount,
+       COALESCE(
+         (
+           SELECT MIN(bp_card_label.fiscal_year)
+             FROM finance_budget_breakup fbb_card_label
+             JOIN budget_proposals bp_card_label ON bp_card_label.id = fbb_card_label.budget_proposal_id
+            WHERE fbb_card_label.finance_id = fr.id
+         ),
+         YEAR(COALESCE(fr.request_date, fr.created_at))
+           - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+       ) AS source_fiscal_year,
+       (
+         SELECT COALESCE(SUM(cf_card_label.carry_forward_amount), 0)
+           FROM finance_carry_forward_allocations cf_card_label
+          WHERE cf_card_label.finance_request_id = fr.id
+            AND LOWER(TRIM(cf_card_label.status)) = 'active'
+            ${fyStart ? 'AND cf_card_label.target_fiscal_year = ?' : ''}
+       ) AS carry_forward_amount,
+       (
+         SELECT GROUP_CONCAT(DISTINCT cf_card_targets.target_fiscal_year ORDER BY cf_card_targets.target_fiscal_year ASC)
+           FROM finance_carry_forward_allocations cf_card_targets
+          WHERE cf_card_targets.finance_request_id = fr.id
+            AND LOWER(TRIM(cf_card_targets.status)) = 'active'
+       ) AS carry_forward_target_years,
        COALESCE(SUM(
          CASE
            WHEN er.request_type = 'Advance'
@@ -1541,9 +1671,12 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        applicant_name,
        designation,
        department,
-       approved_amount
+       approved_amount,
+       source_fiscal_year,
+       carry_forward_amount,
+       carry_forward_target_years
      ORDER BY fr.request_date DESC, fr.id DESC`,
-    financeParams,
+    fyStart ? [fyStart, ...financeParams] : financeParams,
   );
 
   const [requestRows] = await db.execute(
@@ -1630,6 +1763,9 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
         beneficiary_name: normalizeText(row.beneficiary_name),
         finance_tag: normalizeText(row.finance_tag),
         approved_amount: approvedAmount,
+        source_fiscal_year: toPositiveInt(row.source_fiscal_year),
+        carry_forward_amount: toMoney(row.carry_forward_amount),
+        carry_forward_target_years: normalizeText(row.carry_forward_target_years),
         advance_amount: advanceAmount,
         expenditure_amount: expenditureAmount,
         settlement_amount: settlementAmount,
@@ -1846,6 +1982,9 @@ const EXPENDITURE_SELECT = `
     er.is_budget_proposed,
     er.unplanned_budget_enabled,
     er.unplanned_budget_amount,
+    er.unplanned_head_of_account,
+    er.unplanned_head_of_account_budget_line_id,
+    er.unplanned_head_of_account_budget_proposal_id,
     er.unplanned_budget_head,
     er.unplanned_budget_sub_head,
     er.unplanned_budget_description,
@@ -2232,6 +2371,9 @@ export async function createExpenditure(data, userId) {
     request_type: 'Advance',
     unplanned_budget_enabled: parseBoolean(data.unplanned_budget_enabled),
     unplanned_budget_amount: data.unplanned_budget_amount ?? null,
+    unplanned_head_of_account: data.unplanned_head_of_account ?? null,
+    unplanned_head_of_account_budget_line_id: data.unplanned_head_of_account_budget_line_id ?? null,
+    unplanned_head_of_account_budget_proposal_id: data.unplanned_head_of_account_budget_proposal_id ?? null,
     unplanned_budget_head: data.unplanned_budget_head ?? null,
     unplanned_budget_sub_head: data.unplanned_budget_sub_head ?? null,
     unplanned_budget_description: data.unplanned_budget_description ?? null,
@@ -2637,11 +2779,17 @@ async function upsertBulkNeftFile(conn, expenditureId, file = null, templateVers
 function collectUsageRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows } = {}) {
   const usageByLine = new Map();
 
-  const addUsage = (budgetLineId, amount) => {
+  const addUsage = (budgetLineId, amount, extra = {}) => {
     const lineId = toPositiveInt(budgetLineId);
     const normalizedAmount = toMoney(amount);
     if (!lineId || normalizedAmount <= 0) return;
-    usageByLine.set(lineId, toMoney((usageByLine.get(lineId) || 0) + normalizedAmount));
+    const current = usageByLine.get(lineId) || { budgetLineId: lineId, amount: 0 };
+    usageByLine.set(lineId, {
+      ...current,
+      ...extra,
+      budgetLineId: lineId,
+      amount: toMoney((current.amount || 0) + normalizedAmount),
+    });
   };
 
   if (requestType === 'Advance') {
@@ -2658,7 +2806,23 @@ function collectUsageRowsForRequestType(requestType, { advanceRows, settlementRo
     });
   }
 
-  return [...usageByLine.entries()].map(([budgetLineId, amount]) => ({ budgetLineId, amount }));
+  return [...usageByLine.values()];
+}
+
+function addUnplannedUsageRow(usageRows = [], normalizedUnplanned = {}) {
+  if (!normalizedUnplanned?.enabled) return usageRows;
+
+  const budgetLineId = toPositiveInt(normalizedUnplanned.headOfAccountBudgetLineId);
+  const amount = toMoney(normalizedUnplanned.amount);
+  if (!budgetLineId || amount <= 0) return usageRows;
+
+  usageRows.push({
+    budgetLineId,
+    amount,
+    isUnplanned: true,
+    direction: -1,
+  });
+  return usageRows;
 }
 
 function getAmountForWorkflowRow(requestType, row = {}) {
@@ -2964,16 +3128,28 @@ async function getRemainingBudgetByLine(conn, financeRequestId, budgetLineIds = 
 
 function buildBudgetSnapshotsByLine(requestType, usageRows = [], remainingByLineId = new Map()) {
   const snapshots = new Map();
-  const direction = requestType === 'Settlement' ? 0 : -1;
+  const defaultDirection = requestType === 'Settlement' ? 0 : -1;
+  const deltasByLine = new Map();
 
   for (const usageRow of usageRows) {
     const budgetLineId = toPositiveInt(usageRow.budgetLineId);
     const amount = toMoney(usageRow.amount);
+    const direction = Number.isFinite(Number(usageRow.direction))
+      ? Number(usageRow.direction)
+      : defaultDirection;
+    if (!budgetLineId || amount <= 0) continue;
+    deltasByLine.set(
+      budgetLineId,
+      toMoney((deltasByLine.get(budgetLineId) || 0) + (direction * amount)),
+    );
+  }
+
+  for (const [budgetLineId, amountDelta] of deltasByLine.entries()) {
     const budgetState = remainingByLineId.get(budgetLineId);
     if (!budgetLineId || !budgetState) continue;
 
     const availableBefore = toMoney(budgetState.remainingAmount);
-    const remainingAfter = toMoney(Math.max(0, availableBefore + (direction * amount)));
+    const remainingAfter = toMoney(Math.max(0, availableBefore + amountDelta));
 
     snapshots.set(budgetLineId, {
       budgetAmount: availableBefore,
@@ -3074,12 +3250,15 @@ const incomeRows = Array.isArray(data.income_rows)
     });
     const workflowRowIdentity = resolveWorkflowRowIdentifiers(data);
     const sourceRequestId = toPositiveInt(data.source_request_id || data.sourceRequestId);
-    const usageRows = collectUsageRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows });
 
     const advanceTotal = advanceRows.reduce((sum, row) => sum + toMoney(row.advance || row.advance_amount), 0);
     const settlementTotal = settlementRows.reduce((sum, row) => sum + toMoney(row.settlement || row.settlement_amount), 0);
     const expenditureTotal = expenditureRows.reduce((sum, row) => sum + toMoney(row.autoSum || row.expenditure || row.auto_sum_amount), 0);
     const normalizedUnplanned = normalizeUnplannedBudgetPayload(data);
+    const usageRows = addUnplannedUsageRow(
+      collectUsageRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows }),
+      normalizedUnplanned,
+    );
     const activeRequestTotal = toMoney(
       (requestType === 'Advance'
         ? advanceTotal
@@ -3113,7 +3292,8 @@ const incomeRows = Array.isArray(data.income_rows)
 
     if (requestType === 'Expenditure') {
       await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows);
-    } else if (usageRows.length) {
+    }
+    if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,
         financeRequestId,
@@ -3128,7 +3308,7 @@ const incomeRows = Array.isArray(data.income_rows)
         if (!lineId || !remainingByLineId.has(lineId)) {
           throw new Error(`Budget line ${lineId || 'unknown'} is not linked to this finance request`);
         }
-        if (requestType !== 'Settlement' && requestedAmount > remaining) {
+        if ((requestType !== 'Settlement' || usageRow.isUnplanned) && requestedAmount > remaining) {
           throw new Error(
             `Requested amount ${requestedAmount.toFixed(2)} exceeds remaining budget ${remaining.toFixed(2)} for line ${lineId}`,
           );
@@ -3167,6 +3347,9 @@ const incomeRows = Array.isArray(data.income_rows)
       balance_amount: moneyOrNull(data.balance_amount),
       unplanned_budget_enabled: normalizedUnplanned.enabled ? 1 : 0,
       unplanned_budget_amount: normalizedUnplanned.enabled ? normalizedUnplanned.amount : null,
+      unplanned_head_of_account: normalizedUnplanned.enabled ? normalizedUnplanned.headOfAccount : null,
+      unplanned_head_of_account_budget_line_id: normalizedUnplanned.enabled ? normalizedUnplanned.headOfAccountBudgetLineId : null,
+      unplanned_head_of_account_budget_proposal_id: normalizedUnplanned.enabled ? normalizedUnplanned.headOfAccountBudgetProposalId : null,
       unplanned_budget_head: normalizedUnplanned.enabled ? normalizedUnplanned.head : null,
       unplanned_budget_sub_head: normalizedUnplanned.enabled ? normalizedUnplanned.subHead : null,
       unplanned_budget_description: normalizedUnplanned.enabled ? normalizedUnplanned.description : null,
@@ -3205,6 +3388,12 @@ const incomeRows = Array.isArray(data.income_rows)
 
     const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', { tx: conn });
     const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', { tx: conn });
+    const hasUnplannedHeadOfAccountColumn = await hasExpenditureRequestColumn('unplanned_head_of_account', { tx: conn });
+    const hasUnplannedHeadOfAccountBudgetLineIdColumn = await hasExpenditureRequestColumn('unplanned_head_of_account_budget_line_id', { tx: conn });
+    const hasUnplannedHeadOfAccountBudgetProposalIdColumn = await hasExpenditureRequestColumn('unplanned_head_of_account_budget_proposal_id', { tx: conn });
+    if (!hasUnplannedHeadOfAccountColumn) delete entry.unplanned_head_of_account;
+    if (!hasUnplannedHeadOfAccountBudgetLineIdColumn) delete entry.unplanned_head_of_account_budget_line_id;
+    if (!hasUnplannedHeadOfAccountBudgetProposalIdColumn) delete entry.unplanned_head_of_account_budget_proposal_id;
     if (hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn) {
       // NEW: resolve and attach catalog IDs (Phase 2 of catalog ref hardening).
       // LEGACY: nulls when the catalog has no matching name.
@@ -3386,11 +3575,14 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
 
     const workflowRowIdentity = resolveWorkflowRowIdentifiers(data);
     const sourceRequestId = toPositiveInt(data.source_request_id || data.sourceRequestId);
-    const usageRows = collectUsageRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows });
     const advanceTotal = advanceRows.reduce((sum, row) => sum + toMoney(row.advance || row.advance_amount), 0);
     const settlementTotal = settlementRows.reduce((sum, row) => sum + toMoney(row.settlement || row.settlement_amount), 0);
     const expenditureTotal = expenditureRows.reduce((sum, row) => sum + toMoney(row.autoSum || row.expenditure || row.auto_sum_amount), 0);
     const normalizedUnplanned = normalizeUnplannedBudgetPayload(data);
+    const usageRows = addUnplannedUsageRow(
+      collectUsageRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows }),
+      normalizedUnplanned,
+    );
     const activeRequestTotal = toMoney(
       (requestType === 'Advance'
         ? advanceTotal
@@ -3453,7 +3645,8 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows, {
         excludeExpenditureId: normalizedExpenditureId,
       });
-    } else if (usageRows.length) {
+    }
+    if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,
         financeRequestId,
@@ -3469,7 +3662,7 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
         if (!lineId || !remainingByLineId.has(lineId)) {
           throw new Error(`Budget line ${lineId || 'unknown'} is not linked to this finance request`);
         }
-        if (requestType !== 'Settlement' && requestedAmount > remaining) {
+        if ((requestType !== 'Settlement' || usageRow.isUnplanned) && requestedAmount > remaining) {
           throw new Error(
             `Requested amount ${requestedAmount.toFixed(2)} exceeds remaining budget ${remaining.toFixed(2)} for line ${lineId}`,
           );
@@ -3512,6 +3705,9 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       balance_amount: moneyOrNull(data.balance_amount),
       unplanned_budget_enabled: normalizedUnplanned.enabled ? 1 : 0,
       unplanned_budget_amount: normalizedUnplanned.enabled ? normalizedUnplanned.amount : null,
+      unplanned_head_of_account: normalizedUnplanned.enabled ? normalizedUnplanned.headOfAccount : null,
+      unplanned_head_of_account_budget_line_id: normalizedUnplanned.enabled ? normalizedUnplanned.headOfAccountBudgetLineId : null,
+      unplanned_head_of_account_budget_proposal_id: normalizedUnplanned.enabled ? normalizedUnplanned.headOfAccountBudgetProposalId : null,
       unplanned_budget_head: normalizedUnplanned.enabled ? normalizedUnplanned.head : null,
       unplanned_budget_sub_head: normalizedUnplanned.enabled ? normalizedUnplanned.subHead : null,
       unplanned_budget_description: normalizedUnplanned.enabled ? normalizedUnplanned.description : null,
@@ -3538,6 +3734,12 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
 
     const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', { tx: conn });
     const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', { tx: conn });
+    const hasUnplannedHeadOfAccountColumn = await hasExpenditureRequestColumn('unplanned_head_of_account', { tx: conn });
+    const hasUnplannedHeadOfAccountBudgetLineIdColumn = await hasExpenditureRequestColumn('unplanned_head_of_account_budget_line_id', { tx: conn });
+    const hasUnplannedHeadOfAccountBudgetProposalIdColumn = await hasExpenditureRequestColumn('unplanned_head_of_account_budget_proposal_id', { tx: conn });
+    if (!hasUnplannedHeadOfAccountColumn) delete updatedEntry.unplanned_head_of_account;
+    if (!hasUnplannedHeadOfAccountBudgetLineIdColumn) delete updatedEntry.unplanned_head_of_account_budget_line_id;
+    if (!hasUnplannedHeadOfAccountBudgetProposalIdColumn) delete updatedEntry.unplanned_head_of_account_budget_proposal_id;
     if (hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn) {
       const headerIds = await resolvePrimaryHeadIds(
         conn,
@@ -3552,6 +3754,9 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       'primary_head_id',
       'event_sub_head_id',
       'unplanned_budget_amount',
+      'unplanned_head_of_account',
+      'unplanned_head_of_account_budget_line_id',
+      'unplanned_head_of_account_budget_proposal_id',
       'unplanned_budget_head',
       'unplanned_budget_sub_head',
       'unplanned_budget_description',
