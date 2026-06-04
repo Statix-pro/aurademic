@@ -268,7 +268,15 @@ const normalizeApprovedBudgetOption = (
   if (!head || !subHead) return null;
 
   return {
-    budgetLineId: Number(row.budgetLineId ?? row.budget_line_id) || null,
+    budgetLineId:
+      Number(
+        row.budgetLineId ??
+        row.budget_line_id ??
+        row.id ??
+        row.finance_budget_breakup_id ??
+        row.financeBudgetBreakupId ??
+        row.breakup_id,
+      ) || null,
     budgetProposalId:
       Number(row.budgetProposalId ?? row.budget_proposal_id) || null,
     financeRequestRef: String(
@@ -319,6 +327,16 @@ interface ExpenditureFormRow {
   autoSum: string;
   budgetLineId?: number | null;
   budgetProposalId?: number | null;
+}
+interface UnplannedBudgetRow {
+  id: string;
+  headOfAccount: string;
+  headOfAccountBudgetLineId?: number | null;
+  headOfAccountBudgetProposalId?: number | null;
+  budgetHead: string;
+  subHead: string;
+  amount: string;
+  description: string;
 }
 interface BudgetHeadGroup {
   label: string;
@@ -551,8 +569,8 @@ const hasReachedPostDofStage = (
     (state && typeof state === "object"
       ? (state as Record<string, unknown>).currentStage
       : "") ||
-      record?.workflow_stage ||
-      "",
+    record?.workflow_stage ||
+    "",
   )
     .trim()
     .toLowerCase();
@@ -659,8 +677,8 @@ const BUDGET_SELECT_STYLES = {
 const createIncomeRow = (): IncomeRow => ({
   id:
     typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
   incomeSource: "",
   contribution: "",
   amount: "",
@@ -671,8 +689,8 @@ const createIncomeRow = (): IncomeRow => ({
 const createPayeeRow = (): PayeeRow => ({
   id:
     typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
   payeeId: null,
   approvalStatus: "",
   payeeName: "",
@@ -793,6 +811,17 @@ const createExpenditureRow = (): ExpenditureFormRow => ({
   autoSum: "",
   budgetLineId: null,
   budgetProposalId: null,
+});
+
+const createUnplannedBudgetRow = (): UnplannedBudgetRow => ({
+  id: `${Date.now()}-${Math.random().toString(16).slice(2)}-u`,
+  headOfAccount: "",
+  headOfAccountBudgetLineId: null,
+  headOfAccountBudgetProposalId: null,
+  budgetHead: "",
+  subHead: "",
+  amount: "",
+  description: "",
 });
 
 const mapFinanceBeneficiaryTypeToExpenditureCategory = (
@@ -981,19 +1010,9 @@ const ExpenditureApproval: React.FC = () => {
   ]);
   const [showUnplannedBudget, setShowUnplannedBudget] =
     useState<boolean>(false);
-  const [unplannedBudgetAmount, setUnplannedBudgetAmount] =
-    useState<string>("");
-  const [unplannedHeadOfAccount, setUnplannedHeadOfAccount] =
-    useState<string>("");
-  const [unplannedHeadOfAccountBudgetLineId, setUnplannedHeadOfAccountBudgetLineId] =
-    useState<number | null>(null);
-  const [unplannedHeadOfAccountBudgetProposalId, setUnplannedHeadOfAccountBudgetProposalId] =
-    useState<number | null>(null);
-  const [unplannedBudgetHead, setUnplannedBudgetHead] = useState<string>("");
-  const [unplannedBudgetSubHead, setUnplannedBudgetSubHead] =
-    useState<string>("");
-  const [unplannedBudgetDescription, setUnplannedBudgetDescription] =
-    useState<string>("");
+  const [unplannedRows, setUnplannedRows] = useState<UnplannedBudgetRow[]>([
+    createUnplannedBudgetRow(),
+  ]);
   const [showIncomeSection, setShowIncomeSection] = useState<boolean>(false);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([
     createIncomeRow(),
@@ -1053,8 +1072,8 @@ const ExpenditureApproval: React.FC = () => {
   );
   const canEditPaymentStatus = Boolean(
     submittedRequestIdFromState &&
-      isReadOnlyView &&
-      !isAdminWorkflowContext &&
+    isReadOnlyView &&
+    !isAdminWorkflowContext &&
     isFinalApprovedWorkflow,
   );
   const componentRef = useRef<HTMLDivElement>(null);
@@ -1113,6 +1132,21 @@ const ExpenditureApproval: React.FC = () => {
   const payeeLookupTimeoutRef = useRef<number | null>(null);
   const payeeLookupRequestRef = useRef(0);
   const normalizeText = (value: unknown): string => String(value ?? "").trim();
+  const firstUnplannedRow: UnplannedBudgetRow = unplannedRows[0] || {
+    id: "",
+    headOfAccount: "",
+    headOfAccountBudgetLineId: null,
+    headOfAccountBudgetProposalId: null,
+    budgetHead: "",
+    subHead: "",
+    amount: "",
+    description: "",
+  };
+  const unplannedHeadOfAccount = firstUnplannedRow.headOfAccount;
+  const unplannedHeadOfAccountBudgetLineId =
+    firstUnplannedRow.headOfAccountBudgetLineId ?? null;
+  const unplannedHeadOfAccountBudgetProposalId =
+    firstUnplannedRow.headOfAccountBudgetProposalId ?? null;
   const [expenditureSubRows, setExpenditureSubRows] = useState<
     ExpenditureFormRow[]
   >([createExpenditureRow()]);
@@ -1187,8 +1221,8 @@ const ExpenditureApproval: React.FC = () => {
         setFinanceApprovedAmount(
           Number(
             financeContext.approved_amount ||
-              financeApprovedAmountFromState ||
-              0,
+            financeApprovedAmountFromState ||
+            0,
           ),
         );
         setEmployeeId(financeContext.employee_id ?? null);
@@ -1331,17 +1365,17 @@ const ExpenditureApproval: React.FC = () => {
         })();
         const workflowStatus = String(
           workflowState?.status ||
-            workflowState?.lastDecision ||
-            record.workflow_status ||
-            record.overall_status ||
-            "",
+          workflowState?.lastDecision ||
+          record.workflow_status ||
+          record.overall_status ||
+          "",
         ).toLowerCase();
         const currentStage = String(
           workflowState?.currentStage ||
-            (workflowState as Record<string, unknown> | null)?.stage ||
-            record.workflow_stage ||
-            record.current_stage ||
-            "",
+          (workflowState as Record<string, unknown> | null)?.stage ||
+          record.workflow_stage ||
+          record.current_stage ||
+          "",
         )
           .trim()
           .toLowerCase();
@@ -1356,41 +1390,41 @@ const ExpenditureApproval: React.FC = () => {
 
         const mapAdvanceRows = Array.isArray(record.advance_rows)
           ? record.advance_rows.map((row: any, index: number) => ({
-              id: toRowId("advance", index),
-              budgetHead: String(row?.budget_head || ""),
-              subHead: String(row?.sub_head || ""),
-              budget: String(row?.budget_amount ?? ""),
-              preAdvance: String(row?.pre_advance_amount ?? ""),
-              advance: String(row?.advance_amount ?? ""),
-              budgetLineId: row?.budget_line_id ?? null,
-              budgetProposalId: row?.budget_proposal_id ?? null,
-            }))
+            id: toRowId("advance", index),
+            budgetHead: String(row?.budget_head || ""),
+            subHead: String(row?.sub_head || ""),
+            budget: String(row?.budget_amount ?? ""),
+            preAdvance: String(row?.pre_advance_amount ?? ""),
+            advance: String(row?.advance_amount ?? ""),
+            budgetLineId: row?.budget_line_id ?? null,
+            budgetProposalId: row?.budget_proposal_id ?? null,
+          }))
           : [];
 
         const mapSettlementRows = Array.isArray(record.settlement_rows)
           ? record.settlement_rows.map((row: any, index: number) => ({
-              id: toRowId("settlement", index),
-              budgetHead: String(row?.budget_head || ""),
-              subHead: String(row?.sub_head || ""),
-              budget: String(row?.budget_amount ?? ""),
-              advance: String(row?.advance_amount ?? ""),
-              settlement: String(row?.settlement_amount ?? ""),
-              budgetLineId: row?.budget_line_id ?? null,
-              budgetProposalId: row?.budget_proposal_id ?? null,
-            }))
+            id: toRowId("settlement", index),
+            budgetHead: String(row?.budget_head || ""),
+            subHead: String(row?.sub_head || ""),
+            budget: String(row?.budget_amount ?? ""),
+            advance: String(row?.advance_amount ?? ""),
+            settlement: String(row?.settlement_amount ?? ""),
+            budgetLineId: row?.budget_line_id ?? null,
+            budgetProposalId: row?.budget_proposal_id ?? null,
+          }))
           : [];
 
         const mapExpenditureRows = Array.isArray(record.expenditure_rows)
           ? record.expenditure_rows.map((row: any, index: number) => ({
-              id: toRowId("expenditure", index),
-              budgetHead: String(row?.budget_head || ""),
-              subHead: String(row?.sub_head || ""),
-              budget: String(row?.budget_amount ?? ""),
-              expenditure: String(row?.expenditure_input ?? ""),
-              autoSum: String(row?.auto_sum_amount ?? ""),
-              budgetLineId: row?.budget_line_id ?? null,
-              budgetProposalId: row?.budget_proposal_id ?? null,
-            }))
+            id: toRowId("expenditure", index),
+            budgetHead: String(row?.budget_head || ""),
+            subHead: String(row?.sub_head || ""),
+            budget: String(row?.budget_amount ?? ""),
+            expenditure: String(row?.expenditure_input ?? ""),
+            autoSum: String(row?.auto_sum_amount ?? ""),
+            budgetLineId: row?.budget_line_id ?? null,
+            budgetProposalId: row?.budget_proposal_id ?? null,
+          }))
           : [];
         setSettlementRemarks(String(record.settlement_remarks || ""));
         setExpenditureRemarks(String(record.expenditure_remarks || ""));
@@ -1398,39 +1432,39 @@ const ExpenditureApproval: React.FC = () => {
 
         const mapPayeeRows = Array.isArray(record.payee_rows)
           ? record.payee_rows.map((row: any, index: number) => ({
-              ...(() => {
-                const canonicalPayeeName = resolveCanonicalPayeeName(
+            ...(() => {
+              const canonicalPayeeName = resolveCanonicalPayeeName(
+                row?.payee_name,
+                row?.account_name,
+              );
+              return {
+                payeeName: canonicalPayeeName,
+                accountName: canonicalPayeeName,
+                beneficiaryOrg: resolveCanonicalBeneficiaryOrg(
+                  row?.beneficiary_org,
                   row?.payee_name,
-                  row?.account_name,
-                );
-                return {
-                  payeeName: canonicalPayeeName,
-                  accountName: canonicalPayeeName,
-                  beneficiaryOrg: resolveCanonicalBeneficiaryOrg(
-                    row?.beneficiary_org,
-                    row?.payee_name,
-                  ),
-                };
-              })(),
-              id: `${submittedRequestIdFromState}-payee-${index}`,
-              payeeId: row?.payee_id ?? null,
-              approvalStatus: String(row?.approval_status || "").trim(),
-              bankName: String(row?.bank_name || ""),
-              accountNo: String(row?.account_no || ""),
-              ifsc: String(row?.ifsc || ""),
-              branchName: String(row?.branch_name || ""),
-              url: String(row?.url || ""),
-              amount: String(row?.amount || ""),
-              mode: String(row?.mode || ""),
-              panNumber: String(row?.pan_number || ""),
-              accountType: String(row?.account_type || ""),
-              beneficiaryType: String(row?.beneficiary_type || "individual"),
-              organizationType: String(row?.organization_type || ""),
-              msme: String(row?.msme || ""),
-              gstin: String(row?.gstin || ""),
-              tdsDetails: String(row?.tds_details || ""),
-              tdsSection: String(row?.tds_section || ""),
-            }))
+                ),
+              };
+            })(),
+            id: `${submittedRequestIdFromState}-payee-${index}`,
+            payeeId: row?.payee_id ?? null,
+            approvalStatus: String(row?.approval_status || "").trim(),
+            bankName: String(row?.bank_name || ""),
+            accountNo: String(row?.account_no || ""),
+            ifsc: String(row?.ifsc || ""),
+            branchName: String(row?.branch_name || ""),
+            url: String(row?.url || ""),
+            amount: String(row?.amount || ""),
+            mode: String(row?.mode || ""),
+            panNumber: String(row?.pan_number || ""),
+            accountType: String(row?.account_type || ""),
+            beneficiaryType: String(row?.beneficiary_type || "individual"),
+            organizationType: String(row?.organization_type || ""),
+            msme: String(row?.msme || ""),
+            gstin: String(row?.gstin || ""),
+            tdsDetails: String(row?.tds_details || ""),
+            tdsSection: String(row?.tds_section || ""),
+          }))
           : [];
 
         setApplicantName(String(record.applicant_name || ""));
@@ -1441,7 +1475,7 @@ const ExpenditureApproval: React.FC = () => {
         setMobile(String(record.mobile || ""));
         setDate(
           normalizeDateForInput(String(record.request_date || "")) ||
-            getLocalTodayYmd(),
+          getLocalTodayYmd(),
         );
         setDescription(String(record.description || ""));
         setCategoryType(String(record.beneficiary_type || ""));
@@ -1449,12 +1483,12 @@ const ExpenditureApproval: React.FC = () => {
         {
           const recordTag = resolveTagValue(
             record.budget_tag ??
-              record.budgettag ??
-              record.budgetTag ??
-              record.tag ??
-              record.finance_tag ??
-              record.financeTag ??
-              "",
+            record.budgettag ??
+            record.budgetTag ??
+            record.tag ??
+            record.finance_tag ??
+            record.financeTag ??
+            "",
             tagOptions,
           );
           setSelectedTag((prev) => prev || recordTag);
@@ -1505,35 +1539,64 @@ const ExpenditureApproval: React.FC = () => {
           setShowUnplannedBudget(
             Boolean(recordUnplannedBudgetEnabled || hasUnplannedBudgetAmount),
           );
-          setUnplannedBudgetAmount(
-            recordUnplannedBudgetAmount !== null &&
-              recordUnplannedBudgetAmount !== undefined
-              ? String(recordUnplannedBudgetAmount)
-              : "",
-          );
-          setUnplannedHeadOfAccount(
-            String(recordUnplannedHeadOfAccount || ""),
-          );
-          setUnplannedHeadOfAccountBudgetLineId(
-            parsePositiveIntLike(recordUnplannedHeadOfAccountBudgetLineId),
-          );
-          setUnplannedHeadOfAccountBudgetProposalId(
-            parsePositiveIntLike(recordUnplannedHeadOfAccountBudgetProposalId),
-          );
-          setUnplannedBudgetHead(String(recordUnplannedBudgetHead || ""));
-          setUnplannedBudgetSubHead(
-            String(recordUnplannedBudgetSubHead || ""),
-          );
-          setUnplannedBudgetDescription(
-            String(recordUnplannedBudgetDescription || ""),
+          const mappedUnplannedRows = Array.isArray(record.unplanned_rows)
+            ? record.unplanned_rows
+              .map((row: any, index: number) => ({
+                id: String(row.id ?? `unplanned-${index}`),
+                headOfAccount: String(row.head_of_account ?? row.headOfAccount ?? ""),
+                headOfAccountBudgetLineId: parsePositiveIntLike(
+                  row.head_of_account_budget_line_id ?? row.headOfAccountBudgetLineId,
+                ),
+                headOfAccountBudgetProposalId: parsePositiveIntLike(
+                  row.head_of_account_budget_proposal_id ?? row.headOfAccountBudgetProposalId,
+                ),
+                budgetHead: String(row.budget_head ?? row.budgetHead ?? ""),
+                subHead: String(row.sub_head ?? row.subHead ?? ""),
+                amount:
+                  row.amount !== null && row.amount !== undefined
+                    ? String(row.amount)
+                    : "",
+                description: String(row.description ?? ""),
+              }))
+              .filter((row: UnplannedBudgetRow) =>
+                row.headOfAccount || row.budgetHead || row.subHead || row.amount,
+              )
+            : [];
+          const legacyUnplannedRow: UnplannedBudgetRow = {
+            id: "unplanned-legacy",
+            headOfAccount: String(recordUnplannedHeadOfAccount || ""),
+            headOfAccountBudgetLineId: parsePositiveIntLike(
+              recordUnplannedHeadOfAccountBudgetLineId,
+            ),
+            headOfAccountBudgetProposalId: parsePositiveIntLike(
+              recordUnplannedHeadOfAccountBudgetProposalId,
+            ),
+            budgetHead: String(recordUnplannedBudgetHead || ""),
+            subHead: String(recordUnplannedBudgetSubHead || ""),
+            amount:
+              recordUnplannedBudgetAmount !== null &&
+                recordUnplannedBudgetAmount !== undefined
+                ? String(recordUnplannedBudgetAmount)
+                : "",
+            description: String(recordUnplannedBudgetDescription || ""),
+          };
+          setUnplannedRows(
+            mappedUnplannedRows.length > 0
+              ? mappedUnplannedRows
+              : hasUnplannedBudgetAmount ||
+                legacyUnplannedRow.headOfAccount ||
+                legacyUnplannedRow.budgetHead ||
+                legacyUnplannedRow.subHead
+                ? [legacyUnplannedRow]
+                : [createUnplannedBudgetRow()],
           );
         }
         setIsBudgetProposed(String(record.is_budget_proposed || ""));
         setDebitStatus(
           String(record.debit_status || "") as
-            | "credited"
-            | "reimbursement"
-            | "",
+          | "credited"
+          | "reimbursement"
+          | "",
         );
         setAmountProposed(
           String(record.total_amount ?? record.approved_total_amount ?? ""),
@@ -1544,11 +1607,11 @@ const ExpenditureApproval: React.FC = () => {
         const requestType = normalizeText(record.request_type);
         setActiveTab(
           launchModuleFromState ??
-            (requestType === "Advance" ||
+          (requestType === "Advance" ||
             requestType === "Settlement" ||
             requestType === "Expenditure"
-              ? requestType
-              : null),
+            ? requestType
+            : null),
         );
         setAdvanceRows(
           mapAdvanceRows.length > 0 ? mapAdvanceRows : [createAdvanceRow()],
@@ -1652,29 +1715,29 @@ const ExpenditureApproval: React.FC = () => {
       isCancelled = true;
     };
   }, [resolvedFinanceRequestId]);
- const rowReferenceIdFromState = (() => {
-  const state = location.state as { rowReferenceId?: unknown } | null;
+  const rowReferenceIdFromState = (() => {
+    const state = location.state as { rowReferenceId?: unknown } | null;
     const value = String(state?.rowReferenceId ?? "").trim();
-  return value || null;
-})();
+    return value || null;
+  })();
 
-const workflowBudgetLineIdFromState = (() => {
-  const state = location.state as {
-    workflowbudgetlineid?: unknown;
-    budgetLineId?: unknown;
-  } | null;
+  const workflowBudgetLineIdFromState = (() => {
+    const state = location.state as {
+      workflowbudgetlineid?: unknown;
+      budgetLineId?: unknown;
+    } | null;
 
-  return (
-    parsePositiveIntLike(state?.workflowbudgetlineid) ??
-    parsePositiveIntLike(state?.budgetLineId)
-  );
-})();
+    return (
+      parsePositiveIntLike(state?.workflowbudgetlineid) ??
+      parsePositiveIntLike(state?.budgetLineId)
+    );
+  })();
 
-const workflowRowRefFromState = (() => {
-  const state = location.state as { workflowrowref?: unknown } | null;
+  const workflowRowRefFromState = (() => {
+    const state = location.state as { workflowrowref?: unknown } | null;
     const value = String(state?.workflowrowref ?? "").trim();
-  return value || null;
-})();
+    return value || null;
+  })();
   useEffect(() => {
     let cancelled = false;
 
@@ -1699,9 +1762,9 @@ const workflowRowRefFromState = (() => {
               const rows = Array.isArray(
                 (grouped as Record<string, any[]>)[apiType],
               )
-              ? (grouped as Record<string, any[]>)[apiType]
-              : [];
-            nextOptions[beneficiaryKey] = toOptionList(rows);
+                ? (grouped as Record<string, any[]>)[apiType]
+                : [];
+              nextOptions[beneficiaryKey] = toOptionList(rows);
             },
           );
         } else {
@@ -1812,18 +1875,18 @@ const workflowRowRefFromState = (() => {
   const removeExpenditureRow = (id: string) =>
     setExpenditureSubRows(expenditureSubRows.filter((r) => r.id !== id));
 
-   const formatDMY = (value: string | Date | null | undefined) => {
-     if (!value) return "";
-     const d = new Date(value);
-     if (isNaN(d.getTime())) return "";
-     const day = String(d.getDate()).padStart(2, "0");
-     const month = String(d.getMonth() + 1).padStart(2, "0");
-     const year = d.getFullYear();
-     return `${day}.${month}.${year}`;
-   };
+  const formatDMY = (value: string | Date | null | undefined) => {
+    if (!value) return "";
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return "";
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}.${month}.${year}`;
+  };
 
-   const numberToIndianWords = (num: number): string => {
-     if (num === 0) return "Zero rupees only";
+  const numberToIndianWords = (num: number): string => {
+    if (num === 0) return "Zero rupees only";
     const a = [
       "",
       "One",
@@ -1858,8 +1921,8 @@ const workflowRowRefFromState = (() => {
       "Eighty",
       "Ninety",
     ];
-     const inWordsBelowThousand = (n: number): string => {
-       let str = "";
+    const inWordsBelowThousand = (n: number): string => {
+      let str = "";
       if (n > 99) {
         str += a[Math.floor(n / 100)] + " hundred ";
         n %= 100;
@@ -1871,21 +1934,21 @@ const workflowRowRefFromState = (() => {
       if (n > 0) {
         str += a[n]!.toLowerCase().replace(/^./, (c) => c.toUpperCase()) + " ";
       }
-       return str.trim();
-     };
-     let n = Math.floor(num);
-     let result = "";
-     const crore = Math.floor(n / 10000000);
+      return str.trim();
+    };
+    let n = Math.floor(num);
+    let result = "";
+    const crore = Math.floor(n / 10000000);
     if (crore) {
       result += inWordsBelowThousand(crore) + " crore ";
       n %= 10000000;
     }
-     const lakh = Math.floor(n / 100000);
+    const lakh = Math.floor(n / 100000);
     if (lakh) {
       result += inWordsBelowThousand(lakh) + " lakh ";
       n %= 100000;
     }
-     const thousand = Math.floor(n / 1000);
+    const thousand = Math.floor(n / 1000);
     if (thousand) {
       result += inWordsBelowThousand(thousand) + " thousand ";
       n %= 1000;
@@ -1897,15 +1960,15 @@ const workflowRowRefFromState = (() => {
       .trim()
       .replace(/\b\w/g, (l) => l.toUpperCase())
       .replace(/[A-Z]{2,}/g, (m) => m.charAt(0) + m.slice(1).toLowerCase());
-     return titleCased + " Rupees only";
-   };
+    return titleCased + " Rupees only";
+  };
 
-   const MAX_AMOUNT = 999999999;
+  const MAX_AMOUNT = 999999999;
 
-   const getSubcategoryLabel = (category: string) => {
-     if (!category) return "Sub category";
-     return category;
-   };
+  const getSubcategoryLabel = (category: string) => {
+    if (!category) return "Sub category";
+    return category;
+  };
 
   const isMultipleSelect = (type: string) =>
     type === "Faculty" || type === "Staff";
@@ -1915,7 +1978,7 @@ const workflowRowRefFromState = (() => {
   const subcategoryList: string[] = subcategoryOptions.map((option) =>
     String(option.value),
   );
-   const hasSubcategories = subcategoryList.length > 0;
+  const hasSubcategories = subcategoryList.length > 0;
 
   const extraDropdownVisible =
     primaryHead === "Events & Competitions" ||
@@ -2299,11 +2362,23 @@ const workflowRowRefFromState = (() => {
       selectedHead = normalizeBudgetToken(matchedByLineId?.head);
     }
 
-    return options.find(
+    const matched = options.find(
       (option) =>
         normalizeBudgetToken(option.budgetHead) === selectedHead &&
         !normalizeBudgetToken(option.subHead),
-    ) || null;
+    );
+    if (matched) return matched;
+
+    const fallbackHead = String(budgetHead || "").trim();
+    return fallbackHead
+      ? {
+        value: `legacy-head::${fallbackHead}`,
+        label: fallbackHead,
+        budgetHead: fallbackHead,
+        subHead: "",
+        budgetLineId: parsedBudgetLineId,
+      }
+      : null;
   };
 
   const filterApprovedBudgetHeadOption = (candidate: any, input: string) => {
@@ -2311,6 +2386,20 @@ const workflowRowRefFromState = (() => {
     const option = candidate?.data || {};
     const subHead = normalizeBudgetToken(option.subHead);
     if (!query) return !subHead;
+    return [option.label, option.budgetHead, option.subHead]
+      .map((value) => normalizeBudgetToken(value))
+      .some((value) => value.includes(query));
+  };
+
+  // Unplanned Head of Accounts options always carry a sub-head (label is
+  // "head - subHead"), so the planned-budget filter above (which hides any
+  // option with a sub-head when no text is typed) would drop every option.
+  // Here we show all options when the query is empty and substring-match
+  // against head/sub-head/label otherwise.
+  const filterUnplannedHeadOfAccountOption = (candidate: any, input: string) => {
+    const query = normalizeBudgetToken(input);
+    if (!query) return true;
+    const option = candidate?.data || {};
     return [option.label, option.budgetHead, option.subHead]
       .map((value) => normalizeBudgetToken(value))
       .some((value) => value.includes(query));
@@ -2352,11 +2441,22 @@ const workflowRowRefFromState = (() => {
     }
 
     const normalizedSubHead = normalizeBudgetToken(subHead);
-    return (
-      options.find(
-        (option) => normalizeBudgetToken(option.subHead) === normalizedSubHead,
-      ) || null
+    const matched = options.find(
+      (option) => normalizeBudgetToken(option.subHead) === normalizedSubHead,
     );
+    if (matched) return matched;
+
+    const fallbackHead = String(budgetHead || "").trim();
+    const fallbackSubHead = String(subHead || "").trim();
+    return fallbackSubHead
+      ? {
+        value: `legacy-sub::${fallbackHead}::${fallbackSubHead}`,
+        label: fallbackSubHead,
+        budgetHead: fallbackHead,
+        subHead: fallbackSubHead,
+        budgetLineId: parsedBudgetLineId,
+      }
+      : null;
   };
 
   const findApprovedBudgetOption = (
@@ -2394,16 +2494,18 @@ const workflowRowRefFromState = (() => {
         const head = String(budget.head || "").trim();
         const subHead = String(budget.subHead || "").trim();
         const lineId = parsePositiveIntLike(budget.budgetLineId);
-        if (!head || !lineId) return null;
+        const proposalId = parsePositiveIntLike(budget.budgetProposalId);
+        const optionId = lineId || proposalId || index + 1;
+        if (!head || !optionId) return null;
 
         const remainingAmount = Number(budget.remainingAmount || 0);
         return {
-          value: `account::${lineId}`,
-          label: subHead ? `${head} - ${subHead}` : head,
+          value: `account::${optionId}`,
+          label: head,
           budgetHead: head,
-          subHead,
+          subHead: "",
           budgetLineId: lineId,
-          budgetProposalId: budget.budgetProposalId,
+          budgetProposalId: proposalId,
           approvedAmount: Number(budget.totalAmount || 0),
           remainingAmount: Number.isFinite(remainingAmount)
             ? remainingAmount
@@ -2413,9 +2515,11 @@ const workflowRowRefFromState = (() => {
       })
       .filter((option): option is OptionType => Boolean(option));
 
-  const getUnplannedHeadOfAccountSelectedOption = (): OptionType | null => {
-    const lineId = parsePositiveIntLike(unplannedHeadOfAccountBudgetLineId);
-    const normalizedAccount = normalizeBudgetToken(unplannedHeadOfAccount);
+  const getUnplannedHeadOfAccountSelectedOption = (
+    row: UnplannedBudgetRow,
+  ): OptionType | null => {
+    const lineId = parsePositiveIntLike(row.headOfAccountBudgetLineId);
+    const normalizedAccount = normalizeBudgetToken(row.headOfAccount);
 
     if (!lineId && !normalizedAccount) return null;
 
@@ -2437,20 +2541,22 @@ const workflowRowRefFromState = (() => {
     );
     if (byLabel) return byLabel;
 
-    return unplannedHeadOfAccount
+    return row.headOfAccount
       ? {
-          value: `account::legacy::${unplannedHeadOfAccount}`,
-          label: unplannedHeadOfAccount,
-          budgetHead: unplannedHeadOfAccount,
-          subHead: "",
-          budgetLineId: lineId,
-          budgetProposalId: unplannedHeadOfAccountBudgetProposalId,
-        }
+        value: `account::legacy::${row.headOfAccount}`,
+        label: row.headOfAccount,
+        budgetHead: row.headOfAccount,
+        subHead: "",
+        budgetLineId: lineId,
+        budgetProposalId: row.headOfAccountBudgetProposalId,
+      }
       : null;
   };
 
-  const getUnplannedHeadOfAccountAmount = (): number | null => {
-    const selected = getUnplannedHeadOfAccountSelectedOption();
+  const getUnplannedHeadOfAccountAmount = (
+    row: UnplannedBudgetRow,
+  ): number | null => {
+    const selected = getUnplannedHeadOfAccountSelectedOption(row);
     if (
       selected &&
       selected.remainingAmount === undefined &&
@@ -2462,13 +2568,15 @@ const workflowRowRefFromState = (() => {
     return Number.isFinite(amount) ? amount : 0;
   };
 
-  const getUnplannedBudgetAmountPlaceholder = (): string => {
-    const amount = getUnplannedHeadOfAccountAmount();
+  const getUnplannedBudgetAmountPlaceholder = (
+    row: UnplannedBudgetRow,
+  ): string => {
+    const amount = getUnplannedHeadOfAccountAmount(row);
     return amount === null
       ? "Balance unavailable"
       : amount > 0
-      ? `₹ ${amount.toLocaleString("en-IN")}`
-      : "₹ 0";
+        ? `₹ ${amount.toLocaleString("en-IN")}`
+        : "₹ 0";
   };
 
   const getUnplannedBudgetHeadOptions = (): Array<
@@ -2489,10 +2597,10 @@ const workflowRowRefFromState = (() => {
     getSelectedOption(budgetHead, getUnplannedBudgetHeadOptions()) ||
     (budgetHead
       ? {
-          value: String(budgetHead),
-          label: String(budgetHead),
-          budgetHead: String(budgetHead),
-        }
+        value: String(budgetHead),
+        label: String(budgetHead),
+        budgetHead: String(budgetHead),
+      }
       : null);
 
   const getCatalogSubHeadOptions = (budgetHead: string | number): OptionType[] =>
@@ -2518,82 +2626,135 @@ const workflowRowRefFromState = (() => {
   };
 
   const getUnplannedBudgetDescription = (
-    head = unplannedBudgetHead,
-    subHead = unplannedBudgetSubHead,
+    head = "",
+    subHead = "",
   ): string =>
     [head, subHead]
       .map((value) => String(value || "").trim())
       .filter(Boolean)
       .join(" - ");
 
-  const handleUnplannedBudgetHeadChange = (selected: OptionType | null) => {
+  const updateUnplannedRow = (
+    rowId: string,
+    patch:
+      | Partial<UnplannedBudgetRow>
+      | ((row: UnplannedBudgetRow) => UnplannedBudgetRow),
+  ) => {
+    setUnplannedRows((rows) =>
+      rows.map((row) =>
+        row.id === rowId
+          ? typeof patch === "function"
+            ? patch(row)
+            : { ...row, ...patch }
+          : row,
+      ),
+    );
+  };
+
+  const addUnplannedRow = () =>
+    setUnplannedRows((rows) => [...rows, createUnplannedBudgetRow()]);
+
+  const removeUnplannedRow = (rowId: string) =>
+    setUnplannedRows((rows) =>
+      rows.length > 1
+        ? rows.filter((row) => row.id !== rowId)
+        : [createUnplannedBudgetRow()],
+    );
+
+  const isUnplannedRowFilled = (row: UnplannedBudgetRow): boolean =>
+    Boolean(
+      row.budgetHead.trim() &&
+      row.subHead.trim() &&
+      parseAmountValue(row.amount) > 0,
+    );
+
+  const handleUnplannedHeadOfAccountForFormChange = (
+    selected: OptionType | null,
+  ) => {
+    const label = String(selected?.label || selected?.budgetHead || "").trim();
+    const budgetLineId = parsePositiveIntLike(selected?.budgetLineId);
+    const budgetProposalId = parsePositiveIntLike(selected?.budgetProposalId);
+
+    setUnplannedRows((rows) => {
+      const currentRows = rows.length ? rows : [createUnplannedBudgetRow()];
+      return currentRows.map((row) => ({
+        ...row,
+        headOfAccount: label,
+        headOfAccountBudgetLineId: budgetLineId,
+        headOfAccountBudgetProposalId: budgetProposalId,
+      }));
+    });
+  };
+
+  const handleUnplannedBudgetHeadChange = (
+    rowId: string,
+    selected: OptionType | null,
+  ) => {
     const head = String(selected?.budgetHead || selected?.value || "")
       .trim();
 
-    setUnplannedBudgetHead(head);
-    setUnplannedBudgetSubHead("");
-    setUnplannedBudgetDescription(getUnplannedBudgetDescription(head, ""));
-  };
-
-  const handleUnplannedHeadOfAccountChange = (selected: OptionType | null) => {
-    const label = String(selected?.label || selected?.budgetHead || "").trim();
-
-    setUnplannedHeadOfAccount(label);
-    setUnplannedHeadOfAccountBudgetLineId(
-      parsePositiveIntLike(selected?.budgetLineId),
-    );
-    setUnplannedHeadOfAccountBudgetProposalId(
-      parsePositiveIntLike(selected?.budgetProposalId),
-    );
+    updateUnplannedRow(rowId, {
+      budgetHead: head,
+      subHead: "",
+      description: getUnplannedBudgetDescription(head, ""),
+    });
   };
 
   useEffect(() => {
-    if (!showUnplannedBudget || !unplannedHeadOfAccount || !approvedBudgetOptions.length) {
+    if (!showUnplannedBudget || !approvedBudgetOptions.length) {
       return;
     }
 
-    const selected = getUnplannedHeadOfAccountSelectedOption();
-    const resolvedLineId = parsePositiveIntLike(selected?.budgetLineId);
-    if (!resolvedLineId) return;
+    setUnplannedRows((rows) =>
+      rows.map((row) => {
+        if (!row.headOfAccount) return row;
+        const selected = getUnplannedHeadOfAccountSelectedOption(row);
+        const resolvedLineId = parsePositiveIntLike(selected?.budgetLineId);
+        if (!resolvedLineId) return row;
 
-    const resolvedProposalId = parsePositiveIntLike(selected?.budgetProposalId);
-    const currentLineId = parsePositiveIntLike(unplannedHeadOfAccountBudgetLineId);
-    const currentProposalId = parsePositiveIntLike(unplannedHeadOfAccountBudgetProposalId);
-    const resolvedLabel = String(selected?.label || selected?.budgetHead || "").trim();
+        const resolvedProposalId = parsePositiveIntLike(selected?.budgetProposalId);
+        const resolvedLabel = String(selected?.label || selected?.budgetHead || "").trim();
+        const currentLineId = parsePositiveIntLike(row.headOfAccountBudgetLineId);
+        const currentProposalId = parsePositiveIntLike(row.headOfAccountBudgetProposalId);
 
-    if (currentLineId !== resolvedLineId) {
-      setUnplannedHeadOfAccountBudgetLineId(resolvedLineId);
-    }
-    if (currentProposalId !== resolvedProposalId) {
-      setUnplannedHeadOfAccountBudgetProposalId(resolvedProposalId);
-    }
-    if (resolvedLabel && resolvedLabel !== unplannedHeadOfAccount) {
-      setUnplannedHeadOfAccount(resolvedLabel);
-    }
-  }, [
-    approvedBudgetOptions,
-    showUnplannedBudget,
-    unplannedHeadOfAccount,
-    unplannedHeadOfAccountBudgetLineId,
-    unplannedHeadOfAccountBudgetProposalId,
-  ]);
+        if (
+          currentLineId === resolvedLineId &&
+          currentProposalId === resolvedProposalId &&
+          (!resolvedLabel || resolvedLabel === row.headOfAccount)
+        ) {
+          return row;
+        }
 
-  const handleUnplannedBudgetSubHeadChange = (selected: OptionType | null) => {
+        return {
+          ...row,
+          headOfAccount: resolvedLabel || row.headOfAccount,
+          headOfAccountBudgetLineId: resolvedLineId,
+          headOfAccountBudgetProposalId: resolvedProposalId,
+        };
+      }),
+    );
+  }, [approvedBudgetOptions, showUnplannedBudget]);
+
+  const handleUnplannedBudgetSubHeadChange = (
+    rowId: string,
+    selected: OptionType | null,
+  ) => {
     const subHead = String(selected?.subHead || "").trim();
 
-    setUnplannedBudgetSubHead(subHead);
-    setUnplannedBudgetDescription(
-      getUnplannedBudgetDescription(unplannedBudgetHead, subHead),
-    );
+    updateUnplannedRow(rowId, (row) => ({
+      ...row,
+      subHead,
+      description: getUnplannedBudgetDescription(row.budgetHead, subHead),
+    }));
   };
 
   const hydrateRowsFromApprovedBudgets = <
     T extends {
-    budgetHead: string | number;
-    subHead: string | number;
-    budget: string;
-    budgetLineId?: number | null;
-    budgetProposalId?: number | null;
+      budgetHead: string | number;
+      subHead: string | number;
+      budget: string;
+      budgetLineId?: number | null;
+      budgetProposalId?: number | null;
     },
   >(
     rows: T[],
@@ -2606,16 +2767,16 @@ const workflowRowRefFromState = (() => {
       const normalizedSubHead = normalizeBudgetToken(row.subHead);
       const matchedBudget = budgetLineId
         ? approvedBudgetOptions.find(
-            (budget) =>
-              Number(budget.budgetLineId || 0) === budgetLineId &&
-              normalizeBudgetToken(budget.head) === normalizedHead &&
-              normalizeBudgetToken(budget.subHead) === normalizedSubHead,
-          )
-          || approvedBudgetOptions.find(
-            (budget) =>
-              normalizeBudgetToken(budget.head) === normalizedHead &&
-              normalizeBudgetToken(budget.subHead) === normalizedSubHead,
-          )
+          (budget) =>
+            Number(budget.budgetLineId || 0) === budgetLineId &&
+            normalizeBudgetToken(budget.head) === normalizedHead &&
+            normalizeBudgetToken(budget.subHead) === normalizedSubHead,
+        )
+        || approvedBudgetOptions.find(
+          (budget) =>
+            normalizeBudgetToken(budget.head) === normalizedHead &&
+            normalizeBudgetToken(budget.subHead) === normalizedSubHead,
+        )
         : null;
 
       if (!matchedBudget) return row;
@@ -2770,20 +2931,19 @@ const workflowRowRefFromState = (() => {
     return sum + (Number.isFinite(amount) ? amount : 0);
   }, 0);
 
-  const rawUnplannedBudgetAmount = Number(
-    String(unplannedBudgetAmount || "")
-      .replace(/,/g, "")
-      .trim(),
-  );
-  const unplannedBudgetTotal =
-    showUnplannedBudget && Number.isFinite(rawUnplannedBudgetAmount)
-      ? rawUnplannedBudgetAmount
-      : 0;
+  const getUnplannedRowAmountValue = (row: UnplannedBudgetRow): number => {
+    if (activeTab === "Expenditure") {
+      return evaluateArithmeticExpression(row.amount);
+    }
+    return parseAmountValue(row.amount);
+  };
+
+  const unplannedBudgetTotal = showUnplannedBudget
+    ? unplannedRows.reduce((sum, row) => sum + getUnplannedRowAmountValue(row), 0)
+    : 0;
   const hasUnplannedBudgetPreview =
     showUnplannedBudget ||
-    (Number.isFinite(rawUnplannedBudgetAmount) && rawUnplannedBudgetAmount > 0);
-  const unplannedBudgetDisplayLabel =
-    getUnplannedBudgetDescription() || unplannedBudgetDescription;
+    unplannedRows.some((row) => getUnplannedRowAmountValue(row) > 0);
   const totalAdvanceDisplayAmount =
     totalAdvanceAmount + (activeTab === "Advance" ? unplannedBudgetTotal : 0);
   const totalSettlementDisplayAmount =
@@ -3307,7 +3467,7 @@ const workflowRowRefFromState = (() => {
 
   const closeAlert = () => setAlertConfig((prev) => ({ ...prev, show: false }));
 
-  const parseAmountValue = (value: unknown): number => {
+  function parseAmountValue(value: unknown): number {
     const normalized = String(value ?? "")
       .replace(/,/g, "")
       .trim();
@@ -3315,7 +3475,7 @@ const workflowRowRefFromState = (() => {
 
     const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : 0;
-  };
+  }
 
   const formatAmountInputValue = (value: number): string => {
     if (!Number.isFinite(value)) return "";
@@ -3324,22 +3484,22 @@ const workflowRowRefFromState = (() => {
       : value.toFixed(2).replace(/\.?0+$/, "");
   };
 
-const toNumber = (value: unknown) => {
+  const toNumber = (value: unknown) => {
     const n = Number(
       String(value ?? "")
         .replace(/,/g, "")
         .trim(),
     );
-  return Number.isFinite(n) ? n : 0;
-};
-const evaluateArithmeticExpression = (input: string) => {
-  const expression = String(input || "").replace(/\s+/g, "");
-  if (!expression || !/^[\d+\-*/().]+$/.test(expression)) return 0;
-  const tokens = expression.match(/\d+(?:\.\d+)?|[()+\-*/]/g);
-  if (!tokens) return 0;
+    return Number.isFinite(n) ? n : 0;
+  };
+  function evaluateArithmeticExpression(input: string) {
+    const expression = String(input || "").replace(/\s+/g, "");
+    if (!expression || !/^[\d+\-*/().]+$/.test(expression)) return 0;
+    const tokens = expression.match(/\d+(?:\.\d+)?|[()+\-*/]/g);
+    if (!tokens) return 0;
 
-  const output: string[] = [];
-  const operators: string[] = [];
+    const output: string[] = [];
+    const operators: string[] = [];
     const precedence: Record<string, number> = {
       "+": 1,
       "-": 1,
@@ -3347,105 +3507,105 @@ const evaluateArithmeticExpression = (input: string) => {
       "/": 2,
     };
 
-  for (const token of tokens) {
-    if (/^\d+(?:\.\d+)?$/.test(token)) {
-      output.push(token);
-      continue;
-    }
-    if (token === "(") {
-      operators.push(token);
-      continue;
-    }
-    if (token === ")") {
-      while (operators.length && operators[operators.length - 1] !== "(") {
+    for (const token of tokens) {
+      if (/^\d+(?:\.\d+)?$/.test(token)) {
+        output.push(token);
+        continue;
+      }
+      if (token === "(") {
+        operators.push(token);
+        continue;
+      }
+      if (token === ")") {
+        while (operators.length && operators[operators.length - 1] !== "(") {
+          output.push(operators.pop() as string);
+        }
+        if (!operators.length) return 0;
+        operators.pop();
+        continue;
+      }
+      while (
+        operators.length &&
+        operators[operators.length - 1] !== "(" &&
+        precedence[operators[operators.length - 1]] >= precedence[token]
+      ) {
         output.push(operators.pop() as string);
       }
-      if (!operators.length) return 0;
-      operators.pop();
-      continue;
+      operators.push(token);
     }
-    while (
-      operators.length &&
-      operators[operators.length - 1] !== "(" &&
-      precedence[operators[operators.length - 1]] >= precedence[token]
-    ) {
-      output.push(operators.pop() as string);
+
+    while (operators.length) {
+      const op = operators.pop() as string;
+      if (op === "(" || op === ")") return 0;
+      output.push(op);
     }
-    operators.push(token);
-  }
 
-  while (operators.length) {
-    const op = operators.pop() as string;
-    if (op === "(" || op === ")") return 0;
-    output.push(op);
-  }
-
-  const stack: number[] = [];
-  for (const token of output) {
-    if (/^\d+(?:\.\d+)?$/.test(token)) {
-      stack.push(Number(token));
-      continue;
+    const stack: number[] = [];
+    for (const token of output) {
+      if (/^\d+(?:\.\d+)?$/.test(token)) {
+        stack.push(Number(token));
+        continue;
+      }
+      const b = stack.pop();
+      const a = stack.pop();
+      if (a === undefined || b === undefined) return 0;
+      if (token === "+") stack.push(a + b);
+      else if (token === "-") stack.push(a - b);
+      else if (token === "*") stack.push(a * b);
+      else if (token === "/") stack.push(b === 0 ? 0 : a / b);
     }
-    const b = stack.pop();
-    const a = stack.pop();
-    if (a === undefined || b === undefined) return 0;
-    if (token === "+") stack.push(a + b);
-    else if (token === "-") stack.push(a - b);
-    else if (token === "*") stack.push(a * b);
-    else if (token === "/") stack.push(b === 0 ? 0 : a / b);
+
+    if (stack.length !== 1 || !Number.isFinite(stack[0])) return 0;
+    return Math.max(0, stack[0]);
   }
+  const handleAdvanceAmountChange = (rowId: string | number, value: string) => {
+    if (!/^\d*\.?\d*$/.test(value)) return;
 
-  if (stack.length !== 1 || !Number.isFinite(stack[0])) return 0;
-  return Math.max(0, stack[0]);
-};
- const handleAdvanceAmountChange = (rowId: string | number, value: string) => {
-  if (!/^\d*\.?\d*$/.test(value)) return;
-
-  const updatedRows = advanceRows.map((row) =>
+    const updatedRows = advanceRows.map((row) =>
       row.id === rowId ? { ...row, advance: value } : row,
-  );
+    );
 
-  setAdvanceRows(updatedRows);
-};
+    setAdvanceRows(updatedRows);
+  };
 
   const handleExpenditureAmountChange = (
     rowId: string | number,
     value: string,
   ) => {
-  const sanitizedValue = value.replace(/[^\d.+\-*/() ]/g, "");
+    const sanitizedValue = value.replace(/[^\d.+\-*/() ]/g, "");
 
-  const updatedRows = expenditureSubRows.map((row) =>
+    const updatedRows = expenditureSubRows.map((row) =>
       row.id === rowId ? { ...row, expenditure: sanitizedValue } : row,
-  );
+    );
 
-  const targetRow = updatedRows.find((row) => row.id === rowId);
-  if (!targetRow) {
-    setExpenditureSubRows(updatedRows);
-    return;
-  }
-
-  let evaluatedAmount = 0;
-
-  try {
-    if (sanitizedValue.trim()) {
-      evaluatedAmount = evaluateArithmeticExpression(sanitizedValue);
+    const targetRow = updatedRows.find((row) => row.id === rowId);
+    if (!targetRow) {
+      setExpenditureSubRows(updatedRows);
+      return;
     }
-  } catch {
-    evaluatedAmount = 0;
-  }
 
-  const finalRows = updatedRows.map((row) =>
-    row.id === rowId
-      ? {
+    let evaluatedAmount = 0;
+
+    try {
+      if (sanitizedValue.trim()) {
+        evaluatedAmount = evaluateArithmeticExpression(sanitizedValue);
+      }
+    } catch {
+      evaluatedAmount = 0;
+    }
+
+    const finalRows = updatedRows.map((row) =>
+      row.id === rowId
+        ? {
           ...row,
           expenditure: sanitizedValue,
           autoSum: evaluatedAmount ? String(evaluatedAmount) : "",
         }
         : row,
-  );
+    );
 
-  setExpenditureSubRows(finalRows);
-};
+    setExpenditureSubRows(finalRows);
+  };
 
   // Search applicant handler
   const handleApplicantSearch = async (query: string) => {
@@ -3533,7 +3693,7 @@ const evaluateArithmeticExpression = (input: string) => {
     `,
     documentTitle: "Expenditure_Approval_Request",
   });
-   const formatSelections = (selections: SelectOption[]): string => {
+  const formatSelections = (selections: SelectOption[]): string => {
     return selections.map((sel) => sel.value).join(", ") || "";
   };
 
@@ -3758,51 +3918,51 @@ const evaluateArithmeticExpression = (input: string) => {
               </button>
             </div>
           </div>
-<div className="payee-footer-grid">
-  <div className="payee-footer-input-wrap">
-    <div className="payee-footer-debit-inline">
-      <div className="payee-footer-debit-left">
+          <div className="payee-footer-grid">
+            <div className="payee-footer-input-wrap">
+              <div className="payee-footer-debit-inline">
+                <div className="payee-footer-debit-left">
                   <span className="payee-footer-input-label">
                     Debit Account
                   </span>
-        <button
-          type="button"
+                  <button
+                    type="button"
                     className={`payee-footer-switch ${showDebitAccountDropdown ? "is-on" : "is-off"}`}
-          onClick={() => setShowDebitAccountDropdown((prev) => !prev)}
+                    onClick={() => setShowDebitAccountDropdown((prev) => !prev)}
                     aria-label={
                       showDebitAccountDropdown
                         ? "Disable debit account dropdown"
                         : "Enable debit account dropdown"
                     }
-          aria-pressed={showDebitAccountDropdown}
-        >
-          <span className="payee-footer-switch-thumb" />
-        </button>
-      </div>
-      <div className="payee-footer-debit-dropdown">
-        {showDebitAccountDropdown && (
-          <CustomDropdown
-            name="debitAccount"
-            options={accountDropdownOptions}
-            value={getSelectedOption(
-              paymentDetails.debitAccount,
-              accountDropdownOptions,
-            )}
-            onChange={(option) =>
-              setPaymentDetails({
-                ...paymentDetails,
-                debitAccount: String(
-                  (option as OptionType)?.value || "",
-                ),
-              })
-            }
-            placeholder="Select debit account"
-            className="mb-0"
-          />
-        )}
-      </div>
-    </div>
-  </div>
+                    aria-pressed={showDebitAccountDropdown}
+                  >
+                    <span className="payee-footer-switch-thumb" />
+                  </button>
+                </div>
+                <div className="payee-footer-debit-dropdown">
+                  {showDebitAccountDropdown && (
+                    <CustomDropdown
+                      name="debitAccount"
+                      options={accountDropdownOptions}
+                      value={getSelectedOption(
+                        paymentDetails.debitAccount,
+                        accountDropdownOptions,
+                      )}
+                      onChange={(option) =>
+                        setPaymentDetails({
+                          ...paymentDetails,
+                          debitAccount: String(
+                            (option as OptionType)?.value || "",
+                          ),
+                        })
+                      }
+                      placeholder="Select debit account"
+                      className="mb-0"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
             <label className="payee-upload-label payee-footer-upload-label">
               <span className="payee-upload-label-content">
                 <span className="payee-upload-label-text">Bills</span>
@@ -3853,238 +4013,236 @@ const evaluateArithmeticExpression = (input: string) => {
             <tbody>
               {payeeRows.map((row, index) => {
                 const isCashMode = isCashPaymentMode(row.mode);
-                const bankFieldClassName = `payee-field payee-field--readonly ${
-                  isCashMode ? "payee-field--disabled" : ""
-                }`;
+                const bankFieldClassName = `payee-field payee-field--readonly ${isCashMode ? "payee-field--disabled" : ""
+                  }`;
                 const isReadyForAdd = isPayeeRowReadyForAdd(row);
 
                 return (
-                <tr key={row.id}>
-                  <td className="payee-sno-cell">{index + 1}</td>
-                  <td>
-                    <div className="payee-lookup-wrap">
-                      <div className="payee-details-grid">
-                        <div className="payee-field-wrap">
-                          <input
-                            className={`payee-field payee-field--readonly ${
-                              isCashMode ? "payee-field--disabled" : ""
-                            }`}
-                            placeholder="Accountant Name"
-                            value={row.payeeName}
-                            onChange={(e) => {
-                              if (isCashMode) return;
-                              handlePayeeLookupInputChange(
-                                row.id,
-                                "payeeName",
-                                e.target.value,
-                              );
-                            }}
-                            onFocus={() =>
-                              !isCashMode && handlePayeeLookupFocus(row, "payeeName")
-                            }
-                            onBlur={handlePayeeLookupBlur}
-                            readOnly={isCashMode}
-                            disabled={isCashMode}
-                            tabIndex={isCashMode ? -1 : undefined}
-                          />
-                          {!isCashMode && renderPayeeLookupDropdown(row.id, "payeeName")}
-                        </div>
-                        <div className="payee-field-wrap">
-                          <input
-                            className={bankFieldClassName}
-                            placeholder="Account No."
-                            value={row.accountNo}
-                            readOnly
-                            disabled={isCashMode}
-                            tabIndex={-1}
-                          />
-                        </div>
-                        <div className="payee-field-wrap">
-                          <input
-                            className={bankFieldClassName}
-                            placeholder="Bank Name"
-                            value={row.bankName}
-                            readOnly
-                            disabled={isCashMode}
-                            tabIndex={-1}
-                          />
-                        </div>
-                        <div className="payee-field-wrap">
-                          <input
-                            className={bankFieldClassName}
-                            placeholder="IFSC"
-                            value={row.ifsc}
-                            readOnly
-                            disabled={isCashMode}
-                            tabIndex={-1}
-                          />
-                        </div>
-                        <div className="payee-field-wrap payee-field-wrap-full">
-                          <input
-                            className={bankFieldClassName}
-                            placeholder="Branch Name"
-                            value={row.branchName}
-                            readOnly
-                            disabled={isCashMode}
-                            tabIndex={-1}
-                          />
+                  <tr key={row.id}>
+                    <td className="payee-sno-cell">{index + 1}</td>
+                    <td>
+                      <div className="payee-lookup-wrap">
+                        <div className="payee-details-grid">
+                          <div className="payee-field-wrap">
+                            <input
+                              className={`payee-field payee-field--readonly ${isCashMode ? "payee-field--disabled" : ""
+                                }`}
+                              placeholder="Accountant Name"
+                              value={row.payeeName}
+                              onChange={(e) => {
+                                if (isCashMode) return;
+                                handlePayeeLookupInputChange(
+                                  row.id,
+                                  "payeeName",
+                                  e.target.value,
+                                );
+                              }}
+                              onFocus={() =>
+                                !isCashMode && handlePayeeLookupFocus(row, "payeeName")
+                              }
+                              onBlur={handlePayeeLookupBlur}
+                              readOnly={isCashMode}
+                              disabled={isCashMode}
+                              tabIndex={isCashMode ? -1 : undefined}
+                            />
+                            {!isCashMode && renderPayeeLookupDropdown(row.id, "payeeName")}
+                          </div>
+                          <div className="payee-field-wrap">
+                            <input
+                              className={bankFieldClassName}
+                              placeholder="Account No."
+                              value={row.accountNo}
+                              readOnly
+                              disabled={isCashMode}
+                              tabIndex={-1}
+                            />
+                          </div>
+                          <div className="payee-field-wrap">
+                            <input
+                              className={bankFieldClassName}
+                              placeholder="Bank Name"
+                              value={row.bankName}
+                              readOnly
+                              disabled={isCashMode}
+                              tabIndex={-1}
+                            />
+                          </div>
+                          <div className="payee-field-wrap">
+                            <input
+                              className={bankFieldClassName}
+                              placeholder="IFSC"
+                              value={row.ifsc}
+                              readOnly
+                              disabled={isCashMode}
+                              tabIndex={-1}
+                            />
+                          </div>
+                          <div className="payee-field-wrap payee-field-wrap-full">
+                            <input
+                              className={bankFieldClassName}
+                              placeholder="Branch Name"
+                              value={row.branchName}
+                              readOnly
+                              disabled={isCashMode}
+                              tabIndex={-1}
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="payee-transaction-cell">
-                    <div className="payee-transaction-inner">
-                    <div className="payee-stack">
-                      <input
-                        className="payee-field payee-transaction-field"
-                        placeholder="Amount"
-                        value={row.amount}
-                        onChange={(e) => {
-                          handlePayeeAmountChange(row.id, e.target.value);
-                        }}
-                      />
-                      <CustomDropdown
-                        className="payee-transaction-mode-dropdown"
-                        options={toOptions(PAYMENT_MODE_OPTIONS)}
-                          value={getSelectedOption(
-                            row.mode,
-                            toOptions(PAYMENT_MODE_OPTIONS),
-                          )}
-                        onChange={(opt) => {
-                          const selected = opt as OptionType | null;
-                          const nextMode = selected?.value
-                            ? String(selected.value)
-                            : "";
-                            const updated = payeeRows.map((r) =>
-                              r.id === row.id
-                                ? {
+                    </td>
+                    <td className="payee-transaction-cell">
+                      <div className="payee-transaction-inner">
+                        <div className="payee-stack">
+                          <input
+                            className="payee-field payee-transaction-field"
+                            placeholder="Amount"
+                            value={row.amount}
+                            onChange={(e) => {
+                              handlePayeeAmountChange(row.id, e.target.value);
+                            }}
+                          />
+                          <CustomDropdown
+                            className="payee-transaction-mode-dropdown"
+                            options={toOptions(PAYMENT_MODE_OPTIONS)}
+                            value={getSelectedOption(
+                              row.mode,
+                              toOptions(PAYMENT_MODE_OPTIONS),
+                            )}
+                            onChange={(opt) => {
+                              const selected = opt as OptionType | null;
+                              const nextMode = selected?.value
+                                ? String(selected.value)
+                                : "";
+                              const updated = payeeRows.map((r) =>
+                                r.id === row.id
+                                  ? {
                                     ...r,
                                     mode: nextMode,
                                     ...(isCashPaymentMode(nextMode)
                                       ? getCashPayeeResetFields()
                                       : {}),
                                   }
-                                : r,
-                            );
-                          setPayeeRows(updated);
-                          if (isCashPaymentMode(nextMode)) {
-                            closePayeeLookup();
-                          }
-                        }}
-                        placeholder="Mode *"
-                      />
-                    </div>
-                      {((row.tdsDetails &&
-                        row.tdsDetails !== "Yes" &&
-                        row.tdsDetails !== "No") ||
-                        (row.tdsSection &&
-                          row.tdsSection !== "Yes" &&
-                          row.tdsSection !== "No")) && (
-                        <div
-                          style={{
-                            marginTop: "8px",
-                            fontSize: "12px",
-                            color: "#6c757d",
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          {row.tdsDetails &&
-                            row.tdsDetails !== "Yes" &&
-                            row.tdsDetails !== "No" && (
-                              <div>TDS Details: {row.tdsDetails}</div>
-                            )}
-                          {row.tdsSection &&
+                                  : r,
+                              );
+                              setPayeeRows(updated);
+                              if (isCashPaymentMode(nextMode)) {
+                                closePayeeLookup();
+                              }
+                            }}
+                            placeholder="Mode *"
+                          />
+                        </div>
+                        {((row.tdsDetails &&
+                          row.tdsDetails !== "Yes" &&
+                          row.tdsDetails !== "No") ||
+                          (row.tdsSection &&
                             row.tdsSection !== "Yes" &&
-                            row.tdsSection !== "No" && (
-                              <div>TDS Section: {row.tdsSection}</div>
-                            )}
+                            row.tdsSection !== "No")) && (
+                            <div
+                              style={{
+                                marginTop: "8px",
+                                fontSize: "12px",
+                                color: "#6c757d",
+                                lineHeight: 1.5,
+                              }}
+                            >
+                              {row.tdsDetails &&
+                                row.tdsDetails !== "Yes" &&
+                                row.tdsDetails !== "No" && (
+                                  <div>TDS Details: {row.tdsDetails}</div>
+                                )}
+                              {row.tdsSection &&
+                                row.tdsSection !== "Yes" &&
+                                row.tdsSection !== "No" && (
+                                  <div>TDS Section: {row.tdsSection}</div>
+                                )}
+                            </div>
+                          )}
+                        <div className="payee-tds-row">
+                          <span className="payee-tds-label">TDS</span>
+                          <label className="payee-tds-option">
+                            <input
+                              type="radio"
+                              name={`tds-${row.id}`}
+                              value="Yes"
+                              checked={row.tdsSection === "Yes"}
+                              onChange={() =>
+                                updatePayeeRow(row.id, (r) => ({
+                                  ...r,
+                                  tdsSection: "Yes",
+                                }))
+                              }
+                            />{" "}
+                            Yes
+                          </label>
+                          <label className="payee-tds-option">
+                            <input
+                              type="radio"
+                              name={`tds-${row.id}`}
+                              value="No"
+                              checked={row.tdsSection === "No"}
+                              onChange={() =>
+                                updatePayeeRow(row.id, (r) => ({
+                                  ...r,
+                                  tdsSection: "No",
+                                }))
+                              }
+                            />{" "}
+                            No
+                          </label>
+                        </div>
                       </div>
-                    )}
-                    <div className="payee-tds-row">
-                      <span className="payee-tds-label">TDS</span>
-                      <label className="payee-tds-option">
-                        <input
-                          type="radio"
-                          name={`tds-${row.id}`}
-                          value="Yes"
-                            checked={row.tdsSection === "Yes"}
-                            onChange={() =>
-                              updatePayeeRow(row.id, (r) => ({
-                                ...r,
-                                tdsSection: "Yes",
-                              }))
-                            }
-                          />{" "}
-                          Yes
-                      </label>
-                      <label className="payee-tds-option">
-                        <input
-                          type="radio"
-                          name={`tds-${row.id}`}
-                          value="No"
-                            checked={row.tdsSection === "No"}
-                            onChange={() =>
-                              updatePayeeRow(row.id, (r) => ({
-                                ...r,
-                                tdsSection: "No",
-                              }))
-                            }
-                          />{" "}
-                          No
-                      </label>
-                    </div>
-                    </div>
-                  </td>
-                  <td
-                    style={{
-                      borderBottom: "none",
-                      verticalAlign: "middle",
-                      textAlign: "center",
-                    }}
-                  >
-                    <div className="payee-row-actions">
-                      {index === payeeRows.length - 1 && (
-                        <button
-                          className="payee-row-btn"
-                          disabled={!isReadyForAdd}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            addPayeeRow();
-                          }}
-                          title={
-                            !isReadyForAdd
-                              ? "Please fill all fields to add a new row"
-                              : "Add Row"
-                          }
-                          style={{
-                            opacity:
+                    </td>
+                    <td
+                      style={{
+                        borderBottom: "none",
+                        verticalAlign: "middle",
+                        textAlign: "center",
+                      }}
+                    >
+                      <div className="payee-row-actions">
+                        {index === payeeRows.length - 1 && (
+                          <button
+                            className="payee-row-btn"
+                            disabled={!isReadyForAdd}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              addPayeeRow();
+                            }}
+                            title={
                               !isReadyForAdd
-                                ? 0.5
-                                : 1,
-                            cursor:
-                              !isReadyForAdd
-                                ? "not-allowed"
-                                : "pointer",
-                          }}
-                        >
-                          <Plus size={14} strokeWidth={2.5} />
-                        </button>
-                      )}
-                      {payeeRows.length > 1 && (
-                        <button
-                          className="payee-row-btn payee-row-btn-delete"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            removePayeeRow(row.id);
-                          }}
-                          title="Delete Row"
-                        >
-                          <X size={14} strokeWidth={2.5} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                                ? "Please fill all fields to add a new row"
+                                : "Add Row"
+                            }
+                            style={{
+                              opacity:
+                                !isReadyForAdd
+                                  ? 0.5
+                                  : 1,
+                              cursor:
+                                !isReadyForAdd
+                                  ? "not-allowed"
+                                  : "pointer",
+                            }}
+                          >
+                            <Plus size={14} strokeWidth={2.5} />
+                          </button>
+                        )}
+                        {payeeRows.length > 1 && (
+                          <button
+                            className="payee-row-btn payee-row-btn-delete"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              removePayeeRow(row.id);
+                            }}
+                            title="Delete Row"
+                          >
+                            <X size={14} strokeWidth={2.5} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>
@@ -4137,19 +4295,19 @@ const evaluateArithmeticExpression = (input: string) => {
           {!isReadOnlyView &&
             existingPayeeBills.length === 0 &&
             uploadedPayeeBills.length === 0 && (
-            <label className="payee-upload-label payee-footer-upload-label">
-              <span className="payee-upload-label-content">
-                <span className="payee-upload-label-text">Bills</span>
-                <Upload size={18} />
-              </span>
-              <input
-                type="file"
-                className="payee-upload-input"
-                accept=".pdf,application/pdf"
-                onChange={handlePayeeBillUpload}
-              />
-            </label>
-          )}
+              <label className="payee-upload-label payee-footer-upload-label">
+                <span className="payee-upload-label-content">
+                  <span className="payee-upload-label-text">Bills</span>
+                  <Upload size={18} />
+                </span>
+                <input
+                  type="file"
+                  className="payee-upload-input"
+                  accept=".pdf,application/pdf"
+                  onChange={handlePayeeBillUpload}
+                />
+              </label>
+            )}
         </div>
 
         {(existingPayeeBills.length > 0 || uploadedPayeeBills.length > 0) && (
@@ -4166,9 +4324,9 @@ const evaluateArithmeticExpression = (input: string) => {
               const fileUrl = resolveBillFileUrl(file);
               const displayName = normalizeText(
                 file.original_name ||
-                  file.stored_name ||
-                  file.file_path ||
-                  `File ${i + 1}`,
+                file.stored_name ||
+                file.file_path ||
+                `File ${i + 1}`,
               );
 
               return (
@@ -4253,65 +4411,65 @@ const evaluateArithmeticExpression = (input: string) => {
     );
   };
   type WorkflowFormRow =
-  | AdvanceFormRow
-  | SettlementFormRow
-  | ExpenditureFormRow;
+    | AdvanceFormRow
+    | SettlementFormRow
+    | ExpenditureFormRow;
 
-const getRowsForActiveTab = (): WorkflowFormRow[] => {
+  const getRowsForActiveTab = (): WorkflowFormRow[] => {
     if (activeTab === "Advance") return advanceRows;
     if (activeTab === "Settlement") return settlementRows;
     if (activeTab === "Expenditure") return expenditureSubRows;
-  return [];
-};
+    return [];
+  };
 
-const getSelectedWorkflowRow = (): WorkflowFormRow | null => {
-  const rows = getRowsForActiveTab();
+  const getSelectedWorkflowRow = (): WorkflowFormRow | null => {
+    const rows = getRowsForActiveTab();
 
-  if (rowIndexFromState && rows[rowIndexFromState - 1]) {
-    return rows[rowIndexFromState - 1];
-  }
+    if (rowIndexFromState && rows[rowIndexFromState - 1]) {
+      return rows[rowIndexFromState - 1];
+    }
 
-  if (workflowBudgetLineIdFromState) {
-    const matched = rows.find(
+    if (workflowBudgetLineIdFromState) {
+      const matched = rows.find(
         (row) =>
           parsePositiveIntLike(row.budgetLineId) ===
           workflowBudgetLineIdFromState,
-    );
-    if (matched) return matched;
-  }
+      );
+      if (matched) return matched;
+    }
 
-  if (rows.length === 1) return rows[0];
+    if (rows.length === 1) return rows[0];
 
-  const rowsWithBudgetLine = rows.filter((row) =>
+    const rowsWithBudgetLine = rows.filter((row) =>
       Boolean(parsePositiveIntLike(row.budgetLineId)),
-  );
+    );
 
-  if (rowsWithBudgetLine.length === 1) return rowsWithBudgetLine[0];
+    if (rowsWithBudgetLine.length === 1) return rowsWithBudgetLine[0];
 
-  if (rowsWithBudgetLine.length > 1) return rowsWithBudgetLine[0];
+    if (rowsWithBudgetLine.length > 1) return rowsWithBudgetLine[0];
 
-  return rows[0] || null;
-};
+    return rows[0] || null;
+  };
 
-const getSelectedWorkflowBudgetLineId = (): number | null =>
-  parsePositiveIntLike(getSelectedWorkflowRow()?.budgetLineId);
+  const getSelectedWorkflowBudgetLineId = (): number | null =>
+    parsePositiveIntLike(getSelectedWorkflowRow()?.budgetLineId);
 
   const getSelectedWorkflowBudgetProposalId = (): number | null =>
-  parsePositiveIntLike(getSelectedWorkflowRow()?.budgetProposalId);
+    parsePositiveIntLike(getSelectedWorkflowRow()?.budgetProposalId);
 
-const getActiveTabTransactionAmount = (
+  const getActiveTabTransactionAmount = (
     tab: "Advance" | "Settlement" | "Expenditure",
-): number => {
+  ): number => {
     if (tab === "Advance") return totalAdvanceDisplayAmount;
     if (tab === "Settlement") return totalSettlementDisplayAmount;
-  return totalExpenditureDisplayAmount;
-};
+    return totalExpenditureDisplayAmount;
+  };
 
-const getWorkflowRowEnteredAmount = (
-  row: WorkflowFormRow | null | undefined,
+  const getWorkflowRowEnteredAmount = (
+    row: WorkflowFormRow | null | undefined,
     tab: "Advance" | "Settlement" | "Expenditure" | null,
-): number => {
-  if (!row || !tab) return 0;
+  ): number => {
+    if (!row || !tab) return 0;
 
     if (tab === "Advance")
       return parseAmountValue((row as AdvanceFormRow).advance ?? "");
@@ -4319,33 +4477,33 @@ const getWorkflowRowEnteredAmount = (
       return parseAmountValue((row as SettlementFormRow).settlement ?? "");
     return parseAmountValue(
       (row as ExpenditureFormRow).autoSum ||
-        (row as ExpenditureFormRow).expenditure ||
-        "",
+      (row as ExpenditureFormRow).expenditure ||
+      "",
     );
-};
+  };
 
-const getInvalidWorkflowBudgetRowNumbers = (
-  rows: WorkflowFormRow[],
+  const getInvalidWorkflowBudgetRowNumbers = (
+    rows: WorkflowFormRow[],
     tab: "Advance" | "Settlement" | "Expenditure",
-): number[] =>
-  rows
-    .map((row, index) => ({
-      rowNumber: index + 1,
-      amount: getWorkflowRowEnteredAmount(row, tab),
-      budgetLineId: parsePositiveIntLike(row?.budgetLineId),
-    }))
-    .filter((row) => row.amount > 0 && !row.budgetLineId)
-    .map((row) => row.rowNumber);
+  ): number[] =>
+    rows
+      .map((row, index) => ({
+        rowNumber: index + 1,
+        amount: getWorkflowRowEnteredAmount(row, tab),
+        budgetLineId: parsePositiveIntLike(row?.budgetLineId),
+      }))
+      .filter((row) => row.amount > 0 && !row.budgetLineId)
+      .map((row) => row.rowNumber);
 
-const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
-  if (!/^\d*\.?\d*$/.test(nextValue)) return;
+  const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
+    if (!/^\d*\.?\d*$/.test(nextValue)) return;
 
-  const workflowAmount = activeTab
-    ? getActiveTabTransactionAmount(activeTab)
-    : 0;
-  let exceededLimit = false;
+    const workflowAmount = activeTab
+      ? getActiveTabTransactionAmount(activeTab)
+      : 0;
+    let exceededLimit = false;
 
-  setPayeeRows((prev) => {
+    setPayeeRows((prev) => {
       const updatedRows = prev.map((row) =>
         row.id === rowId ? { ...row, amount: nextValue } : row,
       );
@@ -4354,20 +4512,20 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         workflowAmount > 0 &&
         getPayeeTransactionTotal(updatedRows) > workflowAmount
       ) {
-      exceededLimit = true;
-      return prev;
-    }
+        exceededLimit = true;
+        return prev;
+      }
 
-    return updatedRows;
-  });
+      return updatedRows;
+    });
 
-  if (exceededLimit && activeTab) {
-    showAlert(
+    if (exceededLimit && activeTab) {
+      showAlert(
         `Total payee transaction amount cannot exceed the ${activeTab.toLowerCase()} amount of ₹ ${workflowAmount.toLocaleString("en-IN")}.`,
         "warning",
-    );
-  }
-};
+      );
+    }
+  };
   const getSettlementAdjustmentNotice = () => {
     if (activeTab !== "Settlement") {
       return null;
@@ -4423,8 +4581,8 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       return Math.max(
         0,
         financeApprovedAmount -
-          totalSettlementDisplayAmount -
-          totalExpenditureDisplayAmount,
+        totalSettlementDisplayAmount -
+        totalExpenditureDisplayAmount,
       );
     }
 
@@ -4432,8 +4590,8 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       return Math.max(
         0,
         financeApprovedAmount -
-          totalAdvanceDisplayAmount -
-          totalExpenditureDisplayAmount,
+        totalAdvanceDisplayAmount -
+        totalExpenditureDisplayAmount,
       );
     }
 
@@ -4441,8 +4599,8 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       return Math.max(
         0,
         financeApprovedAmount -
-          totalAdvanceDisplayAmount -
-          totalExpenditureDisplayAmount,
+        totalAdvanceDisplayAmount -
+        totalExpenditureDisplayAmount,
       );
     }
 
@@ -4456,58 +4614,101 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
   };
 
   const performSubmit = async (resubmissionComment?: string): Promise<void> => {
-  if (isSubmitting) return;
-  setIsSubmitting(true);
-  try {
-    if (isReadOnlyView) {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      if (isReadOnlyView) {
         showAlert(
           "This proposal is opened in view mode and cannot be submitted again.",
           "warning",
         );
-      return;
-    }
+        return;
+      }
 
-    if (!resolvedFinanceRequestId) {
+      if (!resolvedFinanceRequestId) {
         showAlert(
           "Open Expenditure from an approved Finance request to continue.",
           "warning",
         );
-      return;
-    }
+        return;
+      }
 
-    if (!activeTab) {
+      if (!activeTab) {
         showAlert(
           "Please choose Advance, Settlement, or Expenditure before submitting.",
           "warning",
         );
-      return;
-    }
+        return;
+      }
 
-    if (showUnplannedBudget) {
-      if (!unplannedHeadOfAccount.trim() || !unplannedHeadOfAccountBudgetLineId) {
-        showAlert("Please select Head of Accounts for Unplanned Expenditure.", "warning");
-        return;
-      }
-      if (!unplannedBudgetHead.trim() || !unplannedBudgetSubHead.trim()) {
-        showAlert("Please select Unplanned Expenditure budget head and sub head.", "warning");
-        return;
-      }
-      if (!(unplannedBudgetTotal > 0)) {
-        showAlert("Please enter a valid Unplanned Expenditure amount.", "warning");
-        return;
-      }
-      const selectedHeadBalance = getUnplannedHeadOfAccountAmount();
-      if (selectedHeadBalance !== null && unplannedBudgetTotal > selectedHeadBalance) {
-        showAlert(
-          `Unplanned Expenditure amount cannot exceed Head of Accounts balance ₹ ${selectedHeadBalance.toLocaleString("en-IN")}.`,
-          "warning",
-        );
-        return;
-      }
-    }
+      const effectiveUnplannedRows = showUnplannedBudget
+        ? unplannedRows.filter(
+          (row) =>
+            row.headOfAccount.trim() ||
+            row.budgetHead.trim() ||
+            row.subHead.trim() ||
+            getUnplannedRowAmountValue(row) > 0,
+        )
+        : [];
 
-    const workflowRows = getRowsForActiveTab();
-    const selectedWorkflowRow =
+      if (showUnplannedBudget) {
+        if (!effectiveUnplannedRows.length) {
+          showAlert("Please add at least one Unplanned Expenditure row.", "warning");
+          return;
+        }
+        if (!unplannedHeadOfAccount.trim() || !unplannedHeadOfAccountBudgetLineId) {
+          showAlert("Please select Head of Accounts for Unplanned Expenditure.", "warning");
+          return;
+        }
+
+        const totalsByHeadOfAccount = new Map<
+          number,
+          { amount: number; balance: number | null; rowNumber: number }
+        >();
+
+        for (const [index, row] of effectiveUnplannedRows.entries()) {
+          const rowNumber = index + 1;
+          const rowAmount = getUnplannedRowAmountValue(row);
+          if (!row.budgetHead.trim() || !row.subHead.trim()) {
+            showAlert(
+              `Please select budget head and sub head for Unplanned Expenditure row ${rowNumber}.`,
+              "warning",
+            );
+            return;
+          }
+          if (!(rowAmount > 0)) {
+            showAlert(
+              `Please enter a valid amount for Unplanned Expenditure row ${rowNumber}.`,
+              "warning",
+            );
+            return;
+          }
+
+          const lineId = unplannedHeadOfAccountBudgetLineId;
+          const selectedHeadBalance = getUnplannedHeadOfAccountAmount(firstUnplannedRow);
+          const current = totalsByHeadOfAccount.get(lineId) || {
+            amount: 0,
+            balance: selectedHeadBalance,
+            rowNumber: 1,
+          };
+          current.amount += rowAmount;
+          current.balance = selectedHeadBalance;
+          totalsByHeadOfAccount.set(lineId, current);
+        }
+
+        for (const { amount, balance } of totalsByHeadOfAccount.values()) {
+          if (balance !== null && amount > balance) {
+            showAlert(
+              `Unplanned Expenditure amount cannot exceed Head of Accounts balance ₹ ${balance.toLocaleString("en-IN")}.`,
+              "warning",
+            );
+            return;
+          }
+        }
+      }
+
+      const workflowRows = getRowsForActiveTab();
+      const selectedWorkflowRow =
         workflowRows.find(
           (row) => getWorkflowRowEnteredAmount(row, activeTab) > 0,
         ) ||
@@ -4522,138 +4723,138 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         selectedWorkflowRow?.budgetProposalId,
       );
 
-    if (!workflowRows.length) {
-      showAlert(
+      if (!workflowRows.length) {
+        showAlert(
           "No workflow rows were found for the selected request type.",
           "warning",
-      );
-      return;
-    }
+        );
+        return;
+      }
 
       const invalidBudgetRows = getInvalidWorkflowBudgetRowNumbers(
         workflowRows,
         activeTab,
       );
-    if (invalidBudgetRows.length > 0) {
-      showAlert(
+      if (invalidBudgetRows.length > 0) {
+        showAlert(
           `Please select a valid approved budget line (head + sub-head) for row ${invalidBudgetRows.join(", ")} before submitting.`,
           "warning",
-      );
-      return;
-    }
-
-    if (activeTab === "Advance") {
-      if (!String(advanceTentativeSettlementDate || "").trim()) {
-        showAlert(
-          "Please select a Tentative Date of Settlement.",
-          "warning",
-        );
-        return;
-      }
-    }
-
-    const approvedFinanceLimit = Number(financeApprovedAmount || 0);
-    if (approvedFinanceLimit > 0) {
-      if (activeTab === "Advance" && totalAdvanceDisplayAmount > approvedFinanceLimit) {
-        showAlert(
-          `Total advance amount cannot exceed the approved finance amount of ₹ ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
-          "warning",
         );
         return;
       }
 
-      if (activeTab === "Settlement" && totalSettlementDisplayAmount > approvedFinanceLimit) {
-        showAlert(
-          `Total settlement amount cannot exceed the approved finance amount of ₹ ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
-          "warning",
-        );
-        return;
+      if (activeTab === "Advance") {
+        if (!String(advanceTentativeSettlementDate || "").trim()) {
+          showAlert(
+            "Please select a Tentative Date of Settlement.",
+            "warning",
+          );
+          return;
+        }
       }
 
-      if (activeTab === "Expenditure" && totalExpenditureDisplayAmount > approvedFinanceLimit) {
-        showAlert(
-          `Total expenditure amount cannot exceed the approved finance amount of ₹ ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
-          "warning",
-        );
-        return;
+      const approvedFinanceLimit = Number(financeApprovedAmount || 0);
+      if (approvedFinanceLimit > 0) {
+        if (activeTab === "Advance" && totalAdvanceDisplayAmount > approvedFinanceLimit) {
+          showAlert(
+            `Total advance amount cannot exceed the approved finance amount of ₹ ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
+            "warning",
+          );
+          return;
+        }
+
+        if (activeTab === "Settlement" && totalSettlementDisplayAmount > approvedFinanceLimit) {
+          showAlert(
+            `Total settlement amount cannot exceed the approved finance amount of ₹ ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
+            "warning",
+          );
+          return;
+        }
+
+        if (activeTab === "Expenditure" && totalExpenditureDisplayAmount > approvedFinanceLimit) {
+          showAlert(
+            `Total expenditure amount cannot exceed the approved finance amount of ₹ ${approvedFinanceLimit.toLocaleString("en-IN")}.`,
+            "warning",
+          );
+          return;
+        }
       }
-    }
 
       const hasExistingBills =
         isEditingExistingRequest && existingPayeeBills.length > 0;
-    if (uploadedPayeeBills.length === 0 && !hasExistingBills) {
+      if (uploadedPayeeBills.length === 0 && !hasExistingBills) {
         showAlert("Please upload bills before submitting the form.", "warning");
-      return;
-    }
+        return;
+      }
 
-    const effectivePayeeRows = payeeRows.filter((row) => hasAnyPayeeRowValue(row));
+      const effectivePayeeRows = payeeRows.filter((row) => hasAnyPayeeRowValue(row));
 
-    if (effectivePayeeRows.length === 0) {
-      showAlert("Please add at least one payee transaction row before submitting.", "warning");
-      return;
-    }
+      if (effectivePayeeRows.length === 0) {
+        showAlert("Please add at least one payee transaction row before submitting.", "warning");
+        return;
+      }
 
-    const missingModeRowIndex = effectivePayeeRows.findIndex(
-      (row) => !row.mode || !row.mode.trim(),
-    );
-    if (missingModeRowIndex !== -1) {
-      showAlert(
-        `Please select a transaction mode for Payee row ${missingModeRowIndex + 1} before submitting.`,
-        "warning",
+      const missingModeRowIndex = effectivePayeeRows.findIndex(
+        (row) => !row.mode || !row.mode.trim(),
       );
-      return;
-    }
+      if (missingModeRowIndex !== -1) {
+        showAlert(
+          `Please select a transaction mode for Payee row ${missingModeRowIndex + 1} before submitting.`,
+          "warning",
+        );
+        return;
+      }
 
-    const incompletePayeeRowIndex = effectivePayeeRows.findIndex(
-      (row) => !isPayeeRowReadyForAdd(row),
-    );
-    if (incompletePayeeRowIndex !== -1) {
-      showAlert(
-        `Please fill required payee details for Payee row ${incompletePayeeRowIndex + 1}.`,
-        "warning",
+      const incompletePayeeRowIndex = effectivePayeeRows.findIndex(
+        (row) => !isPayeeRowReadyForAdd(row),
       );
-      return;
-    }
+      if (incompletePayeeRowIndex !== -1) {
+        showAlert(
+          `Please fill required payee details for Payee row ${incompletePayeeRowIndex + 1}.`,
+          "warning",
+        );
+        return;
+      }
 
-    const normalizedTotalPayeeTransactionAmount = Number(
-      getPayeeTransactionTotal(effectivePayeeRows).toFixed(2),
-    );
-    const normalizedWorkflowAmount = Number(
-      getActiveTabTransactionAmount(activeTab).toFixed(2),
-    );
+      const normalizedTotalPayeeTransactionAmount = Number(
+        getPayeeTransactionTotal(effectivePayeeRows).toFixed(2),
+      );
+      const normalizedWorkflowAmount = Number(
+        getActiveTabTransactionAmount(activeTab).toFixed(2),
+      );
 
-    if (normalizedTotalPayeeTransactionAmount !== normalizedWorkflowAmount) {
-      showAlert(
+      if (normalizedTotalPayeeTransactionAmount !== normalizedWorkflowAmount) {
+        showAlert(
           `${activeTab} amount is ₹ ${normalizedWorkflowAmount.toLocaleString(
             "en-IN",
             {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
             },
           )} and total payee transaction amount is ₹ ${normalizedTotalPayeeTransactionAmount.toLocaleString(
             "en-IN",
             {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
             },
           )}. Both must be exactly the same. Form cannot be submitted.`,
           "warning",
-      );
-      return;
-    }
+        );
+        return;
+      }
 
-    const primaryIncomeRow = showIncomeSection ? incomeRows[0] : undefined;
+      const primaryIncomeRow = showIncomeSection ? incomeRows[0] : undefined;
 
-    const normalizedPayeeRows = effectivePayeeRows.map((row) => {
-      const isCashMode = isCashPaymentMode(row.mode);
+      const normalizedPayeeRows = effectivePayeeRows.map((row) => {
+        const isCashMode = isCashPaymentMode(row.mode);
         const canonicalPayeeName = resolveCanonicalPayeeName(
           isCashMode ? "" : row.payeeName,
           isCashMode ? "" : row.accountName,
         );
 
-      return {
-        payee_id: isCashMode ? null : row.payeeId ?? null,
-        payee_name: canonicalPayeeName,
+        return {
+          payee_id: isCashMode ? null : row.payeeId ?? null,
+          payee_name: canonicalPayeeName,
           bank_name: isCashMode ? "" : row.bankName?.trim() || "",
           account_no: isCashMode ? "" : row.accountNo?.trim() || "",
           ifsc: isCashMode ? "" : row.ifsc?.trim().toUpperCase() || "",
@@ -4661,7 +4862,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
           url: isCashMode ? "" : row.url?.trim() || "",
           amount: row.amount?.trim() || "",
           mode: row.mode?.trim() || "",
-        account_name: canonicalPayeeName,
+          account_name: canonicalPayeeName,
           pan_number: isCashMode ? "" : row.panNumber?.trim() || "",
           account_type: isCashMode ? "" : row.accountType?.trim() || "",
           beneficiary_type: isCashMode ? "" : row.beneficiaryType || "individual",
@@ -4674,172 +4875,189 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
           gstin: isCashMode ? "" : row.gstin?.trim() || "",
           tds_details: isCashMode ? "" : row.tdsDetails?.trim() || "",
           tds_section: isCashMode ? "" : row.tdsSection?.trim() || "",
-      };
-    });
+        };
+      });
 
       const selectedAdvanceRows = activeTab === "Advance" ? advanceRows : [];
 
-    const selectedSettlementRows =
+      const selectedSettlementRows =
         activeTab === "Settlement" ? settlementRows : [];
 
-    const selectedExpenditureRows =
+      const selectedExpenditureRows =
         activeTab === "Expenditure" ? expenditureSubRows : [];
 
-    const payload = {
-      financerequestid: resolvedFinanceRequestId,
-      workflowbudgetlineid: selectedWorkflowBudgetLineId,
-      sourcebudgetlineid: selectedWorkflowBudgetLineId,
-      workflowbudgetproposalid: selectedWorkflowBudgetProposalId,
-      workflowrequesttype: activeTab,
-      row_index: rowIndexFromState,
-      dashboard_row_id: dashboardRowIdFromState,
-      source_request_id: sourceRequestIdFromState,
-      workflowrowref:
-        workflowRowRefFromState ??
-        rowReferenceIdFromState ??
-        dashboardRowIdFromState ??
-        null,
+      const normalizedUnplannedRows = effectiveUnplannedRows.map((row) => ({
+        head_of_account: unplannedHeadOfAccount.trim(),
+        head_of_account_budget_line_id: unplannedHeadOfAccountBudgetLineId,
+        head_of_account_budget_proposal_id: unplannedHeadOfAccountBudgetProposalId,
+        budget_head: row.budgetHead.trim(),
+        sub_head: row.subHead.trim(),
+        amount: getUnplannedRowAmountValue(row),
+        amount_expression:
+          activeTab === "Expenditure" ? row.amount.trim() || null : null,
+        description:
+          getUnplannedBudgetDescription(row.budgetHead, row.subHead) ||
+          row.description.trim(),
+      }));
+      const primaryUnplannedRow = normalizedUnplannedRows[0] || null;
 
-      employeeid: isExternalApplicant ? null : employeeId,
-      applicantname: isExternalApplicant ? applicantName : null,
-      designation: isExternalApplicant ? designation : null,
-      department: isExternalApplicant ? department : null,
-      email: isExternalApplicant ? email : null,
-      mobile: isExternalApplicant ? mobile : null,
-      requestdate: date,
-      description,
-      beneficiarytype: categoryType,
-      beneficiaryvalue: categoryItem,
-      beneficiaryentityid: beneficiaryEmployeeId,
-      budget_tag: selectedTag,
-      budgettag: selectedTag,
-      primaryhead: primaryHead,
-      eventsubhead: eventSubHead,
-      isbudgetproposed: isBudgetProposed,
-      proposedamount: amountProposed || null,
-      balanceamount: getComputedBalanceAmount() || null,
-      unplanned_budget_enabled: showUnplannedBudget,
-      unplanned_budget_amount: showUnplannedBudget
-        ? Number(unplannedBudgetAmount || 0)
-        : null,
-      unplanned_head_of_account: showUnplannedBudget
-        ? unplannedHeadOfAccount.trim() || null
-        : null,
-      unplanned_head_of_account_budget_line_id: showUnplannedBudget
-        ? unplannedHeadOfAccountBudgetLineId
-        : null,
-      unplanned_head_of_account_budget_proposal_id: showUnplannedBudget
-        ? unplannedHeadOfAccountBudgetProposalId
-        : null,
-      unplanned_budget_head: showUnplannedBudget
-        ? unplannedBudgetHead.trim() || null
-        : null,
-      unplanned_budget_sub_head: showUnplannedBudget
-        ? unplannedBudgetSubHead.trim() || null
-        : null,
-      unplanned_budget_description: showUnplannedBudget
-        ? getUnplannedBudgetDescription().trim() || null
-        : null,
-      settlement_remarks:
-        activeTab === "Settlement" ? settlementRemarks.trim() || null : null,
-      expenditure_remarks:
-        activeTab === "Expenditure" ? expenditureRemarks.trim() || null : null,
-      tentative_settlement_date:
-        activeTab === "Advance" ? advanceTentativeSettlementDate || null : null,
-      incometype: primaryIncomeRow?.incomeSource || null,
-      incomestatus: primaryIncomeRow?.creditAccount || null,
-      incomeamounttype: primaryIncomeRow?.contribution || null,
-      creditstatus: primaryIncomeRow?.status || null,
-      debitstatus: debitStatus,
-      partialamount: primaryIncomeRow?.amount || null,
+      const payload = {
+        financerequestid: resolvedFinanceRequestId,
+        workflowbudgetlineid: selectedWorkflowBudgetLineId,
+        sourcebudgetlineid: selectedWorkflowBudgetLineId,
+        workflowbudgetproposalid: selectedWorkflowBudgetProposalId,
+        workflowrequesttype: activeTab,
+        row_index: rowIndexFromState,
+        dashboard_row_id: dashboardRowIdFromState,
+        source_request_id: sourceRequestIdFromState,
+        workflowrowref:
+          workflowRowRefFromState ??
+          rowReferenceIdFromState ??
+          dashboardRowIdFromState ??
+          null,
 
-      incomerows: showIncomeSection ? incomeRows : [],
-      advancerows: selectedAdvanceRows,
-      settlementrows: selectedSettlementRows,
-      expenditurerows: selectedExpenditureRows,
+        employeeid: isExternalApplicant ? null : employeeId,
+        applicantname: isExternalApplicant ? applicantName : null,
+        designation: isExternalApplicant ? designation : null,
+        department: isExternalApplicant ? department : null,
+        email: isExternalApplicant ? email : null,
+        mobile: isExternalApplicant ? mobile : null,
+        requestdate: date,
+        description,
+        beneficiarytype: categoryType,
+        beneficiaryvalue: categoryItem,
+        beneficiaryentityid: beneficiaryEmployeeId,
+        budget_tag: selectedTag,
+        budgettag: selectedTag,
+        primaryhead: primaryHead,
+        eventsubhead: eventSubHead,
+        isbudgetproposed: isBudgetProposed,
+        proposedamount: amountProposed || null,
+        balanceamount: getComputedBalanceAmount() || null,
+        unplanned_budget_enabled:
+          showUnplannedBudget && normalizedUnplannedRows.length > 0,
+        unplanned_budget_amount: showUnplannedBudget
+          ? unplannedBudgetTotal
+          : null,
+        unplanned_head_of_account: showUnplannedBudget
+          ? primaryUnplannedRow?.head_of_account || null
+          : null,
+        unplanned_head_of_account_budget_line_id: showUnplannedBudget
+          ? primaryUnplannedRow?.head_of_account_budget_line_id || null
+          : null,
+        unplanned_head_of_account_budget_proposal_id: showUnplannedBudget
+          ? primaryUnplannedRow?.head_of_account_budget_proposal_id || null
+          : null,
+        unplanned_budget_head: showUnplannedBudget
+          ? primaryUnplannedRow?.budget_head || null
+          : null,
+        unplanned_budget_sub_head: showUnplannedBudget
+          ? primaryUnplannedRow?.sub_head || null
+          : null,
+        unplanned_budget_description: showUnplannedBudget
+          ? primaryUnplannedRow?.description || null
+          : null,
+        unplanned_rows: normalizedUnplannedRows,
+        settlement_remarks:
+          activeTab === "Settlement" ? settlementRemarks.trim() || null : null,
+        expenditure_remarks:
+          activeTab === "Expenditure" ? expenditureRemarks.trim() || null : null,
+        tentative_settlement_date:
+          activeTab === "Advance" ? advanceTentativeSettlementDate || null : null,
+        incometype: primaryIncomeRow?.incomeSource || null,
+        incomestatus: primaryIncomeRow?.creditAccount || null,
+        incomeamounttype: primaryIncomeRow?.contribution || null,
+        creditstatus: primaryIncomeRow?.status || null,
+        debitstatus: debitStatus,
+        partialamount: primaryIncomeRow?.amount || null,
 
-      payeerows: normalizedPayeeRows,
-      showbulkneft: showBulkNEFT || Boolean(bulkNeftFile),
-      bulknefttemplateversion: BULK_NEFT_TEMPLATE_VERSION,
-      paymentdetails: paymentDetails,
-    };
+        incomerows: showIncomeSection ? incomeRows : [],
+        advancerows: selectedAdvanceRows,
+        settlementrows: selectedSettlementRows,
+        expenditurerows: selectedExpenditureRows,
 
-    const formData = new FormData();
+        payeerows: normalizedPayeeRows,
+        showbulkneft: showBulkNEFT || Boolean(bulkNeftFile),
+        bulknefttemplateversion: BULK_NEFT_TEMPLATE_VERSION,
+        paymentdetails: paymentDetails,
+      };
+
+      const formData = new FormData();
       formData.append("payload", JSON.stringify(payload));
 
-    uploadedPayeeBills.forEach((file) => {
+      uploadedPayeeBills.forEach((file) => {
         formData.append("bill_files", file);
-    });
+      });
 
-    if (bulkNeftFile) {
+      if (bulkNeftFile) {
         formData.append("bulk_neft_file", bulkNeftFile);
-    }
+      }
 
       const endpoint =
         isEditingExistingRequest && submittedRequestIdFromState
-      ? `/expenditure/${submittedRequestIdFromState}`
+          ? `/expenditure/${submittedRequestIdFromState}`
           : "/expenditure";
       const result =
         isEditingExistingRequest && submittedRequestIdFromState
-      ? await authenticityUtility.put(endpoint, formData, {
-          headers: {
-                "Content-Type": "multipart/form-data",
-          },
-        })
-      : await authenticityUtility.postFile(endpoint, formData);
-    const normalizedResult = result as {
-      success?: boolean;
-      status?: string;
-      message?: string;
-      data?: {
-        expenditureId?: unknown;
-        requestRef?: unknown;
+          ? await authenticityUtility.put(endpoint, formData, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          })
+          : await authenticityUtility.postFile(endpoint, formData);
+      const normalizedResult = result as {
+        success?: boolean;
+        status?: string;
+        message?: string;
+        data?: {
+          expenditureId?: unknown;
+          requestRef?: unknown;
+        };
       };
-    };
-    const isSubmitSuccess =
-      normalizedResult.success === true || normalizedResult.status === "success";
+      const isSubmitSuccess =
+        normalizedResult.success === true || normalizedResult.status === "success";
 
       if (!isSubmitSuccess) {
         showAlert(normalizedResult.message || "Submission failed", "error");
-      return;
-    }
-
-    const shouldResubmitAfterSave =
-      isEditingExistingRequest &&
-      Boolean(submittedRequestIdFromState) &&
-      isReturnedWorkflowRequest;
-
-    if (shouldResubmitAfterSave) {
-      const comment = String(resubmissionComment || "").trim();
-      if (!comment) {
-        showAlert("Please enter resubmission comments.", "warning");
         return;
       }
 
-      const resubmitResult = (await authenticityUtility.post(
-        `/expenditure/${submittedRequestIdFromState}/resubmit`,
-        { feedback: comment },
-      )) as { success?: boolean; status?: string; message?: string };
+      const shouldResubmitAfterSave =
+        isEditingExistingRequest &&
+        Boolean(submittedRequestIdFromState) &&
+        isReturnedWorkflowRequest;
+
+      if (shouldResubmitAfterSave) {
+        const comment = String(resubmissionComment || "").trim();
+        if (!comment) {
+          showAlert("Please enter resubmission comments.", "warning");
+          return;
+        }
+
+        const resubmitResult = (await authenticityUtility.post(
+          `/expenditure/${submittedRequestIdFromState}/resubmit`,
+          { feedback: comment },
+        )) as { success?: boolean; status?: string; message?: string };
 
         if (resubmitResult.success !== true && resubmitResult.status !== "success") {
-        showAlert(
+          showAlert(
             resubmitResult.message ||
-              "Request updated, but resubmission failed",
+            "Request updated, but resubmission failed",
             "error",
-        );
-        return;
+          );
+          return;
+        }
+        closeResubmitPopup(true);
       }
-      closeResubmitPopup(true);
-    }
 
-    const submittedAmount =
+      const submittedAmount =
         activeTab === "Advance"
-        ? totalAdvanceDisplayAmount
+          ? totalAdvanceDisplayAmount
           : activeTab === "Settlement"
-          ? totalSettlementDisplayAmount
+            ? totalSettlementDisplayAmount
             : activeTab === "Expenditure"
-            ? totalExpenditureDisplayAmount
-            : 0;
+              ? totalExpenditureDisplayAmount
+              : 0;
 
       const savedRequestId = parsePositiveIntLike(
         normalizedResult.data?.expenditureId,
@@ -4847,19 +5065,19 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       const savedRequestRef = String(
         normalizedResult.data?.requestRef || "",
       ).trim();
-    const financeIdLabel = `Finance ID: ${resolvedFinanceRequestId}`;
-    const financeRefLabel = `Finance Ref: ${String(
+      const financeIdLabel = `Finance ID: ${resolvedFinanceRequestId}`;
+      const financeRefLabel = `Finance Ref: ${String(
         (
           location.state as {
             financeProposal?: { proposalId?: unknown };
           } | null
         )?.financeProposal?.proposalId || "",
-    ).trim()}`;
-    const moduleLabel = activeTab
-      ? shouldResubmitAfterSave
-        ? `${activeTab} resubmitted successfully.`
+      ).trim()}`;
+      const moduleLabel = activeTab
+        ? shouldResubmitAfterSave
+          ? `${activeTab} resubmitted successfully.`
           : `${activeTab} ${isEditingExistingRequest ? "updated successfully." : "submitted successfully."}`
-      : isEditingExistingRequest
+        : isEditingExistingRequest
           ? shouldResubmitAfterSave
             ? "Resubmitted successfully."
             : "Updated successfully."
@@ -4868,23 +5086,23 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         ? `Request Ref: ${savedRequestRef}`
         : "";
 
-    showAlert(
-      <div style={{ lineHeight: 1.6 }}>
+      showAlert(
+        <div style={{ lineHeight: 1.6 }}>
           <div>{moduleLabel}</div>
-        <div>{financeIdLabel}</div>
+          <div>{financeIdLabel}</div>
           {financeRefLabel.trim() !== "Finance Ref:" && (
             <div>{financeRefLabel}</div>
           )}
-        {requestLabel && <div>{requestLabel}</div>}
-      </div>,
+          {requestLabel && <div>{requestLabel}</div>}
+        </div>,
         "success",
         "Submission Successful",
-      false,
+        false,
         "Continue",
-      () => {
-        closeAlert();
+        () => {
+          closeAlert();
           navigate("/expenditurecard", {
-          state: {
+            state: {
               ...(dashboardRowIdFromState
                 ? { dashboardRowId: dashboardRowIdFromState }
                 : {}),
@@ -4894,30 +5112,30 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
               ...(workflowRowRefFromState
                 ? { workflowrowref: workflowRowRefFromState }
                 : {}),
-            workflowbudgetlineid: selectedWorkflowBudgetLineId,
-            budgetLineId: selectedWorkflowBudgetLineId,
+              workflowbudgetlineid: selectedWorkflowBudgetLineId,
+              budgetLineId: selectedWorkflowBudgetLineId,
               workflowbudgetproposalid:
                 selectedWorkflowBudgetProposalId ?? undefined,
-            submittedModule: activeTab ?? undefined,
-            submittedAmount,
-            submittedRequestId: savedRequestId ?? undefined,
-            financeRequestId: resolvedFinanceRequestId ?? undefined,
-            fiscalYear: (location.state as { fiscalYear?: unknown } | null)?.fiscalYear,
-            financeProposal:
+              submittedModule: activeTab ?? undefined,
+              submittedAmount,
+              submittedRequestId: savedRequestId ?? undefined,
+              financeRequestId: resolvedFinanceRequestId ?? undefined,
+              fiscalYear: (location.state as { fiscalYear?: unknown } | null)?.fiscalYear,
+              financeProposal:
                 (location.state as { financeProposal?: unknown } | null)
                   ?.financeProposal ?? null,
-          },
-        });
+            },
+          });
         },
-    );
-    return;
-  } catch (error) {
+      );
+      return;
+    } catch (error) {
       console.error("Expenditure submit error:", error);
       showAlert(getSubmitErrorMessage(error), "error");
-  } finally {
+    } finally {
       setIsSubmitting(false);
-  }
-};
+    }
+  };
 
   const handleSubmit = async (resubmissionComment?: string): Promise<void> => {
     if (isSubmitting) return;
@@ -4950,7 +5168,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     }
 
     await performSubmit(resubmissionComment);
-};
+  };
 
   const submitResubmissionWithComment = async () => {
     if (resubmitSubmitting) return;
@@ -4986,16 +5204,16 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
 
       const response = (decision === "archived"
         ? await authenticityUtility.patch(
-            `/expenditure/${submittedRequestIdFromState}/archive-toggle`,
-            {},
-          )
+          `/expenditure/${submittedRequestIdFromState}/archive-toggle`,
+          {},
+        )
         : await authenticityUtility.patch(
-            `/expenditure/${submittedRequestIdFromState}/approval`,
-            {
-              decision,
-              feedback,
-            },
-          )) as { status?: string; success?: boolean; message?: string };
+          `/expenditure/${submittedRequestIdFromState}/approval`,
+          {
+            decision,
+            feedback,
+          },
+        )) as { status?: string; success?: boolean; message?: string };
 
       if (response?.status !== "success" && response?.success !== true) {
         showAlert(response?.message || `Failed to ${decision}`, "error");
@@ -5006,8 +5224,8 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     } catch (error: any) {
       showAlert(
         error?.response?.data?.message ||
-          error?.message ||
-          `Failed to ${decision}`,
+        error?.message ||
+        `Failed to ${decision}`,
         "error",
       );
     } finally {
@@ -5083,12 +5301,12 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       const requestBody = hasPaymentProofs
         ? new FormData()
         : {
-            payment_status: paymentPayload.payment_status,
-            payment_date: paymentPayload.payment_date || null,
-            payment_ref_no: paymentPayload.payment_ref_no || null,
-            payment_mode: paymentPayload.payment_mode || null,
-            payment_debit_account: paymentPayload.payment_debit_account || null,
-          };
+          payment_status: paymentPayload.payment_status,
+          payment_date: paymentPayload.payment_date || null,
+          payment_ref_no: paymentPayload.payment_ref_no || null,
+          payment_mode: paymentPayload.payment_mode || null,
+          payment_debit_account: paymentPayload.payment_debit_account || null,
+        };
 
       if (hasPaymentProofs && requestBody instanceof FormData) {
         Object.entries(paymentPayload).forEach(([key, value]) => {
@@ -5104,10 +5322,10 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
         requestBody,
         hasPaymentProofs
           ? {
-              headers: {
-                "Content-Type": "multipart/form-data",
-              },
-            }
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          }
           : undefined,
       )) as {
         success?: boolean;
@@ -5163,13 +5381,7 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
       setBalanceAmount("");
       setIsBudgetProposed("");
       setShowUnplannedBudget(false);
-      setUnplannedBudgetAmount("");
-      setUnplannedHeadOfAccount("");
-      setUnplannedHeadOfAccountBudgetLineId(null);
-      setUnplannedHeadOfAccountBudgetProposalId(null);
-      setUnplannedBudgetHead("");
-      setUnplannedBudgetSubHead("");
-      setUnplannedBudgetDescription("");
+      setUnplannedRows([createUnplannedBudgetRow()]);
       setBudgetRows([{ category: "", head: "", amount: "" }]);
       setAmountProposed("");
       setShowIncomeSection(false);
@@ -5216,29 +5428,29 @@ const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     }
   };
 
-   // Helper functions previously here moved to top
+  // Helper functions previously here moved to top
 
-// Tag
+  // Tag
   const [selectedTag, setSelectedTag] = useState<string>("");
-useEffect(() => {
-  if (!financeTagFromState) return;
+  useEffect(() => {
+    if (!financeTagFromState) return;
     setSelectedTag(
       (prev) => prev || resolveTagValue(financeTagFromState, tagOptions),
     );
-}, [financeTagFromState, tagOptions]);
+  }, [financeTagFromState, tagOptions]);
 
-useEffect(() => {
-  if (!selectedTag) return;
+  useEffect(() => {
+    if (!selectedTag) return;
 
-  const resolvedTag = resolveTagValue(selectedTag, tagOptions);
-  if (resolvedTag !== selectedTag) {
-    setSelectedTag(resolvedTag);
-  }
-}, [selectedTag, tagOptions]);
+    const resolvedTag = resolveTagValue(selectedTag, tagOptions);
+    if (resolvedTag !== selectedTag) {
+      setSelectedTag(resolvedTag);
+    }
+  }, [selectedTag, tagOptions]);
 
-const handleBeneficiarySearch = async (query: string) => {
-  setBeneficiarySearchQuery(query);
-  try {
+  const handleBeneficiarySearch = async (query: string) => {
+    setBeneficiarySearchQuery(query);
+    try {
       let typeParam = "";
       if (categoryType === "Faculty") typeParam = "&type=Teaching";
       else if (categoryType === "Staff") typeParam = "&type=Non-Teaching";
@@ -5246,14 +5458,14 @@ const handleBeneficiarySearch = async (query: string) => {
         `/expenditure/search-applicant?q=${encodeURIComponent(query)}${typeParam}`,
       )) as any;
       if (response?.success === true || response?.status === "success") {
-      setBeneficiarySearchResults(response.data);
-      setShowBeneficiaryDropdown(true);
+        setBeneficiarySearchResults(response.data);
+        setShowBeneficiaryDropdown(true);
+      }
+    } catch (error) {
+      setBeneficiarySearchResults([]);
+      setShowBeneficiaryDropdown(false);
     }
-  } catch (error) {
-    setBeneficiarySearchResults([]);
-    setShowBeneficiaryDropdown(false);
-  }
-};
+  };
 
   const handleSelectBeneficiary = (emp: {
     employeeid: number;
@@ -5261,11 +5473,11 @@ const handleBeneficiarySearch = async (query: string) => {
     designation: string;
     department: string;
   }) => {
-  setCategoryItem(emp.name.trim());
-  setBeneficiaryEmployeeId(emp.employeeid);
-  setBeneficiarySearchQuery(emp.name.trim());
-  setShowBeneficiaryDropdown(false);
-};
+    setCategoryItem(emp.name.trim());
+    setBeneficiaryEmployeeId(emp.employeeid);
+    setBeneficiarySearchQuery(emp.name.trim());
+    setShowBeneficiaryDropdown(false);
+  };
 
   const handleAddPayee = async (payee: AddPayeeModalPayee) => {
     try {
@@ -5334,8 +5546,8 @@ const handleBeneficiarySearch = async (query: string) => {
         beneficiaryType:
           String(
             savedPayee.beneficiary_type ||
-              payee.beneficiaryType ||
-              "individual",
+            payee.beneficiaryType ||
+            "individual",
           )
             .trim()
             .toLowerCase() === "organization"
@@ -5409,6 +5621,413 @@ const handleBeneficiarySearch = async (query: string) => {
     }
   };
 
+  const renderUnplannedExpenditureTable = () => {
+    if (!hasUnplannedBudgetPreview) return null;
+    const amountColumnLabel =
+      activeTab === "Settlement" ? "Settlement" : "Expenditure";
+    const headerColumns =
+      activeTab === "Advance" || activeTab === "Expenditure"
+        ? [
+          ["6%", "S.No"],
+          ["35%", "Budget Head"],
+          ["35%", "Sub Head"],
+          ["14%", "Budget"],
+          ["10%", "Action"],
+        ]
+        : [
+          ["6%", "S.No"],
+          ["30%", "Budget Head"],
+          ["30%", "Sub Head"],
+          ["14%", "Budget"],
+          ["14%", amountColumnLabel],
+          ["6%", "Action"],
+        ];
+    const amountInputPlaceholder = (row: UnplannedBudgetRow) =>
+      activeTab === "Advance"
+        ? "₹ 0"
+        : getUnplannedBudgetAmountPlaceholder(row);
+
+    return (
+      <div
+        style={{
+          backgroundColor: "#fff",
+          padding: "30px",
+          borderRadius: "20px",
+          marginBottom: "20px",
+          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+        }}
+      >
+        <h6
+          style={{
+            fontWeight: 600,
+            color: "#0a2540",
+            marginBottom: "24px",
+          }}
+        >
+          Unplanned Expenditure
+        </h6>
+        <div style={{ overflowX: "visible" }}>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              backgroundColor: "#fff",
+              border: "1px solid #e0e0e0",
+              tableLayout: "fixed",
+            }}
+          >
+            <thead>
+              <tr style={{ backgroundColor: "#f0f6ff" }}>
+                {headerColumns.map(([width, label]) => (
+                  <th
+                    key={label}
+                    style={{
+                      width,
+                      padding: "12px",
+                      border: "1px solid #e0e0e0",
+                      color: "#0069ab",
+                      fontWeight: 600,
+                      textAlign: "center",
+                    }}
+                  >
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {unplannedRows.map((row, idx) => {
+                const isFilled = isUnplannedRowFilled(row);
+                return (
+                  <Fragment key={row.id}>
+                  <tr>
+                    <td
+                      rowSpan={activeTab === "Advance" || activeTab === "Expenditure" ? 2 : 1}
+                      style={{
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        textAlign: "center",
+                        verticalAlign: "middle",
+                        color: "#495057",
+                      }}
+                    >
+                      {idx + 1}
+                    </td>
+                    <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                      <CustomDropdown
+                        className="mb-0"
+                        options={getUnplannedBudgetHeadOptions()}
+                        value={getUnplannedBudgetHeadSelectedOption(row.budgetHead)}
+                        onChange={(option) =>
+                          handleUnplannedBudgetHeadChange(row.id, option as OptionType | null)
+                        }
+                        filterOption={filterApprovedBudgetHeadOption}
+                        placeholder="Select Head"
+                        isDisabled={isReadOnlyView}
+                      />
+                    </td>
+                    <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                      <CustomDropdown
+                        className="mb-0"
+                        options={getCatalogSubHeadOptions(row.budgetHead)}
+                        value={getCatalogSubHeadSelectedOption(row.budgetHead, row.subHead)}
+                        onChange={(option) =>
+                          handleUnplannedBudgetSubHeadChange(row.id, option as OptionType | null)
+                        }
+                        placeholder="Select Sub Head"
+                        isDisabled={isReadOnlyView || !row.budgetHead}
+                      />
+                    </td>
+                    <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                      <input
+                        type="text"
+                        value={getUnplannedBudgetAmountPlaceholder(firstUnplannedRow)}
+                        readOnly
+                        style={{
+                          border: "1px solid #d7dee7",
+                          borderRadius: "12px",
+                          padding: "10px 14px",
+                          fontSize: "0.95rem",
+                          width: "100%",
+                          height: "45px",
+                          backgroundColor: "#f5f7fb",
+                          color: "#5f6f86",
+                          textAlign: "center",
+                          outline: "none",
+                        }}
+                      />
+                    </td>
+                    {activeTab === "Settlement" && (
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                        <input
+                          type="text"
+                          value={row.amount}
+                          readOnly={isReadOnlyView}
+                          onChange={(e) =>
+                            updateUnplannedRow(row.id, {
+                              amount: e.target.value.replace(/[^\d.]/g, ""),
+                            })
+                          }
+                          placeholder={amountInputPlaceholder(row)}
+                          style={{
+                            border: "1px solid #d7dee7",
+                            borderRadius: "12px",
+                            padding: "10px 14px",
+                            fontSize: "0.95rem",
+                            width: "100%",
+                            height: "45px",
+                            backgroundColor: isReadOnlyView ? "#e9ecef" : "#fcfdff",
+                            color: "#2a3f5e",
+                            textAlign: "center",
+                            outline: "none",
+                          }}
+                        />
+                      </td>
+                    )}
+                    <td
+                      rowSpan={activeTab === "Advance" || activeTab === "Expenditure" ? 2 : 1}
+                      style={{
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        textAlign: "center",
+                        verticalAlign: "middle",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "center", gap: "8px" }}>
+                        {unplannedRows.length > 1 && !isReadOnlyView && (
+                          <button
+                            type="button"
+                            onClick={() => removeUnplannedRow(row.id)}
+                            style={deleteIconBtn}
+                            title="Remove Row"
+                          >
+                            <X size={14} strokeWidth={2.5} />
+                          </button>
+                        )}
+                        {idx === unplannedRows.length - 1 && !isReadOnlyView && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isFilled) addUnplannedRow();
+                            }}
+                            disabled={!isFilled}
+                            style={{
+                              ...iconBtn,
+                              opacity: isFilled ? 1 : 0.45,
+                              cursor: isFilled ? "pointer" : "not-allowed",
+                            }}
+                            title="Add Row"
+                          >
+                            <Plus size={14} strokeWidth={2.5} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {activeTab === "Advance" && (
+                    <tr>
+                      <td
+                        style={{
+                          padding: "12px 16px",
+                          border: "1px solid #e0e0e0",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              minWidth: "110px",
+                              color: "#364152",
+                              fontSize: "1rem",
+                              fontWeight: 500,
+                            }}
+                          >
+                            Pre Advance
+                          </span>
+                          <input
+                            type="text"
+                            value="₹ 0"
+                            readOnly
+                            style={{
+                              border: "1px solid #d7dee7",
+                              borderRadius: "12px",
+                              padding: "10px 14px",
+                              fontSize: "0.95rem",
+                              width: "100%",
+                              height: "45px",
+                              backgroundColor: "#f5f7fb",
+                              color: "#5f6f86",
+                              textAlign: "center",
+                              outline: "none",
+                            }}
+                          />
+                        </div>
+                      </td>
+                      <td
+                        colSpan={2}
+                        style={{
+                          padding: "12px 16px",
+                          border: "1px solid #e0e0e0",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "minmax(90px, auto) minmax(160px, 1fr)",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              color: "#364152",
+                              fontSize: "1rem",
+                              fontWeight: 500,
+                            }}
+                          >
+                            Advance
+                          </span>
+                          <input
+                            type="text"
+                            value={row.amount}
+                            readOnly={isReadOnlyView}
+                            onChange={(e) =>
+                              updateUnplannedRow(row.id, {
+                                amount: e.target.value.replace(/[^\d.]/g, ""),
+                              })
+                            }
+                            placeholder="₹ 0"
+                            style={{
+                              border: "1px solid #d7dee7",
+                              borderRadius: "12px",
+                              padding: "10px 14px",
+                              fontSize: "0.95rem",
+                              width: "100%",
+                              height: "45px",
+                              backgroundColor: isReadOnlyView ? "#e9ecef" : "#fcfdff",
+                              color: "#2a3f5e",
+                              outline: "none",
+                            }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  {activeTab === "Expenditure" && (
+                    <tr>
+                      <td
+                        colSpan={3}
+                        style={{
+                          padding: "12px",
+                          border: "1px solid #e0e0e0",
+                          borderTop: "none",
+                          backgroundColor: "#fff",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontWeight: 500,
+                              color: "#495057",
+                              minWidth: "95px",
+                            }}
+                          >
+                            Expenditure
+                          </span>
+                          <input
+                            type="text"
+                            placeholder="Eg: 455+345+780"
+                            value={row.amount}
+                            readOnly={isReadOnlyView}
+                            onChange={(e) =>
+                              updateUnplannedRow(row.id, {
+                                amount: e.target.value.replace(/[^\d.+\-*/() ]/g, ""),
+                              })
+                            }
+                            style={{
+                              border: "1px solid #e0e0e0",
+                              borderRadius: "12px",
+                              padding: "10px 15px",
+                              fontSize: "0.95rem",
+                              flex: 1,
+                              height: "45px",
+                              boxSizing: "border-box",
+                              fontFamily: "inherit",
+                              backgroundColor: isReadOnlyView ? "#e9ecef" : "#fcfdff",
+                              color: "#000",
+                              outline: "none",
+                            }}
+                          />
+                          <input
+                            type="text"
+                            readOnly
+                            value={
+                              getUnplannedRowAmountValue(row)
+                                ? `₹ ${getUnplannedRowAmountValue(row)}`
+                                : ""
+                            }
+                            style={{
+                              border: "1px solid #e0e0e0",
+                              borderRadius: "12px",
+                              padding: "10px 15px",
+                              fontSize: "0.95rem",
+                              width: "145px",
+                              height: "45px",
+                              boxSizing: "border-box",
+                              fontFamily: "inherit",
+                              backgroundColor: "#fff",
+                              color: "#6c757d",
+                              textAlign: "center",
+                              outline: "none",
+                              cursor: "not-allowed",
+                            }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr style={{ backgroundColor: "#f0f6ff" }}>
+                <td
+                  colSpan={activeTab === "Settlement" ? 6 : 5}
+                  style={{
+                    padding: "16px 20px",
+                    border: "1px solid #e0e0e0",
+                    textAlign: "right",
+                    fontWeight: 700,
+                    color: "#0069ab",
+                    fontSize: "1.05rem",
+                  }}
+                >
+                  Total Unplanned Expenditure: ₹{" "}
+                  {unplannedBudgetTotal.toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div
       className="expenditure-approval-body"
@@ -5430,20 +6049,20 @@ const handleBeneficiarySearch = async (query: string) => {
           style={{
             pointerEvents: "auto",
             userSelect: "auto",
-      }}
-    >
-            {/* Collapsible Header */}
-            <div
-              className="ea-cardHeader"
-              onClick={() => setIsApplicantCardOpen(!isApplicantCardOpen)}
-            >
-              <h5>Applicant Details</h5>
-              <svg
+          }}
+        >
+          {/* Collapsible Header */}
+          <div
+            className="ea-cardHeader"
+            onClick={() => setIsApplicantCardOpen(!isApplicantCardOpen)}
+          >
+            <h5>Applicant Details</h5>
+            <svg
               width="12"
               height="8"
               viewBox="0 0 12 8"
               className={`ea-card-toggle-arrow ${isApplicantCardOpen ? "open" : ""}`}
-              >
+            >
               <polyline
                 points="1.5,1.5 6,5.5 10.5,1.5"
                 stroke="#0069ab"
@@ -5452,16 +6071,16 @@ const handleBeneficiarySearch = async (query: string) => {
                 strokeLinejoin="round"
                 fill="none"
               />
-              </svg>
-            </div>
+            </svg>
+          </div>
 
-            {/* Collapsed view: show only name + date */}
-            {!isApplicantCardOpen && (
-              <div className="ea-cardContent">
-                <div className="ea-row">
-                  <div className="ea-col-7">
-                    <div className="ea-formGroup" style={{ marginBottom: 0 }}>
-                      <label>Applicant Name</label>
+          {/* Collapsed view: show only name + date */}
+          {!isApplicantCardOpen && (
+            <div className="ea-cardContent">
+              <div className="ea-row">
+                <div className="ea-col-7">
+                  <div className="ea-formGroup" style={{ marginBottom: 0 }}>
+                    <label>Applicant Name</label>
                     <input
                       type="text"
                       value={applicantName}
@@ -5471,11 +6090,11 @@ const handleBeneficiarySearch = async (query: string) => {
                       style={{ cursor: "pointer" }}
                       onClick={() => setIsApplicantCardOpen(true)}
                     />
-                    </div>
                   </div>
-                  <div className="ea-col-5">
-                    <div className="ea-formGroup" style={{ marginBottom: 0 }}>
-                      <label>Date</label>
+                </div>
+                <div className="ea-col-5">
+                  <div className="ea-formGroup" style={{ marginBottom: 0 }}>
+                    <label>Date</label>
                     <input
                       type="date"
                       value={date}
@@ -5485,14 +6104,14 @@ const handleBeneficiarySearch = async (query: string) => {
                       style={{ cursor: "pointer" }}
                       onClick={() => setIsApplicantCardOpen(true)}
                     />
-                    </div>
                   </div>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Expanded form */}
-            {isApplicantCardOpen && (
+          {/* Expanded form */}
+          {isApplicantCardOpen && (
             <div
               className="cardContent"
               style={{
@@ -5500,7 +6119,7 @@ const handleBeneficiarySearch = async (query: string) => {
               }}
             >
               <div className="row mb-3" style={{ marginBottom: "15px" }}>
-              <div className="col-md-7">
+                <div className="col-md-7">
                   <div className="form-group" style={{ position: "relative" }}>
                     <label
                       style={{
@@ -5523,53 +6142,53 @@ const handleBeneficiarySearch = async (query: string) => {
                           (External)
                         </span>
                       )}
-                  </label>
-                  <input
-                    type="text"
-                    value={
-                      isExternalApplicant ? applicantName : applicantSearchQuery
-                    }
-                    disabled={isReadOnlyView}
-                    readOnly={isReadOnlyView}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                      if (isReadOnlyView) return;
-                      if (isExternalApplicant) {
-                        setApplicantName(e.target.value);
-                      } else {
-                        handleApplicantSearch(e.target.value);
+                    </label>
+                    <input
+                      type="text"
+                      value={
+                        isExternalApplicant ? applicantName : applicantSearchQuery
                       }
-                    }}
-                    style={{
-                      borderRadius: "12px",
-                      border: "1px solid #e0e0e0",
-                      padding: "10px 15px",
-                      fontSize: "0.95rem",
-                      width: "100%",
-                      fontFamily: "inherit",
-                      backgroundColor: "#fcfdff",
-                      transition: "all 0.3s ease",
-                      outline: "none",
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = "#0069ab";
-                      e.currentTarget.style.boxShadow =
-                        "0 0 0 3px rgba(0, 105, 171, 0.15)";
-                      if (!isExternalApplicant && !showApplicantDropdown) {
-                        handleApplicantSearch(applicantSearchQuery);
+                      disabled={isReadOnlyView}
+                      readOnly={isReadOnlyView}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        if (isReadOnlyView) return;
+                        if (isExternalApplicant) {
+                          setApplicantName(e.target.value);
+                        } else {
+                          handleApplicantSearch(e.target.value);
+                        }
+                      }}
+                      style={{
+                        borderRadius: "12px",
+                        border: "1px solid #e0e0e0",
+                        padding: "10px 15px",
+                        fontSize: "0.95rem",
+                        width: "100%",
+                        fontFamily: "inherit",
+                        backgroundColor: "#fcfdff",
+                        transition: "all 0.3s ease",
+                        outline: "none",
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = "#0069ab";
+                        e.currentTarget.style.boxShadow =
+                          "0 0 0 3px rgba(0, 105, 171, 0.15)";
+                        if (!isExternalApplicant && !showApplicantDropdown) {
+                          handleApplicantSearch(applicantSearchQuery);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = "#e0e0e0";
+                        e.currentTarget.style.boxShadow = "none";
+                        setTimeout(() => setShowApplicantDropdown(false), 200);
+                      }}
+                      placeholder={
+                        isExternalApplicant
+                          ? "Enter external applicant name"
+                          : "Search employee by name or ERP ID"
                       }
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "#e0e0e0";
-                      e.currentTarget.style.boxShadow = "none";
-                      setTimeout(() => setShowApplicantDropdown(false), 200);
-                    }}
-                    placeholder={
-                      isExternalApplicant
-                        ? "Enter external applicant name"
-                        : "Search employee by name or ERP ID"
-                    }
-                  />
-                  {/* Search Results Dropdown */}
+                    />
+                    {/* Search Results Dropdown */}
                     {!isReadOnlyView &&
                       showApplicantDropdown &&
                       applicantSearchResults.length > 0 && (
@@ -5577,60 +6196,60 @@ const handleBeneficiarySearch = async (query: string) => {
                           style={{
                             position: "absolute",
                             top: "100%",
-                      left: 0,
-                      right: 0,
+                            left: 0,
+                            right: 0,
                             backgroundColor: "#fff",
                             border: "1px solid #e0e0e0",
                             borderRadius: "12px",
                             boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)",
-                      zIndex: 1000,
+                            zIndex: 1000,
                             maxHeight: "250px",
                             overflowY: "auto",
                             marginTop: "4px",
                           }}
                         >
-                      {/* Add External Option */}
-                      <div
+                          {/* Add External Option */}
+                          <div
                             onMouseDown={(e) => {
                               e.preventDefault();
                               handleAddExternalApplicant();
                             }}
-                        style={{
+                            style={{
                               padding: "10px 15px",
                               cursor: "pointer",
                               backgroundColor: "#f8f9fa",
                               color: "#0069ab",
                               fontWeight: "600",
                               borderBottom: "2px solid #e0e0e0",
-                        }}
+                            }}
                             onMouseEnter={(e) =>
-                              (e.currentTarget.style.backgroundColor =
-                                "#e9ecef")
+                            (e.currentTarget.style.backgroundColor =
+                              "#e9ecef")
                             }
                             onMouseLeave={(e) =>
-                              (e.currentTarget.style.backgroundColor =
-                                "#f8f9fa")
+                            (e.currentTarget.style.backgroundColor =
+                              "#f8f9fa")
                             }
-                      >
-                        + Add External Applicant
-                      </div>
+                          >
+                            + Add External Applicant
+                          </div>
 
-                      {applicantSearchResults.map((emp) => (
-                        <div
-                          key={emp.employee_id}
+                          {applicantSearchResults.map((emp) => (
+                            <div
+                              key={emp.employee_id}
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 handleSelectApplicant(emp);
                               }}
-                          style={{
+                              style={{
                                 padding: "10px 15px",
                                 cursor: "pointer",
                                 borderBottom: "1px solid #f0f0f0",
                                 transition: "background-color 0.2s",
-                          }}
+                              }}
                               onMouseEnter={(e) =>
-                                (e.currentTarget.style.backgroundColor =
-                                  "#f8f9fa")
+                              (e.currentTarget.style.backgroundColor =
+                                "#f8f9fa")
                               }
                               onMouseLeave={(e) =>
                                 (e.currentTarget.style.backgroundColor = "#fff")
@@ -5641,14 +6260,14 @@ const handleBeneficiarySearch = async (query: string) => {
                               </div>
                               <div
                                 style={{ fontSize: "12px", color: "#6c757d" }}
-                        >
-                            {emp.designation} | {emp.department}
-                          </div>
+                              >
+                                {emp.designation} | {emp.department}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* No results message */}
+                      )}
+                    {/* No results message */}
                     {!isReadOnlyView &&
                       showApplicantDropdown &&
                       applicantSearchQuery.length >= 2 &&
@@ -5657,13 +6276,13 @@ const handleBeneficiarySearch = async (query: string) => {
                           style={{
                             position: "absolute",
                             top: "100%",
-                      left: 0,
-                      right: 0,
+                            left: 0,
+                            right: 0,
                             backgroundColor: "#fff",
                             border: "1px solid #e0e0e0",
                             borderRadius: "12px",
                             boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)",
-                      zIndex: 1000,
+                            zIndex: 1000,
                             marginTop: "4px",
                           }}
                         >
@@ -5672,36 +6291,36 @@ const handleBeneficiarySearch = async (query: string) => {
                           >
                             No employees found
                           </div>
-                      <div
+                          <div
                             onMouseDown={(e) => {
                               e.preventDefault();
                               handleAddExternalApplicant();
                             }}
-                        style={{
+                            style={{
                               padding: "10px 15px",
                               cursor: "pointer",
                               backgroundColor: "#f8f9fa",
                               color: "#0069ab",
                               fontWeight: "600",
                               borderTop: "1px solid #e0e0e0",
-                        }}
+                            }}
                             onMouseEnter={(e) =>
-                              (e.currentTarget.style.backgroundColor =
-                                "#e9ecef")
+                            (e.currentTarget.style.backgroundColor =
+                              "#e9ecef")
                             }
                             onMouseLeave={(e) =>
-                              (e.currentTarget.style.backgroundColor =
-                                "#f8f9fa")
+                            (e.currentTarget.style.backgroundColor =
+                              "#f8f9fa")
                             }
-                      >
-                        + Add External Applicant
-                      </div>
-                    </div>
-                  )}
+                          >
+                            + Add External Applicant
+                          </div>
+                        </div>
+                      )}
+                  </div>
                 </div>
-              </div>
-              <div className="col-md-5">
-                <div className="form-group">
+                <div className="col-md-5">
+                  <div className="form-group">
                     <label
                       style={{
                         fontSize: "14px",
@@ -5712,17 +6331,17 @@ const handleBeneficiarySearch = async (query: string) => {
                       }}
                     >
                       Date<span style={{ color: "red" }}></span>
-                  </label>
-                  <input
-                    type="date"
-                    value={date}
+                    </label>
+                    <input
+                      type="date"
+                      value={date}
                       disabled={isReadOnlyView}
                       readOnly={isReadOnlyView}
                       onChange={(e: ChangeEvent<HTMLInputElement>) => {
                         if (isReadOnlyView) return;
                         setDate(e.target.value);
                       }}
-                    style={{
+                      style={{
                         borderRadius: "12px",
                         border: "1px solid #e0e0e0",
                         padding: "10px 15px",
@@ -5732,25 +6351,25 @@ const handleBeneficiarySearch = async (query: string) => {
                         backgroundColor: "#fcfdff",
                         transition: "all 0.3s ease",
                         outline: "none",
-                    }}
-                    onFocus={(e) => {
+                      }}
+                      onFocus={(e) => {
                         e.currentTarget.style.borderColor = "#0069ab";
                         e.currentTarget.style.boxShadow =
                           "0 0 0 3px rgba(0, 105, 171, 0.15)";
-                    }}
-                    onBlur={(e) => {
+                      }}
+                      onBlur={(e) => {
                         e.currentTarget.style.borderColor = "#e0e0e0";
                         e.currentTarget.style.boxShadow = "none";
-                    }}
-                    required
-                  />
+                      }}
+                      required
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
 
               <div className="row md-3" style={{ marginBottom: "15px" }}>
-              <div className="col-md-7">
-                <div className="form-group">
+                <div className="col-md-7">
+                  <div className="form-group">
                     <label
                       style={{
                         fontSize: "14px",
@@ -5762,16 +6381,16 @@ const handleBeneficiarySearch = async (query: string) => {
                     >
                       Department
                     </label>
-                  <input
-                    type="text"
-                    value={department}
+                    <input
+                      type="text"
+                      value={department}
                       disabled={isReadOnlyView}
                       readOnly={isReadOnlyView}
                       onChange={(e: ChangeEvent<HTMLInputElement>) => {
                         if (isReadOnlyView) return;
                         setDepartment(e.target.value);
                       }}
-                    style={{
+                      style={{
                         borderRadius: "12px",
                         border: "1px solid #e0e0e0",
                         padding: "10px 15px",
@@ -5781,23 +6400,23 @@ const handleBeneficiarySearch = async (query: string) => {
                         backgroundColor: "#fcfdff",
                         transition: "all 0.3s ease",
                         outline: "none",
-                    }}
-                    onFocus={(e) => {
+                      }}
+                      onFocus={(e) => {
                         e.currentTarget.style.borderColor = "#0069ab";
                         e.currentTarget.style.boxShadow =
                           "0 0 0 3px rgba(0, 105, 171, 0.15)";
-                    }}
-                    onBlur={(e) => {
+                      }}
+                      onBlur={(e) => {
                         e.currentTarget.style.borderColor = "#e0e0e0";
                         e.currentTarget.style.boxShadow = "none";
-                    }}
-                    placeholder="Department name"
-                  />
+                      }}
+                      placeholder="Department name"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div className="col-md-5">
-                <div className="form-group">
+                <div className="col-md-5">
+                  <div className="form-group">
                     <label
                       style={{
                         fontSize: "14px",
@@ -5809,16 +6428,16 @@ const handleBeneficiarySearch = async (query: string) => {
                     >
                       Designation
                     </label>
-                  <input
-                    type="text"
-                    value={designation}
+                    <input
+                      type="text"
+                      value={designation}
                       disabled={isReadOnlyView}
                       readOnly={isReadOnlyView}
                       onChange={(e: ChangeEvent<HTMLInputElement>) => {
                         if (isReadOnlyView) return;
                         setDesignation(e.target.value);
                       }}
-                    style={{
+                      style={{
                         borderRadius: "12px",
                         border: "1px solid #e0e0e0",
                         padding: "10px 15px",
@@ -5828,45 +6447,45 @@ const handleBeneficiarySearch = async (query: string) => {
                         backgroundColor: "#fcfdff",
                         transition: "all 0.3s ease",
                         outline: "none",
-                    }}
-                    onFocus={(e) => {
+                      }}
+                      onFocus={(e) => {
                         e.currentTarget.style.borderColor = "#0069ab";
                         e.currentTarget.style.boxShadow =
                           "0 0 0 3px rgba(0, 105, 171, 0.15)";
-                    }}
-                    onBlur={(e) => {
+                      }}
+                      onBlur={(e) => {
                         e.currentTarget.style.borderColor = "#e0e0e0";
                         e.currentTarget.style.boxShadow = "none";
-                    }}
-                    placeholder="e.g., Manager, Staff"
-                  />
+                      }}
+                      placeholder="e.g., Manager, Staff"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
               <div className="row mb-3" style={{ marginBottom: "15px" }}>
-              <div className="col-md-7">
-                <div className="form-group">
-                  <label
-                    style={{
+                <div className="col-md-7">
+                  <div className="form-group">
+                    <label
+                      style={{
                         fontSize: "14px",
                         color: "#495057",
                         marginBottom: "8px",
                         fontWeight: "600",
                         display: "block",
-                    }}
-                  >
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
+                      }}
+                    >
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
                       disabled={isReadOnlyView}
                       readOnly={isReadOnlyView}
                       onChange={(e) => {
                         if (isReadOnlyView) return;
                         setEmail(e.target.value);
                       }}
-                    style={{
+                      style={{
                         borderRadius: "12px",
                         border: "1px solid #e0e0e0",
                         padding: "10px 15px",
@@ -5876,22 +6495,22 @@ const handleBeneficiarySearch = async (query: string) => {
                         backgroundColor: "#fcfdff",
                         transition: "all 0.3s ease",
                         outline: "none",
-                    }}
-                    onFocus={(e) => {
+                      }}
+                      onFocus={(e) => {
                         e.currentTarget.style.borderColor = "#0069ab";
-                      e.currentTarget.style.boxShadow =
+                        e.currentTarget.style.boxShadow =
                           "0 0 0 3px rgba(0, 105, 171, 0.15)";
-                    }}
-                    onBlur={(e) => {
+                      }}
+                      onBlur={(e) => {
                         e.currentTarget.style.borderColor = "#e0e0e0";
                         e.currentTarget.style.boxShadow = "none";
-                    }}
-                    placeholder="example@email.com"
-                  />
+                      }}
+                      placeholder="example@email.com"
+                    />
+                  </div>
                 </div>
-              </div>
-              <div className="col-md-5">
-                <div className="form-group">
+                <div className="col-md-5">
+                  <div className="form-group">
                     <label
                       style={{
                         fontSize: "14px",
@@ -5903,16 +6522,16 @@ const handleBeneficiarySearch = async (query: string) => {
                     >
                       Mobile <span style={{ color: "red" }}> </span>
                     </label>
-                  <input
-                    type="tel"
-                    value={mobile}
+                    <input
+                      type="tel"
+                      value={mobile}
                       disabled={isReadOnlyView}
                       readOnly={isReadOnlyView}
                       onChange={(e: ChangeEvent<HTMLInputElement>) => {
                         if (isReadOnlyView) return;
                         setMobile(e.target.value);
                       }}
-                    style={{
+                      style={{
                         borderRadius: "12px",
                         border: "1px solid #e0e0e0",
                         padding: "10px 15px",
@@ -5922,26 +6541,26 @@ const handleBeneficiarySearch = async (query: string) => {
                         backgroundColor: "#fcfdff",
                         transition: "all 0.3s ease",
                         outline: "none",
-                    }}
-                    onFocus={(e) => {
+                      }}
+                      onFocus={(e) => {
                         e.currentTarget.style.borderColor = "#0069ab";
                         e.currentTarget.style.boxShadow =
                           "0 0 0 3px rgba(0, 105, 171, 0.15)";
-                    }}
-                    onBlur={(e) => {
+                      }}
+                      onBlur={(e) => {
                         e.currentTarget.style.borderColor = "#e0e0e0";
                         e.currentTarget.style.boxShadow = "none";
-                    }}
-                    placeholder="10 digit mobile"
-                    pattern="[0-9]{10}"
-                    required
-                  />
+                      }}
+                      placeholder="10 digit mobile"
+                      pattern="[0-9]{10}"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-            )}
-          </div>
+          )}
+        </div>
         <div
           style={{
             backgroundColor: "#fff",
@@ -5951,24 +6570,24 @@ const handleBeneficiarySearch = async (query: string) => {
             boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
           }}
         >
-            <div className="row mb-3">
-              <div className="col-md-13">
-                <div className="form-group">
-                  <label
-                    style={{
+          <div className="row mb-3">
+            <div className="col-md-13">
+              <div className="form-group">
+                <label
+                  style={{
                     fontSize: "14px",
                     color: "#495057",
                     marginBottom: "8px",
                     fontWeight: "600",
                     display: "block",
-                    }}
+                  }}
                 ></label>
 
-                  {/* REPLACE the entire beneficiary row with this: */}
+                {/* REPLACE the entire beneficiary row with this: */}
                 <div className="row mb-3" style={{ alignItems: "flex-start" }}>
-                       {/* Column 1: Beneficiary Type */}
-                          <div className="col-md-3">
-                              <div className="form-group">
+                  {/* Column 1: Beneficiary Type */}
+                  <div className="col-md-3">
+                    <div className="form-group">
                       <label
                         style={{
                           fontSize: 14,
@@ -5978,43 +6597,43 @@ const handleBeneficiarySearch = async (query: string) => {
                           display: "block",
                         }}
                       >
-                                      Beneficiary
-                                      </label>
-                                  <CustomDropdown
-        name="categoryType"
-        options={toOptions(CATEGORY_TYPE_OPTIONS)}
+                        Beneficiary
+                      </label>
+                      <CustomDropdown
+                        name="categoryType"
+                        options={toOptions(CATEGORY_TYPE_OPTIONS)}
                         value={getSelectedOption(
                           categoryType,
                           toOptions(CATEGORY_TYPE_OPTIONS),
                         )}
-        isDisabled={lockBeneficiaryAndTagFields}
-        onChange={(option) => {
-          const selected = option as OptionType | null;
+                        isDisabled={lockBeneficiaryAndTagFields}
+                        onChange={(option) => {
+                          const selected = option as OptionType | null;
                           const next = selected?.value
                             ? String(selected.value)
                             : "";
-          setCategoryType(next);
+                          setCategoryType(next);
                           setCategoryItem("");
-          setCategorySelections([]);
-          setBeneficiaryEmployeeId(null);
+                          setCategorySelections([]);
+                          setBeneficiaryEmployeeId(null);
                           setBeneficiarySearchQuery("");
-          setBeneficiarySearchResults([]);
-          setShowBeneficiaryDropdown(false);
+                          setBeneficiarySearchResults([]);
+                          setShowBeneficiaryDropdown(false);
                           setSelectedTag("");
                           if (next === "Institution")
                             setCategoryItem(
                               "K.S.Rangasamy College of Technology",
                             );
                           else setCategoryItem("");
-        }}
-        placeholder="Select"
-      />
-    </div>
-  </div>
+                        }}
+                        placeholder="Select"
+                      />
+                    </div>
+                  </div>
 
-  {/* Column 2: Dynamic field based on type */}
-  <div className="col-md-6">
-    {/* Faculty / Staff — live search */}
+                  {/* Column 2: Dynamic field based on type */}
+                  <div className="col-md-6">
+                    {/* Faculty / Staff — live search */}
                     {["Faculty", "Staff"].includes(categoryType) && (
                       <div
                         className="form-group"
@@ -6032,40 +6651,40 @@ const handleBeneficiarySearch = async (query: string) => {
                           {categoryType === "Staff"
                             ? "Staff Name"
                             : "Faculty Name"}
-        </label>
-        <input
-          type="text"
-          value={beneficiarySearchQuery || categoryItem}
-          disabled={lockBeneficiaryAndTagFields}
-          readOnly={lockBeneficiaryAndTagFields}
-          onChange={(e) => {
-            setCategoryItem(e.target.value);
-            setBeneficiaryEmployeeId(null);
-            setBeneficiarySearchQuery(e.target.value);
-            handleBeneficiarySearch(e.target.value);
-          }}
-          onFocus={(e) => {
+                        </label>
+                        <input
+                          type="text"
+                          value={beneficiarySearchQuery || categoryItem}
+                          disabled={lockBeneficiaryAndTagFields}
+                          readOnly={lockBeneficiaryAndTagFields}
+                          onChange={(e) => {
+                            setCategoryItem(e.target.value);
+                            setBeneficiaryEmployeeId(null);
+                            setBeneficiarySearchQuery(e.target.value);
+                            handleBeneficiarySearch(e.target.value);
+                          }}
+                          onFocus={(e) => {
                             e.currentTarget.style.borderColor = "#0069ab";
                             e.currentTarget.style.boxShadow =
                               "0 0 0 3px rgba(0,105,171,0.15)";
                             if (!showBeneficiaryDropdown)
                               handleBeneficiarySearch(beneficiarySearchQuery);
-          }}
-          onBlur={(e) => {
+                          }}
+                          onBlur={(e) => {
                             e.currentTarget.style.borderColor = "#e0e0e0";
                             e.currentTarget.style.boxShadow = "none";
                             setTimeout(
                               () => setShowBeneficiaryDropdown(false),
                               200,
                             );
-          }}
+                          }}
                           placeholder={
                             categoryType === "Staff"
                               ? "Search staff by name or ERP ID"
                               : "Search faculty by name or ERP ID"
                           }
-          style={{
-            borderRadius: 12,
+                          style={{
+                            borderRadius: 12,
                             border: "1px solid #e0e0e0",
                             padding: "10px 15px",
                             fontSize: "0.95rem",
@@ -6080,9 +6699,9 @@ const handleBeneficiarySearch = async (query: string) => {
                               ? "not-allowed"
                               : "text",
                             outline: "none",
-          }}
-        />
-        {/* Search Results Dropdown */}
+                          }}
+                        />
+                        {/* Search Results Dropdown */}
                         {showBeneficiaryDropdown &&
                           beneficiarySearchResults.length > 0 && (
                             <div
@@ -6101,7 +6720,7 @@ const handleBeneficiarySearch = async (query: string) => {
                                 marginTop: 4,
                               }}
                             >
-            {beneficiarySearchResults.map((emp) => (
+                              {beneficiarySearchResults.map((emp) => (
                                 <div
                                   key={emp.employeeid}
                                   onMouseDown={(e) => {
@@ -6114,12 +6733,12 @@ const handleBeneficiarySearch = async (query: string) => {
                                     borderBottom: "1px solid #f0f0f0",
                                   }}
                                   onMouseEnter={(e) =>
-                                    (e.currentTarget.style.backgroundColor =
-                                      "#f8f9fa")
+                                  (e.currentTarget.style.backgroundColor =
+                                    "#f8f9fa")
                                   }
                                   onMouseLeave={(e) =>
-                                    (e.currentTarget.style.backgroundColor =
-                                      "#fff")
+                                  (e.currentTarget.style.backgroundColor =
+                                    "#fff")
                                   }
                                 >
                                   <div
@@ -6132,16 +6751,16 @@ const handleBeneficiarySearch = async (query: string) => {
                                   >
                                     {emp.designation} — {emp.department}
                                   </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                      </div>
+                    )}
 
-    {/* Institution — readonly */}
+                    {/* Institution — readonly */}
                     {categoryType === "Institution" && (
-      <div className="form-group">
+                      <div className="form-group">
                         <label
                           style={{
                             fontSize: 14,
@@ -6169,12 +6788,12 @@ const handleBeneficiarySearch = async (query: string) => {
                             outline: "none",
                           }}
                         />
-      </div>
-    )}
+                      </div>
+                    )}
 
-    {/* Department / Centre / Cell / Club — subcategory dropdown or tag */}
-    {hasSubcategories && (
-      <div className="form-group">
+                    {/* Department / Centre / Cell / Club — subcategory dropdown or tag */}
+                    {hasSubcategories && (
+                      <div className="form-group">
                         <label
                           style={{
                             fontSize: 14,
@@ -6184,12 +6803,12 @@ const handleBeneficiarySearch = async (query: string) => {
                             display: "block",
                           }}
                         >
-          {getSubcategoryLabel(categoryType)}
-        </label>
-        {isMultipleSelect(categoryType) ? (
-          <CustomTagInput
-            name="categorySelections"
-            value={categorySelections}
+                          {getSubcategoryLabel(categoryType)}
+                        </label>
+                        {isMultipleSelect(categoryType) ? (
+                          <CustomTagInput
+                            name="categorySelections"
+                            value={categorySelections}
                             onChange={(tags) => {
                               setCategorySelections(tags);
                               setCategoryItem(tags.join(", "));
@@ -6197,37 +6816,37 @@ const handleBeneficiarySearch = async (query: string) => {
                             suggestions={subcategoryList.filter(
                               (sub) => !categorySelections.includes(sub),
                             )}
-            placeholder=""
-            disabled={lockBeneficiaryAndTagFields}
-            className="mb-0"
-          />
-        ) : (
-          <CustomDropdown
-            name="categoryItem"
-            options={subcategoryOptions}
+                            placeholder=""
+                            disabled={lockBeneficiaryAndTagFields}
+                            className="mb-0"
+                          />
+                        ) : (
+                          <CustomDropdown
+                            name="categoryItem"
+                            options={subcategoryOptions}
                             value={getSelectedOption(
                               categoryItem,
                               subcategoryOptions,
                             )}
-            isDisabled={lockBeneficiaryAndTagFields}
-            onChange={(option) => {
-              const selected = option as OptionType | null;
+                            isDisabled={lockBeneficiaryAndTagFields}
+                            onChange={(option) => {
+                              const selected = option as OptionType | null;
                               setCategoryItem(
                                 selected?.value ? String(selected.value) : "",
                               );
-              setCategorySelections([]);
-            }}
-            placeholder="Select"
-          />
-        )}
-      </div>
-    )}
-  </div>
+                              setCategorySelections([]);
+                            }}
+                            placeholder="Select"
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
 
-  {/* Column 3: Tag (same as budget page) */}
-      <div className="col-md-3">
-    {categoryType && (
-      <div className="form-group">
+                  {/* Column 3: Tag (same as budget page) */}
+                  <div className="col-md-3">
+                    {categoryType && (
+                      <div className="form-group">
                         <label
                           style={{
                             fontSize: 14,
@@ -6239,11 +6858,11 @@ const handleBeneficiarySearch = async (query: string) => {
                         >
                           Tag
                         </label>
-        <CustomDropdown
-          name="selectedTag"
-          options={tagOptions}
-          isDisabled={lockBeneficiaryAndTagFields}
-          value={(() => {
+                        <CustomDropdown
+                          name="selectedTag"
+                          options={tagOptions}
+                          isDisabled={lockBeneficiaryAndTagFields}
+                          value={(() => {
                             const resolvedTag = resolveTagValue(
                               selectedTag,
                               tagOptions,
@@ -6251,24 +6870,24 @@ const handleBeneficiarySearch = async (query: string) => {
                             return resolvedTag
                               ? { value: resolvedTag, label: resolvedTag }
                               : null;
-          })()}
-          onChange={(option) => {
-            const selected = option as OptionType | null;
+                          })()}
+                          onChange={(option) => {
+                            const selected = option as OptionType | null;
                             setSelectedTag(
                               selected?.value ? String(selected.value) : "",
                             );
-          }}
-          placeholder="Select Tag"
-        />
-      </div>
-    )}
-  </div>
-</div>
+                          }}
+                          placeholder="Select Tag"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="form-group">
+          <div className="form-group">
             <label
               style={{
                 fontSize: "14px",
@@ -6280,15 +6899,15 @@ const handleBeneficiarySearch = async (query: string) => {
             >
               Description
             </label>
-              <textarea
-                data-readonly-scrollable="true"
-                value={description}
-                readOnly={isReadOnlyView}
-                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
-                  if (isReadOnlyView) return;
-                  setDescription(e.target.value);
-                }}
-                style={{
+            <textarea
+              data-readonly-scrollable="true"
+              value={description}
+              readOnly={isReadOnlyView}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
+                if (isReadOnlyView) return;
+                setDescription(e.target.value);
+              }}
+              style={{
                 borderRadius: "12px",
                 border: "1px solid #e0e0e0",
                 padding: "10px 15px",
@@ -6299,153 +6918,90 @@ const handleBeneficiarySearch = async (query: string) => {
                 transition: "all 0.3s ease",
                 resize: "vertical",
                 outline: "none",
-                }}
-                onFocus={(e) => {
+              }}
+              onFocus={(e) => {
                 e.currentTarget.style.borderColor = "#0069ab";
                 e.currentTarget.style.boxShadow =
                   "0 0 0 3px rgba(0, 105, 171, 0.15)";
-                }}
-                onBlur={(e) => {
+              }}
+              onBlur={(e) => {
                 e.currentTarget.style.borderColor = "#e0e0e0";
                 e.currentTarget.style.boxShadow = "none";
-                }}
-                rows={3}
-                placeholder="Enter short description"
-              />
-            </div>
+              }}
+              rows={3}
+              placeholder="Enter short description"
+            />
           </div>
+        </div>
 
+        <div
+          style={{
+            backgroundColor: "#fff",
+            padding: "18px 24px",
+            borderRadius: "16px",
+            marginBottom: "20px",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+          }}
+        >
           <div
             style={{
-              backgroundColor: "#fff",
-              padding: "18px 24px",
-              borderRadius: "16px",
-              marginBottom: "20px",
-              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "16px",
+              flexWrap: "wrap",
             }}
           >
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "space-between",
-                gap: "16px",
-                flexWrap: "wrap",
+                gap: "8px",
+                whiteSpace: "nowrap",
               }}
             >
-              <div
+              <span
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  whiteSpace: "nowrap",
+                  fontSize: "14px",
+                  color: "#495057",
+                  fontWeight: 600,
                 }}
               >
-                <span
-                  style={{
-                    fontSize: "14px",
-                    color: "#495057",
-                    fontWeight: 600,
-                  }}
-                >
-                  Unplanned Expenditure
-                </span>
-                <CustomToggle
-                  name="unplannedBudgetToggle"
-                  label=""
-                  checked={showUnplannedBudget}
-                  onChange={(checked) => {
-                    setShowUnplannedBudget(checked);
-                    if (!checked) {
-                      setUnplannedHeadOfAccount("");
-                      setUnplannedHeadOfAccountBudgetLineId(null);
-                      setUnplannedHeadOfAccountBudgetProposalId(null);
-                      setUnplannedBudgetAmount("");
-                      setUnplannedBudgetHead("");
-                      setUnplannedBudgetSubHead("");
-                      setUnplannedBudgetDescription("");
-                    }
-                  }}
+                Unplanned Expenditure
+              </span>
+              <CustomToggle
+                name="unplannedBudgetToggle"
+                label=""
+                checked={showUnplannedBudget}
+                onChange={(checked) => {
+                  setShowUnplannedBudget(checked);
+                  if (!checked) {
+                    setUnplannedRows([createUnplannedBudgetRow()]);
+                  }
+                }}
+              />
+            </div>
+            {hasUnplannedBudgetPreview && (
+              <div style={{ flex: "1 1 360px", maxWidth: "520px" }}>
+                <CustomDropdown
+                  className="mb-0"
+                  options={getUnplannedHeadOfAccountOptions()}
+                  value={getUnplannedHeadOfAccountSelectedOption(firstUnplannedRow)}
+                  onChange={(option) =>
+                    handleUnplannedHeadOfAccountForFormChange(
+                      option as OptionType | null,
+                    )
+                  }
+                  filterOption={filterUnplannedHeadOfAccountOption}
+                  placeholder={isApprovedBudgetLoading ? "Loading..." : "Select Head of Accounts"}
+                  isDisabled={isReadOnlyView}
                 />
               </div>
-
-              {hasUnplannedBudgetPreview && (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(240px, 1.1fr) minmax(220px, 1fr) minmax(220px, 1fr) minmax(140px, 180px)",
-                    gap: "12px",
-                    flex: "1 1 980px",
-                  }}
-                >
-                  <CustomDropdown
-                    className="mb-0"
-                    options={getUnplannedHeadOfAccountOptions()}
-                    value={getUnplannedHeadOfAccountSelectedOption()}
-                    onChange={(option) =>
-                      handleUnplannedHeadOfAccountChange(
-                        option as OptionType | null,
-                      )
-                    }
-                    filterOption={filterApprovedBudgetHeadOption}
-                    placeholder="Head of Accounts"
-                  />
-                  <CustomDropdown
-                    className="mb-0"
-                    options={getUnplannedBudgetHeadOptions()}
-                    value={getUnplannedBudgetHeadSelectedOption(
-                      unplannedBudgetHead,
-                    )}
-                    onChange={(option) =>
-                      handleUnplannedBudgetHeadChange(
-                        option as OptionType | null,
-                      )
-                    }
-                    filterOption={filterApprovedBudgetHeadOption}
-                    placeholder="Budget Head"
-                  />
-                  <CustomDropdown
-                    className="mb-0"
-                    options={getCatalogSubHeadOptions(
-                      unplannedBudgetHead,
-                    )}
-                    value={getCatalogSubHeadSelectedOption(
-                      unplannedBudgetHead,
-                      unplannedBudgetSubHead,
-                    )}
-                    onChange={(option) =>
-                      handleUnplannedBudgetSubHeadChange(
-                        option as OptionType | null,
-                      )
-                    }
-                    placeholder="Budget Sub Head"
-                    isDisabled={!unplannedBudgetHead}
-                  />
-                  <input
-                    type="text"
-                    value={unplannedBudgetAmount}
-                    onChange={(e) =>
-                      setUnplannedBudgetAmount(
-                        e.target.value.replace(/[^\d.]/g, ""),
-                      )
-                    }
-                    placeholder={getUnplannedBudgetAmountPlaceholder()}
-                    style={{
-                      border: "1px solid #d7dee7",
-                      borderRadius: "12px",
-                      padding: "10px 14px",
-                      fontSize: "0.95rem",
-                      height: "45px",
-                      backgroundColor: "#fcfdff",
-                      color: "#2a3f5e",
-                      textAlign: "center",
-                      outline: "none",
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+            )}
           </div>
+        </div>
+
+        {renderUnplannedExpenditureTable()}
 
         {activeTab === "Advance" && (
           <div
@@ -6789,38 +7345,6 @@ const handleBeneficiarySearch = async (query: string) => {
                   ))}
                 </tbody>
                 <tfoot>
-                  {hasUnplannedBudgetPreview && (
-                    <tr style={{ backgroundColor: "#fafcff" }}>
-                      <td
-                        colSpan={3}
-                        style={{
-                          padding: "12px",
-                          border: "1px solid #e0e0e0",
-                          fontWeight: 600,
-                          color: "#0069ab",
-                        }}
-                      >
-                        Unplanned Expenditure:{" "}
-                        {unplannedBudgetDisplayLabel || "\u00A0"}
-                      </td>
-                      <td
-                        colSpan={2}
-                        style={{
-                          padding: "12px",
-                          border: "1px solid #e0e0e0",
-                          textAlign: "right",
-                          fontWeight: 600,
-                          color: "#0069ab",
-                        }}
-                      >
-                        ₹{" "}
-                        {unplannedBudgetTotal.toLocaleString("en-IN", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </td>
-                    </tr>
-                  )}
                   <tr style={{ backgroundColor: "#f0f6ff" }}>
                     <td
                       colSpan={5}
@@ -6903,7 +7427,7 @@ const handleBeneficiarySearch = async (query: string) => {
               </div>
             </div>
           </div>
-          )}
+        )}
 
         {activeTab === "Settlement" && (
           <div
@@ -7126,14 +7650,14 @@ const handleBeneficiarySearch = async (query: string) => {
                           placeholder="₹ 0"
                           value={row.settlement}
                           onChange={(e) => {
-  const value = e.target.value;
-  if (!/^\d*\.?\d*$/.test(value)) return;
+                            const value = e.target.value;
+                            if (!/^\d*\.?\d*$/.test(value)) return;
 
-  const updated = settlementRows.map((r) =>
+                            const updated = settlementRows.map((r) =>
                               r.id === row.id ? { ...r, settlement: value } : r,
-  );
-  setSettlementRows(updated);
-}}
+                            );
+                            setSettlementRows(updated);
+                          }}
                           style={{
                             border: "1px solid #e0e0e0",
                             borderRadius: "12px",
@@ -7183,12 +7707,12 @@ const handleBeneficiarySearch = async (query: string) => {
                               style={deleteIconBtn}
                               title="Delete Row"
                               onMouseEnter={(e) =>
-                                (e.currentTarget.style.backgroundColor =
-                                  "#ffdede")
+                              (e.currentTarget.style.backgroundColor =
+                                "#ffdede")
                               }
                               onMouseLeave={(e) =>
-                                (e.currentTarget.style.backgroundColor =
-                                  "#ffe6e6")
+                              (e.currentTarget.style.backgroundColor =
+                                "#ffe6e6")
                               }
                             >
                               <X size={14} strokeWidth={2.5} />
@@ -7200,105 +7724,74 @@ const handleBeneficiarySearch = async (query: string) => {
                                 row.budgetHead &&
                                 row.subHead &&
                                 row.settlement !== "";
-                            return (
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  addSettlementRow();
-                                }}
-                                disabled={!isFilled}
-                                style={{
-                                  ...iconBtn,
-                                  opacity: isFilled ? 1 : 0.5,
+                              return (
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    addSettlementRow();
+                                  }}
+                                  disabled={!isFilled}
+                                  style={{
+                                    ...iconBtn,
+                                    opacity: isFilled ? 1 : 0.5,
                                     cursor: isFilled
                                       ? "pointer"
                                       : "not-allowed",
-                                }}
-                                title="Add Row"
-                                onMouseEnter={(e) => {
+                                  }}
+                                  title="Add Row"
+                                  onMouseEnter={(e) => {
                                     if (isFilled)
                                       e.currentTarget.style.backgroundColor =
                                         "#eceef2";
-                                }}
-                                onMouseLeave={(e) => {
+                                  }}
+                                  onMouseLeave={(e) => {
                                     if (isFilled)
                                       e.currentTarget.style.backgroundColor =
                                         "#f5f6f8";
-                                }}
-                              >
-                                <Plus size={14} strokeWidth={2.5} />
-                              </button>
-                            );
-                          })()}
+                                  }}
+                                >
+                                  <Plus size={14} strokeWidth={2.5} />
+                                </button>
+                              );
+                            })()}
                         </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-  {hasUnplannedBudgetPreview && (
-    <tr style={{ backgroundColor: "#fafcff" }}>
-      <td
-        colSpan={4}
-        style={{
-          padding: "12px",
-          border: "1px solid #e0e0e0",
-          fontWeight: 600,
-          color: "#0069ab",
-        }}
-      >
-        Unplanned Expenditure: {unplannedBudgetDisplayLabel || "\u00A0"}
-      </td>
-      <td
-        style={{
-          padding: "12px",
-          border: "1px solid #e0e0e0",
-          fontWeight: 600,
-          color: "#0069ab",
-          textAlign: "center",
-        }}
-      >
-        ₹{" "}
-        {unplannedBudgetTotal.toLocaleString("en-IN", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}
-      </td>
-      <td style={{ border: "1px solid #e0e0e0" }}></td>
-    </tr>
-  )}
-  <tr style={{ backgroundColor: "#f0f6ff" }}>
-    <td
-      colSpan={4}
-      style={{
-        padding: "12px",
-        border: "1px solid #e0e0e0",
-        textAlign: "right",
-        paddingRight: "15px",
-        fontWeight: 600,
-        color: "#0069ab",
-      }}
-    >
-      Total Settlement
-    </td>
-    <td
-      style={{
-        padding: "12px",
-        border: "1px solid #e0e0e0",
-        fontWeight: 600,
-        color: "#0069ab",
-        textAlign: "center",
-      }}
-    >
+                  <tr style={{ backgroundColor: "#f0f6ff" }}>
+                    <td
+                      colSpan={4}
+                      style={{
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        textAlign: "right",
+                        paddingRight: "15px",
+                        fontWeight: 600,
+                        color: "#0069ab",
+                      }}
+                    >
+                      Total Settlement
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px",
+                        border: "1px solid #e0e0e0",
+                        fontWeight: 600,
+                        color: "#0069ab",
+                        textAlign: "center",
+                      }}
+                    >
                       ₹{" "}
                       {totalSettlementDisplayAmount.toLocaleString("en-IN", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })}
-    </td>
-    <td style={{ border: "1px solid #e0e0e0" }}></td>
-  </tr>
-</tfoot>
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </td>
+                    <td style={{ border: "1px solid #e0e0e0" }}></td>
+                  </tr>
+                </tfoot>
               </table>
 
               <div
@@ -7317,7 +7810,7 @@ const handleBeneficiarySearch = async (query: string) => {
                   textAlign: "center",
                   width: "100%",
                 }}
-               >
+              >
                 <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
                 <span style={{ fontWeight: 600 }}>
                   {numberToIndianWords(totalSettlementDisplayAmount)}
@@ -7325,7 +7818,7 @@ const handleBeneficiarySearch = async (query: string) => {
               </div>
             </div>
           </div>
-          )}
+        )}
         {activeTab === "Expenditure" && (
           <div
             style={{
@@ -7355,7 +7848,7 @@ const handleBeneficiarySearch = async (query: string) => {
                   tableLayout: "fixed",
                 }}
               >
-        <thead>
+                <thead>
                   <tr style={{ backgroundColor: "#f0f6ff" }}>
                     <th
                       style={{
@@ -7417,12 +7910,12 @@ const handleBeneficiarySearch = async (query: string) => {
                     >
                       Action
                     </th>
-          </tr>
-        </thead>
-        <tbody>
-          {expenditureSubRows.map((row, idx) => (
-            <React.Fragment key={row.id}>
-              <tr>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expenditureSubRows.map((row, idx) => (
+                    <React.Fragment key={row.id}>
+                      <tr>
                         <td
                           style={{
                             padding: "12px",
@@ -7433,8 +7926,8 @@ const handleBeneficiarySearch = async (query: string) => {
                             color: "#495057",
                           }}
                         >
-                  {idx + 1}
-                </td>
+                          {idx + 1}
+                        </td>
                         <td
                           style={{
                             padding: "12px",
@@ -7444,28 +7937,28 @@ const handleBeneficiarySearch = async (query: string) => {
                             textAlign: "center",
                           }}
                         >
-                  <CustomDropdown
-                    className="mb-0"
-                    options={getApprovedBudgetHeadSearchOptions()}
+                          <CustomDropdown
+                            className="mb-0"
+                            options={getApprovedBudgetHeadSearchOptions()}
                             value={getApprovedBudgetHeadSelectedOption(
                               row.budgetHead,
                               row.subHead,
                               row.budgetLineId,
                             )}
-                    onChange={(option) =>
-                      handleExpenditureBudgetHeadSearchChange(
-                        row.id,
-                        option as OptionType | null,
-                      )
-                    }
-                    filterOption={filterApprovedBudgetHeadOption}
+                            onChange={(option) =>
+                              handleExpenditureBudgetHeadSearchChange(
+                                row.id,
+                                option as OptionType | null,
+                              )
+                            }
+                            filterOption={filterApprovedBudgetHeadOption}
                             placeholder={
                               isApprovedBudgetLoading
                                 ? "Loading..."
                                 : "Select Head"
                             }
-                  />
-                </td>
+                          />
+                        </td>
                         <td
                           style={{
                             padding: "12px",
@@ -7475,8 +7968,8 @@ const handleBeneficiarySearch = async (query: string) => {
                             textAlign: "center",
                           }}
                         >
-                  <CustomDropdown
-                    className="mb-0"
+                          <CustomDropdown
+                            className="mb-0"
                             options={getApprovedSubHeadOptionsForAdvance(
                               row.budgetHead,
                             )}
@@ -7485,15 +7978,15 @@ const handleBeneficiarySearch = async (query: string) => {
                               row.subHead,
                               row.budgetLineId,
                             )}
-                    onChange={(option) => {
+                            onChange={(option) => {
                               const selected = option as OptionType | null;
                               const val = String(selected?.subHead || "");
-                      handleExpenditureSubHeadChange(row.id, val, selected);
-                    }}
-                    placeholder="Select Sub Head"
-                    isDisabled={!row.budgetHead}
-                  />
-                </td>
+                              handleExpenditureSubHeadChange(row.id, val, selected);
+                            }}
+                            placeholder="Select Sub Head"
+                            isDisabled={!row.budgetHead}
+                          />
+                        </td>
                         <td
                           style={{
                             padding: "12px",
@@ -7503,11 +7996,11 @@ const handleBeneficiarySearch = async (query: string) => {
                             textAlign: "center",
                           }}
                         >
-                  <input
-                    type="text"
-                    value={getBudgetDisplayValue(row.budget)}
-                    readOnly
-                    style={{
+                          <input
+                            type="text"
+                            value={getBudgetDisplayValue(row.budget)}
+                            readOnly
+                            style={{
                               border: "1px solid #e0e0e0",
                               borderRadius: "12px",
                               padding: "10px 15px",
@@ -7521,9 +8014,9 @@ const handleBeneficiarySearch = async (query: string) => {
                               textAlign: "center",
                               outline: "none",
                               cursor: "not-allowed",
-                    }}
-                  />
-                </td>
+                            }}
+                          />
+                        </td>
                         <td
                           style={{
                             padding: "12px",
@@ -7543,14 +8036,14 @@ const handleBeneficiarySearch = async (query: string) => {
                               flexWrap: "nowrap",
                             }}
                           >
-                    {expenditureSubRows.length > 1 && (
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          removeExpenditureRow(row.id);
-                        }}
-                        title="Delete Row"
-                        style={{
+                            {expenditureSubRows.length > 1 && (
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  removeExpenditureRow(row.id);
+                                }}
+                                title="Delete Row"
+                                style={{
                                   width: "38px",
                                   height: "38px",
                                   borderRadius: "50%",
@@ -7561,30 +8054,30 @@ const handleBeneficiarySearch = async (query: string) => {
                                   display: "inline-flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                        }}
-                      >
-                        <X size={14} strokeWidth={2.5} />
-                      </button>
-                    )}
-                    {idx === expenditureSubRows.length - 1 && (
-                      <button
+                                }}
+                              >
+                                <X size={14} strokeWidth={2.5} />
+                              </button>
+                            )}
+                            {idx === expenditureSubRows.length - 1 && (
+                              <button
                                 disabled={
                                   !row.budgetHead ||
                                   !row.subHead ||
                                   !row.expenditure
                                 }
-                        onClick={(e) => {
-                          e.preventDefault();
-                          addExpenditureRow();
-                        }}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  addExpenditureRow();
+                                }}
                                 title={
                                   !row.budgetHead ||
-                                  !row.subHead ||
-                                  !row.expenditure
+                                    !row.subHead ||
+                                    !row.expenditure
                                     ? "Please fill all fields to add a new row"
                                     : "Add Row"
                                 }
-                        style={{
+                                style={{
                                   width: "38px",
                                   height: "38px",
                                   borderRadius: "50%",
@@ -7593,8 +8086,8 @@ const handleBeneficiarySearch = async (query: string) => {
                                   color: "#000000",
                                   cursor:
                                     !row.budgetHead ||
-                                    !row.subHead ||
-                                    !row.expenditure
+                                      !row.subHead ||
+                                      !row.expenditure
                                       ? "not-allowed"
                                       : "pointer",
                                   display: "inline-flex",
@@ -7602,19 +8095,19 @@ const handleBeneficiarySearch = async (query: string) => {
                                   justifyContent: "center",
                                   opacity:
                                     !row.budgetHead ||
-                                    !row.subHead ||
-                                    !row.expenditure
+                                      !row.subHead ||
+                                      !row.expenditure
                                       ? 0.5
                                       : 1,
-                        }}
-                      >
-                        <Plus size={14} strokeWidth={2.5} />
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-              <tr>
+                                }}
+                              >
+                                <Plus size={14} strokeWidth={2.5} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      <tr>
                         <td
                           style={{
                             padding: "12px",
@@ -7626,8 +8119,8 @@ const handleBeneficiarySearch = async (query: string) => {
                             backgroundColor: "#fff",
                           }}
                         >
-                  {/* Empty cell under S.No */}
-                </td>
+                          {/* Empty cell under S.No */}
+                        </td>
                         <td
                           colSpan={3}
                           style={{
@@ -7655,48 +8148,48 @@ const handleBeneficiarySearch = async (query: string) => {
                             >
                               Expenditure
                             </span>
-                    <input
-                      type="text"
-                      placeholder="Eg: 455+345+780"
-                      value={row.expenditure}
+                            <input
+                              type="text"
+                              placeholder="Eg: 455+345+780"
+                              value={row.expenditure}
                               onChange={(e) =>
                                 handleExpenditureAmountChange(
                                   row.id,
                                   e.target.value,
                                 )
                               }
-                      style={{
+                              style={{
                                 border: "1px solid #e0e0e0",
                                 borderRadius: "12px",
                                 padding: "10px 15px",
                                 fontSize: "0.95rem",
-                        flex: 1,
+                                flex: 1,
                                 height: "45px",
                                 boxSizing: "border-box",
                                 fontFamily: "inherit",
                                 backgroundColor: "#fcfdff",
                                 color: "#000",
                                 outline: "none",
-                      }}
-                      onFocus={(e) => {
+                              }}
+                              onFocus={(e) => {
                                 e.currentTarget.style.borderColor = "#0069ab";
                                 e.currentTarget.style.boxShadow =
                                   "0 0 0 3px rgba(0, 105, 171, 0.15)";
                                 e.currentTarget.style.backgroundColor =
                                   "#fcfdff";
-                      }}
-                      onBlur={(e) => {
+                              }}
+                              onBlur={(e) => {
                                 e.currentTarget.style.borderColor = "#e0e0e0";
                                 e.currentTarget.style.boxShadow = "none";
                                 e.currentTarget.style.backgroundColor =
                                   "#fcfdff";
-                      }}
-                    />
-                    <input
-                      type="text"
-                      readOnly
+                              }}
+                            />
+                            <input
+                              type="text"
+                              readOnly
                               value={row.autoSum ? `₹ ${row.autoSum}` : ""}
-                      style={{
+                              style={{
                                 border: "1px solid #e0e0e0",
                                 borderRadius: "12px",
                                 padding: "10px 15px",
@@ -7710,48 +8203,15 @@ const handleBeneficiarySearch = async (query: string) => {
                                 textAlign: "center",
                                 outline: "none",
                                 cursor: "not-allowed",
-                      }}
-                    />
-                  </div>
-                </td>
-              </tr>
-            </React.Fragment>
-          ))}
-        </tbody>
+                              }}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    </React.Fragment>
+                  ))}
+                </tbody>
                 <tfoot>
-                  {hasUnplannedBudgetPreview && (
-                    <tr style={{ backgroundColor: "#fafcff" }}>
-                      <td
-                        colSpan={3}
-                        style={{
-                          padding: "12px",
-                          border: "1px solid #e0e0e0",
-                          fontWeight: 600,
-                          color: "#0069ab",
-                        }}
-                      >
-                        Unplanned Expenditure:{" "}
-                        {unplannedBudgetDisplayLabel || "\u00A0"}
-                      </td>
-                      <td
-                        colSpan={2}
-                        style={{
-                          padding: "12px",
-                          border: "1px solid #e0e0e0",
-                          textAlign: "right",
-                          paddingRight: "18px",
-                          fontWeight: 600,
-                          color: "#0069ab",
-                        }}
-                      >
-                        ₹{" "}
-                        {unplannedBudgetTotal.toLocaleString("en-IN", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </td>
-                    </tr>
-                  )}
                   <tr style={{ backgroundColor: "#f0f6ff" }}>
                     <td
                       colSpan={5}
@@ -7769,153 +8229,153 @@ const handleBeneficiarySearch = async (query: string) => {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
 
-      <div
-        style={{
-          marginTop: "14px",
-          padding: "10px 14px",
-          borderRadius: "10px",
-          backgroundColor: "#f0f6ff",
-          border: "1px solid #cfe2ff",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          gap: "8px",
-          fontSize: "0.9rem",
-          color: "#0b3d75",
-          textAlign: "center",
-          width: "100%",
-        }}
-      >
-        <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
+              <div
+                style={{
+                  marginTop: "14px",
+                  padding: "10px 14px",
+                  borderRadius: "10px",
+                  backgroundColor: "#f0f6ff",
+                  border: "1px solid #cfe2ff",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "0.9rem",
+                  color: "#0b3d75",
+                  textAlign: "center",
+                  width: "100%",
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
                 <span style={{ fontWeight: 600 }}>
                   {numberToIndianWords(totalExpenditureDisplayAmount)}
                 </span>
-      </div>
-    </div>
-  </div>
-)}
+              </div>
+            </div>
+          </div>
+        )}
 
-          {/* Payee Details Section */}
+        {/* Payee Details Section */}
         <div style={{ marginTop: "20px" }}>{renderPayeeDetails()}</div>
 
-          {/* Payment Status Section - Separate Card */}
-       {!showBulkNEFT && hasDofApprovalForPaymentStatus && (
+        {/* Payment Status Section - Separate Card */}
+        {!showBulkNEFT && hasDofApprovalForPaymentStatus && (
           <div
             className="payee-details-card"
             data-readonly-payment-status={canEditPaymentStatus ? "true" : undefined}
             style={{ marginTop: "20px", pointerEvents: "auto" }}
           >
-    <div className="payee-details-header">
-      <h5 className="payee-details-title">Payment Status</h5>
-    </div>
-    <div
-      className="payee-status-card-fields"
-      style={{
+            <div className="payee-details-header">
+              <h5 className="payee-details-title">Payment Status</h5>
+            </div>
+            <div
+              className="payee-status-card-fields"
+              style={{
                 padding: "20px",
-      }}
-    >
-      {/* 1. Dropdown (Status) */}
-      <div className="payee-status-col payee-status-col-pending">
-	        <CustomDropdown
-	          options={toOptions(PAYMENT_STATUS_OPTIONS)}
-	                  value={getSelectedOption(
-	                    paymentDetails.status,
-	                    toOptions(PAYMENT_STATUS_OPTIONS),
-	                  )}
-          onChange={(opt) =>
+              }}
+            >
+              {/* 1. Dropdown (Status) */}
+              <div className="payee-status-col payee-status-col-pending">
+                <CustomDropdown
+                  options={toOptions(PAYMENT_STATUS_OPTIONS)}
+                  value={getSelectedOption(
+                    paymentDetails.status,
+                    toOptions(PAYMENT_STATUS_OPTIONS),
+                  )}
+                  onChange={(opt) =>
                     setPaymentDetails({
                       ...paymentDetails,
                       status: String((opt as OptionType)?.value || ""),
                     })
-	          }
-	          placeholder="Status"
-	          isDisabled={!canEditPaymentStatus}
-	        />
-      </div>
+                  }
+                  placeholder="Status"
+                  isDisabled={!canEditPaymentStatus}
+                />
+              </div>
 
-      {/* 2. Date Picker */}
-      <div className="payee-status-col payee-status-col-date">
-        <input
-          type="date"
-          className="payee-field"
-          value={paymentDetails.date}
+              {/* 2. Date Picker */}
+              <div className="payee-status-col payee-status-col-date">
+                <input
+                  type="date"
+                  className="payee-field"
+                  value={paymentDetails.date}
                   onChange={(e) =>
                     setPaymentDetails({
                       ...paymentDetails,
                       date: e.target.value,
                     })
                   }
-          disabled={!canEditPaymentStatus}
+                  disabled={!canEditPaymentStatus}
                   style={{ width: "100%" }}
-        />
-      </div>
+                />
+              </div>
 
-      {/* 3. Bills Uploaded Button */}
-      <div className="payee-status-col payee-status-col-bills">
-        {canEditPaymentStatus && (
-          <label
-            className="payee-upload-label payee-status-upload-label"
-            style={{
-              margin: 0,
+              {/* 3. Bills Uploaded Button */}
+              <div className="payee-status-col payee-status-col-bills">
+                {canEditPaymentStatus && (
+                  <label
+                    className="payee-upload-label payee-status-upload-label"
+                    style={{
+                      margin: 0,
                       justifyContent: "center",
                       display: "flex",
                       alignItems: "center",
                       width: "100%",
                       boxSizing: "border-box",
-            }}
-          >
-            <span className="payee-upload-label-content">
-              <span className="payee-upload-label-text">
-                Payment proof{" "}
-              </span>
-              <Upload size={16} />
-            </span>
-            <input
-              type="file"
-              className="payee-upload-input"
-              multiple
-              accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
-              disabled={!canEditPaymentStatus}
-              onChange={handlePaymentProofUpload}
-            />
-          </label>
-        )}
-        {(existingPaymentProofs.length > 0 || uploadedPaymentProofs.length > 0) && (
-          <div
-            style={{
-              fontSize: "11px",
-              marginTop: "8px",
-            }}
-          >
-            {[...existingPaymentProofs, ...uploadedPaymentProofs].length} file(s)
-          </div>
-        )}
-      </div>
+                    }}
+                  >
+                    <span className="payee-upload-label-content">
+                      <span className="payee-upload-label-text">
+                        Payment proof{" "}
+                      </span>
+                      <Upload size={16} />
+                    </span>
+                    <input
+                      type="file"
+                      className="payee-upload-input"
+                      multiple
+                      accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+                      disabled={!canEditPaymentStatus}
+                      onChange={handlePaymentProofUpload}
+                    />
+                  </label>
+                )}
+                {(existingPaymentProofs.length > 0 || uploadedPaymentProofs.length > 0) && (
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      marginTop: "8px",
+                    }}
+                  >
+                    {[...existingPaymentProofs, ...uploadedPaymentProofs].length} file(s)
+                  </div>
+                )}
+              </div>
 
-      {/* 4. Comments Input */}
-      <div className="payee-status-col payee-status-col-comments">
-        <div className="payee-comments-group">
-            <input
-              type="text"
-              className="payee-field payee-status-comment-input"
-              placeholder="Transaction Details"
-              value={paymentDetails.refNo}
+              {/* 4. Comments Input */}
+              <div className="payee-status-col payee-status-col-comments">
+                <div className="payee-comments-group">
+                  <input
+                    type="text"
+                    className="payee-field payee-status-comment-input"
+                    placeholder="Transaction Details"
+                    value={paymentDetails.refNo}
                     onChange={(e) =>
                       setPaymentDetails({
                         ...paymentDetails,
                         refNo: e.target.value,
                       })
                     }
-            disabled={!canEditPaymentStatus}
+                    disabled={!canEditPaymentStatus}
                     style={{ width: "100%" }}
-          />
-          <button
-            type="button"
+                  />
+                  <button
+                    type="button"
                     onClick={() => {
                       setPaymentDetails((prev) => ({
                         ...prev,
@@ -7923,212 +8383,191 @@ const handleBeneficiarySearch = async (query: string) => {
                       }));
                       void handlePaymentStatusUpdate();
                     }}
-            className="payee-comment-tick-btn"
-            aria-label="Update payment status"
+                    className="payee-comment-tick-btn"
+                    aria-label="Update payment status"
                     title="Update payment status"
-            disabled={!canEditPaymentStatus}
-          >
-            <CheckCircle2 size={20} strokeWidth={2.2} />
-          </button>
-        </div>
-      </div>
-    </div>
-    {(existingPaymentProofs.length > 0 || uploadedPaymentProofs.length > 0) && (
-      <div
-        className="payee-uploaded-files"
-        style={{ margin: "0 20px 20px", pointerEvents: "auto" }}
-      >
-        <div className="payee-uploaded-files-header">
-          <span>S.No</span>
-          <span>Payment Proof</span>
-          <span>Action</span>
-        </div>
-        {existingPaymentProofs.map((file, i) => {
-          const fileUrl = resolveBillFileUrl(file);
-          const displayName = normalizeText(
-            file.original_name ||
-              file.stored_name ||
-              file.file_path ||
-              `Proof ${i + 1}`,
-          );
-
-          return (
-            <div
-              key={`existing-payment-proof-${file.id ?? i}`}
-              className="payee-uploaded-file-row"
-            >
-              <span className="payee-uploaded-file-index">{i + 1}</span>
-              <span className="payee-uploaded-file-name" title={displayName}>
-                {displayName}
-              </span>
-              <div className="payee-upload-actions">
-                <button
-                  className="payee-upload-view-btn"
-                  disabled={!fileUrl}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (fileUrl) {
-                      window.open(fileUrl, "_blank", "noopener,noreferrer");
-                    }
-                  }}
-                >
-                  <Eye size={16} />
-                </button>
+                    disabled={!canEditPaymentStatus}
+                  >
+                    <CheckCircle2 size={20} strokeWidth={2.2} />
+                  </button>
+                </div>
               </div>
             </div>
-          );
-        })}
-        {uploadedPaymentProofs.map((file, i) => (
-          <div
-            key={`uploaded-payment-proof-${i}`}
-            className="payee-uploaded-file-row"
-          >
-            <span className="payee-uploaded-file-index">
-              {existingPaymentProofs.length + i + 1}
-            </span>
-            <span className="payee-uploaded-file-name" title={file.name}>
-              {file.name}
-            </span>
-            <div className="payee-upload-actions">
-              <button
-                className="payee-upload-view-btn"
-                onClick={(e) => {
-                  e.preventDefault();
-                  window.open(
-                    URL.createObjectURL(file),
-                    "_blank",
-                    "noopener,noreferrer",
+            {(existingPaymentProofs.length > 0 || uploadedPaymentProofs.length > 0) && (
+              <div
+                className="payee-uploaded-files"
+                style={{ margin: "0 20px 20px", pointerEvents: "auto" }}
+              >
+                <div className="payee-uploaded-files-header">
+                  <span>S.No</span>
+                  <span>Payment Proof</span>
+                  <span>Action</span>
+                </div>
+                {existingPaymentProofs.map((file, i) => {
+                  const fileUrl = resolveBillFileUrl(file);
+                  const displayName = normalizeText(
+                    file.original_name ||
+                    file.stored_name ||
+                    file.file_path ||
+                    `Proof ${i + 1}`,
                   );
-                }}
-              >
-                <Eye size={16} />
-              </button>
-              <button
-                className="payee-upload-view-btn payee-upload-delete-btn"
-                onClick={(e) => {
-                  e.preventDefault();
-                  removePaymentProof(i);
-                }}
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-)}
 
-          {/* Remarks Section */}
-          {(activeTab === "Settlement" || activeTab === "Expenditure") && (
+                  return (
+                    <div
+                      key={`existing-payment-proof-${file.id ?? i}`}
+                      className="payee-uploaded-file-row"
+                    >
+                      <span className="payee-uploaded-file-index">{i + 1}</span>
+                      <span className="payee-uploaded-file-name" title={displayName}>
+                        {displayName}
+                      </span>
+                      <div className="payee-upload-actions">
+                        <button
+                          className="payee-upload-view-btn"
+                          disabled={!fileUrl}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (fileUrl) {
+                              window.open(fileUrl, "_blank", "noopener,noreferrer");
+                            }
+                          }}
+                        >
+                          <Eye size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {uploadedPaymentProofs.map((file, i) => (
+                  <div
+                    key={`uploaded-payment-proof-${i}`}
+                    className="payee-uploaded-file-row"
+                  >
+                    <span className="payee-uploaded-file-index">
+                      {existingPaymentProofs.length + i + 1}
+                    </span>
+                    <span className="payee-uploaded-file-name" title={file.name}>
+                      {file.name}
+                    </span>
+                    <div className="payee-upload-actions">
+                      <button
+                        className="payee-upload-view-btn"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          window.open(
+                            URL.createObjectURL(file),
+                            "_blank",
+                            "noopener,noreferrer",
+                          );
+                        }}
+                      >
+                        <Eye size={16} />
+                      </button>
+                      <button
+                        className="payee-upload-view-btn payee-upload-delete-btn"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          removePaymentProof(i);
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Remarks Section */}
+        {(activeTab === "Settlement" || activeTab === "Expenditure") && (
+          <div
+            style={{
+              backgroundColor: "#fff",
+              padding: "30px",
+              borderRadius: "20px",
+              marginTop: "20px",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+            }}
+          >
             <div
               style={{
-                backgroundColor: "#fff",
-                padding: "30px",
-                borderRadius: "20px",
-                marginTop: "20px",
-                boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
               }}
             >
-              <div
+              <label
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
+                  fontWeight: 600,
+                  color: "#2a3f5e",
+                  fontSize: "0.95rem",
                 }}
               >
-                <label
-                  style={{
-                    fontWeight: 600,
-                    color: "#2a3f5e",
-                    fontSize: "0.95rem",
-                  }}
-                >
-                  Remarks
-                </label>
-                <textarea
-                  value={activeTab === "Settlement" ? settlementRemarks : expenditureRemarks}
-                  onChange={(event) => {
-                    if (activeTab === "Settlement") {
-                      setSettlementRemarks(event.target.value);
-                    } else {
-                      setExpenditureRemarks(event.target.value);
-                    }
-                  }}
-                  placeholder="Enter remarks (optional)"
-                  rows={3}
-                  style={{
-                    border: "1px solid #d7dee7",
-                    borderRadius: "12px",
-                    padding: "12px 14px",
-                    fontSize: "0.95rem",
-                    width: "100%",
-                    minHeight: "90px",
-                    resize: "vertical",
-                    backgroundColor: "#fcfdff",
-                    color: "#2a3f5e",
-                    outline: "none",
-                    fontFamily: "inherit",
-                  }}
-                />
-              </div>
+                Remarks
+              </label>
+              <textarea
+                value={activeTab === "Settlement" ? settlementRemarks : expenditureRemarks}
+                onChange={(event) => {
+                  if (activeTab === "Settlement") {
+                    setSettlementRemarks(event.target.value);
+                  } else {
+                    setExpenditureRemarks(event.target.value);
+                  }
+                }}
+                placeholder="Enter remarks (optional)"
+                rows={3}
+                style={{
+                  border: "1px solid #d7dee7",
+                  borderRadius: "12px",
+                  padding: "12px 14px",
+                  fontSize: "0.95rem",
+                  width: "100%",
+                  minHeight: "90px",
+                  resize: "vertical",
+                  backgroundColor: "#fcfdff",
+                  color: "#2a3f5e",
+                  outline: "none",
+                  fontFamily: "inherit",
+                }}
+              />
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Submit Button Section */}
-          {!isReadOnlyView && (
-            <div className="expenditure-submit-buttons">
-              <button
-                className="btn-submit"
-                disabled={isSubmitting}
+        {/* Submit Button Section */}
+        {!isReadOnlyView && (
+          <div className="expenditure-submit-buttons">
+            <button
+              className="btn-submit"
+              disabled={isSubmitting}
               onClick={(e) => {
                 e.preventDefault();
                 handleSubmit();
               }}
-          >
-            {isSubmitting ? "Submitting..." : submitActionLabel}
-          </button>
-        </div>
-      )}
-          {showWorkflowActions && (
-            <div
-              className="expenditure-workflow-actions"
-              data-readonly-action-bar="true"
-              style={{ pointerEvents: "auto" }}
             >
-              {!isSuperAdminUser && canActOnCurrentStage && (
-                <>
-                  <button
-                    type="button"
-                    className="expenditure-workflow-btn expenditure-workflow-btn--approve"
-                    onClick={() => handleWorkflowAction("approved")}
-                    disabled={isLoading}
-                  >
-                    <CheckCircle2 size={18} />
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    className="expenditure-workflow-btn expenditure-workflow-btn--return"
-                    onClick={() => handleWorkflowAction("returned")}
-                    disabled={isLoading}
-                  >
-                    <RotateCcw size={18} />
-                    Return
-                  </button>
-                  <button
-                    type="button"
-                    className="expenditure-workflow-btn expenditure-workflow-btn--reject"
-                    onClick={() => handleWorkflowAction("rejected")}
-                    disabled={isLoading}
-                  >
-                    <XCircle size={18} />
-                    Reject
-                  </button>
-                </>
-              )}
-              {isSuperAdminUser && (
+              {isSubmitting ? "Submitting..." : submitActionLabel}
+            </button>
+          </div>
+        )}
+        {showWorkflowActions && (
+          <div
+            className="expenditure-workflow-actions"
+            data-readonly-action-bar="true"
+            style={{ pointerEvents: "auto" }}
+          >
+            {!isSuperAdminUser && canActOnCurrentStage && (
+              <>
+                <button
+                  type="button"
+                  className="expenditure-workflow-btn expenditure-workflow-btn--approve"
+                  onClick={() => handleWorkflowAction("approved")}
+                  disabled={isLoading}
+                >
+                  <CheckCircle2 size={18} />
+                  Approve
+                </button>
                 <button
                   type="button"
                   className="expenditure-workflow-btn expenditure-workflow-btn--return"
@@ -8138,152 +8577,172 @@ const handleBeneficiarySearch = async (query: string) => {
                   <RotateCcw size={18} />
                   Return
                 </button>
-              )}
+                <button
+                  type="button"
+                  className="expenditure-workflow-btn expenditure-workflow-btn--reject"
+                  onClick={() => handleWorkflowAction("rejected")}
+                  disabled={isLoading}
+                >
+                  <XCircle size={18} />
+                  Reject
+                </button>
+              </>
+            )}
+            {isSuperAdminUser && (
               <button
                 type="button"
-                className="expenditure-workflow-btn expenditure-workflow-btn--archive"
-                onClick={() => handleWorkflowAction("archived")}
+                className="expenditure-workflow-btn expenditure-workflow-btn--return"
+                onClick={() => handleWorkflowAction("returned")}
                 disabled={isLoading}
               >
-                <Archive size={18} />
-                Archive
+                <RotateCcw size={18} />
+                Return
+              </button>
+            )}
+            <button
+              type="button"
+              className="expenditure-workflow-btn expenditure-workflow-btn--archive"
+              onClick={() => handleWorkflowAction("archived")}
+              disabled={isLoading}
+            >
+              <Archive size={18} />
+              Archive
+            </button>
+          </div>
+        )}
+
+        <AlertModal
+          show={alertConfig.show}
+          onHide={closeAlert}
+          title={alertConfig.title}
+          message={alertConfig.message}
+          type={alertConfig.type}
+          onConfirm={() => {
+            if (alertConfig.onConfirm) {
+              alertConfig.onConfirm();
+              return;
+            }
+            closeAlert();
+          }}
+          showCancel={alertConfig.showCancel}
+          confirmText={alertConfig.confirmText}
+        />
+
+        <CustomModal
+          show={wfActionPopupOpen}
+          onHide={wfActionSubmitting ? () => { } : closeWfActionPopup}
+          title={
+            wfActionType === "returned"
+              ? "Return Item - Comments"
+              : "Reject Item - Comments"
+          }
+          size="sm"
+          centered
+          backdrop={wfActionSubmitting ? "static" : true}
+          keyboard={!wfActionSubmitting}
+          hideCloseButton={wfActionSubmitting}
+          footer={
+            <div className="d-flex justify-content-end gap-2 w-100" data-readonly-action-bar="true">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={closeWfActionPopup}
+                disabled={wfActionSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${wfActionType === "rejected"
+                    ? "btn-danger"
+                    : "btn-warning text-dark"
+                  }`}
+                onClick={submitWfActionWithComment}
+                disabled={wfActionSubmitting}
+              >
+                {wfActionSubmitting
+                  ? "Submitting..."
+                  : wfActionType === "returned"
+                    ? "Return"
+                    : "Reject"}
               </button>
             </div>
-          )}
-
-          <AlertModal
-            show={alertConfig.show}
-            onHide={closeAlert}
-            title={alertConfig.title}
-            message={alertConfig.message}
-            type={alertConfig.type}
-            onConfirm={() => {
-              if (alertConfig.onConfirm) {
-                alertConfig.onConfirm();
-                return;
+          }
+        >
+          <div className="p-2" data-readonly-action-bar="true">
+            <label className="form-label fw-semibold">
+              Comments <span className="text-danger">*</span>
+            </label>
+            <textarea
+              className="form-control"
+              rows={4}
+              value={wfActionComment}
+              onChange={(event) => setWfActionComment(event.target.value)}
+              placeholder={
+                wfActionType === "returned"
+                  ? "Enter return comments"
+                  : "Enter rejection comments"
               }
-              closeAlert();
-            }}
-            showCancel={alertConfig.showCancel}
-            confirmText={alertConfig.confirmText}
-          />
+              disabled={wfActionSubmitting}
+              autoFocus
+            />
+          </div>
+        </CustomModal>
 
-          <CustomModal
-            show={wfActionPopupOpen}
-            onHide={wfActionSubmitting ? () => {} : closeWfActionPopup}
-            title={
-              wfActionType === "returned"
-                ? "Return Item - Comments"
-                : "Reject Item - Comments"
-            }
-            size="sm"
-            centered
-            backdrop={wfActionSubmitting ? "static" : true}
-            keyboard={!wfActionSubmitting}
-            hideCloseButton={wfActionSubmitting}
-            footer={
-              <div className="d-flex justify-content-end gap-2 w-100" data-readonly-action-bar="true">
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-secondary"
-                  onClick={closeWfActionPopup}
-                  disabled={wfActionSubmitting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${
-                    wfActionType === "rejected"
-                      ? "btn-danger"
-                      : "btn-warning text-dark"
-                  }`}
-                  onClick={submitWfActionWithComment}
-                  disabled={wfActionSubmitting}
-                >
-                  {wfActionSubmitting
-                    ? "Submitting..."
-                    : wfActionType === "returned"
-                      ? "Return"
-                      : "Reject"}
-                </button>
-              </div>
-            }
-          >
-            <div className="p-2" data-readonly-action-bar="true">
-              <label className="form-label fw-semibold">
-                Comments <span className="text-danger">*</span>
-              </label>
-              <textarea
-                className="form-control"
-                rows={4}
-                value={wfActionComment}
-                onChange={(event) => setWfActionComment(event.target.value)}
-                placeholder={
-                  wfActionType === "returned"
-                    ? "Enter return comments"
-                    : "Enter rejection comments"
-                }
-                disabled={wfActionSubmitting}
-                autoFocus
-              />
-            </div>
-          </CustomModal>
-
-          <CustomModal
-            show={resubmitPopupOpen}
-            onHide={resubmitSubmitting ? () => {} : closeResubmitPopup}
-            title="Resubmit Item - Comments"
-            size="sm"
-            centered
-            backdrop={resubmitSubmitting ? "static" : true}
-            keyboard={!resubmitSubmitting}
-            hideCloseButton={resubmitSubmitting}
-            footer={
-              <div className="d-flex justify-content-end gap-2 w-100" data-readonly-action-bar="true">
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-secondary"
-                  onClick={() => closeResubmitPopup()}
-                  disabled={resubmitSubmitting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-primary"
-                  onClick={submitResubmissionWithComment}
-                  disabled={resubmitSubmitting}
-                >
-                  {resubmitSubmitting ? "Resubmitting..." : "Resubmit"}
-                </button>
-              </div>
-            }
-          >
-            <div className="p-2" data-readonly-action-bar="true">
-              <label className="form-label fw-semibold">
-                Comments <span className="text-danger">*</span>
-              </label>
-              <textarea
-                className="form-control"
-                rows={4}
-                value={resubmitComment}
-                onChange={(event) => setResubmitComment(event.target.value)}
-                placeholder="Enter resubmission comments"
+        <CustomModal
+          show={resubmitPopupOpen}
+          onHide={resubmitSubmitting ? () => { } : closeResubmitPopup}
+          title="Resubmit Item - Comments"
+          size="sm"
+          centered
+          backdrop={resubmitSubmitting ? "static" : true}
+          keyboard={!resubmitSubmitting}
+          hideCloseButton={resubmitSubmitting}
+          footer={
+            <div className="d-flex justify-content-end gap-2 w-100" data-readonly-action-bar="true">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => closeResubmitPopup()}
                 disabled={resubmitSubmitting}
-                autoFocus
-              />
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                onClick={submitResubmissionWithComment}
+                disabled={resubmitSubmitting}
+              >
+                {resubmitSubmitting ? "Resubmitting..." : "Resubmit"}
+              </button>
             </div>
-          </CustomModal>
+          }
+        >
+          <div className="p-2" data-readonly-action-bar="true">
+            <label className="form-label fw-semibold">
+              Comments <span className="text-danger">*</span>
+            </label>
+            <textarea
+              className="form-control"
+              rows={4}
+              value={resubmitComment}
+              onChange={(event) => setResubmitComment(event.target.value)}
+              placeholder="Enter resubmission comments"
+              disabled={resubmitSubmitting}
+              autoFocus
+            />
+          </div>
+        </CustomModal>
 
-          <AddPayeeModal
-            show={showAddPayeeModal}
-            onClose={() => setShowAddPayeeModal(false)}
-            onAddPayee={handleAddPayee}
-            showAlert={showAlert}
-          />
-        </div>
-        )
+        <AddPayeeModal
+          show={showAddPayeeModal}
+          onClose={() => setShowAddPayeeModal(false)}
+          onAddPayee={handleAddPayee}
+          showAlert={showAlert}
+        />
+      </div>
+      )
       <div
         style={{
           position: "absolute",
@@ -8293,15 +8752,15 @@ const handleBeneficiarySearch = async (query: string) => {
           textAlign: "right",
           fontSize: "13px",
           color: "#000000",
-            fontFamily: '"Times New Roman", serif',
+          fontFamily: '"Times New Roman", serif',
           backgroundColor: "#fff",
           padding: "2px 8px",
           border: "1px solid #ddd",
           borderRadius: "4px",
-            zIndex: 100,
+          zIndex: 100,
         }}
       ></div>
-     </div>
+    </div>
   );
 };
 

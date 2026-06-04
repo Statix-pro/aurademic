@@ -90,41 +90,116 @@ const toMoney = (v) => {
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
 };
 
-const normalizeUnplannedBudgetPayload = (payload = {}) => {
-  const enabled = parseBoolean(payload?.unplanned_budget_enabled);
-  const amount = enabled ? toMoney(payload?.unplanned_budget_amount) : 0;
-  const headOfAccount = enabled ? normalizeText(payload?.unplanned_head_of_account) : '';
-  const headOfAccountBudgetLineId = enabled
-    ? toPositiveInt(payload?.unplanned_head_of_account_budget_line_id)
-    : null;
-  const headOfAccountBudgetProposalId = enabled
-    ? toPositiveInt(payload?.unplanned_head_of_account_budget_proposal_id)
-    : null;
-  const head = enabled ? normalizeText(payload?.unplanned_budget_head) : '';
-  const subHead = enabled ? normalizeText(payload?.unplanned_budget_sub_head) : '';
-  const description = enabled
-    ? normalizeText(payload?.unplanned_budget_description) || [head, subHead].filter(Boolean).join(' - ')
-    : '';
+const normalizeUnplannedBudgetRows = (payload = {}) => {
+  const rawRows = Array.isArray(payload?.unplanned_rows)
+    ? payload.unplanned_rows
+    : Array.isArray(payload?.unplannedRows)
+      ? payload.unplannedRows
+      : [];
 
-  if (enabled && amount <= 0) {
-    throw new Error('Please enter a valid Unplanned Expenditure amount.');
+  if (rawRows.length) {
+    return rawRows
+      .map((row) => {
+        const headOfAccount = normalizeText(row?.head_of_account || row?.headOfAccount);
+        const headOfAccountBudgetLineId = toPositiveInt(
+          row?.head_of_account_budget_line_id || row?.headOfAccountBudgetLineId,
+        );
+        const headOfAccountBudgetProposalId = toPositiveInt(
+          row?.head_of_account_budget_proposal_id || row?.headOfAccountBudgetProposalId,
+        );
+        const head = normalizeText(row?.budget_head || row?.budgetHead);
+        const subHead = normalizeText(row?.sub_head || row?.subHead);
+        const amount = toMoney(row?.amount);
+        const description =
+          normalizeText(row?.description) ||
+          [head, subHead].filter(Boolean).join(' - ');
+
+        return {
+          headOfAccount,
+          headOfAccountBudgetLineId,
+          headOfAccountBudgetProposalId,
+          head,
+          subHead,
+          amount,
+          description,
+        };
+      })
+      .filter((row) =>
+        row.headOfAccount ||
+        row.headOfAccountBudgetLineId ||
+        row.head ||
+        row.subHead ||
+        row.amount > 0,
+      );
   }
-  if (enabled && (!headOfAccount || !headOfAccountBudgetLineId)) {
-    throw new Error('Please select Head of Accounts for Unplanned Expenditure.');
+
+  const enabled = parseBoolean(payload?.unplanned_budget_enabled);
+  if (!enabled) return [];
+
+  return [{
+    headOfAccount: normalizeText(payload?.unplanned_head_of_account),
+    headOfAccountBudgetLineId: toPositiveInt(payload?.unplanned_head_of_account_budget_line_id),
+    headOfAccountBudgetProposalId: toPositiveInt(payload?.unplanned_head_of_account_budget_proposal_id),
+    head: normalizeText(payload?.unplanned_budget_head),
+    subHead: normalizeText(payload?.unplanned_budget_sub_head),
+    amount: toMoney(payload?.unplanned_budget_amount),
+    description:
+      normalizeText(payload?.unplanned_budget_description) ||
+      [
+        normalizeText(payload?.unplanned_budget_head),
+        normalizeText(payload?.unplanned_budget_sub_head),
+      ].filter(Boolean).join(' - '),
+  }];
+};
+
+const normalizeUnplannedBudgetPayload = (payload = {}) => {
+  const rows = normalizeUnplannedBudgetRows(payload);
+  const enabled = parseBoolean(payload?.unplanned_budget_enabled) || rows.length > 0;
+
+  if (!enabled) {
+    return {
+      enabled: false,
+      amount: 0,
+      rows: [],
+      headOfAccount: '',
+      headOfAccountBudgetLineId: null,
+      headOfAccountBudgetProposalId: null,
+      head: '',
+      subHead: '',
+      description: '',
+    };
   }
-  if (enabled && (!head || !subHead)) {
-    throw new Error('Please select Unplanned Expenditure budget head and sub head.');
+
+  if (!rows.length) {
+    throw new Error('Please add at least one Unplanned Expenditure row.');
   }
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 1;
+    if (row.amount <= 0) {
+      throw new Error(`Please enter a valid amount for Unplanned Expenditure row ${rowNumber}.`);
+    }
+    if (!row.headOfAccount || !row.headOfAccountBudgetLineId) {
+      throw new Error(`Please select Head of Accounts for Unplanned Expenditure row ${rowNumber}.`);
+    }
+    if (!row.head || !row.subHead) {
+      throw new Error(`Please select budget head and sub head for Unplanned Expenditure row ${rowNumber}.`);
+    }
+  });
+
+  const primary = rows[0];
+  const amount = toMoney(rows.reduce((sum, row) => sum + row.amount, 0));
 
   return {
-    enabled,
+    enabled: true,
     amount,
-    headOfAccount,
-    headOfAccountBudgetLineId,
-    headOfAccountBudgetProposalId,
-    head,
-    subHead,
-    description,
+    rows,
+    headOfAccount: primary.headOfAccount,
+    headOfAccountBudgetLineId: primary.headOfAccountBudgetLineId,
+    headOfAccountBudgetProposalId: primary.headOfAccountBudgetProposalId,
+    head: primary.head,
+    subHead: primary.subHead,
+    description: primary.description,
   };
 };
 
@@ -758,12 +833,19 @@ async function getFinanceRequestBudgetUsageByLine(connOrDb, {
   const lineFilterSql = normalizedBudgetLineIds.length
     ? `WHERE usage_rows.budget_line_id IN (${normalizedBudgetLineIds.map(() => '?').join(', ')})`
     : '';
-  const hasUnplannedHeadOfAccountLineColumn = await hasExpenditureRequestColumn(
-    'unplanned_head_of_account_budget_line_id',
-    { tx: source },
-  );
-  const unplannedUsageUnionSql = hasUnplannedHeadOfAccountLineColumn
-    ? `
+  const unplannedUsageUnionSql = `
+       UNION ALL
+
+       SELECT
+         eur.head_of_account_budget_line_id AS budget_line_id,
+         eur.amount AS amount_delta
+       FROM expenditure_unplanned_rows eur
+       JOIN expenditure_requests er ON er.id = eur.expenditure_id
+       WHERE er.finance_request_id = ?
+         AND (? IS NULL OR er.id <> ?)
+         AND eur.head_of_account_budget_line_id IS NOT NULL
+         AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
+
        UNION ALL
 
        SELECT
@@ -774,9 +856,13 @@ async function getFinanceRequestBudgetUsageByLine(connOrDb, {
          AND (? IS NULL OR er.id <> ?)
          AND er.unplanned_budget_enabled = 1
          AND er.unplanned_head_of_account_budget_line_id IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1
+             FROM expenditure_unplanned_rows eur_existing
+            WHERE eur_existing.expenditure_id = er.id
+         )
          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
-`
-    : '';
+`;
 
   const [rows] = await source.execute(
     `SELECT
@@ -816,9 +902,12 @@ async function getFinanceRequestBudgetUsageByLine(connOrDb, {
           financeId,
           excludedRequestId,
           excludedRequestId,
-          ...(hasUnplannedHeadOfAccountLineColumn
-            ? [financeId, excludedRequestId, excludedRequestId]
-            : []),
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
           ...normalizedBudgetLineIds,
         ]
       : [
@@ -828,9 +917,12 @@ async function getFinanceRequestBudgetUsageByLine(connOrDb, {
           financeId,
           excludedRequestId,
           excludedRequestId,
-          ...(hasUnplannedHeadOfAccountLineColumn
-            ? [financeId, excludedRequestId, excludedRequestId]
-            : []),
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
         ],
   );
 
@@ -1048,7 +1140,13 @@ export async function getApprovedBudgets({ userId, userEmail, financeRequestId, 
   const financeId = toPositiveInt(financeRequestId);
   if (!financeId || !uid) return [];
 
-  const owner = await getApprovedFinanceRequestOwner(db, financeId);
+  const [[owner]] = await db.execute(
+    `SELECT id, created_by
+       FROM finance_requests
+      WHERE id = ?
+      LIMIT 1`,
+    [financeId],
+  );
   if (!owner) return [];
   if (!allowAnyApprovedFinance && toPositiveInt(owner.created_by) !== uid) return [];
 
@@ -1080,17 +1178,17 @@ export async function getApprovedBudgets({ userId, userEmail, financeRequestId, 
       budgetLineIds: financeRows.map((row) => row.budget_line_id),
     });
 
-    const groupedByHeadSubHead = new Map();
+    const groupedByHead = new Map();
 
     financeRows.forEach((r) => {
       const totalAmount = toMoney(r.total_amount);
       const usedAmount = toMoney(usageByLineId.get(toPositiveInt(r.budget_line_id)));
       const head = normalizeText(r.head);
       const subHead = normalizeText(r.sub_head);
-      if (!head || !subHead) return;
+      if (!head) return;
 
-      const key = `${head.toLowerCase()}::${subHead.toLowerCase()}`;
-      const existing = groupedByHeadSubHead.get(key);
+      const key = head.toLowerCase();
+      const existing = groupedByHead.get(key);
 
       if (existing) {
         existing.totalAmount = toMoney(existing.totalAmount + totalAmount);
@@ -1099,7 +1197,7 @@ export async function getApprovedBudgets({ userId, userEmail, financeRequestId, 
         return;
       }
 
-      groupedByHeadSubHead.set(key, {
+      groupedByHead.set(key, {
         budgetLineId: toPositiveInt(r.budget_line_id),
         budgetProposalId: toPositiveInt(r.budget_proposal_id),
         financeRequestRef: normalizeText(r.finance_request_ref),
@@ -1114,7 +1212,7 @@ export async function getApprovedBudgets({ userId, userEmail, financeRequestId, 
       });
     });
 
-    return Array.from(groupedByHeadSubHead.values());
+    return Array.from(groupedByHead.values());
   } catch (error) {
     if (error?.code === 'ER_NO_SUCH_TABLE') return [];
     throw error;
@@ -1729,6 +1827,10 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
       const settlementAmount = toMoney(row.settlement_amount);
       const expenditureAmount = toMoney(row.expenditure_amount);
       const effectiveUsageAmount = settlementAmount > 0 ? settlementAmount : advanceAmount;
+      const sourceFiscalYear = toPositiveInt(row.source_fiscal_year);
+      const carryForwardAmount = toMoney(row.carry_forward_amount);
+      const carryForwardDeduction =
+        !fyStart || fyStart === sourceFiscalYear ? carryForwardAmount : 0;
       return {
         finance_request_id: toPositiveInt(row.finance_request_id),
         request_ref: normalizeText(row.request_ref),
@@ -1738,13 +1840,16 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
         beneficiary_name: normalizeText(row.beneficiary_name),
         finance_tag: normalizeText(row.finance_tag),
         approved_amount: approvedAmount,
-        source_fiscal_year: toPositiveInt(row.source_fiscal_year),
-        carry_forward_amount: toMoney(row.carry_forward_amount),
+        source_fiscal_year: sourceFiscalYear,
+        carry_forward_amount: carryForwardAmount,
         carry_forward_target_years: normalizeText(row.carry_forward_target_years),
         advance_amount: advanceAmount,
         expenditure_amount: expenditureAmount,
         settlement_amount: settlementAmount,
-        balance_amount: Math.max(0, approvedAmount - effectiveUsageAmount - expenditureAmount),
+        balance_amount: Math.max(
+          0,
+          approvedAmount - effectiveUsageAmount - expenditureAmount - carryForwardDeduction,
+        ),
         expenditure_request_count: Number(row.expenditure_request_count || 0),
       };
     }),
@@ -2718,6 +2823,47 @@ async function insertExpenditureRows(conn, expenditureId, rows = [], budgetSnaps
   }
 }
 
+async function insertUnplannedRows(conn, expenditureId, rows = []) {
+  const validRows = Array.isArray(rows) ? rows : [];
+  let sortOrder = 0;
+  for (const row of validRows) {
+    const headOfAccount = sanitizeRowValue(row.headOfAccount || row.head_of_account);
+    const headOfAccountBudgetLineId = toPositiveInt(
+      row.headOfAccountBudgetLineId || row.head_of_account_budget_line_id,
+    );
+    const headOfAccountBudgetProposalId = toPositiveInt(
+      row.headOfAccountBudgetProposalId || row.head_of_account_budget_proposal_id,
+    );
+    const budgetHead = sanitizeRowValue(row.head || row.budget_head || row.budgetHead);
+    const subHead = sanitizeRowValue(row.subHead || row.sub_head);
+    const amount = toMoney(row.amount);
+    const description =
+      sanitizeRowValue(row.description) ||
+      [budgetHead, subHead].filter(Boolean).join(' - ');
+    if (!headOfAccountBudgetLineId || !budgetHead || !subHead || amount <= 0) continue;
+
+    await conn.execute(
+      `INSERT INTO expenditure_unplanned_rows
+         (expenditure_id, head_of_account, head_of_account_budget_line_id,
+          head_of_account_budget_proposal_id, budget_head, sub_head, amount,
+          description, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        expenditureId,
+        headOfAccount,
+        headOfAccountBudgetLineId,
+        headOfAccountBudgetProposalId,
+        budgetHead,
+        subHead,
+        amount,
+        description,
+        sortOrder,
+      ],
+    );
+    sortOrder += 1;
+  }
+}
+
 async function insertBillFiles(conn, expenditureId, files = [], fileCategory = 'bill') {
   const validFiles = Array.isArray(files) ? files : [];
   if (!validFiles.length) return;
@@ -2815,18 +2961,20 @@ function collectUsageRowsForRequestType(requestType, { advanceRows, settlementRo
   return [...usageByLine.values()];
 }
 
-function addUnplannedUsageRow(usageRows = [], normalizedUnplanned = {}) {
+function addUnplannedUsageRows(usageRows = [], normalizedUnplanned = {}) {
   if (!normalizedUnplanned?.enabled) return usageRows;
 
-  const budgetLineId = toPositiveInt(normalizedUnplanned.headOfAccountBudgetLineId);
-  const amount = toMoney(normalizedUnplanned.amount);
-  if (!budgetLineId || amount <= 0) return usageRows;
+  (Array.isArray(normalizedUnplanned.rows) ? normalizedUnplanned.rows : []).forEach((row) => {
+    const budgetLineId = toPositiveInt(row.headOfAccountBudgetLineId);
+    const amount = toMoney(row.amount);
+    if (!budgetLineId || amount <= 0) return;
 
-  usageRows.push({
-    budgetLineId,
-    amount,
-    isUnplanned: true,
-    direction: -1,
+    usageRows.push({
+      budgetLineId,
+      amount,
+      isUnplanned: true,
+      direction: -1,
+    });
   });
   return usageRows;
 }
@@ -3295,7 +3443,7 @@ const incomeRows = Array.isArray(data.income_rows)
     const settlementTotal = settlementRows.reduce((sum, row) => sum + toMoney(row.settlement || row.settlement_amount), 0);
     const expenditureTotal = expenditureRows.reduce((sum, row) => sum + toMoney(row.autoSum || row.expenditure || row.auto_sum_amount), 0);
     const normalizedUnplanned = normalizeUnplannedBudgetPayload(data);
-    const usageRows = addUnplannedUsageRow(
+    const usageRows = addUnplannedUsageRows(
       collectUsageRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows }),
       normalizedUnplanned,
     );
@@ -3466,6 +3614,7 @@ const incomeRows = Array.isArray(data.income_rows)
     });
     await insertSettlementRows(conn, expenditureId, settlementRows, budgetSnapshotsByLine);
     await insertExpenditureRows(conn, expenditureId, expenditureRows, budgetSnapshotsByLine);
+    await insertUnplannedRows(conn, expenditureId, normalizedUnplanned.rows);
     await insertBillFiles(conn, expenditureId, uploads.billFiles);
     await insertBillFiles(conn, expenditureId, uploads.paymentProofFiles, 'payment_proof');
     await upsertBulkNeftFile(
@@ -3606,7 +3755,7 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     const settlementTotal = settlementRows.reduce((sum, row) => sum + toMoney(row.settlement || row.settlement_amount), 0);
     const expenditureTotal = expenditureRows.reduce((sum, row) => sum + toMoney(row.autoSum || row.expenditure || row.auto_sum_amount), 0);
     const normalizedUnplanned = normalizeUnplannedBudgetPayload(data);
-    const usageRows = addUnplannedUsageRow(
+    const usageRows = addUnplannedUsageRows(
       collectUsageRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows }),
       normalizedUnplanned,
     );
@@ -3801,6 +3950,7 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     await conn.execute('DELETE FROM expenditure_advance_rows WHERE expenditure_id = ?', [normalizedExpenditureId]);
     await conn.execute('DELETE FROM expenditure_settlement_rows WHERE expenditure_id = ?', [normalizedExpenditureId]);
     await conn.execute('DELETE FROM expenditure_line_rows WHERE expenditure_id = ?', [normalizedExpenditureId]);
+    await conn.execute('DELETE FROM expenditure_unplanned_rows WHERE expenditure_id = ?', [normalizedExpenditureId]);
 
     if (Array.isArray(uploads.billFiles) && uploads.billFiles.length) {
       await conn.execute(
@@ -3822,6 +3972,7 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     });
     await insertSettlementRows(conn, normalizedExpenditureId, settlementRows, budgetSnapshotsByLine);
     await insertExpenditureRows(conn, normalizedExpenditureId, expenditureRows, budgetSnapshotsByLine);
+    await insertUnplannedRows(conn, normalizedExpenditureId, normalizedUnplanned.rows);
     await insertBillFiles(conn, normalizedExpenditureId, uploads.billFiles);
     await insertBillFiles(conn, normalizedExpenditureId, uploads.paymentProofFiles, 'payment_proof');
     await upsertBulkNeftFile(
@@ -3859,6 +4010,7 @@ export async function getExpenditureDetails(id) {
       advance_rows: [],
       settlement_rows: [],
       expenditure_rows: [],
+      unplanned_rows: [],
       bill_files: [],
       payment_proof_files: [],
       bulk_neft_file: null,
@@ -3959,6 +4111,21 @@ export async function getExpenditureDetails(id) {
   const [bill_files] = billFilesResult;
   const [payment_proof_files] = paymentProofFilesResult;
   const [bulkNeftRows] = bulkNeftFileResult;
+  let unplanned_rows = [];
+  try {
+    const [unplannedRowsResult] = await db.execute(
+      `SELECT id, head_of_account, head_of_account_budget_line_id,
+              head_of_account_budget_proposal_id, budget_head, sub_head,
+              amount, description, sort_order, created_at, updated_at
+         FROM expenditure_unplanned_rows
+        WHERE expenditure_id = ?
+        ORDER BY sort_order ASC, id ASC`,
+      [expenditureId],
+    );
+    unplanned_rows = unplannedRowsResult;
+  } catch (error) {
+    if (error?.code !== 'ER_NO_SUCH_TABLE') throw error;
+  }
 
   return {
     income_rows,
@@ -3966,6 +4133,7 @@ export async function getExpenditureDetails(id) {
     advance_rows,
     settlement_rows,
     expenditure_rows,
+    unplanned_rows,
     bill_files: bill_files.map(withUploadAccess),
     payment_proof_files: payment_proof_files.map(withUploadAccess),
     bulk_neft_file: withUploadAccess(bulkNeftRows[0] || null),

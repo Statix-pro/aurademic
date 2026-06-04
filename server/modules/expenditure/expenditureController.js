@@ -32,18 +32,69 @@ const parseBoolean = (value) => {
   return ['1', 'true', 'yes', 'y', 'on'].includes(normalized);
 };
 
+const normalizeUnplannedRowsForMeta = (source = {}) => {
+  const rawRows = Array.isArray(source.unplanned_rows)
+    ? source.unplanned_rows
+    : Array.isArray(source.unplannedRows)
+      ? source.unplannedRows
+      : [];
+
+  if (rawRows.length) {
+    return rawRows
+      .map((row) => ({
+        head_of_account: normalizeText(row.head_of_account || row.headOfAccount) || null,
+        head_of_account_budget_line_id: toPositiveInt(
+          row.head_of_account_budget_line_id || row.headOfAccountBudgetLineId,
+        ),
+        head_of_account_budget_proposal_id: toPositiveInt(
+          row.head_of_account_budget_proposal_id || row.headOfAccountBudgetProposalId,
+        ),
+        budget_head: normalizeText(row.budget_head || row.budgetHead) || null,
+        sub_head: normalizeText(row.sub_head || row.subHead) || null,
+        amount: toMoney(row.amount),
+        description: normalizeText(row.description) || null,
+      }))
+      .filter((row) =>
+        row.head_of_account ||
+        row.head_of_account_budget_line_id ||
+        row.budget_head ||
+        row.sub_head ||
+        row.amount > 0,
+      );
+  }
+
+  if (!parseBoolean(source.unplanned_budget_enabled)) return [];
+
+  return [{
+    head_of_account: normalizeText(source.unplanned_head_of_account) || null,
+    head_of_account_budget_line_id: toPositiveInt(source.unplanned_head_of_account_budget_line_id),
+    head_of_account_budget_proposal_id: toPositiveInt(source.unplanned_head_of_account_budget_proposal_id),
+    budget_head: normalizeText(source.unplanned_budget_head) || null,
+    sub_head: normalizeText(source.unplanned_budget_sub_head) || null,
+    amount: toMoney(source.unplanned_budget_amount),
+    description: normalizeText(source.unplanned_budget_description) || null,
+  }];
+};
+
 const resolveUnplannedBudgetMeta = (source = {}) => {
-  const enabled = parseBoolean(source.unplanned_budget_enabled);
-  const amount = enabled ? toMoney(source.unplanned_budget_amount) : 0;
+  const rows = normalizeUnplannedRowsForMeta(source);
+  const enabled = parseBoolean(source.unplanned_budget_enabled) || rows.length > 0;
+  const amount = enabled
+    ? rows.reduce((sum, row) => sum + toMoney(row.amount), 0) || toMoney(source.unplanned_budget_amount)
+    : 0;
+  const primary = rows[0] || {};
   return {
     unplannedBudgetEnabled: enabled,
     unplannedBudgetAmount: enabled ? amount : null,
-    unplannedHeadOfAccount: normalizeText(source.unplanned_head_of_account) || null,
-    unplannedHeadOfAccountBudgetLineId: toPositiveInt(source.unplanned_head_of_account_budget_line_id),
-    unplannedHeadOfAccountBudgetProposalId: toPositiveInt(source.unplanned_head_of_account_budget_proposal_id),
-    unplannedBudgetHead: normalizeText(source.unplanned_budget_head) || null,
-    unplannedBudgetSubHead: normalizeText(source.unplanned_budget_sub_head) || null,
-    unplannedBudgetDescription: normalizeText(source.unplanned_budget_description) || null,
+    unplannedHeadOfAccount: primary.head_of_account || normalizeText(source.unplanned_head_of_account) || null,
+    unplannedHeadOfAccountBudgetLineId:
+      primary.head_of_account_budget_line_id || toPositiveInt(source.unplanned_head_of_account_budget_line_id),
+    unplannedHeadOfAccountBudgetProposalId:
+      primary.head_of_account_budget_proposal_id || toPositiveInt(source.unplanned_head_of_account_budget_proposal_id),
+    unplannedBudgetHead: primary.budget_head || normalizeText(source.unplanned_budget_head) || null,
+    unplannedBudgetSubHead: primary.sub_head || normalizeText(source.unplanned_budget_sub_head) || null,
+    unplannedBudgetDescription: primary.description || normalizeText(source.unplanned_budget_description) || null,
+    unplannedRows: rows,
   };
 };
 
@@ -295,6 +346,9 @@ const normalizeIncomingPayload = (payload = {}) => {
   if (normalized.unplannedbudgetdescription !== undefined && normalized.unplanned_budget_description === undefined) {
     normalized.unplanned_budget_description = normalized.unplannedbudgetdescription;
   }
+  if (normalized.unplannedrows !== undefined && normalized.unplanned_rows === undefined) {
+    normalized.unplanned_rows = normalized.unplannedrows;
+  }
   if (normalized.debitstatus && !normalized.debit_status) {
     normalized.debit_status = normalized.debitstatus;
   }
@@ -493,10 +547,11 @@ const expenditureController = {
         userId,
         userEmail,
         financeRequestId,
-        allowAnyApprovedFinance:
-          isSuperAdminRequest(req) ||
-          hasAnyExpenditureWorkflowPermission(req) ||
-          canAccessExpenditureByRole(req),
+        // The expenditure form is opened from an approved finance request.
+        // Budget-line visibility must follow that approved finance request, not
+        // only the original finance creator, otherwise Head of Accounts is empty
+        // for valid applicant/admin flows.
+        allowAnyApprovedFinance: true,
       });
 
       const head = normalizeText(req.query.head).toLowerCase();
