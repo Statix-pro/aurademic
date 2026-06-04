@@ -2547,6 +2547,37 @@ const workflowRowRefFromState = (() => {
     );
   };
 
+  useEffect(() => {
+    if (!showUnplannedBudget || !unplannedHeadOfAccount || !approvedBudgetOptions.length) {
+      return;
+    }
+
+    const selected = getUnplannedHeadOfAccountSelectedOption();
+    const resolvedLineId = parsePositiveIntLike(selected?.budgetLineId);
+    if (!resolvedLineId) return;
+
+    const resolvedProposalId = parsePositiveIntLike(selected?.budgetProposalId);
+    const currentLineId = parsePositiveIntLike(unplannedHeadOfAccountBudgetLineId);
+    const currentProposalId = parsePositiveIntLike(unplannedHeadOfAccountBudgetProposalId);
+    const resolvedLabel = String(selected?.label || selected?.budgetHead || "").trim();
+
+    if (currentLineId !== resolvedLineId) {
+      setUnplannedHeadOfAccountBudgetLineId(resolvedLineId);
+    }
+    if (currentProposalId !== resolvedProposalId) {
+      setUnplannedHeadOfAccountBudgetProposalId(resolvedProposalId);
+    }
+    if (resolvedLabel && resolvedLabel !== unplannedHeadOfAccount) {
+      setUnplannedHeadOfAccount(resolvedLabel);
+    }
+  }, [
+    approvedBudgetOptions,
+    showUnplannedBudget,
+    unplannedHeadOfAccount,
+    unplannedHeadOfAccountBudgetLineId,
+    unplannedHeadOfAccountBudgetProposalId,
+  ]);
+
   const handleUnplannedBudgetSubHeadChange = (selected: OptionType | null) => {
     const subHead = String(selected?.subHead || "").trim();
 

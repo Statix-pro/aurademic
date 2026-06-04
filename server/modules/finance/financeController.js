@@ -164,12 +164,19 @@ const filterEntriesForCurrentCycle = (entries, financeRecord) => {
 };
 
 const isSuperAdminRequest = (req) => {
-  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)) {
+  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin || req.user?.is_superadmin)) {
     return true;
   }
 
-  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
-  return roles.some((role) => normalizeText(role).toLowerCase() === 'super_admin');
+  const roles = Array.isArray(req.user?.roles)
+    ? req.user.roles
+    : normalizeText(req.user?.roles)
+      ? [req.user.roles]
+      : [];
+  const roleTokens = [req.user?.role, ...roles]
+    .map((role) => normalizeText(role).toLowerCase())
+    .filter(Boolean);
+  return roleTokens.some((role) => role === 'super_admin' || role === 'superadmin');
 };
 
 const normalizeActor = (req) => {

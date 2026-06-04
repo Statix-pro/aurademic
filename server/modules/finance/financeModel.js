@@ -1663,33 +1663,6 @@ const resolveFinanceSourceFiscalYear = async (conn, financeId, requestDate = nul
   return resolveReferenceFiscalYearFromBudgetRows([], fallbackDate);
 };
 
-const ensureFinanceCarryForwardTable = async (conn) => {
-  await conn.query(
-    `CREATE TABLE IF NOT EXISTS finance_carry_forward_allocations (
-      id INT NOT NULL AUTO_INCREMENT,
-      finance_request_id INT NOT NULL,
-      source_fiscal_year INT NOT NULL,
-      target_fiscal_year INT NOT NULL,
-      carry_forward_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-      used_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-      remarks TEXT NULL,
-      status VARCHAR(30) NOT NULL DEFAULT 'active',
-      created_by_user_id INT NULL,
-      created_by_email VARCHAR(255) NULL,
-      created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (id),
-      UNIQUE KEY uq_finance_cf_active_target (finance_request_id, target_fiscal_year, status),
-      KEY idx_finance_cf_finance (finance_request_id),
-      KEY idx_finance_cf_source_fy (source_fiscal_year),
-      KEY idx_finance_cf_target_fy (target_fiscal_year),
-      CONSTRAINT fk_finance_cf_request
-        FOREIGN KEY (finance_request_id) REFERENCES finance_requests(id)
-        ON DELETE CASCADE ON UPDATE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
-  );
-};
-
 const getFinanceUsageSnapshot = async (conn, financeId) => {
   const finalizedExpenditureStatusSql = `
     (
@@ -1736,7 +1709,6 @@ const getFinanceUsageSnapshot = async (conn, financeId) => {
 };
 
 const getActiveCarryForwardTotal = async (conn, financeId, excludeTargetFiscalYear = null) => {
-  await ensureFinanceCarryForwardTable(conn);
   const targetYear = toPositiveInt(excludeTargetFiscalYear);
   const params = [financeId];
   let targetSql = '';
@@ -3906,8 +3878,6 @@ const financeModel = {
     const searchTerm = normalizeText(filters.q || filters.search);
     const fiscalYear = toPositiveInt(filters.fiscalYear || filters.fiscal_year);
 
-    await ensureFinanceCarryForwardTable(tx);
-
     const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
     const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
     const offset = (page - 1) * limit;
@@ -4254,7 +4224,6 @@ const financeModel = {
   },
 
   async listAvailableFiscalYears({ tx = db } = {}) {
-    await ensureFinanceCarryForwardTable(tx);
     const [rows] = await tx.query(
       `SELECT DISTINCT fiscal_year
          FROM (
@@ -4297,8 +4266,6 @@ const financeModel = {
     if (!normalizedRecordId) {
       throw new Error('Invalid finance request ID');
     }
-
-    await ensureFinanceCarryForwardTable(tx);
 
     const [rows] = await tx.query(
       `SELECT
@@ -4412,7 +4379,6 @@ const financeModel = {
     const conn = await db.getConnection();
     try {
       await conn.beginTransaction();
-      await ensureFinanceCarryForwardTable(conn);
       const [lockRows] = await conn.query(
         `SELECT id
            FROM finance_requests

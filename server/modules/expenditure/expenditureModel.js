@@ -1514,31 +1514,6 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
     return { cards: [], requests: [] };
   }
 
-  await db.execute(
-    `CREATE TABLE IF NOT EXISTS finance_carry_forward_allocations (
-      id INT NOT NULL AUTO_INCREMENT,
-      finance_request_id INT NOT NULL,
-      source_fiscal_year INT NOT NULL,
-      target_fiscal_year INT NOT NULL,
-      carry_forward_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-      used_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-      remarks TEXT NULL,
-      status VARCHAR(30) NOT NULL DEFAULT 'active',
-      created_by_user_id INT NULL,
-      created_by_email VARCHAR(255) NULL,
-      created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (id),
-      UNIQUE KEY uq_finance_cf_active_target (finance_request_id, target_fiscal_year, status),
-      KEY idx_finance_cf_finance (finance_request_id),
-      KEY idx_finance_cf_source_fy (source_fiscal_year),
-      KEY idx_finance_cf_target_fy (target_fiscal_year),
-      CONSTRAINT fk_finance_cf_request
-        FOREIGN KEY (finance_request_id) REFERENCES finance_requests(id)
-        ON DELETE CASCADE ON UPDATE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
-  );
-
   const fyStart = toPositiveInt(fiscalYear);
   const financeParams = [uid];
   const expenditureParams = [uid];
@@ -1964,7 +1939,7 @@ export async function upsertPayee(payeeData, userId, conn = db) {
 
 // ─── Core SELECT for expenditure_requests ────────────────────────────────────
 
-const EXPENDITURE_SELECT = `
+const EXPENDITURE_SELECT_TEMPLATE = `
   SELECT
     er.id,
     COALESCE(err.request_ref, CONCAT('#EX-', er.id)) AS request_ref,
@@ -1982,9 +1957,7 @@ const EXPENDITURE_SELECT = `
     er.is_budget_proposed,
     er.unplanned_budget_enabled,
     er.unplanned_budget_amount,
-    er.unplanned_head_of_account,
-    er.unplanned_head_of_account_budget_line_id,
-    er.unplanned_head_of_account_budget_proposal_id,
+__OPTIONAL_UNPLANNED_HEAD_COLUMNS__
     er.unplanned_budget_head,
     er.unplanned_budget_sub_head,
     er.unplanned_budget_description,
@@ -2125,6 +2098,39 @@ const EXPENDITURE_SELECT = `
     WHERE ranked_payee.rn = 1
   ) sample_payee ON sample_payee.expenditure_id = er.id
 `;
+
+// Optional columns (added by the 20260604 migration). The write paths already guard
+// these via hasExpenditureRequestColumn; the read path must match, otherwise a SELECT
+// against a not-yet-migrated database throws "Unknown column". When a column is missing
+// we emit `NULL AS <col>` so the result shape stays stable. Memoized via the cached
+// column-existence lookups.
+const OPTIONAL_UNPLANNED_HEAD_COLUMNS = [
+  'unplanned_head_of_account',
+  'unplanned_head_of_account_budget_line_id',
+  'unplanned_head_of_account_budget_proposal_id',
+];
+
+let expenditureSelectSqlPromise = null;
+const getExpenditureSelect = async () => {
+  if (expenditureSelectSqlPromise) {
+    return expenditureSelectSqlPromise;
+  }
+  expenditureSelectSqlPromise = (async () => {
+    const optionalColumnSql = [];
+    for (const column of OPTIONAL_UNPLANNED_HEAD_COLUMNS) {
+      const exists = await hasExpenditureRequestColumn(column);
+      optionalColumnSql.push(exists ? `    er.${column},` : `    NULL AS ${column},`);
+    }
+    return EXPENDITURE_SELECT_TEMPLATE.replace(
+      '__OPTIONAL_UNPLANNED_HEAD_COLUMNS__',
+      optionalColumnSql.join('\n'),
+    );
+  })().catch((error) => {
+    expenditureSelectSqlPromise = null;
+    throw error;
+  });
+  return expenditureSelectSqlPromise;
+};
 
 // ─── Expenditure CRUD ─────────────────────────────────────────────────────────
 
@@ -2825,6 +2831,40 @@ function addUnplannedUsageRow(usageRows = [], normalizedUnplanned = {}) {
   return usageRows;
 }
 
+// Validate that the usage rows do not exceed the remaining budget per line.
+// Amounts must be aggregated by budget line before comparing: a single request can
+// carry multiple rows for the same line (e.g. a normal draw plus the unplanned
+// head-of-account deduction), and checking each row independently would let the
+// combined draw slip past the remaining balance. This mirrors how
+// buildBudgetSnapshotsByLine sums deltas per line.
+function assertUsageRowsWithinRemainingBudget(requestType, usageRows = [], remainingByLineId = new Map()) {
+  const requestedByLine = new Map();
+
+  for (const usageRow of usageRows) {
+    const lineId = toPositiveInt(usageRow.budgetLineId);
+    if (!lineId || !remainingByLineId.has(lineId)) {
+      throw new Error(`Budget line ${lineId || 'unknown'} is not linked to this finance request`);
+    }
+    // Settlement rows don't draw down the remaining budget, except the unplanned
+    // head-of-account deduction, which always does.
+    const countsAgainstRemaining = requestType !== 'Settlement' || usageRow.isUnplanned;
+    if (!countsAgainstRemaining) continue;
+    requestedByLine.set(
+      lineId,
+      toMoney((requestedByLine.get(lineId) || 0) + toMoney(usageRow.amount)),
+    );
+  }
+
+  for (const [lineId, requestedAmount] of requestedByLine.entries()) {
+    const remaining = toMoney(remainingByLineId.get(lineId)?.remainingAmount);
+    if (requestedAmount > remaining) {
+      throw new Error(
+        `Requested amount ${requestedAmount.toFixed(2)} exceeds remaining budget ${remaining.toFixed(2)} for line ${lineId}`,
+      );
+    }
+  }
+}
+
 function getAmountForWorkflowRow(requestType, row = {}) {
   if (requestType === 'Advance') {
     return toMoney(row.advance || row.advance_amount);
@@ -3300,20 +3340,7 @@ const incomeRows = Array.isArray(data.income_rows)
         usageRows.map((row) => row.budgetLineId),
       );
 
-      for (const usageRow of usageRows) {
-        const lineId = toPositiveInt(usageRow.budgetLineId);
-        const requestedAmount = toMoney(usageRow.amount);
-        const remaining = toMoney(remainingByLineId.get(lineId)?.remainingAmount);
-
-        if (!lineId || !remainingByLineId.has(lineId)) {
-          throw new Error(`Budget line ${lineId || 'unknown'} is not linked to this finance request`);
-        }
-        if ((requestType !== 'Settlement' || usageRow.isUnplanned) && requestedAmount > remaining) {
-          throw new Error(
-            `Requested amount ${requestedAmount.toFixed(2)} exceeds remaining budget ${remaining.toFixed(2)} for line ${lineId}`,
-          );
-        }
-      }
+      assertUsageRowsWithinRemainingBudget(requestType, usageRows, remainingByLineId);
     }
 
     const budgetSnapshotsByLine = buildBudgetSnapshotsByLine(
@@ -3654,20 +3681,7 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
         { excludeExpenditureId: normalizedExpenditureId },
       );
 
-      for (const usageRow of usageRows) {
-        const lineId = toPositiveInt(usageRow.budgetLineId);
-        const requestedAmount = toMoney(usageRow.amount);
-        const remaining = toMoney(remainingByLineId.get(lineId)?.remainingAmount);
-
-        if (!lineId || !remainingByLineId.has(lineId)) {
-          throw new Error(`Budget line ${lineId || 'unknown'} is not linked to this finance request`);
-        }
-        if ((requestType !== 'Settlement' || usageRow.isUnplanned) && requestedAmount > remaining) {
-          throw new Error(
-            `Requested amount ${requestedAmount.toFixed(2)} exceeds remaining budget ${remaining.toFixed(2)} for line ${lineId}`,
-          );
-        }
-      }
+      assertUsageRowsWithinRemainingBudget(requestType, usageRows, remainingByLineId);
     }
 
     const budgetSnapshotsByLine = buildBudgetSnapshotsByLine(
@@ -3829,8 +3843,9 @@ export async function searchApplicant(query = '', employeeType = null) {
  * Fetch a single expenditure request with joined applicant and payee details.
  */
 export async function getExpenditureById(id) {
+  const expenditureSelect = await getExpenditureSelect();
   const [rows] = await db.execute(
-    `${EXPENDITURE_SELECT} WHERE er.id = ? LIMIT 1`, [id],
+    `${expenditureSelect} WHERE er.id = ? LIMIT 1`, [id],
   );
   return rows[0] || null;
 }
@@ -4019,8 +4034,9 @@ export async function listExpenditures({
     `SELECT COUNT(*) AS total FROM expenditure_requests er ${where}`, params,
   );
 
+  const expenditureSelect = await getExpenditureSelect();
   const [rows] = await db.execute(
-    `${EXPENDITURE_SELECT} ${where} ORDER BY er.created_at DESC LIMIT ? OFFSET ?`,
+    `${expenditureSelect} ${where} ORDER BY er.created_at DESC LIMIT ? OFFSET ?`,
     [...params, limitNum, offset],
   );
 
