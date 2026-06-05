@@ -13,7 +13,6 @@
     "strictNullChecks": false,
     "strictFunctionTypes": false,
     "strictBindCallApply": false,
-    "strictBuiltinIteratorReturn": false,
     "noImplicitThis": false,
     "alwaysStrict": true,
     "forceConsistentCasingInFileNames": false,
