@@ -81,7 +81,6 @@ interface ExpenditureProposalCard {
   expenditureAmount: number;
   balanceAmount: number;
   sourceFiscalYear?: number | null;
-  carryForwardAmount?: number;
   carryForwardTargetYears?: string;
 }
 
@@ -104,8 +103,6 @@ interface ExpenditureDashboardCardApi {
   balance_amount?: number;
   sourcefiscalyear?: number;
   source_fiscal_year?: number;
-  carryforwardamount?: number;
-  carry_forward_amount?: number;
   carryforwardtargetyears?: string;
   carry_forward_target_years?: string;
 }
@@ -1142,6 +1139,17 @@ const ExpenditureDashboard: React.FC = () => {
           : targetRow.settlementRequestId;
 
     const targetRequestId = requestId ?? null;
+    const selectedFiscalYearStart = Number.parseInt(financialYear.split("-")[0], 10);
+    const sourceFiscalYear = Number(card.sourceFiscalYear || 0);
+    const carryForwardTargetYears = String(card.carryForwardTargetYears || "")
+      .split(",")
+      .map((year) => Number.parseInt(year.trim(), 10))
+      .filter((year) => Number.isInteger(year) && year > 0);
+    const isCarryForwardCard =
+      sourceFiscalYear > 0 &&
+      selectedFiscalYearStart > 0 &&
+      sourceFiscalYear !== selectedFiscalYearStart &&
+      carryForwardTargetYears.includes(selectedFiscalYearStart);
     const launchMode =
       options?.mode ??
       (targetRequestId
@@ -1167,6 +1175,9 @@ const ExpenditureDashboard: React.FC = () => {
         sourceRequestId: row.requestId ?? undefined,
         financeRequestId: Number(card.financeRequestId),
         fiscalYear: financialYear,
+        sourceFiscalYear: sourceFiscalYear || undefined,
+        budgetFiscalYear: isCarryForwardCard ? selectedFiscalYearStart : undefined,
+        isCarryForwardCard,
         financeProposal: {
           proposalId: card.proposalId,
           applicantName: card.applicantName,
@@ -1878,7 +1889,6 @@ const ExpenditureDashboard: React.FC = () => {
           ),
           balanceAmount: Number(card.balanceamount ?? card.balance_amount ?? 0),
           sourceFiscalYear: Number(card.sourcefiscalyear ?? card.source_fiscal_year) || null,
-          carryForwardAmount: Number(card.carryforwardamount ?? card.carry_forward_amount ?? 0),
           carryForwardTargetYears: String(card.carryforwardtargetyears ?? card.carry_forward_target_years ?? ""),
         })
       );
@@ -2080,6 +2090,7 @@ const ExpenditureDashboard: React.FC = () => {
                   sourceFiscalYear > 0 &&
                   selectedFiscalYearStart > 0 &&
                   sourceFiscalYear !== selectedFiscalYearStart;
+                const hasCarryForwardTarget = String(card.carryForwardTargetYears || "").trim() !== "";
 
                 return (
                   <div
@@ -2134,9 +2145,9 @@ const ExpenditureDashboard: React.FC = () => {
                               Budget FY {formatFY(sourceFiscalYear)}
                             </span>
                           )}
-                          {showCarryForwardLabel && Number(card.carryForwardAmount || 0) > 0 && (
+                          {showCarryForwardLabel && hasCarryForwardTarget && (
                             <span className="expenditure-demo-trigger__meta-tag">
-                              Carry Forward {formatAmount(card.carryForwardAmount || 0)}
+                              Carry Forward Card
                             </span>
                           )}
                         </div>

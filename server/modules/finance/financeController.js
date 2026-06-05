@@ -1203,7 +1203,7 @@ const financeController = {
       if (!isSuperAdminRequest(req)) {
         return res.status(403).json({
           success: false,
-          message: 'Only super admin can manage carry-forward allocations',
+          message: 'Only super admin can carry forward finance cards',
         });
       }
 
@@ -1230,7 +1230,7 @@ const financeController = {
       if (!isSuperAdminRequest(req)) {
         return res.status(403).json({
           success: false,
-          message: 'Only super admin can manage carry-forward allocations',
+          message: 'Only super admin can carry forward finance cards',
         });
       }
 
@@ -1242,7 +1242,7 @@ const financeController = {
         });
       }
 
-      const allocation = await financeModel.createCarryForwardAllocation(
+      const carryForward = await financeModel.createCarryForwardAllocation(
         financeId,
         req.body || {},
         normalizeActor(req)
@@ -1250,8 +1250,8 @@ const financeController = {
 
       return res.status(201).json({
         success: true,
-        message: 'Carry-forward allocation created successfully',
-        data: allocation,
+        message: 'Card carry-forward created successfully',
+        data: carryForward,
       });
     } catch (error) {
       return handleCarryForwardError(res, error, 'Error in createCarryForwardAllocation');
