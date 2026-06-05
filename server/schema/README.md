@@ -39,27 +39,31 @@ mysql -u root -p research < schema/migrations/YYYYMMDD_description.sql
 ### Adding a Column / Modifying Tables
 
 1. **Create a migration file:**
+
    ```bash
    touch schema/migrations/20251219_add_status_to_journals.sql
    ```
 
 2. **Write the migration:**
+
    ```sql
    -- schema/migrations/20251219_add_status_to_journals.sql
    -- Author: Your Name
    -- Date: 2025-12-19
    -- Description: Add review_status column to journals table
-   
-   ALTER TABLE `journals` 
+
+   ALTER TABLE `journals`
    ADD COLUMN `review_status` VARCHAR(50) DEFAULT 'pending' AFTER `status`;
    ```
 
 3. **Test locally:**
+
    ```bash
    mysql -u root -p research < schema/migrations/20251219_add_status_to_journals.sql
    ```
 
 4. **Commit & push:**
+
    ```bash
    git add schema/migrations/20251219_add_status_to_journals.sql
    git commit -m "Add review_status column to journals"
@@ -114,6 +118,7 @@ YYYYMMDD_short_description.sql
 ```
 
 **Examples:**
+
 - `20251219_add_status_to_journals.sql`
 - `20251220_create_notifications_table.sql`
 - `20251221_add_index_on_user_email.sql`
@@ -132,8 +137,9 @@ YYYYMMDD_short_description.sql
 ## 📂 Legacy Folder
 
 The `legacy/` folder contains the original individual schema files for reference:
+
 - `01_auth.sql` - Users & authentication tables
-- `02_journals.sql` - Journal tables  
+- `02_journals.sql` - Journal tables
 - `03_projects.sql` - Project tables
 - `04_events.sql` - Event tables
 

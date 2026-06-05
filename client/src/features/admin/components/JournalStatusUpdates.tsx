@@ -1,8 +1,9 @@
-import React, { useState, useEffect, ChangeEvent } from "react";
-import { Modal, Button, Form, Badge, Alert } from "react-bootstrap";
-import { Reply, X } from "lucide-react";
-import authenticityUtility from "../../../shared/utils/authenticityUtility";
-import "./JournalStatusUpdates.css";
+import { Reply, X } from 'lucide-react';
+import React, { useState, useEffect, ChangeEvent } from 'react';
+import { Modal, Button, Form, Badge, Alert } from 'react-bootstrap';
+
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import './JournalStatusUpdates.css';
 
 interface StatusUpdate {
   id: number;
@@ -28,20 +29,20 @@ const JournalStatusUpdates: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState('');
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [selectedStatusUpdate, setSelectedStatusUpdate] = useState<StatusUpdate | null>(null);
-  const [adminReply, setAdminReply] = useState("");
+  const [adminReply, setAdminReply] = useState('');
   const [submittingReply, setSubmittingReply] = useState(false);
 
   const statusOptions: StatusOption[] = [
-    { value: "", label: "All Statuses" },
-    { value: "submitted", label: "Submitted" },
-    { value: "under_review", label: "Under Review" },
-    { value: "accepted", label: "Accepted" },
-    { value: "rejected", label: "Rejected" },
-    { value: "published", label: "Published" },
-    { value: "revision_required", label: "Revision Required" },
+    { value: '', label: 'All Statuses' },
+    { value: 'submitted', label: 'Submitted' },
+    { value: 'under_review', label: 'Under Review' },
+    { value: 'accepted', label: 'Accepted' },
+    { value: 'rejected', label: 'Rejected' },
+    { value: 'published', label: 'Published' },
+    { value: 'revision_required', label: 'Revision Required' },
   ];
 
   const fetchStatusUpdates = async () => {
@@ -58,15 +59,17 @@ const JournalStatusUpdates: React.FC = () => {
         params.status = statusFilter;
       }
 
-      const response = await authenticityUtility.get("/admin/journal-status-updates", { params }) as {
+      const response = (await authenticityUtility.get('/admin/journal-status-updates', {
+        params,
+      })) as {
         data: StatusUpdate[];
         total: number;
       };
       setStatusUpdates(response.data || []);
       setTotalItems(response.total || 0);
     } catch (err) {
-      console.error("Error fetching status updates:", err);
-      setError("Error fetching status updates. Please try again later.");
+      console.error('Error fetching status updates:', err);
+      setError('Error fetching status updates. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -78,13 +81,13 @@ const JournalStatusUpdates: React.FC = () => {
 
   const handleReply = (statusUpdate: StatusUpdate) => {
     setSelectedStatusUpdate(statusUpdate);
-    setAdminReply(statusUpdate.admin_reply || "");
+    setAdminReply(statusUpdate.admin_reply || '');
     setShowReplyModal(true);
   };
 
   const handleSubmitReply = async () => {
     if (!adminReply.trim() || !selectedStatusUpdate) {
-      setError("Admin reply is required");
+      setError('Admin reply is required');
       return;
     }
 
@@ -92,27 +95,27 @@ const JournalStatusUpdates: React.FC = () => {
       setSubmittingReply(true);
       setError(null);
 
-      const response = await authenticityUtility.patch(
+      const response = (await authenticityUtility.patch(
         `/admin/status-updates/${selectedStatusUpdate.id}/admin-reply`,
-        { admin_reply: adminReply.trim() }
-      ) as { message?: string };
+        { admin_reply: adminReply.trim() },
+      )) as { message?: string };
 
       if (response.message) {
         setStatusUpdates((prev) =>
           prev.map((update) =>
             update.id === selectedStatusUpdate.id
               ? { ...update, admin_reply: adminReply.trim() }
-              : update
-          )
+              : update,
+          ),
         );
 
         setShowReplyModal(false);
         setSelectedStatusUpdate(null);
-        setAdminReply("");
+        setAdminReply('');
       }
     } catch (err) {
-      console.error("Error submitting reply:", err);
-      setError("Error submitting reply. Please try again.");
+      console.error('Error submitting reply:', err);
+      setError('Error submitting reply. Please try again.');
     } finally {
       setSubmittingReply(false);
     }
@@ -120,26 +123,26 @@ const JournalStatusUpdates: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { variant: string; label: string }> = {
-      submitted: { variant: "primary", label: "Submitted" },
-      under_review: { variant: "warning", label: "Under Review" },
-      accepted: { variant: "success", label: "Accepted" },
-      rejected: { variant: "danger", label: "Rejected" },
-      published: { variant: "info", label: "Published" },
-      revision_required: { variant: "secondary", label: "Revision Required" },
+      submitted: { variant: 'primary', label: 'Submitted' },
+      under_review: { variant: 'warning', label: 'Under Review' },
+      accepted: { variant: 'success', label: 'Accepted' },
+      rejected: { variant: 'danger', label: 'Rejected' },
+      published: { variant: 'info', label: 'Published' },
+      revision_required: { variant: 'secondary', label: 'Revision Required' },
     };
 
-    const config = statusConfig[status] || { variant: "secondary", label: status };
+    const config = statusConfig[status] || { variant: 'secondary', label: status };
     return <Badge bg={config.variant}>{config.label}</Badge>;
   };
 
   const formatDate = (dateString: string | undefined): string => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -152,9 +155,11 @@ const JournalStatusUpdates: React.FC = () => {
 
     for (let i = startPage; i <= endPage; i++) {
       pages.push(
-        <li key={i} className={`page-item ${currentPage === i ? "active" : ""}`}>
-          <button className="page-link" onClick={() => setCurrentPage(i)}>{i}</button>
-        </li>
+        <li key={i} className={`page-item ${currentPage === i ? 'active' : ''}`}>
+          <button className="page-link" onClick={() => setCurrentPage(i)}>
+            {i}
+          </button>
+        </li>,
       );
     }
 
@@ -184,7 +189,7 @@ const JournalStatusUpdates: React.FC = () => {
 
           <span className="adminbudget-pagecount">
             {totalItems === 0
-              ? "0-0 of 0"
+              ? '0-0 of 0'
               : `${(currentPage - 1) * itemsPerPage + 1}-${Math.min(currentPage * itemsPerPage, totalItems)} of ${totalItems}`}
           </span>
         </div>
@@ -238,11 +243,21 @@ const JournalStatusUpdates: React.FC = () => {
             }}
           >
             {statusOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
             ))}
           </Form.Select>
           {statusFilter && (
-            <Button variant="light" size="sm" className="border" onClick={() => { setStatusFilter(""); setCurrentPage(1); }}>
+            <Button
+              variant="light"
+              size="sm"
+              className="border"
+              onClick={() => {
+                setStatusFilter('');
+                setCurrentPage(1);
+              }}
+            >
               <X size={18} />
             </Button>
           )}
@@ -250,7 +265,9 @@ const JournalStatusUpdates: React.FC = () => {
       </div>
 
       {error && (
-        <Alert variant="danger" dismissible onClose={() => setError(null)}>{error}</Alert>
+        <Alert variant="danger" dismissible onClose={() => setError(null)}>
+          {error}
+        </Alert>
       )}
 
       {statusUpdates.length === 0 ? (
@@ -292,21 +309,30 @@ const JournalStatusUpdates: React.FC = () => {
                     <td>{getStatusBadge(update.status)}</td>
                     <td>
                       {update.user_comment ? (
-                        <div style={{ maxWidth: "200px", wordWrap: "break-word" }}>{update.user_comment}</div>
+                        <div style={{ maxWidth: '200px', wordWrap: 'break-word' }}>
+                          {update.user_comment}
+                        </div>
                       ) : (
                         <span className="text-muted">No comment</span>
                       )}
                     </td>
                     <td>
                       {update.admin_reply ? (
-                        <div style={{ maxWidth: "200px", wordWrap: "break-word" }}>{update.admin_reply}</div>
+                        <div style={{ maxWidth: '200px', wordWrap: 'break-word' }}>
+                          {update.admin_reply}
+                        </div>
                       ) : (
                         <span className="text-muted">No reply</span>
                       )}
                     </td>
                     <td>{formatDate(update.created_at)}</td>
                     <td>
-                      <Button variant="primary" size="sm" onClick={() => handleReply(update)} title="Reply">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleReply(update)}
+                        title="Reply"
+                      >
                         <Reply size={16} />
                       </Button>
                     </td>
@@ -328,12 +354,18 @@ const JournalStatusUpdates: React.FC = () => {
           {selectedStatusUpdate && (
             <div className="mb-3">
               <h6>Journal: {selectedStatusUpdate.journal_title}</h6>
-              <p><strong>User:</strong> {selectedStatusUpdate.user_name}</p>
-              <p><strong>Status:</strong> {getStatusBadge(selectedStatusUpdate.status)}</p>
+              <p>
+                <strong>User:</strong> {selectedStatusUpdate.user_name}
+              </p>
+              <p>
+                <strong>Status:</strong> {getStatusBadge(selectedStatusUpdate.status)}
+              </p>
               {selectedStatusUpdate.user_comment && (
                 <div>
                   <strong>User Comment:</strong>
-                  <div className="border p-2 mt-1 bg-light">{selectedStatusUpdate.user_comment}</div>
+                  <div className="border p-2 mt-1 bg-light">
+                    {selectedStatusUpdate.user_comment}
+                  </div>
                 </div>
               )}
             </div>
@@ -351,9 +383,15 @@ const JournalStatusUpdates: React.FC = () => {
           </Form.Group>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowReplyModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSubmitReply} disabled={submittingReply || !adminReply.trim()}>
-            {submittingReply ? "Submitting..." : "Submit Reply"}
+          <Button variant="secondary" onClick={() => setShowReplyModal(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmitReply}
+            disabled={submittingReply || !adminReply.trim()}
+          >
+            {submittingReply ? 'Submitting...' : 'Submit Reply'}
           </Button>
         </Modal.Footer>
       </Modal>

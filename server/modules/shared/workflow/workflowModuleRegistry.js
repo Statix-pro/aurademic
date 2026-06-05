@@ -38,9 +38,7 @@ export const registerWorkflowModule = ({
 
   for (const methodName of requiredMethods) {
     if (typeof adapter[methodName] !== 'function') {
-      throw new Error(
-        `Workflow adapter for ${normalizedModuleKey} must implement ${methodName}`
-      );
+      throw new Error(`Workflow adapter for ${normalizedModuleKey} must implement ${methodName}`);
     }
   }
 
@@ -69,5 +67,4 @@ export const getWorkflowModule = (moduleKey) => {
   return entry;
 };
 
-export const listRegisteredWorkflowModules = () =>
-  Array.from(WORKFLOW_MODULE_REGISTRY.keys());
+export const listRegisteredWorkflowModules = () => Array.from(WORKFLOW_MODULE_REGISTRY.keys());

@@ -4,19 +4,19 @@ A modern React-based single-page application for managing academic research, inc
 
 ## 🚀 Tech Stack
 
-| Technology | Purpose |
-|------------|---------|
-| **React 18** | UI Framework |
-| **TypeScript** | Type-safe JavaScript |
-| **Vite** | Build tool & dev server |
-| **React Router DOM** | Client-side routing |
-| **Axios** | HTTP client |
-| **React Bootstrap** | UI component library |
-| **Lucide React** | Icon library |
-| **MSAL React** | Microsoft Azure AD authentication |
-| **Google OAuth** | Google authentication |
-| **FullCalendar** | Calendar/event management |
-| **@hello-pangea/dnd** | Drag and drop functionality |
+| Technology            | Purpose                           |
+| --------------------- | --------------------------------- |
+| **React 18**          | UI Framework                      |
+| **TypeScript**        | Type-safe JavaScript              |
+| **Vite**              | Build tool & dev server           |
+| **React Router DOM**  | Client-side routing               |
+| **Axios**             | HTTP client                       |
+| **React Bootstrap**   | UI component library              |
+| **Lucide React**      | Icon library                      |
+| **MSAL React**        | Microsoft Azure AD authentication |
+| **Google OAuth**      | Google authentication             |
+| **FullCalendar**      | Calendar/event management         |
+| **@hello-pangea/dnd** | Drag and drop functionality       |
 
 ## 📁 Directory Structure
 
@@ -101,11 +101,11 @@ npm run preview
 
 ## 📜 Available Scripts
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production (TypeScript + Vite) |
-| `npm run preview` | Preview production build locally |
+| Script            | Description                              |
+| ----------------- | ---------------------------------------- |
+| `npm run dev`     | Start development server                 |
+| `npm run build`   | Build for production (TypeScript + Vite) |
+| `npm run preview` | Preview production build locally         |
 
 ## 🔐 Authentication
 
@@ -119,6 +119,7 @@ Authentication state is managed via React Context and JWT tokens stored in local
 ## 🔗 API Integration
 
 The client communicates with the backend API via `authenticityUtility`, a pre-configured Axios instance that handles:
+
 - JWT token injection in headers
 - Automatic session expiry handling
 - File upload support

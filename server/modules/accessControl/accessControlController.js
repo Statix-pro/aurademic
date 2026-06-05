@@ -57,10 +57,7 @@ const accessControlController = {
   async updatePermission(req, res) {
     try {
       const { permissionId } = req.params;
-      const permission = await accessControlModel.updatePermission(
-        permissionId,
-        req.body || {}
-      );
+      const permission = await accessControlModel.updatePermission(permissionId, req.body || {});
 
       return res.json({
         status: 'success',
@@ -100,13 +97,7 @@ const accessControlController = {
 
   async createRole(req, res) {
     try {
-      const {
-        role_name,
-        role_code,
-        description,
-        permission_keys,
-        is_admin_role,
-      } = req.body || {};
+      const { role_name, role_code, description, permission_keys, is_admin_role } = req.body || {};
 
       const role = await accessControlModel.createRole({
         role_name,
@@ -165,10 +156,7 @@ const accessControlController = {
         });
       }
 
-      const role = await accessControlModel.updateRolePermissions(
-        roleId,
-        permission_keys
-      );
+      const role = await accessControlModel.updateRolePermissions(roleId, permission_keys);
 
       return res.json({
         status: 'success',
@@ -209,7 +197,7 @@ const accessControlController = {
         userId,
         role_codes,
         Array.isArray(entity_roles) ? entity_roles : [],
-        req.user?.id || null
+        req.user?.id || null,
       );
 
       return res.json({
@@ -237,7 +225,7 @@ const accessControlController = {
       const updatedUser = await accessControlModel.setUserSuperAdmin(
         userId,
         parsedEnabled,
-        req.user?.id || null
+        req.user?.id || null,
       );
 
       return res.json({

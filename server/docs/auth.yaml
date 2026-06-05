@@ -34,12 +34,12 @@ components:
           description: Last login timestamp
       example:
         id: 1
-        email: "user@example.com"
-        name: "John Doe"
-        picture: "https://lh3.googleusercontent.com/a/ACg8ocI2OH7zkLRTjrHISc-UBxmeidCElHSlWN74yFCo03s-9Hiecfy7=s96-c"
+        email: 'user@example.com'
+        name: 'John Doe'
+        picture: 'https://lh3.googleusercontent.com/a/ACg8ocI2OH7zkLRTjrHISc-UBxmeidCElHSlWN74yFCo03s-9Hiecfy7=s96-c'
         is_admin: false
-        created_at: "2024-11-05 05:30:30"
-        last_login: "2025-01-01 10:00:00"
+        created_at: '2024-11-05 05:30:30'
+        last_login: '2025-01-01 10:00:00'
 
     LoginResponse:
       type: object
@@ -50,12 +50,12 @@ components:
         user:
           $ref: '#/components/schemas/User'
       example:
-        token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
         user:
           id: 1
-          email: "user@example.com"
-          name: "John Doe"
-          picture: "https://lh3.googleusercontent.com/a/ACg8ocI2OH7zkLRTjrHISc-UBxmeidCElHSlWN74yFCo03s-9Hiecfy7=s96-c"
+          email: 'user@example.com'
+          name: 'John Doe'
+          picture: 'https://lh3.googleusercontent.com/a/ACg8ocI2OH7zkLRTjrHISc-UBxmeidCElHSlWN74yFCo03s-9Hiecfy7=s96-c'
           is_admin: false
 
 paths:
@@ -77,7 +77,7 @@ paths:
                   type: string
                   description: Google OAuth credential token
               example:
-                token: "google-oauth-token-123"
+                token: 'google-oauth-token-123'
       responses:
         200:
           description: Login successful

@@ -242,7 +242,7 @@ const SYSTEM_PERMISSION_SEED = [
 ];
 
 const SYSTEM_PERMISSION_KEYS = new Set(
-  SYSTEM_PERMISSION_SEED.map((permission) => permission.permission_key)
+  SYSTEM_PERMISSION_SEED.map((permission) => permission.permission_key),
 );
 
 const RBAC_MIGRATION_MESSAGE =
@@ -277,7 +277,7 @@ const uniqueStringArray = (values = []) => [
     values
       .filter((value) => typeof value === 'string')
       .map((value) => value.trim())
-      .filter(Boolean)
+      .filter(Boolean),
   ),
 ];
 
@@ -288,8 +288,7 @@ const isMissingRbacTableError = (error) => {
 
   return (
     error.code === 'ER_NO_SUCH_TABLE' ||
-    (typeof error.message === 'string' &&
-      error.message.toLowerCase().includes("doesn't exist"))
+    (typeof error.message === 'string' && error.message.toLowerCase().includes("doesn't exist"))
   );
 };
 
@@ -298,10 +297,7 @@ const isMissingDynamicPermissionColumnError = (error) => {
     return false;
   }
 
-  return (
-    typeof error.message === 'string' &&
-    error.message.toLowerCase().includes('is_system')
-  );
+  return typeof error.message === 'string' && error.message.toLowerCase().includes('is_system');
 };
 
 const makeRbacError = (message, statusCode = 500) => {
@@ -336,7 +332,7 @@ const ensureSystemPermissionSeed = async (connection = db) => {
           description = VALUES(description),
           is_system = VALUES(is_system)
       `,
-      [values]
+      [values],
     );
   }
 };
@@ -356,7 +352,7 @@ const ensureBaseUserRoleSeed = async (connection = db) => {
         role_name = VALUES(role_name),
         description = VALUES(description)
     `,
-    [BASE_USER_ROLE_CODE, BASE_USER_ROLE_NAME, BASE_USER_ROLE_DESCRIPTION]
+    [BASE_USER_ROLE_CODE, BASE_USER_ROLE_NAME, BASE_USER_ROLE_DESCRIPTION],
   );
 };
 
@@ -376,7 +372,7 @@ const ensureChairmanRoleSeed = async (connection = db) => {
         description = VALUES(description),
         is_admin_role = VALUES(is_admin_role)
     `,
-    [CHAIRMAN_ROLE_CODE, CHAIRMAN_ROLE_NAME, CHAIRMAN_ROLE_DESCRIPTION]
+    [CHAIRMAN_ROLE_CODE, CHAIRMAN_ROLE_NAME, CHAIRMAN_ROLE_DESCRIPTION],
   );
 };
 
@@ -388,10 +384,9 @@ const ensureUserBaseRoleAssignment = async (userId, connection = db, assignedBy 
 
   await ensureBaseUserRoleSeed(connection);
 
-  const [roleRows] = await connection.query(
-    'SELECT id FROM roles WHERE role_code = ? LIMIT 1',
-    [BASE_USER_ROLE_CODE]
-  );
+  const [roleRows] = await connection.query('SELECT id FROM roles WHERE role_code = ? LIMIT 1', [
+    BASE_USER_ROLE_CODE,
+  ]);
 
   if (!roleRows.length) {
     return false;
@@ -402,7 +397,7 @@ const ensureUserBaseRoleAssignment = async (userId, connection = db, assignedBy 
       INSERT IGNORE INTO user_roles (user_id, role_id, assigned_by)
       VALUES (?, ?, ?)
     `,
-    [parsedUserId, roleRows[0].id, assignedBy]
+    [parsedUserId, roleRows[0].id, assignedBy],
   );
 
   return true;
@@ -434,8 +429,7 @@ const groupUserRows = (rows = []) => {
   });
 
   const uniqueRoles = roles.filter(
-    (role, index) =>
-      roles.findIndex((item) => item.role_code === role.role_code) === index
+    (role, index) => roles.findIndex((item) => item.role_code === role.role_code) === index,
   );
 
   return {
@@ -443,19 +437,12 @@ const groupUserRows = (rows = []) => {
     name: firstRow.name,
     email: firstRow.email,
     is_admin: Boolean(firstRow.is_admin),
-    is_super_admin: uniqueRoles.some(
-      (role) => role.role_code === SUPER_ADMIN_ROLE_CODE
-    ),
+    is_super_admin: uniqueRoles.some((role) => role.role_code === SUPER_ADMIN_ROLE_CODE),
     roles: uniqueRoles,
   };
 };
 
-const validatePermissionPayload = ({
-  module_key,
-  action_key,
-  permission_key,
-  description,
-}) => {
+const validatePermissionPayload = ({ module_key, action_key, permission_key, description }) => {
   const normalizedModuleKey = normalizePermissionToken(module_key || '');
   const normalizedActionKey = normalizePermissionToken(action_key || '');
 
@@ -502,19 +489,16 @@ const accessControlModel = {
       return getEmptyAuthorizationSnapshot();
     }
 
-    const [userRows] = await db.query(
-      'SELECT id, is_admin FROM users WHERE id = ? LIMIT 1',
-      [parsedUserId]
-    );
+    const [userRows] = await db.query('SELECT id, is_admin FROM users WHERE id = ? LIMIT 1', [
+      parsedUserId,
+    ]);
 
     if (!userRows.length) {
       return getEmptyAuthorizationSnapshot();
     }
 
     const legacyIsAdmin = Boolean(userRows[0].is_admin);
-    const fallbackPermissions = legacyIsAdmin
-      ? [...LEGACY_ADMIN_PERMISSION_KEYS]
-      : [];
+    const fallbackPermissions = legacyIsAdmin ? [...LEGACY_ADMIN_PERMISSION_KEYS] : [];
 
     try {
       await ensureUserBaseRoleAssignment(parsedUserId, db, null);
@@ -535,7 +519,7 @@ const accessControlModel = {
           JOIN roles r ON r.id = combined_roles.role_id
           ORDER BY r.role_name ASC
         `,
-        [parsedUserId, parsedUserId]
+        [parsedUserId, parsedUserId],
       );
 
       // Get permissions from both global and contextual roles
@@ -552,7 +536,7 @@ const accessControlModel = {
           JOIN permissions p ON p.id = rp.permission_id
           ORDER BY p.permission_key ASC
         `,
-        [parsedUserId, parsedUserId]
+        [parsedUserId, parsedUserId],
       );
 
       const roles = roleRows.map((role) => role.role_code);
@@ -601,7 +585,7 @@ const accessControlModel = {
             COALESCE(is_system, 0) AS is_system
           FROM permissions
           ORDER BY module_key ASC, action_key ASC
-        `
+        `,
       );
 
       return rows.map((permission) => ({
@@ -642,7 +626,7 @@ const accessControlModel = {
           WHERE id = ?
           LIMIT 1
         `,
-        [parsedPermissionId]
+        [parsedPermissionId],
       );
 
       if (!rows.length) {
@@ -686,7 +670,7 @@ const accessControlModel = {
           permissionData.action_key,
           permissionData.permission_key,
           permissionData.description,
-        ]
+        ],
       );
 
       return this.getPermissionById(result.insertId);
@@ -715,9 +699,7 @@ const accessControlModel = {
       action_key: payload?.action_key ?? existingPermission.action_key,
       permission_key: payload?.permission_key ?? existingPermission.permission_key,
       description:
-        payload?.description !== undefined
-          ? payload.description
-          : existingPermission.description,
+        payload?.description !== undefined ? payload.description : existingPermission.description,
     };
 
     const permissionData = validatePermissionPayload(mergedPayload);
@@ -743,7 +725,7 @@ const accessControlModel = {
           permissionData.permission_key,
           permissionData.description,
           existingPermission.id,
-        ]
+        ],
       );
 
       return this.getPermissionById(existingPermission.id);
@@ -769,13 +751,13 @@ const accessControlModel = {
 
     const [usageRows] = await db.query(
       'SELECT COUNT(*) AS total FROM role_permissions WHERE permission_id = ?',
-      [existingPermission.id]
+      [existingPermission.id],
     );
 
     if (Number(usageRows[0]?.total || 0) > 0) {
       throw makeRbacError(
         'Permission is assigned to one or more roles. Remove it from roles first.',
-        409
+        409,
       );
     }
 
@@ -824,7 +806,7 @@ const accessControlModel = {
           LEFT JOIN role_permissions rp ON rp.role_id = r.id
           LEFT JOIN permissions p ON p.id = rp.permission_id
           ORDER BY r.is_system DESC, r.role_name ASC, p.module_key ASC, p.action_key ASC
-        `
+        `,
       );
 
       const roleMap = new Map();
@@ -895,7 +877,7 @@ const accessControlModel = {
 
       const [existingRoles] = await connection.query(
         'SELECT id FROM roles WHERE role_code = ? LIMIT 1',
-        [generatedRoleCode]
+        [generatedRoleCode],
       );
 
       if (existingRoles.length > 0) {
@@ -918,7 +900,7 @@ const accessControlModel = {
           trimmedRoleName,
           description?.toString().trim() || null,
           is_admin_role ? 1 : 0,
-        ]
+        ],
       );
 
       const roleId = insertRoleResult.insertId;
@@ -926,33 +908,24 @@ const accessControlModel = {
       if (uniquePermissionKeys.length > 0) {
         const [permissionRows] = await connection.query(
           'SELECT id, permission_key FROM permissions WHERE permission_key IN (?)',
-          [uniquePermissionKeys]
+          [uniquePermissionKeys],
         );
 
         if (permissionRows.length !== uniquePermissionKeys.length) {
-          const foundPermissionKeys = permissionRows.map(
-            (permission) => permission.permission_key
-          );
+          const foundPermissionKeys = permissionRows.map((permission) => permission.permission_key);
           const missingPermissionKeys = uniquePermissionKeys.filter(
-            (permissionKey) => !foundPermissionKeys.includes(permissionKey)
+            (permissionKey) => !foundPermissionKeys.includes(permissionKey),
           );
 
-          throw makeRbacError(
-            `Invalid permission keys: ${missingPermissionKeys.join(', ')}`,
-            400
-          );
+          throw makeRbacError(`Invalid permission keys: ${missingPermissionKeys.join(', ')}`, 400);
         }
 
-        const rolePermissionValues = permissionRows.map((permission) => [
-          roleId,
-          permission.id,
-        ]);
+        const rolePermissionValues = permissionRows.map((permission) => [roleId, permission.id]);
 
         if (rolePermissionValues.length > 0) {
-          await connection.query(
-            'INSERT INTO role_permissions (role_id, permission_id) VALUES ?',
-            [rolePermissionValues]
-          );
+          await connection.query('INSERT INTO role_permissions (role_id, permission_id) VALUES ?', [
+            rolePermissionValues,
+          ]);
         }
       }
 
@@ -998,7 +971,7 @@ const accessControlModel = {
         WHERE id = ?
         LIMIT 1
       `,
-      [parsedRoleId]
+      [parsedRoleId],
     );
 
     if (!roleRows.length) {
@@ -1034,7 +1007,7 @@ const accessControlModel = {
         SET role_name = ?, description = ?, is_admin_role = ?
         WHERE id = ?
       `,
-      [roleName, description, isAdminRole ? 1 : 0, parsedRoleId]
+      [roleName, description, isAdminRole ? 1 : 0, parsedRoleId],
     );
 
     return this.getRoleById(parsedRoleId);
@@ -1054,7 +1027,7 @@ const accessControlModel = {
         WHERE id = ?
         LIMIT 1
       `,
-      [parsedRoleId]
+      [parsedRoleId],
     );
 
     if (!roleRows.length) {
@@ -1074,13 +1047,13 @@ const accessControlModel = {
          UNION ALL
          SELECT COUNT(*) AS cnt FROM user_entity_roles WHERE role_id = ?
        ) AS combined_counts`,
-      [parsedRoleId, parsedRoleId]
+      [parsedRoleId, parsedRoleId],
     );
 
     if (Number(usageRows[0]?.total || 0) > 0) {
       throw makeRbacError(
         'Role is assigned to users. Remove assignments before deleting the role.',
-        409
+        409,
       );
     }
 
@@ -1104,7 +1077,7 @@ const accessControlModel = {
 
       const [roleRows] = await connection.query(
         'SELECT id, role_code FROM roles WHERE id = ? LIMIT 1',
-        [parsedRoleId]
+        [parsedRoleId],
       );
 
       if (!roleRows.length) {
@@ -1115,28 +1088,21 @@ const accessControlModel = {
         throw makeRbacError('Super Admin permissions cannot be modified', 400);
       }
 
-      await connection.query('DELETE FROM role_permissions WHERE role_id = ?', [
-        parsedRoleId,
-      ]);
+      await connection.query('DELETE FROM role_permissions WHERE role_id = ?', [parsedRoleId]);
 
       if (uniquePermissionKeys.length > 0) {
         const [permissionRows] = await connection.query(
           'SELECT id, permission_key FROM permissions WHERE permission_key IN (?)',
-          [uniquePermissionKeys]
+          [uniquePermissionKeys],
         );
 
         if (permissionRows.length !== uniquePermissionKeys.length) {
-          const foundPermissionKeys = permissionRows.map(
-            (permission) => permission.permission_key
-          );
+          const foundPermissionKeys = permissionRows.map((permission) => permission.permission_key);
           const missingPermissionKeys = uniquePermissionKeys.filter(
-            (permissionKey) => !foundPermissionKeys.includes(permissionKey)
+            (permissionKey) => !foundPermissionKeys.includes(permissionKey),
           );
 
-          throw makeRbacError(
-            `Invalid permission keys: ${missingPermissionKeys.join(', ')}`,
-            400
-          );
+          throw makeRbacError(`Invalid permission keys: ${missingPermissionKeys.join(', ')}`, 400);
         }
 
         const rolePermissionValues = permissionRows.map((permission) => [
@@ -1145,10 +1111,9 @@ const accessControlModel = {
         ]);
 
         if (rolePermissionValues.length > 0) {
-          await connection.query(
-            'INSERT INTO role_permissions (role_id, permission_id) VALUES ?',
-            [rolePermissionValues]
-          );
+          await connection.query('INSERT INTO role_permissions (role_id, permission_id) VALUES ?', [
+            rolePermissionValues,
+          ]);
         }
       }
 
@@ -1193,7 +1158,7 @@ const accessControlModel = {
           ORDER BY u.name ASC, u.email ASC
           LIMIT 500
         `,
-        [normalizedSearch, likeTerm, likeTerm]
+        [normalizedSearch, likeTerm, likeTerm],
       );
 
       const userMap = new Map();
@@ -1245,7 +1210,7 @@ const accessControlModel = {
             LEFT JOIN master_entities me ON uer.entity_id = me.id AND uer.entity_type != 'DEPARTMENT'
             WHERE uer.user_id IN (?)
           `,
-          [userIdsChunk]
+          [userIdsChunk],
         );
 
         entityRoleRows.forEach((er) => {
@@ -1256,7 +1221,7 @@ const accessControlModel = {
               entity_type: er.entity_type,
               role_code: er.role_code,
               role_name: er.role_name,
-              entity_name: er.entity_name
+              entity_name: er.entity_name,
             });
           }
         });
@@ -1281,7 +1246,7 @@ const accessControlModel = {
         JOIN roles r ON r.id = ur.role_id
         WHERE ur.user_id = ?
       `,
-      [userId]
+      [userId],
     );
 
     const hasAdminRole = roleRows.some((role) => Boolean(role.is_admin_role));
@@ -1302,7 +1267,7 @@ const accessControlModel = {
         JOIN roles r ON r.id = ur.role_id
         WHERE r.role_code = ?
       `,
-      [SUPER_ADMIN_ROLE_CODE]
+      [SUPER_ADMIN_ROLE_CODE],
     );
 
     if (!superAdminRows[0] || Number(superAdminRows[0].total) <= 0) {
@@ -1317,16 +1282,18 @@ const accessControlModel = {
       throw makeRbacError('Invalid user id', 400);
     }
 
-    const uniqueRoleCodes = uniqueStringArray([...(Array.isArray(roleCodes) ? roleCodes : []), BASE_USER_ROLE_CODE]);
+    const uniqueRoleCodes = uniqueStringArray([
+      ...(Array.isArray(roleCodes) ? roleCodes : []),
+      BASE_USER_ROLE_CODE,
+    ]);
     const connection = await db.getConnection();
 
     try {
       await connection.beginTransaction();
 
-      const [userRows] = await connection.query(
-        'SELECT id FROM users WHERE id = ? LIMIT 1',
-        [parsedUserId]
-      );
+      const [userRows] = await connection.query('SELECT id FROM users WHERE id = ? LIMIT 1', [
+        parsedUserId,
+      ]);
 
       if (!userRows.length) {
         throw makeRbacError('User not found', 404);
@@ -1340,53 +1307,41 @@ const accessControlModel = {
       if (uniqueRoleCodes.length > 0) {
         [roleRows] = await connection.query(
           'SELECT id, role_code FROM roles WHERE role_code IN (?)',
-          [uniqueRoleCodes]
+          [uniqueRoleCodes],
         );
 
         if (roleRows.length !== uniqueRoleCodes.length) {
           const foundRoleCodes = roleRows.map((role) => role.role_code);
           const missingRoleCodes = uniqueRoleCodes.filter(
-            (roleCode) => !foundRoleCodes.includes(roleCode)
+            (roleCode) => !foundRoleCodes.includes(roleCode),
           );
 
-          throw makeRbacError(
-            `Invalid role codes: ${missingRoleCodes.join(', ')}`,
-            400
-          );
+          throw makeRbacError(`Invalid role codes: ${missingRoleCodes.join(', ')}`, 400);
         }
       }
 
-      await connection.query('DELETE FROM user_roles WHERE user_id = ?', [
-        parsedUserId,
-      ]);
+      await connection.query('DELETE FROM user_roles WHERE user_id = ?', [parsedUserId]);
 
-      const userRoleValues = roleRows.map((role) => [
-        parsedUserId,
-        role.id,
-        assignedBy || null,
-      ]);
+      const userRoleValues = roleRows.map((role) => [parsedUserId, role.id, assignedBy || null]);
 
       if (userRoleValues.length > 0) {
-        await connection.query(
-          'INSERT INTO user_roles (user_id, role_id, assigned_by) VALUES ?',
-          [userRoleValues]
-        );
+        await connection.query('INSERT INTO user_roles (user_id, role_id, assigned_by) VALUES ?', [
+          userRoleValues,
+        ]);
       }
 
       // Handle the Contextual Roles (user_entity_roles)
       if (Array.isArray(entityRolesPayload)) {
-        await connection.query('DELETE FROM user_entity_roles WHERE user_id = ?', [
-          parsedUserId,
-        ]);
+        await connection.query('DELETE FROM user_entity_roles WHERE user_id = ?', [parsedUserId]);
 
         if (entityRolesPayload.length > 0) {
           const uniqueRoleCodesForEntities = uniqueStringArray(
-            entityRolesPayload.map((er) => er.role_code)
+            entityRolesPayload.map((er) => er.role_code),
           );
 
           const [targetRoleRows] = await connection.query(
             'SELECT id, role_code FROM roles WHERE role_code IN (?)',
-            [uniqueRoleCodesForEntities]
+            [uniqueRoleCodesForEntities],
           );
 
           const roleMap = new Map(targetRoleRows.map((r) => [r.role_code, r.id]));
@@ -1395,12 +1350,7 @@ const accessControlModel = {
             .map((entityRole) => {
               const roleId = roleMap.get(entityRole.role_code);
               if (roleId) {
-                return [
-                  parsedUserId,
-                  entityRole.entity_id,
-                  entityRole.entity_type,
-                  roleId,
-                ];
+                return [parsedUserId, entityRole.entity_id, entityRole.entity_type, roleId];
               }
               return null;
             })
@@ -1409,7 +1359,7 @@ const accessControlModel = {
           if (entityRoleValues.length > 0) {
             await connection.query(
               'INSERT INTO user_entity_roles (user_id, entity_id, entity_type, role_id) VALUES ?',
-              [entityRoleValues]
+              [entityRoleValues],
             );
           }
         }
@@ -1447,10 +1397,9 @@ const accessControlModel = {
     try {
       await connection.beginTransaction();
 
-      const [userRows] = await connection.query(
-        'SELECT id FROM users WHERE id = ? LIMIT 1',
-        [parsedUserId]
-      );
+      const [userRows] = await connection.query('SELECT id FROM users WHERE id = ? LIMIT 1', [
+        parsedUserId,
+      ]);
 
       if (!userRows.length) {
         throw makeRbacError('User not found', 404);
@@ -1458,7 +1407,7 @@ const accessControlModel = {
 
       const [superRoleRows] = await connection.query(
         'SELECT id FROM roles WHERE role_code = ? LIMIT 1',
-        [SUPER_ADMIN_ROLE_CODE]
+        [SUPER_ADMIN_ROLE_CODE],
       );
 
       if (!superRoleRows.length) {
@@ -1473,13 +1422,13 @@ const accessControlModel = {
             INSERT IGNORE INTO user_roles (user_id, role_id, assigned_by)
             VALUES (?, ?, ?)
           `,
-          [parsedUserId, superRoleId, assignedBy || null]
+          [parsedUserId, superRoleId, assignedBy || null],
         );
       } else {
-        await connection.query(
-          'DELETE FROM user_roles WHERE user_id = ? AND role_id = ?',
-          [parsedUserId, superRoleId]
-        );
+        await connection.query('DELETE FROM user_roles WHERE user_id = ? AND role_id = ?', [
+          parsedUserId,
+          superRoleId,
+        ]);
 
         await this.ensureAtLeastOneSuperAdmin(connection);
       }
@@ -1525,7 +1474,7 @@ const accessControlModel = {
           LEFT JOIN roles r ON r.id = ur.role_id
           WHERE u.id = ?
         `,
-        [parsedUserId]
+        [parsedUserId],
       );
 
       const groupedUser = groupUserRows(rows);
@@ -1543,14 +1492,14 @@ const accessControlModel = {
             JOIN roles r ON uer.role_id = r.id
             WHERE uer.user_id = ?
           `,
-          [parsedUserId]
+          [parsedUserId],
         );
 
         groupedUser.entity_roles = entityRoleRows.map((er) => ({
           entity_id: er.entity_id,
           entity_type: er.entity_type,
           role_code: er.role_code,
-          role_name: er.role_name
+          role_name: er.role_name,
         }));
       }
 

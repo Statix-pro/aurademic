@@ -2,7 +2,13 @@ import financeModel from './financeModel.js';
 import { registerWorkflowModule } from '../shared/workflow/workflowModuleRegistry.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
-const ALLOWED_META_KEYS = new Set(['trigger', 'route', 'amountBand', 'beneficiaryType', 'financeMeta']);
+const ALLOWED_META_KEYS = new Set([
+  'trigger',
+  'route',
+  'amountBand',
+  'beneficiaryType',
+  'financeMeta',
+]);
 const ALLOWED_AMOUNT_BANDS = new Set(['lte_10k', 'gt_10k']);
 const FINANCE_FLOW_LTE_10K = Object.freeze(['level1', 'dof', 'principal']);
 const FINANCE_FLOW_GT_10K = Object.freeze(['level1', 'dof', 'principal', 'chairman']);
@@ -31,7 +37,7 @@ const financeWorkflowAdapter = {
       throw new WorkflowError(
         'finance workflow moduleMeta must be an object or null',
         400,
-        'INVALID_WORKFLOW_META'
+        'INVALID_WORKFLOW_META',
       );
     }
 
@@ -42,16 +48,20 @@ const financeWorkflowAdapter = {
         throw new WorkflowError(
           `Unsupported finance workflow moduleMeta key: ${key}`,
           400,
-          'INVALID_WORKFLOW_META'
+          'INVALID_WORKFLOW_META',
         );
       }
 
       if (key === 'financeMeta') {
-        if (value !== null && value !== undefined && (typeof value !== 'object' || Array.isArray(value))) {
+        if (
+          value !== null &&
+          value !== undefined &&
+          (typeof value !== 'object' || Array.isArray(value))
+        ) {
           throw new WorkflowError(
             'finance workflow moduleMeta.financeMeta must be an object or null',
             400,
-            'INVALID_WORKFLOW_META'
+            'INVALID_WORKFLOW_META',
           );
         }
 
@@ -76,15 +86,20 @@ const financeWorkflowAdapter = {
         throw new WorkflowError(
           `finance workflow moduleMeta.${key} must be a string or null`,
           400,
-          'INVALID_WORKFLOW_META'
+          'INVALID_WORKFLOW_META',
         );
       }
 
-      if (key === 'amountBand' && value !== null && value !== undefined && !ALLOWED_AMOUNT_BANDS.has(value)) {
+      if (
+        key === 'amountBand' &&
+        value !== null &&
+        value !== undefined &&
+        !ALLOWED_AMOUNT_BANDS.has(value)
+      ) {
         throw new WorkflowError(
           `finance workflow moduleMeta.amountBand must be one of: ${Array.from(ALLOWED_AMOUNT_BANDS).join(', ')}`,
           400,
-          'INVALID_WORKFLOW_META'
+          'INVALID_WORKFLOW_META',
         );
       }
 
@@ -96,16 +111,16 @@ const financeWorkflowAdapter = {
 
   resolveStartFlow({ metadata }) {
     const amountBand = String(metadata?.moduleMeta?.amountBand || '').toLowerCase();
-    const beneficiaryType = String(metadata?.moduleMeta?.beneficiaryType || '').trim().toLowerCase();
+    const beneficiaryType = String(metadata?.moduleMeta?.beneficiaryType || '')
+      .trim()
+      .toLowerCase();
     if (beneficiaryType === 'institution') {
       return amountBand === 'gt_10k'
         ? [...FINANCE_FLOW_INSTITUTION_GT_10K]
         : [...FINANCE_FLOW_INSTITUTION_LTE_10K];
     }
 
-    return amountBand === 'gt_10k'
-      ? [...FINANCE_FLOW_GT_10K]
-      : [...FINANCE_FLOW_LTE_10K];
+    return amountBand === 'gt_10k' ? [...FINANCE_FLOW_GT_10K] : [...FINANCE_FLOW_LTE_10K];
   },
 };
 

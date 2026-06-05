@@ -2,7 +2,7 @@
   background: #f3f7fb;
   min-height: calc(100vh - 64px);
   padding: 24px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .adminbudget-container {
@@ -16,7 +16,6 @@
   border-radius: 18px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.06);
   overflow: hidden;
-
 }
 
 .adminbudget-view-toggle {
@@ -90,7 +89,10 @@
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .adminbudget-role-tab:hover {
@@ -128,7 +130,10 @@
   font-size: 0.95rem;
   color: #0f172a;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
 }
 
 select.adminbudget-control {
@@ -142,7 +147,9 @@ select.adminbudget-control {
 
 .adminbudget-control:focus {
   border-color: #0069ab;
-  box-shadow: 0 0 0 4px rgba(0, 105, 171, 0.15), 0 10px 22px rgba(2, 6, 23, 0.08);
+  box-shadow:
+    0 0 0 4px rgba(0, 105, 171, 0.15),
+    0 10px 22px rgba(2, 6, 23, 0.08);
   background-color: #ffffff;
 }
 
@@ -193,7 +200,10 @@ select.adminbudget-control {
   color: #ffffff;
   box-shadow: 0 10px 22px rgba(185, 28, 28, 0.28);
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .adminbudget-freeze-trigger:hover {
@@ -219,7 +229,7 @@ select.adminbudget-control {
 }
 
 .adminbudget-freeze-popover-card::before {
-  content: "";
+  content: '';
   position: absolute;
   top: -7px;
   left: 46px; /* Centered above the 52px wide trigger button (minus the 20px offset) */
@@ -326,7 +336,10 @@ select.adminbudget-control {
   font-weight: 700;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(185, 28, 28, 0.2);
-  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .adminbudget-freeze-btn:hover:not(:disabled) {
@@ -399,7 +412,10 @@ select.adminbudget-control {
 
 .adminbudget-item--clickable {
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .adminbudget-item--clickable:hover {
@@ -627,7 +643,9 @@ select.adminbudget-control {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform 0.15s ease, background 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
 }
 
 .adminbudget-action-btn:disabled {
@@ -661,15 +679,12 @@ select.adminbudget-control {
 .adminbudget-action-btn--return {
   background: #fff4d6;
   color: #d97706;
-
 }
-
 
 .adminbudget-action-btn--return:hover:not(:disabled) {
   background: #fef3c7;
   transform: translateY(-1px);
 }
-
 
 .adminbudget-action-btn--reject {
   background: #fdeaea;
@@ -939,13 +954,11 @@ select.adminbudget-control {
   line-height: 1.1;
 }
 
-
 .adminbudget-stats-card.active {
   border-color: rgba(15, 23, 42, 0.16);
   box-shadow:
     0 0 0 4px rgba(2, 6, 23, 0.05),
     0 8px 30px rgba(0, 0, 0, 0.2) !important;
-
 }
 
 .adminbudget-stats-number {
@@ -985,7 +998,6 @@ select.adminbudget-control {
   background: #0069ab !important;
   color: #eef2f7 !important;
 }
-
 
 /* Mobile: Stack vertically if too small */
 @media (max-width: 768px) {

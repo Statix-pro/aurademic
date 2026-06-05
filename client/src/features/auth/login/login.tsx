@@ -1,10 +1,11 @@
-import React, { useState, useEffect, FormEvent, ChangeEvent } from 'react';
-import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
-import { useLocation } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
-import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
+import React, { useState, useEffect, FormEvent, ChangeEvent } from 'react';
+import { useLocation } from 'react-router-dom';
+
 import { loginRequest } from '../../../config/authConfig';
 import { useAuth } from '../../../contexts/AuthContext';
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import { User } from '../../../types/index';
 import './login.css';
 import KSRCTLogo from '../../../shared/assets/images/ksrct_logo.png';
@@ -65,15 +66,11 @@ const Login: React.FC = () => {
         throw new Error('No credentials received from Google');
       }
 
-      const response = await authenticityUtility.post('/auth/google', {
+      const response = (await authenticityUtility.post('/auth/google', {
         credential: credentialResponse.credential,
-      }) as AuthResponse;
+      })) as AuthResponse;
 
-      if (
-        !response?.token ||
-        !response?.user ||
-        typeof response.user !== 'object'
-      ) {
+      if (!response?.token || !response?.user || typeof response.user !== 'object') {
         console.error('Invalid server response:', response);
         throw new Error('Invalid server response - missing token or user data');
       }
@@ -86,11 +83,7 @@ const Login: React.FC = () => {
     } catch (err: unknown) {
       console.error('Login error:', err);
       const error = err as { response?: { data?: { details?: string } }; message?: string };
-      setError(
-        error.response?.data?.details ||
-          error.message ||
-          'Authentication failed.'
-      );
+      setError(error.response?.data?.details || error.message || 'Authentication failed.');
       setDebugInfo({
         timestamp: new Date().toISOString(),
         errorDetails: String(err),
@@ -118,15 +111,11 @@ const Login: React.FC = () => {
         throw new Error('No access token received from Microsoft');
       }
 
-      const response = await authenticityUtility.post('/auth/microsoft', {
+      const response = (await authenticityUtility.post('/auth/microsoft', {
         accessToken: msalResponse.accessToken,
-      }) as AuthResponse;
+      })) as AuthResponse;
 
-      if (
-        !response?.token ||
-        !response?.user ||
-        typeof response.user !== 'object'
-      ) {
+      if (!response?.token || !response?.user || typeof response.user !== 'object') {
         console.error('Invalid server response:', response);
         throw new Error('Invalid server response - missing token or user data');
       }
@@ -142,7 +131,7 @@ const Login: React.FC = () => {
       setError(
         error.response?.data?.details ||
           error.message ||
-          'Failed to connect with Microsoft. Please try again.'
+          'Failed to connect with Microsoft. Please try again.',
       );
       setDebugInfo({
         timestamp: new Date().toISOString(),
@@ -164,20 +153,12 @@ const Login: React.FC = () => {
       <div className="login-wrapper">
         <div className="left-panel">
           <div className="left-panel-content">
-            <img
-              src={KSRCTLogo}
-              alt="KSRCT Logo"
-              className="college-logo"
-            />
+            <img src={KSRCTLogo} alt="KSRCT Logo" className="college-logo" />
             <h2>K.S.RANGASAMY COLLEGE OF TECHNOLOGY</h2>
             <h4>(Autonomous)</h4>
 
             <div className="college-website-left">
-              <a
-                href="https://www.ksrct.ac.in"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href="https://www.ksrct.ac.in" target="_blank" rel="noopener noreferrer">
                 www.ksrct.ac.in
               </a>
             </div>
@@ -192,9 +173,7 @@ const Login: React.FC = () => {
             </h3>
 
             {error && <div className="login-error-msg">{error}</div>}
-            {isLoading && (
-              <div className="login-loading-msg">Authenticating...</div>
-            )}
+            {isLoading && <div className="login-loading-msg">Authenticating...</div>}
 
             <form onSubmit={handleFormSubmit}>
               <div className="input-group">

@@ -1,13 +1,29 @@
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronLeft,
+  Edit2,
+  CheckCircle,
+  Shield,
+  ShieldCheck,
+  UserCog,
+  Plus,
+  Trash2,
+  Save,
+  RefreshCw,
+  Search,
+  X,
+} from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Badge, Button, Form, Spinner, Accordion, Card } from 'react-bootstrap';
-import { ChevronDown, ChevronRight, ChevronLeft, Edit2, CheckCircle, Shield, ShieldCheck, UserCog, Plus, Trash2, Save, RefreshCw, Search, X } from 'lucide-react';
 import Select, { GroupProps, GroupHeadingProps, components } from 'react-select';
+
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import {
   canAccessAdminArea,
   canAccessBudgetApproval,
   canManageAccessControl,
 } from '../../../shared/utils/permissionUtils';
-import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
 import './AccessControlPage.css';
 import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
@@ -110,7 +126,9 @@ const AccessControlPage: React.FC = () => {
   const [users, setUsers] = useState<AccessUser[]>([]);
 
   const [userRoleDrafts, setUserRoleDrafts] = useState<Record<number, string[]>>({});
-  const [userEntityRoleDrafts, setUserEntityRoleDrafts] = useState<Record<number, EntityRole[]>>({});
+  const [userEntityRoleDrafts, setUserEntityRoleDrafts] = useState<Record<number, EntityRole[]>>(
+    {},
+  );
   const [rolePermissionDrafts, setRolePermissionDrafts] = useState<Record<number, string[]>>({});
   const [roleMetaDrafts, setRoleMetaDrafts] = useState<Record<number, RoleMetaDraft>>({});
 
@@ -143,21 +161,28 @@ const AccessControlPage: React.FC = () => {
   }>({
     show: false,
     message: '',
-    type: 'info'
+    type: 'info',
   });
 
-  const showAlert = (message: React.ReactNode, type: AlertType = 'info', title?: string, showCancel = false, confirmText = 'OK', onConfirm?: () => void) => {
+  const showAlert = (
+    message: React.ReactNode,
+    type: AlertType = 'info',
+    title?: string,
+    showCancel = false,
+    confirmText = 'OK',
+    onConfirm?: () => void,
+  ) => {
     setAlertConfig({ show: true, message, type, title, onConfirm, showCancel, confirmText });
   };
 
-  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+  const closeAlert = () => setAlertConfig((prev) => ({ ...prev, show: false }));
 
   const [deleteModalConfig, setDeleteModalConfig] = useState<{
     show: boolean;
     role: Role | null;
   }>({
     show: false,
-    role: null
+    role: null,
   });
 
   const handleSyncRolesClick = () => {
@@ -170,12 +195,11 @@ const AccessControlPage: React.FC = () => {
       () => {
         closeAlert();
         executeSyncRoles();
-      }
+      },
     );
   };
 
   const executeSyncRoles = async () => {
-
     setSyncRolesLoading(true);
     setError('');
     setSuccessMessage('');
@@ -190,11 +214,7 @@ const AccessControlPage: React.FC = () => {
         response?: { data?: { message?: string } };
         message?: string;
       };
-      setError(
-        errorObj.response?.data?.message ||
-        errorObj.message ||
-        'Failed to sync roles'
-      );
+      setError(errorObj.response?.data?.message || errorObj.message || 'Failed to sync roles');
     } finally {
       setSyncRolesLoading(false);
     }
@@ -203,10 +223,8 @@ const AccessControlPage: React.FC = () => {
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
 
   const toggleGroup = (groupLabel: string) => {
-    setExpandedGroups(prev =>
-      prev.includes(groupLabel)
-        ? prev.filter(g => g !== groupLabel)
-        : [...prev, groupLabel]
+    setExpandedGroups((prev) =>
+      prev.includes(groupLabel) ? prev.filter((g) => g !== groupLabel) : [...prev, groupLabel],
     );
   };
 
@@ -228,7 +246,7 @@ const AccessControlPage: React.FC = () => {
             fontWeight: 700,
             fontSize: '11px',
             textTransform: 'uppercase',
-            letterSpacing: '0.5px'
+            letterSpacing: '0.5px',
           }}
         >
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -240,11 +258,7 @@ const AccessControlPage: React.FC = () => {
 
   const CollapsibleGroup = (props: GroupProps<any>) => {
     const isExpanded = expandedGroups.includes(props.data.label);
-    return (
-      <components.Group {...props}>
-        {isExpanded && props.children}
-      </components.Group>
-    );
+    return <components.Group {...props}>{isExpanded && props.children}</components.Group>;
   };
 
   const [roleName, setRoleName] = useState('');
@@ -257,16 +271,16 @@ const AccessControlPage: React.FC = () => {
 
   const hodOptions = useMemo(() => {
     return masterEntities
-      .filter(e => e.entity_type === 'DEPARTMENT')
-      .map(e => ({ label: e.entity_name, value: e.entity_id, type: 'DEPARTMENT' }))
+      .filter((e) => e.entity_type === 'DEPARTMENT')
+      .map((e) => ({ label: e.entity_name, value: e.entity_id, type: 'DEPARTMENT' }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [masterEntities]);
 
   const coordinatorOptions = useMemo(() => {
-    const nonDepts = masterEntities.filter(e => e.entity_type !== 'DEPARTMENT');
-    const groups: Record<string, { label: string; value: number, type: string }[]> = {};
+    const nonDepts = masterEntities.filter((e) => e.entity_type !== 'DEPARTMENT');
+    const groups: Record<string, { label: string; value: number; type: string }[]> = {};
 
-    nonDepts.forEach(e => {
+    nonDepts.forEach((e) => {
       const type = e.entity_type || 'OTHER';
       if (!groups[type]) groups[type] = [];
       groups[type].push({ label: e.entity_name, value: e.entity_id, type: e.entity_type });
@@ -274,9 +288,9 @@ const AccessControlPage: React.FC = () => {
 
     return Object.keys(groups)
       .sort()
-      .map(type => ({
+      .map((type) => ({
         label: type,
-        options: groups[type].sort((a, b) => a.label.localeCompare(b.label))
+        options: groups[type].sort((a, b) => a.label.localeCompare(b.label)),
       }));
   }, [masterEntities]);
 
@@ -298,7 +312,7 @@ const AccessControlPage: React.FC = () => {
 
   const fetchAccessControlData = async (
     searchValue = '',
-    options: { showPageLoader?: boolean } = {}
+    options: { showPageLoader?: boolean } = {},
   ) => {
     const { showPageLoader = false } = options;
 
@@ -312,14 +326,14 @@ const AccessControlPage: React.FC = () => {
         authenticityUtility.get('/access-control/permissions') as Promise<
           ApiCollectionResponse<Permission>
         >,
-        authenticityUtility.get('/access-control/roles') as Promise<
-          ApiCollectionResponse<Role>
-        >,
+        authenticityUtility.get('/access-control/roles') as Promise<ApiCollectionResponse<Role>>,
         authenticityUtility.get('/access-control/users', {
           params: { search: searchValue.trim() },
         }) as Promise<ApiCollectionResponse<AccessUser>>,
         // Need lists of all entities to map against
-        authenticityUtility.get('/adminbudget/org-units').catch(() => ({ data: { data: { all: [] } } }))
+        authenticityUtility
+          .get('/adminbudget/org-units')
+          .catch(() => ({ data: { data: { all: [] } } })),
       ]);
 
       const fetchedPermissions = Array.isArray(permissionResponse.data)
@@ -334,12 +348,13 @@ const AccessControlPage: React.FC = () => {
 
       // Aggregating available entities
       console.log('ORG_UNITS_API_RESPONSE_LOG', orgUnitsResponse);
-      const rawOrgUnits = (orgUnitsResponse as any)?.data?.data?.all || (orgUnitsResponse as any)?.data?.all || [];
+      const rawOrgUnits =
+        (orgUnitsResponse as any)?.data?.data?.all || (orgUnitsResponse as any)?.data?.all || [];
 
       const combinedEntities = rawOrgUnits.map((e: any) => ({
         entity_id: e.id,
         entity_name: e.name,
-        entity_type: e.type_code
+        entity_type: e.type_code,
       }));
       setMasterEntities(combinedEntities);
 
@@ -348,7 +363,7 @@ const AccessControlPage: React.FC = () => {
 
       fetchedUsers.forEach((accessUser) => {
         initialUserRoleDrafts[accessUser.id] = accessUser.roles.map(
-          (assignedRole) => assignedRole.role_code
+          (assignedRole) => assignedRole.role_code,
         );
         initialUserEntityRoleDrafts[accessUser.id] = accessUser.entity_roles || [];
       });
@@ -359,7 +374,7 @@ const AccessControlPage: React.FC = () => {
       const initialRoleMetaDrafts: Record<number, RoleMetaDraft> = {};
       fetchedRoles.forEach((roleItem) => {
         initialRolePermissionDrafts[roleItem.id] = roleItem.permissions.map(
-          (permission) => permission.permission_key
+          (permission) => permission.permission_key,
         );
         initialRoleMetaDrafts[roleItem.id] = {
           role_name: roleItem.role_name,
@@ -378,8 +393,8 @@ const AccessControlPage: React.FC = () => {
       };
       setError(
         errorObj.response?.data?.message ||
-        errorObj.message ||
-        'Failed to load access control data'
+          errorObj.message ||
+          'Failed to load access control data',
       );
     } finally {
       if (showPageLoader) {
@@ -435,11 +450,7 @@ const AccessControlPage: React.FC = () => {
         response?: { data?: { message?: string } };
         message?: string;
       };
-      setError(
-        errorObj.response?.data?.message ||
-        errorObj.message ||
-        'Failed to create role'
-      );
+      setError(errorObj.response?.data?.message || errorObj.message || 'Failed to create role');
     } finally {
       setRoleCreationLoading(false);
     }
@@ -482,9 +493,7 @@ const AccessControlPage: React.FC = () => {
         message?: string;
       };
       setError(
-        errorObj.response?.data?.message ||
-        errorObj.message ||
-        'Failed to update role permissions'
+        errorObj.response?.data?.message || errorObj.message || 'Failed to update role permissions',
       );
     } finally {
       setSavingRoleId(null);
@@ -494,7 +503,7 @@ const AccessControlPage: React.FC = () => {
   const updateRoleMetaDraft = <K extends keyof RoleMetaDraft>(
     roleId: number,
     key: K,
-    value: RoleMetaDraft[K]
+    value: RoleMetaDraft[K],
   ) => {
     setRoleMetaDrafts((previousDrafts) => ({
       ...previousDrafts,
@@ -532,11 +541,7 @@ const AccessControlPage: React.FC = () => {
         response?: { data?: { message?: string } };
         message?: string;
       };
-      setError(
-        errorObj.response?.data?.message ||
-        errorObj.message ||
-        'Failed to update role'
-      );
+      setError(errorObj.response?.data?.message || errorObj.message || 'Failed to update role');
     } finally {
       setSavingRoleMetaId(null);
     }
@@ -550,7 +555,7 @@ const AccessControlPage: React.FC = () => {
     const role = deleteModalConfig.role;
     if (!role) return;
 
-    setDeleteModalConfig(prev => ({ ...prev, show: false }));
+    setDeleteModalConfig((prev) => ({ ...prev, show: false }));
 
     setDeletingRoleId(role.id);
     setError('');
@@ -566,11 +571,7 @@ const AccessControlPage: React.FC = () => {
         response?: { data?: { message?: string } };
         message?: string;
       };
-      setError(
-        errorObj.response?.data?.message ||
-        errorObj.message ||
-        'Failed to delete role'
-      );
+      setError(errorObj.response?.data?.message || errorObj.message || 'Failed to delete role');
     } finally {
       setDeletingRoleId(null);
     }
@@ -594,40 +595,50 @@ const AccessControlPage: React.FC = () => {
     });
   };
 
-  const addUserEntityRoleDraft = (userId: number, roleCode: string, entityId: number, entityType?: string) => {
-    const selectedEntity = masterEntities.find(e => 
-      e.entity_id === entityId && (!entityType || e.entity_type === entityType)
+  const addUserEntityRoleDraft = (
+    userId: number,
+    roleCode: string,
+    entityId: number,
+    entityType?: string,
+  ) => {
+    const selectedEntity = masterEntities.find(
+      (e) => e.entity_id === entityId && (!entityType || e.entity_type === entityType),
     );
-    let selectedRole = roles.find(r => r.role_code === roleCode);
+    const selectedRole = roles.find((r) => r.role_code === roleCode);
 
     if (!selectedEntity || !selectedRole) return;
 
-    setUserEntityRoleDrafts(prev => {
+    setUserEntityRoleDrafts((prev) => {
       const existing = prev[userId] || [];
       // Prevent duplicates of EXACT same (role, entity) pair
-      if (existing.some(er => er.role_code === roleCode && er.entity_id === entityId)) {
+      if (existing.some((er) => er.role_code === roleCode && er.entity_id === entityId)) {
         return prev;
       }
 
       return {
         ...prev,
-        [userId]: [...existing, {
-          entity_id: selectedEntity.entity_id,
-          entity_type: selectedEntity.entity_type,
-          entity_name: selectedEntity.entity_name,
-          role_code: selectedRole!.role_code,
-          role_name: selectedRole!.role_name
-        }]
+        [userId]: [
+          ...existing,
+          {
+            entity_id: selectedEntity.entity_id,
+            entity_type: selectedEntity.entity_type,
+            entity_name: selectedEntity.entity_name,
+            role_code: selectedRole!.role_code,
+            role_name: selectedRole!.role_name,
+          },
+        ],
       };
     });
   };
 
   const removeUserEntityRoleDraft = (userId: number, roleCode: string, entityId: number) => {
-    setUserEntityRoleDrafts(prev => {
+    setUserEntityRoleDrafts((prev) => {
       const existing = prev[userId] || [];
       return {
         ...prev,
-        [userId]: existing.filter(er => !(er.entity_id === entityId && er.role_code === roleCode))
+        [userId]: existing.filter(
+          (er) => !(er.entity_id === entityId && er.role_code === roleCode),
+        ),
       };
     });
   };
@@ -640,7 +651,7 @@ const AccessControlPage: React.FC = () => {
     try {
       await authenticityUtility.put(`/access-control/users/${userId}/roles`, {
         role_codes: userRoleDrafts[userId] || [],
-        entity_roles: userEntityRoleDrafts[userId] || []
+        entity_roles: userEntityRoleDrafts[userId] || [],
       });
 
       setSuccessMessage('User roles updated successfully.');
@@ -652,9 +663,7 @@ const AccessControlPage: React.FC = () => {
         message?: string;
       };
       setError(
-        errorObj.response?.data?.message ||
-        errorObj.message ||
-        'Failed to update user roles'
+        errorObj.response?.data?.message || errorObj.message || 'Failed to update user roles',
       );
     } finally {
       setSavingUserId(null);
@@ -668,13 +677,12 @@ const AccessControlPage: React.FC = () => {
 
   return (
     <>
-
       <div className="access-control-wrapper">
         <div className="access-control-header">
           <h2>Access Control</h2>
           <p>
-            Fully role-based access: create roles, map existing permissions, and assign
-            roles to users.
+            Fully role-based access: create roles, map existing permissions, and assign roles to
+            users.
           </p>
         </div>
 
@@ -739,13 +747,9 @@ const AccessControlPage: React.FC = () => {
                               type="checkbox"
                               id={`new-role-${permission.permission_key}`}
                               label={`${permission.action_key.toUpperCase()} (${permission.permission_key})`}
-                              checked={selectedPermissionKeys.includes(
-                                permission.permission_key
-                              )}
+                              checked={selectedPermissionKeys.includes(permission.permission_key)}
                               onChange={() =>
-                                toggleCreateRolePermissionSelection(
-                                  permission.permission_key
-                                )
+                                toggleCreateRolePermissionSelection(permission.permission_key)
                               }
                             />
                           ))}
@@ -814,11 +818,7 @@ const AccessControlPage: React.FC = () => {
                         checked={Boolean(roleMetaDraft?.is_admin_role)}
                         disabled={role.is_system}
                         onChange={(event) =>
-                          updateRoleMetaDraft(
-                            role.id,
-                            'is_admin_role',
-                            event.target.checked
-                          )
+                          updateRoleMetaDraft(role.id, 'is_admin_role', event.target.checked)
                         }
                       />
 
@@ -836,9 +836,7 @@ const AccessControlPage: React.FC = () => {
                             size="sm"
                             variant="danger"
                             onClick={() => handleDeleteRoleClick(role)}
-                            disabled={
-                              deletingRoleId === role.id || role.assigned_user_count > 0
-                            }
+                            disabled={deletingRoleId === role.id || role.assigned_user_count > 0}
                           >
                             {deletingRoleId === role.id ? 'Deleting...' : 'Delete Role'}
                           </Button>
@@ -890,7 +888,14 @@ const AccessControlPage: React.FC = () => {
                   >
                     {syncRolesLoading ? (
                       <>
-                        <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> Syncing...
+                        <Spinner
+                          as="span"
+                          animation="border"
+                          size="sm"
+                          role="status"
+                          aria-hidden="true"
+                        />{' '}
+                        Syncing...
                       </>
                     ) : (
                       'Sync Roles'
@@ -920,13 +925,20 @@ const AccessControlPage: React.FC = () => {
                 </div>
               </div>
               <div className="accordion-wrapper mt-3 bg-white border rounded shadow-sm">
-                <div className="d-flex align-items-center text-muted fw-bold px-4 py-3 border-bottom bg-light bg-opacity-50" style={{ fontSize: '0.85rem' }}>
+                <div
+                  className="d-flex align-items-center text-muted fw-bold px-4 py-3 border-bottom bg-light bg-opacity-50"
+                  style={{ fontSize: '0.85rem' }}
+                >
                   <div style={{ flex: '0 0 35%' }}>USER</div>
                   <div style={{ flex: '1' }}>ROLE SUMMARY</div>
                   <div style={{ flex: '0 0 150px', textAlign: 'right' }}>ACTIONS</div>
                 </div>
 
-                <Accordion activeKey={expandedUser?.toString()} onSelect={(k) => setExpandedUser(k ? Number(k) : null)} flush>
+                <Accordion
+                  activeKey={expandedUser?.toString()}
+                  onSelect={(k) => setExpandedUser(k ? Number(k) : null)}
+                  flush
+                >
                   {(() => {
                     const indexOfLastUser = currentPage * rowsPerPage;
                     const indexOfFirstUser = indexOfLastUser - rowsPerPage;
@@ -944,29 +956,54 @@ const AccessControlPage: React.FC = () => {
                       const draftRoleCodes = userRoleDrafts[accessUser.id] || [];
                       const draftEntityRoles = userEntityRoleDrafts[accessUser.id] || [];
                       const allRoles = [
-                        ...accessUser.roles.map(r => ({ ...r, type: 'global' })),
-                        ...(accessUser.entity_roles || []).map(r => ({ ...r, type: 'context' }))
+                        ...accessUser.roles.map((r) => ({ ...r, type: 'global' })),
+                        ...(accessUser.entity_roles || []).map((r) => ({ ...r, type: 'context' })),
                       ].filter((r) => String(r.role_code || '').toLowerCase() !== 'user');
                       const visibleRoles = allRoles.slice(0, 2);
                       const remainingCount = allRoles.length - 2;
 
                       return (
-                        <Accordion.Item eventKey={accessUser.id.toString()} key={accessUser.id} className="border-bottom-0 border-top">
+                        <Accordion.Item
+                          eventKey={accessUser.id.toString()}
+                          key={accessUser.id}
+                          className="border-bottom-0 border-top"
+                        >
                           <Accordion.Header className="user-accordion-header">
                             <div className="d-flex align-items-center w-100 pe-3">
-                              <div className="me-3 text-secondary d-flex align-items-center" style={{ width: '20px' }}>
-                                {expandedUser === accessUser.id ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                              <div
+                                className="me-3 text-secondary d-flex align-items-center"
+                                style={{ width: '20px' }}
+                              >
+                                {expandedUser === accessUser.id ? (
+                                  <ChevronDown size={18} />
+                                ) : (
+                                  <ChevronRight size={18} />
+                                )}
                               </div>
                               <div style={{ flex: '0 0 34%' }} className="d-flex flex-column">
-                                <strong className="text-dark">{accessUser.name || 'Unnamed User'}</strong>
-                                <span className="text-muted small">{accessUser.email}, ID: {accessUser.id}</span>
+                                <strong className="text-dark">
+                                  {accessUser.name || 'Unnamed User'}
+                                </strong>
+                                <span className="text-muted small">
+                                  {accessUser.email}, ID: {accessUser.id}
+                                </span>
                               </div>
-                              <div style={{ flex: '1' }} className="d-flex align-items-center gap-2">
+                              <div
+                                style={{ flex: '1' }}
+                                className="d-flex align-items-center gap-2"
+                              >
                                 {visibleRoles.map((r, i) => (
                                   <span key={i} className={getRoleBadgeClassName(r.role_code)}>
-                                    {r.role_code === 'hod' ? 'Head of Department' : r.role_code === 'coordinator' ? 'Coordinator' : r.role_name}
+                                    {r.role_code === 'hod'
+                                      ? 'Head of Department'
+                                      : r.role_code === 'coordinator'
+                                        ? 'Coordinator'
+                                        : r.role_name}
                                     {r.type === 'context' && (r as any).entity_name && (
-                                      <span className="ms-1 opacity-75" style={{ fontSize: '0.9em' }}>
+                                      <span
+                                        className="ms-1 opacity-75"
+                                        style={{ fontSize: '0.9em' }}
+                                      >
                                         : {(r as any).entity_name}
                                       </span>
                                     )}
@@ -978,7 +1015,9 @@ const AccessControlPage: React.FC = () => {
                                   </span>
                                 )}
                                 {allRoles.length === 0 && (
-                                  <span className="assigned-role-tag assigned-role-tag-empty">No roles assigned</span>
+                                  <span className="assigned-role-tag assigned-role-tag-empty">
+                                    No roles assigned
+                                  </span>
                                 )}
                               </div>
                               <div style={{ flex: '0 0 150px', textAlign: 'right' }}>
@@ -988,7 +1027,12 @@ const AccessControlPage: React.FC = () => {
                                   className="rounded-pill px-3 border shadow-sm fw-medium d-flex align-items-center ms-auto gap-1 bg-white"
                                   style={{ color: '#6c757d', borderColor: '#dee2e6' }}
                                 >
-                                  <Edit2 size={13} style={{ strokeWidth: 3 }} className="text-muted" /> Edit Roles
+                                  <Edit2
+                                    size={13}
+                                    style={{ strokeWidth: 3 }}
+                                    className="text-muted"
+                                  />{' '}
+                                  Edit Roles
                                 </Button>
                               </div>
                             </div>
@@ -1000,7 +1044,11 @@ const AccessControlPage: React.FC = () => {
                                 <h6 className="fw-bold mb-3 fontSize-sm text-dark">GLOBAL ROLES</h6>
                                 <div className="d-flex gap-4 flex-wrap">
                                   {roles
-                                    .filter(r => r.is_admin_role && !['hod', 'coordinator'].includes(r.role_code))
+                                    .filter(
+                                      (r) =>
+                                        r.is_admin_role &&
+                                        !['hod', 'coordinator'].includes(r.role_code),
+                                    )
                                     .map((role) => (
                                       <Form.Check
                                         key={`${accessUser.id}-${role.role_code}`}
@@ -1008,7 +1056,9 @@ const AccessControlPage: React.FC = () => {
                                         id={`user-role-${accessUser.id}-${role.role_code}`}
                                         label={role.role_name}
                                         checked={draftRoleCodes.includes(role.role_code)}
-                                        onChange={() => toggleUserRoleDraft(accessUser.id, role.role_code)}
+                                        onChange={() =>
+                                          toggleUserRoleDraft(accessUser.id, role.role_code)
+                                        }
                                         className="mb-0 custom-checkbox"
                                       />
                                     ))}
@@ -1020,47 +1070,69 @@ const AccessControlPage: React.FC = () => {
                                 {/* <h6 className="fw-bold mb-3 fontSize-sm text-dark">CONTEXT ROLES (ENTITY-BASED)</h6> */}
                                 <div className="row g-2">
                                   <div className="col-md-6">
-                                    <label className="text-secondary small fw-medium mb-1">HOD (Department)</label>
+                                    <label className="text-secondary small fw-medium mb-1">
+                                      HOD (Department)
+                                    </label>
                                     <Select
                                       classNamePrefix="react-select"
                                       options={hodOptions}
                                       value={null}
                                       onChange={(selectedOption: any) => {
                                         if (selectedOption) {
-                                          addUserEntityRoleDraft(accessUser.id, 'hod', selectedOption.value, selectedOption.type);
+                                          addUserEntityRoleDraft(
+                                            accessUser.id,
+                                            'hod',
+                                            selectedOption.value,
+                                            selectedOption.type,
+                                          );
                                         }
                                       }}
                                       placeholder="Select Department..."
                                       isClearable
-                                      onMenuOpen={() => { }}
+                                      onMenuOpen={() => {}}
                                       menuPortalTarget={document.body}
                                       styles={{
-                                        menuPortal: base => ({ ...base, zIndex: 9999 }),
-                                        control: base => ({ ...base, minHeight: '38px', borderRadius: '8px' })
+                                        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                                        control: (base) => ({
+                                          ...base,
+                                          minHeight: '38px',
+                                          borderRadius: '8px',
+                                        }),
                                       }}
                                     />
                                   </div>
                                   <div className="col-md-6">
-                                    <label className="text-secondary small fw-medium mb-1">Coordinator (Club/Other)</label>
+                                    <label className="text-secondary small fw-medium mb-1">
+                                      Coordinator (Club/Other)
+                                    </label>
                                     <Select
                                       classNamePrefix="react-select"
                                       options={coordinatorOptions}
                                       components={{
                                         GroupHeading: CollapsibleGroupHeading,
-                                        Group: CollapsibleGroup
+                                        Group: CollapsibleGroup,
                                       }}
                                       value={null}
                                       onChange={(selectedOption: any) => {
                                         if (selectedOption) {
-                                          addUserEntityRoleDraft(accessUser.id, 'coordinator', selectedOption.value, selectedOption.type);
+                                          addUserEntityRoleDraft(
+                                            accessUser.id,
+                                            'coordinator',
+                                            selectedOption.value,
+                                            selectedOption.type,
+                                          );
                                         }
                                       }}
                                       placeholder="Select Entity..."
                                       isClearable
                                       menuPortalTarget={document.body}
                                       styles={{
-                                        menuPortal: base => ({ ...base, zIndex: 9999 }),
-                                        control: base => ({ ...base, minHeight: '38px', borderRadius: '8px' })
+                                        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                                        control: (base) => ({
+                                          ...base,
+                                          minHeight: '38px',
+                                          borderRadius: '8px',
+                                        }),
                                       }}
                                     />
                                   </div>
@@ -1074,15 +1146,31 @@ const AccessControlPage: React.FC = () => {
                                           className="d-inline-flex align-items-center bg-light text-dark rounded-pill px-3 py-1 mb-1 border shadow-sm"
                                           style={{ fontSize: '11px', fontWeight: 500 }}
                                         >
-                                          <span className="fw-bold text-muted me-2" style={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '10px' }}>
+                                          <span
+                                            className="fw-bold text-muted me-2"
+                                            style={{
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.5px',
+                                              fontSize: '10px',
+                                            }}
+                                          >
                                             {er.role_name}:
                                           </span>
                                           <span className="me-2">{er.entity_name}</span>
                                           <button
                                             className="btn btn-link p-0 text-dark opacity-50 d-flex align-items-center justify-content-center hover-opacity-100"
-                                            onClick={() => removeUserEntityRoleDraft(accessUser.id, er.role_code, er.entity_id)}
+                                            onClick={() =>
+                                              removeUserEntityRoleDraft(
+                                                accessUser.id,
+                                                er.role_code,
+                                                er.entity_id,
+                                              )
+                                            }
                                             title="Remove assignment"
-                                            style={{ textDecoration: 'none', transition: 'opacity 0.2s' }}
+                                            style={{
+                                              textDecoration: 'none',
+                                              transition: 'opacity 0.2s',
+                                            }}
                                           >
                                             <X size={12} strokeWidth={3} />
                                           </button>
@@ -1095,7 +1183,13 @@ const AccessControlPage: React.FC = () => {
                             </div>
 
                             {/* Action Footer */}
-                            <div className="d-flex justify-content-end gap-2 pt-3 border-top bg-white px-4 py-3 mx-n4 mb-n4 rounded-bottom" style={{ borderBottomLeftRadius: 'var(--bs-border-radius)', borderBottomRightRadius: 'var(--bs-border-radius)' }}>
+                            <div
+                              className="d-flex justify-content-end gap-2 pt-3 border-top bg-white px-4 py-3 mx-n4 mb-n4 rounded-bottom"
+                              style={{
+                                borderBottomLeftRadius: 'var(--bs-border-radius)',
+                                borderBottomRightRadius: 'var(--bs-border-radius)',
+                              }}
+                            >
                               <Button
                                 variant="primary"
                                 size="sm"
@@ -1111,7 +1205,7 @@ const AccessControlPage: React.FC = () => {
                                       closeAlert();
                                       await saveUserRoles(accessUser.id);
                                       setExpandedUser(null);
-                                    }
+                                    },
                                   );
                                 }}
                                 disabled={savingUserId === accessUser.id}
@@ -1130,7 +1224,7 @@ const AccessControlPage: React.FC = () => {
                           </Accordion.Body>
                         </Accordion.Item>
                       );
-                    })
+                    });
                   })()}
                 </Accordion>
 
@@ -1142,9 +1236,13 @@ const AccessControlPage: React.FC = () => {
                         <Form.Select
                           size="sm"
                           className="border rounded shadow-sm d-inline-block w-auto"
-                          style={{ minWidth: '70px', padding: '0.25rem 2.25rem 0.25rem 0.75rem', fontSize: '0.85rem' }}
+                          style={{
+                            minWidth: '70px',
+                            padding: '0.25rem 2.25rem 0.25rem 0.75rem',
+                            fontSize: '0.85rem',
+                          }}
                           value={rowsPerPage}
-                          onChange={e => {
+                          onChange={(e) => {
                             setRowsPerPage(Number(e.target.value));
                             setCurrentPage(1);
                           }}
@@ -1156,7 +1254,8 @@ const AccessControlPage: React.FC = () => {
                       </div>
 
                       <span className="text-secondary small fw-medium">
-                        {(currentPage - 1) * rowsPerPage + 1}-{Math.min(currentPage * rowsPerPage, users.length)} of {users.length}
+                        {(currentPage - 1) * rowsPerPage + 1}-
+                        {Math.min(currentPage * rowsPerPage, users.length)} of {users.length}
                       </span>
 
                       <div className="d-flex align-items-center gap-1 ms-2">
@@ -1165,17 +1264,27 @@ const AccessControlPage: React.FC = () => {
                           size="sm"
                           className="d-flex align-items-center gap-1 text-secondary border-0 bg-transparent fw-medium pagination-nav-btn"
                           disabled={currentPage === 1}
-                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                         >
                           <ChevronLeft size={16} /> Previous
                         </Button>
 
                         <div className="d-flex align-items-center gap-1">
-                          {Array.from({ length: Math.ceil(users.length / rowsPerPage) }, (_, i) => i + 1)
-                            .filter(p => p === 1 || p === Math.ceil(users.length / rowsPerPage) || Math.abs(p - currentPage) <= 1)
+                          {Array.from(
+                            { length: Math.ceil(users.length / rowsPerPage) },
+                            (_, i) => i + 1,
+                          )
+                            .filter(
+                              (p) =>
+                                p === 1 ||
+                                p === Math.ceil(users.length / rowsPerPage) ||
+                                Math.abs(p - currentPage) <= 1,
+                            )
                             .map((p, idx, arr) => (
                               <React.Fragment key={p}>
-                                {idx > 0 && arr[idx - 1] !== p - 1 && <span className="text-muted px-1">...</span>}
+                                {idx > 0 && arr[idx - 1] !== p - 1 && (
+                                  <span className="text-muted px-1">...</span>
+                                )}
                                 <Button
                                   variant={currentPage === p ? 'primary' : 'light'}
                                   size="sm"
@@ -1193,8 +1302,15 @@ const AccessControlPage: React.FC = () => {
                           variant="light"
                           size="sm"
                           className="d-flex align-items-center gap-1 text-secondary border-0 bg-transparent fw-medium pagination-nav-btn"
-                          disabled={currentPage === Math.ceil(users.length / rowsPerPage) || Math.ceil(users.length / rowsPerPage) === 0}
-                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(users.length / rowsPerPage)))}
+                          disabled={
+                            currentPage === Math.ceil(users.length / rowsPerPage) ||
+                            Math.ceil(users.length / rowsPerPage) === 0
+                          }
+                          onClick={() =>
+                            setCurrentPage((prev) =>
+                              Math.min(prev + 1, Math.ceil(users.length / rowsPerPage)),
+                            )
+                          }
                         >
                           Next <ChevronRight size={16} />
                         </Button>
@@ -1221,7 +1337,7 @@ const AccessControlPage: React.FC = () => {
 
       <DeleteConfirmationModal
         show={deleteModalConfig.show}
-        onHide={() => setDeleteModalConfig(prev => ({ ...prev, show: false }))}
+        onHide={() => setDeleteModalConfig((prev) => ({ ...prev, show: false }))}
         onConfirm={executeDeleteRole}
         itemName={deleteModalConfig.role?.role_name}
         isDeleting={deletingRoleId !== null}

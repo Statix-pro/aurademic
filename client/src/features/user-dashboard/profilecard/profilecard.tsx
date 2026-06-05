@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+
 import './profilecard.css';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
@@ -75,7 +76,10 @@ const ProfileCard: React.FC = () => {
               style={{ width: '120px', height: '120px', objectFit: 'cover' }}
             />
           ) : (
-            <div className="avatar-placeholder rounded-circle mx-auto mb-2 d-flex align-items-center justify-content-center bg-secondary text-white" style={{ width: '100px', height: '100px', fontSize: '2.5rem' }}>
+            <div
+              className="avatar-placeholder rounded-circle mx-auto mb-2 d-flex align-items-center justify-content-center bg-secondary text-white"
+              style={{ width: '100px', height: '100px', fontSize: '2.5rem' }}
+            >
               {profile?.name?.charAt(0) || 'U'}
             </div>
           )}
@@ -87,7 +91,9 @@ const ProfileCard: React.FC = () => {
           <div className="info">
             <div className="row">
               <div className="col-6">
-                <h6 className="employee-id">EMPLOYEE ID: {profile?.employee_id || 'Not Available'}</h6>
+                <h6 className="employee-id">
+                  EMPLOYEE ID: {profile?.employee_id || 'Not Available'}
+                </h6>
                 <p className="department">{profile?.department || 'Not Available'}</p>
               </div>
               <div className="col-6">
@@ -161,18 +167,32 @@ const ProfileCard: React.FC = () => {
 
             {!profile?.employee_id && (
               <div className="alert alert-info mt-3" role="alert">
-                <small>Your profile is not linked to employee records. Please contact the administrator to update your details.</small>
+                <small>
+                  Your profile is not linked to employee records. Please contact the administrator
+                  to update your details.
+                </small>
               </div>
             )}
 
             <div className="stats mt-4">
               <div className="row">
                 <div className="col-md-12">
-                  <h6 className="text-center stat-title" style={{ marginBottom: '20px' }}>Overall Status</h6>
+                  <h6 className="text-center stat-title" style={{ marginBottom: '20px' }}>
+                    Overall Status
+                  </h6>
                   <div className="row g-0 text-center">
-                    <div className="col"><h6>Publications</h6><p>{stats?.publication_count || 0}</p></div>
-                    <div className="col"><h6>Projects</h6><p>{stats?.project_count || 0}</p></div>
-                    <div className="col"><h6>Collaborations</h6><p>{stats?.collaboration_count || 0}</p></div>
+                    <div className="col">
+                      <h6>Publications</h6>
+                      <p>{stats?.publication_count || 0}</p>
+                    </div>
+                    <div className="col">
+                      <h6>Projects</h6>
+                      <p>{stats?.project_count || 0}</p>
+                    </div>
+                    <div className="col">
+                      <h6>Collaborations</h6>
+                      <p>{stats?.collaboration_count || 0}</p>
+                    </div>
                   </div>
                 </div>
               </div>

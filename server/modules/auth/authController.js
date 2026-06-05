@@ -1,5 +1,6 @@
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
+
 import authModel from './authModel.js';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -53,7 +54,7 @@ const authController = {
           googleId: googleId,
         },
         process.env.JWT_SECRET,
-        { expiresIn: '24h' }
+        { expiresIn: '24h' },
       );
 
       return res.json({ token, user });
@@ -80,16 +81,13 @@ const authController = {
       // Verify token by calling Microsoft Graph
       let graphProfile;
       try {
-        const graphResponse = await fetch(
-          'https://graph.microsoft.com/v1.0/me',
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
+        const graphResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
 
         if (!graphResponse.ok) {
           const errorText = await graphResponse.text();
-          throw new Error(
-            `Graph API responded ${graphResponse.status}: ${errorText}`
-          );
+          throw new Error(`Graph API responded ${graphResponse.status}: ${errorText}`);
         }
 
         graphProfile = await graphResponse.json();
@@ -130,7 +128,7 @@ const authController = {
           microsoftId,
         },
         process.env.JWT_SECRET,
-        { expiresIn: '24h' }
+        { expiresIn: '24h' },
       );
 
       return res.json({ token, user });

@@ -5,9 +5,7 @@ const adminModel = {
   async getAllProjects(page, perPage) {
     try {
       // Get total count
-      const [countResult] = await db.query(
-        'SELECT COUNT(*) as total FROM research_projects'
-      );
+      const [countResult] = await db.query('SELECT COUNT(*) as total FROM research_projects');
       const total = countResult[0].total;
 
       // Calculate offset
@@ -60,7 +58,7 @@ const adminModel = {
                 ORDER BY rp.id DESC
                 LIMIT ? OFFSET ?
             `,
-        [perPage, offset]
+        [perPage, offset],
       );
 
       // Transform the results to include team_members array and grant_disbursements
@@ -69,21 +67,18 @@ const adminModel = {
         agency: row.agency_name, // Map agency_name to agency for backwards compatibility
         scheme: row.scheme_name, // Map scheme_name to scheme for backwards compatibility
         team_members: row.team_members_names
-          ? row.team_members_names
-            .split(',')
-            .map((name) => ({ name: name.trim() }))
+          ? row.team_members_names.split(',').map((name) => ({ name: name.trim() }))
           : [],
         grant_disbursements: row.grant_disbursements_data
           ? row.grant_disbursements_data.split(',').map((gd) => {
-            const [fiscal_year, agency, amount, disbursement_date] =
-              gd.split(':');
-            return {
-              fiscal_year,
-              agency,
-              amount: parseFloat(amount),
-              disbursement_date,
-            };
-          })
+              const [fiscal_year, agency, amount, disbursement_date] = gd.split(':');
+              return {
+                fiscal_year,
+                agency,
+                amount: parseFloat(amount),
+                disbursement_date,
+              };
+            })
           : [],
       }));
 
@@ -118,7 +113,7 @@ const adminModel = {
             LEFT JOIN edit_requests er ON rp.id = er.entity_id AND er.entity_type = 'research_projects'
             WHERE rp.id = ?
         `,
-        [id]
+        [id],
       );
 
       if (!projectDetails[0]) {
@@ -142,7 +137,7 @@ const adminModel = {
             WHERE ap.project_id = ?
             ORDER BY ap.is_principal DESC, ap.is_primary DESC, va.author_name
         `,
-        [id]
+        [id],
       );
 
       // Get grant disbursements
@@ -159,7 +154,7 @@ const adminModel = {
             WHERE project_id = ?
             ORDER BY disbursement_date DESC
         `,
-        [id]
+        [id],
       );
 
       // Get collaborating partners
@@ -172,7 +167,7 @@ const adminModel = {
             FROM project_collaborations
             WHERE project_id = ?
         `,
-        [id]
+        [id],
       );
 
       // Get project documents
@@ -184,7 +179,7 @@ const adminModel = {
             FROM project_documents
             WHERE project_id = ?
         `,
-        [id]
+        [id],
       );
 
       // Get financial contributions with agency type names
@@ -199,7 +194,7 @@ const adminModel = {
             LEFT JOIN project_agency_type_options pato ON pfc.agency_type_id = pato.id
             WHERE pfc.project_id = ?
         `,
-        [id]
+        [id],
       );
 
       // Combine all the data
@@ -251,9 +246,7 @@ const adminModel = {
   async getAllJournals(page, perPage) {
     try {
       // Get total count of journals
-      const [countResult] = await db.query(
-        'SELECT COUNT(*) as total FROM journals'
-      );
+      const [countResult] = await db.query('SELECT COUNT(*) as total FROM journals');
       const total = countResult[0].total;
 
       // Calculate offset for pagination
@@ -305,7 +298,7 @@ const adminModel = {
                 ORDER BY j.id DESC
                 LIMIT ? OFFSET ?
             `,
-        [perPage, offset]
+        [perPage, offset],
       );
 
       return {
@@ -366,7 +359,7 @@ const adminModel = {
                 GROUP BY j.id, jo.journal_name, jo.publisher, jo.print_issn, 
                          jo.online_issn, jo.website, j.status, er.status, er.created_at
             `,
-        [id]
+        [id],
       );
 
       if (rows.length === 0) {
@@ -376,9 +369,7 @@ const adminModel = {
       const journal = rows[0];
       return {
         ...journal,
-        author_names: journal.author_names
-          ? journal.author_names.split(',')
-          : [],
+        author_names: journal.author_names ? journal.author_names.split(',') : [],
         index_names: journal.index_names ? journal.index_names.split(',') : [],
       };
     } catch (error) {
@@ -433,10 +424,9 @@ const adminModel = {
   async approveJournalRequest(requestId, adminComment) {
     try {
       // Get the journal request
-      const [requestRows] = await db.query(
-        'SELECT * FROM journal_requests WHERE id = ?',
-        [requestId]
-      );
+      const [requestRows] = await db.query('SELECT * FROM journal_requests WHERE id = ?', [
+        requestId,
+      ]);
 
       if (requestRows.length === 0) {
         return null;
@@ -456,7 +446,7 @@ const adminModel = {
           request.online_issn,
           request.impact_factor || null,
           request.cite_score || null,
-        ]
+        ],
       );
 
       // Update the request status
@@ -464,7 +454,7 @@ const adminModel = {
         `UPDATE journal_requests 
                      SET status = 'approved', admin_comment = ?, updated_at = CURRENT_TIMESTAMP
                      WHERE id = ?`,
-        [adminComment || 'Journal approved and added to options', requestId]
+        [adminComment || 'Journal approved and added to options', requestId],
       );
 
       return {
@@ -483,7 +473,7 @@ const adminModel = {
         `UPDATE journal_requests 
                      SET status = 'rejected', admin_comment = ?, updated_at = CURRENT_TIMESTAMP
                      WHERE id = ?`,
-        [adminComment || 'Journal request rejected', requestId]
+        [adminComment || 'Journal request rejected', requestId],
       );
 
       if (result.affectedRows === 0) {
@@ -517,10 +507,9 @@ const adminModel = {
   async approveProjectRequest(requestId, adminComment) {
     try {
       // Get the project request
-      const [requestRows] = await db.query(
-        'SELECT * FROM project_requests WHERE id = ?',
-        [requestId]
-      );
+      const [requestRows] = await db.query('SELECT * FROM project_requests WHERE id = ?', [
+        requestId,
+      ]);
 
       if (requestRows.length === 0) {
         return null;
@@ -532,22 +521,19 @@ const adminModel = {
       // Add to appropriate options table based on request type
       switch (request.request_type) {
         case 'agency':
-          [result] = await db.query(
-            'INSERT INTO project_agency_options (name) VALUES (?)',
-            [request.name]
-          );
+          [result] = await db.query('INSERT INTO project_agency_options (name) VALUES (?)', [
+            request.name,
+          ]);
           break;
         case 'scheme':
-          [result] = await db.query(
-            'INSERT INTO project_scheme_options (name) VALUES (?)',
-            [request.name]
-          );
+          [result] = await db.query('INSERT INTO project_scheme_options (name) VALUES (?)', [
+            request.name,
+          ]);
           break;
         case 'agency_type':
-          [result] = await db.query(
-            'INSERT INTO project_agency_type_options (name) VALUES (?)',
-            [request.name]
-          );
+          [result] = await db.query('INSERT INTO project_agency_type_options (name) VALUES (?)', [
+            request.name,
+          ]);
           break;
         default:
           throw new Error('Invalid request type');
@@ -559,10 +545,9 @@ const adminModel = {
                      SET status = 'approved', admin_comment = ?, updated_at = CURRENT_TIMESTAMP
                      WHERE id = ?`,
         [
-          adminComment ||
-          `${request.request_type.replace('_', ' ')} approved and added to options`,
+          adminComment || `${request.request_type.replace('_', ' ')} approved and added to options`,
           requestId,
-        ]
+        ],
       );
 
       return {
@@ -582,7 +567,7 @@ const adminModel = {
         `UPDATE project_requests 
                      SET status = 'rejected', admin_comment = ?, updated_at = CURRENT_TIMESTAMP
                      WHERE id = ?`,
-        [adminComment || 'Project request rejected', requestId]
+        [adminComment || 'Project request rejected', requestId],
       );
 
       if (result.affectedRows === 0) {
@@ -595,12 +580,7 @@ const adminModel = {
     }
   },
 
-  async updateJournalSubmissionApproval(
-    journalId,
-    status,
-    adminComment,
-    adminUserId
-  ) {
+  async updateJournalSubmissionApproval(journalId, status, adminComment, adminUserId) {
     try {
       const commentValue = adminComment?.trim() || null;
 
@@ -658,14 +638,12 @@ const adminModel = {
           FROM journals
           WHERE id = ?
         `,
-        [journalId]
+        [journalId],
       );
 
       return rows[0] || null;
     } catch (error) {
-      throw new Error(
-        `Error updating journal submission approval: ${error.message}`
-      );
+      throw new Error(`Error updating journal submission approval: ${error.message}`);
     }
   },
 
@@ -720,9 +698,7 @@ const adminModel = {
 
       return { statusUpdates: rows, total };
     } catch (error) {
-      throw new Error(
-        `Error retrieving journal status updates: ${error.message}`
-      );
+      throw new Error(`Error retrieving journal status updates: ${error.message}`);
     }
   },
 
@@ -737,13 +713,11 @@ const adminModel = {
                  JOIN users u ON jsu.user_id = u.id
                  WHERE jsu.journal_id = ? 
                  ORDER BY jsu.created_at ASC`,
-        [journalId]
+        [journalId],
       );
       return rows;
     } catch (error) {
-      throw new Error(
-        `Error retrieving journal status updates: ${error.message}`
-      );
+      throw new Error(`Error retrieving journal status updates: ${error.message}`);
     }
   },
 
@@ -751,7 +725,7 @@ const adminModel = {
     try {
       const [result] = await db.query(
         'UPDATE journal_status_updates SET admin_reply = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [adminReply, statusUpdateId]
+        [adminReply, statusUpdateId],
       );
       return result;
     } catch (error) {
@@ -759,31 +733,32 @@ const adminModel = {
     }
   },
 
-async getAllBudgets(page, perPage, filters = {}) {
-  const offset = (page - 1) * perPage;
-  const { fiscalYear, status, beneficiaryType } = filters;
-  
-  const whereParts = [`LOWER(TRIM(bp.status)) <> 'deleted'`];
-  const params = [];
-  
-  if (fiscalYear) {
-    whereParts.push('bp.fiscal_year = ?');
-    params.push(fiscalYear);
-  }
-  
-  if (status) {
-    whereParts.push('bp.status = ?');
-    params.push(status);
-  }
-  
-  if (beneficiaryType) {
-    whereParts.push('bp.beneficiary_type = ?');
-    params.push(beneficiaryType);
-  }
+  async getAllBudgets(page, perPage, filters = {}) {
+    const offset = (page - 1) * perPage;
+    const { fiscalYear, status, beneficiaryType } = filters;
 
-  const whereClause = `WHERE ${whereParts.join(' AND ')}`;
-  
-  const [rows] = await db.query(`
+    const whereParts = [`LOWER(TRIM(bp.status)) <> 'deleted'`];
+    const params = [];
+
+    if (fiscalYear) {
+      whereParts.push('bp.fiscal_year = ?');
+      params.push(fiscalYear);
+    }
+
+    if (status) {
+      whereParts.push('bp.status = ?');
+      params.push(status);
+    }
+
+    if (beneficiaryType) {
+      whereParts.push('bp.beneficiary_type = ?');
+      params.push(beneficiaryType);
+    }
+
+    const whereClause = `WHERE ${whereParts.join(' AND ')}`;
+
+    const [rows] = await db.query(
+      `
     SELECT 
       bp.*,
       md.name as department,
@@ -802,49 +777,62 @@ async getAllBudgets(page, perPage, filters = {}) {
     GROUP BY bp.id, md.name, md.code, me.name, met.name, met.code
     ORDER BY bp.created_at DESC
     LIMIT ? OFFSET ?
-  `, [...params, perPage, offset]);
-  
-  const [count] = await db.query(`
+  `,
+      [...params, perPage, offset],
+    );
+
+    const [count] = await db.query(
+      `
     SELECT COUNT(DISTINCT bp.id) as total 
     FROM budget_proposals bp
     ${whereClause}
-  `, params);
-  
-  return { budgets: rows, total: count[0].total };
-},
+  `,
+      params,
+    );
+
+    return { budgets: rows, total: count[0].total };
+  },
 
   async getBudgetStats(fiscalYear = null) {
     const fyClause = fiscalYear ? ' AND fiscal_year = ?' : '';
     const params = fiscalYear ? [fiscalYear] : [];
-    
-    const [approved] = await db.query(`
+
+    const [approved] = await db.query(
+      `
       SELECT COUNT(*) as approved 
       FROM budget_proposals 
       WHERE LOWER(TRIM(status)) <> 'deleted'
         AND status IN ('principal_approved', 'completed')${fyClause}
-    `, params);
-    
-    const [pending] = await db.query(`
+    `,
+      params,
+    );
+
+    const [pending] = await db.query(
+      `
       SELECT COUNT(*) as pending 
       FROM budget_proposals 
       WHERE LOWER(TRIM(status)) <> 'deleted'
         AND status IN ('submitted', 'hod_approved', 'dof_approved')${fyClause}
-    `, params);
-    
-    const [rejected] = await db.query(`
+    `,
+      params,
+    );
+
+    const [rejected] = await db.query(
+      `
       SELECT COUNT(*) as rejected 
       FROM budget_proposals 
       WHERE LOWER(TRIM(status)) <> 'deleted'
         AND status IN ('hod_rejected', 'dof_rejected', 'principal_rejected')${fyClause}
-    `, params);
-    
-    return { 
-      approved: approved[0].approved, 
+    `,
+      params,
+    );
+
+    return {
+      approved: approved[0].approved,
       pending: pending[0].pending,
-      rejected: rejected[0].rejected
+      rejected: rejected[0].rejected,
     };
   },
-  
 };
 
 export default adminModel;

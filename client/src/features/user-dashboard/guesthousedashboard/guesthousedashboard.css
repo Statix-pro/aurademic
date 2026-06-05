@@ -1,5 +1,3 @@
-
-
 .guesthouse-dashboard-container {
   min-height: 100vh;
   display: flex;
@@ -87,25 +85,24 @@
   line-height: 1.4;
 }
 
-
 .event-top .icon {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  vertical-align: middle;  /* align properly with text */
-  color: #444 !important;  /* same color as category & department */
+  vertical-align: middle; /* align properly with text */
+  color: #444 !important; /* same color as category & department */
 }
 
 .event-time {
-  display: inline-flex;       /* ensures icon and text are in a flex row */
-  align-items: center;        /* vertically center icon and text */
-  gap: 6px;                   /* adjust gap as needed, e.g., 6px */
+  display: inline-flex; /* ensures icon and text are in a flex row */
+  align-items: center; /* vertically center icon and text */
+  gap: 6px; /* adjust gap as needed, e.g., 6px */
   color: #003b73;
   font-weight: 600;
 }
 
 .event-time .icon {
-  color: #444 !important;  /* icon color matches others */
+  color: #444 !important; /* icon color matches others */
 }
 
 .event-name {
@@ -158,7 +155,7 @@
 }
 
 .right-frame h3 {
-  color:#0069ab;
+  color: #0069ab;
   margin-bottom: 15px;
 }
 
@@ -174,7 +171,7 @@
 
 .calendar-left .today-btn {
   min-width: 80px;
-  background-color:#0069ab;
+  background-color: #0069ab;
   color: white;
   border: none;
   padding: 6px 14px;
@@ -209,7 +206,7 @@
 .month-year-text {
   font-weight: 550;
   font-size: 16px;
-  color:#0069ab;
+  color: #0069ab;
   text-align: center;
   width: 100%;
   display: block;
@@ -222,7 +219,7 @@
   border: 1px solid #c0c0c0;
   border-radius: 6px;
   font-size: 14px;
-  color:#0069ab;
+  color: #0069ab;
   background-color: #fff;
   cursor: pointer;
   outline: none;
@@ -233,13 +230,13 @@
 
 .month-select:hover,
 .year-select:hover {
-  border-color:#0069ab;
+  border-color: #0069ab;
   box-shadow: 0 3px 6px rgba(0, 116, 183, 0.15);
 }
 
 .month-select:focus,
 .year-select:focus {
-  border-color:#0069ab;
+  border-color: #0069ab;
   box-shadow: 0 0 0 2px rgba(0, 116, 183, 0.2);
 }
 
@@ -249,18 +246,26 @@
   width: 30px;
   height: 30px;
   border: none;
-  background:#0069ab;
+  background: #0069ab;
   color: white;
   border-radius: 6px;
   cursor: pointer;
   position: absolute;
 }
 
-.nav-prev { left: -15px; }
-.nav-next { right: -15px; }
+.nav-prev {
+  left: -15px;
+}
+.nav-next {
+  right: -15px;
+}
 
-.nav-prev::after { content: "‹"; }
-.nav-next::after { content: "›"; }
+.nav-prev::after {
+  content: '‹';
+}
+.nav-next::after {
+  content: '›';
+}
 
 .nav-prev:hover,
 .nav-next:hover {
@@ -297,7 +302,7 @@
 .inline-day-number {
   font-size: 14px;
   font-weight: 500;
-  color:#0069ab;
+  color: #0069ab;
   line-height: 1;
 }
 
@@ -314,16 +319,31 @@
   color: #fff;
 }
 
-.event-count-1, .event-count-2, .event-count-3 { background-color: #006400; }
-.event-count-4, .event-count-5, .event-count-6 { background-color: #c98302; }
-.event-count-7, .event-count-8, .event-count-9, .event-count-10 { background-color: #ad1818; }
+.event-count-1,
+.event-count-2,
+.event-count-3 {
+  background-color: #006400;
+}
+.event-count-4,
+.event-count-5,
+.event-count-6 {
+  background-color: #c98302;
+}
+.event-count-7,
+.event-count-8,
+.event-count-9,
+.event-count-10 {
+  background-color: #ad1818;
+}
 
 .fc .selected-date {
   background-color: #d0e7ff !important;
   border-radius: 6px;
 }
 
-.sunday-red .inline-day-number { color: red !important; }
+.sunday-red .inline-day-number {
+  color: red !important;
+}
 
 /* =========================
    Responsive Dashboard
@@ -353,10 +373,16 @@
     justify-content: space-between;
   }
 
-  .nav-prev { left: 0; }
-  .nav-next { right: 0; }
+  .nav-prev {
+    left: 0;
+  }
+  .nav-next {
+    right: 0;
+  }
 
-  .month-year-text { font-size: 14px; }
+  .month-year-text {
+    font-size: 14px;
+  }
 
   .month-select,
   .year-select {
@@ -372,20 +398,40 @@
     gap: 5px;
   }
 
-  .today-btn { font-size: 13px; padding: 5px 10px; }
+  .today-btn {
+    font-size: 13px;
+    padding: 5px 10px;
+  }
 }
 
 @media (max-width: 480px) {
-  .event-card { font-size: 14px; }
+  .event-card {
+    font-size: 14px;
+  }
 
   .event-top,
-  .event-bottom { grid-template-columns: 1fr; gap: 5px; }
+  .event-bottom {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
 
-  .event-name { font-size: 14px; }
-  .event-venue { font-size: 13px; justify-content: flex-start; }
+  .event-name {
+    font-size: 14px;
+  }
+  .event-venue {
+    font-size: 13px;
+    justify-content: flex-start;
+  }
 
-  .inline-day-number { font-size: 12px; }
-  .event-badge { font-size: 10px; min-width: 14px; height: 14px; top: 18px; }
+  .inline-day-number {
+    font-size: 12px;
+  }
+  .event-badge {
+    font-size: 10px;
+    min-width: 14px;
+    height: 14px;
+    top: 18px;
+  }
 }
 .left-frame .frame-top-actions {
   position: absolute;
@@ -401,7 +447,7 @@
   padding: 8px 16px;
   border-radius: 6px;
   font-weight: 500;
-  box-shadow: 0 2px 8px rgba(0,105,171,0.3);
+  box-shadow: 0 2px 8px rgba(0, 105, 171, 0.3);
   transition: all 0.2s;
 }
 

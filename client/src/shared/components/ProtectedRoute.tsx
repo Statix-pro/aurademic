@@ -1,6 +1,7 @@
-import React, { ReactNode } from "react";
-import { Navigate, useParams } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext";
+import React, { ReactNode } from 'react';
+import { Navigate, useParams } from 'react-router-dom';
+
+import { useAuth } from '../../contexts/AuthContext';
 import {
   canAccessAdminArea,
   canAccessBudgetApproval,
@@ -8,7 +9,7 @@ import {
   canAccessModuleWorkflow,
   canManageAccessControl,
   canAccessExpenditureWorkflow,
-} from "../utils/permissionUtils";
+} from '../utils/permissionUtils';
 
 interface RouteProps {
   children: ReactNode;
@@ -87,7 +88,9 @@ export const FinanceWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
 export const ModuleWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
   const params = useParams<{ moduleKey?: string }>();
-  const moduleKey = String(params.moduleKey || "").trim().toLowerCase();
+  const moduleKey = String(params.moduleKey || '')
+    .trim()
+    .toLowerCase();
 
   if (loading) {
     return <div>Loading...</div>;

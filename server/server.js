@@ -16,35 +16,31 @@ import accessControlRoutes from './modules/accessControl/accessControlRoutes.js'
 import accountOptionsRoutes from './modules/accountOptions/accountOptionsRoutes.js';
 import adminBudgetRoutes from './modules/adminbudget/adminBudgetRoutes.js';
 import adminRoutes from './modules/admindashboard/adminRoutes.js';
-import journalRoutes from './modules/journal/journalRoutes.js';
-import projectRoutes from './modules/project/projectRoutes.js';
 import authRoutes from './modules/auth/authRoutes.js';
-import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
-import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
-import editRequestRoutes from './modules/editRequest/editRequestRoutes.js';
 import budgetRoutes from './modules/budget/budgetRoutes.js';
-import expenditureRoutes from './modules/expenditure/expenditureRoutes.js';
-import expenditureUserDashboardRoutes from './modules/expenditure/expenditureUserDashboardRoutes.js';
 
 // Events routes
-import eventRoutes from './modules/events/events/eventRoutes.js';
-import preEventRoutes from './modules/events/preevents/preEventRoutes.js';
-import financeRoutes from './modules/events/finance/financeRoutes.js';
 import updatesRoutes from './modules/events/updates/updatesRoutes.js';
 import documentsRoutes from './modules/events/documents/documentsRoutes.js';
 import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
 import budgetCatalogRoutes from './modules/budgetCatalog/budgetCatalogRoutes.js';
+import editRequestRoutes from './modules/editRequest/editRequestRoutes.js';
+import eventRoutes from './modules/events/events/eventRoutes.js';
+import financeRoutes from './modules/events/finance/financeRoutes.js';
+import preEventRoutes from './modules/events/preevents/preEventRoutes.js';
+import expenditureRoutes from './modules/expenditure/expenditureRoutes.js';
+import expenditureUserDashboardRoutes from './modules/expenditure/expenditureUserDashboardRoutes.js';
 
 // Finance page
 import financePageRoutes from './modules/finance/financeRoutes.js';
+import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
+import journalRoutes from './modules/journal/journalRoutes.js';
+import projectRoutes from './modules/project/projectRoutes.js';
+import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
 
 // FinanceCard routes
 // import financeCardRoutes from './modules/financeCard/financeCardRoutes.js';
 // import guesthouseRoutes from './modules/guesthouse/guesthouseRoutes.js';
-
-
-
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

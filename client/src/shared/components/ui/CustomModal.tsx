@@ -40,14 +40,8 @@ const CustomModal: React.FC<CustomModalProps> = ({
       <Modal.Header closeButton={!hideCloseButton}>
         <Modal.Title>{title}</Modal.Title>
       </Modal.Header>
-      <Modal.Body>
-        {children}
-      </Modal.Body>
-      {footer && (
-        <Modal.Footer>
-          {footer}
-        </Modal.Footer>
-      )}
+      <Modal.Body>{children}</Modal.Body>
+      {footer && <Modal.Footer>{footer}</Modal.Footer>}
     </Modal>
   );
 };

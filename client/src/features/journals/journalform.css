@@ -35,7 +35,7 @@
 }
 
 .custom-tooltip .tooltip-text::after {
-  content: "";
+  content: '';
   position: absolute;
   top: 100%;
   left: 50%;
@@ -392,12 +392,12 @@
   transition: transform 0.2s ease-in-out;
 }
 
-.radio-item input[type='radio']:checked+label::before {
+.radio-item input[type='radio']:checked + label::before {
   border-color: #0069ab;
   /* Primary blue */
 }
 
-.radio-item input[type='radio']:checked+label::after {
+.radio-item input[type='radio']:checked + label::after {
   transform: translateY(-50%) scale(1);
 }
 
@@ -456,13 +456,13 @@
   transition: transform 0.2s ease-in-out;
 }
 
-.checkbox-item input[type='checkbox']:checked+label::before {
+.checkbox-item input[type='checkbox']:checked + label::before {
   background-color: #0069ab;
   /* Primary blue */
   border-color: #0069ab;
 }
 
-.checkbox-item input[type='checkbox']:checked+label::after {
+.checkbox-item input[type='checkbox']:checked + label::after {
   transform: rotate(45deg) scale(1);
 }
 
@@ -505,12 +505,12 @@
   border-radius: 50%;
 }
 
-.toggle-switch input:checked+.slider {
+.toggle-switch input:checked + .slider {
   background-color: #0069ab;
   /* Primary blue */
 }
 
-.toggle-switch input:checked+.slider:before {
+.toggle-switch input:checked + .slider:before {
   transform: translateX(20px);
 }
 
@@ -818,7 +818,6 @@
   opacity: 1;
 }
 
-
 /* Ensure submit button uses the correct blue theme */
 .btn-submit-approval {
   background-color: #0069ab !important;
@@ -870,7 +869,7 @@ button[type='submit']:disabled {
   background-color: #ccc !important;
 }
 
-.toggle-switch input:checked+.slider {
+.toggle-switch input:checked + .slider {
   background-color: #0069ab !important;
 }
 
@@ -878,7 +877,7 @@ button[type='submit']:disabled {
   background-color: #fff !important;
 }
 
-.toggle-switch input:checked+.slider:before {
+.toggle-switch input:checked + .slider:before {
   transform: translateX(20px) !important;
 }
 
@@ -887,7 +886,7 @@ button[type='submit']:disabled {
   background-color: #fff !important;
 }
 
-.radio-item input[type='radio']:checked+label::before {
+.radio-item input[type='radio']:checked + label::before {
   border-color: #0069ab !important;
 }
 
@@ -900,7 +899,7 @@ button[type='submit']:disabled {
   background-color: #fff !important;
 }
 
-.checkbox-item input[type='checkbox']:checked+label::before {
+.checkbox-item input[type='checkbox']:checked + label::before {
   background-color: #0069ab !important;
   border-color: #0069ab !important;
 }
@@ -1134,7 +1133,7 @@ input[type='checkbox'],
   margin-right: -0.25rem;
 }
 
-.modal-body .row>[class*='col-'] {
+.modal-body .row > [class*='col-'] {
   padding-left: 0.25rem;
   padding-right: 0.25rem;
 }
@@ -1280,7 +1279,7 @@ input[type='checkbox'],
 
   .author-row .drag-handle,
   .author-row .custom-tooltip,
-  .author-row>div[style*="position: relative"] {
+  .author-row > div[style*='position: relative'] {
     width: 100%;
     display: flex;
     align-items: center;
@@ -1320,8 +1319,8 @@ input[type='checkbox'],
   }
 
   /* Header row with radio, drag handle and designation on same line */
-  .author-row>.custom-tooltip,
-  .author-row>.drag-handle {
+  .author-row > .custom-tooltip,
+  .author-row > .drag-handle {
     flex-shrink: 0;
     width: auto;
   }

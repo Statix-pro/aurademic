@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+
 import accessControlModel from '../modules/accessControl/accessControlModel.js';
 
 const extractToken = (req) => {
@@ -49,7 +50,7 @@ const uniqueStringArray = (values = []) => [
     values
       .filter((value) => typeof value === 'string')
       .map((value) => value.trim())
-      .filter(Boolean)
+      .filter(Boolean),
   ),
 ];
 
@@ -68,9 +69,7 @@ const normalizeDecodedUser = (decoded) => {
     isAdmin: Boolean(decoded.isAdmin ?? decoded.is_admin),
     isSuperAdmin: Boolean(decoded.isSuperAdmin ?? decoded.is_super_admin),
     roles: uniqueStringArray(decodedRoles),
-    permissions: uniqueStringArray(
-      Array.isArray(decoded.permissions) ? decoded.permissions : []
-    ),
+    permissions: uniqueStringArray(Array.isArray(decoded.permissions) ? decoded.permissions : []),
   };
 };
 
@@ -85,10 +84,10 @@ const normalizeRequestUser = (requestUser = {}) => ({
       ? requestUser.roles
       : requestUser.role
         ? [requestUser.role]
-        : []
+        : [],
   ),
   permissions: uniqueStringArray(
-    Array.isArray(requestUser.permissions) ? requestUser.permissions : []
+    Array.isArray(requestUser.permissions) ? requestUser.permissions : [],
   ),
 });
 
@@ -112,14 +111,10 @@ const mergeAuthorizationSnapshot = async (user) => {
     return user;
   }
 
-  const authorization = await accessControlModel.getUserAuthorizationSnapshot(
-    user.id
-  );
+  const authorization = await accessControlModel.getUserAuthorizationSnapshot(user.id);
 
   const roles =
-    authorization.roles.length > 0
-      ? authorization.roles
-      : uniqueStringArray(user.roles);
+    authorization.roles.length > 0 ? authorization.roles : uniqueStringArray(user.roles);
   const permissions =
     authorization.permissions.length > 0
       ? authorization.permissions
@@ -269,14 +264,9 @@ export const superAdminMiddleware = async (req, res, next) => {
   }
 };
 
-export const permissionMiddleware = (
-  requiredPermissions,
-  { requireAll = false } = {}
-) => {
+export const permissionMiddleware = (requiredPermissions, { requireAll = false } = {}) => {
   const requiredPermissionList = uniqueStringArray(
-    Array.isArray(requiredPermissions)
-      ? requiredPermissions
-      : [requiredPermissions]
+    Array.isArray(requiredPermissions) ? requiredPermissions : [requiredPermissions],
   );
 
   return async (req, res, next) => {

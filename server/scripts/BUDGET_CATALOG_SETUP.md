@@ -4,14 +4,14 @@ Moves hardcoded budget heads / sub-heads from the client into the DB so admins c
 
 SQL files do the work:
 
-| File | Purpose |
-|---|---|
-| `server/schema/migrations/20260520_create_budget_catalog.sql` | Creates `budget_heads` and `budget_sub_heads` tables |
-| `server/schema/migrations/20260520_seed_budget_catalog.sql` | Inserts ~75 heads and ~600 sub-heads (conditional inserts, safe to re-run) |
+| File                                                                        | Purpose                                                                                                   |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `server/schema/migrations/20260520_create_budget_catalog.sql`               | Creates `budget_heads` and `budget_sub_heads` tables                                                      |
+| `server/schema/migrations/20260520_seed_budget_catalog.sql`                 | Inserts ~75 heads and ~600 sub-heads (conditional inserts, safe to re-run)                                |
 | `server/schema/migrations/20260521_add_catalog_refs_to_workflow_tables.sql` | Adds nullable catalog ID columns to Budget / Finance / Expenditure workflow tables and backfills old rows |
-| `server/schema/migrations/20260522_add_catalog_deleted_flags.sql` | Adds hidden/deleted flags so delete can hide from UI while toggle stays reversible |
-| `server/schema/migrations/20260525_add_budget_tags_deleted_flag.sql` | Adds hidden/deleted flag for editable budget tags |
-| `server/schema/migrations/20260525_add_coe_claims_tag.sql` | Adds the CoE Claims tag |
+| `server/schema/migrations/20260522_add_catalog_deleted_flags.sql`           | Adds hidden/deleted flags so delete can hide from UI while toggle stays reversible                        |
+| `server/schema/migrations/20260525_add_budget_tags_deleted_flag.sql`        | Adds hidden/deleted flag for editable budget tags                                                         |
+| `server/schema/migrations/20260525_add_coe_claims_tag.sql`                  | Adds the CoE Claims tag                                                                                   |
 
 Both are pure SQL — no Node needed at the target machine.
 
@@ -84,6 +84,7 @@ SELECT COUNT(*) FROM expenditure_advance_rows WHERE budget_head_id IS NOT NULL;
 ```
 
 Open the live site, navigate to **Super Admin → Budget Catalog**, and confirm:
+
 - Heads and sub-heads load.
 - A test add / edit / delete works.
 - The Budget, Expenditure, and Finance approval forms still show the dropdowns.

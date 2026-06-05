@@ -1,7 +1,6 @@
 import { WorkflowApprovalModuleConfig } from './workflowApprovalTypes';
 
-const formatCurrencyINR = (value: number) =>
-  `\u20B9 ${Number(value || 0).toLocaleString('en-IN')}`;
+const formatCurrencyINR = (value: number) => `\u20B9 ${Number(value || 0).toLocaleString('en-IN')}`;
 
 const formatFinanceBeneficiary = (record: Record<string, any>) => {
   const type = String(record?.beneficiary_type || '').trim();
@@ -65,7 +64,7 @@ export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfi
     getEditRoute: (id) => `/expenditure/${id}/edit?admin=true`,
     enableSuperAdminDelete: true,
     enableLevel1RoleTabs: true,
-    enablePdfPreview: false, 
+    enablePdfPreview: false,
     enableSuperAdminAllProposals: true,
     enableSecondaryFilter: true,
     deleteEntityLabel: 'expenditure request',
@@ -83,7 +82,7 @@ export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfi
         label: 'Amount',
         render: (record) =>
           formatCurrencyINR(
-            Number(record.total_amount || record.total_budget || record.amount || 0)
+            Number(record.total_amount || record.total_budget || record.amount || 0),
           ),
       },
     ],
@@ -92,4 +91,8 @@ export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfi
 };
 
 export const getWorkflowModuleConfig = (moduleKey: string) =>
-  WORKFLOW_MODULE_CONFIGS[String(moduleKey || '').trim().toLowerCase()] || null;
+  WORKFLOW_MODULE_CONFIGS[
+    String(moduleKey || '')
+      .trim()
+      .toLowerCase()
+  ] || null;

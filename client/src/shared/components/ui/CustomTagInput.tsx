@@ -27,7 +27,7 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
   error,
   disabled = false,
   className = '',
-  renderTag
+  renderTag,
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -62,7 +62,7 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
   };
 
   const handleRemove = (itemToRemove: string) => {
-    onChange(value.filter(item => item !== itemToRemove));
+    onChange(value.filter((item) => item !== itemToRemove));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -89,11 +89,19 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
   };
 
   return (
-    <Form.Group className={`custom-input-group ${className} position-relative`} controlId={name} ref={wrapperRef}>
+    <Form.Group
+      className={`custom-input-group ${className} position-relative`}
+      controlId={name}
+      ref={wrapperRef}
+    >
       {label && <Form.Label className="custom-label">{label}</Form.Label>}
       <div
         className={`form-control custom-input d-flex flex-wrap align-items-center gap-2 position-relative ${error ? 'is-invalid' : ''}`}
-        style={{ minHeight: '38px', height: 'auto', paddingRight: value.length > 0 && !disabled ? '2.5rem' : '0.75rem' }}
+        style={{
+          minHeight: '38px',
+          height: 'auto',
+          paddingRight: value.length > 0 && !disabled ? '2.5rem' : '0.75rem',
+        }}
       >
         {value.map((item, index) => (
           <Badge key={index} className="custom-tag-badge">
@@ -111,7 +119,7 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
                   borderRadius: '50%',
                   fontSize: '18px',
                   lineHeight: '1',
-                  transition: 'color 0.2s ease'
+                  transition: 'color 0.2s ease',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.color = '#343a40';
@@ -141,7 +149,9 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+          onFocus={() => {
+            if (suggestions.length > 0) setShowSuggestions(true);
+          }}
           placeholder={value.length === 0 ? placeholder : ''}
           disabled={disabled}
           className="border-0 flex-grow-1"
@@ -155,8 +165,8 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
             className="position-absolute end-0 top-50 translate-middle-y pe-2"
             style={{ cursor: 'pointer', color: '#ccc', display: 'flex', alignItems: 'center' }}
             onClick={handleClear}
-            onMouseEnter={(e) => e.currentTarget.style.color = '#999'}
-            onMouseLeave={(e) => e.currentTarget.style.color = '#ccc'}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#999')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#ccc')}
             title="Clear all"
           >
             <svg
@@ -173,26 +183,25 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
         )}
       </div>
 
-      {
-        showSuggestions && suggestions.length > 0 && (
-          <ListGroup className="position-absolute w-100 mt-1 shadow-sm" style={{ zIndex: 1000, maxHeight: '200px', overflowY: 'auto' }}>
-            {suggestions.filter(s => !value.includes(s)).map((item, index) => (
-              <ListGroup.Item
-                key={index}
-                action
-                onClick={() => handleSelect(item)}
-              >
+      {showSuggestions && suggestions.length > 0 && (
+        <ListGroup
+          className="position-absolute w-100 mt-1 shadow-sm"
+          style={{ zIndex: 1000, maxHeight: '200px', overflowY: 'auto' }}
+        >
+          {suggestions
+            .filter((s) => !value.includes(s))
+            .map((item, index) => (
+              <ListGroup.Item key={index} action onClick={() => handleSelect(item)}>
                 {item}
               </ListGroup.Item>
             ))}
-          </ListGroup>
-        )
-      }
+        </ListGroup>
+      )}
 
       <Form.Control.Feedback type="invalid" className="custom-error-text d-block">
         {error}
       </Form.Control.Feedback>
-    </Form.Group >
+    </Form.Group>
   );
 };
 

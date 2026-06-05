@@ -1,9 +1,10 @@
-import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
-import { Table, Button, Form, Modal, Alert } from "react-bootstrap";
-import { Pencil, Trash2 } from "lucide-react";
-import authenticityUtility from "../../../shared/utils/authenticityUtility";
-import "./FormManagementStyles.css";
-import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
+import { Pencil, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
+import { Table, Button, Form, Modal, Alert } from 'react-bootstrap';
+
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import './FormManagementStyles.css';
+import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
 
 interface JournalOption {
   id: number;
@@ -20,17 +21,17 @@ interface JournalOption {
 const JournalManagement: React.FC = () => {
   const [journals, setJournals] = useState<JournalOption[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentJournal, setCurrentJournal] = useState<Partial<JournalOption>>({
-    journal_name: "",
-    publisher: "",
-    website: "",
-    print_issn: "",
-    online_issn: "",
+    journal_name: '',
+    publisher: '',
+    website: '',
+    print_issn: '',
+    online_issn: '',
     impact_factor: null,
     cite_score: null,
-    category: "National",
+    category: 'National',
   });
   const [isEditing, setIsEditing] = useState(false);
 
@@ -44,15 +45,22 @@ const JournalManagement: React.FC = () => {
     confirmText?: string;
   }>({
     show: false,
-    message: "",
-    type: "info"
+    message: '',
+    type: 'info',
   });
 
-  const showAlert = (message: React.ReactNode, type: AlertType = "info", title?: string, showCancel = false, confirmText = "OK", onConfirm?: () => void) => {
+  const showAlert = (
+    message: React.ReactNode,
+    type: AlertType = 'info',
+    title?: string,
+    showCancel = false,
+    confirmText = 'OK',
+    onConfirm?: () => void,
+  ) => {
     setAlertConfig({ show: true, message, type, title, onConfirm, showCancel, confirmText });
   };
 
-  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+  const closeAlert = () => setAlertConfig((prev) => ({ ...prev, show: false }));
 
   useEffect(() => {
     fetchJournals();
@@ -61,11 +69,13 @@ const JournalManagement: React.FC = () => {
   const fetchJournals = async () => {
     try {
       setLoading(true);
-      setError("");
-      const response = await authenticityUtility.get("/form-options/journals") as { data: JournalOption[] };
+      setError('');
+      const response = (await authenticityUtility.get('/form-options/journals')) as {
+        data: JournalOption[];
+      };
       setJournals(Array.isArray(response.data) ? response.data : []);
     } catch (err: unknown) {
-      console.error("Error fetching journals:", err);
+      console.error('Error fetching journals:', err);
       setJournals([]);
     } finally {
       setLoading(false);
@@ -76,21 +86,26 @@ const JournalManagement: React.FC = () => {
     e.preventDefault();
     try {
       setLoading(true);
-      setError("");
+      setError('');
 
       if (isEditing && currentJournal.id) {
-        await authenticityUtility.put(`/form-options/journals/${currentJournal.id}`, currentJournal);
+        await authenticityUtility.put(
+          `/form-options/journals/${currentJournal.id}`,
+          currentJournal,
+        );
       } else {
-        await authenticityUtility.post("/form-options/journals", currentJournal);
+        await authenticityUtility.post('/form-options/journals', currentJournal);
       }
 
       setShowModal(false);
       fetchJournals();
       resetForm();
     } catch (err: unknown) {
-      console.error("Error saving journal:", err);
+      console.error('Error saving journal:', err);
       const error = err as { response?: { data?: { message?: string } } };
-      setError("Failed to save journal. " + (error.response?.data?.message || "Please try again later."));
+      setError(
+        'Failed to save journal. ' + (error.response?.data?.message || 'Please try again later.'),
+      );
     } finally {
       setLoading(false);
     }
@@ -98,26 +113,29 @@ const JournalManagement: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     showAlert(
-      "Are you sure you want to delete this journal?",
-      "warning",
-      "Confirm Deletion",
+      'Are you sure you want to delete this journal?',
+      'warning',
+      'Confirm Deletion',
       true,
-      "Delete",
+      'Delete',
       async () => {
         closeAlert();
         try {
           setLoading(true);
-          setError("");
+          setError('');
           await authenticityUtility.delete(`/form-options/journals/${id}`);
           fetchJournals();
         } catch (err: unknown) {
-          console.error("Error deleting journal:", err);
+          console.error('Error deleting journal:', err);
           const error = err as { response?: { data?: { message?: string } } };
-          setError("Failed to delete journal. " + (error.response?.data?.message || "Please try again later."));
+          setError(
+            'Failed to delete journal. ' +
+              (error.response?.data?.message || 'Please try again later.'),
+          );
         } finally {
           setLoading(false);
         }
-      }
+      },
     );
   };
 
@@ -129,17 +147,17 @@ const JournalManagement: React.FC = () => {
 
   const resetForm = () => {
     setCurrentJournal({
-      journal_name: "",
-      publisher: "",
-      website: "",
-      print_issn: "",
-      online_issn: "",
+      journal_name: '',
+      publisher: '',
+      website: '',
+      print_issn: '',
+      online_issn: '',
       impact_factor: null,
       cite_score: null,
-      category: "National",
+      category: 'National',
     });
     setIsEditing(false);
-    setError("");
+    setError('');
   };
 
   return (
@@ -155,7 +173,14 @@ const JournalManagement: React.FC = () => {
 
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Journal Management</h2>
-        <Button variant="primary" onClick={() => { resetForm(); setShowModal(true); }} disabled={loading}>
+        <Button
+          variant="primary"
+          onClick={() => {
+            resetForm();
+            setShowModal(true);
+          }}
+          disabled={loading}
+        >
           Add New Journal
         </Button>
       </div>
@@ -180,22 +205,34 @@ const JournalManagement: React.FC = () => {
               <tr key={journal.id}>
                 <td>{journal.journal_name}</td>
                 <td>
-                  <span className={`badge bg-${journal.category === "International" ? "primary" : "secondary"}`}>
-                    {journal.category || "National"}
+                  <span
+                    className={`badge bg-${journal.category === 'International' ? 'primary' : 'secondary'}`}
+                  >
+                    {journal.category || 'National'}
                   </span>
                 </td>
                 <td>{journal.publisher}</td>
                 <td>{journal.print_issn}</td>
                 <td>{journal.online_issn}</td>
-                <td>{journal.impact_factor ?? "-"}</td>
-                <td>{journal.cite_score ?? "-"}</td>
+                <td>{journal.impact_factor ?? '-'}</td>
+                <td>{journal.cite_score ?? '-'}</td>
                 <td>{journal.website}</td>
                 <td>
                   <div className="btn-group">
-                    <Button variant="primary" size="sm" onClick={() => handleEdit(journal)} title="Edit">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handleEdit(journal)}
+                      title="Edit"
+                    >
                       <Pencil size={16} />
                     </Button>
-                    <Button variant="danger" size="sm" onClick={() => handleDelete(journal.id)} title="Delete">
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleDelete(journal.id)}
+                      title="Delete"
+                    >
                       <Trash2 size={16} />
                     </Button>
                   </div>
@@ -204,7 +241,9 @@ const JournalManagement: React.FC = () => {
             ))
           ) : (
             <tr>
-              <td colSpan={9} className="text-center">{loading ? "Loading..." : "No journals found"}</td>
+              <td colSpan={9} className="text-center">
+                {loading ? 'Loading...' : 'No journals found'}
+              </td>
             </tr>
           )}
         </tbody>
@@ -212,7 +251,7 @@ const JournalManagement: React.FC = () => {
 
       <Modal show={showModal} onHide={() => setShowModal(false)}>
         <Modal.Header closeButton>
-          <Modal.Title>{isEditing ? "Edit Journal" : "Add New Journal"}</Modal.Title>
+          <Modal.Title>{isEditing ? 'Edit Journal' : 'Add New Journal'}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {error && <Alert variant="danger">{error}</Alert>}
@@ -221,16 +260,20 @@ const JournalManagement: React.FC = () => {
               <Form.Label>Journal Name</Form.Label>
               <Form.Control
                 type="text"
-                value={currentJournal.journal_name || ""}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentJournal({ ...currentJournal, journal_name: e.target.value })}
+                value={currentJournal.journal_name || ''}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setCurrentJournal({ ...currentJournal, journal_name: e.target.value })
+                }
                 required
               />
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>Category</Form.Label>
               <Form.Select
-                value={currentJournal.category || "National"}
-                onChange={(e: ChangeEvent<HTMLSelectElement>) => setCurrentJournal({ ...currentJournal, category: e.target.value })}
+                value={currentJournal.category || 'National'}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                  setCurrentJournal({ ...currentJournal, category: e.target.value })
+                }
                 required
               >
                 <option value="National">National</option>
@@ -241,8 +284,10 @@ const JournalManagement: React.FC = () => {
               <Form.Label>Publisher *</Form.Label>
               <Form.Control
                 type="text"
-                value={currentJournal.publisher || ""}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentJournal({ ...currentJournal, publisher: e.target.value })}
+                value={currentJournal.publisher || ''}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setCurrentJournal({ ...currentJournal, publisher: e.target.value })
+                }
                 required
               />
             </Form.Group>
@@ -250,8 +295,10 @@ const JournalManagement: React.FC = () => {
               <Form.Label>Print ISSN *</Form.Label>
               <Form.Control
                 type="text"
-                value={currentJournal.print_issn || ""}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentJournal({ ...currentJournal, print_issn: e.target.value })}
+                value={currentJournal.print_issn || ''}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setCurrentJournal({ ...currentJournal, print_issn: e.target.value })
+                }
                 required
               />
             </Form.Group>
@@ -259,8 +306,10 @@ const JournalManagement: React.FC = () => {
               <Form.Label>Online ISSN *</Form.Label>
               <Form.Control
                 type="text"
-                value={currentJournal.online_issn || ""}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentJournal({ ...currentJournal, online_issn: e.target.value })}
+                value={currentJournal.online_issn || ''}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setCurrentJournal({ ...currentJournal, online_issn: e.target.value })
+                }
                 required
               />
             </Form.Group>
@@ -271,8 +320,13 @@ const JournalManagement: React.FC = () => {
                   <Form.Control
                     type="number"
                     step="0.001"
-                    value={currentJournal.impact_factor ?? ""}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentJournal({ ...currentJournal, impact_factor: e.target.value ? parseFloat(e.target.value) : null })}
+                    value={currentJournal.impact_factor ?? ''}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                      setCurrentJournal({
+                        ...currentJournal,
+                        impact_factor: e.target.value ? parseFloat(e.target.value) : null,
+                      })
+                    }
                     placeholder="e.g., 5.123"
                     required
                   />
@@ -284,8 +338,13 @@ const JournalManagement: React.FC = () => {
                   <Form.Control
                     type="number"
                     step="0.001"
-                    value={currentJournal.cite_score ?? ""}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentJournal({ ...currentJournal, cite_score: e.target.value ? parseFloat(e.target.value) : null })}
+                    value={currentJournal.cite_score ?? ''}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                      setCurrentJournal({
+                        ...currentJournal,
+                        cite_score: e.target.value ? parseFloat(e.target.value) : null,
+                      })
+                    }
                     placeholder="e.g., 8.5"
                     required
                   />
@@ -296,14 +355,25 @@ const JournalManagement: React.FC = () => {
               <Form.Label>Website *</Form.Label>
               <Form.Control
                 type="text"
-                value={currentJournal.website || ""}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentJournal({ ...currentJournal, website: e.target.value })}
+                value={currentJournal.website || ''}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setCurrentJournal({ ...currentJournal, website: e.target.value })
+                }
                 required
               />
             </Form.Group>
             <div className="d-flex justify-content-end">
-              <Button variant="secondary" className="me-2" onClick={() => setShowModal(false)} disabled={loading}>Cancel</Button>
-              <Button variant="primary" type="submit" disabled={loading}>{loading ? "Saving..." : "Save"}</Button>
+              <Button
+                variant="secondary"
+                className="me-2"
+                onClick={() => setShowModal(false)}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+              <Button variant="primary" type="submit" disabled={loading}>
+                {loading ? 'Saving...' : 'Save'}
+              </Button>
             </div>
           </Form>
         </Modal.Body>
