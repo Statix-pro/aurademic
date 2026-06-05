@@ -1,5 +1,7 @@
 # Research Portal (GEMINI Project)
 
+Last updated: Sat Jun 06 2026
+
 This document outlines the architecture, setup, and deployment procedures for the Research Portal application (`aurademic`).
 
 ## 1. Project Overview
