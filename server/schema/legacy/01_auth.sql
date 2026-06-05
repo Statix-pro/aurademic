@@ -3,7 +3,7 @@
    MODULE: Authentication & User Profiles
    PURPOSE: Defines tables for user identities, admin status,
             and edit requests for research entities.
-   Date: June 2026
+   Date: June 6, 2026
    ============================================================ */
 
 SET FOREIGN_KEY_CHECKS = 0;

@@ -4,7 +4,7 @@
    PURPOSE: Defines tables for tracking academic papers, publishers,
             affiliations (faculty/student), indexing databases,
             and publication approval requests.
-   Date: June 2026
+   Date: June 6, 2026
    ============================================================ */
 
 SET FOREIGN_KEY_CHECKS = 0;

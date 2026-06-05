@@ -5,7 +5,7 @@
             departments, employees, specialized entities (cells,
             centres, clubs), entity contacts, and employee import
             pending queue structures.
-   Date: June 2026
+   Date: June 6, 2026
    ============================================================ */
 
 SET FOREIGN_KEY_CHECKS = 0;

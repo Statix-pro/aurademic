@@ -4,7 +4,7 @@
    PURPOSE: Defines tables for funded projects, proposals,
             financial contributions, grant disbursements, documents,
             collaboration agreements, options lists, and requests.
-   Date: June 2026
+   Date: June 6, 2026
    ============================================================ */
 
 SET FOREIGN_KEY_CHECKS = 0;

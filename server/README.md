@@ -135,7 +135,7 @@ The server will run on `http://localhost:5000` (or the port specified in `.env`)
 | ------------- | -------------------------------------- |
 | `npm run dev` | Start server with nodemon (hot reload) |
 | `npm start`   | Start server in production mode        |
-| `npm test`    | Run tests (placeholder)                |
+| `npm test`    | Run the Vitest test suite              |
 
 ## 📡 API Endpoints
 
