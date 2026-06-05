@@ -1,0 +1,162 @@
+tags:
+  - name: Access Control
+    description: RBAC roles, permissions, and user credentials administration
+
+paths:
+  /access-control/permissions:
+    get:
+      summary: Retrieve all system permissions
+      tags: [Access Control]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of permissions
+
+    post:
+      summary: Create a new system permission (requires access_control.manage)
+      tags: [Access Control]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - key
+              properties:
+                name:
+                  type: string
+                key:
+                  type: string
+      responses:
+        200:
+          description: Permission created successfully
+
+  /access-control/roles:
+    get:
+      summary: Retrieve all system roles
+      tags: [Access Control]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of roles with associated permissions
+
+    post:
+      summary: Create a new role
+      tags: [Access Control]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+      responses:
+        200:
+          description: Role created successfully
+
+  /access-control/roles/{roleId}/permissions:
+    put:
+      summary: Update permissions associated with a specific role
+      tags: [Access Control]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: roleId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - permissionIds
+              properties:
+                permissionIds:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        200:
+          description: Role permissions updated successfully
+
+  /access-control/users:
+    get:
+      summary: Retrieve all users and their mapped roles (requires access_control.read)
+      tags: [Access Control]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of users
+
+  /access-control/users/{userId}/roles:
+    put:
+      summary: Update system roles mapped to a user
+      tags: [Access Control]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - roleIds
+              properties:
+                roleIds:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        200:
+          description: User roles updated successfully
+
+  /access-control/users/{userId}/super-admin:
+    put:
+      summary: Toggle user super admin status (Super Admin only)
+      tags: [Access Control]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - is_super_admin
+              properties:
+                is_super_admin:
+                  type: boolean
+      responses:
+        200:
+          description: Super admin status updated successfully

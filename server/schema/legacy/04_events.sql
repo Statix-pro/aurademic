@@ -5,7 +5,7 @@
             pre-event planning details, event types, collaborating
             departments, target audience, SDGs, publicity channels,
             coordinators, budgets, participants, and event finance records.
-   Date: June 2026
+   Date: June 6, 2026
    ============================================================ */
 
 SET FOREIGN_KEY_CHECKS = 0;

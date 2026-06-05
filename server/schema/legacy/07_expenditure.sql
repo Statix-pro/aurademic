@@ -5,7 +5,7 @@
             planned and unplanned advance payouts, payee details,
             receipt and payment voucher uploads, NEFT exports,
             budget usage ledgers, and settlement balancing.
-   Date: June 2026
+   Date: June 6, 2026
    ============================================================ */
 
 SET FOREIGN_KEY_CHECKS = 0;

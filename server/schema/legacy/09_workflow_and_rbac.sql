@@ -5,7 +5,7 @@
             user roles, entity-scoped roles (departments, centres, etc.),
             historical workflow action snapshots, stage policies, and
             permitted account options.
-   Date: June 2026
+   Date: June 6, 2026
    ============================================================ */
 
 SET FOREIGN_KEY_CHECKS = 0;

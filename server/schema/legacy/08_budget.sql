@@ -1,7 +1,7 @@
 /* ============================================================
    08_org_and_budget_v9_PRODUCTION_FINAL.sql
    UPGRADED: Faculty flow now matches Department (requires HoD)
-   Date: Feb 17, 2026
+   Date: June 6, 2026 (Upgraded: Feb 17, 2026)
    ============================================================ */
 
 SET FOREIGN_KEY_CHECKS = 0;
@@ -458,7 +458,7 @@ UNION ALL SELECT 'budget_proposals', COUNT(*) FROM budget_proposals;
 
 
 -- ==========================================
--- NEW BUDGET MODULE TABLES (Added June 2026)
+-- NEW BUDGET MODULE TABLES (Added June 6, 2026)
 -- ==========================================
 
 CREATE TABLE `Budget_annual` (
