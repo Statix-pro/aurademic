@@ -12,7 +12,6 @@ import { useBudgetCatalog } from '../../shared/hooks/useBudgetCatalog';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils';
 
-
 import './budget.css';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 

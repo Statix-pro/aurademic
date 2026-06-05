@@ -12,7 +12,6 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { Trash2, Plus, GripVertical, ChevronDown } from 'lucide-react';
 
-
 // Type definitions
 interface Author {
   id: number;

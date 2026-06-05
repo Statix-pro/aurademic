@@ -1,4 +1,3 @@
- 
 /**
  * Reads the data declarations from seedBudgetCatalog.js and emits a pure-SQL
  * seed file at server/schema/migrations/20260520_seed_budget_catalog.sql.
