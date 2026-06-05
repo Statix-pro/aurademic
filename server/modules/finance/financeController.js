@@ -1,10 +1,11 @@
 import financeModel from './financeModel.js';
 import './financeWorkflowAdapter.js';
+import db from '../../config/connection.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
+
 import fs from 'fs';
 import path from 'path';
-import db from '../../config/connection.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -31,7 +32,11 @@ const sanitizeAnnexureExtension = (originalName) => {
   return SAFE_ANNEXURE_EXTENSIONS.has(normalizedExt) ? normalizedExt : '';
 };
 
-const FINANCE_PRINCIPAL_DOC_DIR = path.resolve(process.cwd(), 'uploads', 'finance-principal-documents');
+const FINANCE_PRINCIPAL_DOC_DIR = path.resolve(
+  process.cwd(),
+  'uploads',
+  'finance-principal-documents',
+);
 const FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX = '/uploads/finance-principal-documents/';
 
 const TEMP_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'temp');
@@ -57,22 +62,20 @@ const isPrincipalRoleRequest = (req) => {
 const hasFinanceWorkflowPermission = (req) => {
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
   return permissions.some((permission) =>
-    normalizeText(permission).toLowerCase().startsWith('finance.workflow.')
+    normalizeText(permission).toLowerCase().startsWith('finance.workflow.'),
   );
 };
 
-const canManagePrincipalDocumentsRequest = (req) => (
-  Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) ||
-  isPrincipalRoleRequest(req)
-);
+const canManagePrincipalDocumentsRequest = (req) =>
+  Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || isPrincipalRoleRequest(req);
 
 const isEligibleForPrincipalDocument = (finance) => {
   const totalBudget = Number(finance?.total_budget || finance?.proposed_amount || 0);
   const workflowStatus = normalizeText(
-    finance?.workflow_state?.status || finance?.workflow_status || finance?.overall_status
+    finance?.workflow_state?.status || finance?.workflow_status || finance?.overall_status,
   ).toLowerCase();
   const currentStage = normalizeText(
-    finance?.workflow_state?.currentStage || finance?.workflow_stage
+    finance?.workflow_state?.currentStage || finance?.workflow_stage,
   ).toLowerCase();
 
   if (!(totalBudget > 10000)) {
@@ -130,11 +133,7 @@ const resolveCurrentCycleStartMs = (financeRecord, entries = []) => {
     return resubmittedAtMs;
   }
 
-  return (
-    parseDateMs(workflowState.startedAt) ||
-    parseDateMs(financeRecord?.created_at) ||
-    null
-  );
+  return parseDateMs(workflowState.startedAt) || parseDateMs(financeRecord?.created_at) || null;
 };
 
 const filterEntriesForCurrentCycle = (entries, financeRecord) => {
@@ -164,7 +163,7 @@ const filterEntriesForCurrentCycle = (entries, financeRecord) => {
 };
 
 const isSuperAdminRequest = (req) => {
-  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin || req.user?.is_superadmin)) {
+  if (req.user?.is_super_admin || req.user?.isSuperAdmin || req.user?.is_superadmin) {
     return true;
   }
 
@@ -212,7 +211,8 @@ const resolveFinanceLevel1QueueRole = (req) => {
     ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
     : [];
 
-  const hasCoordinatorRole = normalizedRoles.includes('coordinator') || normalizedRoles.includes('entity_approver');
+  const hasCoordinatorRole =
+    normalizedRoles.includes('coordinator') || normalizedRoles.includes('entity_approver');
   const hasHodRole = normalizedRoles.includes('hod');
 
   if (hasCoordinatorRole && !hasHodRole) return 'coordinator';
@@ -223,7 +223,9 @@ const resolveFinanceLevel1QueueRole = (req) => {
 
 const hasAnyFinanceWorkflowPermission = (req) => {
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  return permissions.some((permission) => normalizeText(permission).startsWith('finance.workflow.'));
+  return permissions.some((permission) =>
+    normalizeText(permission).startsWith('finance.workflow.'),
+  );
 };
 
 const hasFinanceStagePermission = (req, stage) => {
@@ -237,7 +239,9 @@ const hasFinanceStagePermission = (req, stage) => {
   }
 
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  const normalizedPermissions = permissions.map((permission) => normalizeText(permission).toLowerCase());
+  const normalizedPermissions = permissions.map((permission) =>
+    normalizeText(permission).toLowerCase(),
+  );
   if (
     normalizedPermissions.includes('finance.workflow.*') ||
     normalizedPermissions.includes(`finance.workflow.${normalizedStage}`)
@@ -361,7 +365,7 @@ const handleCarryForwardError = (res, error, fallbackMessage) => {
 
 const sanitizeFinanceRecordForUser = (req, financeRecord) => {
   if (!financeRecord) return financeRecord;
-  
+
   if (!canManagePrincipalDocumentsRequest(req)) {
     return {
       ...financeRecord,
@@ -382,7 +386,8 @@ const financeController = {
       if (!hasApplicant || !data.request_date || !data.beneficiary_type || !data.primary_head) {
         return res.status(400).json({
           success: false,
-          message: 'Missing required fields (employee_id or applicant_name, request_date, beneficiary_type, primary_head)',
+          message:
+            'Missing required fields (employee_id or applicant_name, request_date, beneficiary_type, primary_head)',
         });
       }
 
@@ -400,7 +405,11 @@ const financeController = {
         });
       }
 
-      const financeId = await financeModel.createFinanceRequest(data, userId, normalizeText(req.user?.email) || null);
+      const financeId = await financeModel.createFinanceRequest(
+        data,
+        userId,
+        normalizeText(req.user?.email) || null,
+      );
       const budgetRows = Array.isArray(data.budget_rows) ? data.budget_rows : [];
       const plannedBudgetAmount = budgetRows.length
         ? budgetRows.reduce((sum, row) => sum + Number(row?.amount || 0), 0)
@@ -409,7 +418,8 @@ const financeController = {
       const unplannedBudgetAmount = unplannedBudgetEnabled
         ? Math.max(0, Number(data.unplanned_budget_amount || 0))
         : 0;
-      const totalBudgetAmount = plannedBudgetAmount + (Number.isFinite(unplannedBudgetAmount) ? unplannedBudgetAmount : 0);
+      const totalBudgetAmount =
+        plannedBudgetAmount + (Number.isFinite(unplannedBudgetAmount) ? unplannedBudgetAmount : 0);
       const amountBand = Number(totalBudgetAmount) > 10000 ? 'gt_10k' : 'lte_10k';
       const financeMeta = {
         unplannedBudgetEnabled,
@@ -440,7 +450,10 @@ const financeController = {
         try {
           await financeModel.hardDeleteFinanceRequest(financeId);
         } catch (cleanupError) {
-          console.error('Failed to clean up finance request after workflow start failure', cleanupError);
+          console.error(
+            'Failed to clean up finance request after workflow start failure',
+            cleanupError,
+          );
         }
         throw workflowError;
       }
@@ -486,7 +499,9 @@ const financeController = {
       const isCreator = Boolean(userId && toPositiveInt(finance.created_by) === userId);
       const isWorkflowEditor = hasFinanceWorkflowEditorAccess(req);
       const workflowStatus = normalizeText(finance.workflow_state?.status).toLowerCase();
-      const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(workflowStatus);
+      const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(
+        workflowStatus,
+      );
 
       if (!isCreator && !isWorkflowEditor) {
         return res.status(403).json({
@@ -516,7 +531,11 @@ const financeController = {
         });
       }
 
-      const result = await financeModel.updateFinanceRequest(financeId, req.body || {}, normalizeActor(req));
+      const result = await financeModel.updateFinanceRequest(
+        financeId,
+        req.body || {},
+        normalizeActor(req),
+      );
 
       if (result.affectedRows > 0) {
         return res.status(200).json({
@@ -574,7 +593,9 @@ const financeController = {
         });
       }
 
-      const resubmissionComment = normalizeText(req.body?.feedback || req.body?.comment || req.body?.remarks);
+      const resubmissionComment = normalizeText(
+        req.body?.feedback || req.body?.comment || req.body?.remarks,
+      );
       if (!resubmissionComment) {
         return res.status(400).json({
           success: false,
@@ -677,7 +698,8 @@ const financeController = {
       const workflowState = finance.workflow_state || null;
       const workflowStatus = normalizeText(workflowState?.status).toLowerCase();
       const currentStage = normalizeText(workflowState?.currentStage).toLowerCase();
-      const hasStartedApproval = Boolean(workflowState) && currentStage && currentStage !== 'level1';
+      const hasStartedApproval =
+        Boolean(workflowState) && currentStage && currentStage !== 'level1';
 
       if (
         !isSuperAdmin &&
@@ -771,7 +793,7 @@ const financeController = {
 
       return res.json({
         success: true,
-        data: rows.map(row => sanitizeFinanceRecordForUser(req, row)),
+        data: rows.map((row) => sanitizeFinanceRecordForUser(req, row)),
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in listFinanceRequests');
@@ -842,7 +864,6 @@ const financeController = {
       const tags = await financeModel.getBudgetTags();
       return res.status(200).json({
         success: true,
-        success: true,
         data: tags,
       });
     } catch (error) {
@@ -855,7 +876,6 @@ const financeController = {
       const type = req.params.type;
       const units = await financeModel.getOrgUnitsByType(type);
       return res.status(200).json({
-        success: true,
         success: true,
         data: units,
         count: units.length,
@@ -879,7 +899,6 @@ const financeController = {
 
       return res.status(200).json({
         success: true,
-        success: true,
         data: {
           all: units,
           grouped,
@@ -898,15 +917,17 @@ const financeController = {
       const subHead = normalizeText(req.query?.sub_head || req.query?.subHead);
       const preferredBudgetLineId = toPositiveInt(req.query?.budget_line_id);
       const excludeFinanceId = toPositiveInt(req.query?.finance_id);
-      const beneficiaryType = normalizeText(req.query?.beneficiary_type || req.query?.beneficiaryType) || null;
-      const beneficiaryValue = normalizeText(req.query?.beneficiary_value || req.query?.beneficiaryValue) || null;
+      const beneficiaryType =
+        normalizeText(req.query?.beneficiary_type || req.query?.beneficiaryType) || null;
+      const beneficiaryValue =
+        normalizeText(req.query?.beneficiary_value || req.query?.beneficiaryValue) || null;
       const departmentId = toPositiveInt(req.query?.department_id || req.query?.departmentId);
       const beneficiaryEntityId = toPositiveInt(
-        req.query?.beneficiary_entity_id || req.query?.beneficiaryEntityId
+        req.query?.beneficiary_entity_id || req.query?.beneficiaryEntityId,
       );
       const fiscalYear = toPositiveInt(req.query?.fiscal_year || req.query?.fiscalYear);
       const headOnlyMatch = ['1', 'true', 'yes', 'on'].includes(
-        normalizeText(req.query?.head_only_match).toLowerCase()
+        normalizeText(req.query?.head_only_match).toLowerCase(),
       );
 
       if (!userId) {
@@ -974,10 +995,10 @@ const financeController = {
       }
 
       const workflowStatus = normalizeText(
-        finance.workflow_state?.status || finance.workflow_status || finance.overall_status
+        finance.workflow_state?.status || finance.workflow_status || finance.overall_status,
       ).toLowerCase();
       const currentStage = normalizeText(
-        finance.workflow_state?.currentStage || finance.workflow_stage
+        finance.workflow_state?.currentStage || finance.workflow_stage,
       ).toLowerCase();
       const isTerminalWorkflow = ['completed', 'rejected', 'archived'].includes(workflowStatus);
       const canPersistStageRemark =
@@ -985,26 +1006,27 @@ const financeController = {
         hasFinanceStagePermission(req, currentStage);
 
       if (normalizedStageRemark && canPersistStageRemark) {
-        await financeModel.updateWorkflowStageRemark(financeId, currentStage, normalizedStageRemark);
+        await financeModel.updateWorkflowStageRemark(
+          financeId,
+          currentStage,
+          normalizedStageRemark,
+        );
       }
 
       if (actor.isSuperAdmin && normalizedDecision === 'returned' && isTerminalWorkflow) {
-        result = await financeModel.forceWorkflowTransition(
-          financeId,
-          {
-            decision: 'returned',
-            feedback,
-            actor,
-            stageHint:
-              normalizeText(finance.workflow_stage).toLowerCase() ||
-              normalizeText(
-                Array.isArray(finance.workflow_state?.flow)
-                  ? finance.workflow_state.flow[finance.workflow_state.flow.length - 1]
-                  : ''
-              ).toLowerCase() ||
-              'principal',
-          }
-        );
+        result = await financeModel.forceWorkflowTransition(financeId, {
+          decision: 'returned',
+          feedback,
+          actor,
+          stageHint:
+            normalizeText(finance.workflow_stage).toLowerCase() ||
+            normalizeText(
+              Array.isArray(finance.workflow_state?.flow)
+                ? finance.workflow_state.flow[finance.workflow_state.flow.length - 1]
+                : '',
+            ).toLowerCase() ||
+            'principal',
+        });
       } else {
         result = await workflowService.actOnWorkflow({
           moduleKey: 'finance',
@@ -1063,7 +1085,7 @@ const financeController = {
       }
 
       const workflowStatus = normalizeText(
-        finance.workflow_state?.status || finance.workflow_status || finance.overall_status
+        finance.workflow_state?.status || finance.workflow_status || finance.overall_status,
       ).toLowerCase();
       const isArchived = workflowStatus === 'archived' || workflowStatus === 'archive';
       const actor = normalizeActor(req);
@@ -1081,7 +1103,8 @@ const financeController = {
           });
         }
 
-        const restoreResult = await financeModel.restoreWorkflowSnapshotFromLatestArchive(financeId);
+        const restoreResult =
+          await financeModel.restoreWorkflowSnapshotFromLatestArchive(financeId);
         if (!restoreResult.restored) {
           return res.status(409).json({
             success: false,
@@ -1100,22 +1123,19 @@ const financeController = {
 
       const isTerminalWorkflow = ['completed', 'rejected'].includes(workflowStatus);
       if (actor.isSuperAdmin && isTerminalWorkflow) {
-        const forcedArchiveResult = await financeModel.forceWorkflowTransition(
-          financeId,
-          {
-            decision: 'archived',
-            feedback: normalizeText(req.body?.feedback) || null,
-            actor,
-            stageHint:
-              normalizeText(finance.workflow_stage).toLowerCase() ||
-              normalizeText(
-                Array.isArray(finance.workflow_state?.flow)
-                  ? finance.workflow_state.flow[finance.workflow_state.flow.length - 1]
-                  : ''
-              ).toLowerCase() ||
-              'principal',
-          }
-        );
+        const forcedArchiveResult = await financeModel.forceWorkflowTransition(financeId, {
+          decision: 'archived',
+          feedback: normalizeText(req.body?.feedback) || null,
+          actor,
+          stageHint:
+            normalizeText(finance.workflow_stage).toLowerCase() ||
+            normalizeText(
+              Array.isArray(finance.workflow_state?.flow)
+                ? finance.workflow_state.flow[finance.workflow_state.flow.length - 1]
+                : '',
+            ).toLowerCase() ||
+            'principal',
+        });
 
         return res.status(200).json({
           success: true,
@@ -1159,13 +1179,23 @@ const financeController = {
   async getFinanceQueue(req, res) {
     try {
       const stage = normalizeText(req.params.stage).toLowerCase();
-      const { page, limit, workflowStatus, statusCategory, level1Role, q, allProposals, fiscalYear } = req.query;
+      const {
+        page,
+        limit,
+        workflowStatus,
+        statusCategory,
+        level1Role,
+        q,
+        allProposals,
+        fiscalYear,
+      } = req.query;
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
-      const effectiveLevel1Role = stage === 'level1'
-        ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
-          ? normalizedLevel1Role
-          : resolveFinanceLevel1QueueRole(req))
-        : null;
+      const effectiveLevel1Role =
+        stage === 'level1'
+          ? ['hod', 'coordinator'].includes(normalizedLevel1Role)
+            ? normalizedLevel1Role
+            : resolveFinanceLevel1QueueRole(req)
+          : null;
 
       const queue = await workflowService.listQueue({
         moduleKey: 'finance',
@@ -1245,7 +1275,7 @@ const financeController = {
       const carryForward = await financeModel.createCarryForwardAllocation(
         financeId,
         req.body || {},
-        normalizeActor(req)
+        normalizeActor(req),
       );
 
       return res.status(201).json({
@@ -1578,7 +1608,8 @@ const financeController = {
         }
         return res.status(409).json({
           success: false,
-          message: 'Principal document is only available for proposals above 10000 at principal stage or after principal approval',
+          message:
+            'Principal document is only available for proposals above 10000 at principal stage or after principal approval',
         });
       }
 
@@ -1604,13 +1635,17 @@ const financeController = {
       const connection = await db.getConnection();
       try {
         await connection.beginTransaction();
-        await financeModel.setPrincipalDocument(financeId, {
-          original_name: originalName || file.originalname || null,
-          stored_name: storedName,
-          file_path: `${FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX}${storedName}`,
-          mime_type: 'application/pdf',
-          file_size: file.size,
-        }, { tx: connection });
+        await financeModel.setPrincipalDocument(
+          financeId,
+          {
+            original_name: originalName || file.originalname || null,
+            stored_name: storedName,
+            file_path: `${FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX}${storedName}`,
+            mime_type: 'application/pdf',
+            file_size: file.size,
+          },
+          { tx: connection },
+        );
         await connection.commit();
       } catch (dbError) {
         await connection.rollback();
@@ -1620,7 +1655,10 @@ const financeController = {
       }
 
       if (previousDocument?.file_path) {
-        const previousPath = path.resolve(process.cwd(), `.${String(previousDocument.file_path || '').trim()}`);
+        const previousPath = path.resolve(
+          process.cwd(),
+          `.${String(previousDocument.file_path || '').trim()}`,
+        );
         if (previousPath !== savedFilePath) {
           await fs.promises.unlink(previousPath).catch(() => {});
         }
@@ -1680,7 +1718,8 @@ const financeController = {
       if (!isEligibleForPrincipalDocument(finance)) {
         return res.status(409).json({
           success: false,
-          message: 'Principal document is only available for proposals above 10000 at principal stage or after principal approval',
+          message:
+            'Principal document is only available for proposals above 10000 at principal stage or after principal approval',
         });
       }
 
@@ -1694,7 +1733,10 @@ const financeController = {
 
       await financeModel.deletePrincipalDocument(financeId);
 
-      const resolvedPath = path.resolve(process.cwd(), `.${String(document.file_path || '').trim()}`);
+      const resolvedPath = path.resolve(
+        process.cwd(),
+        `.${String(document.file_path || '').trim()}`,
+      );
       await fs.promises.unlink(resolvedPath).catch(() => {});
 
       return res.status(200).json({
