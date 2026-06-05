@@ -4,7 +4,6 @@ import path from 'path';
 import express from 'express';
 import multer from 'multer';
 
-
 import expenditureController from './expenditureController.js';
 import * as expenditureModel from './expenditureModel.js';
 import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';

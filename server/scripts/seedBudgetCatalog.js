@@ -1,4 +1,3 @@
- 
 /**
  * Seeds the `budget_heads` and `budget_sub_heads` tables from the union of
  * the previously-hardcoded constants in:
