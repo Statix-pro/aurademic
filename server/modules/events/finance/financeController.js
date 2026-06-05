@@ -1,16 +1,14 @@
-import eventDb from '../../../config/connection.js';
+import db from '../../../config/connection.js';
 
 async function query(sql, params = []) {
-  const [rows] = await eventDb.query(sql, params);
+  const [rows] = await db.query(sql, params);
   return rows;
 }
 
 // 🔹 Get all finance records (summary only)
 export const getFinanceRecords = async (req, res) => {
   try {
-    const records = await query(
-      'SELECT * FROM finance ORDER BY created_at DESC'
-    );
+    const records = await query('SELECT * FROM finance ORDER BY created_at DESC');
     res.status(200).json(records);
   } catch (err) {
     console.error('❌ Error fetching finance records:', err.message);
@@ -31,7 +29,7 @@ export const getFinanceById = async (req, res) => {
     // Fetch income data with agency information to match frontend incomeRows
     const incomeData = await query(
       'SELECT id, source as incomeHead, agency_name as agency, amount as income FROM finance_income WHERE finance_id=?',
-      [id]
+      [id],
     );
 
     // Fetch expenditure data to match frontend expenditureRows structure
@@ -41,26 +39,25 @@ export const getFinanceById = async (req, res) => {
              FROM finance_expenditure e
              LEFT JOIN events_uploads u ON e.upload_id = u.id
              WHERE e.finance_id=?`,
-      [id]
+      [id],
     );
 
     // Fetch sponsors data
     const sponsorsData = await query(
       'SELECT id, agency_name, amount FROM finance_sponsors WHERE finance_id=?',
-      [id]
+      [id],
     );
 
     // Fetch supporting documents
     const docsData = await query(
       'SELECT id, filename, original_name, mime, size, uploaded_at FROM finance_docs WHERE finance_id=?',
-      [id]
+      [id],
     );
 
     // Fetch budget data if connected to pre-event
-    const budgetData = await query(
-      'SELECT id, head, amount FROM budgets WHERE pre_event_id=?',
-      [finance.event_id]
-    );
+    const budgetData = await query('SELECT id, head, amount FROM budgets WHERE pre_event_id=?', [
+      finance.event_id,
+    ]);
 
     // Format response to match frontend expectations
     const response = {
@@ -78,10 +75,10 @@ export const getFinanceById = async (req, res) => {
         actualExpenditure: parseFloat(item.actualExpenditure) || 0,
         file: item.filename
           ? {
-            name: item.original_name,
-            filename: item.filename,
-            upload_id: item.upload_id,
-          }
+              name: item.original_name,
+              filename: item.filename,
+              upload_id: item.upload_id,
+            }
           : null,
       })),
       agencies: sponsorsData.map((item) => ({
@@ -124,10 +121,7 @@ export const createFinance = async (req, res) => {
     await conn.beginTransaction();
 
     // Insert main finance record
-    const [result] = await conn.query(
-      'INSERT INTO finance (event_id) VALUES (?)',
-      [event_id]
-    );
+    const [result] = await conn.query('INSERT INTO finance (event_id) VALUES (?)', [event_id]);
     const financeId = result.insertId;
 
     // Helper function for bulk inserts
@@ -136,9 +130,7 @@ export const createFinance = async (req, res) => {
         return;
       }
 
-      await conn.query(`INSERT INTO ${table} (${cols.join(',')}) VALUES ?`, [
-        values,
-      ]);
+      await conn.query(`INSERT INTO ${table} (${cols.join(',')}) VALUES ?`, [values]);
     };
 
     // Insert income data (map frontend structure to backend)
@@ -153,7 +145,7 @@ export const createFinance = async (req, res) => {
     await insertMany(
       'finance_income',
       ['finance_id', 'source', 'agency_name', 'amount'],
-      incomeValues
+      incomeValues,
     );
 
     // Insert expenditure data (map frontend structure to backend)
@@ -169,22 +161,14 @@ export const createFinance = async (req, res) => {
     await insertMany(
       'finance_expenditure',
       ['finance_id', 'category', 'amount_proposed', 'amount', 'upload_id'],
-      expenditureValues
+      expenditureValues,
     );
 
     // Insert sponsor agencies
     const agencyValues = agencies
       .filter((agency) => agency.name && agency.name.trim())
-      .map((agency) => [
-        financeId,
-        agency.name.trim(),
-        parseFloat(agency.amount) || null,
-      ]);
-    await insertMany(
-      'finance_sponsors',
-      ['finance_id', 'agency_name', 'amount'],
-      agencyValues
-    );
+      .map((agency) => [financeId, agency.name.trim(), parseFloat(agency.amount) || null]);
+    await insertMany('finance_sponsors', ['finance_id', 'agency_name', 'amount'], agencyValues);
 
     // Insert supporting documents
     const docValues = financeDocs
@@ -199,7 +183,7 @@ export const createFinance = async (req, res) => {
     await insertMany(
       'finance_docs',
       ['finance_id', 'filename', 'original_name', 'mime', 'size'],
-      docValues
+      docValues,
     );
 
     // Insert budget data (if provided)
@@ -210,11 +194,7 @@ export const createFinance = async (req, res) => {
         budget.head.trim(),
         parseFloat(budget.amount) || 0,
       ]);
-    await insertMany(
-      'budgets',
-      ['pre_event_id', 'head', 'amount'],
-      budgetValues
-    );
+    await insertMany('budgets', ['pre_event_id', 'head', 'amount'], budgetValues);
 
     await conn.commit();
 
@@ -230,8 +210,7 @@ export const createFinance = async (req, res) => {
     console.error('❌ Full error details:', err);
     res.status(500).json({
       error: err.message,
-      details:
-        'Failed to create finance record. Please check your data and try again.',
+      details: 'Failed to create finance record. Please check your data and try again.',
     });
   } finally {
     conn.release();
@@ -249,15 +228,12 @@ export const updateFinance = async (req, res) => {
     budgetRows = [],
   } = req.body;
 
-  const conn = await eventDb.getConnection();
+  const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
 
     // Check if finance record exists
-    const [result] = await conn.query(
-      'SELECT event_id FROM finance WHERE id=?',
-      [id]
-    );
+    const [result] = await conn.query('SELECT event_id FROM finance WHERE id=?', [id]);
 
     if (!result.length) {
       await conn.rollback();
@@ -287,9 +263,7 @@ export const updateFinance = async (req, res) => {
         return;
       }
 
-      await conn.query(`INSERT INTO ${table} (${cols.join(',')}) VALUES ?`, [
-        values,
-      ]);
+      await conn.query(`INSERT INTO ${table} (${cols.join(',')}) VALUES ?`, [values]);
     };
 
     // Reinsert income data
@@ -304,7 +278,7 @@ export const updateFinance = async (req, res) => {
     await insertMany(
       'finance_income',
       ['finance_id', 'source', 'agency_name', 'amount'],
-      incomeValues
+      incomeValues,
     );
 
     // Reinsert expenditure data
@@ -320,22 +294,14 @@ export const updateFinance = async (req, res) => {
     await insertMany(
       'finance_expenditure',
       ['finance_id', 'category', 'amount_proposed', 'amount', 'upload_id'],
-      expenditureValues
+      expenditureValues,
     );
 
     // Reinsert sponsor agencies
     const agencyValues = agencies
       .filter((agency) => agency.name && agency.name.trim())
-      .map((agency) => [
-        id,
-        agency.name.trim(),
-        parseFloat(agency.amount) || null,
-      ]);
-    await insertMany(
-      'finance_sponsors',
-      ['finance_id', 'agency_name', 'amount'],
-      agencyValues
-    );
+      .map((agency) => [id, agency.name.trim(), parseFloat(agency.amount) || null]);
+    await insertMany('finance_sponsors', ['finance_id', 'agency_name', 'amount'], agencyValues);
 
     // Reinsert supporting documents
     const docValues = financeDocs
@@ -350,22 +316,14 @@ export const updateFinance = async (req, res) => {
     await insertMany(
       'finance_docs',
       ['finance_id', 'filename', 'original_name', 'mime', 'size'],
-      docValues
+      docValues,
     );
 
     // Reinsert budget data
     const budgetValues = budgetRows
       .filter((budget) => budget.head && budget.head.trim())
-      .map((budget) => [
-        eventId,
-        budget.head.trim(),
-        parseFloat(budget.amount) || 0,
-      ]);
-    await insertMany(
-      'budgets',
-      ['pre_event_id', 'head', 'amount'],
-      budgetValues
-    );
+      .map((budget) => [eventId, budget.head.trim(), parseFloat(budget.amount) || 0]);
+    await insertMany('budgets', ['pre_event_id', 'head', 'amount'], budgetValues);
 
     await conn.commit();
 
@@ -380,8 +338,7 @@ export const updateFinance = async (req, res) => {
     console.error('❌ Full error details:', err);
     res.status(500).json({
       error: err.message,
-      details:
-        'Failed to update finance record. Please check your data and try again.',
+      details: 'Failed to update finance record. Please check your data and try again.',
     });
   } finally {
     conn.release();
@@ -420,9 +377,9 @@ export const handleFinanceFileUpload = async (req, res) => {
     }
 
     // Insert file record into uploads table
-    const [result] = await eventDb.query(
+    const [result] = await db.query(
       'INSERT INTO events_uploads (event_id, filename, original_name, mime, size) VALUES (?, ?, ?, ?, ?)',
-      [event_id, file.filename, file.originalname, file.mimetype, file.size]
+      [event_id, file.filename, file.originalname, file.mimetype, file.size],
     );
 
     const uploadId = result.insertId;
