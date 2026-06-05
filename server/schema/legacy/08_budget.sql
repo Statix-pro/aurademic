@@ -455,3 +455,122 @@ UNION ALL SELECT 'budget_proposals', COUNT(*) FROM budget_proposals;
    3. ✅ NOTE: Principal auto-approval logic handled in backend (budgetModel.js)
    4. ✅ VERIFIED: All 7 approval_flow_config rows aligned with backend
    ============================================================ */
+
+
+-- ==========================================
+-- NEW BUDGET MODULE TABLES (Added June 2026)
+-- ==========================================
+
+CREATE TABLE `Budget_annual` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `fiscal_year` int NOT NULL,
+  `beneficiary_type` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `beneficiary_entity_id` int DEFAULT NULL,
+  `department_id` int DEFAULT NULL,
+  `entity_id` int DEFAULT NULL,
+  `proposed_total_amount` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `approved_total_amount` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `initial_total_amount` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `additional_total_amount` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `expenditure_total_amount` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `balance_total_amount` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `annual_total_amount` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_budget_annual_scope` (`fiscal_year`,`beneficiary_type`,`department_id`,`entity_id`),
+  KEY `idx_budget_annual_fy` (`fiscal_year`),
+  KEY `idx_budget_annual_type` (`beneficiary_type`),
+  KEY `idx_budget_annual_entity` (`beneficiary_entity_id`),
+  KEY `idx_budget_annual_department` (`department_id`),
+  KEY `idx_budget_annual_entity_id` (`entity_id`),
+  KEY `idx_budget_annual_rollup` (`fiscal_year`,`beneficiary_type`,`department_id`,`beneficiary_entity_id`),
+  CONSTRAINT `fk_budget_annual_department` FOREIGN KEY (`department_id`) REFERENCES `master_departments` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_budget_annual_entity` FOREIGN KEY (`beneficiary_entity_id`) REFERENCES `master_entities` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_budget_annual_entity_id` FOREIGN KEY (`entity_id`) REFERENCES `master_entities` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `budget_heads` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `code` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `group_label` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sort_order` int DEFAULT '0',
+  `is_active` tinyint(1) DEFAULT '1',
+  `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_budget_head_name` (`name`),
+  UNIQUE KEY `uniq_budget_heads_code` (`code`),
+  KEY `idx_budget_head_group` (`group_label`),
+  KEY `idx_budget_head_deleted` (`is_deleted`)
+) ENGINE=InnoDB AUTO_INCREMENT=60 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `budget_sub_heads` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `code` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `head_id` int DEFAULT NULL,
+  `scope` enum('head-specific','hoac-shared') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'head-specific',
+  `event_type` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `group_label` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `head_identity_id` int GENERATED ALWAYS AS (coalesce(`head_id`,0)) STORED,
+  `event_type_key` varchar(100) COLLATE utf8mb4_unicode_ci GENERATED ALWAYS AS (coalesce(`event_type`,_utf8mb4'')) STORED,
+  `group_label_key` varchar(150) COLLATE utf8mb4_unicode_ci GENERATED ALWAYS AS (coalesce(`group_label`,_utf8mb4'')) STORED,
+  `sort_order` int DEFAULT '0',
+  `is_active` tinyint(1) DEFAULT '1',
+  `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_budget_subhead_identity` (`name`,`scope`,`head_identity_id`,`event_type_key`,`group_label_key`),
+  KEY `idx_subhead_scope` (`scope`),
+  KEY `idx_subhead_head` (`head_id`),
+  KEY `idx_subhead_event_type` (`event_type`),
+  KEY `idx_budget_sub_heads_code` (`code`),
+  KEY `idx_budget_sub_head_deleted` (`is_deleted`)
+) ENGINE=InnoDB AUTO_INCREMENT=586 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `budget_tags` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `tag_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
+  `sort_order` int NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_budget_tags_name` (`tag_name`),
+  KEY `idx_budget_tags_active_order` (`is_active`,`sort_order`,`tag_name`),
+  KEY `idx_budget_tags_deleted` (`is_deleted`)
+) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `budget_time_freeze_config` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `fiscal_year` int NOT NULL,
+  `cutoff_date` date NOT NULL,
+  `is_frozen` tinyint(1) NOT NULL DEFAULT '0',
+  `updated_by_user_id` int DEFAULT NULL,
+  `updated_by_email` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_budget_time_freeze_config_fiscal_year` (`fiscal_year`),
+  KEY `idx_budget_time_freeze_config_fiscal_year` (`fiscal_year`),
+  KEY `fk_budget_time_freeze_config_user` (`updated_by_user_id`),
+  CONSTRAINT `fk_budget_time_freeze_config_user` FOREIGN KEY (`updated_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `budget_proposal_edits` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `budget_proposal_id` int NOT NULL,
+  `edited_by_user_id` int DEFAULT NULL,
+  `edited_by_email` varchar(191) DEFAULT NULL,
+  `summary` varchar(255) DEFAULT NULL,
+  `details` text,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_budget_proposal_edits_proposal` (`budget_proposal_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
