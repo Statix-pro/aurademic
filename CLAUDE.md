@@ -59,6 +59,7 @@ aurademic/
 ### Server module pattern
 
 Every module under `server/modules/` follows the same structure:
+
 ```
 modules/[name]/
 ├── [name]Model.js       # DB queries (mysql2 pool)
@@ -79,15 +80,15 @@ The Events domain nests sub-modules: `modules/events/{events,preevents,finance,u
 
 ### Protected route variants
 
-| Component | Guards by |
-|-----------|-----------|
-| `ProtectedRoute` | Any authenticated user |
-| `AdminRoute` | Admin role |
-| `SuperAdminRoute` | Super-admin role |
-| `BudgetApprovalRoute` | Budget approval permission |
-| `FinanceWorkflowRoute` | Finance workflow permission |
-| `ExpenditureApprovalRoute` | Expenditure approval permission |
-| `ModuleWorkflowRoute` | General module workflow permission |
+| Component                  | Guards by                          |
+| -------------------------- | ---------------------------------- |
+| `ProtectedRoute`           | Any authenticated user             |
+| `AdminRoute`               | Admin role                         |
+| `SuperAdminRoute`          | Super-admin role                   |
+| `BudgetApprovalRoute`      | Budget approval permission         |
+| `FinanceWorkflowRoute`     | Finance workflow permission        |
+| `ExpenditureApprovalRoute` | Expenditure approval permission    |
+| `ModuleWorkflowRoute`      | General module workflow permission |
 
 ### API structure
 
@@ -105,6 +106,7 @@ Multer saves files to `server/uploads/[category]/` and Express serves the direct
 ## Environment configuration
 
 **Client** (`.env.development` / `.env.production`):
+
 ```
 VITE_API_URL=http://localhost:5000/api
 VITE_GOOGLE_CLIENT_ID=...
@@ -113,6 +115,7 @@ VITE_MICROSOFT_TENANT_ID=...
 ```
 
 **Server** (`.env.development` / `.env.production`):
+
 ```
 PORT=5000
 DB_HOST=localhost
@@ -131,6 +134,7 @@ NODE_ENV=development
 MySQL 8.x. Schema files live in `server/schema/`. Utility scripts in `server/scripts/` handle employee imports and entity migrations. The connection pool is configured in `server/config/connection.js` with a limit of 10 connections.
 
 All queries use parameterized statements (`mysql2`). Typical usage in a model:
+
 ```javascript
 import db from '../config/connection.js';
 const connection = await db.getConnection();

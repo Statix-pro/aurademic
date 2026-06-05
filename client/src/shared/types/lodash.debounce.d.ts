@@ -4,6 +4,10 @@ declare module 'lodash.debounce' {
     cancel(): void;
     flush(): ReturnType<T>;
   }
-  const debounce: <T extends (...args: any[]) => any>(func: T, wait?: number, immediate?: boolean) => DebouncedFunc<T>;
+  const debounce: <T extends (...args: any[]) => any>(
+    func: T,
+    wait?: number,
+    immediate?: boolean,
+  ) => DebouncedFunc<T>;
   export default debounce;
 }

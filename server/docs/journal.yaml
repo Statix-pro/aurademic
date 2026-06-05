@@ -11,20 +11,20 @@ components:
           type: integer
         category:
           type: string
-          example: "National"
+          example: 'National'
         title:
           type: string
-          example: "Advanced Computing Research"
+          example: 'Advanced Computing Research'
         book_chapter_title:
           type: string
         publication_details:
           type: object
         type:
           type: string
-          example: "Research Article"
+          example: 'Research Article'
         quartile:
           type: string
-          example: "Q1"
+          example: 'Q1'
         impact_factor:
           type: number
           format: float
@@ -38,7 +38,7 @@ components:
           example: true
         anna_university_annexure_no:
           type: string
-          example: "12345"
+          example: '12345'
         acknowledgement:
           type: object
         date_of_submission:
@@ -46,13 +46,13 @@ components:
           format: date
         status:
           type: string
-          default: "waiting"
+          default: 'waiting'
         volume:
           type: string
-          example: "12"
+          example: '12'
         issue:
           type: string
-          example: "4"
+          example: '4'
         issue_type:
           type: string
         pages_from:
@@ -63,7 +63,7 @@ components:
           example: 115
         article_number:
           type: string
-          example: "A123"
+          example: 'A123'
         abstract:
           type: string
         keywords:
@@ -72,7 +72,7 @@ components:
           type: object
         doi:
           type: string
-          example: "10.1000/xyz123"
+          example: '10.1000/xyz123'
         accepted_date:
           type: string
           format: date

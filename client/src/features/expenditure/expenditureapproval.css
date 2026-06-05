@@ -5,7 +5,7 @@
   background-color: var(--bg-light, #f0f6ff);
   min-height: 100vh;
   padding: 20px;
-  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
   color: var(--text-main, #4f4f6e);
 }
 
@@ -65,13 +65,17 @@
 .btn-primary-action {
   background-color: var(--primary-color, #0069ab);
   color: #ffffff;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.04),
+    0 2px 4px -1px rgba(0, 0, 0, 0.02);
 }
 
 .btn-primary-action:hover {
   background-color: var(--primary-hover, #005492);
   transform: translateY(-1px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.04),
+    0 4px 6px -2px rgba(0, 0, 0, 0.02);
 }
 
 .btn-primary-action:active {
@@ -170,7 +174,8 @@
   font-size: 14px;
   color: var(--text-main, #4f4f6e);
   background-color: var(--bg-input, #fcfdff);
-  transition: border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+  transition:
+    border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   font-family: inherit;
   line-height: 1.5;
@@ -291,7 +296,8 @@
   color: var(--text-main, #4f4f6e);
   background-color: var(--bg-input, #fcfdff);
   font-family: inherit;
-  transition: border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+  transition:
+    border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -405,7 +411,9 @@
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .payee-toolbar-btn:hover {
@@ -544,7 +552,7 @@
   color: #3b4f73;
 }
 
-.payee-tds-option input[type="radio"] {
+.payee-tds-option input[type='radio'] {
   margin: 0;
   vertical-align: middle;
   transform: translateY(0);
@@ -574,7 +582,9 @@
   background: #fcfdff;
   color: #1f2a37;
   box-sizing: border-box;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .payee-field:focus {
@@ -691,7 +701,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s ease, transform 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .payee-row-btn:hover {
@@ -809,7 +821,9 @@
   font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .payee-status-submit-btn:hover {
@@ -977,7 +991,10 @@
   gap: 4px;
   padding: 0 8px;
   cursor: pointer;
-  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .payee-footer-toggle-text {
@@ -1010,7 +1027,9 @@
   line-height: normal;
   color: #1f2a37;
   background: #ffffff;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .payee-footer-input:focus {
@@ -1038,7 +1057,10 @@
   line-height: 1.1;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
   white-space: nowrap;
 }
 
@@ -1074,7 +1096,7 @@
   min-height: var(--payee-status-control-height) !important;
   border-radius: 18px;
   padding: 0 14px;
-   background-color: #f8fafc !important;
+  background-color: #f8fafc !important;
 }
 
 .payee-status-comment-input {
@@ -1100,7 +1122,10 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
   box-shadow: 0 8px 18px rgba(0, 105, 171, 0.28);
 }
 
@@ -1139,7 +1164,6 @@
   padding-top: 0;
   padding-bottom: 0;
 }
-
 
 .payee-uploaded-files {
   margin-top: 16px;
@@ -1275,7 +1299,10 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: background-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .bulk-neft-btn:hover:not(:disabled) {
@@ -1412,7 +1439,9 @@
   font-weight: 600;
   cursor: pointer;
   box-shadow: none;
-  transition: background-color 0.2s ease, transform 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .payee-modal-btn:hover {
@@ -1459,10 +1488,10 @@
   }
 
   .payee-status-card-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 24px; 
-}
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
 
   .payee-footer-input-wrap {
     grid-template-columns: 1fr;
@@ -1581,7 +1610,10 @@
   justify-content: center;
   gap: 10px;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.1);
-  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    filter 0.18s ease;
   white-space: nowrap;
 }
 
@@ -1637,13 +1669,17 @@
 .expenditure-approval-body .btn-submit {
   background-color: var(--primary-color, #0069ab);
   color: #ffffff;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.04),
+    0 2px 4px -1px rgba(0, 0, 0, 0.02);
 }
 
 .expenditure-approval-body .btn-submit:hover {
   background-color: var(--primary-hover, #005492);
   transform: translateY(-1px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.04),
+    0 4px 6px -2px rgba(0, 0, 0, 0.02);
 }
 
 .expenditure-approval-body .btn-submit:active {
@@ -2046,27 +2082,28 @@
   border: none !important;
   background: #fafbfc !important;
   border-radius: 12px !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
 }
 
 .hoac-primary-row .custom-input-group:hover,
 .hoac-sub-row .custom-input-group:hover {
   background: #f0f4f8 !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
 }
 
 .hoac-primary-row .custom-input-group:focus-within,
 .hoac-sub-row .custom-input-group:focus-within {
   background: #fff !important;
-  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15),
-              0 2px 8px rgba(0,0,0,0.12) !important;
+  box-shadow:
+    0 0 0 3px rgba(0, 105, 171, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.12) !important;
   outline: none !important;
 }
 
 /* Search button - Matches style */
 .hoac-search-icon {
   background: #fafbfc !important;
-  border: none !important;        /* NO BORDER */
+  border: none !important; /* NO BORDER */
   border-radius: 12px !important;
   padding: 12px !important;
   cursor: pointer !important;
@@ -2075,13 +2112,13 @@
   flex-shrink: 0 !important;
   min-height: 48px !important;
   min-width: 48px !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
 }
 
 .hoac-search-icon:hover {
   background: #f0f4f8 !important;
   color: #0069ab !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
 }
 
 /* ===== Budget-style Applicant Card (matches budget.css) ===== */

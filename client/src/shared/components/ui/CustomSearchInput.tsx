@@ -103,7 +103,7 @@ const CustomSearchInput: React.FC<CustomSearchInputProps> = ({
         />
         {loading && (
           <div className="position-absolute top-50 end-0 translate-middle-y me-3">
-             <Spinner animation="border" size="sm" variant="primary" />
+            <Spinner animation="border" size="sm" variant="primary" />
           </div>
         )}
       </div>

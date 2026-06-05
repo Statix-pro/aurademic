@@ -22,7 +22,11 @@
   padding: 2rem;
   background-color: var(--admin-bg);
   min-height: 100vh;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    sans-serif;
 }
 
 .publication-approval-dashboard .tab-buttons {
@@ -159,7 +163,6 @@
   border-color: var(--admin-accent);
   color: white;
 }
-
 
 .pagination .page-link:hover:not(.active) {
   background-color: var(--admin-hover-bg);
@@ -511,7 +514,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.12s ease, filter 0.12s ease, opacity 0.12s ease;
+  transition:
+    transform 0.12s ease,
+    filter 0.12s ease,
+    opacity 0.12s ease;
   color: #fff;
 }
 
@@ -608,7 +614,9 @@
   background: white;
   border: 1px solid var(--admin-border);
   border-radius: 1rem;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1);
   padding: 1.5rem;
   z-index: 1050;
   overflow-y: auto;

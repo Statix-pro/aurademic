@@ -48,7 +48,9 @@ export interface WorkflowQueueResult<TRecord extends Record<string, any> = Recor
   };
 }
 
-export interface WorkflowApprovalModuleConfig<TRecord extends Record<string, any> = Record<string, any>> {
+export interface WorkflowApprovalModuleConfig<
+  TRecord extends Record<string, any> = Record<string, any>,
+> {
   moduleKey: string;
   title: string;
   apiBasePath: string;

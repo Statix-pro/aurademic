@@ -2,7 +2,13 @@ import * as expenditureModel from './expenditureModel.js';
 import { registerWorkflowModule } from '../shared/workflow/workflowModuleRegistry.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
-const ALLOWED_META_KEYS = new Set(['trigger', 'route', 'amountBand', 'beneficiaryType', 'expenditureMeta']);
+const ALLOWED_META_KEYS = new Set([
+  'trigger',
+  'route',
+  'amountBand',
+  'beneficiaryType',
+  'expenditureMeta',
+]);
 const ALLOWED_AMOUNT_BANDS = new Set(['lte_10k', 'gt_10k']);
 const EXPENDITURE_FLOW_DEFAULT = Object.freeze(['level1', 'dof', 'principal']);
 const EXPENDITURE_FLOW_INSTITUTION = Object.freeze(['dof', 'principal']);
@@ -29,7 +35,7 @@ const expenditureWorkflowAdapter = {
       throw new WorkflowError(
         'expenditure workflow moduleMeta must be an object or null',
         400,
-        'INVALID_WORKFLOW_META'
+        'INVALID_WORKFLOW_META',
       );
     }
 
@@ -40,7 +46,7 @@ const expenditureWorkflowAdapter = {
         throw new WorkflowError(
           `Unsupported expenditure workflow moduleMeta key: ${key}`,
           400,
-          'INVALID_WORKFLOW_META'
+          'INVALID_WORKFLOW_META',
         );
       }
 
@@ -53,7 +59,7 @@ const expenditureWorkflowAdapter = {
           throw new WorkflowError(
             'expenditure workflow moduleMeta.expenditureMeta must be an object or null',
             400,
-            'INVALID_WORKFLOW_META'
+            'INVALID_WORKFLOW_META',
           );
         }
 
@@ -61,18 +67,15 @@ const expenditureWorkflowAdapter = {
           ? {
               unplannedBudgetEnabled: Boolean(value.unplannedBudgetEnabled),
               unplannedBudgetAmount:
-                value.unplannedBudgetAmount !== undefined &&
-                value.unplannedBudgetAmount !== null
+                value.unplannedBudgetAmount !== undefined && value.unplannedBudgetAmount !== null
                   ? Number(value.unplannedBudgetAmount)
                   : null,
               unplannedBudgetHead:
-                value.unplannedBudgetHead !== undefined &&
-                value.unplannedBudgetHead !== null
+                value.unplannedBudgetHead !== undefined && value.unplannedBudgetHead !== null
                   ? String(value.unplannedBudgetHead).trim()
                   : null,
               unplannedBudgetSubHead:
-                value.unplannedBudgetSubHead !== undefined &&
-                value.unplannedBudgetSubHead !== null
+                value.unplannedBudgetSubHead !== undefined && value.unplannedBudgetSubHead !== null
                   ? String(value.unplannedBudgetSubHead).trim()
                   : null,
               unplannedBudgetDescription:
@@ -95,7 +98,7 @@ const expenditureWorkflowAdapter = {
         throw new WorkflowError(
           `expenditure workflow moduleMeta.${key} must be a string or null`,
           400,
-          'INVALID_WORKFLOW_META'
+          'INVALID_WORKFLOW_META',
         );
       }
 
@@ -107,10 +110,10 @@ const expenditureWorkflowAdapter = {
       ) {
         throw new WorkflowError(
           `expenditure workflow moduleMeta.amountBand must be one of: ${Array.from(
-            ALLOWED_AMOUNT_BANDS
+            ALLOWED_AMOUNT_BANDS,
           ).join(', ')}`,
           400,
-          'INVALID_WORKFLOW_META'
+          'INVALID_WORKFLOW_META',
         );
       }
 
@@ -122,8 +125,10 @@ const expenditureWorkflowAdapter = {
 
   resolveStartFlow({ context, metadata }) {
     const beneficiaryType = String(
-      metadata?.moduleMeta?.beneficiaryType || context?.beneficiaryType || ''
-    ).trim().toLowerCase();
+      metadata?.moduleMeta?.beneficiaryType || context?.beneficiaryType || '',
+    )
+      .trim()
+      .toLowerCase();
 
     if (beneficiaryType === 'institution') {
       return [...EXPENDITURE_FLOW_INSTITUTION];

@@ -10,6 +10,7 @@ not be backfilled.
 ## Target design
 
 **1. Catalog rows have stable identity.**
+
 - `budget_heads.id` and `budget_sub_heads.id` are the real identity.
 - Adding `code` (kebab-case slug) is optional but useful for cross-environment seeding and external integrations.
 - Admin rename only changes `name` (display). `id` (and `code`) never change.
@@ -41,15 +42,15 @@ When finance computes "how much of head X is already used":
 **4. Catalog availability respects context.**
 
 - New budget proposal forms: show only `is_active = 1` heads/sub-heads.
-- Finance / expenditure on an *existing* approved budget: show whatever heads that budget actually used, even if now inactive — labelled `Civil Infrastructure (inactive)`. Never block submit on inactive-ness of a referenced head.
+- Finance / expenditure on an _existing_ approved budget: show whatever heads that budget actually used, even if now inactive — labelled `Civil Infrastructure (inactive)`. Never block submit on inactive-ness of a referenced head.
 - Finance approved-budget dropdowns come from **approved budget rows**, not from the live catalog.
 
 **5. Rename and deactivation are non-events.**
 
-| Admin action | Effect on old approved budget | Effect on new budget creation |
-|---|---|---|
-| Rename `Civil Infrastructure` → `Civil Infra` | Snapshot keeps `Civil Infrastructure` in audit; dropdowns show `Civil Infra`; finance matching unchanged (ID is same). | Shows `Civil Infra`. |
-| Deactivate `Civil Infrastructure` | Existing finance/expenditure flows continue. Display may add `(inactive)` suffix. | Hidden from new-budget creation. |
+| Admin action                                  | Effect on old approved budget                                                                                          | Effect on new budget creation    |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| Rename `Civil Infrastructure` → `Civil Infra` | Snapshot keeps `Civil Infrastructure` in audit; dropdowns show `Civil Infra`; finance matching unchanged (ID is same). | Shows `Civil Infra`.             |
+| Deactivate `Civil Infrastructure`             | Existing finance/expenditure flows continue. Display may add `(inactive)` suffix.                                      | Hidden from new-budget creation. |
 
 ---
 
@@ -112,10 +113,9 @@ Helper to put in `server/modules/budgetCatalog/budgetCatalogResolver.js`:
 
 ```js
 export async function resolveCatalogIds(connection, headName, subHeadName) {
-  const [[h]] = await connection.query(
-    'SELECT id FROM budget_heads WHERE name = ? LIMIT 1',
-    [headName],
-  );
+  const [[h]] = await connection.query('SELECT id FROM budget_heads WHERE name = ? LIMIT 1', [
+    headName,
+  ]);
   const headId = h?.id || null;
   let subId = null;
   if (headId && subHeadName) {
@@ -177,7 +177,7 @@ when the ID is unknown (legacy proposal).
 
 - In the budget creation form, filter `is_active = 1` (already does this if
   using `budgetHeadGroups` from the hook).
-- In finance / expenditure on an *existing* approved budget, build the
+- In finance / expenditure on an _existing_ approved budget, build the
   head/sub-head dropdown from **the budget's actual lines** (not from the live
   catalog), and tag any inactive heads with ` (inactive)` for clarity.
 - Never block submit because a referenced head was deactivated post-approval.
@@ -190,6 +190,7 @@ IDs exist.
 ### Phase 6 — Add `code` slug
 
 Add `code VARCHAR(64) NULL` to both catalog tables. Useful for:
+
 - Stable cross-environment references (`civil-infrastructure` in dev = prod).
 - External system integration.
 - Seed file readability.

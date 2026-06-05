@@ -4,17 +4,17 @@ A Node.js and Express-based REST API for managing academic research data, includ
 
 ## 🚀 Tech Stack
 
-| Technology | Purpose |
-|------------|---------|
-| **Node.js** | JavaScript runtime |
-| **Express.js** | Web framework |
-| **MySQL** | Relational database |
-| **mysql2** | MySQL driver |
-| **JWT** | Authentication tokens |
-| **Multer** | File upload handling |
-| **Swagger** | API documentation |
-| **CORS** | Cross-origin resource sharing |
-| **dotenv** | Environment variable management |
+| Technology     | Purpose                         |
+| -------------- | ------------------------------- |
+| **Node.js**    | JavaScript runtime              |
+| **Express.js** | Web framework                   |
+| **MySQL**      | Relational database             |
+| **mysql2**     | MySQL driver                    |
+| **JWT**        | Authentication tokens           |
+| **Multer**     | File upload handling            |
+| **Swagger**    | API documentation               |
+| **CORS**       | Cross-origin resource sharing   |
+| **dotenv**     | Environment variable management |
 
 ## 📁 Directory Structure
 
@@ -131,66 +131,74 @@ The server will run on `http://localhost:5000` (or the port specified in `.env`)
 
 ## 📜 Available Scripts
 
-| Script | Description |
-|--------|-------------|
+| Script        | Description                            |
+| ------------- | -------------------------------------- |
 | `npm run dev` | Start server with nodemon (hot reload) |
-| `npm start` | Start server in production mode |
-| `npm test` | Run tests (placeholder) |
+| `npm start`   | Start server in production mode        |
+| `npm test`    | Run tests (placeholder)                |
 
 ## 📡 API Endpoints
 
 ### Authentication
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/google` | Google OAuth login |
-| POST | `/api/auth/refresh` | Refresh JWT token |
+
+| Method | Endpoint            | Description        |
+| ------ | ------------------- | ------------------ |
+| POST   | `/api/auth/google`  | Google OAuth login |
+| POST   | `/api/auth/refresh` | Refresh JWT token  |
 
 ### Admin Dashboard
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/admin/*` | Admin dashboard routes |
+
+| Method | Endpoint       | Description            |
+| ------ | -------------- | ---------------------- |
+| GET    | `/api/admin/*` | Admin dashboard routes |
 
 ### User Dashboard
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/dashboard/*` | User dashboard routes |
+
+| Method | Endpoint           | Description           |
+| ------ | ------------------ | --------------------- |
+| GET    | `/api/dashboard/*` | User dashboard routes |
 
 ### Journals
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/journal` | Get all journals |
-| GET | `/api/journal/:id` | Get journal by ID |
-| POST | `/api/journal` | Create new journal |
-| PUT | `/api/journal/:id` | Update journal |
-| DELETE | `/api/journal/:id` | Delete journal |
+
+| Method | Endpoint           | Description        |
+| ------ | ------------------ | ------------------ |
+| GET    | `/api/journal`     | Get all journals   |
+| GET    | `/api/journal/:id` | Get journal by ID  |
+| POST   | `/api/journal`     | Create new journal |
+| PUT    | `/api/journal/:id` | Update journal     |
+| DELETE | `/api/journal/:id` | Delete journal     |
 
 ### Projects
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/project` | Get all projects |
-| GET | `/api/project/:id` | Get project by ID |
-| POST | `/api/project` | Create new project |
-| PUT | `/api/project/:id` | Update project |
-| DELETE | `/api/project/:id` | Delete project |
+
+| Method | Endpoint           | Description        |
+| ------ | ------------------ | ------------------ |
+| GET    | `/api/project`     | Get all projects   |
+| GET    | `/api/project/:id` | Get project by ID  |
+| POST   | `/api/project`     | Create new project |
+| PUT    | `/api/project/:id` | Update project     |
+| DELETE | `/api/project/:id` | Delete project     |
 
 ### Events
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/events/*` | Event management |
-| GET | `/api/pre-events/*` | Pre-event management |
-| GET | `/api/finance/*` | Event finance |
-| GET | `/api/updates/*` | Event updates |
-| GET | `/api/documents/*` | Event documents |
+
+| Method | Endpoint            | Description          |
+| ------ | ------------------- | -------------------- |
+| GET    | `/api/events/*`     | Event management     |
+| GET    | `/api/pre-events/*` | Pre-event management |
+| GET    | `/api/finance/*`    | Event finance        |
+| GET    | `/api/updates/*`    | Event updates        |
+| GET    | `/api/documents/*`  | Event documents      |
 
 ### Edit Requests
-| Method | Endpoint | Description |
-|--------|----------|-------------|
+
+| Method         | Endpoint               | Description             |
+| -------------- | ---------------------- | ----------------------- |
 | GET/POST/PATCH | `/api/edit-requests/*` | Edit request management |
 
 ### Form Options
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/form-options/*` | Get dropdown options |
+
+| Method | Endpoint              | Description          |
+| ------ | --------------------- | -------------------- |
+| GET    | `/api/form-options/*` | Get dropdown options |
 
 ## 📚 API Documentation (Swagger)
 
@@ -271,7 +279,6 @@ schema/
 
 - `nodemon` - Development server with hot reload
 
-
 ## 🤝 Contributing
 
 1. Create a new branch for your feature
@@ -279,4 +286,3 @@ schema/
 3. Add Swagger documentation for new endpoints
 4. Test your changes locally
 5. Submit a pull request with a detailed description
-

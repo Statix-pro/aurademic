@@ -1,7 +1,8 @@
-import React, { ReactNode } from "react";
-import { MsalProvider as MSALProvider } from "@azure/msal-react";
-import { PublicClientApplication } from "@azure/msal-browser";
-import { msalConfig } from "../../config/authConfig";
+import { PublicClientApplication } from '@azure/msal-browser';
+import { MsalProvider as MSALProvider } from '@azure/msal-react';
+import React, { ReactNode } from 'react';
+
+import { msalConfig } from '../../config/authConfig';
 
 const msalInstance = new PublicClientApplication(msalConfig);
 

@@ -13,8 +13,8 @@
 import type { BudgetCatalog } from './useBudgetCatalog';
 
 export interface BudgetHeadGroup {
-    label: string;
-    options: string[];
+  label: string;
+  options: string[];
 }
 
 export const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [];
@@ -29,8 +29,14 @@ export const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits'
 // canonical entry instead of looking like an unknown value.
 // LEGACY: the four exports above (`BUDGET_HEAD_GROUPS`, …) keep their
 // active-only contract so new submission forms never show inactive heads.
-export const ALL_HEADS_BY_NAME: Record<string, { id: number; isActive: boolean; groupLabel: string }> = {};
-export const ALL_SUB_HEADS_BY_NAME: Record<string, { id: number; isActive: boolean; headName: string | null; scope: string }> = {};
+export const ALL_HEADS_BY_NAME: Record<
+  string,
+  { id: number; isActive: boolean; groupLabel: string }
+> = {};
+export const ALL_SUB_HEADS_BY_NAME: Record<
+  string,
+  { id: number; isActive: boolean; headName: string | null; scope: string }
+> = {};
 
 /**
  * Is the named head currently active in the catalog? Returns `true` for
@@ -38,15 +44,15 @@ export const ALL_SUB_HEADS_BY_NAME: Record<string, { id: number; isActive: boole
  * inactive.
  */
 export function isHeadActive(name: string | null | undefined): boolean {
-    if (!name) return true;
-    const entry = ALL_HEADS_BY_NAME[name];
-    return entry ? entry.isActive : true;
+  if (!name) return true;
+  const entry = ALL_HEADS_BY_NAME[name];
+  return entry ? entry.isActive : true;
 }
 
 export function isSubHeadActive(name: string | null | undefined): boolean {
-    if (!name) return true;
-    const entry = ALL_SUB_HEADS_BY_NAME[name];
-    return entry ? entry.isActive : true;
+  if (!name) return true;
+  const entry = ALL_SUB_HEADS_BY_NAME[name];
+  return entry ? entry.isActive : true;
 }
 
 /**
@@ -56,90 +62,90 @@ export function isSubHeadActive(name: string | null | undefined): boolean {
  * informational.
  */
 export function decorateInactive(name: string | null | undefined): string {
-    if (!name) return '';
-    return isHeadActive(name) && isSubHeadActive(name) ? name : `${name} (inactive)`;
+  if (!name) return '';
+  return isHeadActive(name) && isSubHeadActive(name) ? name : `${name} (inactive)`;
 }
 
 const listeners = new Set<() => void>();
 
 export function subscribeBudgetCatalog(cb: () => void): () => void {
-    listeners.add(cb);
-    return () => listeners.delete(cb);
+  listeners.add(cb);
+  return () => listeners.delete(cb);
 }
 
 function clear<T extends Record<string, unknown>>(obj: T) {
-    for (const key of Object.keys(obj)) {
-        delete (obj as any)[key];
-    }
+  for (const key of Object.keys(obj)) {
+    delete (obj as any)[key];
+  }
 }
 
 export function hydrateBudgetCatalogStore(catalog: BudgetCatalog) {
-    BUDGET_HEAD_GROUPS.length = 0;
-    clear(SUB_HEAD_BY_BUDGET_HEAD);
-    clear(HOAC_SUBHEAD_OPTIONS);
-    clear(HEAD_TO_GROUP);
-    clear(ALL_HEADS_BY_NAME);
-    clear(ALL_SUB_HEADS_BY_NAME);
+  BUDGET_HEAD_GROUPS.length = 0;
+  clear(SUB_HEAD_BY_BUDGET_HEAD);
+  clear(HOAC_SUBHEAD_OPTIONS);
+  clear(HEAD_TO_GROUP);
+  clear(ALL_HEADS_BY_NAME);
+  clear(ALL_SUB_HEADS_BY_NAME);
 
-    // Index ALL heads/sub-heads (active + inactive) for display helpers.
-    catalog.heads.forEach((h) => {
-        ALL_HEADS_BY_NAME[h.name] = {
-            id: h.id,
-            isActive: !!h.is_active,
-            groupLabel: h.group_label,
-        };
-    });
-    catalog.subHeads.forEach((s) => {
-        ALL_SUB_HEADS_BY_NAME[s.name] = {
-            id: s.id,
-            isActive: !!s.is_active,
-            headName: s.head_name,
-            scope: s.scope,
-        };
-    });
+  // Index ALL heads/sub-heads (active + inactive) for display helpers.
+  catalog.heads.forEach((h) => {
+    ALL_HEADS_BY_NAME[h.name] = {
+      id: h.id,
+      isActive: !!h.is_active,
+      groupLabel: h.group_label,
+    };
+  });
+  catalog.subHeads.forEach((s) => {
+    ALL_SUB_HEADS_BY_NAME[s.name] = {
+      id: s.id,
+      isActive: !!s.is_active,
+      headName: s.head_name,
+      scope: s.scope,
+    };
+  });
 
-    // Heads grouped by group_label, preserving sort order
-    const byGroup = new Map<string, { sortOrder: number; heads: typeof catalog.heads }>();
-    catalog.heads.forEach((h) => {
-        if (!h.is_active) return;
-        if (!byGroup.has(h.group_label)) {
-            byGroup.set(h.group_label, { sortOrder: h.sort_order, heads: [] });
-        }
-        byGroup.get(h.group_label)!.heads.push(h);
-        HEAD_TO_GROUP[h.name] = h.group_label;
-    });
-    Array.from(byGroup.entries())
-        .sort((a, b) => a[1].sortOrder - b[1].sortOrder)
-        .forEach(([label, { heads }]) => {
-            BUDGET_HEAD_GROUPS.push({
-                label,
-                options: heads
-                    .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name))
-                    .map((h) => h.name),
-            });
-        });
-
-    // Sub-heads by scope
-    catalog.subHeads.forEach((s) => {
-        if (!s.is_active) return;
-        if (s.scope === 'head-specific' && s.head_name) {
-            if (!SUB_HEAD_BY_BUDGET_HEAD[s.head_name]) {
-                SUB_HEAD_BY_BUDGET_HEAD[s.head_name] = [];
-            }
-            SUB_HEAD_BY_BUDGET_HEAD[s.head_name].push(s.name);
-        } else if (s.scope === 'hoac-shared' && s.event_type) {
-            if (!HOAC_SUBHEAD_OPTIONS[s.event_type]) {
-                HOAC_SUBHEAD_OPTIONS[s.event_type] = [];
-            }
-            HOAC_SUBHEAD_OPTIONS[s.event_type].push(s.name);
-        }
+  // Heads grouped by group_label, preserving sort order
+  const byGroup = new Map<string, { sortOrder: number; heads: typeof catalog.heads }>();
+  catalog.heads.forEach((h) => {
+    if (!h.is_active) return;
+    if (!byGroup.has(h.group_label)) {
+      byGroup.set(h.group_label, { sortOrder: h.sort_order, heads: [] });
+    }
+    byGroup.get(h.group_label)!.heads.push(h);
+    HEAD_TO_GROUP[h.name] = h.group_label;
+  });
+  Array.from(byGroup.entries())
+    .sort((a, b) => a[1].sortOrder - b[1].sortOrder)
+    .forEach(([label, { heads }]) => {
+      BUDGET_HEAD_GROUPS.push({
+        label,
+        options: heads
+          .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name))
+          .map((h) => h.name),
+      });
     });
 
-    listeners.forEach((cb) => {
-        try {
-            cb();
-        } catch {
-            // ignore listener errors
-        }
-    });
+  // Sub-heads by scope
+  catalog.subHeads.forEach((s) => {
+    if (!s.is_active) return;
+    if (s.scope === 'head-specific' && s.head_name) {
+      if (!SUB_HEAD_BY_BUDGET_HEAD[s.head_name]) {
+        SUB_HEAD_BY_BUDGET_HEAD[s.head_name] = [];
+      }
+      SUB_HEAD_BY_BUDGET_HEAD[s.head_name].push(s.name);
+    } else if (s.scope === 'hoac-shared' && s.event_type) {
+      if (!HOAC_SUBHEAD_OPTIONS[s.event_type]) {
+        HOAC_SUBHEAD_OPTIONS[s.event_type] = [];
+      }
+      HOAC_SUBHEAD_OPTIONS[s.event_type].push(s.name);
+    }
+  });
+
+  listeners.forEach((cb) => {
+    try {
+      cb();
+    } catch {
+      // ignore listener errors
+    }
+  });
 }

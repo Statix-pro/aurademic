@@ -1,5 +1,5 @@
- .adminbudgetsummary-page {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+.adminbudgetsummary-page {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   width: 100%;
 }
 
@@ -98,7 +98,10 @@
   outline: none;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
-  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
 }
 
 .adminbudgetsummary-search::placeholder {
@@ -107,7 +110,9 @@
 
 .adminbudgetsummary-search:focus {
   border-color: #0069ab;
-  box-shadow: 0 0 0 4px rgba(0, 105, 171, 0.15), 0 10px 22px rgba(2, 6, 23, 0.08);
+  box-shadow:
+    0 0 0 4px rgba(0, 105, 171, 0.15),
+    0 10px 22px rgba(2, 6, 23, 0.08);
   background: #ffffff;
 }
 
@@ -121,13 +126,18 @@
   color: #0f172a;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
-  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
 }
 
 .adminbudgetsummary-toggle-btn:hover,
 .adminbudgetsummary-toggle-btn:focus {
   border-color: #0069ab;
-  box-shadow: 0 0 0 4px rgba(0, 105, 171, 0.15), 0 10px 22px rgba(2, 6, 23, 0.08);
+  box-shadow:
+    0 0 0 4px rgba(0, 105, 171, 0.15),
+    0 10px 22px rgba(2, 6, 23, 0.08);
   background: #ffffff;
 }
 
@@ -145,7 +155,9 @@
 
 .adminbudgetsummary-select:focus {
   border-color: #0069ab;
-  box-shadow: 0 0 0 4px rgba(0, 105, 171, 0.15), 0 10px 22px rgba(2, 6, 23, 0.08);
+  box-shadow:
+    0 0 0 4px rgba(0, 105, 171, 0.15),
+    0 10px 22px rgba(2, 6, 23, 0.08);
   background: #ffffff;
 }
 
@@ -468,11 +480,3 @@
   text-align: right;
   white-space: nowrap;
 }
-
-
-
-
-
-
-
-

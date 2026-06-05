@@ -104,19 +104,14 @@ const formOptionsController = {
 
   async updateProjectAgencyOption(req, res) {
     try {
-      const success = await formOptionsModel.updateProjectAgencyOption(
-        req.params.id,
-        req.body
-      );
+      const success = await formOptionsModel.updateProjectAgencyOption(req.params.id, req.body);
       if (success) {
         res.json({
           status: 'success',
           message: 'Agency option updated successfully',
         });
       } else {
-        res
-          .status(404)
-          .json({ status: 'error', message: 'Agency option not found' });
+        res.status(404).json({ status: 'error', message: 'Agency option not found' });
       }
     } catch (error) {
       res.status(500).json({ status: 'error', message: error.message });
@@ -125,18 +120,14 @@ const formOptionsController = {
 
   async deleteProjectAgencyOption(req, res) {
     try {
-      const success = await formOptionsModel.deleteProjectAgencyOption(
-        req.params.id
-      );
+      const success = await formOptionsModel.deleteProjectAgencyOption(req.params.id);
       if (success) {
         res.json({
           status: 'success',
           message: 'Agency option deleted successfully',
         });
       } else {
-        res
-          .status(404)
-          .json({ status: 'error', message: 'Agency option not found' });
+        res.status(404).json({ status: 'error', message: 'Agency option not found' });
       }
     } catch (error) {
       res.status(500).json({ status: 'error', message: error.message });
@@ -164,19 +155,14 @@ const formOptionsController = {
 
   async updateProjectSchemeOption(req, res) {
     try {
-      const success = await formOptionsModel.updateProjectSchemeOption(
-        req.params.id,
-        req.body
-      );
+      const success = await formOptionsModel.updateProjectSchemeOption(req.params.id, req.body);
       if (success) {
         res.json({
           status: 'success',
           message: 'Scheme option updated successfully',
         });
       } else {
-        res
-          .status(404)
-          .json({ status: 'error', message: 'Scheme option not found' });
+        res.status(404).json({ status: 'error', message: 'Scheme option not found' });
       }
     } catch (error) {
       res.status(500).json({ status: 'error', message: error.message });
@@ -185,18 +171,14 @@ const formOptionsController = {
 
   async deleteProjectSchemeOption(req, res) {
     try {
-      const success = await formOptionsModel.deleteProjectSchemeOption(
-        req.params.id
-      );
+      const success = await formOptionsModel.deleteProjectSchemeOption(req.params.id);
       if (success) {
         res.json({
           status: 'success',
           message: 'Scheme option deleted successfully',
         });
       } else {
-        res
-          .status(404)
-          .json({ status: 'error', message: 'Scheme option not found' });
+        res.status(404).json({ status: 'error', message: 'Scheme option not found' });
       }
     } catch (error) {
       res.status(500).json({ status: 'error', message: error.message });
@@ -215,9 +197,7 @@ const formOptionsController = {
 
   async addProjectAgencyTypeOption(req, res) {
     try {
-      const newOption = await formOptionsModel.addProjectAgencyTypeOption(
-        req.body
-      );
+      const newOption = await formOptionsModel.addProjectAgencyTypeOption(req.body);
       res.status(201).json({ status: 'success', data: newOption });
     } catch (error) {
       res.status(500).json({ status: 'error', message: error.message });
@@ -226,19 +206,14 @@ const formOptionsController = {
 
   async updateProjectAgencyTypeOption(req, res) {
     try {
-      const success = await formOptionsModel.updateProjectAgencyTypeOption(
-        req.params.id,
-        req.body
-      );
+      const success = await formOptionsModel.updateProjectAgencyTypeOption(req.params.id, req.body);
       if (success) {
         res.json({
           status: 'success',
           message: 'Agency type option updated successfully',
         });
       } else {
-        res
-          .status(404)
-          .json({ status: 'error', message: 'Agency type option not found' });
+        res.status(404).json({ status: 'error', message: 'Agency type option not found' });
       }
     } catch (error) {
       res.status(500).json({ status: 'error', message: error.message });
@@ -247,18 +222,14 @@ const formOptionsController = {
 
   async deleteProjectAgencyTypeOption(req, res) {
     try {
-      const success = await formOptionsModel.deleteProjectAgencyTypeOption(
-        req.params.id
-      );
+      const success = await formOptionsModel.deleteProjectAgencyTypeOption(req.params.id);
       if (success) {
         res.json({
           status: 'success',
           message: 'Agency type option deleted successfully',
         });
       } else {
-        res
-          .status(404)
-          .json({ status: 'error', message: 'Agency type option not found' });
+        res.status(404).json({ status: 'error', message: 'Agency type option not found' });
       }
     } catch (error) {
       res.status(500).json({ status: 'error', message: error.message });
