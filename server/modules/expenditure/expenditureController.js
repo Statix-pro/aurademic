@@ -541,12 +541,14 @@ const expenditureController = {
       const userId = toPositiveInt(req.user?.id);
       const userEmail = normalizeText(req.user?.email);
       const financeRequestId = toPositiveInt(req.query.finance_request_id);
+      const fiscalYear = toPositiveInt(req.query.fiscal_year || req.query.fiscalYear);
       if (!financeRequestId) return sendError(res, 400, 'finance_request_id is required');
 
       let budgets = await expenditureModel.getApprovedBudgets({
         userId,
         userEmail,
         financeRequestId,
+        fiscalYear,
         // The expenditure form is opened from an approved finance request.
         // Budget-line visibility must follow that approved finance request, not
         // only the original finance creator, otherwise Head of Accounts is empty

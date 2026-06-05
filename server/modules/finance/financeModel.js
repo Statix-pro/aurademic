@@ -686,6 +686,43 @@ const buildFinanceSelectSql = ({
        WHERE fbb.finance_id = fr.id
     ) AS fiscal_year,
     (
+      SELECT GREATEST(
+        0,
+        COALESCE(SUM(CASE
+          WHEN er_cf.request_type = 'Advance'
+            AND (
+              YEAR(COALESCE(er_cf.request_date, er_cf.created_at))
+                - (MONTH(COALESCE(er_cf.request_date, er_cf.created_at)) < 4)
+            ) = COALESCE(
+              (
+                SELECT MIN(bp_cf.fiscal_year)
+                  FROM finance_budget_breakup fbb_cf
+                  JOIN budget_proposals bp_cf ON bp_cf.id = fbb_cf.budget_proposal_id
+                 WHERE fbb_cf.finance_id = fr.id
+              ),
+              YEAR(COALESCE(fr.request_date, fr.created_at))
+                - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+            )
+            AND (
+              LOWER(TRIM(COALESCE(er_cf.overall_status, ''))) IN ('approved', 'completed')
+              OR LOWER(TRIM(COALESCE(er_cf.workflow_status, ''))) IN ('approved', 'completed')
+              OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er_cf.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
+            )
+          THEN COALESCE(er_cf.advance_total_amount, er_cf.total_amount, 0)
+          WHEN er_cf.request_type = 'Settlement'
+            AND (
+              LOWER(TRIM(COALESCE(er_cf.overall_status, ''))) IN ('approved', 'completed')
+              OR LOWER(TRIM(COALESCE(er_cf.workflow_status, ''))) IN ('approved', 'completed')
+              OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er_cf.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
+            )
+          THEN -COALESCE(er_cf.settlement_total_amount, er_cf.total_amount, 0)
+          ELSE 0
+        END), 0)
+      )
+      FROM expenditure_requests er_cf
+      WHERE er_cf.finance_request_id = fr.id
+    ) AS carry_forward_unsettled_advance_amount,
+    (
       SELECT wa.decision
         FROM workflow_actions wa
        WHERE wa.module_key = 'finance'
@@ -1663,30 +1700,31 @@ const resolveFinanceSourceFiscalYear = async (conn, financeId, requestDate = nul
   return resolveReferenceFiscalYearFromBudgetRows([], fallbackDate);
 };
 
-const getFinanceUsageSnapshot = async (conn, financeId) => {
-  const finalizedExpenditureStatusSql = `
+const FINALIZED_EXPENDITURE_STATUS_SQL = `
     (
       LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
       OR LOWER(TRIM(COALESCE(er.workflow_status, ''))) IN ('approved', 'completed')
       OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
     )`;
+
+const getFinanceUsageSnapshot = async (conn, financeId) => {
   const [usageRows] = await conn.query(
     `SELECT
        COALESCE(SUM(CASE
          WHEN er.request_type = 'Advance'
-          AND ${finalizedExpenditureStatusSql}
+          AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
          THEN COALESCE(er.advance_total_amount, er.total_amount, 0)
          ELSE 0
        END), 0) AS advance_amount,
        COALESCE(SUM(CASE
          WHEN er.request_type = 'Settlement'
-          AND ${finalizedExpenditureStatusSql}
+          AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
          THEN COALESCE(er.settlement_total_amount, er.total_amount, 0)
          ELSE 0
        END), 0) AS settlement_amount,
        COALESCE(SUM(CASE
          WHEN er.request_type = 'Expenditure'
-          AND ${finalizedExpenditureStatusSql}
+          AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
          THEN COALESCE(er.expenditure_total_amount, er.total_amount, 0)
          ELSE 0
        END), 0) AS expenditure_amount
@@ -1708,24 +1746,141 @@ const getFinanceUsageSnapshot = async (conn, financeId) => {
   };
 };
 
-const getActiveCarryForwardTotal = async (conn, financeId, excludeTargetFiscalYear = null) => {
-  const targetYear = toPositiveInt(excludeTargetFiscalYear);
-  const params = [financeId];
-  let targetSql = '';
-  if (targetYear) {
-    targetSql = ' AND target_fiscal_year <> ?';
-    params.push(targetYear);
+const getFinanceAdvanceSettlementSnapshotForFiscalYear = async (conn, financeId, fiscalYear) => {
+  const normalizedFinanceId = toPositiveInt(financeId);
+  const normalizedFiscalYear = toPositiveInt(fiscalYear);
+  if (!normalizedFinanceId || !normalizedFiscalYear) {
+    return { advanceAmount: 0, settlementAmount: 0, unsettledAdvanceAmount: 0 };
   }
 
   const [rows] = await conn.query(
-    `SELECT COALESCE(SUM(carry_forward_amount), 0) AS total_amount
-       FROM finance_carry_forward_allocations
-      WHERE finance_request_id = ?
-        AND LOWER(TRIM(status)) = 'active'
-        ${targetSql}`,
-    params
+    `SELECT
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Advance'
+          AND (
+            YEAR(COALESCE(er.request_date, er.created_at))
+              - (MONTH(COALESCE(er.request_date, er.created_at)) < 4)
+          ) = ?
+          AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
+         THEN COALESCE(er.advance_total_amount, er.total_amount, 0)
+         ELSE 0
+       END), 0) AS advance_amount,
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Settlement'
+          AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
+         THEN COALESCE(er.settlement_total_amount, er.total_amount, 0)
+         ELSE 0
+       END), 0) AS settlement_amount
+     FROM expenditure_requests er
+     WHERE er.finance_request_id = ?`,
+    [normalizedFiscalYear, normalizedFinanceId]
   );
-  return toMoney(rows?.[0]?.total_amount);
+
+  const advanceAmount = toMoney(rows?.[0]?.advance_amount);
+  const settlementAmount = toMoney(rows?.[0]?.settlement_amount);
+  return {
+    advanceAmount,
+    settlementAmount,
+    unsettledAdvanceAmount: Math.max(0, toMoney(advanceAmount - settlementAmount)),
+  };
+};
+
+const getCarryForwardTargetBudgetAvailability = async (conn, financeId, targetFiscalYear) => {
+  const normalizedFinanceId = toPositiveInt(financeId);
+  const normalizedTargetYear = toPositiveInt(targetFiscalYear);
+  if (!normalizedFinanceId || !normalizedTargetYear) {
+    return { hasBudget: false, matchedHeadCount: 0, sourceHeads: [] };
+  }
+
+  const [scopeRows] = await conn.query(
+    `SELECT
+       fr.beneficiary_type,
+       fr.beneficiary_value,
+       fr.department_id,
+       fr.beneficiary_entity_id,
+       fr.primary_head
+     FROM finance_requests fr
+     WHERE fr.id = ?
+     LIMIT 1`,
+    [normalizedFinanceId]
+  );
+  const scope = scopeRows?.[0] || null;
+  if (!scope) {
+    return { hasBudget: false, matchedHeadCount: 0, sourceHeads: [] };
+  }
+
+  const [sourceHeadRows] = await conn.query(
+    `SELECT DISTINCT
+       COALESCE(NULLIF(TRIM(fbb.budget_head), ''), NULLIF(TRIM(bpl.budget_head), '')) AS budget_head
+     FROM finance_budget_breakup fbb
+     LEFT JOIN budget_proposal_lines bpl ON bpl.id = fbb.budget_line_id
+     WHERE fbb.finance_id = ?`,
+    [normalizedFinanceId]
+  );
+
+  const sourceHeads = Array.from(
+    new Set(
+      [
+        ...(sourceHeadRows || []).map((row) => normalizeText(row.budget_head)),
+        normalizeText(scope.primary_head),
+      ]
+        .map((head) => head.trim())
+        .filter(Boolean)
+    )
+  );
+
+  if (!sourceHeads.length) {
+    return { hasBudget: false, matchedHeadCount: 0, sourceHeads };
+  }
+
+  const scopeParts = [];
+  const scopeParams = [];
+  const beneficiaryType = normalizeText(scope.beneficiary_type).toLowerCase();
+  const beneficiaryValue = normalizeText(scope.beneficiary_value);
+  const departmentId = toPositiveInt(scope.department_id);
+  const entityId = toPositiveInt(scope.beneficiary_entity_id);
+
+  if (departmentId) {
+    scopeParts.push('bp.department_id = ?');
+    scopeParams.push(departmentId);
+  } else if (entityId && !['department', 'faculty', 'staff', 'individual faculty'].includes(beneficiaryType)) {
+    scopeParts.push('bp.beneficiary_entity_id = ?');
+    scopeParams.push(entityId);
+  } else if (beneficiaryValue) {
+    scopeParts.push(
+      'LOWER(TRIM(CONVERT(COALESCE(bp.beneficiary_value, \'\') USING utf8mb4) COLLATE utf8mb4_unicode_ci)) = LOWER(TRIM(CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci))'
+    );
+    scopeParams.push(beneficiaryValue);
+  } else if (beneficiaryType) {
+    scopeParts.push('LOWER(TRIM(COALESCE(bp.beneficiary_type, \'\'))) = ?');
+    scopeParams.push(beneficiaryType);
+  }
+
+  const headPlaceholders = sourceHeads.map(() => '?').join(', ');
+  const [budgetRows] = await conn.query(
+    `SELECT COUNT(DISTINCT bpl.id) AS matched_head_count
+       FROM budget_proposals bp
+       JOIN budget_proposal_lines bpl ON bpl.budget_proposal_id = bp.id
+      WHERE bp.fiscal_year = ?
+        AND (
+          LOWER(TRIM(COALESCE(bp.status, ''))) IN ('completed', 'approved', 'principal_approved')
+          OR LOWER(TRIM(COALESCE(bp.current_stage, ''))) = 'completed'
+        )
+        ${scopeParts.length ? `AND ${scopeParts.join(' AND ')}` : ''}
+        AND LOWER(TRIM(CONVERT(COALESCE(bpl.budget_head, '') USING utf8mb4) COLLATE utf8mb4_unicode_ci)) IN (${headPlaceholders})`,
+    [
+      normalizedTargetYear,
+      ...scopeParams,
+      ...sourceHeads.map((head) => head.toLowerCase()),
+    ]
+  );
+
+  const matchedHeadCount = Number(budgetRows?.[0]?.matched_head_count || 0);
+  return {
+    hasBudget: matchedHeadCount > 0,
+    matchedHeadCount,
+    sourceHeads,
+  };
 };
 
 const replaceFinanceAnnexures = async (conn, financeId, annexures = []) => {
@@ -4307,13 +4462,15 @@ const financeModel = {
       record.request_date,
       record.created_at
     );
-    const usage = await getFinanceUsageSnapshot(tx, normalizedRecordId);
-    const activeCarryForwardAmount = await getActiveCarryForwardTotal(tx, normalizedRecordId);
-    const approvedAmount = toMoney(record.approved_amount);
-    const balanceAmount = Math.max(
-      0,
-      toMoney(approvedAmount - usage.effectiveUsageAmount - usage.expenditureAmount - activeCarryForwardAmount)
+    const sourceFyAdvanceSnapshot = await getFinanceAdvanceSettlementSnapshotForFiscalYear(
+      tx,
+      normalizedRecordId,
+      sourceFiscalYear
     );
+    const usage = await getFinanceUsageSnapshot(tx, normalizedRecordId);
+    const approvedAmount = toMoney(record.approved_amount);
+    const balanceAmount = sourceFyAdvanceSnapshot.unsettledAdvanceAmount;
+    const isEligible = sourceFyAdvanceSnapshot.unsettledAdvanceAmount > 0;
 
     const [allocationRows] = await tx.query(
       `SELECT
@@ -4340,7 +4497,15 @@ const financeModel = {
       advanceAmount: usage.advanceAmount,
       settlementAmount: usage.settlementAmount,
       expenditureAmount: usage.expenditureAmount,
-      activeCarryForwardAmount,
+      sourceFiscalYearAdvanceAmount: sourceFyAdvanceSnapshot.advanceAmount,
+      sourceFiscalYearSettlementAmount: sourceFyAdvanceSnapshot.settlementAmount,
+      unsettledAdvanceAmount: sourceFyAdvanceSnapshot.unsettledAdvanceAmount,
+      carryForwardMode: 'card_visibility',
+      isEligible,
+      eligibilityMessage: isEligible
+        ? ''
+        : 'Carry forward is available only for cards with an unsettled Initial/Interim Advance in the source FY.',
+      activeCarryForwardAmount: 0,
       balanceAmount,
       allocations: (allocationRows || []).map((row) => ({
         id: toPositiveInt(row.id),
@@ -4360,7 +4525,6 @@ const financeModel = {
   async createCarryForwardAllocation(recordId, payload = {}, actor = {}) {
     const normalizedRecordId = toPositiveInt(recordId);
     const targetFiscalYear = toPositiveInt(payload.targetFiscalYear || payload.target_fiscal_year);
-    const amount = toMoney(payload.amount || payload.carryForwardAmount || payload.carry_forward_amount);
     const remarks = normalizeText(payload.remarks);
 
     if (!normalizedRecordId) {
@@ -4368,9 +4532,6 @@ const financeModel = {
     }
     if (!targetFiscalYear) {
       throw new Error('Target fiscal year is required');
-    }
-    if (!(amount > 0)) {
-      throw new Error('Carry-forward amount must be greater than zero');
     }
     if (!remarks) {
       throw new Error('Carry-forward remarks are required');
@@ -4396,10 +4557,8 @@ const financeModel = {
       if (targetFiscalYear <= summary.sourceFiscalYear) {
         throw new Error('Target fiscal year must be after the source fiscal year');
       }
-      if (amount > summary.balanceAmount) {
-        throw new Error(
-          `Carry-forward amount ${amount.toFixed(2)} exceeds available balance ${summary.balanceAmount.toFixed(2)}`
-        );
+      if (!summary.isEligible) {
+        throw new Error(summary.eligibilityMessage || 'Carry forward is available only for cards with unsettled advance');
       }
 
       const existingActive = summary.allocations.find(
@@ -4411,6 +4570,20 @@ const financeModel = {
         throw new Error(`Carry-forward is already active for FY ${targetFiscalYear}-${String(targetFiscalYear + 1).slice(2)}`);
       }
 
+      const targetBudgetAvailability = await getCarryForwardTargetBudgetAvailability(
+        conn,
+        normalizedRecordId,
+        targetFiscalYear
+      );
+      if (!targetBudgetAvailability.hasBudget) {
+        const sourceHeadLabel = targetBudgetAvailability.sourceHeads.length
+          ? ` for ${targetBudgetAvailability.sourceHeads.join(', ')}`
+          : '';
+        throw new Error(
+          `No approved FY ${targetFiscalYear}-${String(targetFiscalYear + 1).slice(2)} budget exists${sourceHeadLabel}. Create the target FY budget before carrying forward this card.`
+        );
+      }
+
       const [result] = await conn.query(
         `INSERT INTO finance_carry_forward_allocations
            (finance_request_id, source_fiscal_year, target_fiscal_year,
@@ -4420,7 +4593,7 @@ const financeModel = {
           normalizedRecordId,
           summary.sourceFiscalYear,
           targetFiscalYear,
-          amount,
+          0,
           remarks,
           toPositiveInt(actor?.id || actor?.userId),
           normalizeText(actor?.email) || null,
@@ -4433,9 +4606,9 @@ const financeModel = {
         financeRequestId: normalizedRecordId,
         sourceFiscalYear: summary.sourceFiscalYear,
         targetFiscalYear,
-        carryForwardAmount: amount,
-        balanceBefore: summary.balanceAmount,
-        balanceAfter: Math.max(0, toMoney(summary.balanceAmount - amount)),
+        carryForwardAmount: 0,
+        unsettledAdvanceAmount: summary.unsettledAdvanceAmount,
+        mode: summary.carryForwardMode,
       };
     } catch (error) {
       await conn.rollback();

@@ -571,7 +571,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [carryForwardSourceYear, setCarryForwardSourceYear] = useState<number>(getRunningFiscalYearStart());
   const [carryForwardTargetYear, setCarryForwardTargetYear] = useState<number>(getRunningFiscalYearStart() + 1);
   const [carryForwardAvailableAmount, setCarryForwardAvailableAmount] = useState<number>(0);
-  const [carryForwardAmount, setCarryForwardAmount] = useState<string>('');
   const [carryForwardRemarks, setCarryForwardRemarks] = useState<string>('');
   const [carryForwardLoading, setCarryForwardLoading] = useState<boolean>(false);
   const [carryForwardSubmitting, setCarryForwardSubmitting] = useState<boolean>(false);
@@ -2199,7 +2198,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     setCarryForwardRecordId(null);
     setCarryForwardRef('');
     setCarryForwardAvailableAmount(0);
-    setCarryForwardAmount('');
     setCarryForwardRemarks('');
     setCarryForwardLoading(false);
   }, [carryForwardSubmitting]);
@@ -2216,7 +2214,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     setCarryForwardRef(proposalRef);
     setCarryForwardPopupOpen(true);
     setCarryForwardLoading(true);
-    setCarryForwardAmount('');
     setCarryForwardRemarks('');
 
     try {
@@ -2227,11 +2224,16 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       }
       const data = envelope?.data || envelope;
       const sourceYear = Number(data?.sourceFiscalYear || data?.source_fiscal_year || getRunningFiscalYearStart());
-      const balance = Number(data?.balanceAmount || data?.balance_amount || 0);
+      const unsettledAdvance = Number(
+        data?.unsettledAdvanceAmount ||
+        data?.unsettled_advance_amount ||
+        data?.balanceAmount ||
+        data?.balance_amount ||
+        0
+      );
       setCarryForwardSourceYear(sourceYear);
       setCarryForwardTargetYear(sourceYear + 1);
-      setCarryForwardAvailableAmount(Number.isFinite(balance) ? Math.max(balance, 0) : 0);
-      setCarryForwardAmount(Number.isFinite(balance) && balance > 0 ? String(balance) : '');
+      setCarryForwardAvailableAmount(Number.isFinite(unsettledAdvance) ? Math.max(unsettledAdvance, 0) : 0);
     } catch (error: any) {
       closeCarryForwardPopup();
       showAlert(
@@ -2246,15 +2248,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const submitCarryForward = useCallback(async () => {
     if (!carryForwardRecordId || carryForwardSubmitting) return;
 
-    const amount = Number(carryForwardAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      showAlert('Enter a valid carry-forward amount.', 'warning');
-      return;
-    }
-    if (amount > carryForwardAvailableAmount) {
-      showAlert('Carry-forward amount cannot exceed the available balance.', 'warning');
-      return;
-    }
     if (!carryForwardRemarks.trim()) {
       showAlert('Carry-forward remarks are required.', 'warning');
       return;
@@ -2266,21 +2259,21 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         `${config.apiBasePath}/${carryForwardRecordId}/carry-forward`,
         {
           targetFiscalYear: carryForwardTargetYear,
-          amount,
           remarks: carryForwardRemarks.trim(),
         }
       );
 
-      if (response?.success !== true && response?.status !== 'success') {
-        throw new Error(response?.message || 'Unable to create carry-forward allocation.');
+      const envelope = response?.data && typeof response.data === 'object' ? response.data : response;
+      if (envelope?.success !== true && envelope?.status !== 'success') {
+        throw new Error(envelope?.message || 'Unable to carry forward this card.');
       }
 
       closeCarryForwardPopup();
-      showAlert('Carry-forward allocation created successfully.', 'success');
+      showAlert('Card carry-forward created successfully.', 'success');
       await loadQueue(activeStage, page);
     } catch (error: any) {
       showAlert(
-        error?.response?.data?.message || error?.message || 'Unable to create carry-forward allocation.',
+        error?.response?.data?.message || error?.message || 'Unable to carry forward this card.',
         'error'
       );
     } finally {
@@ -2288,8 +2281,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
   }, [
     activeStage,
-    carryForwardAmount,
-    carryForwardAvailableAmount,
     carryForwardRecordId,
     carryForwardRemarks,
     carryForwardSubmitting,
@@ -2744,6 +2735,18 @@ const proposalFilteredRows = useMemo(() => {
                         Boolean(recordCurrentStage));
                     const isArchived = statusCategory === 'archived';
                     const isApproved = statusCategory === 'approved';
+                    const carryForwardUnsettledAdvance = Number(
+                      record.carry_forward_unsettled_advance_amount ??
+                      record.carryForwardUnsettledAdvanceAmount ??
+                      0
+                    );
+                    const canCarryForwardCard =
+                      config.moduleKey === 'finance' &&
+                      isSuperAdminView &&
+                      !isArchived &&
+                      statusCategory === 'approved' &&
+                      Number.isFinite(carryForwardUnsettledAdvance) &&
+                      carryForwardUnsettledAdvance > 0;
                     const isSuperAdminReturnAllowed =
                       isSuperAdminDeleteMode &&
                       ['pending', 'approved', 'rejected', 'archived'].includes(statusCategory);
@@ -3117,10 +3120,10 @@ const proposalFilteredRows = useMemo(() => {
                                   )
                                 )}
 
-                                {config.moduleKey === 'finance' && isSuperAdminView && !isArchived && statusCategory === 'approved' && (
+                                {canCarryForwardCard && (
                                   <button
                                     className="fw-action-btn fw-action-btn--download"
-                                    title="Carry Forward Balance"
+                                    title="Carry Forward Card"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       openCarryForwardPopup(record);
@@ -3306,7 +3309,7 @@ const proposalFilteredRows = useMemo(() => {
       <CustomModal
         show={carryForwardPopupOpen}
         onHide={carryForwardSubmitting ? (() => {}) : closeCarryForwardPopup}
-        title="Carry Forward Balance"
+        title="Carry Forward Card"
         size="lg"
         centered
         backdrop={carryForwardSubmitting ? "static" : true}
@@ -3328,13 +3331,16 @@ const proposalFilteredRows = useMemo(() => {
               onClick={submitCarryForward}
               disabled={carryForwardLoading || carryForwardSubmitting}
             >
-              {carryForwardSubmitting ? "Saving..." : "Carry Forward"}
+              {carryForwardSubmitting ? "Saving..." : "Carry Forward Card"}
             </button>
           </div>
         }
       >
         <div style={{ fontSize: 13, color: "#666", marginBottom: 10 }}>
           Reference: <b>{carryForwardRef}</b>
+        </div>
+        <div style={{ fontSize: 13, color: "#475569", marginBottom: 12 }}>
+          This only displays the same card in the target FY for settlement. No amount is moved from the source FY.
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -3358,21 +3364,8 @@ const proposalFilteredRows = useMemo(() => {
           </label>
         </div>
         <div style={{ marginBottom: 12, color: "#475569", fontSize: 13 }}>
-          Available balance: <b>{formatAmount(carryForwardAvailableAmount)}</b>
+          Unsettled advance in source FY: <b>{formatAmount(carryForwardAvailableAmount)}</b>
         </div>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Carry-forward amount</span>
-          <input
-            className="form-control"
-            type="number"
-            min="0"
-            max={carryForwardAvailableAmount}
-            step="0.01"
-            value={carryForwardAmount}
-            onChange={(event) => setCarryForwardAmount(event.target.value)}
-            disabled={carryForwardLoading || carryForwardSubmitting}
-          />
-        </label>
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <span style={{ fontSize: 13, fontWeight: 600 }}>Remarks</span>
           <textarea
@@ -3381,7 +3374,7 @@ const proposalFilteredRows = useMemo(() => {
             value={carryForwardRemarks}
             onChange={(event) => setCarryForwardRemarks(event.target.value)}
             disabled={carryForwardLoading || carryForwardSubmitting}
-            placeholder="Reason for carrying this balance into the next FY"
+            placeholder="Reason for showing this card in the target FY"
           />
         </label>
       </CustomModal>

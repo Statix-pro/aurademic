@@ -460,7 +460,7 @@ const PAYMENT_MODE_OPTIONS = [
   "IMPS",
   "Cheque",
   "Cash",
-  "Net Banking",
+  "Online Transfer",
   "UPI",
   "Internal Transfer",
   "Not Applicable",
@@ -468,7 +468,7 @@ const PAYMENT_MODE_OPTIONS = [
 const PAYMENT_STATUS_OPTIONS = ["Paid", "Pending", "Processing", "Cancelled"];
 const BULK_NEFT_TEMPLATE_VERSION = "2026-04-11";
 const isCashPaymentMode = (mode: unknown) =>
-  ["cash", "net banking"].includes(String(mode || "").trim().toLowerCase());
+  ["cash", "online transfer"].includes(String(mode || "").trim().toLowerCase());
 
 const flattenOptions = (
   options: Array<OptionType | { label: string; options: OptionType[] }>,
@@ -960,6 +960,14 @@ const ExpenditureApproval: React.FC = () => {
       };
     } | null;
     return String(state?.financeProposal?.tag ?? "").trim();
+  })();
+  const budgetFiscalYearFromState = (() => {
+    const state = location.state as {
+      budgetFiscalYear?: unknown;
+      isCarryForwardCard?: unknown;
+    } | null;
+    if (!state?.isCarryForwardCard) return null;
+    return parsePositiveIntLike(state?.budgetFiscalYear);
   })();
   const [resolvedFinanceRequestId, setResolvedFinanceRequestId] = useState<
     number | null
@@ -1679,7 +1687,13 @@ const ExpenditureApproval: React.FC = () => {
 
       try {
         setIsApprovedBudgetLoading(true);
-        const budgetUrl = `/expenditure/budget/approved?finance_request_id=${resolvedFinanceRequestId}`;
+        const query = new URLSearchParams({
+          finance_request_id: String(resolvedFinanceRequestId),
+        });
+        if (budgetFiscalYearFromState) {
+          query.set("fiscal_year", String(budgetFiscalYearFromState));
+        }
+        const budgetUrl = `/expenditure/budget/approved?${query.toString()}`;
         const response = (await authenticityUtility.get(budgetUrl)) as {
           status?: string;
           success?: boolean;
@@ -1714,7 +1728,7 @@ const ExpenditureApproval: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [resolvedFinanceRequestId]);
+  }, [budgetFiscalYearFromState, resolvedFinanceRequestId]);
   const rowReferenceIdFromState = (() => {
     const state = location.state as { rowReferenceId?: unknown } | null;
     const value = String(state?.rowReferenceId ?? "").trim();
@@ -4906,6 +4920,7 @@ const ExpenditureApproval: React.FC = () => {
         workflowbudgetlineid: selectedWorkflowBudgetLineId,
         sourcebudgetlineid: selectedWorkflowBudgetLineId,
         workflowbudgetproposalid: selectedWorkflowBudgetProposalId,
+        budget_fiscal_year: budgetFiscalYearFromState,
         workflowrequesttype: activeTab,
         row_index: rowIndexFromState,
         dashboard_row_id: dashboardRowIdFromState,
