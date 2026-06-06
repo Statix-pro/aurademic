@@ -1,6 +1,7 @@
-import multer from 'multer';
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
+
+import multer from 'multer';
 
 const uploadDir = path.join(process.cwd(), 'uploads', 'temp');
 
@@ -35,11 +36,7 @@ const fileFilter = (req, file, cb) => {
   if (allowedMimes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(
-      new Error(
-        'Invalid file type. Only PDF, DOC, DOCX, JPG, and PNG files are allowed.'
-      )
-    );
+    cb(new Error('Invalid file type. Only PDF, DOC, DOCX, JPG, and PNG files are allowed.'));
   }
 };
 

@@ -1,10 +1,8 @@
 // adminRoutes.js
 import express from 'express';
+
 import adminController from './adminController.js';
-import {
-  adminAuthMiddleware,
-  permissionMiddleware,
-} from '../../middleware/authMiddleware.js';
+import { adminAuthMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -31,24 +29,23 @@ router.get('/journals/:id', canReadAdminDashboard, adminController.getJournalDet
 router.patch(
   '/journals/:id/submission-approval',
   canApproveAdminWorkflow,
-  adminController.updateJournalSubmissionApproval
+  adminController.updateJournalSubmissionApproval,
 );
 
 router.get('/budgets', adminController.getAllBudgets);
 router.get('/budget-stats', adminController.getBudgetStats);
-
 
 // Journal Request Management routes
 router.get('/journal-requests', canReadAdminDashboard, adminController.getAllJournalRequests);
 router.patch(
   '/journal-requests/:id/approve',
   canApproveAdminWorkflow,
-  adminController.approveJournalRequest
+  adminController.approveJournalRequest,
 );
 router.patch(
   '/journal-requests/:id/reject',
   canApproveAdminWorkflow,
-  adminController.rejectJournalRequest
+  adminController.rejectJournalRequest,
 );
 
 // Project Request Management routes
@@ -56,34 +53,34 @@ router.get('/project-requests', canReadAdminDashboard, adminController.getAllPro
 router.patch(
   '/project-requests/:id/approve',
   canApproveAdminWorkflow,
-  adminController.approveProjectRequest
+  adminController.approveProjectRequest,
 );
 router.patch(
   '/project-requests/:id/reject',
   canApproveAdminWorkflow,
-  adminController.rejectProjectRequest
+  adminController.rejectProjectRequest,
 );
 
 // Journal Status Update Management routes
 router.get(
   '/journal-status-updates',
   canReadAdminDashboard,
-  adminController.getAllJournalStatusUpdates
+  adminController.getAllJournalStatusUpdates,
 );
 router.get(
   '/journals/:id/status-updates',
   canReadAdminDashboard,
-  adminController.getJournalStatusUpdates
+  adminController.getJournalStatusUpdates,
 );
 router.get(
   '/journals/:id/with-status-updates',
   canReadAdminDashboard,
-  adminController.getJournalWithStatusUpdates
+  adminController.getJournalWithStatusUpdates,
 );
 router.patch(
   '/status-updates/:statusUpdateId/admin-reply',
   canApproveAdminWorkflow,
-  adminController.updateStatusUpdateAdminReply
+  adminController.updateStatusUpdateAdminReply,
 );
 
 export default router;

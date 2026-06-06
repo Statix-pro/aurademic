@@ -11,7 +11,7 @@ components:
           type: integer
         title:
           type: string
-          example: "Annual Tech Symposium"
+          example: 'Annual Tech Symposium'
         status:
           type: string
           enum: [draft, submitted, approved, rejected]
@@ -30,7 +30,7 @@ components:
           type: integer
         title:
           type: string
-          example: "Pre-Symposium Workshop"
+          example: 'Pre-Symposium Workshop'
         start_date:
           type: string
           format: date
@@ -42,19 +42,19 @@ components:
           format: date
         inaugural_time:
           type: string
-          example: "10:00:00"
+          example: '10:00:00'
         inaugural_venue:
           type: string
-          example: "Auditorium A"
+          example: 'Auditorium A'
         valedictory_date:
           type: string
           format: date
         valedictory_time:
           type: string
-          example: "16:00:00"
+          example: '16:00:00'
         valedictory_venue:
           type: string
-          example: "Auditorium A"
+          example: 'Auditorium A'
         mode:
           type: string
           enum: [Physical, Virtual, Hybrid]
@@ -84,7 +84,7 @@ components:
           type: integer
         head:
           type: string
-          example: "Travel Expenses"
+          example: 'Travel Expenses'
         amount:
           type: number
           format: float
@@ -99,7 +99,7 @@ components:
           type: integer
         collaborator:
           type: string
-          example: "Tech Corp"
+          example: 'Tech Corp'
 
     Coordinators:
       type: object
@@ -110,7 +110,7 @@ components:
           type: integer
         name:
           type: string
-          example: "John Doe"
+          example: 'John Doe'
         email:
           type: string
           format: email
@@ -130,7 +130,7 @@ components:
           type: integer
         name:
           type: string
-          example: "Computer Science"
+          example: 'Computer Science'
 
     Documents:
       type: object
@@ -141,7 +141,7 @@ components:
           type: integer
         doc_name:
           type: string
-          example: "Brochure"
+          example: 'Brochure'
         active:
           type: boolean
           default: false
@@ -157,7 +157,7 @@ components:
           type: integer
         type_name:
           type: string
-          example: "Workshop"
+          example: 'Workshop'
 
     EventsUploads:
       type: object
@@ -312,7 +312,16 @@ components:
           type: integer
         type:
           type: string
-          enum: [internal-students, external-students, faculty, research-scholars, industry-experts, alumni, general-public]
+          enum:
+            [
+              internal-students,
+              external-students,
+              faculty,
+              research-scholars,
+              industry-experts,
+              alumni,
+              general-public,
+            ]
         count:
           type: integer
           default: 0

@@ -1,7 +1,7 @@
-import React, { useState, ChangeEvent } from "react";
+import { Plus, Trash2 } from 'lucide-react';
+import React, { useState, ChangeEvent } from 'react';
 
-import { Plus, Trash2 } from "lucide-react";
-import "../styles/EventEntry.css";
+import '../styles/EventEntry.css';
 
 interface EntryData {
   role: string;
@@ -16,13 +16,13 @@ interface EntryData {
 const EventEntry: React.FC = () => {
   const [entries, setEntries] = useState<EntryData[]>([
     {
-      role: "",
-      category: "",
-      name: "",
-      designation: "",
-      department: "",
-      organization: "",
-      country: "",
+      role: '',
+      category: '',
+      name: '',
+      designation: '',
+      department: '',
+      organization: '',
+      country: '',
     },
   ]);
 
@@ -34,13 +34,13 @@ const EventEntry: React.FC = () => {
 
   const handleAddRow = (index: number) => {
     const newRow: EntryData = {
-      role: "",
-      category: "",
-      name: "",
-      designation: "",
-      department: "",
-      organization: "",
-      country: "",
+      role: '',
+      category: '',
+      name: '',
+      designation: '',
+      department: '',
+      organization: '',
+      country: '',
     };
     const updated = [...entries];
     updated.splice(index + 1, 0, newRow);
@@ -55,7 +55,6 @@ const EventEntry: React.FC = () => {
 
   return (
     <div className="event-entry-container">
-
       <div className="content">
         <h2 className="section-title">Project Investigators</h2>
 
@@ -65,13 +64,15 @@ const EventEntry: React.FC = () => {
               <input
                 type="text"
                 value={entry.role}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => handleChange(index, "role", e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  handleChange(index, 'role', e.target.value)
+                }
                 placeholder="Principal Investigator / Co-PI"
               />
               <select
                 value={entry.category}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                  handleChange(index, "category", e.target.value)
+                  handleChange(index, 'category', e.target.value)
                 }
               >
                 <option value="">Category</option>
@@ -83,14 +84,16 @@ const EventEntry: React.FC = () => {
               <input
                 type="text"
                 value={entry.name}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => handleChange(index, "name", e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  handleChange(index, 'name', e.target.value)
+                }
                 placeholder="Name"
               />
               <input
                 type="text"
                 value={entry.designation}
                 onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  handleChange(index, "designation", e.target.value)
+                  handleChange(index, 'designation', e.target.value)
                 }
                 placeholder="Designation"
               />
@@ -101,7 +104,7 @@ const EventEntry: React.FC = () => {
                 type="text"
                 value={entry.department}
                 onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  handleChange(index, "department", e.target.value)
+                  handleChange(index, 'department', e.target.value)
                 }
                 placeholder="Department"
               />
@@ -109,14 +112,16 @@ const EventEntry: React.FC = () => {
                 type="text"
                 value={entry.organization}
                 onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  handleChange(index, "organization", e.target.value)
+                  handleChange(index, 'organization', e.target.value)
                 }
                 placeholder="Organization"
               />
               <input
                 type="text"
                 value={entry.country}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => handleChange(index, "country", e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  handleChange(index, 'country', e.target.value)
+                }
                 placeholder="Country"
               />
               <div className="action-icons">

@@ -1,23 +1,31 @@
-import db from '../../../config/connection.js';
 import {
   WorkflowError,
   normalizeText,
   validateStagePolicyMeta,
   isSuperAdminActor,
 } from './workflowValidators.js';
+import db from '../../../config/connection.js';
 
 const toPositiveInt = (value) => {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
-const normalizeRoleCodes = (roleCodes = []) =>
-  [...new Set(roleCodes.map((roleCode) => normalizeText(roleCode).toLowerCase()).filter(Boolean))];
+const normalizeRoleCodes = (roleCodes = []) => [
+  ...new Set(roleCodes.map((roleCode) => normalizeText(roleCode).toLowerCase()).filter(Boolean)),
+];
 
 const extractRoleToken = (value) => {
   if (typeof value === 'string') return normalizeText(value);
   if (value && typeof value === 'object') {
-    const candidates = [value.role, value.role_code, value.roleCode, value.code, value.name, value.value];
+    const candidates = [
+      value.role,
+      value.role_code,
+      value.roleCode,
+      value.code,
+      value.name,
+      value.value,
+    ];
     for (const candidate of candidates) {
       const normalized = normalizeText(candidate);
       if (normalized) return normalized;
@@ -62,7 +70,9 @@ const getActorUserId = (actor = {}) =>
   toPositiveInt(actor?.userId || actor?.id || actor?.actorUserId);
 
 const resolveEffectiveScopeType = ({ stagePolicy, recordContext, filters = {} }) => {
-  const baseScopeType = normalizeText(stagePolicy?.scopeType || stagePolicy?.scope_type).toLowerCase();
+  const baseScopeType = normalizeText(
+    stagePolicy?.scopeType || stagePolicy?.scope_type,
+  ).toLowerCase();
   const moduleKey = normalizeText(stagePolicy?.moduleKey || stagePolicy?.module_key).toLowerCase();
   const stageKey = normalizeText(stagePolicy?.stageKey || stagePolicy?.stage_key).toLowerCase();
   const level1Role = normalizeText(filters?.level1Role).toLowerCase();
@@ -150,7 +160,7 @@ async function loadPrimaryEmployeeContext(conn, userId) {
          AND status = 'Active'
        ORDER BY id ASC
        LIMIT 1`,
-    [normalizedUserId]
+    [normalizedUserId],
   );
 
   if (!rows.length) {
@@ -176,8 +186,12 @@ async function resolveScopedActorIds(conn, actor, stagePolicy, options = {}) {
 
   const userId = getActorUserId(actor);
   const superAdmin = isSuperAdminActor(actor);
-  const normalizedModuleKey = normalizeText(stagePolicy?.moduleKey || stagePolicy?.module_key).toLowerCase();
-  const normalizedStageKey = normalizeText(stagePolicy?.stageKey || stagePolicy?.stage_key).toLowerCase();
+  const normalizedModuleKey = normalizeText(
+    stagePolicy?.moduleKey || stagePolicy?.module_key,
+  ).toLowerCase();
+  const normalizedStageKey = normalizeText(
+    stagePolicy?.stageKey || stagePolicy?.stage_key,
+  ).toLowerCase();
 
   if (superAdmin || scopeType === 'global') {
     return {
@@ -211,7 +225,11 @@ async function resolveScopedActorIds(conn, actor, stagePolicy, options = {}) {
   }
 
   if (scopeType === 'department') {
-    if (!assignmentBuckets.departmentIds.size && !requireAssignment && primaryContext.departmentId) {
+    if (
+      !assignmentBuckets.departmentIds.size &&
+      !requireAssignment &&
+      primaryContext.departmentId
+    ) {
       assignmentBuckets.departmentIds.add(primaryContext.departmentId);
     }
 
@@ -240,24 +258,18 @@ async function resolveScopedActorIds(conn, actor, stagePolicy, options = {}) {
     };
   }
 
-  throw new WorkflowError(`Unsupported stage policy scope: ${scopeType}`, 500, 'INVALID_SCOPE_TYPE');
+  throw new WorkflowError(
+    `Unsupported stage policy scope: ${scopeType}`,
+    500,
+    'INVALID_SCOPE_TYPE',
+  );
 }
 
-export async function resolveQueueScopeFilters({
-  conn = db,
-  actor,
-  stagePolicy,
-  filters = {},
-}) {
+export async function resolveQueueScopeFilters({ conn = db, actor, stagePolicy, filters = {} }) {
   return resolveScopedActorIds(conn, actor, stagePolicy, { filters });
 }
 
-export async function assertRecordScopeAccess({
-  conn = db,
-  actor,
-  stagePolicy,
-  recordContext,
-}) {
+export async function assertRecordScopeAccess({ conn = db, actor, stagePolicy, recordContext }) {
   const resolvedScope = await resolveScopedActorIds(conn, actor, stagePolicy, {
     recordContext,
   });
@@ -270,11 +282,19 @@ export async function assertRecordScopeAccess({
     const departmentId = toPositiveInt(recordContext?.departmentId);
 
     if (!departmentId) {
-      throw new WorkflowError('Department scope requires record department_id', 403, 'SCOPE_CONTEXT_MISSING');
+      throw new WorkflowError(
+        'Department scope requires record department_id',
+        403,
+        'SCOPE_CONTEXT_MISSING',
+      );
     }
 
     if (!resolvedScope.departmentIds.has(departmentId)) {
-      throw new WorkflowError('Record is outside your department workflow scope', 403, 'WORKFLOW_SCOPE_DENIED');
+      throw new WorkflowError(
+        'Record is outside your department workflow scope',
+        403,
+        'WORKFLOW_SCOPE_DENIED',
+      );
     }
 
     return true;
@@ -284,11 +304,19 @@ export async function assertRecordScopeAccess({
     const entityId = toPositiveInt(recordContext?.beneficiaryEntityId);
 
     if (!entityId) {
-      throw new WorkflowError('Entity scope requires record beneficiary_entity_id', 403, 'SCOPE_CONTEXT_MISSING');
+      throw new WorkflowError(
+        'Entity scope requires record beneficiary_entity_id',
+        403,
+        'SCOPE_CONTEXT_MISSING',
+      );
     }
 
     if (!resolvedScope.entityIds.has(entityId)) {
-      throw new WorkflowError('Record is outside your entity workflow scope', 403, 'WORKFLOW_SCOPE_DENIED');
+      throw new WorkflowError(
+        'Record is outside your entity workflow scope',
+        403,
+        'WORKFLOW_SCOPE_DENIED',
+      );
     }
 
     return true;

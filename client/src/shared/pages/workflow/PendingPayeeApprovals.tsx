@@ -1,5 +1,19 @@
+import {
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  CreditCard,
+  Edit2,
+  Eye,
+  LoaderCircle,
+  Search,
+  Trash2,
+  X,
+  XCircle,
+} from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ChevronLeft, ChevronRight, Clock3, CreditCard, Edit2, Eye, LoaderCircle, Search, Trash2, X, XCircle } from 'lucide-react';
+
 import authenticityUtility from '../../utils/authenticityUtility';
 import '../../components/AddPayeeModal.css';
 
@@ -237,7 +251,9 @@ const formatToken = (value?: string | null) => {
 };
 
 const getStatusToken = (value?: string | null): PayeeFilterStatus | 'unknown' => {
-  const token = String(value || '').trim().toLowerCase();
+  const token = String(value || '')
+    .trim()
+    .toLowerCase();
   if (token === 'pending' || token === 'approved' || token === 'rejected') return token;
   return 'unknown';
 };
@@ -250,13 +266,20 @@ const createDraftFromPayee = (payee: PendingPayeeRecord): PayeeFormDraft => ({
   pan_number: normalizePayeeText(payee.pan_number || '').toUpperCase(),
   account_no: String(payee.account_no || '').trim(),
   account_type: payee.account_type || '',
-  ifsc: String(payee.ifsc || '').trim().toUpperCase(),
+  ifsc: String(payee.ifsc || '')
+    .trim()
+    .toUpperCase(),
   bank_name: String(payee.bank_name || '').trim(),
   branch_name: String(payee.branch_name || '').trim(),
-  beneficiary_type: String(payee.beneficiary_type || 'individual').trim().toLowerCase() === 'organization'
-    ? 'organization'
-    : 'individual',
-  beneficiary_org: normalizePayeeText(payee.beneficiary_org || '') || (isBeneficiaryOrgValue(payee.payee_name) ? normalizePayeeText(payee.payee_name) : ''),
+  beneficiary_type:
+    String(payee.beneficiary_type || 'individual')
+      .trim()
+      .toLowerCase() === 'organization'
+      ? 'organization'
+      : 'individual',
+  beneficiary_org:
+    normalizePayeeText(payee.beneficiary_org || '') ||
+    (isBeneficiaryOrgValue(payee.payee_name) ? normalizePayeeText(payee.payee_name) : ''),
   organization_type: payee.organization_type || '',
   msme: payee.msme || '',
   gstin: payee.gstin || '',
@@ -283,7 +306,18 @@ const PayeeDetailModal: React.FC<{
   onSave: (id: number, payload: PendingPayeeRecord) => Promise<boolean> | boolean;
   onDecision: (id: number, decision: 'approved' | 'rejected') => Promise<boolean> | boolean;
   onDelete: (id: number) => Promise<boolean> | boolean;
-}> = ({ payeeId, queuePayee, apiBasePath, initialMode, busyActionId, busyEditId, onClose, onSave, onDecision, onDelete }) => {
+}> = ({
+  payeeId,
+  queuePayee,
+  apiBasePath,
+  initialMode,
+  busyActionId,
+  busyEditId,
+  onClose,
+  onSave,
+  onDecision,
+  onDelete,
+}) => {
   const [mode, setMode] = useState<PayeeModalMode>(initialMode);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -295,18 +329,25 @@ const PayeeDetailModal: React.FC<{
   const isActing = busyActionId !== null && busyActionId === payeeId;
   const busy = loading || isEditing || isActing;
   const effectivePayee = payee || queuePayee;
-  const approvalStatus = String(effectivePayee?.approval_status || 'pending').trim().toLowerCase();
+  const approvalStatus = String(effectivePayee?.approval_status || 'pending')
+    .trim()
+    .toLowerCase();
   const isPending = approvalStatus === 'pending';
   const isApproved = approvalStatus === 'approved';
   const isRejected = approvalStatus === 'rejected';
-  const isOrganization = String(draft?.beneficiary_type || effectivePayee?.beneficiary_type || 'individual').toLowerCase() === 'organization';
+  const isOrganization =
+    String(
+      draft?.beneficiary_type || effectivePayee?.beneficiary_type || 'individual',
+    ).toLowerCase() === 'organization';
   const formDraft = draft || (effectivePayee ? createDraftFromPayee(effectivePayee) : null);
   const isReadOnly = mode === 'view';
 
   const loadPayee = async (targetPayeeId: number, { silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const response = await authenticityUtility.get(`${apiBasePath}/payees/${targetPayeeId}`) as {
+      const response = (await authenticityUtility.get(
+        `${apiBasePath}/payees/${targetPayeeId}`,
+      )) as {
         success?: boolean;
         status?: string;
         data?: PendingPayeeRecord;
@@ -323,7 +364,11 @@ const PayeeDetailModal: React.FC<{
       setError(response?.message || 'Unable to load payee details.');
       return false;
     } catch (fetchError: any) {
-      setError(fetchError?.response?.data?.message || fetchError?.message || 'Unable to load payee details.');
+      setError(
+        fetchError?.response?.data?.message ||
+          fetchError?.message ||
+          'Unable to load payee details.',
+      );
       return false;
     } finally {
       if (!silent) setLoading(false);
@@ -375,7 +420,10 @@ const PayeeDetailModal: React.FC<{
     };
   }, [apiBasePath, initialMode, payeeId, queuePayee]);
 
-  const title = useMemo(() => normalizePayeeName(effectivePayee) || 'Payee Details', [effectivePayee]);
+  const title = useMemo(
+    () => normalizePayeeName(effectivePayee) || 'Payee Details',
+    [effectivePayee],
+  );
 
   if (!isOpen || !payeeId) return null;
 
@@ -393,9 +441,10 @@ const PayeeDetailModal: React.FC<{
     const confirmAccountNo = normalizePayeeText(draft.confirm_account_no);
     const bankName = normalizePayeeText(draft.bank_name);
     const branchName = capitalizeFirstLetter(draft.branch_name);
-    const beneficiaryType = String(draft.beneficiary_type || 'individual').toLowerCase() === 'organization'
-      ? 'organization'
-      : 'individual';
+    const beneficiaryType =
+      String(draft.beneficiary_type || 'individual').toLowerCase() === 'organization'
+        ? 'organization'
+        : 'individual';
     const organizationType = normalizePayeeText(draft.organization_type);
     const msme = normalizePayeeText(draft.msme);
     const gstin = normalizePayeeText(draft.gstin).toUpperCase();
@@ -408,13 +457,15 @@ const PayeeDetailModal: React.FC<{
     if (!accountName) missingFields.push('Account Name');
     if (beneficiaryType === 'individual') {
       if (!panNumber) missingFields.push('PAN Number');
-      else if (!isExactUppercaseAlphaNumeric(panNumber, 10)) missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
+      else if (!isExactUppercaseAlphaNumeric(panNumber, 10))
+        missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
     } else {
       if (!organizationType) missingFields.push('Organization Type');
       if (!msme) missingFields.push('MSME');
       if (!gstin) missingFields.push('GSTIN');
       if (!panNumber) missingFields.push('PAN Number');
-      else if (!isExactUppercaseAlphaNumeric(panNumber, 10)) missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
+      else if (!isExactUppercaseAlphaNumeric(panNumber, 10))
+        missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
       if (!tdsDetails) missingFields.push('TDS Details');
       if (tdsDetails === 'Yes' && !tdsSection) missingFields.push('TDS Section');
     }
@@ -424,7 +475,8 @@ const PayeeDetailModal: React.FC<{
     if (!bankName) missingFields.push('Bank Name');
     if (!branchName) missingFields.push('Branch Name');
     if (!ifsc) missingFields.push('IFSC Code');
-    else if (!isExactUppercaseAlphaNumeric(ifsc, 11)) missingFields.push('IFSC Code (must be exactly 11 uppercase alphanumeric characters)');
+    else if (!isExactUppercaseAlphaNumeric(ifsc, 11))
+      missingFields.push('IFSC Code (must be exactly 11 uppercase alphanumeric characters)');
 
     if (missingFields.length > 0) {
       setError(`Please fill all mandatory fields: ${missingFields.join(', ')}`);
@@ -450,7 +502,8 @@ const PayeeDetailModal: React.FC<{
       msme: beneficiaryType === 'organization' ? msme : '',
       gstin: beneficiaryType === 'organization' ? gstin : '',
       tds_details: beneficiaryType === 'organization' ? tdsDetails : '',
-      tds_section: beneficiaryType === 'organization' ? (tdsDetails === 'Yes' ? tdsSection : '') : '',
+      tds_section:
+        beneficiaryType === 'organization' ? (tdsDetails === 'Yes' ? tdsSection : '') : '',
       pan_number: panNumber,
       account_type: accountType,
     };
@@ -472,27 +525,57 @@ const PayeeDetailModal: React.FC<{
   };
 
   return (
-    <div style={overlayStyle} onClick={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+    <div
+      style={overlayStyle}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !busy) onClose();
+      }}
+    >
       <div style={modalStyle}>
-        <div style={{ padding: '18px 22px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+        <div
+          style={{
+            padding: '18px 22px',
+            borderBottom: '1px solid #e2e8f0',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
           <div>
             <div style={{ fontSize: '1.08rem', fontWeight: 700, color: '#0f172a' }}>{title}</div>
             <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>
-              {mode === 'edit' ? 'Update payee details before approval.' : 'Review the full payee record before taking action.'}
+              {mode === 'edit'
+                ? 'Update payee details before approval.'
+                : 'Review the full payee record before taking action.'}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: busy ? 'not-allowed' : 'pointer' }}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: '#64748b',
+              cursor: busy ? 'not-allowed' : 'pointer',
+            }}
           >
             <X size={20} />
           </button>
         </div>
 
         {loading ? (
-          <div style={{ padding: '36px 22px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', color: '#475569' }}>
+          <div
+            style={{
+              padding: '36px 22px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              color: '#475569',
+            }}
+          >
             <LoaderCircle size={20} className="spin" />
             Loading payee details...
           </div>
@@ -500,10 +583,20 @@ const PayeeDetailModal: React.FC<{
           <div style={{ padding: '24px 22px', color: '#b91c1c', fontSize: '0.95rem' }}>{error}</div>
         ) : mode === 'edit' && draft ? (
           <div style={{ padding: '22px', display: 'grid', gap: '16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: '16px',
+              }}
+            >
               <div>
                 <label style={labelStyle}>Payee Name</label>
-                <input style={inputStyle} value={draft.payee_name || ''} onChange={(e) => updateDraft('payee_name', e.target.value)} />
+                <input
+                  style={inputStyle}
+                  value={draft.payee_name || ''}
+                  onChange={(e) => updateDraft('payee_name', e.target.value)}
+                />
               </div>
               <div>
                 <label style={labelStyle}>Beneficiary Type</label>
@@ -518,32 +611,62 @@ const PayeeDetailModal: React.FC<{
               </div>
               <div>
                 <label style={labelStyle}>Account Number</label>
-                <input style={inputStyle} value={draft.account_no || ''} onChange={(e) => updateDraft('account_no', e.target.value)} />
+                <input
+                  style={inputStyle}
+                  value={draft.account_no || ''}
+                  onChange={(e) => updateDraft('account_no', e.target.value)}
+                />
               </div>
               <div>
                 <label style={labelStyle}>IFSC</label>
-                <input style={inputStyle} value={draft.ifsc || ''} onChange={(e) => updateDraft('ifsc', e.target.value.toUpperCase())} />
+                <input
+                  style={inputStyle}
+                  value={draft.ifsc || ''}
+                  onChange={(e) => updateDraft('ifsc', e.target.value.toUpperCase())}
+                />
               </div>
               <div>
                 <label style={labelStyle}>Bank Name</label>
-                <input style={inputStyle} value={draft.bank_name || ''} onChange={(e) => updateDraft('bank_name', e.target.value)} />
+                <input
+                  style={inputStyle}
+                  value={draft.bank_name || ''}
+                  onChange={(e) => updateDraft('bank_name', e.target.value)}
+                />
               </div>
               <div>
                 <label style={labelStyle}>Branch Name</label>
-                <input style={inputStyle} value={draft.branch_name || ''} onChange={(e) => updateDraft('branch_name', e.target.value)} />
+                <input
+                  style={inputStyle}
+                  value={draft.branch_name || ''}
+                  onChange={(e) => updateDraft('branch_name', e.target.value)}
+                />
               </div>
               <div>
                 <label style={labelStyle}>Account Type</label>
-                <input style={inputStyle} value={draft.account_type || ''} onChange={(e) => updateDraft('account_type', e.target.value)} />
+                <input
+                  style={inputStyle}
+                  value={draft.account_type || ''}
+                  onChange={(e) => updateDraft('account_type', e.target.value)}
+                />
               </div>
               <div>
                 <label style={labelStyle}>PAN Number</label>
-                <input style={inputStyle} value={draft.pan_number || ''} onChange={(e) => updateDraft('pan_number', e.target.value)} />
+                <input
+                  style={inputStyle}
+                  value={draft.pan_number || ''}
+                  onChange={(e) => updateDraft('pan_number', e.target.value)}
+                />
               </div>
             </div>
 
             {isOrganization ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                  gap: '16px',
+                }}
+              >
                 <div>
                   <label style={labelStyle}>Beneficiary Org</label>
                   <select
@@ -559,30 +682,56 @@ const PayeeDetailModal: React.FC<{
                 </div>
                 <div>
                   <label style={labelStyle}>Organization Type</label>
-                  <input style={inputStyle} value={draft.organization_type || ''} onChange={(e) => updateDraft('organization_type', e.target.value)} />
+                  <input
+                    style={inputStyle}
+                    value={draft.organization_type || ''}
+                    onChange={(e) => updateDraft('organization_type', e.target.value)}
+                  />
                 </div>
                 <div>
                   <label style={labelStyle}>MSME</label>
-                  <input style={inputStyle} value={draft.msme || ''} onChange={(e) => updateDraft('msme', e.target.value)} />
+                  <input
+                    style={inputStyle}
+                    value={draft.msme || ''}
+                    onChange={(e) => updateDraft('msme', e.target.value)}
+                  />
                 </div>
                 <div>
                   <label style={labelStyle}>GSTIN</label>
-                  <input style={inputStyle} value={draft.gstin || ''} onChange={(e) => updateDraft('gstin', e.target.value)} />
+                  <input
+                    style={inputStyle}
+                    value={draft.gstin || ''}
+                    onChange={(e) => updateDraft('gstin', e.target.value)}
+                  />
                 </div>
                 <div>
                   <label style={labelStyle}>TDS Details</label>
-                  <input style={inputStyle} value={draft.tds_details || ''} onChange={(e) => updateDraft('tds_details', e.target.value)} />
+                  <input
+                    style={inputStyle}
+                    value={draft.tds_details || ''}
+                    onChange={(e) => updateDraft('tds_details', e.target.value)}
+                  />
                 </div>
                 <div>
                   <label style={labelStyle}>TDS Section</label>
-                  <input style={inputStyle} value={draft.tds_section || ''} onChange={(e) => updateDraft('tds_section', e.target.value)} />
+                  <input
+                    style={inputStyle}
+                    value={draft.tds_section || ''}
+                    onChange={(e) => updateDraft('tds_section', e.target.value)}
+                  />
                 </div>
               </div>
             ) : null}
           </div>
         ) : effectivePayee ? (
           <div style={{ padding: '22px', display: 'grid', gap: '22px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '18px' }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: '18px',
+              }}
+            >
               <PayeeDetailField label="Payee Name" value={normalizePayeeName(effectivePayee)} />
               <PayeeDetailField label="Account Name" value={effectivePayee.account_name} />
               <PayeeDetailField label="PAN Number" value={effectivePayee.pan_number} />
@@ -590,38 +739,81 @@ const PayeeDetailModal: React.FC<{
               <PayeeDetailField label="Account Type" value={effectivePayee.account_type} />
               <PayeeDetailField label="Bank Name" value={effectivePayee.bank_name} />
               <PayeeDetailField label="Branch Name" value={effectivePayee.branch_name} />
-              <PayeeDetailField label="IFSC" value={String(effectivePayee.ifsc || '').toUpperCase()} />
-              <PayeeDetailField label="Beneficiary Type" value={formatToken(effectivePayee.beneficiary_type)} />
-              {String(effectivePayee.beneficiary_type || '').trim().toLowerCase() === 'organization' ? (
+              <PayeeDetailField
+                label="IFSC"
+                value={String(effectivePayee.ifsc || '').toUpperCase()}
+              />
+              <PayeeDetailField
+                label="Beneficiary Type"
+                value={formatToken(effectivePayee.beneficiary_type)}
+              />
+              {String(effectivePayee.beneficiary_type || '')
+                .trim()
+                .toLowerCase() === 'organization' ? (
                 <>
-                  <PayeeDetailField label="Beneficiary Org" value={effectivePayee.beneficiary_org} />
-                  <PayeeDetailField label="Organization Type" value={effectivePayee.organization_type} />
+                  <PayeeDetailField
+                    label="Beneficiary Org"
+                    value={effectivePayee.beneficiary_org}
+                  />
+                  <PayeeDetailField
+                    label="Organization Type"
+                    value={effectivePayee.organization_type}
+                  />
                   <PayeeDetailField label="MSME" value={effectivePayee.msme} />
                   <PayeeDetailField label="GSTIN" value={effectivePayee.gstin} />
                   <PayeeDetailField label="TDS Details" value={effectivePayee.tds_details} />
                   <PayeeDetailField label="TDS Section" value={effectivePayee.tds_section} />
                 </>
               ) : null}
-              <PayeeDetailField label="Approval Status" value={formatToken(effectivePayee.approval_status)} />
+              <PayeeDetailField
+                label="Approval Status"
+                value={formatToken(effectivePayee.approval_status)}
+              />
               {isRejected ? (
-                <PayeeDetailField label="Rejection Reason" value={effectivePayee.rejection_reason} />
+                <PayeeDetailField
+                  label="Rejection Reason"
+                  value={effectivePayee.rejection_reason}
+                />
               ) : null}
-              <PayeeDetailField label="Requested At" value={formatDateTime(effectivePayee.requested_at)} />
+              <PayeeDetailField
+                label="Requested At"
+                value={formatDateTime(effectivePayee.requested_at)}
+              />
               {isApproved ? (
-                <PayeeDetailField label="Approved At" value={formatDateTime(effectivePayee.approved_at)} />
+                <PayeeDetailField
+                  label="Approved At"
+                  value={formatDateTime(effectivePayee.approved_at)}
+                />
               ) : null}
             </div>
           </div>
         ) : null}
 
-        <div style={{ padding: '18px 22px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            padding: '18px 22px',
+            borderTop: '1px solid #e2e8f0',
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: '10px',
+            flexWrap: 'wrap',
+          }}
+        >
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             {mode === 'view' ? (
               <button
                 type="button"
                 onClick={() => setMode('edit')}
                 disabled={busy || !effectivePayee}
-                style={{ border: '1px solid #2563eb', background: '#eff6ff', color: '#2563eb', borderRadius: '10px', padding: '10px 16px', cursor: busy || !effectivePayee ? 'not-allowed' : 'pointer', opacity: busy || !effectivePayee ? 0.7 : 1 }}
+                style={{
+                  border: '1px solid #2563eb',
+                  background: '#eff6ff',
+                  color: '#2563eb',
+                  borderRadius: '10px',
+                  padding: '10px 16px',
+                  cursor: busy || !effectivePayee ? 'not-allowed' : 'pointer',
+                  opacity: busy || !effectivePayee ? 0.7 : 1,
+                }}
               >
                 Edit
               </button>
@@ -633,7 +825,14 @@ const PayeeDetailModal: React.FC<{
                   setMode('view');
                 }}
                 disabled={busy}
-                style={{ border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer' }}
+                style={{
+                  border: '1px solid #cbd5e1',
+                  background: '#fff',
+                  color: '#334155',
+                  borderRadius: '10px',
+                  padding: '10px 16px',
+                  cursor: busy ? 'not-allowed' : 'pointer',
+                }}
               >
                 Cancel Edit
               </button>
@@ -642,17 +841,37 @@ const PayeeDetailModal: React.FC<{
               <>
                 <button
                   type="button"
-                  onClick={() => { void handleDecision('approved'); }}
+                  onClick={() => {
+                    void handleDecision('approved');
+                  }}
                   disabled={busy}
-                  style={{ border: '1px solid #16a34a', background: '#f0fdf4', color: '#16a34a', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+                  style={{
+                    border: '1px solid #16a34a',
+                    background: '#f0fdf4',
+                    color: '#16a34a',
+                    borderRadius: '10px',
+                    padding: '10px 16px',
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                    opacity: busy ? 0.7 : 1,
+                  }}
                 >
                   {isActing ? 'Working...' : 'Approve'}
                 </button>
                 <button
                   type="button"
-                  onClick={() => { void handleDecision('rejected'); }}
+                  onClick={() => {
+                    void handleDecision('rejected');
+                  }}
                   disabled={busy}
-                  style={{ border: '1px solid #dc2626', background: '#fef2f2', color: '#dc2626', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+                  style={{
+                    border: '1px solid #dc2626',
+                    background: '#fef2f2',
+                    color: '#dc2626',
+                    borderRadius: '10px',
+                    padding: '10px 16px',
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                    opacity: busy ? 0.7 : 1,
+                  }}
                 >
                   {isActing ? 'Working...' : 'Reject'}
                 </button>
@@ -661,9 +880,19 @@ const PayeeDetailModal: React.FC<{
             {mode === 'view' ? (
               <button
                 type="button"
-                onClick={() => { void handleDelete(); }}
+                onClick={() => {
+                  void handleDelete();
+                }}
                 disabled={busy}
-                style={{ border: '1px solid #fecaca', background: '#fff1f2', color: '#dc2626', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+                style={{
+                  border: '1px solid #fecaca',
+                  background: '#fff1f2',
+                  color: '#dc2626',
+                  borderRadius: '10px',
+                  padding: '10px 16px',
+                  cursor: busy ? 'not-allowed' : 'pointer',
+                  opacity: busy ? 0.7 : 1,
+                }}
               >
                 Delete
               </button>
@@ -675,16 +904,33 @@ const PayeeDetailModal: React.FC<{
               type="button"
               onClick={onClose}
               disabled={busy}
-              style={{ border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer' }}
+              style={{
+                border: '1px solid #cbd5e1',
+                background: '#fff',
+                color: '#334155',
+                borderRadius: '10px',
+                padding: '10px 16px',
+                cursor: busy ? 'not-allowed' : 'pointer',
+              }}
             >
               Close
             </button>
             {mode === 'edit' ? (
               <button
                 type="button"
-                onClick={() => { void handleSave(); }}
+                onClick={() => {
+                  void handleSave();
+                }}
                 disabled={busy}
-                style={{ border: '1px solid #0f766e', background: '#0f766e', color: '#fff', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+                style={{
+                  border: '1px solid #0f766e',
+                  background: '#0f766e',
+                  color: '#fff',
+                  borderRadius: '10px',
+                  padding: '10px 16px',
+                  cursor: busy ? 'not-allowed' : 'pointer',
+                  opacity: busy ? 0.7 : 1,
+                }}
               >
                 {isEditing ? 'Saving...' : 'Save'}
               </button>
@@ -707,7 +953,18 @@ const PayeeFormModal: React.FC<{
   onSave: (id: number, payload: PendingPayeeRecord) => Promise<boolean> | boolean;
   onDecision: (id: number, decision: 'approved' | 'rejected') => Promise<boolean> | boolean;
   onDelete: (id: number) => Promise<boolean> | boolean;
-}> = ({ payeeId, queuePayee, apiBasePath, initialMode, busyActionId, busyEditId, onClose, onSave, onDecision, onDelete }) => {
+}> = ({
+  payeeId,
+  queuePayee,
+  apiBasePath,
+  initialMode,
+  busyActionId,
+  busyEditId,
+  onClose,
+  onSave,
+  onDecision,
+  onDelete,
+}) => {
   const [mode, setMode] = useState<PayeeModalMode>(initialMode);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -720,20 +977,27 @@ const PayeeFormModal: React.FC<{
   const isActing = busyActionId !== null && busyActionId === payeeId;
   const busy = loading || isEditing || isActing;
   const effectivePayee = payee || queuePayee;
-  const approvalStatus = String(effectivePayee?.approval_status || 'pending').trim().toLowerCase();
+  const approvalStatus = String(effectivePayee?.approval_status || 'pending')
+    .trim()
+    .toLowerCase();
   const isPending = approvalStatus === 'pending';
   const isApproved = approvalStatus === 'approved';
   const isRejected = approvalStatus === 'rejected';
   const isReadOnly = mode === 'view';
   const formDraft = draft || (effectivePayee ? createDraftFromPayee(effectivePayee) : null);
-  const beneficiaryType = String(formDraft?.beneficiary_type || 'individual').trim().toLowerCase() === 'organization'
-    ? 'organization'
-    : 'individual';
+  const beneficiaryType =
+    String(formDraft?.beneficiary_type || 'individual')
+      .trim()
+      .toLowerCase() === 'organization'
+      ? 'organization'
+      : 'individual';
 
   const loadPayee = async (targetPayeeId: number, { silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const response = await authenticityUtility.get(`${apiBasePath}/payees/${targetPayeeId}`) as {
+      const response = (await authenticityUtility.get(
+        `${apiBasePath}/payees/${targetPayeeId}`,
+      )) as {
         success?: boolean;
         status?: string;
         data?: PendingPayeeRecord;
@@ -752,7 +1016,11 @@ const PayeeFormModal: React.FC<{
       setError(response?.message || 'Unable to load payee details.');
       return false;
     } catch (fetchError: any) {
-      setError(fetchError?.response?.data?.message || fetchError?.message || 'Unable to load payee details.');
+      setError(
+        fetchError?.response?.data?.message ||
+          fetchError?.message ||
+          'Unable to load payee details.',
+      );
       return false;
     } finally {
       if (!silent) setLoading(false);
@@ -808,7 +1076,10 @@ const PayeeFormModal: React.FC<{
     };
   }, [apiBasePath, initialMode, payeeId]);
 
-  const title = useMemo(() => normalizePayeeName(effectivePayee) || 'Payee Details', [effectivePayee]);
+  const title = useMemo(
+    () => normalizePayeeName(effectivePayee) || 'Payee Details',
+    [effectivePayee],
+  );
 
   if (!isOpen || !payeeId) return null;
 
@@ -828,7 +1099,8 @@ const PayeeFormModal: React.FC<{
 
     const original = originalDraft || createDraftFromPayee(effectivePayee || draft);
     const accountName = normalizePayeeText(draft.payee_name).toUpperCase();
-    const beneficiaryOrg = normalizePayeeText(draft.beneficiary_org) || normalizePayeeText(original.beneficiary_org);
+    const beneficiaryOrg =
+      normalizePayeeText(draft.beneficiary_org) || normalizePayeeText(original.beneficiary_org);
     const originalPan = normalizePayeeText(original.pan_number).toUpperCase();
     const originalIfsc = normalizePayeeText(original.ifsc).toUpperCase();
     const panNumber = sanitizeUppercaseAlphaNumeric(draft.pan_number, 10);
@@ -861,9 +1133,12 @@ const PayeeFormModal: React.FC<{
     if (!bankName) missingFields.push('Bank Name');
     if (!branchName) missingFields.push('Branch Name');
     if (!ifsc) missingFields.push('IFSC Code');
-    else if (originalIfscChanged && !isExactUppercaseAlphaNumeric(ifsc, 11)) missingFields.push('IFSC Code (must be exactly 11 uppercase alphanumeric characters)');
-    if ((beneficiaryType === 'individual' || beneficiaryType === 'organization') && !panNumber) missingFields.push('PAN Number');
-    else if (originalPanChanged && !isExactUppercaseAlphaNumeric(panNumber, 10)) missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
+    else if (originalIfscChanged && !isExactUppercaseAlphaNumeric(ifsc, 11))
+      missingFields.push('IFSC Code (must be exactly 11 uppercase alphanumeric characters)');
+    if ((beneficiaryType === 'individual' || beneficiaryType === 'organization') && !panNumber)
+      missingFields.push('PAN Number');
+    else if (originalPanChanged && !isExactUppercaseAlphaNumeric(panNumber, 10))
+      missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
 
     if (missingFields.length > 0) {
       setError(`Please fill all mandatory fields: ${missingFields.join(', ')}`);
@@ -889,7 +1164,8 @@ const PayeeFormModal: React.FC<{
       msme: beneficiaryType === 'organization' ? msme : '',
       gstin: beneficiaryType === 'organization' ? gstin : '',
       tds_details: beneficiaryType === 'organization' ? tdsDetails : '',
-      tds_section: beneficiaryType === 'organization' ? (tdsDetails === 'Yes' ? tdsSection : '') : '',
+      tds_section:
+        beneficiaryType === 'organization' ? (tdsDetails === 'Yes' ? tdsSection : '') : '',
       pan_number: panNumber,
       account_type: accountType,
     };
@@ -920,20 +1196,41 @@ const PayeeFormModal: React.FC<{
   };
 
   return (
-    <div style={overlayStyle} onClick={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+    <div
+      style={overlayStyle}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !busy) onClose();
+      }}
+    >
       <div style={modalStyle} role="dialog" aria-modal="true" aria-label={title}>
-        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+        <div
+          style={{
+            padding: '18px 22px 14px',
+            borderBottom: '1px solid #e2e8f0',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
           <div>
             <div style={{ fontSize: '1.08rem', fontWeight: 700, color: '#0f172a' }}>{title}</div>
             <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>
-              {isReadOnly ? 'Review the full payee record before taking action.' : 'Update payee details before approval.'}
+              {isReadOnly
+                ? 'Review the full payee record before taking action.'
+                : 'Update payee details before approval.'}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: busy ? 'not-allowed' : 'pointer' }}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: '#64748b',
+              cursor: busy ? 'not-allowed' : 'pointer',
+            }}
             aria-label="Close payee details"
           >
             <X size={20} />
@@ -941,14 +1238,30 @@ const PayeeFormModal: React.FC<{
         </div>
 
         {loading ? (
-          <div style={{ padding: '36px 22px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', color: '#475569' }}>
+          <div
+            style={{
+              padding: '36px 22px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              color: '#475569',
+            }}
+          >
             <LoaderCircle size={20} className="spin" />
             Loading payee details...
           </div>
         ) : formDraft ? (
           <>
             {error ? (
-              <div style={{ padding: '14px 22px 0', color: '#b91c1c', fontSize: '0.95rem', lineHeight: 1.5 }}>
+              <div
+                style={{
+                  padding: '14px 22px 0',
+                  color: '#b91c1c',
+                  fontSize: '0.95rem',
+                  lineHeight: 1.5,
+                }}
+              >
                 {error}
               </div>
             ) : null}
@@ -998,7 +1311,9 @@ const PayeeFormModal: React.FC<{
                     className="payee-modal-field-input"
                     type="text"
                     value={String(formDraft.payee_name || '')}
-                    onChange={(event) => !isReadOnly && updateDraft('payee_name', event.target.value.toUpperCase())}
+                    onChange={(event) =>
+                      !isReadOnly && updateDraft('payee_name', event.target.value.toUpperCase())
+                    }
                     placeholder="Enter Account name"
                     readOnly={isReadOnly}
                     disabled={busy}
@@ -1011,7 +1326,13 @@ const PayeeFormModal: React.FC<{
                     className="payee-modal-field-input"
                     type="text"
                     value={String(formDraft.pan_number || '')}
-                    onChange={(event) => !isReadOnly && updateDraft('pan_number', sanitizeUppercaseAlphaNumeric(event.target.value, 10))}
+                    onChange={(event) =>
+                      !isReadOnly &&
+                      updateDraft(
+                        'pan_number',
+                        sanitizeUppercaseAlphaNumeric(event.target.value, 10),
+                      )
+                    }
                     placeholder="Enter PAN number"
                     maxLength={10}
                     minLength={10}
@@ -1028,12 +1349,16 @@ const PayeeFormModal: React.FC<{
                       <select
                         className="payee-modal-field-input"
                         value={String(formDraft.organization_type || '')}
-                        onChange={(event) => !isReadOnly && updateDraft('organization_type', event.target.value)}
+                        onChange={(event) =>
+                          !isReadOnly && updateDraft('organization_type', event.target.value)
+                        }
                         disabled={busy || isReadOnly}
                       >
                         <option value="">Select Organization Type</option>
                         {ORGANIZATION_TYPE_OPTIONS.map((option) => (
-                          <option key={option} value={option}>{option}</option>
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -1047,7 +1372,9 @@ const PayeeFormModal: React.FC<{
                             name="msme"
                             value="Yes"
                             checked={String(formDraft.msme || '') === 'Yes'}
-                            onChange={(event) => !isReadOnly && updateDraft('msme', event.target.value)}
+                            onChange={(event) =>
+                              !isReadOnly && updateDraft('msme', event.target.value)
+                            }
                             disabled={busy || isReadOnly}
                           />
                           <span>Yes</span>
@@ -1058,7 +1385,9 @@ const PayeeFormModal: React.FC<{
                             name="msme"
                             value="No"
                             checked={String(formDraft.msme || '') === 'No'}
-                            onChange={(event) => !isReadOnly && updateDraft('msme', event.target.value)}
+                            onChange={(event) =>
+                              !isReadOnly && updateDraft('msme', event.target.value)
+                            }
                             disabled={busy || isReadOnly}
                           />
                           <span>No</span>
@@ -1072,7 +1401,9 @@ const PayeeFormModal: React.FC<{
                         className="payee-modal-field-input"
                         type="text"
                         value={String(formDraft.gstin || '')}
-                        onChange={(event) => !isReadOnly && updateDraft('gstin', event.target.value.toUpperCase())}
+                        onChange={(event) =>
+                          !isReadOnly && updateDraft('gstin', event.target.value.toUpperCase())
+                        }
                         placeholder="Enter GSTIN"
                         readOnly={isReadOnly}
                         disabled={busy}
@@ -1085,7 +1416,13 @@ const PayeeFormModal: React.FC<{
                         className="payee-modal-field-input"
                         type="text"
                         value={String(formDraft.pan_number || '')}
-                        onChange={(event) => !isReadOnly && updateDraft('pan_number', sanitizeUppercaseAlphaNumeric(event.target.value, 10))}
+                        onChange={(event) =>
+                          !isReadOnly &&
+                          updateDraft(
+                            'pan_number',
+                            sanitizeUppercaseAlphaNumeric(event.target.value, 10),
+                          )
+                        }
                         placeholder="Enter PAN number"
                         maxLength={10}
                         minLength={10}
@@ -1104,7 +1441,9 @@ const PayeeFormModal: React.FC<{
                             name="tds"
                             value="Yes"
                             checked={String(formDraft.tds_details || '') === 'Yes'}
-                            onChange={(event) => !isReadOnly && updateDraft('tds_details', event.target.value)}
+                            onChange={(event) =>
+                              !isReadOnly && updateDraft('tds_details', event.target.value)
+                            }
                             disabled={busy || isReadOnly}
                           />
                           <span>Yes</span>
@@ -1115,21 +1454,31 @@ const PayeeFormModal: React.FC<{
                             name="tds"
                             value="No"
                             checked={String(formDraft.tds_details || '') === 'No'}
-                            onChange={(event) => !isReadOnly && updateDraft('tds_details', event.target.value)}
+                            onChange={(event) =>
+                              !isReadOnly && updateDraft('tds_details', event.target.value)
+                            }
                             disabled={busy || isReadOnly}
                           />
                           <span>No</span>
                         </label>
-                        <div className={`add-payee-modal-tds-section ${String(formDraft.tds_details || '') === 'Yes' ? 'visible' : ''}`}>
+                        <div
+                          className={`add-payee-modal-tds-section ${String(formDraft.tds_details || '') === 'Yes' ? 'visible' : ''}`}
+                        >
                           <select
                             className="payee-modal-field-input"
                             value={String(formDraft.tds_section || '')}
-                            onChange={(event) => !isReadOnly && updateDraft('tds_section', event.target.value)}
-                            disabled={busy || isReadOnly || String(formDraft.tds_details || '') !== 'Yes'}
+                            onChange={(event) =>
+                              !isReadOnly && updateDraft('tds_section', event.target.value)
+                            }
+                            disabled={
+                              busy || isReadOnly || String(formDraft.tds_details || '') !== 'Yes'
+                            }
                           >
                             <option value="">Select TDS Section</option>
                             {TDS_SECTION_OPTIONS.map((option) => (
-                              <option key={option} value={option}>{option}</option>
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
                             ))}
                           </select>
                         </div>
@@ -1146,7 +1495,9 @@ const PayeeFormModal: React.FC<{
                     className="payee-modal-field-input"
                     type="text"
                     value={String(formDraft.account_no || '')}
-                    onChange={(event) => !isReadOnly && updateDraft('account_no', event.target.value)}
+                    onChange={(event) =>
+                      !isReadOnly && updateDraft('account_no', event.target.value)
+                    }
                     placeholder="Enter account number"
                     inputMode="numeric"
                     readOnly={isReadOnly}
@@ -1160,7 +1511,9 @@ const PayeeFormModal: React.FC<{
                       className={`payee-modal-field-input ${!isReadOnly && formDraft.confirm_account_no && formDraft.account_no && formDraft.confirm_account_no !== formDraft.account_no ? 'is-invalid' : ''}`}
                       type="text"
                       value={String(formDraft.confirm_account_no || '')}
-                      onChange={(event) => !isReadOnly && updateDraft('confirm_account_no', event.target.value)}
+                      onChange={(event) =>
+                        !isReadOnly && updateDraft('confirm_account_no', event.target.value)
+                      }
                       onPaste={(event) => !isReadOnly && event.preventDefault()}
                       onDrop={(event) => !isReadOnly && event.preventDefault()}
                       placeholder="Re-enter account number"
@@ -1168,18 +1521,28 @@ const PayeeFormModal: React.FC<{
                       readOnly={isReadOnly}
                       disabled={busy}
                     />
-                    {!isReadOnly && formDraft.confirm_account_no && formDraft.account_no && formDraft.confirm_account_no === formDraft.account_no && (
-                      <CheckCircle2 className="payee-modal-confirm-icon" size={18} aria-hidden="true" />
-                    )}
+                    {!isReadOnly &&
+                      formDraft.confirm_account_no &&
+                      formDraft.account_no &&
+                      formDraft.confirm_account_no === formDraft.account_no && (
+                        <CheckCircle2
+                          className="payee-modal-confirm-icon"
+                          size={18}
+                          aria-hidden="true"
+                        />
+                      )}
                   </div>
                 </div>
-                {!isReadOnly && formDraft.confirm_account_no && formDraft.account_no && formDraft.confirm_account_no !== formDraft.account_no && (
-                  <div className="add-payee-modal-row add-payee-modal-row--helper">
-                    <span className="add-payee-modal-helper-text add-payee-modal-helper-text--error">
-                      Account numbers do not match
-                    </span>
-                  </div>
-                )}
+                {!isReadOnly &&
+                  formDraft.confirm_account_no &&
+                  formDraft.account_no &&
+                  formDraft.confirm_account_no !== formDraft.account_no && (
+                    <div className="add-payee-modal-row add-payee-modal-row--helper">
+                      <span className="add-payee-modal-helper-text add-payee-modal-helper-text--error">
+                        Account numbers do not match
+                      </span>
+                    </div>
+                  )}
                 <div className="add-payee-modal-row">
                   <label>Account Type</label>
                   <div className="add-payee-modal-radio-group">
@@ -1212,12 +1575,16 @@ const PayeeFormModal: React.FC<{
                   <select
                     className="payee-modal-field-input"
                     value={String(formDraft.bank_name || '')}
-                    onChange={(event) => !isReadOnly && updateDraft('bank_name', event.target.value)}
+                    onChange={(event) =>
+                      !isReadOnly && updateDraft('bank_name', event.target.value)
+                    }
                     disabled={busy || isReadOnly}
                   >
                     <option value="">Select bank name</option>
                     {INDIAN_BANK_OPTIONS.map((bank) => (
-                      <option key={bank} value={bank}>{bank}</option>
+                      <option key={bank} value={bank}>
+                        {bank}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -1227,7 +1594,10 @@ const PayeeFormModal: React.FC<{
                     className="payee-modal-field-input"
                     type="text"
                     value={capitalizeFirstLetter(formDraft.branch_name)}
-                    onChange={(event) => !isReadOnly && updateDraft('branch_name', capitalizeFirstLetter(event.target.value))}
+                    onChange={(event) =>
+                      !isReadOnly &&
+                      updateDraft('branch_name', capitalizeFirstLetter(event.target.value))
+                    }
                     placeholder="Enter branch name"
                     readOnly={isReadOnly}
                     disabled={busy}
@@ -1239,7 +1609,10 @@ const PayeeFormModal: React.FC<{
                     className="payee-modal-field-input"
                     type="text"
                     value={String(formDraft.ifsc || '')}
-                    onChange={(event) => !isReadOnly && updateDraft('ifsc', sanitizeUppercaseAlphaNumeric(event.target.value, 11))}
+                    onChange={(event) =>
+                      !isReadOnly &&
+                      updateDraft('ifsc', sanitizeUppercaseAlphaNumeric(event.target.value, 11))
+                    }
                     placeholder="Enter IFSC code"
                     maxLength={11}
                     minLength={11}
@@ -1251,23 +1624,59 @@ const PayeeFormModal: React.FC<{
               </div>
 
               <div style={{ display: 'grid', gap: '10px', marginTop: '18px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
-                  <PayeeDetailField label="Approval Status" value={formatToken(formDraft.approval_status)} />
-                  <PayeeDetailField label="Requested At" value={formatDateTime(formDraft.requested_at)} />
-                  {isApproved ? <PayeeDetailField label="Approved At" value={formatDateTime(formDraft.approved_at)} /> : null}
-                  {isRejected ? <PayeeDetailField label="Rejection Reason" value={formDraft.rejection_reason} /> : null}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: '14px',
+                  }}
+                >
+                  <PayeeDetailField
+                    label="Approval Status"
+                    value={formatToken(formDraft.approval_status)}
+                  />
+                  <PayeeDetailField
+                    label="Requested At"
+                    value={formatDateTime(formDraft.requested_at)}
+                  />
+                  {isApproved ? (
+                    <PayeeDetailField
+                      label="Approved At"
+                      value={formatDateTime(formDraft.approved_at)}
+                    />
+                  ) : null}
+                  {isRejected ? (
+                    <PayeeDetailField label="Rejection Reason" value={formDraft.rejection_reason} />
+                  ) : null}
                 </div>
               </div>
             </div>
 
-            <div style={{ padding: '18px 22px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+            <div
+              style={{
+                padding: '18px 22px',
+                borderTop: '1px solid #e2e8f0',
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '10px',
+                flexWrap: 'wrap',
+              }}
+            >
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 {mode === 'view' ? (
                   <button
                     type="button"
                     onClick={() => setMode('edit')}
                     disabled={busy || !formDraft}
-                    style={{ border: '1px solid #2563eb', background: '#eff6ff', color: '#2563eb', borderRadius: '10px', padding: '10px 16px', cursor: busy || !formDraft ? 'not-allowed' : 'pointer', opacity: busy || !formDraft ? 0.7 : 1 }}
+                    style={{
+                      border: '1px solid #2563eb',
+                      background: '#eff6ff',
+                      color: '#2563eb',
+                      borderRadius: '10px',
+                      padding: '10px 16px',
+                      cursor: busy || !formDraft ? 'not-allowed' : 'pointer',
+                      opacity: busy || !formDraft ? 0.7 : 1,
+                    }}
                   >
                     Edit
                   </button>
@@ -1276,7 +1685,14 @@ const PayeeFormModal: React.FC<{
                     type="button"
                     onClick={resetToView}
                     disabled={busy}
-                    style={{ border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer' }}
+                    style={{
+                      border: '1px solid #cbd5e1',
+                      background: '#fff',
+                      color: '#334155',
+                      borderRadius: '10px',
+                      padding: '10px 16px',
+                      cursor: busy ? 'not-allowed' : 'pointer',
+                    }}
                   >
                     Cancel Edit
                   </button>
@@ -1285,17 +1701,37 @@ const PayeeFormModal: React.FC<{
                   <>
                     <button
                       type="button"
-                      onClick={() => { void handleDecision('approved'); }}
+                      onClick={() => {
+                        void handleDecision('approved');
+                      }}
                       disabled={busy}
-                      style={{ border: '1px solid #16a34a', background: '#f0fdf4', color: '#16a34a', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+                      style={{
+                        border: '1px solid #16a34a',
+                        background: '#f0fdf4',
+                        color: '#16a34a',
+                        borderRadius: '10px',
+                        padding: '10px 16px',
+                        cursor: busy ? 'not-allowed' : 'pointer',
+                        opacity: busy ? 0.7 : 1,
+                      }}
                     >
                       {isActing ? 'Working...' : 'Approve'}
                     </button>
                     <button
                       type="button"
-                      onClick={() => { void handleDecision('rejected'); }}
+                      onClick={() => {
+                        void handleDecision('rejected');
+                      }}
                       disabled={busy}
-                      style={{ border: '1px solid #dc2626', background: '#fef2f2', color: '#dc2626', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+                      style={{
+                        border: '1px solid #dc2626',
+                        background: '#fef2f2',
+                        color: '#dc2626',
+                        borderRadius: '10px',
+                        padding: '10px 16px',
+                        cursor: busy ? 'not-allowed' : 'pointer',
+                        opacity: busy ? 0.7 : 1,
+                      }}
                     >
                       {isActing ? 'Working...' : 'Reject'}
                     </button>
@@ -1304,9 +1740,19 @@ const PayeeFormModal: React.FC<{
                 {mode === 'view' ? (
                   <button
                     type="button"
-                    onClick={() => { void handleDelete(); }}
+                    onClick={() => {
+                      void handleDelete();
+                    }}
                     disabled={busy}
-                    style={{ border: '1px solid #fecaca', background: '#fff1f2', color: '#dc2626', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+                    style={{
+                      border: '1px solid #fecaca',
+                      background: '#fff1f2',
+                      color: '#dc2626',
+                      borderRadius: '10px',
+                      padding: '10px 16px',
+                      cursor: busy ? 'not-allowed' : 'pointer',
+                      opacity: busy ? 0.7 : 1,
+                    }}
                   >
                     Delete
                   </button>
@@ -1318,16 +1764,33 @@ const PayeeFormModal: React.FC<{
                   type="button"
                   onClick={onClose}
                   disabled={busy}
-                  style={{ border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer' }}
+                  style={{
+                    border: '1px solid #cbd5e1',
+                    background: '#fff',
+                    color: '#334155',
+                    borderRadius: '10px',
+                    padding: '10px 16px',
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                  }}
                 >
                   Close
                 </button>
                 {mode === 'edit' ? (
                   <button
                     type="button"
-                    onClick={() => { void handleSave(); }}
+                    onClick={() => {
+                      void handleSave();
+                    }}
                     disabled={busy}
-                    style={{ border: '1px solid #0f766e', background: '#0f766e', color: '#fff', borderRadius: '10px', padding: '10px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+                    style={{
+                      border: '1px solid #0f766e',
+                      background: '#0f766e',
+                      color: '#fff',
+                      borderRadius: '10px',
+                      padding: '10px 16px',
+                      cursor: busy ? 'not-allowed' : 'pointer',
+                      opacity: busy ? 0.7 : 1,
+                    }}
                   >
                     {isEditing ? 'Saving...' : 'Save'}
                   </button>
@@ -1393,7 +1856,9 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
     return pendingPayees.filter((payee) => {
       const status = getStatusToken(payee.approval_status);
       if (statusFilter !== 'all' && status !== statusFilter) return false;
-      const beneficiaryType = String(payee.beneficiary_type || '').trim().toLowerCase();
+      const beneficiaryType = String(payee.beneficiary_type || '')
+        .trim()
+        .toLowerCase();
       if (beneficiaryFilter !== 'all' && beneficiaryType !== beneficiaryFilter) return false;
       if (!normalizedQuery) return true;
       const haystack = [
@@ -1443,7 +1908,9 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
       <div className="fw-state fw-payee-empty">
         <CreditCard size={48} className="fw-payee-empty-icon" />
         <h4 className="fw-payee-empty-title">No payees found</h4>
-        <p className="fw-payee-empty-copy">There are no active payees available in this management view.</p>
+        <p className="fw-payee-empty-copy">
+          There are no active payees available in this management view.
+        </p>
       </div>
     );
   }
@@ -1470,39 +1937,68 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
             <div className="fw-payee-title">Payee Management</div>
           </div>
           <div className="fw-payee-stats">
-          {[
-            { key: 'all', label: 'All', value: statusCounts.all, icon: CreditCard, tone: '#1d4ed8', bg: '#eff6ff' },
-            { key: 'pending', label: 'Pending', value: statusCounts.pending, icon: Clock3, tone: '#b45309', bg: '#fff7ed' },
-            { key: 'approved', label: 'Approved', value: statusCounts.approved, icon: CheckCircle2, tone: '#15803d', bg: '#f0fdf4' },
-            { key: 'rejected', label: 'Rejected', value: statusCounts.rejected, icon: XCircle, tone: '#b91c1c', bg: '#fef2f2' },
-          ].map((item) => {
-            const Icon = item.icon;
-            const active = statusFilter === item.key;
-            return (
-	              <button
-	                key={item.key}
-	                type="button"
-	                onClick={() => setStatusFilter(item.key as PayeeFilterStatus)}
-	                className={`fw-stats-card fw-payee-stats-card ${item.key} ${active ? 'active' : ''}`}
-	              >
-	                <div className="fw-payee-stats-row">
-	                  <div className="fw-stats-icon">
-	                    <Icon size={22} />
-	                  </div>
-	                  <div className="fw-stats-text">
-	                    <div className="fw-stats-label">{item.label}</div>
-	                    <div className="fw-stats-number">{item.value}</div>
-	                  </div>
-	                </div>
-	              </button>
-            );
-          })}
+            {[
+              {
+                key: 'all',
+                label: 'All',
+                value: statusCounts.all,
+                icon: CreditCard,
+                tone: '#1d4ed8',
+                bg: '#eff6ff',
+              },
+              {
+                key: 'pending',
+                label: 'Pending',
+                value: statusCounts.pending,
+                icon: Clock3,
+                tone: '#b45309',
+                bg: '#fff7ed',
+              },
+              {
+                key: 'approved',
+                label: 'Approved',
+                value: statusCounts.approved,
+                icon: CheckCircle2,
+                tone: '#15803d',
+                bg: '#f0fdf4',
+              },
+              {
+                key: 'rejected',
+                label: 'Rejected',
+                value: statusCounts.rejected,
+                icon: XCircle,
+                tone: '#b91c1c',
+                bg: '#fef2f2',
+              },
+            ].map((item) => {
+              const Icon = item.icon;
+              const active = statusFilter === item.key;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setStatusFilter(item.key as PayeeFilterStatus)}
+                  className={`fw-stats-card fw-payee-stats-card ${item.key} ${active ? 'active' : ''}`}
+                >
+                  <div className="fw-payee-stats-row">
+                    <div className="fw-stats-icon">
+                      <Icon size={22} />
+                    </div>
+                    <div className="fw-stats-text">
+                      <div className="fw-stats-label">{item.label}</div>
+                      <div className="fw-stats-number">{item.value}</div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         <div className="fw-payee-toolbar">
           <div className="fw-payee-count">
-            {statusFilter === 'all' ? 'All payees' : `${formatToken(statusFilter)} payees`} - {filteredPayees.length} record{filteredPayees.length === 1 ? '' : 's'}
+            {statusFilter === 'all' ? 'All payees' : `${formatToken(statusFilter)} payees`} -{' '}
+            {filteredPayees.length} record{filteredPayees.length === 1 ? '' : 's'}
           </div>
           <select
             className="fw-control fw-payee-type-filter"
@@ -1523,190 +2019,284 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
             <p className="fw-payee-empty-copy">Try another search or status filter.</p>
           </div>
         ) : (
-        <div className="fw-cards-container fw-payee-list">
-        {paginatedPayees.map((payee) => {
-          const payeeName = normalizePayeeName(payee) || 'Unnamed payee';
-          const busy = pendingPayeeActingId === Number(payee.id);
-          const editing = pendingPayeeEditingId === Number(payee.id);
-          const status = getStatusToken(payee.approval_status);
-          const isPending = status === 'pending';
-          const statusTheme = status === 'approved'
-            ? { bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' }
-            : status === 'rejected'
-              ? { bg: '#fef2f2', color: '#b91c1c', border: '#fecaca' }
-              : { bg: '#fff7ed', color: '#b45309', border: '#fed7aa' };
+          <div className="fw-cards-container fw-payee-list">
+            {paginatedPayees.map((payee) => {
+              const payeeName = normalizePayeeName(payee) || 'Unnamed payee';
+              const busy = pendingPayeeActingId === Number(payee.id);
+              const editing = pendingPayeeEditingId === Number(payee.id);
+              const status = getStatusToken(payee.approval_status);
+              const isPending = status === 'pending';
+              const statusTheme =
+                status === 'approved'
+                  ? { bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' }
+                  : status === 'rejected'
+                    ? { bg: '#fef2f2', color: '#b91c1c', border: '#fecaca' }
+                    : { bg: '#fff7ed', color: '#b45309', border: '#fed7aa' };
 
-          return (
-            <div
-              key={`pending-payee-${payee.id}`}
-              className="fw-item fw-payee-item"
-              style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: '16px',
-                padding: '18px 20px',
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1fr) auto',
-                alignItems: 'center',
-                gap: '18px',
-                boxShadow: '0 8px 22px rgba(15,23,42,0.04)',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, minWidth: 0 }}>
-                <div style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '50%',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#64748b',
-                  flexShrink: 0,
-                }}>
-                  <CreditCard size={24} />
-                </div>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '6px' }}>
-                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '1.05rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {payeeName}
+              return (
+                <div
+                  key={`pending-payee-${payee.id}`}
+                  className="fw-item fw-payee-item"
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '16px',
+                    padding: '18px 20px',
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) auto',
+                    alignItems: 'center',
+                    gap: '18px',
+                    boxShadow: '0 8px 22px rgba(15,23,42,0.04)',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '16px',
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '50%',
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#64748b',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <CreditCard size={24} />
                     </div>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: '999px', background: statusTheme.bg, color: statusTheme.color, border: `1px solid ${statusTheme.border}`, fontSize: '0.78rem', fontWeight: 700 }}>
-                      {formatToken(status)}
-                    </span>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          flexWrap: 'wrap',
+                          marginBottom: '6px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            color: '#0f172a',
+                            fontSize: '1.05rem',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {payeeName}
+                        </div>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '4px 10px',
+                            borderRadius: '999px',
+                            background: statusTheme.bg,
+                            color: statusTheme.color,
+                            border: `1px solid ${statusTheme.border}`,
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {formatToken(status)}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          alignItems: 'center',
+                          gap: '8px',
+                          fontSize: '0.85rem',
+                          color: '#64748b',
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            padding: '2px 8px',
+                            background: '#f1f5f9',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '4px',
+                          }}
+                        >
+                          {payee.bank_name || 'No Bank'}
+                        </span>
+                        <span>
+                          A/C:{' '}
+                          <strong style={{ color: '#475569' }}>{payee.account_no || '-'}</strong>
+                        </span>
+                        <span>
+                          IFSC:{' '}
+                          <strong style={{ color: '#475569' }}>
+                            {String(payee.ifsc || '').toUpperCase() || '-'}
+                          </strong>
+                        </span>
+                        <span>
+                          Type:{' '}
+                          <strong style={{ color: '#475569' }}>
+                            {formatToken(payee.beneficiary_type)}
+                          </strong>
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#64748b' }}>
-                    <span style={{ display: 'inline-block', padding: '2px 8px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '4px' }}>
-                      {payee.bank_name || 'No Bank'}
-                    </span>
-                    <span>A/C: <strong style={{ color: '#475569' }}>{payee.account_no || '-'}</strong></span>
-                    <span>IFSC: <strong style={{ color: '#475569' }}>{String(payee.ifsc || '').toUpperCase() || '-'}</strong></span>
-                    <span>Type: <strong style={{ color: '#475569' }}>{formatToken(payee.beneficiary_type)}</strong></span>
+
+                  <div className="fw-payee-action-buttons">
+                    <button
+                      type="button"
+                      disabled={busy || editing}
+                      onClick={() => {
+                        setSelectedMode('view');
+                        setSelectedPayeeId(Number(payee.id));
+                      }}
+                      title="View"
+                      aria-label="View"
+                      className="fw-payee-action-btn fw-payee-action-btn--view"
+                    >
+                      <Eye size={20} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy || editing}
+                      onClick={() => {
+                        setSelectedMode('edit');
+                        setSelectedPayeeId(Number(payee.id));
+                      }}
+                      title={editing ? 'Editing' : 'Edit'}
+                      aria-label={editing ? 'Editing' : 'Edit'}
+                      className="fw-payee-action-btn fw-payee-action-btn--edit"
+                    >
+                      <Edit2 size={20} />
+                    </button>
+                    {isPending ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={busy || editing}
+                          onClick={() => {
+                            void onPayeeDecision(Number(payee.id), 'approved');
+                          }}
+                          title="Approve"
+                          aria-label="Approve"
+                          className="fw-payee-action-btn fw-payee-action-btn--approve"
+                        >
+                          <CheckCircle2 size={20} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy || editing}
+                          onClick={() => {
+                            void onPayeeDecision(Number(payee.id), 'rejected');
+                          }}
+                          title="Reject"
+                          aria-label="Reject"
+                          className="fw-payee-action-btn fw-payee-action-btn--reject"
+                        >
+                          <XCircle size={20} />
+                        </button>
+                      </>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={busy || editing}
+                      onClick={() => {
+                        void onPayeeDelete(Number(payee.id));
+                      }}
+                      title="Delete"
+                      aria-label="Delete"
+                      className="fw-payee-action-btn fw-payee-action-btn--delete"
+                    >
+                      <Trash2 size={20} />
+                    </button>
                   </div>
                 </div>
-              </div>
-
-              <div className="fw-payee-action-buttons">
-                <button
-                  type="button"
-                  disabled={busy || editing}
-                  onClick={() => {
-                    setSelectedMode('view');
-                    setSelectedPayeeId(Number(payee.id));
-                  }}
-                  title="View"
-                  aria-label="View"
-                  className="fw-payee-action-btn fw-payee-action-btn--view"
-                >
-                  <Eye size={20} />
-                </button>
-                <button
-                  type="button"
-                  disabled={busy || editing}
-                  onClick={() => {
-                    setSelectedMode('edit');
-                    setSelectedPayeeId(Number(payee.id));
-                  }}
-                  title={editing ? 'Editing' : 'Edit'}
-                  aria-label={editing ? 'Editing' : 'Edit'}
-                  className="fw-payee-action-btn fw-payee-action-btn--edit"
-                >
-                  <Edit2 size={20} />
-                </button>
-                {isPending ? (
-                  <>
-                    <button
-                      type="button"
-                      disabled={busy || editing}
-                      onClick={() => { void onPayeeDecision(Number(payee.id), 'approved'); }}
-                      title="Approve"
-                      aria-label="Approve"
-                      className="fw-payee-action-btn fw-payee-action-btn--approve"
-                    >
-                      <CheckCircle2 size={20} />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || editing}
-                      onClick={() => { void onPayeeDecision(Number(payee.id), 'rejected'); }}
-                      title="Reject"
-                      aria-label="Reject"
-                      className="fw-payee-action-btn fw-payee-action-btn--reject"
-                    >
-                      <XCircle size={20} />
-                    </button>
-                  </>
-                ) : null}
-                <button
-                  type="button"
-                  disabled={busy || editing}
-                  onClick={() => { void onPayeeDelete(Number(payee.id)); }}
-                  title="Delete"
-                  aria-label="Delete"
-                  className="fw-payee-action-btn fw-payee-action-btn--delete"
-                >
-                  <Trash2 size={20} />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-        {totalPages > 1 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-            <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>
-              Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, filteredPayees.length)} of {filteredPayees.length}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
+              );
+            })}
+            {totalPages > 1 && (
+              <div
                 style={{
-                  border: '1px solid #cbd5e1',
-                  background: '#fff',
-                  color: '#334155',
-                  borderRadius: '10px',
-                  width: '36px',
-                  height: '36px',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                  opacity: currentPage === 1 ? 0.6 : 1,
+                  justifyContent: 'space-between',
+                  gap: '10px',
+                  flexWrap: 'wrap',
                 }}
               >
-                <ChevronLeft size={18} />
-              </button>
-              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#334155', minWidth: '72px', textAlign: 'center' }}>
-                {currentPage} / {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                style={{
-                  border: '1px solid #cbd5e1',
-                  background: '#fff',
-                  color: '#334155',
-                  borderRadius: '10px',
-                  width: '36px',
-                  height: '36px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                  opacity: currentPage === totalPages ? 0.6 : 1,
-                }}
-              >
-                <ChevronRight size={18} />
-              </button>
-            </div>
+                <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>
+                  Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}-
+                  {Math.min(currentPage * ITEMS_PER_PAGE, filteredPayees.length)} of{' '}
+                  {filteredPayees.length}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    style={{
+                      border: '1px solid #cbd5e1',
+                      background: '#fff',
+                      color: '#334155',
+                      borderRadius: '10px',
+                      width: '36px',
+                      height: '36px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                      opacity: currentPage === 1 ? 0.6 : 1,
+                    }}
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <span
+                    style={{
+                      fontSize: '0.9rem',
+                      fontWeight: 700,
+                      color: '#334155',
+                      minWidth: '72px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    style={{
+                      border: '1px solid #cbd5e1',
+                      background: '#fff',
+                      color: '#334155',
+                      borderRadius: '10px',
+                      width: '36px',
+                      height: '36px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                      opacity: currentPage === totalPages ? 0.6 : 1,
+                    }}
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
-      </div>
-      )}
       </div>
 
       <PayeeFormModal

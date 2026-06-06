@@ -109,7 +109,9 @@
   color: #334155;
   background: #ffffff;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .expenditure-search-input::placeholder {
@@ -194,13 +196,17 @@
   border-radius: 12px;
   font-size: 0.95rem;
   color: #334155;
-  background: #ffffff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23707f95' d='M1 1l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 14px center;
+  background: #ffffff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23707f95' d='M1 1l4 4 4-4'/%3E%3C/svg%3E")
+    no-repeat right 14px center;
   background-size: 10px 6px;
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
   flex: 0 0 auto;
 }
 
@@ -217,7 +223,6 @@
   border-color: #0069ab;
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.12);
 }
-
 
 /* Body */
 .expenditure-body {
@@ -248,7 +253,11 @@
   width: 100%;
   font: inherit;
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .expenditure-stats-card:hover {
@@ -1170,7 +1179,9 @@
   cursor: pointer;
   user-select: none;
   box-shadow: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   flex: 0 0 auto;
 }
 
@@ -1234,7 +1245,7 @@
 }
 
 .expenditure-status-line-connector::before {
-  content: "";
+  content: '';
   position: absolute;
   top: 50%;
   left: 0;
@@ -1289,7 +1300,9 @@
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .expenditure-toggle.on {

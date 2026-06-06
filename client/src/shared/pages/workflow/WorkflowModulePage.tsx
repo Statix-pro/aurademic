@@ -1,11 +1,14 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
+
 import WorkflowApprovalPage from './WorkflowApprovalPage';
 import { getWorkflowModuleConfig } from '../../workflow/workflowModuleConfigs';
 
 const WorkflowModulePage: React.FC = () => {
   const params = useParams<{ moduleKey?: string }>();
-  const moduleKey = String(params.moduleKey || '').trim().toLowerCase();
+  const moduleKey = String(params.moduleKey || '')
+    .trim()
+    .toLowerCase();
   const config = getWorkflowModuleConfig(moduleKey);
 
   if (!moduleKey || !config) {

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import "./adminbudget.css";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import './adminbudget.css';
 
 import {
   Eye,
@@ -14,16 +14,17 @@ import {
   Trash2,
   CalendarDays,
   Lock,
-} from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
-import authenticityUtility from "../../../../shared/utils/authenticityUtility";
-import { useAuth } from "../../../../contexts/AuthContext";
-import { hasPermission, isSuperAdmin } from "../../../../shared/utils/permissionUtils";
-import AlertModal, { type AlertType } from "../../../../shared/components/ui/AlertModal";
-import { formatRowRanges, summarizeLineChanges } from "../../../../shared/utils/logDiffUtils";
+} from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
-type ActionType = "return" | "reject" | null;
-type QueueTabKey = "hod" | "coordinator" | "ithead" | "dof" | "principal" | "admin";
+import { useAuth } from '../../../../contexts/AuthContext';
+import AlertModal, { type AlertType } from '../../../../shared/components/ui/AlertModal';
+import authenticityUtility from '../../../../shared/utils/authenticityUtility';
+import { formatRowRanges, summarizeLineChanges } from '../../../../shared/utils/logDiffUtils';
+import { hasPermission, isSuperAdmin } from '../../../../shared/utils/permissionUtils';
+
+type ActionType = 'return' | 'reject' | null;
+type QueueTabKey = 'hod' | 'coordinator' | 'ithead' | 'dof' | 'principal' | 'admin';
 
 interface QueueTab {
   key: QueueTabKey;
@@ -82,64 +83,68 @@ interface AdminLogEvent {
 }
 
 const BENEFICIARY_OPTIONS = [
-  "All Beneficiary",
-  "Faculty",
-  "Department",
-  "Centre",
-  "Cell",
-  "Club",
-  "Professional Body",
-  "Institution",
+  'All Beneficiary',
+  'Faculty',
+  'Department',
+  'Centre',
+  'Cell',
+  'Club',
+  'Professional Body',
+  'Institution',
 ];
 
 const ARCHIVE_TRANSITION_MS = 280;
 const ADMIN_FETCH_PAGE_SIZE = 100;
-const TAB_PRIORITY: QueueTabKey[] = ["hod", "coordinator", "ithead", "dof", "principal", "admin"];
+const TAB_PRIORITY: QueueTabKey[] = ['hod', 'coordinator', 'ithead', 'dof', 'principal', 'admin'];
 
 const STAGE_PERMISSION_MAP: Record<string, string> = {
-  level1: "budget.workflow.level1",
-  ithead: "budget.workflow.ithead",
-  dof: "budget.workflow.dof",
-  principal: "budget.workflow.principal",
+  level1: 'budget.workflow.level1',
+  ithead: 'budget.workflow.ithead',
+  dof: 'budget.workflow.dof',
+  principal: 'budget.workflow.principal',
 };
 
 const STAGE_DISPLAY_MAP: Record<string, string> = {
-  level1: "Level-1",
-  ithead: "IT Head",
-  dof: "DoF",
-  principal: "Principal",
+  level1: 'Level-1',
+  ithead: 'IT Head',
+  dof: 'DoF',
+  principal: 'Principal',
 };
 
-const ENTITY_BENEFICIARY_TYPES = ["Centre", "Cell", "Club", "Professional Body"];
+const ENTITY_BENEFICIARY_TYPES = ['Centre', 'Cell', 'Club', 'Professional Body'];
 const ROWS_PER_PAGE_OPTIONS = [5, 10, 25, 50];
 
 const getLevel1Label = (beneficiaryType: string, routeType?: string | null) => {
-  if (String(routeType || "").toLowerCase() === "entity_contact") {
-    return "Coordinator";
+  if (String(routeType || '').toLowerCase() === 'entity_contact') {
+    return 'Coordinator';
   }
-  const type = (beneficiaryType || "").toLowerCase();
+  const type = (beneficiaryType || '').toLowerCase();
   const entityTypes = ENTITY_BENEFICIARY_TYPES.map((t) => t.toLowerCase());
-  return entityTypes.includes(type) ? "Coordinator" : "HOD";
+  return entityTypes.includes(type) ? 'Coordinator' : 'HOD';
 };
 
 const getRoleLabel = (role: string) => {
   const map: Record<string, string> = {
-    hod: "HoD",
-    coordinator: "Coordinator",
-    ithead: "IT Head",
-    principal: "Principal",
-    dof: "DoF",
-    admin: "Admin",
-    super_admin: "Super Admin",
+    hod: 'HoD',
+    coordinator: 'Coordinator',
+    ithead: 'IT Head',
+    principal: 'Principal',
+    dof: 'DoF',
+    admin: 'Admin',
+    super_admin: 'Super Admin',
   };
   return map[role.toLowerCase()] || role.charAt(0).toUpperCase() + role.slice(1);
 };
 
 const isResubmittedBudgetItem = (item: BudgetRequestItem) =>
-  String(item.status || "").toLowerCase() === "re_submitted";
+  String(item.status || '').toLowerCase() === 're_submitted';
 
 const getBudgetSortTime = (item: BudgetRequestItem) => {
-  const raw = (item as any).updated_date || (item as any).updated_at || item.created_date || (item as any).created_at;
+  const raw =
+    (item as any).updated_date ||
+    (item as any).updated_at ||
+    item.created_date ||
+    (item as any).created_at;
   const parsed = raw ? Date.parse(String(raw)) : 0;
   return Number.isFinite(parsed) ? parsed : 0;
 };
@@ -173,18 +178,27 @@ const AdminBudget: React.FC = () => {
 
   const [data, setData] = useState<BudgetRequestItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [accessError, setAccessError] = useState("");
-  const [kpiStats, setKpiStats] = useState({ total: 0, pending: 0, returned: 0, rejected: 0, approved: 0, archived: 0 });
+  const [accessError, setAccessError] = useState('');
+  const [kpiStats, setKpiStats] = useState({
+    total: 0,
+    pending: 0,
+    returned: 0,
+    rejected: 0,
+    approved: 0,
+    archived: 0,
+  });
   const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 100, pages: 1 });
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState<string>("pending");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [beneficiaryFilter, setBeneficiaryFilter] = useState("All Beneficiary");
-  const [departmentFilter, setDepartmentFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>('pending');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [beneficiaryFilter, setBeneficiaryFilter] = useState('All Beneficiary');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('');
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [fiscalYear, setFiscalYear] = useState<number>(() => getBudgetWorkflowFiscalYearStart());
-  const [availableFiscalYears, setAvailableFiscalYears] = useState<number[]>(() => getBudgetWorkflowFiscalYearOptions());
+  const [availableFiscalYears, setAvailableFiscalYears] = useState<number[]>(() =>
+    getBudgetWorkflowFiscalYearOptions(),
+  );
   const [freezeDate, setFreezeDate] = useState<string>(() => `${new Date().getFullYear()}-02-01`);
   const [isTimeFrozen, setIsTimeFrozen] = useState<boolean>(false);
   const [freezeLoading, setFreezeLoading] = useState<boolean>(false);
@@ -210,38 +224,38 @@ const AdminBudget: React.FC = () => {
     const tabs: QueueTab[] = [];
     const superUser = isSuperAdmin(user);
     const hasLevel1Context =
-      currentActiveAssignment?.permissions?.includes("budget.workflow.level1") ||
-      hasPermission(user, "budget.workflow.level1");
+      currentActiveAssignment?.permissions?.includes('budget.workflow.level1') ||
+      hasPermission(user, 'budget.workflow.level1');
     const isAcademicContext = currentActiveAssignment
-      ? currentActiveAssignment.entity_type === "DEPARTMENT"
+      ? currentActiveAssignment.entity_type === 'DEPARTMENT'
       : true;
 
     if (superUser || (hasLevel1Context && isAcademicContext)) {
-      tabs.push({ key: "hod", label: "HOD", endpoint: "/adminbudget/hod" });
+      tabs.push({ key: 'hod', label: 'HOD', endpoint: '/adminbudget/hod' });
     }
 
     if (superUser || (hasLevel1Context && !isAcademicContext)) {
-      tabs.push({ key: "coordinator", label: "Coordinator", endpoint: "/adminbudget/coordinator" });
+      tabs.push({ key: 'coordinator', label: 'Coordinator', endpoint: '/adminbudget/coordinator' });
     }
 
-    if (superUser || hasPermission(user, "budget.workflow.ithead")) {
-      tabs.push({ key: "ithead", label: "IT Head", endpoint: "/adminbudget/ithead" });
+    if (superUser || hasPermission(user, 'budget.workflow.ithead')) {
+      tabs.push({ key: 'ithead', label: 'IT Head', endpoint: '/adminbudget/ithead' });
     }
 
-    if (superUser || hasPermission(user, "budget.workflow.dof")) {
-      tabs.push({ key: "dof", label: "DoF", endpoint: "/adminbudget/dof" });
+    if (superUser || hasPermission(user, 'budget.workflow.dof')) {
+      tabs.push({ key: 'dof', label: 'DoF', endpoint: '/adminbudget/dof' });
     }
 
-    if (superUser || hasPermission(user, "budget.workflow.principal")) {
-      tabs.push({ key: "principal", label: "Principal", endpoint: "/adminbudget/principal" });
+    if (superUser || hasPermission(user, 'budget.workflow.principal')) {
+      tabs.push({ key: 'principal', label: 'Principal', endpoint: '/adminbudget/principal' });
     }
 
     if (
       superUser ||
-      hasPermission(user, "budget.admin.view") ||
-      hasPermission(user, "budget.admin.manage")
+      hasPermission(user, 'budget.admin.view') ||
+      hasPermission(user, 'budget.admin.manage')
     ) {
-      tabs.push({ key: "admin", label: "All Proposals", endpoint: "/adminbudget/admin" });
+      tabs.push({ key: 'admin', label: 'All Proposals', endpoint: '/adminbudget/admin' });
     }
 
     return tabs;
@@ -249,31 +263,31 @@ const AdminBudget: React.FC = () => {
 
   const activeQueueTab = useMemo(
     () => queueTabs.find((tab) => tab.key === activeQueueTabKey) || null,
-    [queueTabs, activeQueueTabKey]
+    [queueTabs, activeQueueTabKey],
   );
 
   const fiscalYearOptions = useMemo(
     () => normalizeFiscalYearOptions(availableFiscalYears, getBudgetWorkflowFiscalYearStart()),
-    [availableFiscalYears]
+    [availableFiscalYears],
   );
 
   const fetchKpiStats = useCallback(async () => {
     if (!activeQueueTab) return;
     try {
-      const response: any = await authenticityUtility.get("/adminbudget/kpi-stats", {
+      const response: any = await authenticityUtility.get('/adminbudget/kpi-stats', {
         params: {
           fiscalYear,
           scope: activeQueueTab.key,
           q: searchTerm || undefined,
-          beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter,
-          departmentFilter: departmentFilter || undefined
+          beneficiaryType: beneficiaryFilter === 'All Beneficiary' ? undefined : beneficiaryFilter,
+          departmentFilter: departmentFilter || undefined,
         },
       });
       if (response?.success && response.data) {
         setKpiStats(response.data);
       }
     } catch (error) {
-      console.error("Failed to fetch KPI stats:", error);
+      console.error('Failed to fetch KPI stats:', error);
     }
   }, [activeQueueTab, fiscalYear, searchTerm, beneficiaryFilter, departmentFilter]);
 
@@ -281,18 +295,18 @@ const AdminBudget: React.FC = () => {
   const [actionPopupOpen, setActionPopupOpen] = useState(false);
   const [actionType, setActionType] = useState<ActionType>(null);
   const [actionId, setActionId] = useState<number | null>(null);
-  const [actionRef, setActionRef] = useState<string>("");
-  const [actionComment, setActionComment] = useState<string>("");
-  const [actionStage, setActionStage] = useState<string>("");
+  const [actionRef, setActionRef] = useState<string>('');
+  const [actionComment, setActionComment] = useState<string>('');
+  const [actionStage, setActionStage] = useState<string>('');
 
   // Super-admin delete
   const [deletePopupOpen, setDeletePopupOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [deleteRef, setDeleteRef] = useState<string>("");
+  const [deleteRef, setDeleteRef] = useState<string>('');
   const [deleteCountdown, setDeleteCountdown] = useState(5);
   const [logPopupOpen, setLogPopupOpen] = useState(false);
   const [logLoading, setLogLoading] = useState(false);
-  const [logRef, setLogRef] = useState<string>("");
+  const [logRef, setLogRef] = useState<string>('');
   const [logProposal, setLogProposal] = useState<any>(null);
   const [logEntries, setLogEntries] = useState<BudgetHistoryEntry[]>([]);
   const [logEdits, setLogEdits] = useState<any[]>([]);
@@ -311,18 +325,18 @@ const AdminBudget: React.FC = () => {
     cancelText?: string;
   }>({
     show: false,
-    message: "",
-    type: "info",
+    message: '',
+    type: 'info',
   });
 
   const showAlert = (
     message: React.ReactNode,
-    type: AlertType = "info",
+    type: AlertType = 'info',
     title?: string,
     onConfirm?: () => void,
     showCancel = false,
-    confirmText = "OK",
-    cancelText = "Cancel"
+    confirmText = 'OK',
+    cancelText = 'Cancel',
   ) => {
     setAlertConfig({
       show: true,
@@ -331,9 +345,9 @@ const AdminBudget: React.FC = () => {
       title,
       onConfirm: onConfirm
         ? () => {
-          closeAlert();
-          onConfirm();
-        }
+            closeAlert();
+            onConfirm();
+          }
         : undefined,
       showCancel,
       confirmText,
@@ -348,13 +362,13 @@ const AdminBudget: React.FC = () => {
   useEffect(() => {
     const fetchAssignments = async () => {
       try {
-        const response: any = await authenticityUtility.get("/adminbudget/faculty");
+        const response: any = await authenticityUtility.get('/adminbudget/faculty');
         if (response?.success && Array.isArray(response?.data?.assignments)) {
           setAssignments(response.data.assignments);
           return;
         }
       } catch (error) {
-        console.error("Failed to fetch assignments:", error);
+        console.error('Failed to fetch assignments:', error);
       }
       setAssignments([]);
     };
@@ -365,12 +379,12 @@ const AdminBudget: React.FC = () => {
   useEffect(() => {
     const fetchFiscalYears = async () => {
       try {
-        const response: any = await authenticityUtility.get("/adminbudget/fiscal-years");
+        const response: any = await authenticityUtility.get('/adminbudget/fiscal-years');
         if (response?.success && Array.isArray(response.data) && response.data.length > 0) {
           setAvailableFiscalYears(response.data);
         }
       } catch (error) {
-        console.error("Failed to fetch budget fiscal years:", error);
+        console.error('Failed to fetch budget fiscal years:', error);
       }
     };
 
@@ -380,10 +394,11 @@ const AdminBudget: React.FC = () => {
   useEffect(() => {
     const fetchDepartments = async () => {
       try {
-        const response: any = await authenticityUtility.get("/adminbudget/departments", {
+        const response: any = await authenticityUtility.get('/adminbudget/departments', {
           params: {
-            beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter
-          }
+            beneficiaryType:
+              beneficiaryFilter === 'All Beneficiary' ? undefined : beneficiaryFilter,
+          },
         });
         if (response?.success && Array.isArray(response?.data)) {
           setDepartmentsList(response.data);
@@ -391,7 +406,7 @@ const AdminBudget: React.FC = () => {
           setDepartmentsList([]);
         }
       } catch (error) {
-        console.error("Failed to fetch departments:", error);
+        console.error('Failed to fetch departments:', error);
       }
     };
 
@@ -415,55 +430,69 @@ const AdminBudget: React.FC = () => {
 
   const isApprovedForActiveTab = useCallback(
     (item: BudgetRequestItem) => {
-      const s = (item.status || "").toLowerCase();
+      const s = (item.status || '').toLowerCase();
 
       const approvedStatusByTab: Record<QueueTabKey, string[]> = {
         // Stage-wise cumulative approved visibility:
         // HOD/Coordinator should still see records approved in downstream stages.
-        hod: ["level1_approved", "hod_approved", "ithead_approved", "dof_approved", "principal_approved", "completed"],
-        coordinator: ["level1_approved", "hod_approved", "ithead_approved", "dof_approved", "principal_approved", "completed"],
-        ithead: ["ithead_approved", "dof_approved", "principal_approved", "completed"],
-        dof: ["dof_approved", "principal_approved", "completed"],
-        principal: ["principal_approved", "completed"],
-        admin: ["principal_approved", "completed"],
+        hod: [
+          'level1_approved',
+          'hod_approved',
+          'ithead_approved',
+          'dof_approved',
+          'principal_approved',
+          'completed',
+        ],
+        coordinator: [
+          'level1_approved',
+          'hod_approved',
+          'ithead_approved',
+          'dof_approved',
+          'principal_approved',
+          'completed',
+        ],
+        ithead: ['ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
+        dof: ['dof_approved', 'principal_approved', 'completed'],
+        principal: ['principal_approved', 'completed'],
+        admin: ['principal_approved', 'completed'],
       };
 
-      const tabKey = activeQueueTabKey || "admin";
+      const tabKey = activeQueueTabKey || 'admin';
       const approvedStates = approvedStatusByTab[tabKey] || approvedStatusByTab.admin;
 
       return approvedStates.some((stateToken) =>
-        stateToken === "completed" ? s === "completed" : s.startsWith(stateToken)
+        stateToken === 'completed' ? s === 'completed' : s.startsWith(stateToken),
       );
     },
-    [activeQueueTabKey]
+    [activeQueueTabKey],
   );
 
   const getStatusCategory = useCallback(
     (item: BudgetRequestItem) => {
-      const s = (item.status || "").toLowerCase();
-      if (s.includes("archived") || s.includes("archive")) return "archived";
-      if (s.includes("returned")) return "returned";
-      if (s.includes("rejected")) return "rejected";
-      if (isApprovedForActiveTab(item)) return "approved";
-      return "pending";
+      const s = (item.status || '').toLowerCase();
+      if (s.includes('archived') || s.includes('archive')) return 'archived';
+      if (s.includes('returned')) return 'returned';
+      if (s.includes('rejected')) return 'rejected';
+      if (isApprovedForActiveTab(item)) return 'approved';
+      return 'pending';
     },
-    [isApprovedForActiveTab]
+    [isApprovedForActiveTab],
   );
 
   const canProcessStage = useCallback(
     (stage: string) => {
       if (isSuperAdmin(user)) return true;
-      const permissionKey = STAGE_PERMISSION_MAP[(stage || "").toLowerCase()];
+      const permissionKey = STAGE_PERMISSION_MAP[(stage || '').toLowerCase()];
       if (!permissionKey) return false;
       return hasPermission(user, permissionKey);
     },
-    [user]
+    [user],
   );
 
   const fetchDashboard = useCallback(async () => {
     if (!activeQueueTab) {
       setData([]);
-      setAccessError("Insufficient permissions");
+      setAccessError('Insufficient permissions');
       return;
     }
 
@@ -471,18 +500,18 @@ const AdminBudget: React.FC = () => {
 
     try {
       setLoading(true);
-      setAccessError("");
+      setAccessError('');
 
       const response: any = await authenticityUtility.get(activeQueueTab.endpoint, {
         params: {
           page: currentPage,
           limit: itemsPerPage,
-          status: statusFilter === "all" ? "" : statusFilter,
+          status: statusFilter === 'all' ? '' : statusFilter,
           fiscalYear,
           scope: activeQueueTab.key,
           q: searchTerm || undefined,
-          beneficiaryType: beneficiaryFilter === "All Beneficiary" ? undefined : beneficiaryFilter,
-          departmentFilter: departmentFilter || undefined
+          beneficiaryType: beneficiaryFilter === 'All Beneficiary' ? undefined : beneficiaryFilter,
+          departmentFilter: departmentFilter || undefined,
         },
       });
 
@@ -498,7 +527,7 @@ const AdminBudget: React.FC = () => {
       const normalizedRows: BudgetRequestItem[] = rows.map((row: any) => ({
         ...row,
         applicant_name: String(
-          row?.applicant_name || row?.faculty_name || row?.user_name || row?.user_email || ""
+          row?.applicant_name || row?.faculty_name || row?.user_name || row?.user_email || '',
         ).trim(),
       }));
 
@@ -509,14 +538,24 @@ const AdminBudget: React.FC = () => {
       }
     } catch (error: any) {
       if (requestSeq !== fetchRequestSeqRef.current) return;
-      console.error("Fetch budget error:", error);
+      console.error('Fetch budget error:', error);
       setData([]);
-      setAccessError(error?.response?.data?.message || "Failed to fetch budget requests");
+      setAccessError(error?.response?.data?.message || 'Failed to fetch budget requests');
     } finally {
-      if (requestSeq !== fetchRequestSeqRef.current) return;
-      setLoading(false);
+      if (requestSeq === fetchRequestSeqRef.current) {
+        setLoading(false);
+      }
     }
-  }, [activeQueueTab, fiscalYear, currentPage, statusFilter, searchTerm, itemsPerPage, beneficiaryFilter, departmentFilter]);
+  }, [
+    activeQueueTab,
+    fiscalYear,
+    currentPage,
+    statusFilter,
+    searchTerm,
+    itemsPerPage,
+    beneficiaryFilter,
+    departmentFilter,
+  ]);
 
   useEffect(() => {
     fetchDashboard();
@@ -544,19 +583,19 @@ const AdminBudget: React.FC = () => {
       setFreezePopupOpen(false);
     };
 
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [freezePopupOpen]);
 
-  const openActionPopup = (type: "return" | "reject", id: number, ref: string, stage: string) => {
+  const openActionPopup = (type: 'return' | 'reject', id: number, ref: string, stage: string) => {
     if (!canProcessStage(stage)) {
-      showAlert("You do not have permission to process this stage.", "warning");
+      showAlert('You do not have permission to process this stage.', 'warning');
       return;
     }
     setActionType(type);
     setActionId(id);
     setActionRef(ref);
-    setActionComment("");
+    setActionComment('');
     setActionStage(stage);
     setActionPopupOpen(true);
   };
@@ -565,57 +604,57 @@ const AdminBudget: React.FC = () => {
     setActionPopupOpen(false);
     setActionType(null);
     setActionId(null);
-    setActionRef("");
-    setActionComment("");
-    setActionStage("");
+    setActionRef('');
+    setActionComment('');
+    setActionStage('');
   };
 
   const onApprove = async (itemId?: number, stage?: string) => {
     if (!itemId) {
-      showAlert("Missing budget id.", "warning");
+      showAlert('Missing budget id.', 'warning');
       return;
     }
 
     if (!stage || !canProcessStage(stage)) {
-      showAlert("You do not have permission to approve this stage.", "warning");
+      showAlert('You do not have permission to approve this stage.', 'warning');
       return;
     }
     showAlert(
-      "Are you sure you want to approve this budget?",
-      "warning",
-      "Confirm Approval",
+      'Are you sure you want to approve this budget?',
+      'warning',
+      'Confirm Approval',
       async () => {
         try {
           const response: any = await authenticityUtility.patch(`/adminbudget/${itemId}/approval`, {
-            decision: "approved",
+            decision: 'approved',
           });
 
           if (response?.success || response?.data?.success) {
             await refreshBudgetData();
             return;
           }
-          showAlert(response?.message || "Failed to approve", "error");
+          showAlert(response?.message || 'Failed to approve', 'error');
         } catch (error: any) {
-          showAlert(error.response?.data?.message || "Failed to approve", "error");
+          showAlert(error.response?.data?.message || 'Failed to approve', 'error');
         }
       },
       true,
-      "Approve"
+      'Approve',
     );
   };
 
   const onArchiveToggle = (item: BudgetRequestItem) => {
     const id = Number(item.id);
-    const isArchived = ["archived", "archive"].some((token) =>
-      (item.status || "").toLowerCase().includes(token)
+    const isArchived = ['archived', 'archive'].some((token) =>
+      (item.status || '').toLowerCase().includes(token),
     );
     const confirmMessage = isArchived
-      ? "Are you sure you want to unarchive this budget?"
-      : "Are you sure you want to archive this budget?";
+      ? 'Are you sure you want to unarchive this budget?'
+      : 'Are you sure you want to archive this budget?';
     showAlert(
       confirmMessage,
-      "warning",
-      isArchived ? "Confirm Unarchive" : "Confirm Archive",
+      'warning',
+      isArchived ? 'Confirm Unarchive' : 'Confirm Archive',
       async () => {
         if (archivingIds.has(id)) return;
 
@@ -626,7 +665,10 @@ const AdminBudget: React.FC = () => {
         });
 
         try {
-          const response: any = await authenticityUtility.patch(`/adminbudget/${id}/archive-toggle`, {});
+          const response: any = await authenticityUtility.patch(
+            `/adminbudget/${id}/archive-toggle`,
+            {},
+          );
 
           if (response?.success || response?.data?.success) {
             await refreshBudgetData();
@@ -637,8 +679,8 @@ const AdminBudget: React.FC = () => {
               return next;
             });
             showAlert(
-              response?.message || response?.data?.message || "Failed to update archive state",
-              "error"
+              response?.message || response?.data?.message || 'Failed to update archive state',
+              'error',
             );
             return;
           }
@@ -648,7 +690,7 @@ const AdminBudget: React.FC = () => {
             next.delete(id);
             return next;
           });
-          showAlert(error.response?.data?.message || "Failed to update archive state", "error");
+          showAlert(error.response?.data?.message || 'Failed to update archive state', 'error');
           return;
         }
 
@@ -662,7 +704,7 @@ const AdminBudget: React.FC = () => {
         }, ARCHIVE_TRANSITION_MS);
       },
       true,
-      isArchived ? "Unarchive" : "Archive"
+      isArchived ? 'Unarchive' : 'Archive',
     );
   };
 
@@ -670,19 +712,19 @@ const AdminBudget: React.FC = () => {
     if (!actionType || !actionId) return;
 
     if (!canProcessStage(actionStage)) {
-      showAlert("You do not have permission to process this stage.", "warning");
+      showAlert('You do not have permission to process this stage.', 'warning');
       return;
     }
 
     const comment = actionComment.trim();
     if (!comment) {
-      showAlert("Please enter comments.", "warning");
+      showAlert('Please enter comments.', 'warning');
       return;
     }
 
     try {
       const response: any = await authenticityUtility.patch(`/adminbudget/${actionId}/approval`, {
-        decision: actionType === "return" ? "returned" : "rejected",
+        decision: actionType === 'return' ? 'returned' : 'rejected',
         feedback: comment,
       });
 
@@ -691,12 +733,9 @@ const AdminBudget: React.FC = () => {
         await refreshBudgetData();
         return;
       }
-      showAlert(
-        response?.message || response?.data?.message || `Failed to ${actionType}`,
-        "error"
-      );
+      showAlert(response?.message || response?.data?.message || `Failed to ${actionType}`, 'error');
     } catch (error: any) {
-      showAlert(error.response?.data?.message || `Failed to ${actionType}`, "error");
+      showAlert(error.response?.data?.message || `Failed to ${actionType}`, 'error');
     }
   };
 
@@ -710,7 +749,7 @@ const AdminBudget: React.FC = () => {
   const closeDeletePopup = () => {
     setDeletePopupOpen(false);
     setDeleteId(null);
-    setDeleteRef("");
+    setDeleteRef('');
   };
 
   const confirmDelete = async () => {
@@ -723,23 +762,23 @@ const AdminBudget: React.FC = () => {
         return;
       }
       showAlert(
-        response?.message || response?.data?.message || "Failed to delete budget proposal",
-        "error"
+        response?.message || response?.data?.message || 'Failed to delete budget proposal',
+        'error',
       );
     } catch (error: any) {
-      showAlert(error.response?.data?.message || "Failed to delete budget proposal", "error");
+      showAlert(error.response?.data?.message || 'Failed to delete budget proposal', 'error');
     }
   };
 
   const filteredBeneficiaryOptions = useMemo(() => {
-    if (activeQueueTabKey === "hod") {
+    if (activeQueueTabKey === 'hod') {
       return BENEFICIARY_OPTIONS.filter((opt) =>
-        ["All Beneficiary", "Faculty", "Department"].includes(opt)
+        ['All Beneficiary', 'Faculty', 'Department'].includes(opt),
       );
     }
-    if (activeQueueTabKey === "coordinator") {
+    if (activeQueueTabKey === 'coordinator') {
       return BENEFICIARY_OPTIONS.filter((opt) =>
-        ["All Beneficiary", "Centre", "Cell", "Club", "Professional Body"].includes(opt)
+        ['All Beneficiary', 'Centre', 'Cell', 'Club', 'Professional Body'].includes(opt),
       );
     }
     return BENEFICIARY_OPTIONS;
@@ -747,7 +786,7 @@ const AdminBudget: React.FC = () => {
 
   const baseFilteredData = useMemo(() => {
     let results = [...data];
-    if (beneficiaryFilter !== "All Beneficiary") {
+    if (beneficiaryFilter !== 'All Beneficiary') {
       results = results.filter((item) => item.beneficiary_type === beneficiaryFilter);
     }
     return results;
@@ -757,20 +796,20 @@ const AdminBudget: React.FC = () => {
     return kpiStats;
   }, [kpiStats]);
 
-  const [localStatsFilter, setLocalStatsFilter] = useState<string>("pending");
+  const [localStatsFilter, setLocalStatsFilter] = useState<string>('pending');
 
   const handleStatsFilter = useCallback((filter: string) => {
     setLocalStatsFilter(filter);
-    setStatusFilter(filter === "total" ? "all" : filter);
+    setStatusFilter(filter === 'total' ? 'all' : filter);
     setCurrentPage(1);
   }, []);
 
   useEffect(() => {
-    setLocalStatsFilter(statusFilter === "all" ? "total" : statusFilter);
+    setLocalStatsFilter(statusFilter === 'all' ? 'total' : statusFilter);
   }, [statusFilter]);
 
   const currentItems = useMemo(() => {
-    if (statusFilter !== "pending") return baseFilteredData;
+    if (statusFilter !== 'pending') return baseFilteredData;
     return [...baseFilteredData].sort((a, b) => {
       const aResubmitted = isResubmittedBudgetItem(a);
       const bResubmitted = isResubmittedBudgetItem(b);
@@ -784,43 +823,48 @@ const AdminBudget: React.FC = () => {
 
   const statusClass = (item: BudgetRequestItem) => {
     const category = getStatusCategory(item);
-    if (category === "approved") return "adminbudget-status adminbudget-status--approved";
-    if (category === "rejected") return "adminbudget-status adminbudget-status--rejected";
-    if (category === "archived") return "adminbudget-status adminbudget-status--archived";
-    return "adminbudget-status adminbudget-status--pending";
+    if (category === 'approved') return 'adminbudget-status adminbudget-status--approved';
+    if (category === 'rejected') return 'adminbudget-status adminbudget-status--rejected';
+    if (category === 'archived') return 'adminbudget-status adminbudget-status--archived';
+    return 'adminbudget-status adminbudget-status--pending';
   };
 
   const getDisplayStatus = (item: BudgetRequestItem) => {
-    const s = (item.status || "").toLowerCase();
-    if (s === "re_submitted") return "Resubmitted";
-    if (getStatusCategory(item) === "approved") return "Approved";
-    if (s.includes("archived") || s.includes("archive")) return "Archived";
-    if (s.includes("rejected")) return "Reject";
-    if (s.includes("returned") || s.includes("return")) return "Return";
+    const s = (item.status || '').toLowerCase();
+    if (s === 're_submitted') return 'Resubmitted';
+    if (getStatusCategory(item) === 'approved') return 'Approved';
+    if (s.includes('archived') || s.includes('archive')) return 'Archived';
+    if (s.includes('rejected')) return 'Reject';
+    if (s.includes('returned') || s.includes('return')) return 'Return';
 
-    const stageKey = (item.current_stage || "").toLowerCase();
-    let stageLabel = STAGE_DISPLAY_MAP[stageKey] || (item.current_stage ? item.current_stage.toUpperCase() : "");
-    if (stageKey === "level1") {
+    const stageKey = (item.current_stage || '').toLowerCase();
+    let stageLabel =
+      STAGE_DISPLAY_MAP[stageKey] || (item.current_stage ? item.current_stage.toUpperCase() : '');
+    if (stageKey === 'level1') {
       stageLabel = getLevel1Label(item.beneficiary_type, item.level1_route_type);
     }
-    return "Pending " + stageLabel;
+    return 'Pending ' + stageLabel;
   };
 
   const isHodBudgetView = useMemo(() => {
-    const roles = Array.isArray(user?.roles) ? user.roles.map((role) => String(role).toLowerCase()) : [];
+    const roles = Array.isArray(user?.roles)
+      ? user.roles.map((role) => String(role).toLowerCase())
+      : [];
     const permissions = Array.isArray(user?.permissions)
       ? user.permissions.map((permission) => String(permission).toLowerCase())
       : [];
 
-    return roles.includes("hod") || permissions.includes("budget.workflow.level1");
+    return roles.includes('hod') || permissions.includes('budget.workflow.level1');
   }, [user]);
 
   const isDofLogin = useMemo(() => {
-    const roles = Array.isArray(user?.roles) ? user.roles.map((role) => String(role).toLowerCase()) : [];
+    const roles = Array.isArray(user?.roles)
+      ? user.roles.map((role) => String(role).toLowerCase())
+      : [];
     const permissions = Array.isArray(user?.permissions)
       ? user.permissions.map((permission) => String(permission).toLowerCase())
       : [];
-    return roles.includes("dof") || permissions.includes("budget.workflow.dof");
+    return roles.includes('dof') || permissions.includes('budget.workflow.dof');
   }, [user]);
 
   const isSuperAdminLogin = useMemo(() => isSuperAdmin(user), [user]);
@@ -839,7 +883,7 @@ const AdminBudget: React.FC = () => {
     const fetchFreezeConfig = async () => {
       try {
         setFreezeLoading(true);
-        const response: any = await authenticityUtility.get("/adminbudget/freeze-config", {
+        const response: any = await authenticityUtility.get('/adminbudget/freeze-config', {
           params: { fiscalYear },
         });
 
@@ -851,7 +895,7 @@ const AdminBudget: React.FC = () => {
           setIsTimeFrozen(false);
         }
       } catch (error) {
-        console.error("Failed to fetch freeze config:", error);
+        console.error('Failed to fetch freeze config:', error);
         setFreezeDate(getDefaultFreezeDate(fiscalYear));
         setIsTimeFrozen(false);
       } finally {
@@ -865,27 +909,30 @@ const AdminBudget: React.FC = () => {
   const onFreezeTime = async () => {
     if (!canFreezeNow) {
       if (isDofLogin && !isSuperAdminLogin && isTimeFrozen) {
-        showAlert("Freeze already applied for this fiscal year. Only Super Admin can edit it now.", "warning");
+        showAlert(
+          'Freeze already applied for this fiscal year. Only Super Admin can edit it now.',
+          'warning',
+        );
         return;
       }
       if (isDofLogin && !isSuperAdminLogin && !isTodayFebFirst) {
-        showAlert(`DoF freeze can be applied only on ${dofFreezeAllowedDateText}.`, "warning");
+        showAlert(`DoF freeze can be applied only on ${dofFreezeAllowedDateText}.`, 'warning');
         return;
       }
-      showAlert("Only Super Admin can edit freeze configuration right now.", "warning");
+      showAlert('Only Super Admin can edit freeze configuration right now.', 'warning');
       return;
     }
 
     const selectedFreezeDate = freezeDate;
 
     if (!selectedFreezeDate) {
-      showAlert("Please select a freeze date.", "warning");
+      showAlert('Please select a freeze date.', 'warning');
       return;
     }
 
     try {
       setFreezeSaving(true);
-      const response: any = await authenticityUtility.put("/adminbudget/freeze-config", {
+      const response: any = await authenticityUtility.put('/adminbudget/freeze-config', {
         fiscalYear,
         cutoffDate: selectedFreezeDate,
         isFrozen: true,
@@ -896,30 +943,30 @@ const AdminBudget: React.FC = () => {
         setIsTimeFrozen(true);
         setFreezePopupOpen(false);
       } else {
-        showAlert(response?.message || "Failed to freeze budget time.", "error");
+        showAlert(response?.message || 'Failed to freeze budget time.', 'error');
       }
     } catch (error: any) {
-      showAlert(error?.response?.data?.message || "Failed to freeze budget time.", "error");
+      showAlert(error?.response?.data?.message || 'Failed to freeze budget time.', 'error');
     } finally {
       setFreezeSaving(false);
     }
   };
 
-  const activeAdminBudgetTab = useMemo<"dashboard" | "approval">(() => {
-    if (location.pathname.endsWith("/dashboard")) return "dashboard";
-    return "approval";
+  const activeAdminBudgetTab = useMemo<'dashboard' | 'approval'>(() => {
+    if (location.pathname.endsWith('/dashboard')) return 'dashboard';
+    return 'approval';
   }, [location.pathname]);
 
   useEffect(() => {
-    if (location.pathname === "/adminbudget") {
-      navigate("/admin/budget", { replace: true });
+    if (location.pathname === '/adminbudget') {
+      navigate('/admin/budget', { replace: true });
     }
   }, [location.pathname, navigate]);
 
   const openLogPopup = async (item: BudgetRequestItem) => {
     setLogPopupOpen(true);
     setLogLoading(true);
-    setLogRef(item.proposal_ref || "");
+    setLogRef(item.proposal_ref || '');
     setLogProposal(null);
     setLogEntries([]);
     setLogEdits([]);
@@ -938,7 +985,7 @@ const AdminBudget: React.FC = () => {
       setLogEntries(entries);
       setLogEdits(edits);
     } catch (error: any) {
-      showAlert(error?.response?.data?.message || "Failed to fetch proposal logs", "error");
+      showAlert(error?.response?.data?.message || 'Failed to fetch proposal logs', 'error');
       setLogPopupOpen(false);
     } finally {
       setLogLoading(false);
@@ -951,11 +998,11 @@ const AdminBudget: React.FC = () => {
     setLogEntries([]);
     setLogEdits([]);
     setExpandedLogDetails({});
-    setLogRef("");
+    setLogRef('');
   };
 
   const formatFreezeDate = (value?: string) => {
-    if (!value) return "--";
+    if (!value) return '--';
     const raw = String(value).trim();
 
     const ymdMatch = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
@@ -967,18 +1014,18 @@ const AdminBudget: React.FC = () => {
     const parsedMs = parseDateMsForLog(raw);
     if (!parsedMs) return raw;
     const parsed = new Date(parsedMs);
-    const day = String(parsed.getDate()).padStart(2, "0");
-    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const day = String(parsed.getDate()).padStart(2, '0');
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
     const year = String(parsed.getFullYear());
     return `${day}-${month}-${year}`;
   };
 
-  const normalizeTextForLog = (value?: string | null) => String(value || "").trim();
+  const normalizeTextForLog = (value?: string | null) => String(value || '').trim();
   const normalizeEmailForLog = (value?: string | null) => normalizeTextForLog(value).toLowerCase();
 
   const normalizeDateTimeForLog = (value?: string | null) => {
     const raw = normalizeTextForLog(value);
-    if (!raw) return "";
+    if (!raw) return '';
 
     return raw;
   };
@@ -988,13 +1035,13 @@ const AdminBudget: React.FC = () => {
     if (!raw) return 0;
 
     const dmyMatch = raw.match(
-      /^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
+      /^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/,
     );
     if (dmyMatch) {
       const day = Number(dmyMatch[1]);
       const month = Number(dmyMatch[2]);
       const yearRaw = Number(dmyMatch[3]);
-      const year = yearRaw < 100 ? (2000 + yearRaw) : yearRaw;
+      const year = yearRaw < 100 ? 2000 + yearRaw : yearRaw;
       const hour = Number(dmyMatch[4] || 0);
       const minute = Number(dmyMatch[5] || 0);
       const second = Number(dmyMatch[6] || 0);
@@ -1004,7 +1051,7 @@ const AdminBudget: React.FC = () => {
     }
 
     const ymdNoTzMatch = raw.match(
-      /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/
+      /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/,
     );
     if (ymdNoTzMatch && !/[zZ]|[+-]\d{2}:\d{2}$/.test(raw)) {
       const year = Number(ymdNoTzMatch[1]);
@@ -1022,15 +1069,15 @@ const AdminBudget: React.FC = () => {
     const directMs = direct.getTime();
     if (!Number.isNaN(directMs)) return directMs;
 
-    const fallback = new Date(raw.replace(" ", "T"));
+    const fallback = new Date(raw.replace(' ', 'T'));
     const fallbackMs = fallback.getTime();
     return Number.isNaN(fallbackMs) ? 0 : fallbackMs;
   };
 
   const formatDateTimeForLog = (value?: string) => {
     const ms = parseDateMsForLog(value);
-    if (!ms) return "-";
-    return new Date(ms).toLocaleString("en-IN");
+    if (!ms) return '-';
+    return new Date(ms).toLocaleString('en-IN');
   };
 
   const readActorEmail = (record: any, keys: string[]) => {
@@ -1038,40 +1085,41 @@ const AdminBudget: React.FC = () => {
       const value = normalizeEmailForLog(record?.[key]);
       if (value) return value;
     }
-    return "";
+    return '';
   };
 
   const isAdminRoleToken = (value?: string | null) => {
     const token = normalizeTextForLog(value).toLowerCase();
-    return token === "admin" || token === "super_admin";
+    return token === 'admin' || token === 'super_admin';
   };
 
   const getWorkflowBadgeLabel = (role?: string | null) => {
     const token = normalizeTextForLog(role).toLowerCase();
-    if (["level1", "hod", "coordinator"].includes(token)) return "HOD";
-    if (token === "dof") return "DOF";
-    if (["principal", "admin", "super_admin", "superadmin"].includes(token)) return "SUPERADMIN";
-    return "";
+    if (['level1', 'hod', 'coordinator'].includes(token)) return 'HOD';
+    if (token === 'dof') return 'DOF';
+    if (['principal', 'admin', 'super_admin', 'superadmin'].includes(token)) return 'SUPERADMIN';
+    return '';
   };
 
   const getRoleLabelForLog = (role?: string) => {
-    const normalized = String(role || "").toLowerCase();
-    if (normalized === "level1") {
-      return getLevel1Label(logProposal?.beneficiary_type || "", logProposal?.level1_route_type) === "Coordinator"
-        ? "Coordinator"
-        : "HoD";
+    const normalized = String(role || '').toLowerCase();
+    if (normalized === 'level1') {
+      return getLevel1Label(logProposal?.beneficiary_type || '', logProposal?.level1_route_type) ===
+        'Coordinator'
+        ? 'Coordinator'
+        : 'HoD';
     }
     const map: Record<string, string> = {
-      hod: "HoD",
-      coordinator: "Coordinator",
-      dof: "DoF",
-      principal: "Principal",
-      admin: "Admin",
-      super_admin: "Super Admin",
-      applicant: "Applicant",
-      user: "Applicant",
+      hod: 'HoD',
+      coordinator: 'Coordinator',
+      dof: 'DoF',
+      principal: 'Principal',
+      admin: 'Admin',
+      super_admin: 'Super Admin',
+      applicant: 'Applicant',
+      user: 'Applicant',
     };
-    return map[normalized] || (role ? role.toUpperCase() : "Approver");
+    return map[normalized] || (role ? role.toUpperCase() : 'Approver');
   };
 
   const buildAdminLogEvents = useMemo<AdminLogEvent[]>(() => {
@@ -1085,18 +1133,18 @@ const AdminBudget: React.FC = () => {
     const submitterEmail = normalizeEmailForLog(logProposal?.user_email || logProposal?.userEmail);
     const approvalLogs = Array.isArray(logEntries) ? logEntries : [];
     const hasApprovalUpdate = approvalLogs.some(
-      (app: any) => String(app?.decision || app?.status || "").toLowerCase() === "updated"
+      (app: any) => String(app?.decision || app?.status || '').toLowerCase() === 'updated',
     );
 
     if (createdAtMs) {
       events.push({
-        key: "submitted",
-        title: "Submitted",
-        subtitle: "Proposal created",
-        actorLine: `Submitted By: ${submitterEmail || "-"}`,
+        key: 'submitted',
+        title: 'Submitted',
+        subtitle: 'Proposal created',
+        actorLine: `Submitted By: ${submitterEmail || '-'}`,
         timestamp: createdAtMs,
         dateLabel: formatDateTimeForLog(createdAt),
-        decision: "submitted",
+        decision: 'submitted',
       });
     }
 
@@ -1110,32 +1158,36 @@ const AdminBudget: React.FC = () => {
 
         if (edit.details) {
           try {
-            parsedDetails = typeof edit.details === "string" ? JSON.parse(edit.details) : edit.details;
+            parsedDetails =
+              typeof edit.details === 'string' ? JSON.parse(edit.details) : edit.details;
           } catch {
             parsedDetails = null;
           }
         }
 
         const editorEmail = readActorEmail(edit, [
-          "edited_by_email",
-          "editedByEmail",
-          "updated_by_email",
-          "updatedByEmail",
-          "user_email",
-          "email",
+          'edited_by_email',
+          'editedByEmail',
+          'updated_by_email',
+          'updatedByEmail',
+          'user_email',
+          'email',
         ]);
         const explicitlyAdmin =
           Boolean(edit.is_admin ?? edit.isAdmin ?? edit.updated_by_admin ?? edit.updatedByAdmin) ||
           isAdminRoleToken(edit.edited_by_role || edit.editedByRole || edit.role);
-        const inferredAdmin = Boolean(editorEmail && submitterEmail && editorEmail !== submitterEmail);
+        const inferredAdmin = Boolean(
+          editorEmail && submitterEmail && editorEmail !== submitterEmail,
+        );
         const actorIsAdmin = explicitlyAdmin || inferredAdmin;
         const editorRole =
           normalizeTextForLog(edit.edited_by_role || edit.editedByRole || edit.role) ||
           normalizeTextForLog(parsedDetails?.editorRole);
-        const actorBadgeLabel = getWorkflowBadgeLabel(editorRole) || (actorIsAdmin ? "SUPERADMIN" : "");
-        let rowSummary = "";
-        let detailSummary = "";
-        let fullDetailSummary = "";
+        const actorBadgeLabel =
+          getWorkflowBadgeLabel(editorRole) || (actorIsAdmin ? 'SUPERADMIN' : '');
+        let rowSummary = '';
+        let detailSummary = '';
+        let fullDetailSummary = '';
 
         if (edit.details) {
           try {
@@ -1152,7 +1204,9 @@ const AdminBudget: React.FC = () => {
               : [];
             if (lines.length > 0) {
               const numericRows = lines
-                .map((line: any) => Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no))
+                .map((line: any) =>
+                  Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no),
+                )
                 .filter((lineNo: number) => Number.isInteger(lineNo) && lineNo > 0);
               const rowNumbers = Array.from(new Set<number>(numericRows)).sort((a, b) => a - b);
 
@@ -1168,85 +1222,83 @@ const AdminBudget: React.FC = () => {
               const proposalSummary = proposalChanges
                 .map((change: any) => normalizeTextForLog(change))
                 .filter(Boolean)
-                .join("; ");
-              detailSummary = [detailSummary, proposalSummary].filter(Boolean).join(" | ");
-              fullDetailSummary = [fullDetailSummary, proposalSummary].filter(Boolean).join(" | ");
+                .join('; ');
+              detailSummary = [detailSummary, proposalSummary].filter(Boolean).join(' | ');
+              fullDetailSummary = [fullDetailSummary, proposalSummary].filter(Boolean).join(' | ');
             }
           } catch {
             // Keep summary fallback if details parse fails.
           }
         }
 
-        const subtitle = [rowSummary || summary, detailSummary].filter(Boolean).join(" | ");
-        const fullSubtitle = [rowSummary || summary, fullDetailSummary || detailSummary].filter(Boolean).join(" | ");
+        const subtitle = [rowSummary || summary, detailSummary].filter(Boolean).join(' | ');
+        const fullSubtitle = [rowSummary || summary, fullDetailSummary || detailSummary]
+          .filter(Boolean)
+          .join(' | ');
         if (!subtitle) return;
 
         events.push({
           key: `edit-${edit.id || idx}`,
-          title: "Updated",
+          title: 'Updated',
           subtitle,
           fullSubtitle,
-          actorLine: `Updated By: ${editorEmail || "-"}`,
+          actorLine: `Updated By: ${editorEmail || '-'}`,
           actorIsAdmin,
           actorBadgeLabel,
           timestamp: editCreatedMs,
           dateLabel: formatDateTimeForLog(editCreatedAt || updatedAt || createdAt),
-          decision: "updated",
+          decision: 'updated',
         });
       });
     }
 
     approvalLogs.forEach((app: any, idx: number) => {
       const feedback = normalizeTextForLog(app.feedback);
-      if (feedback === "__archive_meta__:") return;
-      if (feedback === "Auto-approved after DoF clearance") return;
+      if (feedback === '__archive_meta__:') return;
+      if (feedback === 'Auto-approved after DoF clearance') return;
 
-      const decision = String(app.decision || app.status || "updated").toLowerCase();
-      if (decision === "updated") {
+      const decision = String(app.decision || app.status || 'updated').toLowerCase();
+      if (decision === 'updated') {
         if (editLogs.length > 0) return;
-        if (!feedback || feedback.toLowerCase().includes("reviewed (no line change)")) return;
+        if (!feedback || feedback.toLowerCase().includes('reviewed (no line change)')) return;
       }
       const approverEmail = readActorEmail(app, [
-        "approver_email",
-        "approverEmail",
-        "updated_by_email",
-        "updatedByEmail",
-        "email",
+        'approver_email',
+        'approverEmail',
+        'updated_by_email',
+        'updatedByEmail',
+        'email',
       ]);
       const decidedAt = app.decided_at || app.decidedAt || app.decided_at_formatted;
       const decidedAtMs = parseDateMsForLog(decidedAt);
-      const feedbackNote = feedback && !feedback.startsWith("__archive_meta__:")
-        ? `Remarks: ${feedback}`
-        : "";
+      const feedbackNote =
+        feedback && !feedback.startsWith('__archive_meta__:') ? `Remarks: ${feedback}` : '';
       const actorPrefix =
-        decision === "approved"
-          ? "Approved By"
+        decision === 'approved'
+          ? 'Approved By'
           : `${decision.charAt(0).toUpperCase() + decision.slice(1)} By`;
-      const subtitleParts = [
-        `by ${getRoleLabelForLog(app.role)}`,
-        feedbackNote,
-      ].filter(Boolean);
+      const subtitleParts = [`by ${getRoleLabelForLog(app.role)}`, feedbackNote].filter(Boolean);
       const actorIsAdmin =
         isAdminRoleToken(app.role) ||
         Boolean(app.is_admin ?? app.isAdmin ?? app.updated_by_admin ?? app.updatedByAdmin);
-      const actorBadgeLabel = decision === "updated" ? getWorkflowBadgeLabel(app.role) : "";
+      const actorBadgeLabel = decision === 'updated' ? getWorkflowBadgeLabel(app.role) : '';
 
       events.push({
         key: `approval-${idx}`,
         title: decision.charAt(0).toUpperCase() + decision.slice(1),
-        subtitle: subtitleParts.join(" | "),
-        actorLine: `${actorPrefix}: ${approverEmail || "-"}`,
+        subtitle: subtitleParts.join(' | '),
+        actorLine: `${actorPrefix}: ${approverEmail || '-'}`,
         actorIsAdmin,
         actorBadgeLabel,
         timestamp: decidedAtMs || createdAtMs,
-        dateLabel: decidedAt ? formatDateTimeForLog(decidedAt) : "-",
+        dateLabel: decidedAt ? formatDateTimeForLog(decidedAt) : '-',
         decision,
       });
     });
 
     const decisionOrder = (decision?: string) => {
-      if (decision === "submitted") return 0;
-      if (decision === "updated") return 1;
+      if (decision === 'submitted') return 0;
+      if (decision === 'updated') return 1;
       return 2;
     };
 
@@ -1265,23 +1317,25 @@ const AdminBudget: React.FC = () => {
 
   return (
     <>
-
-
       <section className="adminbudget-page">
         <div className="adminbudget-container">
           <div className="adminbudget-card">
-            {(activeAdminBudgetTab !== "dashboard" || !isHodBudgetView) && (
+            {(activeAdminBudgetTab !== 'dashboard' || !isHodBudgetView) && (
               <>
                 <div className="adminbudget-header">
                   <h5 className="adminbudget-title">Budget Requests</h5>
 
                   {queueTabs.length > 0 && (
-                    <div className="adminbudget-role-tabs" role="tablist" aria-label="Budget queues">
+                    <div
+                      className="adminbudget-role-tabs"
+                      role="tablist"
+                      aria-label="Budget queues"
+                    >
                       {queueTabs.map((tab) => (
                         <button
                           key={tab.key}
                           type="button"
-                          className={`adminbudget-role-tab ${activeQueueTabKey === tab.key ? "active" : ""}`}
+                          className={`adminbudget-role-tab ${activeQueueTabKey === tab.key ? 'active' : ''}`}
                           onClick={() => setActiveQueueTabKey(tab.key)}
                           role="tab"
                           aria-selected={activeQueueTabKey === tab.key}
@@ -1297,7 +1351,7 @@ const AdminBudget: React.FC = () => {
                       <div className="adminbudget-freeze-popover-wrap" ref={freezePopoverRef}>
                         <button
                           type="button"
-                          className={`adminbudget-freeze-trigger ${isTimeFrozen ? "is-frozen" : ""}`}
+                          className={`adminbudget-freeze-trigger ${isTimeFrozen ? 'is-frozen' : ''}`}
                           onClick={() => setFreezePopupOpen((prev) => !prev)}
                           title="Freeze Budget Time"
                           aria-label="Freeze Budget Time"
@@ -1307,7 +1361,9 @@ const AdminBudget: React.FC = () => {
 
                         {freezePopupOpen && (
                           <div className="adminbudget-freeze-popover-card">
-                            <div className="adminbudget-freeze-popover-title">Freeze Budget Time</div>
+                            <div className="adminbudget-freeze-popover-title">
+                              Freeze Budget Time
+                            </div>
                             <div className="adminbudget-freeze-popover-meta">
                               <div className="adminbudget-freeze-popover-subtitle">
                                 FY {fiscalYear}-{String(fiscalYear + 1).slice(2)}
@@ -1317,7 +1373,10 @@ const AdminBudget: React.FC = () => {
                               </div>
                             </div>
 
-                            <label className="adminbudget-freeze-popover-label" htmlFor="freezeDateInput">
+                            <label
+                              className="adminbudget-freeze-popover-label"
+                              htmlFor="freezeDateInput"
+                            >
                               Cutoff Date
                             </label>
                             <div className="adminbudget-freeze-date-wrap">
@@ -1335,7 +1394,8 @@ const AdminBudget: React.FC = () => {
 
                             {!isSuperAdminLogin && (
                               <div className="adminbudget-freeze-popover-note">
-                                DoF can freeze once per financial year and only on {dofFreezeAllowedDateText}.
+                                DoF can freeze once per financial year and only on{' '}
+                                {dofFreezeAllowedDateText}.
                               </div>
                             )}
 
@@ -1350,16 +1410,20 @@ const AdminBudget: React.FC = () => {
                               </button>
                               <button
                                 type="button"
-                                className={`adminbudget-freeze-btn ${isTimeFrozen ? "is-frozen" : ""}`}
+                                className={`adminbudget-freeze-btn ${isTimeFrozen ? 'is-frozen' : ''}`}
                                 onClick={onFreezeTime}
                                 disabled={freezeLoading || freezeSaving || !canFreezeNow}
                                 title={
                                   !canFreezeNow && !isSuperAdminLogin
                                     ? `DoF freeze is available only on ${dofFreezeAllowedDateText}`
-                                    : "Freeze"
+                                    : 'Freeze'
                                 }
                               >
-                                {freezeSaving ? "Freezing..." : isTimeFrozen ? "Update Freeze" : "Freeze"}
+                                {freezeSaving
+                                  ? 'Freezing...'
+                                  : isTimeFrozen
+                                    ? 'Update Freeze'
+                                    : 'Freeze'}
                               </button>
                             </div>
                           </div>
@@ -1400,7 +1464,7 @@ const AdminBudget: React.FC = () => {
                       value={beneficiaryFilter}
                       onChange={(e) => {
                         setBeneficiaryFilter(e.target.value);
-                        setDepartmentFilter("");
+                        setDepartmentFilter('');
                       }}
                       title="Beneficiary"
                     >
@@ -1411,18 +1475,26 @@ const AdminBudget: React.FC = () => {
                       ))}
                     </select>
 
-                    {(isSuperAdminLogin || isDofLogin || hasPermission(user, "budget.workflow.principal")) && (
+                    {(isSuperAdminLogin ||
+                      isDofLogin ||
+                      hasPermission(user, 'budget.workflow.principal')) && (
                       <select
                         className="adminbudget-control"
                         value={departmentFilter}
                         onChange={(e) => setDepartmentFilter(e.target.value)}
-                        title={beneficiaryFilter === "All Beneficiary" || ["Faculty", "Staff", "Department"].includes(beneficiaryFilter) ? "Department" : beneficiaryFilter}
+                        title={
+                          beneficiaryFilter === 'All Beneficiary' ||
+                          ['Faculty', 'Staff', 'Department'].includes(beneficiaryFilter)
+                            ? 'Department'
+                            : beneficiaryFilter
+                        }
                       >
                         <option value="">
-                          {beneficiaryFilter === "All Beneficiary" || ["Faculty", "Staff", "Department"].includes(beneficiaryFilter) 
-                            ? "All Departments" 
-                            : beneficiaryFilter === "Professional Body" 
-                              ? "All Professional Bodies"
+                          {beneficiaryFilter === 'All Beneficiary' ||
+                          ['Faculty', 'Staff', 'Department'].includes(beneficiaryFilter)
+                            ? 'All Departments'
+                            : beneficiaryFilter === 'Professional Body'
+                              ? 'All Professional Bodies'
                               : `All ${beneficiaryFilter}s`}
                         </option>
                         {departmentsList.map((dept) => (
@@ -1445,8 +1517,8 @@ const AdminBudget: React.FC = () => {
 
                 <div className="adminbudget-stats">
                   <div
-                    className={`adminbudget-stats-card total ${localStatsFilter === "total" ? "active" : ""}`}
-                    onClick={() => handleStatsFilter("total")}
+                    className={`adminbudget-stats-card total ${localStatsFilter === 'total' ? 'active' : ''}`}
+                    onClick={() => handleStatsFilter('total')}
                     title="Show All Budgets"
                   >
                     <span className="adminbudget-stats-icon">
@@ -1458,8 +1530,8 @@ const AdminBudget: React.FC = () => {
                     </div>
                   </div>
                   <div
-                    className={`adminbudget-stats-card pending ${localStatsFilter === "pending" ? "active" : ""}`}
-                    onClick={() => handleStatsFilter("pending")}
+                    className={`adminbudget-stats-card pending ${localStatsFilter === 'pending' ? 'active' : ''}`}
+                    onClick={() => handleStatsFilter('pending')}
                     title="Filter Pending"
                   >
                     <span className="adminbudget-stats-icon">
@@ -1471,8 +1543,8 @@ const AdminBudget: React.FC = () => {
                     </div>
                   </div>
                   <div
-                    className={`adminbudget-stats-card returned ${localStatsFilter === "returned" ? "active" : ""}`}
-                    onClick={() => handleStatsFilter("returned")}
+                    className={`adminbudget-stats-card returned ${localStatsFilter === 'returned' ? 'active' : ''}`}
+                    onClick={() => handleStatsFilter('returned')}
                     title="Filter Returned"
                   >
                     <span className="adminbudget-stats-icon">
@@ -1484,8 +1556,8 @@ const AdminBudget: React.FC = () => {
                     </div>
                   </div>
                   <div
-                    className={`adminbudget-stats-card rejected ${localStatsFilter === "rejected" ? "active" : ""}`}
-                    onClick={() => handleStatsFilter("rejected")}
+                    className={`adminbudget-stats-card rejected ${localStatsFilter === 'rejected' ? 'active' : ''}`}
+                    onClick={() => handleStatsFilter('rejected')}
                     title="Filter Rejected"
                   >
                     <span className="adminbudget-stats-icon">
@@ -1497,8 +1569,8 @@ const AdminBudget: React.FC = () => {
                     </div>
                   </div>
                   <div
-                    className={`adminbudget-stats-card approved ${localStatsFilter === "approved" ? "active" : ""}`}
-                    onClick={() => handleStatsFilter("approved")}
+                    className={`adminbudget-stats-card approved ${localStatsFilter === 'approved' ? 'active' : ''}`}
+                    onClick={() => handleStatsFilter('approved')}
                     title="Filter Approved"
                   >
                     <span className="adminbudget-stats-icon">
@@ -1510,8 +1582,8 @@ const AdminBudget: React.FC = () => {
                     </div>
                   </div>
                   <div
-                    className={`adminbudget-stats-card archived ${localStatsFilter === "archived" ? "active" : ""}`}
-                    onClick={() => handleStatsFilter("archived")}
+                    className={`adminbudget-stats-card archived ${localStatsFilter === 'archived' ? 'active' : ''}`}
+                    onClick={() => handleStatsFilter('archived')}
                     title="Filter Archived"
                   >
                     <span className="adminbudget-stats-icon">
@@ -1526,7 +1598,9 @@ const AdminBudget: React.FC = () => {
 
                 <div className="adminbudget-body">
                   {loading && <div className="adminbudget-state">Loading budget requests...</div>}
-                  {!loading && accessError && <div className="adminbudget-state">{accessError}</div>}
+                  {!loading && accessError && (
+                    <div className="adminbudget-state">{accessError}</div>
+                  )}
                   {!loading && !accessError && baseFilteredData.length === 0 && (
                     <div className="adminbudget-state">No budget requests found</div>
                   )}
@@ -1536,30 +1610,38 @@ const AdminBudget: React.FC = () => {
                       <div className="adminbudget-cards-container">
                         {currentItems.map((item) => {
                           const canProcessCurrentStage = canProcessStage(item.current_stage);
-                          const normalizedStatus = (item.status || "").toLowerCase();
+                          const normalizedStatus = (item.status || '').toLowerCase();
                           const isResubmitted = isResubmittedBudgetItem(item);
-                          const isArchivedStatus = ["archived", "archive"].some((token) => normalizedStatus.includes(token));
-                          const isRejectedStatus = normalizedStatus.includes("rejected");
-                          const isReturnedStatus = normalizedStatus.includes("returned");
-                          const isCompletedStatus = normalizedStatus.includes("completed");
-                          const isActionLocked = isArchivedStatus || isRejectedStatus || isReturnedStatus || isCompletedStatus;
-                          const effectiveAmount = item.approved_total_amount != null 
-                            ? Number(item.approved_total_amount) 
-                            : Number(item.total_amount ?? 0);
-                          const isApprovedForDisplay = getStatusCategory(item) === "approved";
-                          const displayAmountLabel = isApprovedForDisplay ? "Approved" : "Proposed";
+                          const isArchivedStatus = ['archived', 'archive'].some((token) =>
+                            normalizedStatus.includes(token),
+                          );
+                          const isRejectedStatus = normalizedStatus.includes('rejected');
+                          const isReturnedStatus = normalizedStatus.includes('returned');
+                          const isCompletedStatus = normalizedStatus.includes('completed');
+                          const isActionLocked =
+                            isArchivedStatus ||
+                            isRejectedStatus ||
+                            isReturnedStatus ||
+                            isCompletedStatus;
+                          const effectiveAmount =
+                            item.approved_total_amount != null
+                              ? Number(item.approved_total_amount)
+                              : Number(item.total_amount ?? 0);
+                          const isApprovedForDisplay = getStatusCategory(item) === 'approved';
+                          const displayAmountLabel = isApprovedForDisplay ? 'Approved' : 'Proposed';
                           const displayAmountValue = effectiveAmount;
 
                           return (
                             <div className="adminbudget-item-wrap" key={item.id}>
                               <div
-                                className={`adminbudget-item adminbudget-item--clickable ${isResubmitted ? "adminbudget-item--resubmitted" : ""} ${archivingIds.has(item.id) ? "adminbudget-item--archiving" : ""
-                                  }`}
+                                className={`adminbudget-item adminbudget-item--clickable ${isResubmitted ? 'adminbudget-item--resubmitted' : ''} ${
+                                  archivingIds.has(item.id) ? 'adminbudget-item--archiving' : ''
+                                }`}
                                 role="button"
                                 tabIndex={0}
                                 onClick={() => navigate(`/budget/${item.id}?admin=true`)}
                                 onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
+                                  if (e.key === 'Enter' || e.key === ' ') {
                                     e.preventDefault();
                                     navigate(`/budget/${item.id}?admin=true`);
                                   }
@@ -1568,24 +1650,41 @@ const AdminBudget: React.FC = () => {
                                 <div className="adminbudget-topbar">
                                   <div className="adminbudget-topbar-left">
                                     <span className="adminbudget-id">{item.proposal_ref}</span>
-                                    <h5 className="adminbudget-name">{item.applicant_name || "Unknown"}</h5>
-                                    <span className="adminbudget-tag-pill">{item.budget_tag || "No Tag"}</span>
+                                    <h5 className="adminbudget-name">
+                                      {item.applicant_name || 'Unknown'}
+                                    </h5>
+                                    <span className="adminbudget-tag-pill">
+                                      {item.budget_tag || 'No Tag'}
+                                    </span>
                                   </div>
 
                                   <div className="adminbudget-topbar-right">
                                     <div
                                       className="adminbudget-amounts-container"
-                                      style={{ display: "flex", gap: "20px", textAlign: "right", marginRight: "15px" }}
+                                      style={{
+                                        display: 'flex',
+                                        gap: '20px',
+                                        textAlign: 'right',
+                                        marginRight: '15px',
+                                      }}
                                     >
                                       <div className="adminbudget-amount-item">
                                         <p
                                           className="adminbudget-amount-label"
-                                          style={{ margin: 0, fontSize: "0.78rem", fontWeight: 600, opacity: 0.75 }}
+                                          style={{
+                                            margin: 0,
+                                            fontSize: '0.78rem',
+                                            fontWeight: 600,
+                                            opacity: 0.75,
+                                          }}
                                         >
                                           {displayAmountLabel}
                                         </p>
-                                        <p className="adminbudget-amount" style={{ margin: 0, fontSize: "1.1rem" }}>
-                                          ₹ {displayAmountValue.toLocaleString("en-IN")}
+                                        <p
+                                          className="adminbudget-amount"
+                                          style={{ margin: 0, fontSize: '1.1rem' }}
+                                        >
+                                          ₹ {displayAmountValue.toLocaleString('en-IN')}
                                         </p>
                                       </div>
                                     </div>
@@ -1630,13 +1729,17 @@ const AdminBudget: React.FC = () => {
                                   <div className="adminbudget-left">
                                     <div className="adminbudget-detail-row">
                                       <span className="adminbudget-label">Beneficiary</span>
-                                      <span className="adminbudget-value">{item.beneficiary_value || "Not specified"}</span>
+                                      <span className="adminbudget-value">
+                                        {item.beneficiary_value || 'Not specified'}
+                                      </span>
                                     </div>
                                   </div>
 
                                   <div className="adminbudget-right">
                                     <div className="adminbudget-status-wrap">
-                                      <span className={statusClass(item)}>{getDisplayStatus(item)}</span>
+                                      <span className={statusClass(item)}>
+                                        {getDisplayStatus(item)}
+                                      </span>
                                     </div>
                                     <div className="adminbudget-actions-row">
                                       {!isSuperAdmin(user) && !isApprovedForDisplay && (
@@ -1648,10 +1751,7 @@ const AdminBudget: React.FC = () => {
                                               e.stopPropagation();
                                               onApprove(item.id, item.current_stage);
                                             }}
-                                            disabled={
-                                              isActionLocked ||
-                                              !canProcessCurrentStage
-                                            }
+                                            disabled={isActionLocked || !canProcessCurrentStage}
                                           >
                                             <CheckCircle2 size={18} />
                                           </button>
@@ -1661,11 +1761,14 @@ const AdminBudget: React.FC = () => {
                                             title="Return"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              openActionPopup("return", item.id, item.proposal_ref, item.current_stage);
+                                              openActionPopup(
+                                                'return',
+                                                item.id,
+                                                item.proposal_ref,
+                                                item.current_stage,
+                                              );
                                             }}
-                                            disabled={
-                                              isActionLocked || !canProcessCurrentStage
-                                            }
+                                            disabled={isActionLocked || !canProcessCurrentStage}
                                           >
                                             <RotateCcw size={18} />
                                           </button>
@@ -1675,11 +1778,14 @@ const AdminBudget: React.FC = () => {
                                             title="Reject"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              openActionPopup("reject", item.id, item.proposal_ref, item.current_stage);
+                                              openActionPopup(
+                                                'reject',
+                                                item.id,
+                                                item.proposal_ref,
+                                                item.current_stage,
+                                              );
                                             }}
-                                            disabled={
-                                              isActionLocked || !canProcessCurrentStage
-                                            }
+                                            disabled={isActionLocked || !canProcessCurrentStage}
                                           >
                                             <XCircle size={18} />
                                           </button>
@@ -1693,7 +1799,12 @@ const AdminBudget: React.FC = () => {
                                             title="Return"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              openActionPopup("return", item.id, item.proposal_ref, item.current_stage);
+                                              openActionPopup(
+                                                'return',
+                                                item.id,
+                                                item.proposal_ref,
+                                                item.current_stage,
+                                              );
                                             }}
                                             disabled={false}
                                           >
@@ -1715,11 +1826,7 @@ const AdminBudget: React.FC = () => {
                                       {(isSuperAdmin(user) || !isApprovedForDisplay) && (
                                         <button
                                           className="adminbudget-action-btn adminbudget-action-btn--archive"
-                                          title={
-                                            isArchivedStatus
-                                              ? "Unarchive"
-                                              : "Archive"
-                                          }
+                                          title={isArchivedStatus ? 'Unarchive' : 'Archive'}
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             onArchiveToggle(item);
@@ -1728,7 +1835,9 @@ const AdminBudget: React.FC = () => {
                                             archivingIds.has(item.id) ||
                                             (!isSuperAdmin(user) &&
                                               !isArchivedStatus &&
-                                              (isCompletedStatus || isRejectedStatus || isReturnedStatus))
+                                              (isCompletedStatus ||
+                                                isRejectedStatus ||
+                                                isReturnedStatus))
                                           }
                                         >
                                           <Archive size={18} />
@@ -1746,7 +1855,10 @@ const AdminBudget: React.FC = () => {
                       <div className="adminbudget-pagination">
                         <div className="adminbudget-pagination-left">
                           <div className="adminbudget-rows-control">
-                            <label htmlFor="adminbudget-rows-per-page" className="adminbudget-rows-label">
+                            <label
+                              htmlFor="adminbudget-rows-per-page"
+                              className="adminbudget-rows-label"
+                            >
                               Rows per page
                             </label>
                             <select
@@ -1768,7 +1880,7 @@ const AdminBudget: React.FC = () => {
 
                           <span className="adminbudget-pagecount">
                             {totalItemsCount === 0
-                              ? "0-0 of 0"
+                              ? '0-0 of 0'
                               : `${(safeCurrentPage - 1) * itemsPerPage + 1}-${Math.min(safeCurrentPage * itemsPerPage, totalItemsCount)} of ${totalItemsCount}`}
                           </span>
                         </div>
@@ -1801,22 +1913,24 @@ const AdminBudget: React.FC = () => {
               </>
             )}
 
-            {isHodBudgetView && activeAdminBudgetTab === "dashboard" && (
-              <div className="adminbudget-dashboard-placeholder">Dashboard view will be added here.</div>
+            {isHodBudgetView && activeAdminBudgetTab === 'dashboard' && (
+              <div className="adminbudget-dashboard-placeholder">
+                Dashboard view will be added here.
+              </div>
             )}
           </div>
         </div>
-      </section >
+      </section>
 
       {actionPopupOpen && (
         <div
           style={{
-            position: "fixed",
+            position: 'fixed',
             inset: 0,
-            background: "rgba(0,0,0,0.35)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             zIndex: 999999,
             padding: 16,
           }}
@@ -1824,19 +1938,19 @@ const AdminBudget: React.FC = () => {
         >
           <div
             style={{
-              width: "min(520px, 95vw)",
-              background: "#fff",
+              width: 'min(520px, 95vw)',
+              background: '#fff',
               borderRadius: 12,
               padding: 18,
-              boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
+              boxShadow: '0 10px 35px rgba(0,0,0,0.25)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <h5 style={{ margin: 0, marginBottom: 10 }}>
-              {actionType === "return" ? "Return Budget" : "Reject Budget"} - Comments
+              {actionType === 'return' ? 'Return Budget' : 'Reject Budget'} - Comments
             </h5>
 
-            <div style={{ fontSize: 13, color: "#666", marginBottom: 10 }}>
+            <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
               Budget ID: <b>{actionRef}</b>
             </div>
 
@@ -1846,26 +1960,26 @@ const AdminBudget: React.FC = () => {
               rows={4}
               placeholder="Enter comments (required)..."
               style={{
-                width: "100%",
+                width: '100%',
                 borderRadius: 10,
-                border: "1px solid #e0e0e0",
-                padding: "10px 12px",
-                outline: "none",
-                resize: "vertical",
-                fontFamily: "inherit",
+                border: '1px solid #e0e0e0',
+                padding: '10px 12px',
+                outline: 'none',
+                resize: 'vertical',
+                fontFamily: 'inherit',
               }}
             />
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
               <button
                 type="button"
                 onClick={closeActionPopup}
                 style={{
-                  border: "1px solid #ddd",
-                  background: "#fff",
+                  border: '1px solid #ddd',
+                  background: '#fff',
                   borderRadius: 10,
-                  padding: "8px 14px",
-                  cursor: "pointer",
+                  padding: '8px 14px',
+                  cursor: 'pointer',
                 }}
               >
                 Cancel
@@ -1875,12 +1989,12 @@ const AdminBudget: React.FC = () => {
                 type="button"
                 onClick={submitActionWithComment}
                 style={{
-                  border: "none",
-                  background: actionType === "reject" ? "#dc3545" : "#f0ad4e",
-                  color: "#fff",
+                  border: 'none',
+                  background: actionType === 'reject' ? '#dc3545' : '#f0ad4e',
+                  color: '#fff',
                   borderRadius: 10,
-                  padding: "8px 14px",
-                  cursor: "pointer",
+                  padding: '8px 14px',
+                  cursor: 'pointer',
                 }}
               >
                 Submit
@@ -1908,12 +2022,12 @@ const AdminBudget: React.FC = () => {
           tabIndex={0}
           aria-label="Close delete confirmation dialog"
           style={{
-            position: "fixed",
+            position: 'fixed',
             inset: 0,
-            background: "rgba(0,0,0,0.35)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             zIndex: 999999,
             padding: 16,
           }}
@@ -1924,7 +2038,7 @@ const AdminBudget: React.FC = () => {
           }}
           onKeyDown={(e) => {
             if (e.target !== e.currentTarget) return;
-            if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
+            if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               closeDeletePopup();
             }
@@ -1932,33 +2046,33 @@ const AdminBudget: React.FC = () => {
         >
           <div
             style={{
-              width: "min(400px, 95vw)",
-              background: "#fff",
+              width: 'min(400px, 95vw)',
+              background: '#fff',
               borderRadius: 12,
               padding: 24,
-              boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
-              textAlign: "center",
+              boxShadow: '0 10px 35px rgba(0,0,0,0.25)',
+              textAlign: 'center',
             }}
           >
-            <div style={{ color: "#dc3545", marginBottom: 16 }}>
+            <div style={{ color: '#dc3545', marginBottom: 16 }}>
               <Trash2 size={48} />
             </div>
-            <h4 style={{ margin: "0 0 8px 0", color: "#333" }}>Confirm Deletion</h4>
-            <p style={{ margin: "0 0 16px 0", color: "#666", fontSize: "14px" }}>
-              Are you sure you want to permanently delete budget request <strong>{deleteRef}</strong>? This
-              action cannot be undone.
+            <h4 style={{ margin: '0 0 8px 0', color: '#333' }}>Confirm Deletion</h4>
+            <p style={{ margin: '0 0 16px 0', color: '#666', fontSize: '14px' }}>
+              Are you sure you want to permanently delete budget request{' '}
+              <strong>{deleteRef}</strong>? This action cannot be undone.
             </p>
 
-            <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 24 }}>
               <button
                 type="button"
                 onClick={closeDeletePopup}
                 style={{
-                  border: "1px solid #ddd",
-                  background: "#fff",
+                  border: '1px solid #ddd',
+                  background: '#fff',
                   borderRadius: 8,
-                  padding: "8px 24px",
-                  cursor: "pointer",
+                  padding: '8px 24px',
+                  cursor: 'pointer',
                   fontWeight: 500,
                 }}
               >
@@ -1970,18 +2084,18 @@ const AdminBudget: React.FC = () => {
                 onClick={confirmDelete}
                 disabled={deleteCountdown > 0}
                 style={{
-                  border: "none",
-                  background: deleteCountdown > 0 ? "#e9ecef" : "#dc3545",
-                  color: deleteCountdown > 0 ? "#6c757d" : "#fff",
+                  border: 'none',
+                  background: deleteCountdown > 0 ? '#e9ecef' : '#dc3545',
+                  color: deleteCountdown > 0 ? '#6c757d' : '#fff',
                   borderRadius: 8,
-                  padding: "8px 24px",
-                  cursor: deleteCountdown > 0 ? "not-allowed" : "pointer",
+                  padding: '8px 24px',
+                  cursor: deleteCountdown > 0 ? 'not-allowed' : 'pointer',
                   fontWeight: 500,
-                  minWidth: "120px",
-                  transition: "all 0.2s",
+                  minWidth: '120px',
+                  transition: 'all 0.2s',
                 }}
               >
-                {deleteCountdown > 0 ? `Delete (${deleteCountdown}s)` : "Delete"}
+                {deleteCountdown > 0 ? `Delete (${deleteCountdown}s)` : 'Delete'}
               </button>
             </div>
           </div>
@@ -1991,12 +2105,12 @@ const AdminBudget: React.FC = () => {
       {logPopupOpen && (
         <div
           style={{
-            position: "fixed",
+            position: 'fixed',
             inset: 0,
-            background: "rgba(0,0,0,0.35)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             zIndex: 999999,
             padding: 16,
           }}
@@ -2004,13 +2118,13 @@ const AdminBudget: React.FC = () => {
         >
           <div
             style={{
-              width: "min(760px, 96vw)",
-              maxHeight: "80vh",
-              overflow: "auto",
-              background: "#fff",
+              width: 'min(760px, 96vw)',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              background: '#fff',
               borderRadius: 12,
               padding: 0,
-              boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
+              boxShadow: '0 10px 35px rgba(0,0,0,0.25)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -2018,22 +2132,30 @@ const AdminBudget: React.FC = () => {
             <div className="budgetdashboard-log-body adminbudget-log-body">
               <div className="budgetdashboard-log-item">
                 <span className="log-label">Proposal:</span>
-                <span className="log-value">{logRef || "--"}</span>
+                <span className="log-value">{logRef || '--'}</span>
               </div>
 
-              {(logProposal?.updated_at || logProposal?.updatedAt) && (logProposal?.created_at || logProposal?.createdAt) && (
+              {(logProposal?.updated_at || logProposal?.updatedAt) &&
+                (logProposal?.created_at || logProposal?.createdAt) &&
                 parseDateMsForLog(logProposal.updated_at || logProposal.updatedAt) >
-                parseDateMsForLog(logProposal.created_at || logProposal.createdAt)
-              ) && (
+                  parseDateMsForLog(logProposal.created_at || logProposal.createdAt) && (
                   <div className="budgetdashboard-log-item">
                     <span className="log-label">Last Edited:</span>
-                    <span className="log-value">{formatDateTimeForLog(logProposal.updated_at || logProposal.updatedAt)}</span>
+                    <span className="log-value">
+                      {formatDateTimeForLog(logProposal.updated_at || logProposal.updatedAt)}
+                    </span>
                   </div>
                 )}
 
-              {logLoading && <div className="adminbudget-state" style={{ padding: "24px 0" }}>Loading logs...</div>}
+              {logLoading && (
+                <div className="adminbudget-state" style={{ padding: '24px 0' }}>
+                  Loading logs...
+                </div>
+              )}
               {!logLoading && buildAdminLogEvents.length === 0 && (
-                <div className="adminbudget-state" style={{ padding: "24px 0" }}>No logs available.</div>
+                <div className="adminbudget-state" style={{ padding: '24px 0' }}>
+                  No logs available.
+                </div>
               )}
 
               {!logLoading && buildAdminLogEvents.length > 0 && (
@@ -2041,7 +2163,7 @@ const AdminBudget: React.FC = () => {
                   {buildAdminLogEvents.map((event) => (
                     <div
                       key={event.key}
-                      className={`log-approval-item${event.actorBadgeLabel ? " log-approval-item--admin" : ""}`}
+                      className={`log-approval-item${event.actorBadgeLabel ? ' log-approval-item--admin' : ''}`}
                     >
                       {event.actorBadgeLabel && (
                         <span className="log-admin-mark" title="Updated by Admin">
@@ -2049,13 +2171,15 @@ const AdminBudget: React.FC = () => {
                         </span>
                       )}
                       <div className="log-approval-meta">
-                        <span className={`log-decision log-decision--${event.decision || "approved"}`}>
+                        <span
+                          className={`log-decision log-decision--${event.decision || 'approved'}`}
+                        >
                           {event.title.toUpperCase()}
                         </span>
                         <span className="log-role">
-                          {(expandedLogDetails[event.key] && event.fullSubtitle)
+                          {expandedLogDetails[event.key] && event.fullSubtitle
                             ? event.fullSubtitle
-                            : (event.subtitle || "Status update")}
+                            : event.subtitle || 'Status update'}
                         </span>
                         {event.fullSubtitle && event.fullSubtitle !== event.subtitle && (
                           <button
@@ -2067,21 +2191,23 @@ const AdminBudget: React.FC = () => {
                               }));
                             }}
                             style={{
-                              marginTop: "4px",
-                              alignSelf: "flex-start",
-                              border: "none",
-                              background: "transparent",
-                              color: "#0d6efd",
-                              cursor: "pointer",
+                              marginTop: '4px',
+                              alignSelf: 'flex-start',
+                              border: 'none',
+                              background: 'transparent',
+                              color: '#0d6efd',
+                              cursor: 'pointer',
                               padding: 0,
-                              fontSize: "12px",
+                              fontSize: '12px',
                               fontWeight: 600,
                             }}
                           >
-                            {expandedLogDetails[event.key] ? "Show less" : "Show full changes"}
+                            {expandedLogDetails[event.key] ? 'Show less' : 'Show full changes'}
                           </button>
                         )}
-                        {event.actorLine && <span className="log-actor-line">{event.actorLine}</span>}
+                        {event.actorLine && (
+                          <span className="log-actor-line">{event.actorLine}</span>
+                        )}
                         <span className="log-date">{event.dateLabel}</span>
                       </div>
                     </div>
@@ -2090,16 +2216,16 @@ const AdminBudget: React.FC = () => {
               )}
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 16px 16px" }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 16px 16px' }}>
               <button
                 type="button"
                 onClick={closeLogPopup}
                 style={{
-                  border: "1px solid #ddd",
-                  background: "#fff",
+                  border: '1px solid #ddd',
+                  background: '#fff',
                   borderRadius: 8,
-                  padding: "8px 20px",
-                  cursor: "pointer",
+                  padding: '8px 20px',
+                  cursor: 'pointer',
                   fontWeight: 600,
                 }}
               >

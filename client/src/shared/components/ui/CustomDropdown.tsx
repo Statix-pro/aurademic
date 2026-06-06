@@ -1,5 +1,11 @@
 import React from 'react';
-import Select, { OptionsOrGroups, SingleValue, MultiValue, GroupBase, StylesConfig } from 'react-select';
+import Select, {
+  OptionsOrGroups,
+  SingleValue,
+  MultiValue,
+  GroupBase,
+  StylesConfig,
+} from 'react-select';
 import './common.css';
 
 export interface OptionType {
@@ -31,7 +37,7 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
   options,
   value,
   onChange,
-  placeholder = "Select...",
+  placeholder = 'Select...',
   error,
   isDisabled = false,
   isMulti = false,
@@ -41,7 +47,6 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
   menuPosition = 'fixed',
   ...props
 }) => {
-
   // Default styles (keep your existing ones)
   const defaultStyles = {
     control: (provided: any, state: any) => ({
@@ -49,13 +54,17 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
       minHeight: '45px',
       height: '45px',
       backgroundColor: 'var(--bg-input)',
-      borderColor: error ? 'var(--error-color)' : (state.isFocused ? 'var(--border-focus)' : 'var(--border-color)'),
+      borderColor: error
+        ? 'var(--error-color)'
+        : state.isFocused
+          ? 'var(--border-focus)'
+          : 'var(--border-color)',
       borderRadius: 'var(--border-radius-md)',
       padding: '0 4px',
       boxShadow: state.isFocused ? 'var(--shadow-focus)' : 'none',
       '&:hover': {
         borderColor: state.isFocused ? 'var(--border-focus)' : 'var(--border-focus)',
-      }
+      },
     }),
     valueContainer: (provided: any) => ({
       ...provided,
@@ -96,7 +105,7 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
       cursor: 'pointer',
       ':active': {
         backgroundColor: 'var(--primary-color)',
-      }
+      },
     }),
     singleValue: (provided: any) => ({
       ...provided,
@@ -113,7 +122,11 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
 
   return (
     <div className={`custom-input-group ${className}`}>
-      {label && <label className="custom-label" htmlFor={name}>{label}</label>}
+      {label && (
+        <label className="custom-label" htmlFor={name}>
+          {label}
+        </label>
+      )}
       <Select
         inputId={name}
         name={name}
@@ -125,7 +138,13 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
         isMulti={isMulti}
         styles={mergedStyles}
         classNamePrefix="react-select"
-        menuPortalTarget={menuPortalTarget !== undefined ? menuPortalTarget : (typeof document !== 'undefined' ? document.body : null)}
+        menuPortalTarget={
+          menuPortalTarget !== undefined
+            ? menuPortalTarget
+            : typeof document !== 'undefined'
+              ? document.body
+              : null
+        }
         menuPosition={menuPosition}
         {...props}
       />

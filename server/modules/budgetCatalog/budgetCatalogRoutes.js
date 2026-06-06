@@ -1,36 +1,30 @@
 import express from 'express';
+
 import budgetCatalogController from './budgetCatalogController.js';
-import {
-    authMiddleware,
-    superAdminMiddleware,
-} from '../../middleware/authMiddleware.js';
+import { authMiddleware, superAdminMiddleware } from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 const normalizeApiEnvelope = (_req, res, next) => {
-    const originalJson = res.json.bind(res);
-    res.json = (body) => {
-        if (
-            body &&
-            typeof body === 'object' &&
-            Object.prototype.hasOwnProperty.call(body, 'success')
-        ) {
-            return originalJson(body);
-        }
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (body && typeof body === 'object' && Object.prototype.hasOwnProperty.call(body, 'success')) {
+      return originalJson(body);
+    }
 
-        if (res.statusCode >= 400) {
-            return originalJson({
-                success: false,
-                message: body?.message || 'Request failed',
-                ...(body?.error ? { error: body.error } : {}),
-                ...(body?.shouldLogout !== undefined ? { shouldLogout: body.shouldLogout } : {}),
-                ...(body?.tokenExpired !== undefined ? { tokenExpired: body.tokenExpired } : {}),
-            });
-        }
+    if (res.statusCode >= 400) {
+      return originalJson({
+        success: false,
+        message: body?.message || 'Request failed',
+        ...(body?.error ? { error: body.error } : {}),
+        ...(body?.shouldLogout !== undefined ? { shouldLogout: body.shouldLogout } : {}),
+        ...(body?.tokenExpired !== undefined ? { tokenExpired: body.tokenExpired } : {}),
+      });
+    }
 
-        return originalJson(body);
-    };
-    return next();
+    return originalJson(body);
+  };
+  return next();
 };
 
 router.use(normalizeApiEnvelope);
@@ -38,11 +32,15 @@ router.use(authMiddleware);
 
 // Read: any authenticated user for active dropdown data.
 // Inactive/deleted rows are admin maintenance data, so keep includeInactive guarded.
-router.get('/', (req, res, next) => {
+router.get(
+  '/',
+  (req, res, next) => {
     const includeInactive = String(req.query.includeInactive || '').toLowerCase() === 'true';
     if (!includeInactive) return next();
     return superAdminMiddleware(req, res, next);
-}, budgetCatalogController.getCatalog);
+  },
+  budgetCatalogController.getCatalog,
+);
 
 // Write: super admin only
 router.get('/tags', superAdminMiddleware, budgetCatalogController.getTags);

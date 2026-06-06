@@ -1,7 +1,8 @@
-import researchProjectModel from './projectModel.js';
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
 import util from 'util';
+
+import researchProjectModel from './projectModel.js';
 
 const rename = util.promisify(fs.rename);
 
@@ -14,15 +15,11 @@ const researchProjectController = {
       // Look up or create agency ID
       let agencyId;
       if (projectData.agency) {
-        const [existingAgency] = await researchProjectModel.getAgencyByName(
-          projectData.agency
-        );
+        const [existingAgency] = await researchProjectModel.getAgencyByName(projectData.agency);
         if (existingAgency) {
           agencyId = existingAgency.id;
         } else {
-          const newAgency = await researchProjectModel.createAgency(
-            projectData.agency
-          );
+          const newAgency = await researchProjectModel.createAgency(projectData.agency);
           agencyId = newAgency.insertId;
         }
       }
@@ -30,15 +27,11 @@ const researchProjectController = {
       // Look up or create scheme ID
       let schemeId;
       if (projectData.scheme) {
-        const [existingScheme] = await researchProjectModel.getSchemeByName(
-          projectData.scheme
-        );
+        const [existingScheme] = await researchProjectModel.getSchemeByName(projectData.scheme);
         if (existingScheme) {
           schemeId = existingScheme.id;
         } else {
-          const newScheme = await researchProjectModel.createScheme(
-            projectData.scheme
-          );
+          const newScheme = await researchProjectModel.createScheme(projectData.scheme);
           schemeId = newScheme.insertId;
         }
       }
@@ -46,34 +39,22 @@ const researchProjectController = {
       // Parse financial contributions and handle agency types
       let financialContributions = [];
       if (projectData.financial_contributions) {
-        financialContributions = JSON.parse(
-          projectData.financial_contributions
-        );
+        financialContributions = JSON.parse(projectData.financial_contributions);
         for (let contribution of financialContributions) {
           if (contribution.agencyType) {
-            const [existingAgencyType] =
-              await researchProjectModel.getAgencyTypeByName(
-                contribution.agencyType
-              );
+            const [existingAgencyType] = await researchProjectModel.getAgencyTypeByName(
+              contribution.agencyType,
+            );
             contribution.agency_type_id = existingAgencyType
               ? existingAgencyType.id
-              : (
-                  await researchProjectModel.createAgencyType(
-                    contribution.agencyType
-                  )
-                ).insertId;
+              : (await researchProjectModel.createAgencyType(contribution.agencyType)).insertId;
           }
         }
       }
 
       // Parse `documents` and `grant_disbursements` if provided as JSON strings
-      let {
-        documents,
-        grant_disbursements,
-        collaborations,
-        project_details,
-        outcome,
-      } = projectData;
+      let { documents, grant_disbursements, collaborations, project_details, outcome } =
+        projectData;
 
       // Parse project_details if it's a string
       if (typeof project_details === 'string') {
@@ -81,9 +62,7 @@ const researchProjectController = {
           project_details = JSON.parse(project_details);
         } catch (error) {
           console.error('Error parsing project_details JSON:', error);
-          return res
-            .status(400)
-            .json({ message: 'Invalid format for project_details field' });
+          return res.status(400).json({ message: 'Invalid format for project_details field' });
         }
       }
 
@@ -98,9 +77,7 @@ const researchProjectController = {
           };
         } catch (error) {
           console.error('Error parsing outcome JSON:', error);
-          return res
-            .status(400)
-            .json({ message: 'Invalid format for outcome field' });
+          return res.status(400).json({ message: 'Invalid format for outcome field' });
         }
       }
       if (typeof documents === 'string') {
@@ -108,9 +85,7 @@ const researchProjectController = {
           documents = JSON.parse(documents);
         } catch (error) {
           console.error('Error parsing documents JSON:', error);
-          return res
-            .status(400)
-            .json({ message: 'Invalid format for documents field' });
+          return res.status(400).json({ message: 'Invalid format for documents field' });
         }
       }
 
@@ -119,9 +94,7 @@ const researchProjectController = {
           grant_disbursements = JSON.parse(grant_disbursements);
         } catch (error) {
           console.error('Error parsing grant disbursements JSON:', error);
-          return res
-            .status(400)
-            .json({ message: 'Invalid format for grant disbursements field' });
+          return res.status(400).json({ message: 'Invalid format for grant disbursements field' });
         }
       }
 
@@ -131,11 +104,9 @@ const researchProjectController = {
           financialContributions = JSON.parse(financialContributions);
         } catch (error) {
           console.error('Error parsing financial contributions JSON:', error);
-          return res
-            .status(400)
-            .json({
-              message: 'Invalid format for financial contributions field',
-            });
+          return res.status(400).json({
+            message: 'Invalid format for financial contributions field',
+          });
         }
       }
 
@@ -144,9 +115,7 @@ const researchProjectController = {
           collaborations = JSON.parse(collaborations);
         } catch (error) {
           console.error('Error parsing collaborations JSON:', error);
-          return res
-            .status(400)
-            .json({ message: 'Invalid format for collaborations field' });
+          return res.status(400).json({ message: 'Invalid format for collaborations field' });
         }
       }
 
@@ -204,10 +173,7 @@ const researchProjectController = {
               };
 
               // Removed the check for agency_type_id
-              await researchProjectModel.addFinancialContribution(
-                projectId,
-                formattedContribution
-              );
+              await researchProjectModel.addFinancialContribution(projectId, formattedContribution);
             } catch (error) {
               console.error('Error adding financial contribution:', error);
             }
@@ -231,10 +197,7 @@ const researchProjectController = {
       // 4. Insert project details if any
       if (project_details) {
         try {
-          await researchProjectModel.addProjectDetails(
-            projectId,
-            project_details
-          );
+          await researchProjectModel.addProjectDetails(projectId, project_details);
         } catch (error) {
           console.error('Error adding project details:', error);
         }
@@ -262,10 +225,7 @@ const researchProjectController = {
             };
 
             try {
-              await researchProjectModel.addGrantDisbursement(
-                projectId,
-                disbursementData
-              );
+              await researchProjectModel.addGrantDisbursement(projectId, disbursementData);
             } catch (error) {
               console.error(`Error adding grant disbursement:`, error);
             }
@@ -312,12 +272,10 @@ const researchProjectController = {
         res.status(404).json({ message: 'Research project not found' });
       }
     } catch (error) {
-      res
-        .status(500)
-        .json({
-          message: 'Error retrieving research project',
-          error: error.message,
-        });
+      res.status(500).json({
+        message: 'Error retrieving research project',
+        error: error.message,
+      });
     }
   },
 
@@ -352,10 +310,7 @@ const researchProjectController = {
       // Build diff: only update fields that have changed
       const changedData = {};
       allowedFields.forEach((field) => {
-        if (
-          newData[field] !== undefined &&
-          newData[field] !== existingProject[field]
-        ) {
+        if (newData[field] !== undefined && newData[field] !== existingProject[field]) {
           changedData[field] = newData[field];
         }
       });
@@ -365,14 +320,9 @@ const researchProjectController = {
       }
 
       // Call model to update only changed data
-      const result = await researchProjectModel.updateProject(
-        projectId,
-        changedData
-      );
+      const result = await researchProjectModel.updateProject(projectId, changedData);
       if (result.affectedRows > 0) {
-        res
-          .status(200)
-          .json({ message: 'Research project updated successfully' });
+        res.status(200).json({ message: 'Research project updated successfully' });
       } else {
         res.status(404).json({ message: 'Research project not found' });
       }
@@ -395,19 +345,15 @@ const researchProjectController = {
       const id = req.params.id;
       const result = await researchProjectModel.delete(id);
       if (result.affectedRows > 0) {
-        res
-          .status(200)
-          .json({ message: 'Research project deleted successfully' });
+        res.status(200).json({ message: 'Research project deleted successfully' });
       } else {
         res.status(404).json({ message: 'Research project not found' });
       }
     } catch (error) {
-      res
-        .status(500)
-        .json({
-          message: 'Error deleting research project',
-          error: error.message,
-        });
+      res.status(500).json({
+        message: 'Error deleting research project',
+        error: error.message,
+      });
     }
   },
 
@@ -423,10 +369,7 @@ const researchProjectController = {
         });
       }
 
-      const result = await researchProjectModel.addAuthorToProject(
-        projectId,
-        authorData
-      );
+      const result = await researchProjectModel.addAuthorToProject(projectId, authorData);
 
       res.status(201).json({
         message: 'Author added successfully to project',
@@ -444,16 +387,13 @@ const researchProjectController = {
   async getAuthors(req, res) {
     try {
       const { id: projectId } = req.params;
-      const authors =
-        await researchProjectModel.getAuthorsForProject(projectId);
+      const authors = await researchProjectModel.getAuthorsForProject(projectId);
       res.status(200).json(authors);
     } catch (error) {
-      res
-        .status(500)
-        .json({
-          message: 'Error retrieving authors for project',
-          error: error.message,
-        });
+      res.status(500).json({
+        message: 'Error retrieving authors for project',
+        error: error.message,
+      });
     }
   },
 
@@ -463,28 +403,19 @@ const researchProjectController = {
       const { author_id } = req.body;
 
       if (!author_id) {
-        return res
-          .status(400)
-          .json({ message: 'Author ID is required to remove author' });
+        return res.status(400).json({ message: 'Author ID is required to remove author' });
       }
 
-      const result = await projectModel.removeAuthorFromProject(
-        projectId,
-        author_id
-      );
-      res
-        .status(200)
-        .json({
-          message: 'Author removed from project',
-          affectedRows: result.affectedRows,
-        });
+      const result = await researchProjectModel.removeAuthorFromProject(projectId, author_id);
+      res.status(200).json({
+        message: 'Author removed from project',
+        affectedRows: result.affectedRows,
+      });
     } catch (error) {
-      res
-        .status(500)
-        .json({
-          message: 'Error removing author from project',
-          error: error.message,
-        });
+      res.status(500).json({
+        message: 'Error removing author from project',
+        error: error.message,
+      });
     }
   },
 
@@ -503,7 +434,7 @@ const researchProjectController = {
 
       const result = await researchProjectModel.addFinancialContribution(
         projectId,
-        contributionData
+        contributionData,
       );
       res.status(201).json({
         message: 'Financial contribution added successfully',
@@ -521,16 +452,13 @@ const researchProjectController = {
   async getFinancialContributions(req, res) {
     try {
       const { id: projectId } = req.params;
-      const contributions =
-        await researchProjectModel.getFinancialContributions(projectId);
+      const contributions = await researchProjectModel.getFinancialContributions(projectId);
       res.status(200).json(contributions);
     } catch (error) {
-      res
-        .status(500)
-        .json({
-          message: 'Error retrieving financial contributions',
-          error: error.message,
-        });
+      res.status(500).json({
+        message: 'Error retrieving financial contributions',
+        error: error.message,
+      });
     }
   },
 
@@ -545,15 +473,12 @@ const researchProjectController = {
         });
       }
 
-      const result =
-        await researchProjectModel.deleteFinancialContribution(contributionId);
+      const result = await researchProjectModel.deleteFinancialContribution(contributionId);
       if (result.affectedRows === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: 'Financial contribution not found',
-          });
+        return res.status(404).json({
+          success: false,
+          message: 'Financial contribution not found',
+        });
       }
       res.json({
         success: true,
@@ -561,13 +486,11 @@ const researchProjectController = {
       });
     } catch (error) {
       console.error('Error deleting financial contribution:', error);
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: 'Error deleting financial contribution',
-          error: error.message,
-        });
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting financial contribution',
+        error: error.message,
+      });
     }
   },
 
@@ -577,10 +500,7 @@ const researchProjectController = {
       const collaborationData = req.body; // Get data from request body
 
       // Call the MODEL's method, not direct database queries
-      const result = await researchProjectModel.addCollaboration(
-        projectId,
-        collaborationData
-      );
+      const result = await researchProjectModel.addCollaboration(projectId, collaborationData);
 
       res.status(201).json({
         // Send a success response
@@ -600,10 +520,7 @@ const researchProjectController = {
     try {
       const { id: projectId, collabId } = req.params;
       const collaborationData = req.body;
-      const result = await researchProjectModel.updateCollaboration(
-        collabId,
-        collaborationData
-      );
+      const result = await researchProjectModel.updateCollaboration(collabId, collaborationData);
       res.json({
         success: true,
         message: 'Collaboration updated successfully!',
@@ -611,21 +528,18 @@ const researchProjectController = {
       });
     } catch (error) {
       console.error('Error updating collaboration:', error);
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: 'Error updating collaboration',
-          error: error.message,
-        });
+      res.status(500).json({
+        success: false,
+        message: 'Error updating collaboration',
+        error: error.message,
+      });
     }
   },
 
   async getCollaborations(req, res) {
     try {
       const projectId = req.params.id;
-      const collaborations =
-        await researchProjectModel.getCollaborations(projectId);
+      const collaborations = await researchProjectModel.getCollaborations(projectId);
       res.status(200).json({ data: collaborations });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -645,9 +559,7 @@ const researchProjectController = {
 
       const result = await researchProjectModel.deleteCollaboration(collabId);
       if (result.affectedRows === 0) {
-        return res
-          .status(404)
-          .json({ success: false, message: 'Collaboration not found' });
+        return res.status(404).json({ success: false, message: 'Collaboration not found' });
       }
       res.json({
         success: true,
@@ -655,13 +567,11 @@ const researchProjectController = {
       });
     } catch (error) {
       console.error('Error deleting collaboration:', error);
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: 'Error deleting collaboration',
-          error: error.message,
-        });
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting collaboration',
+        error: error.message,
+      });
     }
   },
 
@@ -669,19 +579,14 @@ const researchProjectController = {
     try {
       const projectId = req.params.id;
       const detailsData = req.body;
-      const result = await researchProjectModel.addProjectDetails(
-        projectId,
-        detailsData
-      );
-      res
-        .status(201)
-        .json({ message: 'Project details added successfully', data: result });
+      const result = await researchProjectModel.addProjectDetails(projectId, detailsData);
+      res.status(201).json({ message: 'Project details added successfully', data: result });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
 
-  async getProjectDetails(req, res) {
+  async getProjectDetailsTable(req, res) {
     try {
       const projectId = req.params.id;
       if (isNaN(projectId)) {
@@ -690,8 +595,7 @@ const researchProjectController = {
           details: `Received: ${req.params.id}`,
         });
       }
-      const projectDetails =
-        await researchProjectModel.getProjectDetails(projectId);
+      const projectDetails = await researchProjectModel.getProjectDetailsTable(projectId);
       res.status(200).json({ data: projectDetails });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -719,16 +623,11 @@ const researchProjectController = {
         return res.status(400).json({ message: 'Missing project_id' });
       }
 
-      const result = await researchProjectModel.addGrantDisbursement(
-        projectId,
-        formattedData
-      );
-      res
-        .status(201)
-        .json({
-          message: 'Grant disbursement added successfully',
-          data: result,
-        });
+      const result = await researchProjectModel.addGrantDisbursement(projectId, formattedData);
+      res.status(201).json({
+        message: 'Grant disbursement added successfully',
+        data: result,
+      });
     } catch (error) {
       console.error('Error in addGrantDisbursement:', error);
       res.status(500).json({ error: error.message });
@@ -738,8 +637,7 @@ const researchProjectController = {
   async getGrantDisbursements(req, res) {
     try {
       const projectId = req.params.id;
-      const disbursements =
-        await researchProjectModel.getGrantDisbursements(projectId);
+      const disbursements = await researchProjectModel.getGrantDisbursements(projectId);
       res.status(200).json({ data: disbursements });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -753,13 +651,11 @@ const researchProjectController = {
 
       const result = await researchProjectModel.updateGrantDisbursement(
         disbursementId,
-        disbursementData
+        disbursementData,
       );
 
       if (result.affectedRows === 0) {
-        return res
-          .status(404)
-          .json({ message: 'Grant disbursement not found' });
+        return res.status(404).json({ message: 'Grant disbursement not found' });
       }
 
       res.json({
@@ -786,20 +682,15 @@ const researchProjectController = {
         });
       }
 
-      const result =
-        await researchProjectModel.deleteGrantDisbursement(disbursementId);
+      const result = await researchProjectModel.deleteGrantDisbursement(disbursementId);
 
       if (result.affectedRows > 0) {
-        res
-          .status(200)
-          .json({
-            success: true,
-            message: 'Grant disbursement deleted successfully',
-          });
+        res.status(200).json({
+          success: true,
+          message: 'Grant disbursement deleted successfully',
+        });
       } else {
-        res
-          .status(404)
-          .json({ success: false, message: 'Grant disbursement not found' });
+        res.status(404).json({ success: false, message: 'Grant disbursement not found' });
       }
     } catch (error) {
       console.error('Error deleting grant disbursement:', error);
@@ -825,17 +716,10 @@ const researchProjectController = {
       // if (!document_type) {
       //     return res.status(400).json({ message: 'document_type is required.' });
       // }
-      const document_type_path_safe = document_typeFromRequest.replace(
-        /\s+/g,
-        ''
-      );
+      const document_type_path_safe = document_typeFromRequest.replace(/\s+/g, '');
 
       const file = req.file;
-      const uploadDir = path.join(
-        process.cwd(),
-        'uploads',
-        document_type_path_safe
-      );
+      const uploadDir = path.join(process.cwd(), 'uploads', document_type_path_safe);
 
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
@@ -858,10 +742,7 @@ const researchProjectController = {
           return res.status(500).json({
             message: 'Error saving file (copy/delete failed)',
             error: copyError.message,
-            stack:
-              process.env.NODE_ENV === 'development'
-                ? copyError.stack
-                : undefined,
+            stack: process.env.NODE_ENV === 'development' ? copyError.stack : undefined,
           });
         }
       }
@@ -890,7 +771,7 @@ const researchProjectController = {
         if (!allowedDocTypes.includes(document_typeFromRequest)) {
           // Now this comparison will work
           console.error(
-            `Invalid document_type '${document_typeFromRequest}' for project_documents table.`
+            `Invalid document_type '${document_typeFromRequest}' for project_documents table.`,
           );
           // ... cleanup and error response ...
           try {
@@ -898,11 +779,9 @@ const researchProjectController = {
           } catch (unlinkErr) {
             console.error('Error deleting orphaned file:', unlinkErr);
           }
-          return res
-            .status(400)
-            .json({
-              message: `Invalid document type specified: ${document_typeFromRequest}`,
-            });
+          return res.status(400).json({
+            message: `Invalid document type specified: ${document_typeFromRequest}`,
+          });
         }
 
         // Insert into project_documents table for standard document types
@@ -930,30 +809,20 @@ const researchProjectController = {
     try {
       const { projectId, disbursementId } = req.params; // disbursementId is a string here
       // In both upload functions, at the very start:
-      console.log(
-        'Upload request received for Sanction Letter:',
-        req.file?.originalname
-      );
+      console.log('Upload request received for Sanction Letter:', req.file?.originalname);
       console.log('Request params (Sanction Letter):', req.params);
       console.log('File object (Sanction Letter):', req.file);
 
       if (!req.file) {
-        return res
-          .status(400)
-          .json({ message: 'No file was uploaded for Sanction Letter.' });
+        return res.status(400).json({ message: 'No file was uploaded for Sanction Letter.' });
       }
       // Convert disbursementId to integer for database operations if it's a number column
       const numericDisbursementId = parseInt(disbursementId, 10);
       if (isNaN(numericDisbursementId)) {
-        console.error(
-          'Invalid disbursement ID (Sanction Letter):',
-          disbursementId
-        );
-        return res
-          .status(400)
-          .json({
-            message: 'Invalid disbursement ID format for Sanction Letter.',
-          });
+        console.error('Invalid disbursement ID (Sanction Letter):', disbursementId);
+        return res.status(400).json({
+          message: 'Invalid disbursement ID format for Sanction Letter.',
+        });
       }
 
       const file = req.file;
@@ -970,25 +839,17 @@ const researchProjectController = {
       try {
         await fs.promises.rename(file.path, finalPath);
       } catch (moveError) {
-        console.error(
-          'Error moving file (Sanction Letter), attempting copy/delete:',
-          moveError
-        );
+        console.error('Error moving file (Sanction Letter), attempting copy/delete:', moveError);
         try {
           await fs.promises.copyFile(file.path, finalPath);
           await fs.promises.unlink(file.path);
         } catch (copyError) {
-          console.error(
-            'Error in copy/delete fallback (Sanction Letter):',
-            copyError
-          );
+          console.error('Error in copy/delete fallback (Sanction Letter):', copyError);
           // It's important to return or throw here to stop execution
-          return res
-            .status(500)
-            .json({
-              message: 'Failed to save file (Sanction Letter).',
-              error: copyError.message,
-            });
+          return res.status(500).json({
+            message: 'Failed to save file (Sanction Letter).',
+            error: copyError.message,
+          });
         }
       }
 
@@ -998,21 +859,21 @@ const researchProjectController = {
         'About to update DB for Sanction Letter with disbursementId:',
         numericDisbursementId,
         'and path:',
-        dbFilePath
+        dbFilePath,
       );
       // Ensure the model function is called with the correct disbursementId
       const updateResult = await researchProjectModel.updateGrantDisbursement(
         numericDisbursementId,
         {
           sanction_letter_path: dbFilePath,
-        }
+        },
       );
       console.log('DB update result (Sanction Letter):', updateResult);
 
       if (updateResult.affectedRows === 0) {
         console.warn(
           'DB update for Sanction Letter had no affected rows. Disbursement ID might not exist:',
-          numericDisbursementId
+          numericDisbursementId,
         );
         // Optionally, you might want to delete the uploaded file if the DB update fails
         // try { await fs.promises.unlink(finalPath); } catch (e) { console.error('Failed to delete orphaned file:', finalPath, e); }
@@ -1035,25 +896,18 @@ const researchProjectController = {
   async uploadDisbursementUcAndSoe(req, res) {
     try {
       const { projectId, disbursementId } = req.params; // disbursementId is a string here
-      console.log(
-        'Upload request received for UC & SoE:',
-        req.file?.originalname
-      );
+      console.log('Upload request received for UC & SoE:', req.file?.originalname);
       console.log('Request params (UC & SoE):', req.params);
       console.log('File object (UC & SoE):', req.file);
 
       if (!req.file) {
-        return res
-          .status(400)
-          .json({ message: 'No file was uploaded for UC & SoE.' });
+        return res.status(400).json({ message: 'No file was uploaded for UC & SoE.' });
       }
       // Convert disbursementId to integer
       const numericDisbursementId = parseInt(disbursementId, 10);
       if (isNaN(numericDisbursementId)) {
         console.error('Invalid disbursement ID (UC & SoE):', disbursementId);
-        return res
-          .status(400)
-          .json({ message: 'Invalid disbursement ID format for UC & SoE.' });
+        return res.status(400).json({ message: 'Invalid disbursement ID format for UC & SoE.' });
       }
 
       const file = req.file;
@@ -1070,21 +924,16 @@ const researchProjectController = {
       try {
         await fs.promises.rename(file.path, finalPath);
       } catch (moveError) {
-        console.error(
-          'Error moving file (UC & SoE), attempting copy/delete:',
-          moveError
-        );
+        console.error('Error moving file (UC & SoE), attempting copy/delete:', moveError);
         try {
           await fs.promises.copyFile(file.path, finalPath);
           await fs.promises.unlink(file.path);
         } catch (copyError) {
           console.error('Error in copy/delete fallback (UC & SoE):', copyError);
-          return res
-            .status(500)
-            .json({
-              message: 'Failed to save file (UC & SoE).',
-              error: copyError.message,
-            });
+          return res.status(500).json({
+            message: 'Failed to save file (UC & SoE).',
+            error: copyError.message,
+          });
         }
       }
 
@@ -1094,20 +943,20 @@ const researchProjectController = {
         'About to update DB for UC & SoE with disbursementId:',
         numericDisbursementId,
         'and path:',
-        dbFilePath
+        dbFilePath,
       );
       const updateResult = await researchProjectModel.updateGrantDisbursement(
         numericDisbursementId,
         {
           uc_and_soe_path: dbFilePath,
-        }
+        },
       );
       console.log('DB update result (UC & SoE):', updateResult);
 
       if (updateResult.affectedRows === 0) {
         console.warn(
           'DB update for UC & SoE had no affected rows. Disbursement ID might not exist:',
-          numericDisbursementId
+          numericDisbursementId,
         );
         // Optionally, you might want to delete the uploaded file if the DB update fails
         // try { await fs.promises.unlink(finalPath); } catch (e) { console.error('Failed to delete orphaned file:', finalPath, e); }
@@ -1178,8 +1027,7 @@ const researchProjectController = {
       if (!['agency', 'scheme', 'agency_type'].includes(request_type)) {
         return res.status(400).json({
           status: 'error',
-          message:
-            'Invalid request type. Must be agency, scheme, or agency_type',
+          message: 'Invalid request type. Must be agency, scheme, or agency_type',
         });
       }
 
@@ -1207,8 +1055,7 @@ const researchProjectController = {
   async getUserProjectRequests(req, res) {
     try {
       const userId = req.user.id;
-      const requests =
-        await researchProjectModel.getUserProjectRequests(userId);
+      const requests = await researchProjectModel.getUserProjectRequests(userId);
 
       res.json({
         status: 'success',
@@ -1253,10 +1100,7 @@ const researchProjectController = {
   async getProjectDetails(req, res) {
     try {
       const projectId = parseInt(req.params.id);
-      const project = await researchProjectModel.getProjectDetails(
-        req.user.id,
-        projectId
-      );
+      const project = await researchProjectModel.getProjectDetails(req.user.id, projectId);
 
       // Log the full project data for debugging
       // console.log('Project Data:', project);

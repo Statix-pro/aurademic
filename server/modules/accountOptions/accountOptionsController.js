@@ -21,7 +21,6 @@ const sendError = (res, error, fallbackMessage) => {
   });
 };
 
-
 const accountOptionsController = {
   async listAccountOptions(_req, res) {
     try {
