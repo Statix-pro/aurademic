@@ -26,7 +26,7 @@ const CustomTable: React.FC<CustomTableProps> = ({
   actions,
   className = '',
   loading = false,
-  emptyMessage = 'No data available'
+  emptyMessage = 'No data available',
 }) => {
   return (
     <div className="table-responsive">
@@ -34,7 +34,9 @@ const CustomTable: React.FC<CustomTableProps> = ({
         <thead className="table-light">
           <tr>
             {columns.map((col, index) => (
-              <th key={col.key || index} style={col.style}>{col.label}</th>
+              <th key={col.key || index} style={col.style}>
+                {col.label}
+              </th>
             ))}
             {actions && <th style={{ width: '100px' }}>Actions</th>}
           </tr>
@@ -43,7 +45,11 @@ const CustomTable: React.FC<CustomTableProps> = ({
           {loading ? (
             <tr>
               <td colSpan={columns.length + (actions ? 1 : 0)} className="text-center py-4">
-                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                <span
+                  className="spinner-border spinner-border-sm me-2"
+                  role="status"
+                  aria-hidden="true"
+                ></span>
                 Loading...
               </td>
             </tr>
@@ -55,14 +61,15 @@ const CustomTable: React.FC<CustomTableProps> = ({
                     {col.render ? col.render(row, rowIndex) : row[col.key]}
                   </td>
                 ))}
-                {actions && (
-                  <td>{actions(row, rowIndex)}</td>
-                )}
+                {actions && <td>{actions(row, rowIndex)}</td>}
               </tr>
             ))
           ) : (
             <tr>
-              <td colSpan={columns.length + (actions ? 1 : 0)} className="text-center py-4 text-muted">
+              <td
+                colSpan={columns.length + (actions ? 1 : 0)}
+                className="text-center py-4 text-muted"
+              >
                 {emptyMessage}
               </td>
             </tr>

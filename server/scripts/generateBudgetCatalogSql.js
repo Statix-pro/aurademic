@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * Reads the data declarations from seedBudgetCatalog.js and emits a pure-SQL
  * seed file at server/schema/migrations/20260520_seed_budget_catalog.sql.
@@ -15,11 +14,8 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import {
-    BUDGET_HEAD_GROUPS,
-    SUB_HEAD_BY_HEAD,
-    HOAC_SUBHEADS,
-} from './seedBudgetCatalog.js';
+
+import { BUDGET_HEAD_GROUPS, SUB_HEAD_BY_HEAD, HOAC_SUBHEADS } from './seedBudgetCatalog.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,62 +38,62 @@ out.push('-- ----- HEADS -----');
 let headOrder = 0;
 const seenHeads = new Set();
 for (const group of BUDGET_HEAD_GROUPS) {
-    for (const headName of group.heads) {
-        if (seenHeads.has(headName)) continue;
-        seenHeads.add(headName);
-        out.push(
-            `INSERT INTO budget_heads (name, group_label, sort_order) ` +
-            `SELECT '${esc(headName)}', '${esc(group.label)}', ${headOrder} ` +
-            `FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM budget_heads WHERE name = '${esc(headName)}');`,
-        );
-        headOrder++;
-    }
+  for (const headName of group.heads) {
+    if (seenHeads.has(headName)) continue;
+    seenHeads.add(headName);
+    out.push(
+      `INSERT INTO budget_heads (name, group_label, sort_order) ` +
+        `SELECT '${esc(headName)}', '${esc(group.label)}', ${headOrder} ` +
+        `FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM budget_heads WHERE name = '${esc(headName)}');`,
+    );
+    headOrder++;
+  }
 }
 out.push('');
 
 // ----- Head-specific sub-heads -----
 out.push('-- ----- HEAD-SPECIFIC SUB-HEADS -----');
 for (const [headName, subs] of Object.entries(SUB_HEAD_BY_HEAD)) {
-    const seen = new Set();
-    let order = 0;
-    for (const sub of subs) {
-        const key = sub.trim();
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        out.push(
-            `INSERT INTO budget_sub_heads (name, head_id, scope, sort_order) ` +
-            `SELECT '${esc(key)}', h.id, 'head-specific', ${order} ` +
-            `FROM budget_heads h WHERE h.name = '${esc(headName)}' ` +
-            `AND NOT EXISTS (SELECT 1 FROM budget_sub_heads s WHERE s.name = '${esc(key)}' AND s.head_id = h.id AND s.scope = 'head-specific');`,
-        );
-        order++;
-    }
+  const seen = new Set();
+  let order = 0;
+  for (const sub of subs) {
+    const key = sub.trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(
+      `INSERT INTO budget_sub_heads (name, head_id, scope, sort_order) ` +
+        `SELECT '${esc(key)}', h.id, 'head-specific', ${order} ` +
+        `FROM budget_heads h WHERE h.name = '${esc(headName)}' ` +
+        `AND NOT EXISTS (SELECT 1 FROM budget_sub_heads s WHERE s.name = '${esc(key)}' AND s.head_id = h.id AND s.scope = 'head-specific');`,
+    );
+    order++;
+  }
 }
 out.push('');
 
 // ----- HOAC shared sub-heads -----
 out.push('-- ----- HOAC SHARED SUB-HEADS -----');
 for (const [eventType, subs] of Object.entries(HOAC_SUBHEADS)) {
-    let order = 0;
-    for (const sub of subs) {
-        out.push(
-            `INSERT INTO budget_sub_heads (name, scope, event_type, sort_order) ` +
-            `SELECT '${esc(sub)}', 'hoac-shared', '${esc(eventType)}', ${order} ` +
-            `FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM budget_sub_heads WHERE name = '${esc(sub)}' AND scope = 'hoac-shared' AND event_type = '${esc(eventType)}');`,
-        );
-        order++;
-    }
+  let order = 0;
+  for (const sub of subs) {
+    out.push(
+      `INSERT INTO budget_sub_heads (name, scope, event_type, sort_order) ` +
+        `SELECT '${esc(sub)}', 'hoac-shared', '${esc(eventType)}', ${order} ` +
+        `FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM budget_sub_heads WHERE name = '${esc(sub)}' AND scope = 'hoac-shared' AND event_type = '${esc(eventType)}');`,
+    );
+    order++;
+  }
 }
 out.push('');
 out.push('COMMIT;');
 out.push('');
 
 const outputPath = path.join(
-    __dirname,
-    '..',
-    'schema',
-    'migrations',
-    '20260520_seed_budget_catalog.sql',
+  __dirname,
+  '..',
+  'schema',
+  'migrations',
+  '20260520_seed_budget_catalog.sql',
 );
 fs.writeFileSync(outputPath, out.join('\n'), 'utf8');
 console.log(`Wrote ${outputPath}`);

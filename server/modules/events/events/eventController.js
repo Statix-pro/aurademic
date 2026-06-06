@@ -12,7 +12,7 @@ export const getEvents = async (req, res) => {
     const events = await query(
       `SELECT id, title, status, created_at AS createdAt, updated_at AS updatedAt
        FROM events
-       ORDER BY created_at DESC`
+       ORDER BY created_at DESC`,
     );
     res.status(200).json(events);
   } catch (err) {
@@ -42,7 +42,7 @@ export const getEventSummary = async (req, res) => {
       `SELECT id, title, status, created_at AS createdAt, updated_at AS updatedAt
        FROM events
        WHERE id=?`,
-      [id]
+      [id],
     );
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
@@ -61,12 +61,8 @@ export const createEvent = async (req, res) => {
   }
 
   try {
-    const result = await query('INSERT INTO events (title) VALUES (?)', [
-      title,
-    ]);
-    const [newEvent] = await query('SELECT * FROM events WHERE id=?', [
-      result.insertId,
-    ]);
+    const result = await query('INSERT INTO events (title) VALUES (?)', [title]);
+    const [newEvent] = await query('SELECT * FROM events WHERE id=?', [result.insertId]);
     res.status(201).json(newEvent);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -78,10 +74,7 @@ export const updateEvent = async (req, res) => {
   const { id } = req.params;
   const { title } = req.body;
   try {
-    await query(
-      'UPDATE events SET title=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-      [title, id]
-    );
+    await query('UPDATE events SET title=?, updated_at=CURRENT_TIMESTAMP WHERE id=?', [title, id]);
     const [updated] = await query('SELECT * FROM events WHERE id=?', [id]);
     res.json(updated);
   } catch (err) {

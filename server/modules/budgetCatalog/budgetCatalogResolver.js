@@ -15,49 +15,53 @@ const MEMO_TTL_MS = 60_000;
 const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
 
 function memoKey(headName, subHeadName, scope) {
-    return `${String(headName || '').trim().toLowerCase()}::${String(subHeadName || '').trim().toLowerCase()}::${scope}`;
+  return `${String(headName || '')
+    .trim()
+    .toLowerCase()}::${String(subHeadName || '')
+    .trim()
+    .toLowerCase()}::${scope}`;
 }
 
 function readCache(key) {
-    const hit = memoCache.get(key);
-    if (!hit) return null;
-    if (Date.now() - hit.at > MEMO_TTL_MS) {
-        memoCache.delete(key);
-        return null;
-    }
-    return hit.value;
+  const hit = memoCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > MEMO_TTL_MS) {
+    memoCache.delete(key);
+    return null;
+  }
+  return hit.value;
 }
 
 function writeCache(key, value) {
-    memoCache.set(key, { value, at: Date.now() });
+  memoCache.set(key, { value, at: Date.now() });
 }
 
 function normalizeText(value) {
-    return String(value || '').trim();
+  return String(value || '').trim();
 }
 
 async function resolveHoacEventType(connection, primaryHead) {
-    const trimmedHead = normalizeText(primaryHead);
-    if (!trimmedHead) return '';
-    if (HOAC_GROUPS.has(trimmedHead)) return trimmedHead;
+  const trimmedHead = normalizeText(primaryHead);
+  if (!trimmedHead) return '';
+  if (HOAC_GROUPS.has(trimmedHead)) return trimmedHead;
 
-    const cacheKey = `hoac-event-type::${trimmedHead.toLowerCase()}`;
-    const cached = readCache(cacheKey);
-    if (cached !== null) return cached;
+  const cacheKey = `hoac-event-type::${trimmedHead.toLowerCase()}`;
+  const cached = readCache(cacheKey);
+  if (cached !== null) return cached;
 
-    const [rows] = await connection.query(
-        `SELECT group_label
+  const [rows] = await connection.query(
+    `SELECT group_label
            FROM budget_heads
           WHERE name = ?
             AND is_active = 1
             AND is_deleted = 0
           LIMIT 1`,
-        [trimmedHead],
-    );
-    const groupLabel = normalizeText(rows[0]?.group_label);
-    const eventType = HOAC_GROUPS.has(groupLabel) ? groupLabel : '';
-    writeCache(cacheKey, eventType);
-    return eventType;
+    [trimmedHead],
+  );
+  const groupLabel = normalizeText(rows[0]?.group_label);
+  const eventType = HOAC_GROUPS.has(groupLabel) ? groupLabel : '';
+  writeCache(cacheKey, eventType);
+  return eventType;
 }
 
 /**
@@ -73,64 +77,64 @@ async function resolveHoacEventType(connection, primaryHead) {
  * @returns {Promise<{budget_head_id: number|null, budget_sub_head_id: number|null}>}
  */
 export async function resolveCatalogIds(connection, headName, subHeadName, opts = {}) {
-    const scope = opts.scope || 'head-specific';
-    const trimmedHead = String(headName || '').trim();
-    const trimmedSub = String(subHeadName || '').trim();
-    if (!trimmedHead && !trimmedSub) {
-        return { budget_head_id: null, budget_sub_head_id: null };
-    }
+  const scope = opts.scope || 'head-specific';
+  const trimmedHead = String(headName || '').trim();
+  const trimmedSub = String(subHeadName || '').trim();
+  if (!trimmedHead && !trimmedSub) {
+    return { budget_head_id: null, budget_sub_head_id: null };
+  }
 
-    const cacheKey = memoKey(trimmedHead, trimmedSub, scope);
-    const cached = readCache(cacheKey);
-    if (cached) return { ...cached };
+  const cacheKey = memoKey(trimmedHead, trimmedSub, scope);
+  const cached = readCache(cacheKey);
+  if (cached) return { ...cached };
 
-    let budget_head_id = null;
-    let budget_sub_head_id = null;
+  let budget_head_id = null;
+  let budget_sub_head_id = null;
 
-    if (scope === 'head-specific') {
-        if (trimmedHead) {
-            const [rows] = await connection.query(
-                `SELECT id
+  if (scope === 'head-specific') {
+    if (trimmedHead) {
+      const [rows] = await connection.query(
+        `SELECT id
                    FROM budget_heads
                   WHERE name = ?
                     AND is_active = 1
                     AND is_deleted = 0
                   LIMIT 1`,
-                [trimmedHead],
-            );
-            budget_head_id = rows[0]?.id || null;
-        }
-        if (budget_head_id && trimmedSub) {
-            const [rows] = await connection.query(
-                `SELECT id FROM budget_sub_heads
+        [trimmedHead],
+      );
+      budget_head_id = rows[0]?.id || null;
+    }
+    if (budget_head_id && trimmedSub) {
+      const [rows] = await connection.query(
+        `SELECT id FROM budget_sub_heads
                  WHERE name = ?
                    AND scope = 'head-specific'
                    AND head_id = ?
                    AND is_active = 1
                    AND is_deleted = 0
                  LIMIT 1`,
-                [trimmedSub, budget_head_id],
-            );
-            budget_sub_head_id = rows[0]?.id || null;
-        }
-    } else if (scope === 'hoac-shared' && trimmedSub) {
-        // headName is the event_type here.
-        const [rows] = await connection.query(
-            `SELECT id FROM budget_sub_heads
+        [trimmedSub, budget_head_id],
+      );
+      budget_sub_head_id = rows[0]?.id || null;
+    }
+  } else if (scope === 'hoac-shared' && trimmedSub) {
+    // headName is the event_type here.
+    const [rows] = await connection.query(
+      `SELECT id FROM budget_sub_heads
              WHERE name = ?
                AND scope = 'hoac-shared'
                AND event_type = ?
                AND is_active = 1
                AND is_deleted = 0
              LIMIT 1`,
-            [trimmedSub, trimmedHead],
-        );
-        budget_sub_head_id = rows[0]?.id || null;
-    }
+      [trimmedSub, trimmedHead],
+    );
+    budget_sub_head_id = rows[0]?.id || null;
+  }
 
-    const result = { budget_head_id, budget_sub_head_id };
-    writeCache(cacheKey, result);
-    return result;
+  const result = { budget_head_id, budget_sub_head_id };
+  writeCache(cacheKey, result);
+  return result;
 }
 
 /**
@@ -139,21 +143,23 @@ export async function resolveCatalogIds(connection, headName, subHeadName, opts 
  * sub-head keyed by the primary head's event group).
  */
 export async function resolvePrimaryHeadIds(connection, primaryHead, eventSubHead) {
-    const head = await resolveCatalogIds(connection, primaryHead, null, { scope: 'head-specific' });
-    let event_sub_head_id = null;
-    if (eventSubHead) {
-        // HOAC sub-heads are scoped by event_type. If primaryHead is a child
-        // head (for example Academic Events), resolve its parent HOAC group.
-        const eventType = await resolveHoacEventType(connection, primaryHead);
-        if (eventType) {
-            const hoac = await resolveCatalogIds(connection, eventType, eventSubHead, { scope: 'hoac-shared' });
-            event_sub_head_id = hoac.budget_sub_head_id;
-        }
+  const head = await resolveCatalogIds(connection, primaryHead, null, { scope: 'head-specific' });
+  let event_sub_head_id = null;
+  if (eventSubHead) {
+    // HOAC sub-heads are scoped by event_type. If primaryHead is a child
+    // head (for example Academic Events), resolve its parent HOAC group.
+    const eventType = await resolveHoacEventType(connection, primaryHead);
+    if (eventType) {
+      const hoac = await resolveCatalogIds(connection, eventType, eventSubHead, {
+        scope: 'hoac-shared',
+      });
+      event_sub_head_id = hoac.budget_sub_head_id;
     }
-    return {
-        primary_head_id: head.budget_head_id,
-        event_sub_head_id,
-    };
+  }
+  return {
+    primary_head_id: head.budget_head_id,
+    event_sub_head_id,
+  };
 }
 
 /**
@@ -162,5 +168,5 @@ export async function resolvePrimaryHeadIds(connection, primaryHead, eventSubHea
  * the 60s TTL is normally sufficient.)
  */
 export function clearResolverCache() {
-    memoCache.clear();
+  memoCache.clear();
 }

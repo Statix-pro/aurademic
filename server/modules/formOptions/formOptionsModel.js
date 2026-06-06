@@ -15,7 +15,7 @@ const formOptionsModel = {
           journal.impact_factor || null,
           journal.cite_score || null,
           journal.category || 'National',
-        ]
+        ],
       );
       return { id: result.insertId, ...journal };
     } catch (error) {
@@ -26,9 +26,7 @@ const formOptionsModel = {
 
   async getJournalOptions() {
     try {
-      const [rows] = await db.query(
-        'SELECT * FROM journal_options ORDER BY journal_name'
-      );
+      const [rows] = await db.query('SELECT * FROM journal_options ORDER BY journal_name');
       return rows;
     } catch (error) {
       console.error('Database error in getJournalOptions:', error);
@@ -52,7 +50,7 @@ const formOptionsModel = {
           updatedData.cite_score || null,
           updatedData.category || 'National',
           id,
-        ]
+        ],
       );
       return result.affectedRows > 0;
     } catch (error) {
@@ -63,10 +61,7 @@ const formOptionsModel = {
 
   async deleteJournalOption(id) {
     try {
-      const [result] = await db.query(
-        'DELETE FROM journal_options WHERE id = ?',
-        [id]
-      );
+      const [result] = await db.query('DELETE FROM journal_options WHERE id = ?', [id]);
       return result.affectedRows > 0;
     } catch (error) {
       console.error('Database error in deleteJournalOption:', error);
@@ -77,9 +72,7 @@ const formOptionsModel = {
   // Project Agency Options
   async getProjectAgencyOptions() {
     try {
-      const [rows] = await db.query(
-        'SELECT * FROM project_agency_options ORDER BY name'
-      );
+      const [rows] = await db.query('SELECT * FROM project_agency_options ORDER BY name');
       return rows;
     } catch (error) {
       throw new Error(`Error getting project agency options: ${error.message}`);
@@ -88,10 +81,9 @@ const formOptionsModel = {
 
   async addProjectAgencyOption(data) {
     try {
-      const [result] = await db.query(
-        'INSERT INTO project_agency_options (name) VALUES (?)',
-        [data.name]
-      );
+      const [result] = await db.query('INSERT INTO project_agency_options (name) VALUES (?)', [
+        data.name,
+      ]);
       return { id: result.insertId, name: data.name };
     } catch (error) {
       throw new Error(`Error adding project agency option: ${error.message}`);
@@ -100,10 +92,10 @@ const formOptionsModel = {
 
   async updateProjectAgencyOption(id, data) {
     try {
-      const [result] = await db.query(
-        'UPDATE project_agency_options SET name = ? WHERE id = ?',
-        [data.name, id]
-      );
+      const [result] = await db.query('UPDATE project_agency_options SET name = ? WHERE id = ?', [
+        data.name,
+        id,
+      ]);
       return result.affectedRows > 0;
     } catch (error) {
       throw new Error(`Error updating project agency option: ${error.message}`);
@@ -112,10 +104,7 @@ const formOptionsModel = {
 
   async deleteProjectAgencyOption(id) {
     try {
-      const [result] = await db.query(
-        'DELETE FROM project_agency_options WHERE id = ?',
-        [id]
-      );
+      const [result] = await db.query('DELETE FROM project_agency_options WHERE id = ?', [id]);
       return result.affectedRows > 0;
     } catch (error) {
       throw new Error(`Error deleting project agency option: ${error.message}`);
@@ -125,9 +114,7 @@ const formOptionsModel = {
   // Project Scheme Options
   async getProjectSchemeOptions() {
     try {
-      const [rows] = await db.query(
-        'SELECT * FROM project_scheme_options ORDER BY name'
-      );
+      const [rows] = await db.query('SELECT * FROM project_scheme_options ORDER BY name');
       return rows;
     } catch (error) {
       throw new Error(`Error getting project scheme options: ${error.message}`);
@@ -136,10 +123,9 @@ const formOptionsModel = {
 
   async addProjectSchemeOption(data) {
     try {
-      const [result] = await db.query(
-        'INSERT INTO project_scheme_options (name) VALUES (?)',
-        [data.name]
-      );
+      const [result] = await db.query('INSERT INTO project_scheme_options (name) VALUES (?)', [
+        data.name,
+      ]);
       return { id: result.insertId, name: data.name };
     } catch (error) {
       throw new Error(`Error adding project scheme option: ${error.message}`);
@@ -148,10 +134,10 @@ const formOptionsModel = {
 
   async updateProjectSchemeOption(id, data) {
     try {
-      const [result] = await db.query(
-        'UPDATE project_scheme_options SET name = ? WHERE id = ?',
-        [data.name, id]
-      );
+      const [result] = await db.query('UPDATE project_scheme_options SET name = ? WHERE id = ?', [
+        data.name,
+        id,
+      ]);
       return result.affectedRows > 0;
     } catch (error) {
       throw new Error(`Error updating project scheme option: ${error.message}`);
@@ -160,10 +146,7 @@ const formOptionsModel = {
 
   async deleteProjectSchemeOption(id) {
     try {
-      const [result] = await db.query(
-        'DELETE FROM project_scheme_options WHERE id = ?',
-        [id]
-      );
+      const [result] = await db.query('DELETE FROM project_scheme_options WHERE id = ?', [id]);
       return result.affectedRows > 0;
     } catch (error) {
       throw new Error(`Error deleting project scheme option: ${error.message}`);
@@ -173,28 +156,21 @@ const formOptionsModel = {
   // Project Agency Type Options
   async getProjectAgencyTypeOptions() {
     try {
-      const [rows] = await db.query(
-        'SELECT * FROM project_agency_type_options ORDER BY name'
-      );
+      const [rows] = await db.query('SELECT * FROM project_agency_type_options ORDER BY name');
       return rows;
     } catch (error) {
-      throw new Error(
-        `Error getting project agency type options: ${error.message}`
-      );
+      throw new Error(`Error getting project agency type options: ${error.message}`);
     }
   },
 
   async addProjectAgencyTypeOption(data) {
     try {
-      const [result] = await db.query(
-        'INSERT INTO project_agency_type_options (name) VALUES (?)',
-        [data.name]
-      );
+      const [result] = await db.query('INSERT INTO project_agency_type_options (name) VALUES (?)', [
+        data.name,
+      ]);
       return { id: result.insertId, name: data.name };
     } catch (error) {
-      throw new Error(
-        `Error adding project agency type option: ${error.message}`
-      );
+      throw new Error(`Error adding project agency type option: ${error.message}`);
     }
   },
 
@@ -202,27 +178,20 @@ const formOptionsModel = {
     try {
       const [result] = await db.query(
         'UPDATE project_agency_type_options SET name = ? WHERE id = ?',
-        [data.name, id]
+        [data.name, id],
       );
       return result.affectedRows > 0;
     } catch (error) {
-      throw new Error(
-        `Error updating project agency type option: ${error.message}`
-      );
+      throw new Error(`Error updating project agency type option: ${error.message}`);
     }
   },
 
   async deleteProjectAgencyTypeOption(id) {
     try {
-      const [result] = await db.query(
-        'DELETE FROM project_agency_type_options WHERE id = ?',
-        [id]
-      );
+      const [result] = await db.query('DELETE FROM project_agency_type_options WHERE id = ?', [id]);
       return result.affectedRows > 0;
     } catch (error) {
-      throw new Error(
-        `Error deleting project agency type option: ${error.message}`
-      );
+      throw new Error(`Error deleting project agency type option: ${error.message}`);
     }
   },
 };

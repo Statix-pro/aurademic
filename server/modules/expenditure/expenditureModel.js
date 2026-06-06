@@ -11,8 +11,11 @@ import {
   resolveCatalogIds,
   resolvePrimaryHeadIds,
 } from '../budgetCatalog/budgetCatalogResolver.js';
+import {
+  normalizeBeneficiaryType,
+  beneficiaryTypeToEntityTypeCode,
+} from '../shared/budget/budgetUtils.js';
 import { searchApplicant as searchEmployeeApplicants } from '../shared/budget/userResolvers.js';
-import { normalizeBeneficiaryType, beneficiaryTypeToEntityTypeCode } from '../shared/budget/budgetUtils.js';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -74,8 +77,7 @@ const normalizePayeeRecord = (row) => {
     account_name: canonicalPayeeName || null,
     beneficiary_org: resolveCanonicalBeneficiaryOrg(row.beneficiary_org, row.payee_name) || null,
     approval_status:
-      normalizeText(row.approval_status) ||
-      (row.approved_at ? 'approved' : 'pending'),
+      normalizeText(row.approval_status) || (row.approved_at ? 'approved' : 'pending'),
     requested_at: row.requested_at || row.created_at || null,
   };
 };
@@ -90,32 +92,131 @@ const toMoney = (v) => {
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
 };
 
-const normalizeUnplannedBudgetPayload = (payload = {}) => {
-  const enabled = parseBoolean(payload?.unplanned_budget_enabled);
-  const amount = enabled ? toMoney(payload?.unplanned_budget_amount) : 0;
-  const head = enabled ? normalizeText(payload?.unplanned_budget_head) : '';
-  const subHead = enabled ? normalizeText(payload?.unplanned_budget_sub_head) : '';
-  const description = enabled
-    ? normalizeText(payload?.unplanned_budget_description) || [head, subHead].filter(Boolean).join(' - ')
-    : '';
+const normalizeUnplannedBudgetRows = (payload = {}) => {
+  const rawRows = Array.isArray(payload?.unplanned_rows)
+    ? payload.unplanned_rows
+    : Array.isArray(payload?.unplannedRows)
+      ? payload.unplannedRows
+      : [];
 
-  if (enabled && amount <= 0) {
-    throw new Error('Please enter a valid Unplanned Expenditure amount.');
+  if (rawRows.length) {
+    return rawRows
+      .map((row) => {
+        const headOfAccount = normalizeText(row?.head_of_account || row?.headOfAccount);
+        const headOfAccountBudgetLineId = toPositiveInt(
+          row?.head_of_account_budget_line_id || row?.headOfAccountBudgetLineId,
+        );
+        const headOfAccountBudgetProposalId = toPositiveInt(
+          row?.head_of_account_budget_proposal_id || row?.headOfAccountBudgetProposalId,
+        );
+        const head = normalizeText(row?.budget_head || row?.budgetHead);
+        const subHead = normalizeText(row?.sub_head || row?.subHead);
+        const amount = toMoney(row?.amount);
+        const description =
+          normalizeText(row?.description) || [head, subHead].filter(Boolean).join(' - ');
+
+        return {
+          headOfAccount,
+          headOfAccountBudgetLineId,
+          headOfAccountBudgetProposalId,
+          head,
+          subHead,
+          amount,
+          description,
+        };
+      })
+      .filter(
+        (row) =>
+          row.headOfAccount ||
+          row.headOfAccountBudgetLineId ||
+          row.head ||
+          row.subHead ||
+          row.amount > 0,
+      );
   }
-  if (enabled && (!head || !subHead)) {
-    throw new Error('Please select Unplanned Expenditure head and sub head.');
+
+  const enabled = parseBoolean(payload?.unplanned_budget_enabled);
+  if (!enabled) return [];
+
+  return [
+    {
+      headOfAccount: normalizeText(payload?.unplanned_head_of_account),
+      headOfAccountBudgetLineId: toPositiveInt(payload?.unplanned_head_of_account_budget_line_id),
+      headOfAccountBudgetProposalId: toPositiveInt(
+        payload?.unplanned_head_of_account_budget_proposal_id,
+      ),
+      head: normalizeText(payload?.unplanned_budget_head),
+      subHead: normalizeText(payload?.unplanned_budget_sub_head),
+      amount: toMoney(payload?.unplanned_budget_amount),
+      description:
+        normalizeText(payload?.unplanned_budget_description) ||
+        [
+          normalizeText(payload?.unplanned_budget_head),
+          normalizeText(payload?.unplanned_budget_sub_head),
+        ]
+          .filter(Boolean)
+          .join(' - '),
+    },
+  ];
+};
+
+const normalizeUnplannedBudgetPayload = (payload = {}) => {
+  const rows = normalizeUnplannedBudgetRows(payload);
+  const enabled = parseBoolean(payload?.unplanned_budget_enabled) || rows.length > 0;
+
+  if (!enabled) {
+    return {
+      enabled: false,
+      amount: 0,
+      rows: [],
+      headOfAccount: '',
+      headOfAccountBudgetLineId: null,
+      headOfAccountBudgetProposalId: null,
+      head: '',
+      subHead: '',
+      description: '',
+    };
   }
+
+  if (!rows.length) {
+    throw new Error('Please add at least one Unplanned Expenditure row.');
+  }
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 1;
+    if (row.amount <= 0) {
+      throw new Error(`Please enter a valid amount for Unplanned Expenditure row ${rowNumber}.`);
+    }
+    if (!row.headOfAccount || !row.headOfAccountBudgetLineId) {
+      throw new Error(`Please select Head of Accounts for Unplanned Expenditure row ${rowNumber}.`);
+    }
+    if (!row.head || !row.subHead) {
+      throw new Error(
+        `Please select budget head and sub head for Unplanned Expenditure row ${rowNumber}.`,
+      );
+    }
+  });
+
+  const primary = rows[0];
+  const amount = toMoney(rows.reduce((sum, row) => sum + row.amount, 0));
 
   return {
-    enabled,
+    enabled: true,
     amount,
-    head,
-    subHead,
-    description,
+    rows,
+    headOfAccount: primary.headOfAccount,
+    headOfAccountBudgetLineId: primary.headOfAccountBudgetLineId,
+    headOfAccountBudgetProposalId: primary.headOfAccountBudgetProposalId,
+    head: primary.head,
+    subHead: primary.subHead,
+    description: primary.description,
   };
 };
 
-const normalizeFinanceRequestRefBase = (requestRef, { financeRequestId = null, requestDate = null } = {}) => {
+const normalizeFinanceRequestRefBase = (
+  requestRef,
+  { financeRequestId = null, requestDate = null } = {},
+) => {
   const normalizedRef = normalizeText(requestRef);
   const structuredMatch = normalizedRef.match(/^#?F[-_](\d{4})[-_](\d+)$/i);
   if (structuredMatch) {
@@ -245,6 +346,14 @@ const ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL = `
   LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) NOT IN ('rejected', 'deleted', 'archived')
 `;
 
+const FINALIZED_EXPENDITURE_REQUEST_STATUS_SQL = `
+  (
+    LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
+    OR LOWER(TRIM(COALESCE(er.workflow_status, ''))) IN ('approved', 'completed')
+    OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
+  )
+`;
+
 const WORKFLOW_ROW_REF_SQL_EXPR = `
   LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.workflowrowref')), '')))
 `;
@@ -266,7 +375,11 @@ const normalizeDebitStatus = (value) => {
 const parseBoolean = (value) => {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') return value === 1;
-  return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+  return ['1', 'true', 'yes', 'on'].includes(
+    String(value || '')
+      .trim()
+      .toLowerCase(),
+  );
 };
 
 const inferRequestType = (payload = {}) => {
@@ -282,7 +395,9 @@ const inferRequestType = (payload = {}) => {
 
   if (
     Array.isArray(payload.advance_rows) &&
-    payload.advance_rows.some((row) => String(row?.advance || row?.advanceamount || '').trim() !== '')
+    payload.advance_rows.some(
+      (row) => String(row?.advance || row?.advanceamount || '').trim() !== '',
+    )
   ) {
     return 'Advance';
   }
@@ -300,7 +415,9 @@ const inferRequestType = (payload = {}) => {
     Array.isArray(payload.expenditure_rows) &&
     payload.expenditure_rows.some(
       (row) =>
-        String(row?.expenditure || row?.autoSum || row?.autosumamount || row?.expenditureinput || '').trim() !== '',
+        String(
+          row?.expenditure || row?.autoSum || row?.autosumamount || row?.expenditureinput || '',
+        ).trim() !== '',
     )
   ) {
     return 'Expenditure';
@@ -328,9 +445,7 @@ function resolveWorkflowRowIdentifiers(payload = {}) {
       null,
   );
   const explicitDashboardRowId = normalizeText(
-    payload.dashboard_row_id ||
-      payload.dashboardRowId ||
-      null,
+    payload.dashboard_row_id || payload.dashboardRowId || null,
   );
   const rowIndex = toPositiveInt(payload.row_index || payload.rowIndex);
 
@@ -347,9 +462,10 @@ function resolveWorkflowRowIdentifiers(payload = {}) {
 }
 
 function getPersistentWorkflowRowState(workflowState = {}) {
-  const normalized = workflowState && typeof workflowState === 'object' && !Array.isArray(workflowState)
-    ? workflowState
-    : {};
+  const normalized =
+    workflowState && typeof workflowState === 'object' && !Array.isArray(workflowState)
+      ? workflowState
+      : {};
 
   return {
     module: normalizeRequestType(normalized.module) || null,
@@ -384,13 +500,10 @@ function deriveLegacyAnchorRequestIds({
   return [...ids];
 }
 
-async function getWorkflowRowHistory(conn, {
-  financeRequestId,
-  workflowRowRef,
-  dashboardRowId,
-  rowIndex,
-  sourceRequestId,
-} = {}) {
+async function getWorkflowRowHistory(
+  conn,
+  { financeRequestId, workflowRowRef, dashboardRowId, rowIndex, sourceRequestId } = {},
+) {
   const financeId = toPositiveInt(financeRequestId);
   const normalizedWorkflowRowRef = normalizeText(workflowRowRef).toLowerCase();
   const normalizedDashboardRowId = normalizeText(dashboardRowId).toLowerCase();
@@ -401,7 +514,13 @@ async function getWorkflowRowHistory(conn, {
     sourceRequestId,
   });
 
-  if (!financeId || (!normalizedWorkflowRowRef && !normalizedDashboardRowId && !normalizedRowIndex && !anchorRequestIds.length)) {
+  if (
+    !financeId ||
+    (!normalizedWorkflowRowRef &&
+      !normalizedDashboardRowId &&
+      !normalizedRowIndex &&
+      !anchorRequestIds.length)
+  ) {
     return [];
   }
 
@@ -423,7 +542,12 @@ async function getWorkflowRowHistory(conn, {
     params.push(...anchorRequestIds);
   }
 
-  if (!normalizedWorkflowRowRef && !normalizedDashboardRowId && !anchorRequestIds.length && normalizedRowIndex) {
+  if (
+    !normalizedWorkflowRowRef &&
+    !normalizedDashboardRowId &&
+    !anchorRequestIds.length &&
+    normalizedRowIndex
+  ) {
     matchClauses.push(`${WORKFLOW_ROW_INDEX_SQL_EXPR} = ?`);
     params.push(normalizedRowIndex);
   }
@@ -454,12 +578,16 @@ async function getWorkflowRowHistory(conn, {
   }));
 }
 
-function validateWorkflowRowFlow(requestType, rowHistory = [], {
-  requestedAdvance = 0,
-  requestedSettlement = 0,
-  requestedExpenditure = 0,
-  allowZeroSettlement = false,
-} = {}) {
+function validateWorkflowRowFlow(
+  requestType,
+  rowHistory = [],
+  {
+    requestedAdvance = 0,
+    requestedSettlement = 0,
+    requestedExpenditure = 0,
+    allowZeroSettlement = false,
+  } = {},
+) {
   if (!rowHistory.length) return;
 
   const hasAdvance = rowHistory.some((row) => row.requestType === 'Advance');
@@ -468,10 +596,14 @@ function validateWorkflowRowFlow(requestType, rowHistory = [], {
 
   if (requestType === 'Expenditure') {
     if (hasAdvance || hasSettlement) {
-      throw new Error('Advance flow already exists for this row. Create a new row for expenditure.');
+      throw new Error(
+        'Advance flow already exists for this row. Create a new row for expenditure.',
+      );
     }
     if (hasExpenditure) {
-      throw new Error('Expenditure already exists for this row. Create a new row for another expenditure.');
+      throw new Error(
+        'Expenditure already exists for this row. Create a new row for another expenditure.',
+      );
     }
     if (requestedExpenditure <= 0) {
       throw new Error('Expenditure amount must be greater than 0');
@@ -484,7 +616,9 @@ function validateWorkflowRowFlow(requestType, rowHistory = [], {
       throw new Error('Expenditure already exists for this row. Create a new row for advance.');
     }
     if (hasSettlement) {
-      throw new Error('Settlement already exists for this row. Create a new row for another advance.');
+      throw new Error(
+        'Settlement already exists for this row. Create a new row for another advance.',
+      );
     }
     if (requestedAdvance <= 0) {
       throw new Error('Advance amount must be greater than 0');
@@ -515,37 +649,40 @@ const hasExplicitMoneyValue = (row = {}, keys = []) =>
     return value !== null && value !== undefined && String(value).trim() !== '';
   });
 
-const hasBudgetLineSelection = (row = {}) => (
+const hasBudgetLineSelection = (row = {}) =>
   Boolean(toPositiveInt(row.budgetLineId || row.budget_line_id)) ||
   Boolean(sanitizeRowValue(row.budgetHead || row.budget_head)) ||
-  Boolean(sanitizeRowValue(row.subHead || row.sub_head))
-);
+  Boolean(sanitizeRowValue(row.subHead || row.sub_head));
 
 const hasSettlementRowsForClosure = (rows = []) =>
   Array.isArray(rows) &&
-  rows.some((row) =>
-    hasExplicitMoneyValue(row, ['settlement', 'settlement_amount', 'settlementamount']) &&
-    hasBudgetLineSelection(row)
+  rows.some(
+    (row) =>
+      hasExplicitMoneyValue(row, ['settlement', 'settlement_amount', 'settlementamount']) &&
+      hasBudgetLineSelection(row),
   );
 
-async function getCumulativeAdvanceSummary(connOrDb, {
-  userId,
-  budgetLineId,
-  head,
-  subHead,
-  // NEW: catalog IDs. When present, matching prefers IDs over text so
-  // renames in the catalog don't break the cumulative count. LEGACY: when
-  // IDs are null (older rows pre-dating the catalog), match by normalized
-  // text on snapshot columns.
-  budgetHeadId = null,
-  budgetSubHeadId = null,
-  financeRequestId = null,
-  rowIndex = null,
-  sourceRequestId = null,
-  dashboardRowId = null,
-  workflowRowRef = null,
-  excludeExpenditureId = null,
-} = {}) {
+async function getCumulativeAdvanceSummary(
+  connOrDb,
+  {
+    userId,
+    budgetLineId,
+    head,
+    subHead,
+    // NEW: catalog IDs. When present, matching prefers IDs over text so
+    // renames in the catalog don't break the cumulative count. LEGACY: when
+    // IDs are null (older rows pre-dating the catalog), match by normalized
+    // text on snapshot columns.
+    budgetHeadId = null,
+    budgetSubHeadId = null,
+    financeRequestId = null,
+    rowIndex = null,
+    sourceRequestId = null,
+    dashboardRowId = null,
+    workflowRowRef = null,
+    excludeExpenditureId = null,
+  } = {},
+) {
   const uid = toPositiveInt(userId);
   const lineId = toPositiveInt(budgetLineId);
   const financeId = toPositiveInt(financeRequestId);
@@ -591,7 +728,12 @@ async function getCumulativeAdvanceSummary(connOrDb, {
     rowIdentityClauses.push(`er.id IN (${anchorRequestIds.map(() => '?').join(', ')})`);
     scopeParams.push(...anchorRequestIds);
   }
-  if (!normalizedDashboardRowId && !normalizedWorkflowRowRef && !anchorRequestIds.length && currentRowIndex) {
+  if (
+    !normalizedDashboardRowId &&
+    !normalizedWorkflowRowRef &&
+    !anchorRequestIds.length &&
+    currentRowIndex
+  ) {
     rowIdentityClauses.push(`${WORKFLOW_ROW_INDEX_SQL_EXPR} = ?`);
     scopeParams.push(currentRowIndex);
   }
@@ -618,13 +760,14 @@ async function getCumulativeAdvanceSummary(connOrDb, {
   let legacyMatchParams = [];
 
   if (lineId && normalizedHead && normalizedSubHead) {
-    const nullLineIdMatch = headIdVal && subIdVal
-      ? `OR (
+    const nullLineIdMatch =
+      headIdVal && subIdVal
+        ? `OR (
           ar.budget_line_id IS NULL
           AND ar.budget_head_id = ?
           AND ar.budget_sub_head_id = ?
         )`
-      : '';
+        : '';
     rowMatchClause = `
       (
         ar.budget_line_id = ?
@@ -728,23 +871,56 @@ async function getCumulativeAdvanceSummary(connOrDb, {
   };
 }
 
-async function getFinanceRequestBudgetUsageByLine(connOrDb, {
-  financeRequestId,
-  budgetLineIds = [],
-  excludeExpenditureId = null,
-} = {}) {
+async function getFinanceRequestBudgetUsageByLine(
+  connOrDb,
+  { financeRequestId, budgetLineIds = [], excludeExpenditureId = null } = {},
+) {
   const financeId = toPositiveInt(financeRequestId);
   if (!financeId) return new Map();
   const excludedRequestId = toPositiveInt(excludeExpenditureId);
 
   const normalizedBudgetLineIds = Array.from(
-    new Set((Array.isArray(budgetLineIds) ? budgetLineIds : []).map((id) => toPositiveInt(id)).filter(Boolean)),
+    new Set(
+      (Array.isArray(budgetLineIds) ? budgetLineIds : [])
+        .map((id) => toPositiveInt(id))
+        .filter(Boolean),
+    ),
   );
 
   const source = connOrDb || db;
   const lineFilterSql = normalizedBudgetLineIds.length
     ? `WHERE usage_rows.budget_line_id IN (${normalizedBudgetLineIds.map(() => '?').join(', ')})`
     : '';
+  const unplannedUsageUnionSql = `
+       UNION ALL
+
+       SELECT
+         eur.head_of_account_budget_line_id AS budget_line_id,
+         eur.amount AS amount_delta
+       FROM expenditure_unplanned_rows eur
+       JOIN expenditure_requests er ON er.id = eur.expenditure_id
+       WHERE er.finance_request_id = ?
+         AND (? IS NULL OR er.id <> ?)
+         AND eur.head_of_account_budget_line_id IS NOT NULL
+         AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
+
+       UNION ALL
+
+       SELECT
+         er.unplanned_head_of_account_budget_line_id AS budget_line_id,
+         er.unplanned_budget_amount AS amount_delta
+       FROM expenditure_requests er
+       WHERE er.finance_request_id = ?
+         AND (? IS NULL OR er.id <> ?)
+         AND er.unplanned_budget_enabled = 1
+         AND er.unplanned_head_of_account_budget_line_id IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1
+             FROM expenditure_unplanned_rows eur_existing
+            WHERE eur_existing.expenditure_id = er.id
+         )
+         AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
+`;
 
   const [rows] = await source.execute(
     `SELECT
@@ -771,12 +947,41 @@ async function getFinanceRequestBudgetUsageByLine(connOrDb, {
          AND (? IS NULL OR er.id <> ?)
          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
 
+       ${unplannedUsageUnionSql}
+
     ) AS usage_rows
      ${lineFilterSql}
      GROUP BY usage_rows.budget_line_id`,
     normalizedBudgetLineIds.length
-      ? [financeId, excludedRequestId, excludedRequestId, financeId, excludedRequestId, excludedRequestId, ...normalizedBudgetLineIds]
-      : [financeId, excludedRequestId, excludedRequestId, financeId, excludedRequestId, excludedRequestId],
+      ? [
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+          ...normalizedBudgetLineIds,
+        ]
+      : [
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+          financeId,
+          excludedRequestId,
+          excludedRequestId,
+        ],
   );
 
   return new Map(
@@ -877,7 +1082,9 @@ function getWorkflowRowLetter(sequence) {
 function resolveExpenditureRefMeta(requestType, workflowRowHistory = [], rowIndex = null) {
   const normalizedRowIndex = toPositiveInt(rowIndex);
   const rowLetter = getWorkflowRowLetter(normalizedRowIndex || 1);
-  const priorAdvanceCount = workflowRowHistory.filter((row) => row.requestType === 'Advance').length;
+  const priorAdvanceCount = workflowRowHistory.filter(
+    (row) => row.requestType === 'Advance',
+  ).length;
   let stepSequence = 1;
 
   if (requestType === 'Advance') {
@@ -887,7 +1094,9 @@ function resolveExpenditureRefMeta(requestType, workflowRowHistory = [], rowInde
   } else if (requestType === 'Expenditure') {
     stepSequence = 1;
   } else {
-    throw new Error(`Unsupported expenditure request type for ref generation: ${requestType || 'unknown'}`);
+    throw new Error(
+      `Unsupported expenditure request type for ref generation: ${requestType || 'unknown'}`,
+    );
   }
 
   return {
@@ -915,9 +1124,7 @@ async function insertExpenditureRef(
     );
     const year = resolveExpenditureRefYear(financeRefBase, requestDate);
     const lockName = `expenditure_ref_fy_${year}`;
-    const [[{ acquired }]] = await conn.execute(
-      'SELECT GET_LOCK(?, 15) AS acquired', [lockName],
-    );
+    const [[{ acquired }]] = await conn.execute('SELECT GET_LOCK(?, 15) AS acquired', [lockName]);
     if (Number(acquired) !== 1) {
       throw new Error(
         `Could not acquire expenditure reference lock for ${normalizedFinanceRequestId || year}`,
@@ -925,11 +1132,7 @@ async function insertExpenditureRef(
     }
 
     try {
-      const { suffix } = resolveExpenditureRefMeta(
-        requestType,
-        workflowRowHistory,
-        rowIndex,
-      );
+      const { suffix } = resolveExpenditureRefMeta(requestType, workflowRowHistory, rowIndex);
       const ref = `${financeRefBase}-${suffix}`;
 
       const [[sequenceRow]] = await conn.execute(
@@ -988,14 +1191,270 @@ async function getApprovedFinanceRequestOwner(connOrDb, financeRequestId) {
   return rows[0] || null;
 }
 
-export async function getApprovedBudgets({ userId, userEmail, financeRequestId, allowAnyApprovedFinance = false } = {}) {
+async function getFinanceCarryForwardTargetYear(connOrDb, financeRequestId, fiscalYear) {
+  const financeId = toPositiveInt(financeRequestId);
+  const targetYear = toPositiveInt(fiscalYear);
+  if (!financeId || !targetYear) return null;
+
+  const source = connOrDb || db;
+  const [rows] = await source.execute(
+    `SELECT target_fiscal_year
+       FROM finance_carry_forward_allocations
+      WHERE finance_request_id = ?
+        AND target_fiscal_year = ?
+        AND LOWER(TRIM(COALESCE(status, 'active'))) = 'active'
+      LIMIT 1`,
+    [financeId, targetYear],
+  );
+
+  return toPositiveInt(rows?.[0]?.target_fiscal_year);
+}
+
+async function getFinanceBudgetScope(connOrDb, financeRequestId) {
+  const financeId = toPositiveInt(financeRequestId);
+  if (!financeId) return null;
+
+  const source = connOrDb || db;
+  const [rows] = await source.execute(
+    `SELECT
+       fr.id,
+       fr.beneficiary_type,
+       fr.beneficiary_value,
+       fr.department_id,
+       fr.beneficiary_entity_id,
+       COALESCE(frr.request_ref, '') AS finance_request_ref
+     FROM finance_requests fr
+     LEFT JOIN finance_request_refs frr ON frr.finance_request_id = fr.id
+     WHERE fr.id = ?
+     LIMIT 1`,
+    [financeId],
+  );
+
+  return rows?.[0] || null;
+}
+
+function buildBudgetProposalScope(scope = {}) {
+  const where = [];
+  const params = [];
+  const beneficiaryType = normalizeText(scope.beneficiary_type).toLowerCase();
+  const beneficiaryValue = normalizeText(scope.beneficiary_value);
+  const departmentId = toPositiveInt(scope.department_id);
+  const entityId = toPositiveInt(scope.beneficiary_entity_id);
+
+  if (departmentId) {
+    where.push('bp.department_id = ?');
+    params.push(departmentId);
+  }
+
+  if (
+    entityId &&
+    !['department', 'faculty', 'staff', 'individual faculty'].includes(beneficiaryType)
+  ) {
+    where.push('bp.beneficiary_entity_id = ?');
+    params.push(entityId);
+  }
+
+  if (!where.length && beneficiaryType) {
+    where.push("LOWER(TRIM(COALESCE(bp.beneficiary_type, ''))) = ?");
+    params.push(beneficiaryType);
+  }
+
+  if (!where.length && beneficiaryValue) {
+    where.push(
+      "LOWER(TRIM(CONVERT(COALESCE(bp.beneficiary_value, '') USING utf8mb4) COLLATE utf8mb4_unicode_ci)) = LOWER(TRIM(CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci))",
+    );
+    params.push(beneficiaryValue);
+  }
+
+  return {
+    sql: where.length ? ` AND ${where.join(' AND ')}` : '',
+    params,
+  };
+}
+
+async function getGlobalBudgetUsageByLine(
+  connOrDb,
+  budgetLineIds = [],
+  { excludeExpenditureId = null } = {},
+) {
+  const normalizedBudgetLineIds = Array.from(
+    new Set(
+      (Array.isArray(budgetLineIds) ? budgetLineIds : [])
+        .map((id) => toPositiveInt(id))
+        .filter(Boolean),
+    ),
+  );
+  if (!normalizedBudgetLineIds.length) return new Map();
+
+  const source = connOrDb || db;
+  const placeholders = normalizedBudgetLineIds.map(() => '?').join(', ');
+  const excludedRequestId = toPositiveInt(excludeExpenditureId);
+
+  const [rows] = await source.execute(
+    `SELECT usage_rows.budget_line_id, COALESCE(SUM(usage_rows.amount_delta), 0) AS consumed_amount
+       FROM (
+         SELECT ar.budget_line_id, ar.advance_amount AS amount_delta
+           FROM expenditure_advance_rows ar
+           JOIN expenditure_requests er ON er.id = ar.expenditure_id
+          WHERE ar.budget_line_id IN (${placeholders})
+            AND (? IS NULL OR er.id <> ?)
+            AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
+
+         UNION ALL
+
+         SELECT lr.budget_line_id, lr.auto_sum_amount AS amount_delta
+           FROM expenditure_line_rows lr
+           JOIN expenditure_requests er ON er.id = lr.expenditure_id
+          WHERE lr.budget_line_id IN (${placeholders})
+            AND (? IS NULL OR er.id <> ?)
+            AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
+
+         UNION ALL
+
+         SELECT sr.budget_line_id, sr.settlement_amount AS amount_delta
+           FROM expenditure_settlement_rows sr
+           JOIN expenditure_requests er ON er.id = sr.expenditure_id
+           JOIN finance_requests fr ON fr.id = er.finance_request_id
+           JOIN budget_proposals bp_sr ON bp_sr.id = sr.budget_proposal_id
+          WHERE sr.budget_line_id IN (${placeholders})
+            AND (? IS NULL OR er.id <> ?)
+            AND bp_sr.fiscal_year <> COALESCE(
+              (
+                SELECT MIN(bp_src.fiscal_year)
+                  FROM finance_budget_breakup fbb_src
+                  JOIN budget_proposals bp_src ON bp_src.id = fbb_src.budget_proposal_id
+                 WHERE fbb_src.finance_id = fr.id
+              ),
+              YEAR(COALESCE(fr.request_date, fr.created_at))
+                - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+            )
+            AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
+
+         UNION ALL
+
+         SELECT eur.head_of_account_budget_line_id AS budget_line_id, eur.amount AS amount_delta
+           FROM expenditure_unplanned_rows eur
+           JOIN expenditure_requests er ON er.id = eur.expenditure_id
+          WHERE eur.head_of_account_budget_line_id IN (${placeholders})
+            AND (? IS NULL OR er.id <> ?)
+            AND eur.head_of_account_budget_line_id IS NOT NULL
+            AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
+       ) usage_rows
+      GROUP BY usage_rows.budget_line_id`,
+    [
+      ...normalizedBudgetLineIds,
+      excludedRequestId,
+      excludedRequestId,
+      ...normalizedBudgetLineIds,
+      excludedRequestId,
+      excludedRequestId,
+      ...normalizedBudgetLineIds,
+      excludedRequestId,
+      excludedRequestId,
+      ...normalizedBudgetLineIds,
+      excludedRequestId,
+      excludedRequestId,
+    ],
+  );
+
+  return new Map(
+    rows.map((row) => [toPositiveInt(row.budget_line_id), toMoney(row.consumed_amount)]),
+  );
+}
+
+async function getApprovedCarryForwardFiscalYearBudgets({
+  connOrDb = db,
+  financeRequestId,
+  fiscalYear,
+  excludeExpenditureId = null,
+} = {}) {
+  const financeId = toPositiveInt(financeRequestId);
+  const targetYear = await getFinanceCarryForwardTargetYear(connOrDb, financeId, fiscalYear);
+  if (!financeId || !targetYear) return [];
+
+  const scope = await getFinanceBudgetScope(connOrDb, financeId);
+  if (!scope) return [];
+
+  const { sql: scopeSql, params: scopeParams } = buildBudgetProposalScope(scope);
+  const source = connOrDb || db;
+  const [rows] = await source.execute(
+    `SELECT
+       bpl.id AS budget_line_id,
+       bpl.budget_proposal_id,
+       ? AS finance_request_ref,
+       bp.fiscal_year,
+       COALESCE(NULLIF(TRIM(bpl.budget_head), ''), '') AS head,
+       COALESCE(NULLIF(TRIM(bpl.sub_head), ''), '') AS sub_head,
+       COALESCE(NULLIF(bpl.approved_line_total, 0), NULLIF(bpl.line_total, 0), 0) AS total_amount,
+       bp.beneficiary_type,
+       bp.beneficiary_value
+     FROM budget_proposal_lines bpl
+     JOIN budget_proposals bp ON bp.id = bpl.budget_proposal_id
+     WHERE bp.fiscal_year = ?
+       AND (
+         LOWER(TRIM(COALESCE(bp.status, ''))) IN ('completed', 'approved', 'principal_approved')
+         OR LOWER(TRIM(COALESCE(bp.current_stage, ''))) = 'completed'
+       )
+       ${scopeSql}
+     ORDER BY bpl.budget_head ASC, bpl.sub_head ASC, bpl.id ASC`,
+    [normalizeText(scope.finance_request_ref), targetYear, ...scopeParams],
+  );
+
+  const usageByLineId = await getGlobalBudgetUsageByLine(
+    connOrDb,
+    rows.map((row) => row.budget_line_id),
+    { excludeExpenditureId },
+  );
+
+  return rows
+    .map((row) => {
+      const totalAmount = toMoney(row.total_amount);
+      const usedAmount = toMoney(usageByLineId.get(toPositiveInt(row.budget_line_id)));
+      return {
+        budgetLineId: toPositiveInt(row.budget_line_id),
+        budgetProposalId: toPositiveInt(row.budget_proposal_id),
+        financeRequestRef: normalizeText(row.finance_request_ref),
+        fiscalYear: Number(row.fiscal_year) || targetYear,
+        head: normalizeText(row.head),
+        subHead: normalizeText(row.sub_head),
+        totalAmount,
+        usedAmount,
+        remainingAmount: toMoney(Math.max(0, totalAmount - usedAmount)),
+        beneficiaryType: normalizeText(row.beneficiary_type),
+        beneficiaryValue: normalizeText(row.beneficiary_value),
+      };
+    })
+    .filter((row) => row.budgetLineId && row.head && row.subHead);
+}
+
+export async function getApprovedBudgets({
+  userId,
+  userEmail,
+  financeRequestId,
+  fiscalYear = null,
+  allowAnyApprovedFinance = false,
+} = {}) {
   const uid = toPositiveInt(userId);
   const financeId = toPositiveInt(financeRequestId);
   if (!financeId || !uid) return [];
 
-  const owner = await getApprovedFinanceRequestOwner(db, financeId);
+  const [[owner]] = await db.execute(
+    `SELECT id, created_by
+       FROM finance_requests
+      WHERE id = ?
+      LIMIT 1`,
+    [financeId],
+  );
   if (!owner) return [];
   if (!allowAnyApprovedFinance && toPositiveInt(owner.created_by) !== uid) return [];
+
+  const carryForwardBudgets = await getApprovedCarryForwardFiscalYearBudgets({
+    financeRequestId: financeId,
+    fiscalYear,
+  });
+  if (carryForwardBudgets.length) {
+    return carryForwardBudgets;
+  }
 
   try {
     const [financeRows] = await db.execute(
@@ -1025,17 +1484,17 @@ export async function getApprovedBudgets({ userId, userEmail, financeRequestId, 
       budgetLineIds: financeRows.map((row) => row.budget_line_id),
     });
 
-    const groupedByHeadSubHead = new Map();
+    const groupedByHead = new Map();
 
     financeRows.forEach((r) => {
       const totalAmount = toMoney(r.total_amount);
       const usedAmount = toMoney(usageByLineId.get(toPositiveInt(r.budget_line_id)));
       const head = normalizeText(r.head);
       const subHead = normalizeText(r.sub_head);
-      if (!head || !subHead) return;
+      if (!head) return;
 
-      const key = `${head.toLowerCase()}::${subHead.toLowerCase()}`;
-      const existing = groupedByHeadSubHead.get(key);
+      const key = head.toLowerCase();
+      const existing = groupedByHead.get(key);
 
       if (existing) {
         existing.totalAmount = toMoney(existing.totalAmount + totalAmount);
@@ -1044,7 +1503,7 @@ export async function getApprovedBudgets({ userId, userEmail, financeRequestId, 
         return;
       }
 
-      groupedByHeadSubHead.set(key, {
+      groupedByHead.set(key, {
         budgetLineId: toPositiveInt(r.budget_line_id),
         budgetProposalId: toPositiveInt(r.budget_proposal_id),
         financeRequestRef: normalizeText(r.finance_request_ref),
@@ -1059,7 +1518,7 @@ export async function getApprovedBudgets({ userId, userEmail, financeRequestId, 
       });
     });
 
-    return Array.from(groupedByHeadSubHead.values());
+    return Array.from(groupedByHead.values());
   } catch (error) {
     if (error?.code === 'ER_NO_SUCH_TABLE') return [];
     throw error;
@@ -1107,9 +1566,10 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
   const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
   const offsetNum = Math.max(Number(offset) || 0, 0);
   const normalizedStatus = normalizeText(status).toLowerCase();
-  const statusClause = normalizedStatus && normalizedStatus !== 'all'
-    ? "AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = ?"
-    : '';
+  const statusClause =
+    normalizedStatus && normalizedStatus !== 'all'
+      ? "AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = ?"
+      : '';
   const statusParams = statusClause ? [normalizedStatus] : [];
   const searchTerms = q
     .split(/\s+/)
@@ -1162,13 +1622,8 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
 
   if (searchTerms.length >= 2) {
     const ifscCandidate = searchTerms[searchTerms.length - 1].toUpperCase();
-    const rawAccountCandidate = q
-      .split(/\s+/)
-      .slice(0, -1)
-      .join(' ');
-    const normalizedAccountCandidate = rawAccountCandidate
-      .toLowerCase()
-      .replace(/[\s-]+/g, '');
+    const rawAccountCandidate = q.split(/\s+/).slice(0, -1).join(' ');
+    const normalizedAccountCandidate = rawAccountCandidate.toLowerCase().replace(/[\s-]+/g, '');
 
     if (normalizedAccountCandidate && ifscCandidate) {
       const [exactPayees] = await db.execute(
@@ -1194,7 +1649,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
            updated_at
          FROM expenditure_payees
          WHERE is_active = 1
-           ${statusClause ? 'AND LOWER(TRIM(COALESCE(approval_status, \'approved\'))) = ?' : ''}
+           ${statusClause ? "AND LOWER(TRIM(COALESCE(approval_status, 'approved'))) = ?" : ''}
            AND UPPER(TRIM(COALESCE(ifsc, ''))) = ?
            AND ${accountCompareSql} = ?
          ORDER BY updated_at DESC, id DESC
@@ -1233,7 +1688,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
          INNER JOIN expenditure_payees ep
                  ON ep.id = epr.payee_id
                 AND ep.is_active = 1
-                ${statusClause ? 'AND LOWER(TRIM(COALESCE(ep.approval_status, \'approved\'))) = ?' : ''}
+                ${statusClause ? "AND LOWER(TRIM(COALESCE(ep.approval_status, 'approved'))) = ?" : ''}
          INNER JOIN (
            SELECT MAX(id) AS id
              FROM expenditure_payee_rows
@@ -1327,9 +1782,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
 }
 
 export async function getPayeeById(id) {
-  const [rows] = await db.execute(
-    'SELECT * FROM expenditure_payees WHERE id = ? LIMIT 1', [id],
-  );
+  const [rows] = await db.execute('SELECT * FROM expenditure_payees WHERE id = ? LIMIT 1', [id]);
   return normalizePayeeRecord(rows[0] || null);
 }
 
@@ -1337,16 +1790,25 @@ export async function updatePayeeById(id, payeeData = {}) {
   const payeeId = toPositiveInt(id);
   if (!payeeId) throw new Error('Invalid payee ID');
 
-  const canonicalPayeeName = resolveCanonicalPayeeName(payeeData.payee_name, payeeData.account_name);
+  const canonicalPayeeName = resolveCanonicalPayeeName(
+    payeeData.payee_name,
+    payeeData.account_name,
+  );
   const accountNo = normalizeText(payeeData.account_no);
   const ifsc = normalizeText(payeeData.ifsc).toUpperCase();
   const bankName = normalizeText(payeeData.bank_name);
   const branchName = normalizeText(payeeData.branch_name);
-  const beneficiaryType = normalizeText(payeeData.beneficiary_type).toLowerCase() === 'organization'
-    ? 'organization'
-    : 'individual';
-  const beneficiaryOrgRaw = resolveCanonicalBeneficiaryOrg(payeeData.beneficiary_org, payeeData.payee_name);
-  const beneficiaryOrg = BENEFICIARY_ORG_OPTIONS.includes(beneficiaryOrgRaw) ? beneficiaryOrgRaw : null;
+  const beneficiaryType =
+    normalizeText(payeeData.beneficiary_type).toLowerCase() === 'organization'
+      ? 'organization'
+      : 'individual';
+  const beneficiaryOrgRaw = resolveCanonicalBeneficiaryOrg(
+    payeeData.beneficiary_org,
+    payeeData.payee_name,
+  );
+  const beneficiaryOrg = BENEFICIARY_ORG_OPTIONS.includes(beneficiaryOrgRaw)
+    ? beneficiaryOrgRaw
+    : null;
 
   if (!canonicalPayeeName || !accountNo || !ifsc || !bankName || !branchName) {
     throw new Error('payee_name, account_no, ifsc, bank_name and branch_name are required');
@@ -1404,7 +1866,10 @@ export async function updatePayeeById(id, payeeData = {}) {
   return result.affectedRows >= 0;
 }
 
-export async function updatePayeeApproval(id, { decision, rejectionReason = '', userId = null } = {}) {
+export async function updatePayeeApproval(
+  id,
+  { decision, rejectionReason = '', userId = null } = {},
+) {
   const payeeId = toPositiveInt(id);
   const normalizedDecision = normalizeText(decision).toLowerCase();
   if (!payeeId) throw new Error('Invalid payee ID');
@@ -1468,9 +1933,36 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
   if (fyStart) {
     const fyFrom = `${fyStart}-04-01`;
     const fyTo = `${fyStart + 1}-04-01`;
-    financeFySql = ' AND fr.request_date >= ? AND fr.request_date < ?';
+    financeFySql = ` AND (
+      COALESCE(
+        (
+          SELECT MIN(bp_card.fiscal_year)
+            FROM finance_budget_breakup fbb_card
+            JOIN budget_proposals bp_card ON bp_card.id = fbb_card.budget_proposal_id
+           WHERE fbb_card.finance_id = fr.id
+        ),
+        YEAR(COALESCE(fr.request_date, fr.created_at))
+          - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+      ) = ?
+      OR EXISTS (
+        SELECT 1
+          FROM finance_carry_forward_allocations cf_card
+         WHERE cf_card.finance_request_id = fr.id
+           AND cf_card.target_fiscal_year = ?
+           AND LOWER(TRIM(cf_card.status)) = 'active'
+      )
+      OR EXISTS (
+        SELECT 1
+          FROM expenditure_requests er_fy
+         WHERE er_fy.finance_request_id = fr.id
+           AND er_fy.created_by = ?
+           AND LOWER(TRIM(COALESCE(er_fy.overall_status, 'pending'))) <> 'deleted'
+           AND er_fy.request_date >= ?
+           AND er_fy.request_date < ?
+      )
+    )`;
     expenditureFySql = ' AND er.request_date >= ? AND er.request_date < ?';
-    financeParams.push(fyFrom, fyTo);
+    financeParams.push(fyStart, fyStart, uid, fyFrom, fyTo);
     expenditureParams.push(fyFrom, fyTo);
   }
 
@@ -1498,6 +1990,22 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
          NULLIF(fr.proposed_amount, 0),
          0
        ) AS approved_amount,
+       COALESCE(
+         (
+           SELECT MIN(bp_card_label.fiscal_year)
+             FROM finance_budget_breakup fbb_card_label
+             JOIN budget_proposals bp_card_label ON bp_card_label.id = fbb_card_label.budget_proposal_id
+            WHERE fbb_card_label.finance_id = fr.id
+         ),
+         YEAR(COALESCE(fr.request_date, fr.created_at))
+           - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+       ) AS source_fiscal_year,
+       (
+         SELECT GROUP_CONCAT(DISTINCT cf_card_targets.target_fiscal_year ORDER BY cf_card_targets.target_fiscal_year ASC)
+           FROM finance_carry_forward_allocations cf_card_targets
+          WHERE cf_card_targets.finance_request_id = fr.id
+            AND LOWER(TRIM(cf_card_targets.status)) = 'active'
+       ) AS carry_forward_target_years,
        COALESCE(SUM(
          CASE
            WHEN er.request_type = 'Advance'
@@ -1541,13 +2049,15 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        applicant_name,
        designation,
        department,
-       approved_amount
+       approved_amount,
+       source_fiscal_year,
+       carry_forward_target_years
      ORDER BY fr.request_date DESC, fr.id DESC`,
     financeParams,
   );
 
   const [requestRows] = await db.execute(
-      `SELECT
+    `SELECT
        er.id,
        er.finance_request_id AS finance_id,
        COALESCE(frr.request_ref, CONCAT('#F-', er.finance_request_id)) AS proposal_ref,
@@ -1621,6 +2131,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
       const settlementAmount = toMoney(row.settlement_amount);
       const expenditureAmount = toMoney(row.expenditure_amount);
       const effectiveUsageAmount = settlementAmount > 0 ? settlementAmount : advanceAmount;
+      const sourceFiscalYear = toPositiveInt(row.source_fiscal_year);
       return {
         finance_request_id: toPositiveInt(row.finance_request_id),
         request_ref: normalizeText(row.request_ref),
@@ -1630,6 +2141,8 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
         beneficiary_name: normalizeText(row.beneficiary_name),
         finance_tag: normalizeText(row.finance_tag),
         approved_amount: approvedAmount,
+        source_fiscal_year: sourceFiscalYear,
+        carry_forward_target_years: normalizeText(row.carry_forward_target_years),
         advance_amount: advanceAmount,
         expenditure_amount: expenditureAmount,
         settlement_amount: settlementAmount,
@@ -1646,10 +2159,10 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
       beneficiary_type: normalizeText(row.beneficiary_type),
       primary_head: normalizeText(row.primary_head),
       sub_head: normalizeText(row.sub_head),
-	      request_type: normalizeText(row.request_type),
-	      workflow_state: row.workflow_state,
-	      payment_status: normalizeText(row.payment_status),
-	      amount: toMoney(row.amount),
+      request_type: normalizeText(row.request_type),
+      workflow_state: row.workflow_state,
+      payment_status: normalizeText(row.payment_status),
+      amount: toMoney(row.amount),
       overall_status: normalizeText(row.overall_status) || 'pending',
       created_at: row.created_at,
     })),
@@ -1730,14 +2243,15 @@ export async function getFinanceRequestContext(financeRequestId) {
  */
 export async function upsertPayee(payeeData, userId, conn = db) {
   const accountNo = normalizeText(payeeData.account_no);
-  const ifsc      = normalizeText(payeeData.ifsc).toUpperCase();
+  const ifsc = normalizeText(payeeData.ifsc).toUpperCase();
   const canonicalPayeeName = resolveCanonicalPayeeName(
     payeeData.payee_name,
     payeeData.account_name,
   );
-  const beneficiaryType = normalizeText(payeeData.beneficiary_type).toLowerCase() === 'organization'
-    ? 'organization'
-    : 'individual';
+  const beneficiaryType =
+    normalizeText(payeeData.beneficiary_type).toLowerCase() === 'organization'
+      ? 'organization'
+      : 'individual';
   const beneficiaryOrgRaw = resolveCanonicalBeneficiaryOrg(
     payeeData.beneficiary_org,
     payeeData.payee_name,
@@ -1777,19 +2291,19 @@ export async function upsertPayee(payeeData, userId, conn = db) {
               updated_at   = CURRENT_TIMESTAMP
         WHERE id = ?`,
       [
-        canonicalPayeeName     || null,
-        canonicalPayeeName     || null,
-        payeeData.pan_number   || null,
+        canonicalPayeeName || null,
+        canonicalPayeeName || null,
+        payeeData.pan_number || null,
         payeeData.account_type || null,
-        payeeData.bank_name    || null,
-        payeeData.branch_name  || null,
+        payeeData.bank_name || null,
+        payeeData.branch_name || null,
         beneficiaryType,
         beneficiaryOrg,
         payeeData.organization_type || null,
-        payeeData.msme         || null,
-        payeeData.gstin        || null,
-        payeeData.tds_details  || null,
-        payeeData.tds_section  || null,
+        payeeData.msme || null,
+        payeeData.gstin || null,
+        payeeData.tds_details || null,
+        payeeData.tds_section || null,
         existing[0].id,
       ],
     );
@@ -1808,16 +2322,16 @@ export async function upsertPayee(payeeData, userId, conn = db) {
       canonicalPayeeName,
       canonicalPayeeName || null,
       accountNo,
-      payeeData.account_type  || null,
+      payeeData.account_type || null,
       normalizeText(payeeData.bank_name),
       normalizeText(payeeData.branch_name || ''),
       ifsc,
       beneficiaryType,
       beneficiaryOrg,
       payeeData.organization_type || null,
-      payeeData.msme         || null,
-      payeeData.pan_number  || null,
-      payeeData.gstin       || null,
+      payeeData.msme || null,
+      payeeData.pan_number || null,
+      payeeData.gstin || null,
       payeeData.tds_details || null,
       payeeData.tds_section || null,
       userId || null,
@@ -1828,7 +2342,7 @@ export async function upsertPayee(payeeData, userId, conn = db) {
 
 // ─── Core SELECT for expenditure_requests ────────────────────────────────────
 
-const EXPENDITURE_SELECT = `
+const EXPENDITURE_SELECT_TEMPLATE = `
   SELECT
     er.id,
     COALESCE(err.request_ref, CONCAT('#EX-', er.id)) AS request_ref,
@@ -1846,6 +2360,7 @@ const EXPENDITURE_SELECT = `
     er.is_budget_proposed,
     er.unplanned_budget_enabled,
     er.unplanned_budget_amount,
+__OPTIONAL_UNPLANNED_HEAD_COLUMNS__
     er.unplanned_budget_head,
     er.unplanned_budget_sub_head,
     er.unplanned_budget_description,
@@ -1987,6 +2502,39 @@ const EXPENDITURE_SELECT = `
   ) sample_payee ON sample_payee.expenditure_id = er.id
 `;
 
+// Optional columns (added by the 20260604 migration). The write paths already guard
+// these via hasExpenditureRequestColumn; the read path must match, otherwise a SELECT
+// against a not-yet-migrated database throws "Unknown column". When a column is missing
+// we emit `NULL AS <col>` so the result shape stays stable. Memoized via the cached
+// column-existence lookups.
+const OPTIONAL_UNPLANNED_HEAD_COLUMNS = [
+  'unplanned_head_of_account',
+  'unplanned_head_of_account_budget_line_id',
+  'unplanned_head_of_account_budget_proposal_id',
+];
+
+let expenditureSelectSqlPromise = null;
+const getExpenditureSelect = async () => {
+  if (expenditureSelectSqlPromise) {
+    return expenditureSelectSqlPromise;
+  }
+  expenditureSelectSqlPromise = (async () => {
+    const optionalColumnSql = [];
+    for (const column of OPTIONAL_UNPLANNED_HEAD_COLUMNS) {
+      const exists = await hasExpenditureRequestColumn(column);
+      optionalColumnSql.push(exists ? `    er.${column},` : `    NULL AS ${column},`);
+    }
+    return EXPENDITURE_SELECT_TEMPLATE.replace(
+      '__OPTIONAL_UNPLANNED_HEAD_COLUMNS__',
+      optionalColumnSql.join('\n'),
+    );
+  })().catch((error) => {
+    expenditureSelectSqlPromise = null;
+    throw error;
+  });
+  return expenditureSelectSqlPromise;
+};
+
 // ─── Expenditure CRUD ─────────────────────────────────────────────────────────
 
 /**
@@ -2003,7 +2551,6 @@ const EXPENDITURE_SELECT = `
  */
 async function createExpenditureLegacy(data, userId) {
   return withTransaction(async (conn) => {
-
     // ── 1. Budget validation ────────────────────────────────────────────────
     const budgetLineId = toPositiveInt(data.budget_line_id);
     if (!budgetLineId) throw new Error('budget_line_id is required');
@@ -2051,14 +2598,14 @@ async function createExpenditureLegacy(data, userId) {
     if (!payeeId && data.payment_details) {
       payeeId = await upsertPayee(
         {
-          payee_name:   data.payment_details.payee_name   || data.purpose || 'Unknown',
-          account_no:   data.payment_details.account_no,
-          ifsc:         data.payment_details.ifsc,
-          bank_name:    data.payment_details.bank_name,
-          branch_name:  data.payment_details.branch_name  || '',
+          payee_name: data.payment_details.payee_name || data.purpose || 'Unknown',
+          account_no: data.payment_details.account_no,
+          ifsc: data.payment_details.ifsc,
+          bank_name: data.payment_details.bank_name,
+          branch_name: data.payment_details.branch_name || '',
           account_name: data.payment_details.account_name || null,
           account_type: data.payment_details.account_type || null,
-          pan_number:   data.payment_details.pan_number   || null,
+          pan_number: data.payment_details.pan_number || null,
         },
         userId,
         conn,
@@ -2090,42 +2637,45 @@ async function createExpenditureLegacy(data, userId) {
 
     // ── 5. Insert expenditure row ───────────────────────────────────────────
     const entry = {
-      finance_request_id:   toPositiveInt(data.finance_request_id),
-      budget_line_id:       budgetLineId,
-      budget_proposal_id:   toPositiveInt(lineRow.budget_proposal_id),
-      employee_id:          employeeId || null,
-      payee_id:             payeeId || null,
-      created_by:           toPositiveInt(userId),
-      request_date:         data.request_date || new Date().toISOString().slice(0, 10),
-      request_type:         'Advance',
-      description:          normalizeText(data.description) || null,
-      purpose:              normalizeText(data.purpose) || null,
-      beneficiary_type:     normalizeBeneficiaryType(data.beneficiary_type)
-                              || normalizeText(data.beneficiary_type)
-                              || 'Individual Faculty',
-      beneficiary_value:    normalizeText(data.beneficiary_value) || null,
-      budget_tag:           normalizeText(data.budget_tag) || null,
-      department_id:        workflowContext.departmentId,
+      finance_request_id: toPositiveInt(data.finance_request_id),
+      budget_line_id: budgetLineId,
+      budget_proposal_id: toPositiveInt(lineRow.budget_proposal_id),
+      employee_id: employeeId || null,
+      payee_id: payeeId || null,
+      created_by: toPositiveInt(userId),
+      request_date: data.request_date || new Date().toISOString().slice(0, 10),
+      request_type: 'Advance',
+      description: normalizeText(data.description) || null,
+      purpose: normalizeText(data.purpose) || null,
+      beneficiary_type:
+        normalizeBeneficiaryType(data.beneficiary_type) ||
+        normalizeText(data.beneficiary_type) ||
+        'Individual Faculty',
+      beneficiary_value: normalizeText(data.beneficiary_value) || null,
+      budget_tag: normalizeText(data.budget_tag) || null,
+      department_id: workflowContext.departmentId,
       beneficiary_entity_id: workflowContext.beneficiaryEntityId,
-      primary_head:         normalizeText(data.primary_head)
-                              || normalizeText(lineRow.head)
-                              || 'General',
-      event_sub_head:       normalizeText(data.event_sub_head) || null,
-      head:                 normalizeText(lineRow.head),
-      sub_head:             normalizeText(lineRow.sub_head),
-      amount:               requestedAmount,
-      pre_advance_amount:   preAdvance,
+      primary_head: normalizeText(data.primary_head) || normalizeText(lineRow.head) || 'General',
+      event_sub_head: normalizeText(data.event_sub_head) || null,
+      head: normalizeText(lineRow.head),
+      sub_head: normalizeText(lineRow.sub_head),
+      amount: requestedAmount,
+      pre_advance_amount: preAdvance,
       advance_total_amount: requestedAmount,
-      total_amount:         requestedAmount,
+      total_amount: requestedAmount,
       approved_total_amount: 0,
       payment_debit_account: normalizeText(data.payment_debit_account) || null,
-      payment_mode:          normalizeText(data.payment_mode) || null,
-      payment_status:       'Pending',
-      overall_status:       'pending',
+      payment_mode: normalizeText(data.payment_mode) || null,
+      payment_status: 'Pending',
+      overall_status: 'pending',
     };
 
-    const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', { tx: conn });
-    const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', { tx: conn });
+    const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', {
+      tx: conn,
+    });
+    const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', {
+      tx: conn,
+    });
     if (hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn) {
       // NEW: resolve catalog IDs for the header head + event sub-head and add
       // them to the entry. Keeps text snapshot AND stable IDs in sync.
@@ -2222,9 +2772,10 @@ export async function createExpenditure(data, userId) {
     employee_id: toPositiveInt(data.employee_id),
     request_date: data.request_date || new Date().toISOString().slice(0, 10),
     description: normalizeText(data.description) || normalizeText(data.purpose) || null,
-    beneficiary_type: normalizeBeneficiaryType(data.beneficiary_type)
-      || normalizeText(data.beneficiary_type)
-      || 'Individual Faculty',
+    beneficiary_type:
+      normalizeBeneficiaryType(data.beneficiary_type) ||
+      normalizeText(data.beneficiary_type) ||
+      'Individual Faculty',
     beneficiary_value: normalizeText(data.beneficiary_value) || null,
     budget_tag: normalizeText(data.budget_tag) || null,
     primary_head: normalizeText(data.primary_head) || 'General',
@@ -2232,6 +2783,10 @@ export async function createExpenditure(data, userId) {
     request_type: 'Advance',
     unplanned_budget_enabled: parseBoolean(data.unplanned_budget_enabled),
     unplanned_budget_amount: data.unplanned_budget_amount ?? null,
+    unplanned_head_of_account: data.unplanned_head_of_account ?? null,
+    unplanned_head_of_account_budget_line_id: data.unplanned_head_of_account_budget_line_id ?? null,
+    unplanned_head_of_account_budget_proposal_id:
+      data.unplanned_head_of_account_budget_proposal_id ?? null,
     unplanned_budget_head: data.unplanned_budget_head ?? null,
     unplanned_budget_sub_head: data.unplanned_budget_sub_head ?? null,
     unplanned_budget_description: data.unplanned_budget_description ?? null,
@@ -2250,37 +2805,44 @@ export async function createExpenditure(data, userId) {
         advance: amount,
       },
     ],
-    payee_rows: data.payee_id || paymentDetails.account_no
-      ? [
-        {
-          payee_id: toPositiveInt(data.payee_id),
-          payee_name: resolveCanonicalPayeeName(
-            paymentDetails.payee_name || data.payee_name,
-            paymentDetails.account_name,
-          ) || null,
-          bank_name: normalizeText(paymentDetails.bank_name) || null,
-          account_no: normalizeText(paymentDetails.account_no) || null,
-          ifsc: normalizeText(paymentDetails.ifsc).toUpperCase() || null,
-          branch_name: normalizeText(paymentDetails.branch_name) || null,
-          amount,
-          mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
-          account_name: resolveCanonicalPayeeName(
-            paymentDetails.payee_name || data.payee_name,
-            paymentDetails.account_name,
-          ) || null,
-          beneficiary_org: resolveCanonicalBeneficiaryOrg(
-            paymentDetails.beneficiary_org || data.beneficiary_org,
-            paymentDetails.payee_name || data.payee_name,
-          ) || null,
-        },
-      ]
-      : [],
+    payee_rows:
+      data.payee_id || paymentDetails.account_no
+        ? [
+            {
+              payee_id: toPositiveInt(data.payee_id),
+              payee_name:
+                resolveCanonicalPayeeName(
+                  paymentDetails.payee_name || data.payee_name,
+                  paymentDetails.account_name,
+                ) || null,
+              bank_name: normalizeText(paymentDetails.bank_name) || null,
+              account_no: normalizeText(paymentDetails.account_no) || null,
+              ifsc: normalizeText(paymentDetails.ifsc).toUpperCase() || null,
+              branch_name: normalizeText(paymentDetails.branch_name) || null,
+              amount,
+              mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
+              account_name:
+                resolveCanonicalPayeeName(
+                  paymentDetails.payee_name || data.payee_name,
+                  paymentDetails.account_name,
+                ) || null,
+              beneficiary_org:
+                resolveCanonicalBeneficiaryOrg(
+                  paymentDetails.beneficiary_org || data.beneficiary_org,
+                  paymentDetails.payee_name || data.payee_name,
+                ) || null,
+            },
+          ]
+        : [],
     payment_details: paymentDetails,
     payment_mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
     payment_ref_no: normalizeText(paymentDetails.refNo || data.payment_ref_no) || null,
     payment_date: paymentDetails.date || data.payment_date || null,
-    payment_status: normalizePaymentStatus(paymentDetails.status || data.payment_status || 'Pending'),
-    payment_debit_account: normalizeText(paymentDetails.debitAccount || data.payment_debit_account) || null,
+    payment_status: normalizePaymentStatus(
+      paymentDetails.status || data.payment_status || 'Pending',
+    ),
+    payment_debit_account:
+      normalizeText(paymentDetails.debitAccount || data.payment_debit_account) || null,
   };
 
   return createExpenditureRequest(payload, userId, { billFiles: [], bulkNeftFile: null });
@@ -2297,7 +2859,10 @@ function moneyOrNull(value) {
 
 function toStoredUploadPath(filePath = '') {
   const relativePath = filePath
-    ? `/${filePath.replace(process.cwd(), '').replace(/^[\\/]+/, '').replace(/\\/g, '/')}`
+    ? `/${filePath
+        .replace(process.cwd(), '')
+        .replace(/^[\\/]+/, '')
+        .replace(/\\/g, '/')}`
     : null;
   return relativePath;
 }
@@ -2340,7 +2905,10 @@ async function insertPayeeRows(conn, expenditureId, rows = [], userId = null) {
   for (const row of validRows) {
     const existingPayeeId = toPositiveInt(row.payeeId || row.payee_id);
     const payeeName = sanitizeRowValue(
-      resolveCanonicalPayeeName(row.payeeName || row.payee_name, row.accountName || row.account_name),
+      resolveCanonicalPayeeName(
+        row.payeeName || row.payee_name,
+        row.accountName || row.account_name,
+      ),
     );
     const bankName = sanitizeRowValue(row.bankName || row.bank_name);
     const accountNo = sanitizeRowValue(row.accountNo || row.account_no);
@@ -2352,9 +2920,13 @@ async function insertPayeeRows(conn, expenditureId, rows = [], userId = null) {
     const accountName = payeeName;
     const panNumber = sanitizeRowValue(row.panNumber || row.pan_number);
     const accountType = sanitizeRowValue(row.accountType || row.account_type);
-    const beneficiaryType = sanitizeRowValue(row.beneficiaryType || row.beneficiary_type) || 'individual';
+    const beneficiaryType =
+      sanitizeRowValue(row.beneficiaryType || row.beneficiary_type) || 'individual';
     const beneficiaryOrg = sanitizeRowValue(
-      resolveCanonicalBeneficiaryOrg(row.beneficiaryOrg || row.beneficiary_org, row.payeeName || row.payee_name),
+      resolveCanonicalBeneficiaryOrg(
+        row.beneficiaryOrg || row.beneficiary_org,
+        row.payeeName || row.payee_name,
+      ),
     );
     const organizationType = sanitizeRowValue(row.organizationType || row.organization_type);
     const msme = sanitizeRowValue(row.msme);
@@ -2394,9 +2966,29 @@ async function insertPayeeRows(conn, expenditureId, rows = [], userId = null) {
           amount, mode, account_name, pan_number, account_type,
           beneficiary_type, beneficiary_org, organization_type, msme, gstin, tds_details, tds_section, sort_order)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [expenditureId, payeeId, payeeName, bankName, accountNo, ifsc, branchName, url, amount, mode,
-       accountName, panNumber, accountType, beneficiaryType, beneficiaryOrg,
-       organizationType, msme, gstin, tdsDetails, tdsSection, sortOrder],
+      [
+        expenditureId,
+        payeeId,
+        payeeName,
+        bankName,
+        accountNo,
+        ifsc,
+        branchName,
+        url,
+        amount,
+        mode,
+        accountName,
+        panNumber,
+        accountType,
+        beneficiaryType,
+        beneficiaryOrg,
+        organizationType,
+        msme,
+        gstin,
+        tdsDetails,
+        tdsSection,
+        sortOrder,
+      ],
     );
     sortOrder += 1;
   }
@@ -2452,7 +3044,7 @@ async function insertAdvanceRows(
     const advIds = earlyResolvedIds;
 
     await conn.execute(
-       `INSERT INTO expenditure_advance_rows
+      `INSERT INTO expenditure_advance_rows
           (expenditure_id, finance_budget_breakup_id, budget_proposal_id, budget_line_id,
            amount_source, budget_head, sub_head, budget_head_id, budget_sub_head_id,
            budget_amount, pre_advance_amount,
@@ -2480,7 +3072,12 @@ async function insertAdvanceRows(
   }
 }
 
-async function insertSettlementRows(conn, expenditureId, rows = [], budgetSnapshotsByLine = new Map()) {
+async function insertSettlementRows(
+  conn,
+  expenditureId,
+  rows = [],
+  budgetSnapshotsByLine = new Map(),
+) {
   const validRows = Array.isArray(rows) ? rows : [];
   let sortOrder = 0;
   for (const row of validRows) {
@@ -2498,7 +3095,7 @@ async function insertSettlementRows(conn, expenditureId, rows = [], budgetSnapsh
     const setIds = await resolveCatalogIds(conn, budgetHead, subHead);
 
     await conn.execute(
-       `INSERT INTO expenditure_settlement_rows
+      `INSERT INTO expenditure_settlement_rows
           (expenditure_id, finance_budget_breakup_id, budget_proposal_id, budget_line_id,
            amount_source, budget_head, sub_head, budget_head_id, budget_sub_head_id,
            budget_amount, advance_amount,
@@ -2525,7 +3122,12 @@ async function insertSettlementRows(conn, expenditureId, rows = [], budgetSnapsh
   }
 }
 
-async function insertExpenditureRows(conn, expenditureId, rows = [], budgetSnapshotsByLine = new Map()) {
+async function insertExpenditureRows(
+  conn,
+  expenditureId,
+  rows = [],
+  budgetSnapshotsByLine = new Map(),
+) {
   const validRows = Array.isArray(rows) ? rows : [];
   let sortOrder = 0;
   for (const row of validRows) {
@@ -2535,7 +3137,9 @@ async function insertExpenditureRows(conn, expenditureId, rows = [], budgetSnaps
     const budgetProposalId = toPositiveInt(row.budgetProposalId || row.budget_proposal_id);
     const budgetLineId = toPositiveInt(row.budgetLineId || row.budget_line_id);
     const budgetSnapshot = budgetSnapshotsByLine.get(budgetLineId) || null;
-    const expenditureInput = sanitizeRowValue(row.expenditure || row.expenditure_input || row.autoSum || row.auto_sum_amount);
+    const expenditureInput = sanitizeRowValue(
+      row.expenditure || row.expenditure_input || row.autoSum || row.auto_sum_amount,
+    );
     const autoSumAmount = toMoney(row.autoSum || row.auto_sum_amount || row.expenditure);
     if (!budgetHead && !subHead && autoSumAmount === 0 && !expenditureInput) continue;
 
@@ -2543,7 +3147,7 @@ async function insertExpenditureRows(conn, expenditureId, rows = [], budgetSnaps
     const lineIds = await resolveCatalogIds(conn, budgetHead, subHead);
 
     await conn.execute(
-       `INSERT INTO expenditure_line_rows
+      `INSERT INTO expenditure_line_rows
           (expenditure_id, finance_budget_breakup_id, budget_proposal_id, budget_line_id,
            amount_source, budget_head, sub_head, budget_head_id, budget_sub_head_id,
            budget_amount, expenditure_input,
@@ -2563,6 +3167,46 @@ async function insertExpenditureRows(conn, expenditureId, rows = [], budgetSnaps
         autoSumAmount,
         budgetSnapshot ? budgetSnapshot.availableAmountSnapshot : null,
         budgetSnapshot ? budgetSnapshot.remainingAmountSnapshot : null,
+        sortOrder,
+      ],
+    );
+    sortOrder += 1;
+  }
+}
+
+async function insertUnplannedRows(conn, expenditureId, rows = []) {
+  const validRows = Array.isArray(rows) ? rows : [];
+  let sortOrder = 0;
+  for (const row of validRows) {
+    const headOfAccount = sanitizeRowValue(row.headOfAccount || row.head_of_account);
+    const headOfAccountBudgetLineId = toPositiveInt(
+      row.headOfAccountBudgetLineId || row.head_of_account_budget_line_id,
+    );
+    const headOfAccountBudgetProposalId = toPositiveInt(
+      row.headOfAccountBudgetProposalId || row.head_of_account_budget_proposal_id,
+    );
+    const budgetHead = sanitizeRowValue(row.head || row.budget_head || row.budgetHead);
+    const subHead = sanitizeRowValue(row.subHead || row.sub_head);
+    const amount = toMoney(row.amount);
+    const description =
+      sanitizeRowValue(row.description) || [budgetHead, subHead].filter(Boolean).join(' - ');
+    if (!headOfAccountBudgetLineId || !budgetHead || !subHead || amount <= 0) continue;
+
+    await conn.execute(
+      `INSERT INTO expenditure_unplanned_rows
+         (expenditure_id, head_of_account, head_of_account_budget_line_id,
+          head_of_account_budget_proposal_id, budget_head, sub_head, amount,
+          description, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        expenditureId,
+        headOfAccount,
+        headOfAccountBudgetLineId,
+        headOfAccountBudgetProposalId,
+        budgetHead,
+        subHead,
+        amount,
+        description,
         sortOrder,
       ],
     );
@@ -2634,14 +3278,23 @@ async function upsertBulkNeftFile(conn, expenditureId, file = null, templateVers
   );
 }
 
-function collectUsageRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows } = {}) {
+function collectUsageRowsForRequestType(
+  requestType,
+  { advanceRows, settlementRows, expenditureRows } = {},
+) {
   const usageByLine = new Map();
 
-  const addUsage = (budgetLineId, amount) => {
+  const addUsage = (budgetLineId, amount, extra = {}) => {
     const lineId = toPositiveInt(budgetLineId);
     const normalizedAmount = toMoney(amount);
     if (!lineId || normalizedAmount <= 0) return;
-    usageByLine.set(lineId, toMoney((usageByLine.get(lineId) || 0) + normalizedAmount));
+    const current = usageByLine.get(lineId) || { budgetLineId: lineId, amount: 0 };
+    usageByLine.set(lineId, {
+      ...current,
+      ...extra,
+      budgetLineId: lineId,
+      amount: toMoney((current.amount || 0) + normalizedAmount),
+    });
   };
 
   if (requestType === 'Advance') {
@@ -2654,11 +3307,80 @@ function collectUsageRowsForRequestType(requestType, { advanceRows, settlementRo
     });
   } else if (requestType === 'Expenditure') {
     (Array.isArray(expenditureRows) ? expenditureRows : []).forEach((row) => {
-      addUsage(row.budgetLineId || row.budget_line_id, row.autoSum || row.auto_sum_amount || row.expenditure);
+      addUsage(
+        row.budgetLineId || row.budget_line_id,
+        row.autoSum || row.auto_sum_amount || row.expenditure,
+      );
     });
   }
 
-  return [...usageByLine.entries()].map(([budgetLineId, amount]) => ({ budgetLineId, amount }));
+  return [...usageByLine.values()];
+}
+
+function addUnplannedUsageRows(usageRows = [], normalizedUnplanned = {}) {
+  if (!normalizedUnplanned?.enabled) return usageRows;
+
+  (Array.isArray(normalizedUnplanned.rows) ? normalizedUnplanned.rows : []).forEach((row) => {
+    const budgetLineId = toPositiveInt(row.headOfAccountBudgetLineId);
+    const amount = toMoney(row.amount);
+    if (!budgetLineId || amount <= 0) return;
+
+    usageRows.push({
+      budgetLineId,
+      amount,
+      isUnplanned: true,
+      direction: -1,
+    });
+  });
+  return usageRows;
+}
+
+function markCarryForwardSettlementUsageRows(requestType, usageRows = [], budgetFiscalYear = null) {
+  if (requestType !== 'Settlement' || !toPositiveInt(budgetFiscalYear)) return usageRows;
+  return usageRows.map((row) => ({
+    ...row,
+    countsAgainstRemaining: true,
+    direction: -1,
+  }));
+}
+
+// Validate that the usage rows do not exceed the remaining budget per line.
+// Amounts must be aggregated by budget line before comparing: a single request can
+// carry multiple rows for the same line (e.g. a normal draw plus the unplanned
+// head-of-account deduction), and checking each row independently would let the
+// combined draw slip past the remaining balance. This mirrors how
+// buildBudgetSnapshotsByLine sums deltas per line.
+function assertUsageRowsWithinRemainingBudget(
+  requestType,
+  usageRows = [],
+  remainingByLineId = new Map(),
+) {
+  const requestedByLine = new Map();
+
+  for (const usageRow of usageRows) {
+    const lineId = toPositiveInt(usageRow.budgetLineId);
+    if (!lineId || !remainingByLineId.has(lineId)) {
+      throw new Error(`Budget line ${lineId || 'unknown'} is not linked to this finance request`);
+    }
+    // Settlement rows don't draw down the remaining budget, except the unplanned
+    // head-of-account deduction, which always does.
+    const countsAgainstRemaining =
+      requestType !== 'Settlement' || usageRow.isUnplanned || usageRow.countsAgainstRemaining;
+    if (!countsAgainstRemaining) continue;
+    requestedByLine.set(
+      lineId,
+      toMoney((requestedByLine.get(lineId) || 0) + toMoney(usageRow.amount)),
+    );
+  }
+
+  for (const [lineId, requestedAmount] of requestedByLine.entries()) {
+    const remaining = toMoney(remainingByLineId.get(lineId)?.remainingAmount);
+    if (requestedAmount > remaining) {
+      throw new Error(
+        `Requested amount ${requestedAmount.toFixed(2)} exceeds remaining budget ${remaining.toFixed(2)} for line ${lineId}`,
+      );
+    }
+  }
 }
 
 function getAmountForWorkflowRow(requestType, row = {}) {
@@ -2690,6 +3412,7 @@ async function assertWorkflowRowsHaveApprovedBudgetLines(
   financeRequestId,
   requestType,
   { advanceRows, settlementRows, expenditureRows } = {},
+  { budgetFiscalYear = null } = {},
 ) {
   const rows = getRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows });
   const filledRows = rows
@@ -2697,23 +3420,53 @@ async function assertWorkflowRowsHaveApprovedBudgetLines(
       rowNumber: index + 1,
       budgetLineId: toPositiveInt(row.budgetLineId || row.budget_line_id),
       amount: getAmountForWorkflowRow(requestType, row),
-      hasExplicitAmount: requestType === 'Settlement'
-        ? hasExplicitMoneyValue(row, ['settlement', 'settlement_amount', 'settlementamount'])
-        : getAmountForWorkflowRow(requestType, row) > 0,
+      hasExplicitAmount:
+        requestType === 'Settlement'
+          ? hasExplicitMoneyValue(row, ['settlement', 'settlement_amount', 'settlementamount'])
+          : getAmountForWorkflowRow(requestType, row) > 0,
     }))
     .filter((row) => row.hasExplicitAmount && (requestType === 'Settlement' || row.amount > 0));
 
   if (!filledRows.length) return;
 
-  const missingBudgetLineRows = filledRows.filter((row) => !row.budgetLineId).map((row) => row.rowNumber);
+  const missingBudgetLineRows = filledRows
+    .filter((row) => !row.budgetLineId)
+    .map((row) => row.rowNumber);
   if (missingBudgetLineRows.length) {
     throw new Error(
       `Please select a valid approved budget head and sub-head for row ${missingBudgetLineRows.join(', ')}`,
     );
   }
 
-  const uniqueLineIds = Array.from(new Set(filledRows.map((row) => row.budgetLineId).filter(Boolean)));
+  const uniqueLineIds = Array.from(
+    new Set(filledRows.map((row) => row.budgetLineId).filter(Boolean)),
+  );
   if (!uniqueLineIds.length) return;
+
+  const targetFiscalYear =
+    requestType === 'Settlement'
+      ? await getFinanceCarryForwardTargetYear(conn, financeRequestId, budgetFiscalYear)
+      : null;
+  if (targetFiscalYear) {
+    const approvedRows = await getApprovedCarryForwardFiscalYearBudgets({
+      connOrDb: conn,
+      financeRequestId,
+      fiscalYear: targetFiscalYear,
+    });
+    const approvedLineIds = new Set(
+      approvedRows.map((row) => toPositiveInt(row.budgetLineId)).filter(Boolean),
+    );
+    const invalidRows = filledRows
+      .filter((row) => row.budgetLineId && !approvedLineIds.has(row.budgetLineId))
+      .map((row) => row.rowNumber);
+
+    if (invalidRows.length) {
+      throw new Error(
+        `Please select a valid FY ${targetFiscalYear}-${String(targetFiscalYear + 1).slice(2)} approved budget head and sub-head for row ${invalidRows.join(', ')}`,
+      );
+    }
+    return;
+  }
 
   const placeholders = uniqueLineIds.map(() => '?').join(', ');
   const [linkedRows] = await conn.execute(
@@ -2724,7 +3477,9 @@ async function assertWorkflowRowsHaveApprovedBudgetLines(
     [financeRequestId, ...uniqueLineIds],
   );
 
-  const approvedLineIds = new Set(linkedRows.map((row) => toPositiveInt(row.budget_line_id)).filter(Boolean));
+  const approvedLineIds = new Set(
+    linkedRows.map((row) => toPositiveInt(row.budget_line_id)).filter(Boolean),
+  );
   const invalidRows = filledRows
     .filter((row) => row.budgetLineId && !approvedLineIds.has(row.budgetLineId))
     .map((row) => row.rowNumber);
@@ -2736,9 +3491,12 @@ async function assertWorkflowRowsHaveApprovedBudgetLines(
   }
 }
 
-async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows = [], {
-  excludeExpenditureId = null,
-} = {}) {
+async function assertExpenditureRowsWithinApprovedHeadTotals(
+  conn,
+  financeRequestId,
+  expenditureRows = [],
+  { excludeExpenditureId = null } = {},
+) {
   const normalizedFinanceRequestId = toPositiveInt(financeRequestId);
   const filledRows = [];
   for (const [index, row] of (Array.isArray(expenditureRows) ? expenditureRows : []).entries()) {
@@ -2796,7 +3554,10 @@ async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeReques
     const legacyTextKey = textHeadKey ? `text:${textHeadKey}` : '';
     if (legacyTextKey) addAlias(legacyTextKey, canonicalKey);
 
-    approvedByHead.set(canonicalKey, toMoney((approvedByHead.get(canonicalKey) || 0) + toMoney(row.approved_amount)));
+    approvedByHead.set(
+      canonicalKey,
+      toMoney((approvedByHead.get(canonicalKey) || 0) + toMoney(row.approved_amount)),
+    );
 
     const lineId = toPositiveInt(row.budget_line_id);
     if (lineId) {
@@ -2814,7 +3575,10 @@ async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeReques
     const rawKey = row.budgetHeadId ? `id:${row.budgetHeadId}` : `text:${row.headKey}`;
     const canonicalKey = canonicalKeyByAlias.get(rawKey) || rawKey;
     rowKeyByNumber.set(row.rowNumber, canonicalKey);
-    requestedByHead.set(canonicalKey, toMoney((requestedByHead.get(canonicalKey) || 0) + row.amount));
+    requestedByHead.set(
+      canonicalKey,
+      toMoney((requestedByHead.get(canonicalKey) || 0) + row.amount),
+    );
     if (!headLabelByKey.has(canonicalKey)) {
       headLabelByKey.set(canonicalKey, row.budgetHead || row.headKey);
     }
@@ -2854,7 +3618,12 @@ async function assertExpenditureRowsWithinApprovedHeadTotals(conn, financeReques
   }
 }
 
-async function assertRequestTotalWithinApprovedFinanceAmount(conn, financeRequestId, requestType, requestedAmount) {
+async function assertRequestTotalWithinApprovedFinanceAmount(
+  conn,
+  financeRequestId,
+  requestType,
+  requestedAmount,
+) {
   const normalizedFinanceRequestId = toPositiveInt(financeRequestId);
   const normalizedRequestType = normalizeRequestType(requestType);
   const normalizedRequestedAmount = toMoney(requestedAmount);
@@ -2889,6 +3658,61 @@ async function assertRequestTotalWithinApprovedFinanceAmount(conn, financeReques
   }
 }
 
+async function getUnsettledAdvanceAmount(
+  conn,
+  financeRequestId,
+  { excludeExpenditureId = null } = {},
+) {
+  const normalizedFinanceRequestId = toPositiveInt(financeRequestId);
+  if (!normalizedFinanceRequestId) return 0;
+  const excludedRequestId = toPositiveInt(excludeExpenditureId);
+
+  const [rows] = await conn.execute(
+    `SELECT
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Advance'
+          AND ${FINALIZED_EXPENDITURE_REQUEST_STATUS_SQL}
+         THEN COALESCE(er.advance_total_amount, er.total_amount, 0)
+         ELSE 0
+       END), 0) AS advance_amount,
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Settlement'
+          AND ${FINALIZED_EXPENDITURE_REQUEST_STATUS_SQL}
+         THEN COALESCE(er.settlement_total_amount, er.total_amount, 0)
+         ELSE 0
+       END), 0) AS settlement_amount
+     FROM expenditure_requests er
+     WHERE er.finance_request_id = ?
+       AND (? IS NULL OR er.id <> ?)`,
+    [normalizedFinanceRequestId, excludedRequestId, excludedRequestId],
+  );
+
+  return Math.max(
+    0,
+    toMoney(toMoney(rows?.[0]?.advance_amount) - toMoney(rows?.[0]?.settlement_amount)),
+  );
+}
+
+async function assertSettlementWithinUnsettledAdvance(
+  conn,
+  financeRequestId,
+  settlementAmount,
+  { excludeExpenditureId = null } = {},
+) {
+  const normalizedSettlementAmount = toMoney(settlementAmount);
+  if (normalizedSettlementAmount <= 0) return;
+
+  const unsettledAdvanceAmount = await getUnsettledAdvanceAmount(conn, financeRequestId, {
+    excludeExpenditureId,
+  });
+
+  if (normalizedSettlementAmount > unsettledAdvanceAmount) {
+    throw new Error(
+      `Settlement amount ${normalizedSettlementAmount.toFixed(2)} exceeds unsettled advance ${unsettledAdvanceAmount.toFixed(2)}. Create a separate Expenditure request for the extra amount.`,
+    );
+  }
+}
+
 async function applyBudgetUsageDelta(conn, usageRows = [], multiplier = 1) {
   for (const usageRow of usageRows) {
     const budgetLineId = toPositiveInt(usageRow.budgetLineId);
@@ -2912,16 +3736,49 @@ async function applyBudgetUsageDelta(conn, usageRows = [], multiplier = 1) {
   }
 }
 
-async function getRemainingBudgetByLine(conn, financeRequestId, budgetLineIds = [], {
-  excludeExpenditureId = null,
-} = {}) {
+async function getRemainingBudgetByLine(
+  conn,
+  financeRequestId,
+  budgetLineIds = [],
+  { excludeExpenditureId = null, budgetFiscalYear = null } = {},
+) {
   const normalizedFinanceRequestId = toPositiveInt(financeRequestId);
   const normalizedBudgetLineIds = Array.from(
-    new Set((Array.isArray(budgetLineIds) ? budgetLineIds : []).map((id) => toPositiveInt(id)).filter(Boolean)),
+    new Set(
+      (Array.isArray(budgetLineIds) ? budgetLineIds : [])
+        .map((id) => toPositiveInt(id))
+        .filter(Boolean),
+    ),
   );
 
   if (!normalizedFinanceRequestId || normalizedBudgetLineIds.length === 0) {
     return new Map();
+  }
+
+  const targetFiscalYear = await getFinanceCarryForwardTargetYear(
+    conn,
+    normalizedFinanceRequestId,
+    budgetFiscalYear,
+  );
+  if (targetFiscalYear) {
+    const approvedRows = await getApprovedCarryForwardFiscalYearBudgets({
+      connOrDb: conn,
+      financeRequestId: normalizedFinanceRequestId,
+      fiscalYear: targetFiscalYear,
+      excludeExpenditureId,
+    });
+    return new Map(
+      approvedRows
+        .filter((row) => normalizedBudgetLineIds.includes(toPositiveInt(row.budgetLineId)))
+        .map((row) => [
+          toPositiveInt(row.budgetLineId),
+          {
+            approvedAmount: toMoney(row.totalAmount),
+            usedAmount: toMoney(row.usedAmount),
+            remainingAmount: toMoney(row.remainingAmount),
+          },
+        ]),
+    );
   }
 
   const usageByLineId = await getFinanceRequestBudgetUsageByLine(conn, {
@@ -2932,7 +3789,7 @@ async function getRemainingBudgetByLine(conn, financeRequestId, budgetLineIds = 
 
   const placeholders = normalizedBudgetLineIds.map(() => '?').join(', ');
   const [budgetRows] = await conn.execute(
-  `SELECT
+    `SELECT
      fbb.budget_line_id,
      SUM(${FINANCE_BREAKUP_APPROVED_BASE_SQL}) AS approved_amount,
      0 AS used_amount,
@@ -2943,8 +3800,8 @@ async function getRemainingBudgetByLine(conn, financeRequestId, budgetLineIds = 
      AND fbb.budget_line_id IN (${placeholders})
    GROUP BY fbb.budget_line_id
    FOR UPDATE`,
-  [normalizedFinanceRequestId, ...normalizedBudgetLineIds],
-);
+    [normalizedFinanceRequestId, ...normalizedBudgetLineIds],
+  );
   return new Map(
     budgetRows.map((row) => [
       toPositiveInt(row.budget_line_id),
@@ -2954,7 +3811,8 @@ async function getRemainingBudgetByLine(conn, financeRequestId, budgetLineIds = 
         remainingAmount: toMoney(
           Math.max(
             0,
-            toMoney(row.approved_amount) - toMoney(usageByLineId.get(toPositiveInt(row.budget_line_id))),
+            toMoney(row.approved_amount) -
+              toMoney(usageByLineId.get(toPositiveInt(row.budget_line_id))),
           ),
         ),
       },
@@ -2964,16 +3822,28 @@ async function getRemainingBudgetByLine(conn, financeRequestId, budgetLineIds = 
 
 function buildBudgetSnapshotsByLine(requestType, usageRows = [], remainingByLineId = new Map()) {
   const snapshots = new Map();
-  const direction = requestType === 'Settlement' ? 0 : -1;
+  const defaultDirection = requestType === 'Settlement' ? 0 : -1;
+  const deltasByLine = new Map();
 
   for (const usageRow of usageRows) {
     const budgetLineId = toPositiveInt(usageRow.budgetLineId);
     const amount = toMoney(usageRow.amount);
+    const direction = Number.isFinite(Number(usageRow.direction))
+      ? Number(usageRow.direction)
+      : defaultDirection;
+    if (!budgetLineId || amount <= 0) continue;
+    deltasByLine.set(
+      budgetLineId,
+      toMoney((deltasByLine.get(budgetLineId) || 0) + direction * amount),
+    );
+  }
+
+  for (const [budgetLineId, amountDelta] of deltasByLine.entries()) {
     const budgetState = remainingByLineId.get(budgetLineId);
     if (!budgetLineId || !budgetState) continue;
 
     const availableBefore = toMoney(budgetState.remainingAmount);
-    const remainingAfter = toMoney(Math.max(0, availableBefore + (direction * amount)));
+    const remainingAfter = toMoney(Math.max(0, availableBefore + amountDelta));
 
     snapshots.set(budgetLineId, {
       budgetAmount: availableBefore,
@@ -3023,7 +3893,9 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
       beneficiary_entity_id: data.beneficiary_entity_id,
     });
 
-    const requestDate = data.request_date ? new Date(data.request_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+    const requestDate = data.request_date
+      ? new Date(data.request_date).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
     const financeRequestId = toPositiveInt(data.finance_request_id);
     if (!financeRequestId) {
       throw new Error('finance_request_id is required');
@@ -3039,47 +3911,76 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
 
     const paymentDetails = data.payment_details || {};
     const advanceRows = Array.isArray(data.advance_rows)
-  ? data.advance_rows
-  : Array.isArray(data.advancerows)
-    ? data.advancerows
-    : [];
+      ? data.advance_rows
+      : Array.isArray(data.advancerows)
+        ? data.advancerows
+        : [];
 
-const settlementRows = Array.isArray(data.settlement_rows)
-  ? data.settlement_rows
-  : Array.isArray(data.settlementrows)
-    ? data.settlementrows
-    : [];
+    const settlementRows = Array.isArray(data.settlement_rows)
+      ? data.settlement_rows
+      : Array.isArray(data.settlementrows)
+        ? data.settlementrows
+        : [];
 
-const expenditureRows = Array.isArray(data.expenditure_rows)
-  ? data.expenditure_rows
-  : Array.isArray(data.expenditurerows)
-    ? data.expenditurerows
-    : [];
+    const expenditureRows = Array.isArray(data.expenditure_rows)
+      ? data.expenditure_rows
+      : Array.isArray(data.expenditurerows)
+        ? data.expenditurerows
+        : [];
 
-const payeeRows = Array.isArray(data.payee_rows)
-  ? data.payee_rows
-  : Array.isArray(data.payeerows)
-    ? data.payeerows
-    : [];
+    const payeeRows = Array.isArray(data.payee_rows)
+      ? data.payee_rows
+      : Array.isArray(data.payeerows)
+        ? data.payeerows
+        : [];
 
-const incomeRows = Array.isArray(data.income_rows)
-  ? data.income_rows
-  : Array.isArray(data.incomerows)
-    ? data.incomerows
-    : [];
-    await assertWorkflowRowsHaveApprovedBudgetLines(conn, financeRequestId, requestType, {
-      advanceRows,
-      settlementRows,
-      expenditureRows,
-    });
+    const incomeRows = Array.isArray(data.income_rows)
+      ? data.income_rows
+      : Array.isArray(data.incomerows)
+        ? data.incomerows
+        : [];
+    const budgetFiscalYear = toPositiveInt(data.budget_fiscal_year || data.budgetFiscalYear);
+    await assertWorkflowRowsHaveApprovedBudgetLines(
+      conn,
+      financeRequestId,
+      requestType,
+      {
+        advanceRows,
+        settlementRows,
+        expenditureRows,
+      },
+      {
+        budgetFiscalYear,
+      },
+    );
     const workflowRowIdentity = resolveWorkflowRowIdentifiers(data);
     const sourceRequestId = toPositiveInt(data.source_request_id || data.sourceRequestId);
-    const usageRows = collectUsageRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows });
 
-    const advanceTotal = advanceRows.reduce((sum, row) => sum + toMoney(row.advance || row.advance_amount), 0);
-    const settlementTotal = settlementRows.reduce((sum, row) => sum + toMoney(row.settlement || row.settlement_amount), 0);
-    const expenditureTotal = expenditureRows.reduce((sum, row) => sum + toMoney(row.autoSum || row.expenditure || row.auto_sum_amount), 0);
+    const advanceTotal = advanceRows.reduce(
+      (sum, row) => sum + toMoney(row.advance || row.advance_amount),
+      0,
+    );
+    const settlementTotal = settlementRows.reduce(
+      (sum, row) => sum + toMoney(row.settlement || row.settlement_amount),
+      0,
+    );
+    const expenditureTotal = expenditureRows.reduce(
+      (sum, row) => sum + toMoney(row.autoSum || row.expenditure || row.auto_sum_amount),
+      0,
+    );
     const normalizedUnplanned = normalizeUnplannedBudgetPayload(data);
+    const usageRows = markCarryForwardSettlementUsageRows(
+      requestType,
+      addUnplannedUsageRows(
+        collectUsageRowsForRequestType(requestType, {
+          advanceRows,
+          settlementRows,
+          expenditureRows,
+        }),
+        normalizedUnplanned,
+      ),
+      budgetFiscalYear,
+    );
     const activeRequestTotal = toMoney(
       (requestType === 'Advance'
         ? advanceTotal
@@ -3087,7 +3988,9 @@ const incomeRows = Array.isArray(data.income_rows)
           ? settlementTotal
           : expenditureTotal) + normalizedUnplanned.amount,
     );
-    const totalAmount = toMoney(advanceTotal + settlementTotal + expenditureTotal + normalizedUnplanned.amount);
+    const totalAmount = toMoney(
+      advanceTotal + settlementTotal + expenditureTotal + normalizedUnplanned.amount,
+    );
     const workflowRowHistory = await getWorkflowRowHistory(conn, {
       financeRequestId,
       workflowRowRef: workflowRowIdentity.workflowRowRef,
@@ -3095,7 +3998,8 @@ const incomeRows = Array.isArray(data.income_rows)
       rowIndex: workflowRowIdentity.rowIndex,
       sourceRequestId,
     });
-    const allowZeroSettlement = requestType === 'Settlement' && hasSettlementRowsForClosure(settlementRows);
+    const allowZeroSettlement =
+      requestType === 'Settlement' && hasSettlementRowsForClosure(settlementRows);
 
     validateWorkflowRowFlow(requestType, workflowRowHistory, {
       requestedAdvance: requestType === 'Advance' ? activeRequestTotal : advanceTotal,
@@ -3110,51 +4014,55 @@ const incomeRows = Array.isArray(data.income_rows)
       requestType,
       activeRequestTotal,
     );
+    if (requestType === 'Settlement') {
+      await assertSettlementWithinUnsettledAdvance(conn, financeRequestId, activeRequestTotal);
+    }
 
     if (requestType === 'Expenditure') {
       await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows);
-    } else if (usageRows.length) {
+    }
+    if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,
         financeRequestId,
         usageRows.map((row) => row.budgetLineId),
+        { budgetFiscalYear },
       );
 
-      for (const usageRow of usageRows) {
-        const lineId = toPositiveInt(usageRow.budgetLineId);
-        const requestedAmount = toMoney(usageRow.amount);
-        const remaining = toMoney(remainingByLineId.get(lineId)?.remainingAmount);
-
-        if (!lineId || !remainingByLineId.has(lineId)) {
-          throw new Error(`Budget line ${lineId || 'unknown'} is not linked to this finance request`);
-        }
-        if (requestType !== 'Settlement' && requestedAmount > remaining) {
-          throw new Error(
-            `Requested amount ${requestedAmount.toFixed(2)} exceeds remaining budget ${remaining.toFixed(2)} for line ${lineId}`,
-          );
-        }
-      }
+      assertUsageRowsWithinRemainingBudget(requestType, usageRows, remainingByLineId);
     }
 
     const budgetSnapshotsByLine = buildBudgetSnapshotsByLine(
       requestType,
       usageRows,
-      await getRemainingBudgetByLine(conn, financeRequestId, usageRows.map((row) => row.budgetLineId)),
+      await getRemainingBudgetByLine(
+        conn,
+        financeRequestId,
+        usageRows.map((row) => row.budgetLineId),
+        {
+          budgetFiscalYear,
+        },
+      ),
     );
 
     const entry = {
       finance_request_id: financeRequestId,
       employee_id: employeeId || null,
-      applicant_name: normalizeText(data.applicant_name) || (employee ? `${normalizeText(employee.title)} ${normalizeText(employee.first_name)} ${normalizeText(employee.last_name)}`.trim() : null),
+      applicant_name:
+        normalizeText(data.applicant_name) ||
+        (employee
+          ? `${normalizeText(employee.title)} ${normalizeText(employee.first_name)} ${normalizeText(employee.last_name)}`.trim()
+          : null),
       designation: normalizeText(data.designation) || normalizeText(employee?.designation) || null,
       department: normalizeText(data.department) || normalizeText(employee?.department) || null,
       email: normalizeText(data.email) || normalizeText(employee?.email) || null,
       mobile: normalizeText(data.mobile) || normalizeText(employee?.mobile) || null,
       request_date: requestDate,
       description: normalizeText(data.description) || null,
-      beneficiary_type: normalizeBeneficiaryType(data.beneficiary_type)
-        || normalizeText(data.beneficiary_type)
-        || 'Individual Faculty',
+      beneficiary_type:
+        normalizeBeneficiaryType(data.beneficiary_type) ||
+        normalizeText(data.beneficiary_type) ||
+        'Individual Faculty',
       beneficiary_value: normalizeText(data.beneficiary_value) || null,
       budget_tag: normalizeText(data.budget_tag) || null,
       department_id: workflowContext.departmentId || departmentId,
@@ -3167,21 +4075,33 @@ const incomeRows = Array.isArray(data.income_rows)
       balance_amount: moneyOrNull(data.balance_amount),
       unplanned_budget_enabled: normalizedUnplanned.enabled ? 1 : 0,
       unplanned_budget_amount: normalizedUnplanned.enabled ? normalizedUnplanned.amount : null,
+      unplanned_head_of_account: normalizedUnplanned.enabled
+        ? normalizedUnplanned.headOfAccount
+        : null,
+      unplanned_head_of_account_budget_line_id: normalizedUnplanned.enabled
+        ? normalizedUnplanned.headOfAccountBudgetLineId
+        : null,
+      unplanned_head_of_account_budget_proposal_id: normalizedUnplanned.enabled
+        ? normalizedUnplanned.headOfAccountBudgetProposalId
+        : null,
       unplanned_budget_head: normalizedUnplanned.enabled ? normalizedUnplanned.head : null,
       unplanned_budget_sub_head: normalizedUnplanned.enabled ? normalizedUnplanned.subHead : null,
-      unplanned_budget_description: normalizedUnplanned.enabled ? normalizedUnplanned.description : null,
+      unplanned_budget_description: normalizedUnplanned.enabled
+        ? normalizedUnplanned.description
+        : null,
       income_type: normalizeText(data.income_type) || null,
       income_status: normalizeText(data.income_status) || null,
       income_amount_type: normalizeText(data.income_amount_type) || null,
       credit_status: normalizeText(data.credit_status) || null,
       debit_status: normalizeDebitStatus(data.debit_status),
       partial_amount: moneyOrNull(data.partial_amount),
-      show_bulk_neft: (parseBoolean(data.show_bulk_neft) || Boolean(uploads.bulkNeftFile)) ? 1 : 0,
+      show_bulk_neft: parseBoolean(data.show_bulk_neft) || Boolean(uploads.bulkNeftFile) ? 1 : 0,
       payment_mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
       payment_ref_no: normalizeText(paymentDetails.refNo || data.payment_ref_no) || null,
       payment_date: paymentDetails.date || data.payment_date || null,
       payment_status: normalizePaymentStatus(paymentDetails.status || data.payment_status),
-      payment_debit_account: normalizeText(paymentDetails.debitAccount || data.payment_debit_account) || null,
+      payment_debit_account:
+        normalizeText(paymentDetails.debitAccount || data.payment_debit_account) || null,
       workflow_state: JSON.stringify({
         module: normalizeRequestType(requestType),
         workflowrowref: workflowRowIdentity.workflowRowRef,
@@ -3194,31 +4114,55 @@ const incomeRows = Array.isArray(data.income_rows)
       advance_total_amount: toMoney(advanceTotal),
       settlement_total_amount: toMoney(settlementTotal),
       expenditure_total_amount: toMoney(expenditureTotal),
-      settlement_remarks: requestType === 'Settlement' ? normalizeText(data.settlement_remarks) || null : null,
-      expenditure_remarks: requestType === 'Expenditure' ? normalizeText(data.expenditure_remarks) || null : null,
-      tentative_settlement_date: requestType === 'Advance' ? normalizeSqlDate(data.tentative_settlement_date || data.tentativeSettlementDate) : null,
+      settlement_remarks:
+        requestType === 'Settlement' ? normalizeText(data.settlement_remarks) || null : null,
+      expenditure_remarks:
+        requestType === 'Expenditure' ? normalizeText(data.expenditure_remarks) || null : null,
+      tentative_settlement_date:
+        requestType === 'Advance'
+          ? normalizeSqlDate(data.tentative_settlement_date || data.tentativeSettlementDate)
+          : null,
       total_amount: totalAmount,
-      approved_total_amount: 0.00,
+      approved_total_amount: 0.0,
       created_by: uid,
       overall_status: 'pending',
     };
 
-    const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', { tx: conn });
-    const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', { tx: conn });
+    const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', {
+      tx: conn,
+    });
+    const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', {
+      tx: conn,
+    });
+    const hasUnplannedHeadOfAccountColumn = await hasExpenditureRequestColumn(
+      'unplanned_head_of_account',
+      { tx: conn },
+    );
+    const hasUnplannedHeadOfAccountBudgetLineIdColumn = await hasExpenditureRequestColumn(
+      'unplanned_head_of_account_budget_line_id',
+      { tx: conn },
+    );
+    const hasUnplannedHeadOfAccountBudgetProposalIdColumn = await hasExpenditureRequestColumn(
+      'unplanned_head_of_account_budget_proposal_id',
+      { tx: conn },
+    );
+    if (!hasUnplannedHeadOfAccountColumn) delete entry.unplanned_head_of_account;
+    if (!hasUnplannedHeadOfAccountBudgetLineIdColumn)
+      delete entry.unplanned_head_of_account_budget_line_id;
+    if (!hasUnplannedHeadOfAccountBudgetProposalIdColumn)
+      delete entry.unplanned_head_of_account_budget_proposal_id;
     if (hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn) {
       // NEW: resolve and attach catalog IDs (Phase 2 of catalog ref hardening).
       // LEGACY: nulls when the catalog has no matching name.
-      const headerIds = await resolvePrimaryHeadIds(
-        conn,
-        entry.primary_head,
-        entry.event_sub_head,
-      );
+      const headerIds = await resolvePrimaryHeadIds(conn, entry.primary_head, entry.event_sub_head);
       if (hasPrimaryHeadIdColumn) entry.primary_head_id = headerIds.primary_head_id;
       if (hasEventSubHeadIdColumn) entry.event_sub_head_id = headerIds.event_sub_head_id;
     }
 
     const filteredEntry = Object.fromEntries(
-      Object.entries(entry).filter(([, value]) => value !== null && value !== undefined && value !== ''),
+      Object.entries(entry).filter(
+        ([, value]) => value !== null && value !== undefined && value !== '',
+      ),
     );
     const entryKeys = Object.keys(filteredEntry);
     const entryValues = Object.values(filteredEntry);
@@ -3250,6 +4194,7 @@ const incomeRows = Array.isArray(data.income_rows)
     });
     await insertSettlementRows(conn, expenditureId, settlementRows, budgetSnapshotsByLine);
     await insertExpenditureRows(conn, expenditureId, expenditureRows, budgetSnapshotsByLine);
+    await insertUnplannedRows(conn, expenditureId, normalizedUnplanned.rows);
     await insertBillFiles(conn, expenditureId, uploads.billFiles);
     await insertBillFiles(conn, expenditureId, uploads.paymentProofFiles, 'payment_proof');
     await upsertBulkNeftFile(
@@ -3263,7 +4208,13 @@ const incomeRows = Array.isArray(data.income_rows)
   });
 }
 
-export async function updateExpenditureRequest(expenditureId, data, userId, uploads = {}, options = {}) {
+export async function updateExpenditureRequest(
+  expenditureId,
+  data,
+  userId,
+  uploads = {},
+  options = {},
+) {
   const normalizedExpenditureId = toPositiveInt(expenditureId);
   if (!normalizedExpenditureId) {
     throw new Error('Invalid expenditure request ID');
@@ -3271,12 +4222,12 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
 
   const canBypassFinanceOwnerCheck = Boolean(
     options?.isSuperAdmin ||
-      options?.isWorkflowEditor ||
-      options?.actor?.isSuperAdmin ||
-      options?.actor?.is_super_admin ||
-      normalizeText(options?.actor?.role).toLowerCase() === 'super_admin' ||
-      (Array.isArray(options?.actor?.roles) &&
-        options.actor.roles.some((role) => normalizeText(role).toLowerCase() === 'super_admin')),
+    options?.isWorkflowEditor ||
+    options?.actor?.isSuperAdmin ||
+    options?.actor?.is_super_admin ||
+    normalizeText(options?.actor?.role).toLowerCase() === 'super_admin' ||
+    (Array.isArray(options?.actor?.roles) &&
+      options.actor.roles.some((role) => normalizeText(role).toLowerCase() === 'super_admin')),
   );
 
   return withTransaction(async (conn) => {
@@ -3339,7 +4290,8 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     const requestDate = data.request_date
       ? new Date(data.request_date).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10);
-    const financeRequestId = toPositiveInt(data.finance_request_id) || toPositiveInt(existingRecord.finance_request_id);
+    const financeRequestId =
+      toPositiveInt(data.finance_request_id) || toPositiveInt(existingRecord.finance_request_id);
     if (!financeRequestId) {
       throw new Error('finance_request_id is required');
     }
@@ -3378,19 +4330,48 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       : Array.isArray(data.incomerows)
         ? data.incomerows
         : [];
-    await assertWorkflowRowsHaveApprovedBudgetLines(conn, financeRequestId, requestType, {
-      advanceRows,
-      settlementRows,
-      expenditureRows,
-    });
+    const budgetFiscalYear = toPositiveInt(data.budget_fiscal_year || data.budgetFiscalYear);
+    await assertWorkflowRowsHaveApprovedBudgetLines(
+      conn,
+      financeRequestId,
+      requestType,
+      {
+        advanceRows,
+        settlementRows,
+        expenditureRows,
+      },
+      {
+        budgetFiscalYear,
+      },
+    );
 
     const workflowRowIdentity = resolveWorkflowRowIdentifiers(data);
     const sourceRequestId = toPositiveInt(data.source_request_id || data.sourceRequestId);
-    const usageRows = collectUsageRowsForRequestType(requestType, { advanceRows, settlementRows, expenditureRows });
-    const advanceTotal = advanceRows.reduce((sum, row) => sum + toMoney(row.advance || row.advance_amount), 0);
-    const settlementTotal = settlementRows.reduce((sum, row) => sum + toMoney(row.settlement || row.settlement_amount), 0);
-    const expenditureTotal = expenditureRows.reduce((sum, row) => sum + toMoney(row.autoSum || row.expenditure || row.auto_sum_amount), 0);
+    const advanceTotal = advanceRows.reduce(
+      (sum, row) => sum + toMoney(row.advance || row.advance_amount),
+      0,
+    );
+    const settlementTotal = settlementRows.reduce(
+      (sum, row) => sum + toMoney(row.settlement || row.settlement_amount),
+      0,
+    );
+    const expenditureTotal = expenditureRows.reduce(
+      (sum, row) => sum + toMoney(row.autoSum || row.expenditure || row.auto_sum_amount),
+      0,
+    );
     const normalizedUnplanned = normalizeUnplannedBudgetPayload(data);
+    const usageRows = markCarryForwardSettlementUsageRows(
+      requestType,
+      addUnplannedUsageRows(
+        collectUsageRowsForRequestType(requestType, {
+          advanceRows,
+          settlementRows,
+          expenditureRows,
+        }),
+        normalizedUnplanned,
+      ),
+      budgetFiscalYear,
+    );
     const activeRequestTotal = toMoney(
       (requestType === 'Advance'
         ? advanceTotal
@@ -3398,7 +4379,9 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
           ? settlementTotal
           : expenditureTotal) + normalizedUnplanned.amount,
     );
-    const totalAmount = toMoney(advanceTotal + settlementTotal + expenditureTotal + normalizedUnplanned.amount);
+    const totalAmount = toMoney(
+      advanceTotal + settlementTotal + expenditureTotal + normalizedUnplanned.amount,
+    );
 
     const workflowRowHistory = await getWorkflowRowHistory(conn, {
       financeRequestId,
@@ -3407,30 +4390,40 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       rowIndex: workflowRowIdentity.rowIndex,
       sourceRequestId,
     });
-    const allowZeroSettlement = requestType === 'Settlement' && hasSettlementRowsForClosure(settlementRows);
+    const allowZeroSettlement =
+      requestType === 'Settlement' && hasSettlementRowsForClosure(settlementRows);
 
     if (requestType === 'Advance' && activeRequestTotal <= 0) {
       throw new Error('Advance amount must be greater than 0');
     }
-    if (requestType === 'Settlement' && (activeRequestTotal < 0 || (activeRequestTotal === 0 && !allowZeroSettlement))) {
+    if (
+      requestType === 'Settlement' &&
+      (activeRequestTotal < 0 || (activeRequestTotal === 0 && !allowZeroSettlement))
+    ) {
       throw new Error('Settlement amount must be greater than 0');
     }
     if (requestType === 'Expenditure' && activeRequestTotal <= 0) {
       throw new Error('Expenditure amount must be greater than 0');
     }
 
-    const filteredWorkflowHistory = workflowRowHistory.filter((row) => row.id !== normalizedExpenditureId);
+    const filteredWorkflowHistory = workflowRowHistory.filter(
+      (row) => row.id !== normalizedExpenditureId,
+    );
     if (filteredWorkflowHistory.length) {
       const currentRequestType = normalizeText(existingRecord.request_type);
       const hasAdvance = filteredWorkflowHistory.some((row) => row.requestType === 'Advance');
       const hasSettlement = filteredWorkflowHistory.some((row) => row.requestType === 'Settlement');
-      const hasExpenditure = filteredWorkflowHistory.some((row) => row.requestType === 'Expenditure');
+      const hasExpenditure = filteredWorkflowHistory.some(
+        (row) => row.requestType === 'Expenditure',
+      );
       if (requestType === 'Advance') {
         if (hasExpenditure) {
           throw new Error('Expenditure already exists for this row. Create a new row for advance.');
         }
         if (hasSettlement) {
-          throw new Error('Settlement already exists for this row. Create a new row for another advance.');
+          throw new Error(
+            'Settlement already exists for this row. Create a new row for another advance.',
+          );
         }
       } else if (requestType === 'Settlement') {
         if (!hasAdvance && currentRequestType !== 'Settlement') {
@@ -3448,41 +4441,40 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       requestType,
       activeRequestTotal,
     );
+    if (requestType === 'Settlement') {
+      await assertSettlementWithinUnsettledAdvance(conn, financeRequestId, activeRequestTotal, {
+        excludeExpenditureId: normalizedExpenditureId,
+      });
+    }
 
     if (requestType === 'Expenditure') {
       await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows, {
         excludeExpenditureId: normalizedExpenditureId,
       });
-    } else if (usageRows.length) {
+    }
+    if (usageRows.length) {
       const remainingByLineId = await getRemainingBudgetByLine(
         conn,
         financeRequestId,
         usageRows.map((row) => row.budgetLineId),
-        { excludeExpenditureId: normalizedExpenditureId },
+        { excludeExpenditureId: normalizedExpenditureId, budgetFiscalYear },
       );
 
-      for (const usageRow of usageRows) {
-        const lineId = toPositiveInt(usageRow.budgetLineId);
-        const requestedAmount = toMoney(usageRow.amount);
-        const remaining = toMoney(remainingByLineId.get(lineId)?.remainingAmount);
-
-        if (!lineId || !remainingByLineId.has(lineId)) {
-          throw new Error(`Budget line ${lineId || 'unknown'} is not linked to this finance request`);
-        }
-        if (requestType !== 'Settlement' && requestedAmount > remaining) {
-          throw new Error(
-            `Requested amount ${requestedAmount.toFixed(2)} exceeds remaining budget ${remaining.toFixed(2)} for line ${lineId}`,
-          );
-        }
-      }
+      assertUsageRowsWithinRemainingBudget(requestType, usageRows, remainingByLineId);
     }
 
     const budgetSnapshotsByLine = buildBudgetSnapshotsByLine(
       requestType,
       usageRows,
-      await getRemainingBudgetByLine(conn, financeRequestId, usageRows.map((row) => row.budgetLineId), {
-        excludeExpenditureId: normalizedExpenditureId,
-      }),
+      await getRemainingBudgetByLine(
+        conn,
+        financeRequestId,
+        usageRows.map((row) => row.budgetLineId),
+        {
+          excludeExpenditureId: normalizedExpenditureId,
+          budgetFiscalYear,
+        },
+      ),
     );
 
     const normalizedPaymentDate = normalizeSqlDate(paymentDetails.date || data.payment_date);
@@ -3490,16 +4482,21 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
     const updatedEntry = {
       finance_request_id: financeRequestId,
       employee_id: employeeId || null,
-      applicant_name: normalizeText(data.applicant_name) || (employee ? `${normalizeText(employee.title)} ${normalizeText(employee.first_name)} ${normalizeText(employee.last_name)}`.trim() : null),
+      applicant_name:
+        normalizeText(data.applicant_name) ||
+        (employee
+          ? `${normalizeText(employee.title)} ${normalizeText(employee.first_name)} ${normalizeText(employee.last_name)}`.trim()
+          : null),
       designation: normalizeText(data.designation) || normalizeText(employee?.designation) || null,
       department: normalizeText(data.department) || normalizeText(employee?.department) || null,
       email: normalizeText(data.email) || normalizeText(employee?.email) || null,
       mobile: normalizeText(data.mobile) || normalizeText(employee?.mobile) || null,
       request_date: requestDate,
       description: normalizeText(data.description) || null,
-      beneficiary_type: normalizeBeneficiaryType(data.beneficiary_type)
-        || normalizeText(data.beneficiary_type)
-        || 'Individual Faculty',
+      beneficiary_type:
+        normalizeBeneficiaryType(data.beneficiary_type) ||
+        normalizeText(data.beneficiary_type) ||
+        'Individual Faculty',
       beneficiary_value: normalizeText(data.beneficiary_value) || null,
       budget_tag: normalizeText(data.budget_tag) || null,
       department_id: workflowContext.departmentId || departmentId,
@@ -3512,32 +4509,70 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       balance_amount: moneyOrNull(data.balance_amount),
       unplanned_budget_enabled: normalizedUnplanned.enabled ? 1 : 0,
       unplanned_budget_amount: normalizedUnplanned.enabled ? normalizedUnplanned.amount : null,
+      unplanned_head_of_account: normalizedUnplanned.enabled
+        ? normalizedUnplanned.headOfAccount
+        : null,
+      unplanned_head_of_account_budget_line_id: normalizedUnplanned.enabled
+        ? normalizedUnplanned.headOfAccountBudgetLineId
+        : null,
+      unplanned_head_of_account_budget_proposal_id: normalizedUnplanned.enabled
+        ? normalizedUnplanned.headOfAccountBudgetProposalId
+        : null,
       unplanned_budget_head: normalizedUnplanned.enabled ? normalizedUnplanned.head : null,
       unplanned_budget_sub_head: normalizedUnplanned.enabled ? normalizedUnplanned.subHead : null,
-      unplanned_budget_description: normalizedUnplanned.enabled ? normalizedUnplanned.description : null,
+      unplanned_budget_description: normalizedUnplanned.enabled
+        ? normalizedUnplanned.description
+        : null,
       income_type: normalizeText(data.income_type) || null,
       income_status: normalizeText(data.income_status) || null,
       income_amount_type: normalizeText(data.income_amount_type) || null,
       credit_status: normalizeText(data.credit_status) || null,
       debit_status: normalizeDebitStatus(data.debit_status),
       partial_amount: moneyOrNull(data.partial_amount),
-      show_bulk_neft: (parseBoolean(data.show_bulk_neft) || Boolean(uploads.bulkNeftFile)) ? 1 : 0,
+      show_bulk_neft: parseBoolean(data.show_bulk_neft) || Boolean(uploads.bulkNeftFile) ? 1 : 0,
       payment_mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
       payment_ref_no: normalizeText(paymentDetails.refNo || data.payment_ref_no) || null,
       payment_date: normalizedPaymentDate,
       payment_status: normalizePaymentStatus(paymentDetails.status || data.payment_status),
-      payment_debit_account: normalizeText(paymentDetails.debitAccount || data.payment_debit_account) || null,
+      payment_debit_account:
+        normalizeText(paymentDetails.debitAccount || data.payment_debit_account) || null,
       advance_total_amount: toMoney(advanceTotal),
       settlement_total_amount: toMoney(settlementTotal),
       expenditure_total_amount: toMoney(expenditureTotal),
-      settlement_remarks: requestType === 'Settlement' ? normalizeText(data.settlement_remarks) || null : null,
-      expenditure_remarks: requestType === 'Expenditure' ? normalizeText(data.expenditure_remarks) || null : null,
-      tentative_settlement_date: requestType === 'Advance' ? normalizeSqlDate(data.tentative_settlement_date || data.tentativeSettlementDate) : null,
+      settlement_remarks:
+        requestType === 'Settlement' ? normalizeText(data.settlement_remarks) || null : null,
+      expenditure_remarks:
+        requestType === 'Expenditure' ? normalizeText(data.expenditure_remarks) || null : null,
+      tentative_settlement_date:
+        requestType === 'Advance'
+          ? normalizeSqlDate(data.tentative_settlement_date || data.tentativeSettlementDate)
+          : null,
       total_amount: totalAmount,
     };
 
-    const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', { tx: conn });
-    const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', { tx: conn });
+    const hasPrimaryHeadIdColumn = await hasExpenditureRequestColumn('primary_head_id', {
+      tx: conn,
+    });
+    const hasEventSubHeadIdColumn = await hasExpenditureRequestColumn('event_sub_head_id', {
+      tx: conn,
+    });
+    const hasUnplannedHeadOfAccountColumn = await hasExpenditureRequestColumn(
+      'unplanned_head_of_account',
+      { tx: conn },
+    );
+    const hasUnplannedHeadOfAccountBudgetLineIdColumn = await hasExpenditureRequestColumn(
+      'unplanned_head_of_account_budget_line_id',
+      { tx: conn },
+    );
+    const hasUnplannedHeadOfAccountBudgetProposalIdColumn = await hasExpenditureRequestColumn(
+      'unplanned_head_of_account_budget_proposal_id',
+      { tx: conn },
+    );
+    if (!hasUnplannedHeadOfAccountColumn) delete updatedEntry.unplanned_head_of_account;
+    if (!hasUnplannedHeadOfAccountBudgetLineIdColumn)
+      delete updatedEntry.unplanned_head_of_account_budget_line_id;
+    if (!hasUnplannedHeadOfAccountBudgetProposalIdColumn)
+      delete updatedEntry.unplanned_head_of_account_budget_proposal_id;
     if (hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn) {
       const headerIds = await resolvePrimaryHeadIds(
         conn,
@@ -3552,6 +4587,9 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       'primary_head_id',
       'event_sub_head_id',
       'unplanned_budget_amount',
+      'unplanned_head_of_account',
+      'unplanned_head_of_account_budget_line_id',
+      'unplanned_head_of_account_budget_proposal_id',
       'unplanned_budget_head',
       'unplanned_budget_sub_head',
       'unplanned_budget_description',
@@ -3559,8 +4597,9 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       'expenditure_remarks',
     ]);
     const filteredUpdateEntry = Object.fromEntries(
-      Object.entries(updatedEntry).filter(([key, value]) =>
-        nullableCatalogIdKeys.has(key) || (value !== null && value !== undefined && value !== ''),
+      Object.entries(updatedEntry).filter(
+        ([key, value]) =>
+          nullableCatalogIdKeys.has(key) || (value !== null && value !== undefined && value !== ''),
       ),
     );
 
@@ -3577,11 +4616,24 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       );
     }
 
-    await conn.execute('DELETE FROM expenditure_income_rows WHERE expenditure_id = ?', [normalizedExpenditureId]);
-    await conn.execute('DELETE FROM expenditure_payee_rows WHERE expenditure_id = ?', [normalizedExpenditureId]);
-    await conn.execute('DELETE FROM expenditure_advance_rows WHERE expenditure_id = ?', [normalizedExpenditureId]);
-    await conn.execute('DELETE FROM expenditure_settlement_rows WHERE expenditure_id = ?', [normalizedExpenditureId]);
-    await conn.execute('DELETE FROM expenditure_line_rows WHERE expenditure_id = ?', [normalizedExpenditureId]);
+    await conn.execute('DELETE FROM expenditure_income_rows WHERE expenditure_id = ?', [
+      normalizedExpenditureId,
+    ]);
+    await conn.execute('DELETE FROM expenditure_payee_rows WHERE expenditure_id = ?', [
+      normalizedExpenditureId,
+    ]);
+    await conn.execute('DELETE FROM expenditure_advance_rows WHERE expenditure_id = ?', [
+      normalizedExpenditureId,
+    ]);
+    await conn.execute('DELETE FROM expenditure_settlement_rows WHERE expenditure_id = ?', [
+      normalizedExpenditureId,
+    ]);
+    await conn.execute('DELETE FROM expenditure_line_rows WHERE expenditure_id = ?', [
+      normalizedExpenditureId,
+    ]);
+    await conn.execute('DELETE FROM expenditure_unplanned_rows WHERE expenditure_id = ?', [
+      normalizedExpenditureId,
+    ]);
 
     if (Array.isArray(uploads.billFiles) && uploads.billFiles.length) {
       await conn.execute(
@@ -3594,17 +4646,40 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
 
     await insertIncomeRows(conn, normalizedExpenditureId, incomeRows);
     await insertPayeeRows(conn, normalizedExpenditureId, payeeRows, uid);
-    await insertAdvanceRows(conn, normalizedExpenditureId, advanceRows, uid, budgetSnapshotsByLine, {
-      financeRequestId,
-      rowIndex: workflowRowIdentity.rowIndex,
-      dashboardRowId: workflowRowIdentity.dashboardRowId,
-      workflowRowRef: workflowRowIdentity.workflowRowRef,
-      sourceRequestId,
-    });
-    await insertSettlementRows(conn, normalizedExpenditureId, settlementRows, budgetSnapshotsByLine);
-    await insertExpenditureRows(conn, normalizedExpenditureId, expenditureRows, budgetSnapshotsByLine);
+    await insertAdvanceRows(
+      conn,
+      normalizedExpenditureId,
+      advanceRows,
+      uid,
+      budgetSnapshotsByLine,
+      {
+        financeRequestId,
+        rowIndex: workflowRowIdentity.rowIndex,
+        dashboardRowId: workflowRowIdentity.dashboardRowId,
+        workflowRowRef: workflowRowIdentity.workflowRowRef,
+        sourceRequestId,
+      },
+    );
+    await insertSettlementRows(
+      conn,
+      normalizedExpenditureId,
+      settlementRows,
+      budgetSnapshotsByLine,
+    );
+    await insertExpenditureRows(
+      conn,
+      normalizedExpenditureId,
+      expenditureRows,
+      budgetSnapshotsByLine,
+    );
+    await insertUnplannedRows(conn, normalizedExpenditureId, normalizedUnplanned.rows);
     await insertBillFiles(conn, normalizedExpenditureId, uploads.billFiles);
-    await insertBillFiles(conn, normalizedExpenditureId, uploads.paymentProofFiles, 'payment_proof');
+    await insertBillFiles(
+      conn,
+      normalizedExpenditureId,
+      uploads.paymentProofFiles,
+      'payment_proof',
+    );
     await upsertBulkNeftFile(
       conn,
       normalizedExpenditureId,
@@ -3612,7 +4687,10 @@ export async function updateExpenditureRequest(expenditureId, data, userId, uplo
       data.bulk_neft_template_version,
     );
 
-    return { expenditureId: normalizedExpenditureId, requestRef: existingRecord.request_ref || null };
+    return {
+      expenditureId: normalizedExpenditureId,
+      requestRef: existingRecord.request_ref || null,
+    };
   });
 }
 
@@ -3624,9 +4702,8 @@ export async function searchApplicant(query = '', employeeType = null) {
  * Fetch a single expenditure request with joined applicant and payee details.
  */
 export async function getExpenditureById(id) {
-  const [rows] = await db.execute(
-    `${EXPENDITURE_SELECT} WHERE er.id = ? LIMIT 1`, [id],
-  );
+  const expenditureSelect = await getExpenditureSelect();
+  const [rows] = await db.execute(`${expenditureSelect} WHERE er.id = ? LIMIT 1`, [id]);
   return rows[0] || null;
 }
 
@@ -3639,6 +4716,7 @@ export async function getExpenditureDetails(id) {
       advance_rows: [],
       settlement_rows: [],
       expenditure_rows: [],
+      unplanned_rows: [],
       bill_files: [],
       payment_proof_files: [],
       bulk_neft_file: null,
@@ -3739,6 +4817,21 @@ export async function getExpenditureDetails(id) {
   const [bill_files] = billFilesResult;
   const [payment_proof_files] = paymentProofFilesResult;
   const [bulkNeftRows] = bulkNeftFileResult;
+  let unplanned_rows = [];
+  try {
+    const [unplannedRowsResult] = await db.execute(
+      `SELECT id, head_of_account, head_of_account_budget_line_id,
+              head_of_account_budget_proposal_id, budget_head, sub_head,
+              amount, description, sort_order, created_at, updated_at
+         FROM expenditure_unplanned_rows
+        WHERE expenditure_id = ?
+        ORDER BY sort_order ASC, id ASC`,
+      [expenditureId],
+    );
+    unplanned_rows = unplannedRowsResult;
+  } catch (error) {
+    if (error?.code !== 'ER_NO_SUCH_TABLE') throw error;
+  }
 
   return {
     income_rows,
@@ -3746,6 +4839,7 @@ export async function getExpenditureDetails(id) {
     advance_rows,
     settlement_rows,
     expenditure_rows,
+    unplanned_rows,
     bill_files: bill_files.map(withUploadAccess),
     payment_proof_files: payment_proof_files.map(withUploadAccess),
     bulk_neft_file: withUploadAccess(bulkNeftRows[0] || null),
@@ -3763,11 +4857,11 @@ export async function listExpenditures({
   budgetLineId,
   requestType,
   financeRequestId,
-  page  = 1,
+  page = 1,
   limit = 20,
 } = {}) {
   const conditions = [];
-  const params     = [];
+  const params = [];
 
   if (mine && userId) {
     conditions.push('er.created_by = ?');
@@ -3805,17 +4899,19 @@ export async function listExpenditures({
     params.push(financeId);
   }
 
-  const where    = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const pageNum  = Math.max(Number(page) || 1, 1);
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const pageNum = Math.max(Number(page) || 1, 1);
   const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
-  const offset   = (pageNum - 1) * limitNum;
+  const offset = (pageNum - 1) * limitNum;
 
   const [[{ total }]] = await db.execute(
-    `SELECT COUNT(*) AS total FROM expenditure_requests er ${where}`, params,
+    `SELECT COUNT(*) AS total FROM expenditure_requests er ${where}`,
+    params,
   );
 
+  const expenditureSelect = await getExpenditureSelect();
   const [rows] = await db.execute(
-    `${EXPENDITURE_SELECT} ${where} ORDER BY er.created_at DESC LIMIT ? OFFSET ?`,
+    `${expenditureSelect} ${where} ORDER BY er.created_at DESC LIMIT ? OFFSET ?`,
     [...params, limitNum, offset],
   );
 
@@ -3838,7 +4934,10 @@ export async function updateExpenditure(id, data, actor = null, uploads = {}) {
 
   const update = Object.fromEntries(
     Object.entries(data)
-      .filter(([k, v]) => Object.prototype.hasOwnProperty.call(ALLOWED_UPDATE_COLUMNS, k) && v !== undefined)
+      .filter(
+        ([k, v]) =>
+          Object.prototype.hasOwnProperty.call(ALLOWED_UPDATE_COLUMNS, k) && v !== undefined,
+      )
       .map(([k, v]) => [k, v === '' ? null : v]),
   );
 
@@ -3862,9 +4961,7 @@ export async function updateExpenditure(id, data, actor = null, uploads = {}) {
 
   if (Object.keys(update).length) {
     const updateKeys = Object.keys(update);
-    const setClause = updateKeys
-      .map((key) => `${ALLOWED_UPDATE_COLUMNS[key]} = ?`)
-      .join(', ');
+    const setClause = updateKeys.map((key) => `${ALLOWED_UPDATE_COLUMNS[key]} = ?`).join(', ');
     const updateValues = updateKeys.map((key) => update[key]);
 
     [result] = await db.execute(
@@ -3883,10 +4980,10 @@ export async function updateExpenditure(id, data, actor = null, uploads = {}) {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
-        toPositiveInt(actor?.id)                     || null,
-        normalizeText(actor?.email)                  || null,
-        normalizeText(actor?.role).toLowerCase()     || null,
-        Boolean(actor?.isSuperAdmin) ? 1 : 0,
+        toPositiveInt(actor?.id) || null,
+        normalizeText(actor?.email) || null,
+        normalizeText(actor?.role).toLowerCase() || null,
+        actor?.isSuperAdmin ? 1 : 0,
         'Expenditure request updated',
         JSON.stringify({
           updatedKeys: Object.keys(update),
@@ -3938,7 +5035,8 @@ export async function getExpenditureOwner(id) {
   const n = toPositiveInt(id);
   if (!n) return null;
   const [rows] = await db.execute(
-    'SELECT id, created_by FROM expenditure_requests WHERE id = ? LIMIT 1', [n],
+    'SELECT id, created_by FROM expenditure_requests WHERE id = ? LIMIT 1',
+    [n],
   );
   return rows[0] || null;
 }
@@ -4151,19 +5249,20 @@ const resolveExpenditureLevel1RouteType = (record = {}) => {
     return 'entity_contact';
   }
 
-  if (LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY.includes(beneficiaryType) && beneficiaryEntityId) {
+  if (
+    LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY.includes(beneficiaryType) &&
+    beneficiaryEntityId
+  ) {
     return 'entity_contact';
   }
 
   return 'department_hod';
 };
 
-const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_SQL = LEVEL1_COORDINATOR_BENEFICIARY_TYPES
-  .map(escapeSqlLiteral)
-  .join(', ');
-const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY_SQL = LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY
-  .map(escapeSqlLiteral)
-  .join(', ');
+const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_SQL =
+  LEVEL1_COORDINATOR_BENEFICIARY_TYPES.map(escapeSqlLiteral).join(', ');
+const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY_SQL =
+  LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY.map(escapeSqlLiteral).join(', ');
 
 const LEVEL1_COORDINATOR_ROUTE_SQL_EXPR = `
   (
@@ -4190,14 +5289,15 @@ export async function getExpenditureRecordContext(recordId, { tx = db, forUpdate
        er.total_amount
      FROM expenditure_requests er
      WHERE er.id = ?${lockClause}`,
-    [normalizedRecordId]
+    [normalizedRecordId],
   );
 
   if (!rows.length) return null;
   const row = rows[0];
 
   return {
-    beneficiaryType: normalizeBeneficiaryType(row.beneficiary_type) || normalizeText(row.beneficiary_type),
+    beneficiaryType:
+      normalizeBeneficiaryType(row.beneficiary_type) || normalizeText(row.beneficiary_type),
     beneficiaryEntityId: toPositiveInt(row.beneficiary_entity_id),
     departmentId: toPositiveInt(row.department_id),
     totalBudget: toMoney(row.total_amount),
@@ -4220,7 +5320,7 @@ export async function updateExpenditureWorkflowSnapshot(recordId, newState, { tx
   );
 
   const previousState = normalizeWorkflowState(
-    existingRows?.[0]?.workflow_state ?? existingRows?.[0]?.workflowstate
+    existingRows?.[0]?.workflow_state ?? existingRows?.[0]?.workflowstate,
   );
   const persistentState = getPersistentWorkflowRowState(previousState);
 
@@ -4244,13 +5344,14 @@ export async function updateExpenditureWorkflowSnapshot(recordId, newState, { tx
   return Number(result?.affectedRows || 0) > 0;
 }
 
-export async function autoApprovePrincipalWorkflowStage(recordId, {
-  actor = {},
-  feedback = 'Auto-approved after DoF clearance',
-} = {}, { tx = null } = {}) {
+export async function autoApprovePrincipalWorkflowStage(
+  recordId,
+  { actor = {}, feedback = 'Auto-approved after DoF clearance' } = {},
+  { tx = null } = {},
+) {
   if (!tx) {
     return withTransaction((conn) =>
-      autoApprovePrincipalWorkflowStage(recordId, { actor, feedback }, { tx: conn })
+      autoApprovePrincipalWorkflowStage(recordId, { actor, feedback }, { tx: conn }),
     );
   }
 
@@ -4264,7 +5365,7 @@ export async function autoApprovePrincipalWorkflowStage(recordId, {
        FROM expenditure_requests
       WHERE id = ?
       FOR UPDATE`,
-    [normalizedRecordId]
+    [normalizedRecordId],
   );
 
   if (!rows.length) {
@@ -4339,7 +5440,7 @@ export async function autoApprovePrincipalWorkflowStage(recordId, {
           route: 'PATCH /api/expenditure-requests/:id/approval',
         },
       }),
-    ]
+    ],
   );
 
   const updated = await updateExpenditureWorkflowSnapshot(normalizedRecordId, nextState, { tx });
@@ -4354,12 +5455,11 @@ export async function autoApprovePrincipalWorkflowStage(recordId, {
   };
 }
 
-export async function forceWorkflowTransition(recordId, {
-  decision,
-  feedback = null,
-  actor = {},
-  stageHint = null,
-} = {}, { tx = db } = {}) {
+export async function forceWorkflowTransition(
+  recordId,
+  { decision, feedback = null, actor = {}, stageHint = null } = {},
+  { tx = db } = {},
+) {
   const normalizedRecordId = toPositiveInt(recordId);
   const normalizedDecision = normalizeText(decision).toLowerCase();
 
@@ -4376,7 +5476,7 @@ export async function forceWorkflowTransition(recordId, {
        FROM expenditure_requests
       WHERE id = ?
       FOR UPDATE`,
-    [normalizedRecordId]
+    [normalizedRecordId],
   );
 
   if (!rows.length) {
@@ -4388,9 +5488,10 @@ export async function forceWorkflowTransition(recordId, {
     throw new Error('Workflow state not found');
   }
 
-  const flow = Array.isArray(previousState.flow) && previousState.flow.length
-    ? previousState.flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
-    : ['level1', 'dof', 'principal'];
+  const flow =
+    Array.isArray(previousState.flow) && previousState.flow.length
+      ? previousState.flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
+      : ['level1', 'dof', 'principal'];
   const fallbackStage =
     normalizeText(stageHint).toLowerCase() ||
     normalizeText(previousState.currentStage).toLowerCase() ||
@@ -4444,12 +5545,13 @@ export async function forceWorkflowTransition(recordId, {
         moduleMetaVersion: 1,
         moduleMeta: {
           trigger: 'super_admin_forced_transition',
-          route: normalizedDecision === 'archived'
-            ? 'PATCH /api/expenditure-requests/:id/archive-toggle'
-            : 'PATCH /api/expenditure-requests/:id/approval',
+          route:
+            normalizedDecision === 'archived'
+              ? 'PATCH /api/expenditure-requests/:id/archive-toggle'
+              : 'PATCH /api/expenditure-requests/:id/approval',
         },
       }),
-    ]
+    ],
   );
 
   const updated = await updateExpenditureWorkflowSnapshot(normalizedRecordId, nextState, { tx });
@@ -4479,7 +5581,7 @@ export async function restoreWorkflowSnapshotFromLatestArchive(recordId, { tx = 
         AND decision = 'archived'
       ORDER BY decided_at DESC, id DESC
       LIMIT 1`,
-    [normalizedRecordId]
+    [normalizedRecordId],
   );
 
   if (!rows.length) {
@@ -4491,7 +5593,9 @@ export async function restoreWorkflowSnapshotFromLatestArchive(recordId, { tx = 
     return { restored: false, reason: 'Archived snapshot is not restorable' };
   }
 
-  const updated = await updateExpenditureWorkflowSnapshot(normalizedRecordId, previousState, { tx });
+  const updated = await updateExpenditureWorkflowSnapshot(normalizedRecordId, previousState, {
+    tx,
+  });
   return {
     restored: Boolean(updated),
     restoredState: previousState,
@@ -4511,7 +5615,7 @@ export async function getLatestArchiveAction(recordId, { tx = db } = {}) {
         AND decision = 'archived'
       ORDER BY decided_at DESC, id DESC
       LIMIT 1`,
-    [normalizedRecordId]
+    [normalizedRecordId],
   );
 
   if (!rows.length) return null;
@@ -4529,8 +5633,8 @@ export async function getExpenditureBillsByExpenditureIds(expenditureIds = [], {
     new Set(
       (Array.isArray(expenditureIds) ? expenditureIds : [])
         .map((value) => toPositiveInt(value))
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   );
 
   if (!normalizedIds.length) {
@@ -4561,16 +5665,18 @@ export async function getExpenditureBillsByExpenditureIds(expenditureIds = [], {
     if (!resultMap.has(expenditureId)) {
       resultMap.set(expenditureId, []);
     }
-    resultMap.get(expenditureId).push(withUploadAccess({
-      id: row.id,
-      original_name: row.original_name,
-      stored_name: row.stored_name,
-      file_path: row.file_path,
-      mime_type: row.mime_type,
-      file_size: row.file_size,
-      sort_order: row.sort_order,
-      created_at: row.created_at,
-    }));
+    resultMap.get(expenditureId).push(
+      withUploadAccess({
+        id: row.id,
+        original_name: row.original_name,
+        stored_name: row.stored_name,
+        file_path: row.file_path,
+        mime_type: row.mime_type,
+        file_size: row.file_size,
+        sort_order: row.sort_order,
+        created_at: row.created_at,
+      }),
+    );
   }
   return resultMap;
 }
@@ -4582,7 +5688,9 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
   const isAllProposals = isSuperAdmin && Boolean(filters.allProposals);
   const level1Role = normalizeText(filters.level1Role).toLowerCase();
   const requestedStatusCategory = normalizeText(filters.statusCategory).toLowerCase();
-  const statusCategoryFilter = ['pending', 'approved', 'returned', 'rejected', 'archived'].includes(requestedStatusCategory)
+  const statusCategoryFilter = ['pending', 'approved', 'returned', 'rejected', 'archived'].includes(
+    requestedStatusCategory,
+  )
     ? requestedStatusCategory
     : '';
   const isAllStage = normalizedStage === 'all';
@@ -4648,7 +5756,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
               AND LOWER(TRIM(wa.stage)) = ?
               AND wa.decision IN ('approved', 'returned', 'rejected', 'archived')
           )
-        )`
+        )`,
       );
       whereParams.push(normalizedStage, normalizedStage);
     }
@@ -4720,7 +5828,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
         OR LOWER(COALESCE(er.primary_head, '')) LIKE LOWER(?)
         OR LOWER(COALESCE(er.department, '')) LIKE LOWER(?)
         OR LOWER(COALESCE(er.description, '')) LIKE LOWER(?)
-      )`
+      )`,
     );
     whereParams.push(
       searchLike,
@@ -4732,7 +5840,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
       searchLike,
       searchLike,
       searchLike,
-      searchLike
+      searchLike,
     );
   }
 
@@ -4756,7 +5864,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
          )
            AND LOWER(TRIM(latest_terminal.stage)) = ?
            AND latest_terminal.decision IN ('returned', 'rejected')
-      )`
+      )`,
     );
     whereParams.push(priorTerminalStage);
   }
@@ -4767,7 +5875,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
     `SELECT COUNT(*) AS total
        FROM expenditure_requests er
        ${baseWhereClause}`,
-    whereParams
+    whereParams,
   );
   const total = Number(countRows?.[0]?.total || 0);
 
@@ -4811,7 +5919,14 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
          ${baseWhereClause}
        ) scoped_status
      ) categorized_status`,
-    [statusStageScope, statusStageScope, statusStageScope, statusStageScope, statusStageScope, ...whereParams]
+    [
+      statusStageScope,
+      statusStageScope,
+      statusStageScope,
+      statusStageScope,
+      statusStageScope,
+      ...whereParams,
+    ],
   );
 
   const statusCounts = {
@@ -4864,9 +5979,16 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
           COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.lastDecision')), '')
         )) LIKE '%completed%' THEN 'approved'
         ELSE CASE WHEN ? = 'all' THEN 'pending' ELSE 'other' END
-      END) = ?`
+      END) = ?`,
     );
-    whereParams.push(statusStageScope, statusStageScope, statusStageScope, statusStageScope, statusStageScope, statusCategoryFilter);
+    whereParams.push(
+      statusStageScope,
+      statusStageScope,
+      statusStageScope,
+      statusStageScope,
+      statusStageScope,
+      statusCategoryFilter,
+    );
   }
 
   const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
@@ -4920,7 +6042,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.resubmittedAt')), '') DESC,
        er.created_at DESC
      LIMIT ? OFFSET ?`,
-    [statusStageScope, statusStageScope, ...whereParams, limit, offset]
+    [statusStageScope, statusStageScope, ...whereParams, limit, offset],
   );
 
   const expenditureIds = rows.map((row) => row.id);
@@ -4947,12 +6069,13 @@ export async function listAvailableBeneficiaryTypes({ tx = db } = {}) {
       WHERE LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
         AND beneficiary_type IS NOT NULL
         AND TRIM(beneficiary_type) <> ''
-      ORDER BY TRIM(beneficiary_type) ASC`
+      ORDER BY TRIM(beneficiary_type) ASC`,
   );
 
   const dedup = new Map();
   for (const row of rows || []) {
-    const normalized = normalizeBeneficiaryType(row?.beneficiary_type) || normalizeText(row?.beneficiary_type);
+    const normalized =
+      normalizeBeneficiaryType(row?.beneficiary_type) || normalizeText(row?.beneficiary_type);
     const key = normalizeText(normalized).toLowerCase();
     if (!key || dedup.has(key)) continue;
     dedup.set(key, normalized);
@@ -4997,18 +6120,18 @@ export async function listAvailableFiscalYears({ tx = db } = {}) {
             AND NOT EXISTS (SELECT 1 FROM expenditure_line_rows lr WHERE lr.expenditure_id = er.id AND lr.budget_proposal_id IS NOT NULL)
        ) years
       WHERE fiscal_year IS NOT NULL
-      ORDER BY fiscal_year DESC`
+      ORDER BY fiscal_year DESC`,
   );
 
-  return (rows || [])
-    .map((row) => toPositiveInt(row?.fiscal_year))
-    .filter(Boolean);
+  return (rows || []).map((row) => toPositiveInt(row?.fiscal_year)).filter(Boolean);
 }
 
 export async function hardDeleteExpenditureRequest(id) {
   const expenditureId = toPositiveInt(id);
   if (!expenditureId) return false;
-  const [result] = await db.execute('DELETE FROM expenditure_requests WHERE id = ?', [expenditureId]);
+  const [result] = await db.execute('DELETE FROM expenditure_requests WHERE id = ?', [
+    expenditureId,
+  ]);
   return result.affectedRows > 0;
 }
 

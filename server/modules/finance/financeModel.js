@@ -1,11 +1,12 @@
+import fs from 'fs';
+import path from 'path';
+
 import db from '../../config/connection.js';
-import * as orgUnitQueries from '../shared/budget/orgUnitQueries.js';
 import {
   resolveCatalogIds,
   resolvePrimaryHeadIds,
 } from '../budgetCatalog/budgetCatalogResolver.js';
-import fs from 'fs';
-import path from 'path';
+import * as orgUnitQueries from '../shared/budget/orgUnitQueries.js';
 
 const safeParseJSON = (value, fallback = null) => {
   if (value === undefined || value === null || value === '') return fallback;
@@ -31,7 +32,11 @@ const normalizeSubHeadForLookup = (value) => {
 const FINANCE_ANNEXURE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'finance-annexures');
 const FINANCE_ANNEXURE_PUBLIC_PREFIX = '/uploads/finance-annexures/';
 const FINANCE_ANNEXURE_STORED_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
-const FINANCE_PRINCIPAL_DOC_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'finance-principal-documents');
+const FINANCE_PRINCIPAL_DOC_UPLOAD_DIR = path.resolve(
+  process.cwd(),
+  'uploads',
+  'finance-principal-documents',
+);
 const FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX = '/uploads/finance-principal-documents/';
 const FINANCE_REQUEST_COLUMN_EXISTS_CACHE = new Map();
 const FINANCE_BUDGET_BREAKUP_COLUMN_EXISTS_CACHE = new Map();
@@ -56,7 +61,7 @@ const hasFinanceRequestColumn = async (columnName, { tx = db } = {}) => {
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = 'finance_requests'
          AND COLUMN_NAME = ?`,
-    [normalizedColumn]
+    [normalizedColumn],
   );
 
   const exists = Number(rows?.[0]?.count || 0) > 0;
@@ -78,7 +83,7 @@ const hasFinanceBudgetBreakupColumn = async (columnName, { tx = db } = {}) => {
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = 'finance_budget_breakup'
          AND COLUMN_NAME = ?`,
-    [normalizedColumn]
+    [normalizedColumn],
   );
 
   const exists = Number(rows?.[0]?.count || 0) > 0;
@@ -100,7 +105,7 @@ const hasFinanceIncomeRowsColumn = async (columnName, { tx = db } = {}) => {
        WHERE TABLE_SCHEMA = DATABASE()
          AND TABLE_NAME = 'finance_income_rows'
          AND COLUMN_NAME = ?`,
-    [normalizedColumn]
+    [normalizedColumn],
   );
 
   const exists = Number(rows?.[0]?.count || 0) > 0;
@@ -119,7 +124,7 @@ const supportsFinanceOverallStatusDeletedValue = async ({ tx = db } = {}) => {
       WHERE TABLE_SCHEMA = DATABASE()
         AND TABLE_NAME = 'finance_requests'
         AND COLUMN_NAME = 'overall_status'
-      LIMIT 1`
+      LIMIT 1`,
   );
   const columnType = normalizeText(rows?.[0]?.COLUMN_TYPE || rows?.[0]?.column_type).toLowerCase();
   const supportsDeleted = columnType.includes("'deleted'");
@@ -134,7 +139,8 @@ const normalizeBeneficiaryTypeForStorage = (beneficiaryType) => {
   if (['faculty', 'individual faculty'].includes(normalized)) return 'Faculty';
   if (['staff', 'faculty_team', 'faculty team'].includes(normalized)) return 'Staff';
   if (['student_team', 'student team'].includes(normalized)) return 'Department';
-  if (normalized === 'professional body' || normalized === 'professional bodies') return 'Professional Body';
+  if (normalized === 'professional body' || normalized === 'professional bodies')
+    return 'Professional Body';
   if (normalized === 'department') return 'Department';
   if (normalized === 'centre') return 'Centre';
   if (normalized === 'cell') return 'Cell';
@@ -158,9 +164,8 @@ const toMoney = (value) => {
 const normalizeUnplannedBudgetPayload = (payload = {}) => {
   const enabled = Boolean(payload?.unplanned_budget_enabled);
   const parsedAmount = Number(payload?.unplanned_budget_amount);
-  const amount = enabled && Number.isFinite(parsedAmount) && parsedAmount > 0
-    ? toMoney(parsedAmount)
-    : 0;
+  const amount =
+    enabled && Number.isFinite(parsedAmount) && parsedAmount > 0 ? toMoney(parsedAmount) : 0;
 
   return {
     enabled,
@@ -191,11 +196,7 @@ const normalizeBeneficiaryType = (beneficiaryType) => {
 };
 
 const normalizeBeneficiaryTypeToken = (beneficiaryType) =>
-  normalizeText(beneficiaryType)
-    .toLowerCase()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  normalizeText(beneficiaryType).toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 const isIndividualBeneficiaryType = (beneficiaryType) => {
   const token = normalizeBeneficiaryTypeToken(beneficiaryType);
@@ -222,7 +223,10 @@ const resolveFinanceLevel1RouteType = (record = {}) => {
     return 'entity_contact';
   }
 
-  if (LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY.includes(beneficiaryType) && beneficiaryEntityId) {
+  if (
+    LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY.includes(beneficiaryType) &&
+    beneficiaryEntityId
+  ) {
     return 'entity_contact';
   }
 
@@ -230,7 +234,9 @@ const resolveFinanceLevel1RouteType = (record = {}) => {
 };
 
 const normalizeEntityTypeCode = (typeCode) => {
-  const normalized = normalizeText(typeCode).toUpperCase().replace(/[\s-]+/g, '_');
+  const normalized = normalizeText(typeCode)
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
 
   if (['DEPT', 'DEPARTMENT'].includes(normalized)) return 'DEPARTMENT';
   if (['CENTRE', 'CENTER'].includes(normalized)) return 'CENTRE';
@@ -339,15 +345,21 @@ const normalizeIncomeRows = (rows = []) =>
 const normalizeFinanceAnnexures = (rows = []) =>
   (Array.isArray(rows) ? rows : [])
     .map((row, index) => {
-      const originalName = normalizeText(row?.original_name || row?.originalName || row?.annexure_file_name);
-      const storedName = normalizeText(row?.stored_name || row?.storedName || row?.annexure_storage_name) || originalName;
-    return {
+      const originalName = normalizeText(
+        row?.original_name || row?.originalName || row?.annexure_file_name,
+      );
+      const storedName =
+        normalizeText(row?.stored_name || row?.storedName || row?.annexure_storage_name) ||
+        originalName;
+      return {
         annexure_type: normalizeText(row?.annexure_type || row?.annexureType),
         original_name: originalName,
         stored_name: storedName,
         file_path: normalizeText(row?.file_path || row?.filePath || row?.annexure_file_path),
         mime_type: normalizeText(row?.mime_type || row?.mimeType || row?.annexure_mime_type),
-        file_size: Number.isFinite(Number(row?.file_size ?? row?.fileSize ?? row?.annexure_file_size))
+        file_size: Number.isFinite(
+          Number(row?.file_size ?? row?.fileSize ?? row?.annexure_file_size),
+        )
           ? Number(row?.file_size ?? row?.fileSize ?? row?.annexure_file_size)
           : null,
         sort_order: index,
@@ -364,7 +376,7 @@ const cleanupOrphanFinanceAnnexureFiles = async (storedNames = []) => {
   const uniqueNames = new Set(
     storedNames
       .map((name) => normalizeText(name))
-      .filter((name) => name && FINANCE_ANNEXURE_STORED_NAME_PATTERN.test(name))
+      .filter((name) => name && FINANCE_ANNEXURE_STORED_NAME_PATTERN.test(name)),
   );
 
   for (const storedName of uniqueNames) {
@@ -382,8 +394,6 @@ const cleanupOrphanFinanceAnnexureFiles = async (storedNames = []) => {
   }
 };
 
-
-
 const normalizeFinancePrincipalDocument = (row = {}) => ({
   id: toPositiveInt(row.id),
   finance_id: toPositiveInt(row.finance_id),
@@ -400,15 +410,13 @@ const getFinancePrincipalDocumentsByFinanceIds = async (financeIds = [], { tx = 
     new Set(
       (Array.isArray(financeIds) ? financeIds : [])
         .map((value) => toPositiveInt(value))
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   );
 
   if (!normalizedFinanceIds.length) {
     return new Map();
   }
-
-
 
   const placeholders = normalizedFinanceIds.map(() => '?').join(', ');
   try {
@@ -417,7 +425,7 @@ const getFinancePrincipalDocumentsByFinanceIds = async (financeIds = [], { tx = 
          FROM finance_request_annexures
         WHERE annexure_type = 'principal_approval'
           AND finance_id IN (${placeholders})`,
-      normalizedFinanceIds
+      normalizedFinanceIds,
     );
 
     const map = new Map();
@@ -449,11 +457,9 @@ const setFinancePrincipalDocument = async (financeId, document, { tx = db } = {}
     return null;
   }
 
-
-
   await tx.query(
     `DELETE FROM finance_request_annexures WHERE annexure_type = 'principal_approval' AND finance_id = ?`,
-    [normalizedFinanceId]
+    [normalizedFinanceId],
   );
 
   if (!document || !normalizeText(document.file_path)) {
@@ -471,7 +477,7 @@ const setFinancePrincipalDocument = async (financeId, document, { tx = db } = {}
       normalizeText(document.file_path),
       normalizeText(document.mime_type) || null,
       Number.isFinite(Number(document.file_size)) ? Number(document.file_size) : null,
-    ]
+    ],
   );
 
   return {
@@ -492,11 +498,9 @@ const deleteFinancePrincipalDocumentByFinanceId = async (financeId, { tx = db } 
     return false;
   }
 
-
-
   const [result] = await tx.query(
     `DELETE FROM finance_request_annexures WHERE annexure_type = 'principal_approval' AND finance_id = ?`,
-    [normalizedFinanceId]
+    [normalizedFinanceId],
   );
 
   return Number(result?.affectedRows || 0) > 0;
@@ -510,32 +514,32 @@ const getLegacyAnnexureFromRecord = (record = {}) => {
   if (!filePath || !fallbackStoredName) {
     return [];
   }
-  return [{
-    id: null,
-    finance_id: toPositiveInt(record?.id),
-    annexure_type: normalizeText(record?.annexure_type),
-    original_name: originalName || fallbackStoredName,
-    stored_name: fallbackStoredName,
-    file_path: filePath,
-    mime_type: normalizeText(record?.annexure_mime_type),
-    file_size: Number.isFinite(Number(record?.annexure_file_size))
-      ? Number(record?.annexure_file_size)
-      : null,
-    sort_order: 0,
-    created_at: null,
-  }];
+  return [
+    {
+      id: null,
+      finance_id: toPositiveInt(record?.id),
+      annexure_type: normalizeText(record?.annexure_type),
+      original_name: originalName || fallbackStoredName,
+      stored_name: fallbackStoredName,
+      file_path: filePath,
+      mime_type: normalizeText(record?.annexure_mime_type),
+      file_size: Number.isFinite(Number(record?.annexure_file_size))
+        ? Number(record?.annexure_file_size)
+        : null,
+      sort_order: 0,
+      created_at: null,
+    },
+  ];
 };
 
-const normalizeWorkflowStatus = (state) =>
-  normalizeText(state?.status).toLowerCase();
+const normalizeWorkflowStatus = (state) => normalizeText(state?.status).toLowerCase();
 
 const normalizeToken = (value) =>
   normalizeText(value)
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 
-const normalizeStringForMatch = (value) =>
-  normalizeText(value).toLowerCase().trim();
+const normalizeStringForMatch = (value) => normalizeText(value).toLowerCase().trim();
 
 const isLooseTextMatch = (leftValue, rightValue) => {
   const leftNormalized = normalizeStringForMatch(leftValue);
@@ -591,12 +595,10 @@ const QUEUE_DISPLAY_REF_SQL_EXPR = `
   )
 `;
 
-const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_SQL = LEVEL1_COORDINATOR_BENEFICIARY_TYPES
-  .map(escapeSqlLiteral)
-  .join(', ');
-const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY_SQL = LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY
-  .map(escapeSqlLiteral)
-  .join(', ');
+const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_SQL =
+  LEVEL1_COORDINATOR_BENEFICIARY_TYPES.map(escapeSqlLiteral).join(', ');
+const LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY_SQL =
+  LEVEL1_COORDINATOR_BENEFICIARY_TYPES_WITH_ENTITY.map(escapeSqlLiteral).join(', ');
 
 const LEVEL1_COORDINATOR_ROUTE_SQL_EXPR = `
   (
@@ -686,6 +688,43 @@ const buildFinanceSelectSql = ({
        WHERE fbb.finance_id = fr.id
     ) AS fiscal_year,
     (
+      SELECT GREATEST(
+        0,
+        COALESCE(SUM(CASE
+          WHEN er_cf.request_type = 'Advance'
+            AND (
+              YEAR(COALESCE(er_cf.request_date, er_cf.created_at))
+                - (MONTH(COALESCE(er_cf.request_date, er_cf.created_at)) < 4)
+            ) = COALESCE(
+              (
+                SELECT MIN(bp_cf.fiscal_year)
+                  FROM finance_budget_breakup fbb_cf
+                  JOIN budget_proposals bp_cf ON bp_cf.id = fbb_cf.budget_proposal_id
+                 WHERE fbb_cf.finance_id = fr.id
+              ),
+              YEAR(COALESCE(fr.request_date, fr.created_at))
+                - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+            )
+            AND (
+              LOWER(TRIM(COALESCE(er_cf.overall_status, ''))) IN ('approved', 'completed')
+              OR LOWER(TRIM(COALESCE(er_cf.workflow_status, ''))) IN ('approved', 'completed')
+              OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er_cf.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
+            )
+          THEN COALESCE(er_cf.advance_total_amount, er_cf.total_amount, 0)
+          WHEN er_cf.request_type = 'Settlement'
+            AND (
+              LOWER(TRIM(COALESCE(er_cf.overall_status, ''))) IN ('approved', 'completed')
+              OR LOWER(TRIM(COALESCE(er_cf.workflow_status, ''))) IN ('approved', 'completed')
+              OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er_cf.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
+            )
+          THEN -COALESCE(er_cf.settlement_total_amount, er_cf.total_amount, 0)
+          ELSE 0
+        END), 0)
+      )
+      FROM expenditure_requests er_cf
+      WHERE er_cf.finance_request_id = fr.id
+    ) AS carry_forward_unsettled_advance_amount,
+    (
       SELECT wa.decision
         FROM workflow_actions wa
        WHERE wa.module_key = 'finance'
@@ -706,9 +745,14 @@ const buildFinanceSelectSql = ({
 
 const getFinanceSelectSql = async ({ tx = db } = {}) => {
   const hasBudgetTag = await hasFinanceRequestColumn('budget_tag', { tx });
-  const hasUnplannedBudgetEnabled = await hasFinanceRequestColumn('unplanned_budget_enabled', { tx });
+  const hasUnplannedBudgetEnabled = await hasFinanceRequestColumn('unplanned_budget_enabled', {
+    tx,
+  });
   const hasUnplannedBudgetAmount = await hasFinanceRequestColumn('unplanned_budget_amount', { tx });
-  const hasUnplannedBudgetDescription = await hasFinanceRequestColumn('unplanned_budget_description', { tx });
+  const hasUnplannedBudgetDescription = await hasFinanceRequestColumn(
+    'unplanned_budget_description',
+    { tx },
+  );
   const hasAnnexureType = await hasFinanceRequestColumn('annexure_type', { tx });
   const hasAnnexureFileName = await hasFinanceRequestColumn('annexure_file_name', { tx });
   const hasAnnexureStorageName = await hasFinanceRequestColumn('annexure_storage_name', { tx });
@@ -717,15 +761,31 @@ const getFinanceSelectSql = async ({ tx = db } = {}) => {
   const hasAnnexureFileSize = await hasFinanceRequestColumn('annexure_file_size', { tx });
   return buildFinanceSelectSql({
     budgetTagSelectSql: hasBudgetTag ? 'fr.budget_tag' : 'NULL AS budget_tag',
-    unplannedBudgetEnabledSelectSql: hasUnplannedBudgetEnabled ? 'fr.unplanned_budget_enabled' : 'NULL AS unplanned_budget_enabled',
-    unplannedBudgetAmountSelectSql: hasUnplannedBudgetAmount ? 'fr.unplanned_budget_amount' : 'NULL AS unplanned_budget_amount',
-    unplannedBudgetDescriptionSelectSql: hasUnplannedBudgetDescription ? 'fr.unplanned_budget_description' : 'NULL AS unplanned_budget_description',
+    unplannedBudgetEnabledSelectSql: hasUnplannedBudgetEnabled
+      ? 'fr.unplanned_budget_enabled'
+      : 'NULL AS unplanned_budget_enabled',
+    unplannedBudgetAmountSelectSql: hasUnplannedBudgetAmount
+      ? 'fr.unplanned_budget_amount'
+      : 'NULL AS unplanned_budget_amount',
+    unplannedBudgetDescriptionSelectSql: hasUnplannedBudgetDescription
+      ? 'fr.unplanned_budget_description'
+      : 'NULL AS unplanned_budget_description',
     annexureTypeSelectSql: hasAnnexureType ? 'fr.annexure_type' : 'NULL AS annexure_type',
-    annexureFileNameSelectSql: hasAnnexureFileName ? 'fr.annexure_file_name' : 'NULL AS annexure_file_name',
-    annexureStorageNameSelectSql: hasAnnexureStorageName ? 'fr.annexure_storage_name' : 'NULL AS annexure_storage_name',
-    annexureFilePathSelectSql: hasAnnexureFilePath ? 'fr.annexure_file_path' : 'NULL AS annexure_file_path',
-    annexureMimeTypeSelectSql: hasAnnexureMimeType ? 'fr.annexure_mime_type' : 'NULL AS annexure_mime_type',
-    annexureFileSizeSelectSql: hasAnnexureFileSize ? 'fr.annexure_file_size' : 'NULL AS annexure_file_size',
+    annexureFileNameSelectSql: hasAnnexureFileName
+      ? 'fr.annexure_file_name'
+      : 'NULL AS annexure_file_name',
+    annexureStorageNameSelectSql: hasAnnexureStorageName
+      ? 'fr.annexure_storage_name'
+      : 'NULL AS annexure_storage_name',
+    annexureFilePathSelectSql: hasAnnexureFilePath
+      ? 'fr.annexure_file_path'
+      : 'NULL AS annexure_file_path',
+    annexureMimeTypeSelectSql: hasAnnexureMimeType
+      ? 'fr.annexure_mime_type'
+      : 'NULL AS annexure_mime_type',
+    annexureFileSizeSelectSql: hasAnnexureFileSize
+      ? 'fr.annexure_file_size'
+      : 'NULL AS annexure_file_size',
   });
 };
 
@@ -785,7 +845,8 @@ const collectChangedFields = (previousRecord, nextRecord, fieldMap = []) => {
 
     const normalizeFieldValue = (value) => {
       if (isDateField) return normalizeDateOnly(value);
-      if (isMoneyField) return Number.isFinite(Number(value)) ? toMoney(value).toFixed(2) : normalizeText(value);
+      if (isMoneyField)
+        return Number.isFinite(Number(value)) ? toMoney(value).toFixed(2) : normalizeText(value);
       return normalizeText(value);
     };
 
@@ -817,9 +878,7 @@ const buildFinanceUpdateAudit = ({
   actor = null,
 }) => {
   const nextValue = (key) =>
-    Object.prototype.hasOwnProperty.call(updateData, key)
-      ? updateData[key]
-      : previousRecord[key];
+    Object.prototype.hasOwnProperty.call(updateData, key) ? updateData[key] : previousRecord[key];
   const nextRecord = {
     request_date: updateData.request_date ?? previousRecord.request_date,
     description: updateData.description ?? previousRecord.description,
@@ -859,7 +918,11 @@ const buildFinanceUpdateAudit = ({
     { storageKey: 'proposed_amount', label: 'Proposed amount', valueType: 'money' },
     { storageKey: 'balance_amount', label: 'Balance amount', valueType: 'money' },
     { storageKey: 'unplanned_budget_enabled', label: 'Unplanned expenditure enabled' },
-    { storageKey: 'unplanned_budget_amount', label: 'Unplanned expenditure amount', valueType: 'money' },
+    {
+      storageKey: 'unplanned_budget_amount',
+      label: 'Unplanned expenditure amount',
+      valueType: 'money',
+    },
     { storageKey: 'unplanned_budget_description', label: 'Unplanned expenditure description' },
     { storageKey: 'annexure_type', label: 'Annexure type' },
     { storageKey: 'annexure_file_name', label: 'Annexure file name' },
@@ -878,10 +941,14 @@ const buildFinanceUpdateAudit = ({
 
   const rowChanges = [];
   if (budgetRowsInput) {
-    rowChanges.push(`Budget breakup ${budgetRowsChanged ? 'updated' : 'reviewed'} (${budgetRowsInput.length} row(s))`);
+    rowChanges.push(
+      `Budget breakup ${budgetRowsChanged ? 'updated' : 'reviewed'} (${budgetRowsInput.length} row(s))`,
+    );
   }
   if (incomeRowsInput) {
-    rowChanges.push(`Income rows ${incomeRowsChanged ? 'updated' : 'reviewed'} (${incomeRowsInput.length} row(s))`);
+    rowChanges.push(
+      `Income rows ${incomeRowsChanged ? 'updated' : 'reviewed'} (${incomeRowsInput.length} row(s))`,
+    );
   }
 
   const summaryParts = [];
@@ -900,7 +967,10 @@ const buildFinanceUpdateAudit = ({
       incomeRowsCount: incomeRowsInput ? incomeRowsInput.length : 0,
       actorRole: normalizeText(actor?.role).toLowerCase() || null,
       actorEmail: normalizeText(actor?.email).toLowerCase() || null,
-      actorIsAdmin: Boolean(actor?.isSuperAdmin || ['admin', 'super_admin', 'superadmin'].includes(normalizeText(actor?.role).toLowerCase())),
+      actorIsAdmin: Boolean(
+        actor?.isSuperAdmin ||
+        ['admin', 'super_admin', 'superadmin'].includes(normalizeText(actor?.role).toLowerCase()),
+      ),
     },
   };
 };
@@ -922,11 +992,15 @@ const resolveEntityTypeCodeFromBeneficiaryType = (beneficiaryType) => {
 };
 
 const resolveBudgetAvailabilityScope = async (conn, scope = {}) => {
-  const beneficiaryType = normalizeBeneficiaryType(scope?.beneficiaryType || scope?.beneficiary_type);
+  const beneficiaryType = normalizeBeneficiaryType(
+    scope?.beneficiaryType || scope?.beneficiary_type,
+  );
   const beneficiaryValue = normalizeText(scope?.beneficiaryValue || scope?.beneficiary_value);
   const beneficiaryTypeToken = normalizeBeneficiaryTypeToken(beneficiaryType);
   const providedDepartmentId = toPositiveInt(scope?.departmentId || scope?.department_id);
-  const providedEntityId = toPositiveInt(scope?.beneficiaryEntityId || scope?.beneficiary_entity_id);
+  const providedEntityId = toPositiveInt(
+    scope?.beneficiaryEntityId || scope?.beneficiary_entity_id,
+  );
 
   if (!beneficiaryTypeToken) {
     return {
@@ -972,7 +1046,7 @@ const resolveBudgetAvailabilityScope = async (conn, scope = {}) => {
          FROM master_departments
          WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
          LIMIT 1`,
-        [beneficiaryValue]
+        [beneficiaryValue],
       );
 
       const departmentId = toPositiveInt(rows?.[0]?.id);
@@ -1023,7 +1097,7 @@ const resolveBudgetAvailabilityScope = async (conn, scope = {}) => {
          AND UPPER(TRIM(met.code)) = ?
          AND LOWER(TRIM(me.name)) = LOWER(TRIM(?))
        LIMIT 1`,
-      [entityTypeCode, beneficiaryValue]
+      [entityTypeCode, beneficiaryValue],
     );
 
     const entityId = toPositiveInt(rows?.[0]?.id);
@@ -1085,7 +1159,7 @@ const getBudgetLineAvailabilityById = async (conn, budgetLineId) => {
          OR LOWER(TRIM(bp.current_stage)) = 'completed'
        )
      LIMIT 1`,
-    [budgetLineId]
+    [budgetLineId],
   );
 
   if (!rows.length) {
@@ -1105,20 +1179,23 @@ const getBudgetLineAvailabilityById = async (conn, budgetLineId) => {
   };
 };
 
-const resolveBudgetAvailabilityForUser = async (conn, {
-  userId,
-  userEmail = null,
-  budgetHead,
-  subHead,
-  preferredBudgetLineId = null,
-  headOnlyMatch = false,
-  excludeFinanceId = null,
-  beneficiaryType = null,
-  beneficiaryValue = null,
-  departmentId = null,
-  beneficiaryEntityId = null,
-  fiscalYear = null,
-} = {}) => {
+const resolveBudgetAvailabilityForUser = async (
+  conn,
+  {
+    userId,
+    userEmail = null,
+    budgetHead,
+    subHead,
+    preferredBudgetLineId = null,
+    headOnlyMatch = false,
+    excludeFinanceId = null,
+    beneficiaryType = null,
+    beneficiaryValue = null,
+    departmentId = null,
+    beneficiaryEntityId = null,
+    fiscalYear = null,
+  } = {},
+) => {
   const normalizedUserId = toPositiveInt(userId);
   const normalizedUserEmail = normalizeText(userEmail).toLowerCase();
   const normalizedBudgetHead = normalizeText(budgetHead);
@@ -1126,7 +1203,9 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   const normalizedPreferredBudgetLineId = toPositiveInt(preferredBudgetLineId);
   const normalizedExcludeFinanceId = toPositiveInt(excludeFinanceId);
   const normalizedFiscalYear = toPositiveInt(fiscalYear);
-  const applyHeadOnlyMatch = Boolean(headOnlyMatch) || shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead, normalizedSubHead);
+  const applyHeadOnlyMatch =
+    Boolean(headOnlyMatch) ||
+    shouldUseHeadOnlyAvailabilityMatch(normalizedBudgetHead, normalizedSubHead);
   // NEW: resolve the currently selected catalog labels to IDs, then use those
   // IDs against approved budget lines. LEGACY: if either side has no ID, text
   // matching below remains the fallback.
@@ -1212,9 +1291,9 @@ const resolveBudgetAvailabilityForUser = async (conn, {
   }
 
   if (
-    ((scope.mode === 'user' && !normalizedUserId && !normalizedUserEmail) ||
-      (scope.mode === 'department' && !scope.departmentId) ||
-      (scope.mode === 'entity' && !scope.entityId)) ||
+    (scope.mode === 'user' && !normalizedUserId && !normalizedUserEmail) ||
+    (scope.mode === 'department' && !scope.departmentId) ||
+    (scope.mode === 'entity' && !scope.entityId) ||
     !normalizedBudgetHead ||
     (!applyHeadOnlyMatch && !normalizedSubHead)
   ) {
@@ -1286,7 +1365,7 @@ const resolveBudgetAvailabilityForUser = async (conn, {
       ...ownerScopeParams,
       normalizedFiscalYear,
       normalizedFiscalYear,
-    ]
+    ],
   );
 
   const matches = rows
@@ -1307,9 +1386,10 @@ const resolveBudgetAvailabilityForUser = async (conn, {
       availableAmount: Math.max(0, toMoney(row.available_amount)),
     }))
     .filter((row) => {
-      const headMatches = requestedBudgetHeadId && row.budgetHeadId
-        ? row.budgetHeadId === requestedBudgetHeadId
-        : isLooseTextMatch(row.budgetHead, normalizedBudgetHead);
+      const headMatches =
+        requestedBudgetHeadId && row.budgetHeadId
+          ? row.budgetHeadId === requestedBudgetHeadId
+          : isLooseTextMatch(row.budgetHead, normalizedBudgetHead);
 
       if (!headMatches) {
         return false;
@@ -1365,7 +1445,7 @@ const enrichBudgetRowsWithBudgetRefs = async (
     beneficiaryEntityId = null,
     lookupBudgetHead = null,
     lookupSubHead = null,
-  } = {}
+  } = {},
 ) => {
   const enrichedRows = [];
   const requestedByBudgetLine = new Map();
@@ -1375,9 +1455,11 @@ const enrichBudgetRowsWithBudgetRefs = async (
 
   for (const row of budgetRows) {
     const effectiveLookupBudgetHead = row.budget_head || normalizedLookupBudgetHead;
-    const effectiveLookupSubHead = normalizeSubHeadForLookup(row.sub_head) || normalizedLookupSubHead;
+    const effectiveLookupSubHead =
+      normalizeSubHeadForLookup(row.sub_head) || normalizedLookupSubHead;
     const applyHeadOnlyMatch =
-      Boolean(row.head_only_match) || shouldUseHeadOnlyAvailabilityMatch(effectiveLookupBudgetHead, effectiveLookupSubHead);
+      Boolean(row.head_only_match) ||
+      shouldUseHeadOnlyAvailabilityMatch(effectiveLookupBudgetHead, effectiveLookupSubHead);
 
     const availability = await resolveBudgetAvailabilityForUser(conn, {
       userId,
@@ -1398,18 +1480,21 @@ const enrichBudgetRowsWithBudgetRefs = async (
       availability.reservationHeadKey ||
       `text:${normalizeHeadLabelForMatch(effectiveLookupBudgetHead) || normalizeText(effectiveLookupBudgetHead).toLowerCase()}`;
     const alreadyRequestedForHead = toMoney(requestedByHead.get(headReservationKey) || 0);
-    const remainingHeadAfterLocalReservations = Math.max(0, availability.totalAvailable - alreadyRequestedForHead);
+    const remainingHeadAfterLocalReservations = Math.max(
+      0,
+      availability.totalAvailable - alreadyRequestedForHead,
+    );
 
     if (applyHeadOnlyMatch) {
       if (!availability.matches.length || remainingHeadAfterLocalReservations <= 0) {
         throw new Error(
-          `No approved budget allocation found for "${effectiveLookupBudgetHead}" in the selected beneficiary scope`
+          `No approved budget allocation found for "${effectiveLookupBudgetHead}" in the selected beneficiary scope`,
         );
       }
 
       if (row.amount > remainingHeadAfterLocalReservations) {
         throw new Error(
-          `Requested amount ${row.amount.toFixed(2)} exceeds remaining available amount ${remainingHeadAfterLocalReservations.toFixed(2)} for "${effectiveLookupBudgetHead}" after other rows in this request`
+          `Requested amount ${row.amount.toFixed(2)} exceeds remaining available amount ${remainingHeadAfterLocalReservations.toFixed(2)} for "${effectiveLookupBudgetHead}" after other rows in this request`,
         );
       }
 
@@ -1431,14 +1516,22 @@ const enrichBudgetRowsWithBudgetRefs = async (
         const candidateBudgetLineId = toPositiveInt(match.budgetLineId);
         if (!candidateBudgetLineId) continue;
 
-        const alreadyRequestedForLine = toMoney(requestedByBudgetLine.get(candidateBudgetLineId) || 0);
-        const remainingForLine = Math.max(0, toMoney(match.availableAmount) - alreadyRequestedForLine);
+        const alreadyRequestedForLine = toMoney(
+          requestedByBudgetLine.get(candidateBudgetLineId) || 0,
+        );
+        const remainingForLine = Math.max(
+          0,
+          toMoney(match.availableAmount) - alreadyRequestedForLine,
+        );
         if (remainingForLine <= 0) continue;
 
         const allocatedAmount = Math.min(remainingToAllocate, remainingForLine);
         if (allocatedAmount <= 0) continue;
 
-        requestedByBudgetLine.set(candidateBudgetLineId, toMoney(alreadyRequestedForLine + allocatedAmount));
+        requestedByBudgetLine.set(
+          candidateBudgetLineId,
+          toMoney(alreadyRequestedForLine + allocatedAmount),
+        );
         enrichedRows.push({
           ...row,
           sub_head: row.sub_head,
@@ -1456,7 +1549,7 @@ const enrichBudgetRowsWithBudgetRefs = async (
 
       if (remainingToAllocate > 0) {
         throw new Error(
-          `Unable to map full amount ${row.amount.toFixed(2)} to approved budget lines for "${effectiveLookupBudgetHead}". Remaining ${remainingToAllocate.toFixed(2)} is unmapped.`
+          `Unable to map full amount ${row.amount.toFixed(2)} to approved budget lines for "${effectiveLookupBudgetHead}". Remaining ${remainingToAllocate.toFixed(2)} is unmapped.`,
         );
       }
 
@@ -1467,28 +1560,31 @@ const enrichBudgetRowsWithBudgetRefs = async (
     const selected = availability.selected;
     if (!selected) {
       throw new Error(
-        `No approved budget allocation found for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}" in the selected beneficiary scope`
+        `No approved budget allocation found for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}" in the selected beneficiary scope`,
       );
     }
 
     if (row.amount > selected.availableAmount) {
       throw new Error(
-        `Requested amount ${row.amount.toFixed(2)} exceeds available amount ${selected.availableAmount.toFixed(2)} for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}"`
+        `Requested amount ${row.amount.toFixed(2)} exceeds available amount ${selected.availableAmount.toFixed(2)} for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}"`,
       );
     }
 
     const selectedBudgetLineId = toPositiveInt(selected.budgetLineId);
     if (!selectedBudgetLineId) {
       throw new Error(
-        `No approved budget allocation found for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}" in the selected beneficiary scope`
+        `No approved budget allocation found for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}" in the selected beneficiary scope`,
       );
     }
 
     const alreadyRequested = toMoney(requestedByBudgetLine.get(selectedBudgetLineId) || 0);
-    const remainingAfterLocalReservations = Math.max(0, selected.availableAmount - alreadyRequested);
+    const remainingAfterLocalReservations = Math.max(
+      0,
+      selected.availableAmount - alreadyRequested,
+    );
     if (row.amount > remainingAfterLocalReservations) {
       throw new Error(
-        `Requested amount ${row.amount.toFixed(2)} exceeds remaining available amount ${remainingAfterLocalReservations.toFixed(2)} for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}" after other rows in this request`
+        `Requested amount ${row.amount.toFixed(2)} exceeds remaining available amount ${remainingAfterLocalReservations.toFixed(2)} for "${effectiveLookupBudgetHead}" / "${effectiveLookupSubHead}" after other rows in this request`,
       );
     }
     requestedByBudgetLine.set(selectedBudgetLineId, alreadyRequested + row.amount);
@@ -1518,9 +1614,13 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
     return;
   }
 
-  const hasBudgetProposalIdColumn = await hasFinanceBudgetBreakupColumn('budget_proposal_id', { tx: conn });
+  const hasBudgetProposalIdColumn = await hasFinanceBudgetBreakupColumn('budget_proposal_id', {
+    tx: conn,
+  });
   const hasBudgetHeadIdColumn = await hasFinanceBudgetBreakupColumn('budget_head_id', { tx: conn });
-  const hasBudgetSubHeadIdColumn = await hasFinanceBudgetBreakupColumn('budget_sub_head_id', { tx: conn });
+  const hasBudgetSubHeadIdColumn = await hasFinanceBudgetBreakupColumn('budget_sub_head_id', {
+    tx: conn,
+  });
 
   for (const row of budgetRows) {
     let budget_head_id = toPositiveInt(row.budget_head_id);
@@ -1529,11 +1629,7 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
     // NEW: carry catalog IDs from the selected approved budget line. LEGACY:
     // only resolve from snapshot text when old/unbackfilled rows do not carry IDs.
     if (!budget_head_id || !budget_sub_head_id) {
-      const resolvedIds = await resolveCatalogIds(
-        conn,
-        row.budget_head,
-        row.sub_head,
-      );
+      const resolvedIds = await resolveCatalogIds(conn, row.budget_head, row.sub_head);
       budget_head_id = budget_head_id || toPositiveInt(resolvedIds.budget_head_id);
       budget_sub_head_id = budget_sub_head_id || toPositiveInt(resolvedIds.budget_sub_head_id);
     }
@@ -1577,7 +1673,7 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
       `INSERT INTO finance_budget_breakup
        (${columns.join(', ')})
        VALUES (${columns.map(() => '?').join(', ')})`,
-      values
+      values,
     );
   }
 };
@@ -1620,7 +1716,7 @@ const replaceIncomeRows = async (conn, financeId, incomeRows = []) => {
       `INSERT INTO finance_income_rows
        (${columns.join(', ')})
        VALUES (${columns.map(() => '?').join(', ')})`,
-      values
+      values,
     );
   }
 };
@@ -1628,10 +1724,8 @@ const replaceIncomeRows = async (conn, financeId, incomeRows = []) => {
 const resolveReferenceFiscalYearFromBudgetRows = (budgetRows = [], requestDate = null) => {
   const years = Array.from(
     new Set(
-      budgetRows
-        .map((row) => toPositiveInt(row?.fiscal_year || row?.fiscalYear))
-        .filter(Boolean)
-    )
+      budgetRows.map((row) => toPositiveInt(row?.fiscal_year || row?.fiscalYear)).filter(Boolean),
+    ),
   );
 
   if (years.length > 0) {
@@ -1643,6 +1737,213 @@ const resolveReferenceFiscalYearFromBudgetRows = (budgetRows = [], requestDate =
   return fallbackDate.getFullYear() - (fallbackDate.getMonth() < 3 ? 1 : 0);
 };
 
+const resolveFinanceSourceFiscalYear = async (
+  conn,
+  financeId,
+  requestDate = null,
+  createdAt = null,
+) => {
+  const normalizedFinanceId = toPositiveInt(financeId);
+  if (normalizedFinanceId) {
+    const [rows] = await conn.query(
+      `SELECT MIN(bp.fiscal_year) AS fiscal_year
+         FROM finance_budget_breakup fbb
+         JOIN budget_proposals bp ON bp.id = fbb.budget_proposal_id
+        WHERE fbb.finance_id = ?`,
+      [normalizedFinanceId],
+    );
+    const linkedYear = toPositiveInt(rows?.[0]?.fiscal_year);
+    if (linkedYear) {
+      return linkedYear;
+    }
+  }
+
+  const fallbackDate = requestDate || createdAt;
+  return resolveReferenceFiscalYearFromBudgetRows([], fallbackDate);
+};
+
+const FINALIZED_EXPENDITURE_STATUS_SQL = `
+    (
+      LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
+      OR LOWER(TRIM(COALESCE(er.workflow_status, ''))) IN ('approved', 'completed')
+      OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
+    )`;
+
+const getFinanceUsageSnapshot = async (conn, financeId) => {
+  const [usageRows] = await conn.query(
+    `SELECT
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Advance'
+          AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
+         THEN COALESCE(er.advance_total_amount, er.total_amount, 0)
+         ELSE 0
+       END), 0) AS advance_amount,
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Settlement'
+          AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
+         THEN COALESCE(er.settlement_total_amount, er.total_amount, 0)
+         ELSE 0
+       END), 0) AS settlement_amount,
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Expenditure'
+          AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
+         THEN COALESCE(er.expenditure_total_amount, er.total_amount, 0)
+         ELSE 0
+       END), 0) AS expenditure_amount
+     FROM expenditure_requests er
+     WHERE er.finance_request_id = ?`,
+    [financeId],
+  );
+
+  const advanceAmount = toMoney(usageRows?.[0]?.advance_amount);
+  const settlementAmount = toMoney(usageRows?.[0]?.settlement_amount);
+  const expenditureAmount = toMoney(usageRows?.[0]?.expenditure_amount);
+  const effectiveUsageAmount = settlementAmount > 0 ? settlementAmount : advanceAmount;
+
+  return {
+    advanceAmount,
+    settlementAmount,
+    expenditureAmount,
+    effectiveUsageAmount,
+  };
+};
+
+const getFinanceAdvanceSettlementSnapshotForFiscalYear = async (conn, financeId, fiscalYear) => {
+  const normalizedFinanceId = toPositiveInt(financeId);
+  const normalizedFiscalYear = toPositiveInt(fiscalYear);
+  if (!normalizedFinanceId || !normalizedFiscalYear) {
+    return { advanceAmount: 0, settlementAmount: 0, unsettledAdvanceAmount: 0 };
+  }
+
+  const [rows] = await conn.query(
+    `SELECT
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Advance'
+          AND (
+            YEAR(COALESCE(er.request_date, er.created_at))
+              - (MONTH(COALESCE(er.request_date, er.created_at)) < 4)
+          ) = ?
+          AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
+         THEN COALESCE(er.advance_total_amount, er.total_amount, 0)
+         ELSE 0
+       END), 0) AS advance_amount,
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Settlement'
+          AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
+         THEN COALESCE(er.settlement_total_amount, er.total_amount, 0)
+         ELSE 0
+       END), 0) AS settlement_amount
+     FROM expenditure_requests er
+     WHERE er.finance_request_id = ?`,
+    [normalizedFiscalYear, normalizedFinanceId],
+  );
+
+  const advanceAmount = toMoney(rows?.[0]?.advance_amount);
+  const settlementAmount = toMoney(rows?.[0]?.settlement_amount);
+  return {
+    advanceAmount,
+    settlementAmount,
+    unsettledAdvanceAmount: Math.max(0, toMoney(advanceAmount - settlementAmount)),
+  };
+};
+
+const getCarryForwardTargetBudgetAvailability = async (conn, financeId, targetFiscalYear) => {
+  const normalizedFinanceId = toPositiveInt(financeId);
+  const normalizedTargetYear = toPositiveInt(targetFiscalYear);
+  if (!normalizedFinanceId || !normalizedTargetYear) {
+    return { hasBudget: false, matchedHeadCount: 0, sourceHeads: [] };
+  }
+
+  const [scopeRows] = await conn.query(
+    `SELECT
+       fr.beneficiary_type,
+       fr.beneficiary_value,
+       fr.department_id,
+       fr.beneficiary_entity_id,
+       fr.primary_head
+     FROM finance_requests fr
+     WHERE fr.id = ?
+     LIMIT 1`,
+    [normalizedFinanceId],
+  );
+  const scope = scopeRows?.[0] || null;
+  if (!scope) {
+    return { hasBudget: false, matchedHeadCount: 0, sourceHeads: [] };
+  }
+
+  const [sourceHeadRows] = await conn.query(
+    `SELECT DISTINCT
+       COALESCE(NULLIF(TRIM(fbb.budget_head), ''), NULLIF(TRIM(bpl.budget_head), '')) AS budget_head
+     FROM finance_budget_breakup fbb
+     LEFT JOIN budget_proposal_lines bpl ON bpl.id = fbb.budget_line_id
+     WHERE fbb.finance_id = ?`,
+    [normalizedFinanceId],
+  );
+
+  const sourceHeads = Array.from(
+    new Set(
+      [
+        ...(sourceHeadRows || []).map((row) => normalizeText(row.budget_head)),
+        normalizeText(scope.primary_head),
+      ]
+        .map((head) => head.trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (!sourceHeads.length) {
+    return { hasBudget: false, matchedHeadCount: 0, sourceHeads };
+  }
+
+  const scopeParts = [];
+  const scopeParams = [];
+  const beneficiaryType = normalizeText(scope.beneficiary_type).toLowerCase();
+  const beneficiaryValue = normalizeText(scope.beneficiary_value);
+  const departmentId = toPositiveInt(scope.department_id);
+  const entityId = toPositiveInt(scope.beneficiary_entity_id);
+
+  if (departmentId) {
+    scopeParts.push('bp.department_id = ?');
+    scopeParams.push(departmentId);
+  } else if (
+    entityId &&
+    !['department', 'faculty', 'staff', 'individual faculty'].includes(beneficiaryType)
+  ) {
+    scopeParts.push('bp.beneficiary_entity_id = ?');
+    scopeParams.push(entityId);
+  } else if (beneficiaryValue) {
+    scopeParts.push(
+      "LOWER(TRIM(CONVERT(COALESCE(bp.beneficiary_value, '') USING utf8mb4) COLLATE utf8mb4_unicode_ci)) = LOWER(TRIM(CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci))",
+    );
+    scopeParams.push(beneficiaryValue);
+  } else if (beneficiaryType) {
+    scopeParts.push("LOWER(TRIM(COALESCE(bp.beneficiary_type, ''))) = ?");
+    scopeParams.push(beneficiaryType);
+  }
+
+  const headPlaceholders = sourceHeads.map(() => '?').join(', ');
+  const [budgetRows] = await conn.query(
+    `SELECT COUNT(DISTINCT bpl.id) AS matched_head_count
+       FROM budget_proposals bp
+       JOIN budget_proposal_lines bpl ON bpl.budget_proposal_id = bp.id
+      WHERE bp.fiscal_year = ?
+        AND (
+          LOWER(TRIM(COALESCE(bp.status, ''))) IN ('completed', 'approved', 'principal_approved')
+          OR LOWER(TRIM(COALESCE(bp.current_stage, ''))) = 'completed'
+        )
+        ${scopeParts.length ? `AND ${scopeParts.join(' AND ')}` : ''}
+        AND LOWER(TRIM(CONVERT(COALESCE(bpl.budget_head, '') USING utf8mb4) COLLATE utf8mb4_unicode_ci)) IN (${headPlaceholders})`,
+    [normalizedTargetYear, ...scopeParams, ...sourceHeads.map((head) => head.toLowerCase())],
+  );
+
+  const matchedHeadCount = Number(budgetRows?.[0]?.matched_head_count || 0);
+  return {
+    hasBudget: matchedHeadCount > 0,
+    matchedHeadCount,
+    sourceHeads,
+  };
+};
+
 const replaceFinanceAnnexures = async (conn, financeId, annexures = []) => {
   let financeFkColumn = 'finance_id';
   try {
@@ -1650,7 +1951,9 @@ const replaceFinanceAnnexures = async (conn, financeId, annexures = []) => {
   } catch (error) {
     if (error?.code === 'ER_BAD_FIELD_ERROR') {
       financeFkColumn = 'finance_request_id';
-      await conn.query('DELETE FROM finance_request_annexures WHERE finance_request_id = ?', [financeId]);
+      await conn.query('DELETE FROM finance_request_annexures WHERE finance_request_id = ?', [
+        financeId,
+      ]);
     } else if (error?.code === 'ER_NO_SUCH_TABLE') {
       return;
     } else {
@@ -1677,7 +1980,7 @@ const replaceFinanceAnnexures = async (conn, financeId, annexures = []) => {
         row.mime_type || null,
         row.file_size,
         row.sort_order,
-      ]
+      ],
     );
   }
 };
@@ -1746,8 +2049,8 @@ const getFinanceAnnexuresByFinanceIds = async (financeIds = [], { tx = db } = {}
     new Set(
       (Array.isArray(financeIds) ? financeIds : [])
         .map((value) => toPositiveInt(value))
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   );
 
   if (!normalizedFinanceIds.length) {
@@ -1829,16 +2132,21 @@ const getFinanceAnnexuresByFinanceIds = async (financeIds = [], { tx = db } = {}
   }
 };
 
-const insertFinanceRequestReference = async (conn, financeId, requestDate, referenceFiscalYear = null) => {
+const insertFinanceRequestReference = async (
+  conn,
+  financeId,
+  requestDate,
+  referenceFiscalYear = null,
+) => {
   try {
     const refYear = resolveReferenceFiscalYearFromBudgetRows(
       [{ fiscal_year: referenceFiscalYear }],
-      requestDate
+      requestDate,
     );
 
     const [existing] = await conn.query(
       'SELECT request_ref FROM finance_request_refs WHERE finance_request_id = ? LIMIT 1',
-      [financeId]
+      [financeId],
     );
 
     if (existing.length) {
@@ -1851,14 +2159,14 @@ const insertFinanceRequestReference = async (conn, financeId, requestDate, refer
          last_sequence INT NOT NULL DEFAULT 0,
          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
          PRIMARY KEY (ref_year)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     );
 
     const [[existingYearSequence]] = await conn.query(
       `SELECT COALESCE(MAX(ref_sequence), 0) AS current_max
          FROM finance_request_refs
         WHERE ref_year = ?`,
-      [refYear]
+      [refYear],
     );
     const currentMaxSequence = Number(existingYearSequence?.current_max || 0);
 
@@ -1866,7 +2174,7 @@ const insertFinanceRequestReference = async (conn, financeId, requestDate, refer
       `INSERT INTO finance_request_ref_tracker (ref_year, last_sequence)
        VALUES (?, ?)
        ON DUPLICATE KEY UPDATE last_sequence = GREATEST(last_sequence, VALUES(last_sequence))`,
-      [refYear, currentMaxSequence]
+      [refYear, currentMaxSequence],
     );
 
     const [rows] = await conn.query(
@@ -1874,7 +2182,7 @@ const insertFinanceRequestReference = async (conn, financeId, requestDate, refer
        FROM finance_request_ref_tracker
        WHERE ref_year = ?
        FOR UPDATE`,
-      [refYear]
+      [refYear],
     );
 
     const sequence = Number(rows?.[0]?.current_max || 0) + 1;
@@ -1883,14 +2191,14 @@ const insertFinanceRequestReference = async (conn, financeId, requestDate, refer
     await conn.query(
       `INSERT INTO finance_request_refs (finance_request_id, ref_year, ref_sequence, request_ref)
        VALUES (?, ?, ?, ?)`,
-      [financeId, refYear, sequence, requestRef]
+      [financeId, refYear, sequence, requestRef],
     );
 
     await conn.query(
       `UPDATE finance_request_ref_tracker
        SET last_sequence = ?
        WHERE ref_year = ?`,
-      [sequence, refYear]
+      [sequence, refYear],
     );
 
     return requestRef;
@@ -1918,7 +2226,7 @@ const resolveFinanceWorkflowContext = async (conn, financeData = {}) => {
          WHERE id = ?
            AND status = 'Active'
          LIMIT 1`,
-      [employeeId]
+      [employeeId],
     );
 
     if (employeeRows.length) {
@@ -1927,13 +2235,17 @@ const resolveFinanceWorkflowContext = async (conn, financeData = {}) => {
     }
   }
 
-  if (!departmentId && beneficiaryType === 'Department' && normalizeText(financeData.beneficiary_value)) {
+  if (
+    !departmentId &&
+    beneficiaryType === 'Department' &&
+    normalizeText(financeData.beneficiary_value)
+  ) {
     const [departmentRows] = await conn.query(
       `SELECT id
          FROM master_departments
          WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
          LIMIT 1`,
-      [financeData.beneficiary_value]
+      [financeData.beneficiary_value],
     );
 
     if (departmentRows.length) {
@@ -1950,7 +2262,7 @@ const resolveFinanceWorkflowContext = async (conn, financeData = {}) => {
            AND UPPER(TRIM(met.code)) = ?
            AND LOWER(TRIM(me.name)) = LOWER(TRIM(?))
          LIMIT 1`,
-      [entityTypeCode, financeData.beneficiary_value]
+      [entityTypeCode, financeData.beneficiary_value],
     );
 
     if (entityRows.length) {
@@ -1972,7 +2284,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
      FROM finance_budget_usage_ledger
      WHERE finance_id = ?
        AND operation = 'consume'`,
-    [financeId]
+    [financeId],
   );
 
   if (Number(alreadyConsumedRows?.[0]?.count || 0) > 0) {
@@ -1981,7 +2293,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
 
   const [financeRows] = await conn.query(
     'SELECT unplanned_budget_enabled, unplanned_budget_amount FROM finance_requests WHERE id = ? FOR UPDATE',
-    [financeId]
+    [financeId],
   );
 
   const financeRequest = financeRows[0] || {};
@@ -1999,7 +2311,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
      LEFT JOIN users u ON u.id = fr.created_by
      WHERE fr.id = ?
      LIMIT 1`,
-    [financeId]
+    [financeId],
   );
   const ownerRecord = ownerRows[0] || {};
   const ownerUserId = toPositiveInt(ownerRecord.created_by);
@@ -2020,7 +2332,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
      WHERE fbb.finance_id = ?
      ORDER BY fbb.sort_order ASC, fbb.id ASC
      FOR UPDATE`,
-    [financeId]
+    [financeId],
   );
 
   let approvedTotalAmount = unplannedBudgetEnabled ? unplannedBudgetAmount : 0;
@@ -2032,7 +2344,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
 
     if (requestedAmount <= 0) {
       throw new Error(
-        `Requested amount must be greater than 0 for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`
+        `Requested amount must be greater than 0 for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`,
       );
     }
 
@@ -2040,7 +2352,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
       const lookupBudgetHead = normalizeText(row.budget_head);
       if (!lookupBudgetHead) {
         throw new Error(
-          `Budget line mapping is missing for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`
+          `Budget line mapping is missing for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`,
         );
       }
 
@@ -2059,7 +2371,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
 
       if (requestedAmount > headLevelAvailability.totalAvailable) {
         throw new Error(
-          `Insufficient budget balance for "${lookupBudgetHead}". Requested ${requestedAmount.toFixed(2)}, available ${headLevelAvailability.totalAvailable.toFixed(2)}`
+          `Insufficient budget balance for "${lookupBudgetHead}". Requested ${requestedAmount.toFixed(2)}, available ${headLevelAvailability.totalAvailable.toFixed(2)}`,
         );
       }
 
@@ -2077,7 +2389,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
         await conn.query(
           `INSERT IGNORE INTO finance_budget_line_usage (budget_line_id, consumed_amount)
            VALUES (?, 0.00)`,
-          [candidateBudgetLineId]
+          [candidateBudgetLineId],
         );
 
         const [usageRows] = await conn.query(
@@ -2085,7 +2397,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
            FROM finance_budget_line_usage
            WHERE budget_line_id = ?
            FOR UPDATE`,
-          [candidateBudgetLineId]
+          [candidateBudgetLineId],
         );
 
         const consumedAmount = toMoney(usageRows?.[0]?.consumed_amount);
@@ -2102,7 +2414,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
           `UPDATE finance_budget_line_usage
            SET consumed_amount = ?, updated_at = CURRENT_TIMESTAMP
            WHERE budget_line_id = ?`,
-          [balanceAfter, candidateBudgetLineId]
+          [balanceAfter, candidateBudgetLineId],
         );
 
         await conn.query(
@@ -2117,7 +2429,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
             balanceAfter,
             toPositiveInt(actorUserId),
             'Principal approval committed amount',
-          ]
+          ],
         );
 
         remainingToConsume = toMoney(remainingToConsume - consumeAmount);
@@ -2125,7 +2437,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
 
       if (remainingToConsume > 0) {
         throw new Error(
-          `Insufficient budget balance for "${lookupBudgetHead}". Requested ${requestedAmount.toFixed(2)}, available ${headLevelAvailability.totalAvailable.toFixed(2)}`
+          `Insufficient budget balance for "${lookupBudgetHead}". Requested ${requestedAmount.toFixed(2)}, available ${headLevelAvailability.totalAvailable.toFixed(2)}`,
         );
       }
 
@@ -2137,7 +2449,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
              remaining_amount_snapshot = ?,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
-        [requestedAmount, remainingAfter, row.id]
+        [requestedAmount, remainingAfter, row.id],
       );
 
       approvedTotalAmount += requestedAmount;
@@ -2148,14 +2460,14 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
     const budgetLine = await getBudgetLineAvailabilityById(conn, budgetLineId);
     if (!budgetLine) {
       throw new Error(
-        `Budget line not found/approved for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`
+        `Budget line not found/approved for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`,
       );
     }
 
     await conn.query(
       `INSERT IGNORE INTO finance_budget_line_usage (budget_line_id, consumed_amount)
        VALUES (?, 0.00)`,
-      [budgetLineId]
+      [budgetLineId],
     );
 
     const [usageRows] = await conn.query(
@@ -2163,7 +2475,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
        FROM finance_budget_line_usage
        WHERE budget_line_id = ?
        FOR UPDATE`,
-      [budgetLineId]
+      [budgetLineId],
     );
 
     const consumedAmount = toMoney(usageRows?.[0]?.consumed_amount);
@@ -2171,7 +2483,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
 
     if (requestedAmount > availableAmount) {
       throw new Error(
-        `Insufficient budget balance for "${budgetLine.budgetHead}" / "${budgetLine.subHead}". Requested ${requestedAmount.toFixed(2)}, available ${availableAmount.toFixed(2)}`
+        `Insufficient budget balance for "${budgetLine.budgetHead}" / "${budgetLine.subHead}". Requested ${requestedAmount.toFixed(2)}, available ${availableAmount.toFixed(2)}`,
       );
     }
 
@@ -2182,7 +2494,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
       `UPDATE finance_budget_line_usage
        SET consumed_amount = ?, updated_at = CURRENT_TIMESTAMP
        WHERE budget_line_id = ?`,
-      [balanceAfter, budgetLineId]
+      [balanceAfter, budgetLineId],
     );
 
     await conn.query(
@@ -2191,7 +2503,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
            remaining_amount_snapshot = ?,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [requestedAmount, remainingAfter, row.id]
+      [requestedAmount, remainingAfter, row.id],
     );
 
     await conn.query(
@@ -2206,7 +2518,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
         balanceAfter,
         toPositiveInt(actorUserId),
         'Principal approval committed amount',
-      ]
+      ],
     );
 
     approvedTotalAmount += requestedAmount;
@@ -2219,7 +2531,7 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
          balance_amount = ?,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
-    [approvedTotalAmount, totalRemainingAmount, financeId]
+    [approvedTotalAmount, totalRemainingAmount, financeId],
   );
 };
 
@@ -2228,7 +2540,7 @@ const getFinanceBreakupTotal = async (conn, financeId) => {
     `SELECT COALESCE(SUM(amount), 0) AS total
      FROM finance_budget_breakup
      WHERE finance_id = ?`,
-    [financeId]
+    [financeId],
   );
   return toMoney(rows?.[0]?.total);
 };
@@ -2241,7 +2553,7 @@ const calculateApprovedFinanceTotalsSnapshot = async (conn, financeId, unplanned
        COALESCE(SUM(COALESCE(remaining_amount_snapshot, 0)), 0) AS balance_total
      FROM finance_budget_breakup
      WHERE finance_id = ?`,
-    [financeId]
+    [financeId],
   );
 
   return {
@@ -2257,29 +2569,64 @@ const financeModel = {
     try {
       await connection.beginTransaction();
       const hasBudgetTagColumn = await hasFinanceRequestColumn('budget_tag', { tx: connection });
-      const hasUnplannedBudgetEnabledColumn = await hasFinanceRequestColumn('unplanned_budget_enabled', { tx: connection });
-      const hasUnplannedBudgetAmountColumn = await hasFinanceRequestColumn('unplanned_budget_amount', { tx: connection });
-      const hasUnplannedBudgetDescriptionColumn = await hasFinanceRequestColumn('unplanned_budget_description', { tx: connection });
-      const hasAnnexureTypeColumn = await hasFinanceRequestColumn('annexure_type', { tx: connection });
-      const hasAnnexureFileNameColumn = await hasFinanceRequestColumn('annexure_file_name', { tx: connection });
-      const hasAnnexureStorageNameColumn = await hasFinanceRequestColumn('annexure_storage_name', { tx: connection });
-      const hasAnnexureFilePathColumn = await hasFinanceRequestColumn('annexure_file_path', { tx: connection });
-      const hasAnnexureMimeTypeColumn = await hasFinanceRequestColumn('annexure_mime_type', { tx: connection });
-      const hasAnnexureFileSizeColumn = await hasFinanceRequestColumn('annexure_file_size', { tx: connection });
-      const hasPrimaryHeadIdColumn = await hasFinanceRequestColumn('primary_head_id', { tx: connection });
-      const hasEventSubHeadIdColumn = await hasFinanceRequestColumn('event_sub_head_id', { tx: connection });
+      const hasUnplannedBudgetEnabledColumn = await hasFinanceRequestColumn(
+        'unplanned_budget_enabled',
+        { tx: connection },
+      );
+      const hasUnplannedBudgetAmountColumn = await hasFinanceRequestColumn(
+        'unplanned_budget_amount',
+        { tx: connection },
+      );
+      const hasUnplannedBudgetDescriptionColumn = await hasFinanceRequestColumn(
+        'unplanned_budget_description',
+        { tx: connection },
+      );
+      const hasAnnexureTypeColumn = await hasFinanceRequestColumn('annexure_type', {
+        tx: connection,
+      });
+      const hasAnnexureFileNameColumn = await hasFinanceRequestColumn('annexure_file_name', {
+        tx: connection,
+      });
+      const hasAnnexureStorageNameColumn = await hasFinanceRequestColumn('annexure_storage_name', {
+        tx: connection,
+      });
+      const hasAnnexureFilePathColumn = await hasFinanceRequestColumn('annexure_file_path', {
+        tx: connection,
+      });
+      const hasAnnexureMimeTypeColumn = await hasFinanceRequestColumn('annexure_mime_type', {
+        tx: connection,
+      });
+      const hasAnnexureFileSizeColumn = await hasFinanceRequestColumn('annexure_file_size', {
+        tx: connection,
+      });
+      const hasPrimaryHeadIdColumn = await hasFinanceRequestColumn('primary_head_id', {
+        tx: connection,
+      });
+      const hasEventSubHeadIdColumn = await hasFinanceRequestColumn('event_sub_head_id', {
+        tx: connection,
+      });
 
       const workflowContext = await resolveFinanceWorkflowContext(connection, financeData);
-      const normalizedBudgetRows = normalizeBudgetRows(Array.isArray(financeData.budget_rows) ? financeData.budget_rows : []);
-      const budgetRows = await enrichBudgetRowsWithBudgetRefs(connection, userId, userEmail, normalizedBudgetRows, {
-        beneficiaryType: financeData.beneficiary_type,
-        beneficiaryValue: financeData.beneficiary_value,
-        departmentId: workflowContext.departmentId,
-        beneficiaryEntityId: workflowContext.beneficiaryEntityId,
-        lookupBudgetHead: financeData.primary_head,
-        lookupSubHead: financeData.event_sub_head,
-      });
-      const incomeRows = normalizeIncomeRows(Array.isArray(financeData.income_rows) ? financeData.income_rows : []);
+      const normalizedBudgetRows = normalizeBudgetRows(
+        Array.isArray(financeData.budget_rows) ? financeData.budget_rows : [],
+      );
+      const budgetRows = await enrichBudgetRowsWithBudgetRefs(
+        connection,
+        userId,
+        userEmail,
+        normalizedBudgetRows,
+        {
+          beneficiaryType: financeData.beneficiary_type,
+          beneficiaryValue: financeData.beneficiary_value,
+          departmentId: workflowContext.departmentId,
+          beneficiaryEntityId: workflowContext.beneficiaryEntityId,
+          lookupBudgetHead: financeData.primary_head,
+          lookupSubHead: financeData.event_sub_head,
+        },
+      );
+      const incomeRows = normalizeIncomeRows(
+        Array.isArray(financeData.income_rows) ? financeData.income_rows : [],
+      );
       const normalizedAnnexures = await normalizeFinanceAnnexures(financeData.annexures);
       const primaryAnnexure = normalizedAnnexures[0] || null;
       const totalBudget = calculateFinanceTotalBudget(budgetRows, financeData);
@@ -2333,37 +2680,41 @@ const financeModel = {
       }
       if (hasUnplannedBudgetDescriptionColumn) {
         financeEntry.unplanned_budget_description = normalizedUnplanned.enabled
-          ? (normalizeText(financeData.unplanned_budget_description) || null)
+          ? normalizeText(financeData.unplanned_budget_description) || null
           : null;
       }
       if (hasAnnexureTypeColumn) {
         financeEntry.annexure_type = primaryAnnexure
           ? primaryAnnexure.annexure_type || null
-          : (normalizeText(financeData.annexure_type) || null);
+          : normalizeText(financeData.annexure_type) || null;
       }
       if (hasAnnexureFileNameColumn) {
         financeEntry.annexure_file_name = primaryAnnexure
-          ? (primaryAnnexure.original_name || primaryAnnexure.stored_name || null)
-          : (normalizeText(financeData.annexure_file_name) || null);
+          ? primaryAnnexure.original_name || primaryAnnexure.stored_name || null
+          : normalizeText(financeData.annexure_file_name) || null;
       }
       if (hasAnnexureStorageNameColumn) {
         financeEntry.annexure_storage_name = primaryAnnexure
           ? primaryAnnexure.stored_name || null
-          : (normalizeText(financeData.annexure_storage_name) || null);
+          : normalizeText(financeData.annexure_storage_name) || null;
       }
       if (hasAnnexureFilePathColumn) {
         financeEntry.annexure_file_path = primaryAnnexure
           ? primaryAnnexure.file_path || null
-          : (normalizeText(financeData.annexure_file_path) || null);
+          : normalizeText(financeData.annexure_file_path) || null;
       }
       if (hasAnnexureMimeTypeColumn) {
         financeEntry.annexure_mime_type = primaryAnnexure
           ? primaryAnnexure.mime_type || null
-          : (normalizeText(financeData.annexure_mime_type) || null);
+          : normalizeText(financeData.annexure_mime_type) || null;
       }
       if (hasAnnexureFileSizeColumn) {
-        const parsedAnnexureSize = primaryAnnexure ? Number(primaryAnnexure.file_size) : Number(financeData.annexure_file_size);
-        financeEntry.annexure_file_size = Number.isFinite(parsedAnnexureSize) ? parsedAnnexureSize : null;
+        const parsedAnnexureSize = primaryAnnexure
+          ? Number(primaryAnnexure.file_size)
+          : Number(financeData.annexure_file_size);
+        financeEntry.annexure_file_size = Number.isFinite(parsedAnnexureSize)
+          ? parsedAnnexureSize
+          : null;
       }
 
       // NEW: resolve catalog IDs for primary_head + event_sub_head.
@@ -2384,13 +2735,13 @@ const financeModel = {
       const [result] = await connection.query('INSERT INTO finance_requests SET ?', [financeEntry]);
       const referenceFiscalYear = resolveReferenceFiscalYearFromBudgetRows(
         budgetRows,
-        financeData.request_date
+        financeData.request_date,
       );
       await insertFinanceRequestReference(
         connection,
         result.insertId,
         financeData.request_date,
-        referenceFiscalYear
+        referenceFiscalYear,
       );
       await replaceBudgetRows(connection, result.insertId, budgetRows);
       await replaceIncomeRows(connection, result.insertId, incomeRows);
@@ -2412,17 +2763,42 @@ const financeModel = {
     try {
       await connection.beginTransaction();
       const hasBudgetTagColumn = await hasFinanceRequestColumn('budget_tag', { tx: connection });
-      const hasUnplannedBudgetEnabledColumn = await hasFinanceRequestColumn('unplanned_budget_enabled', { tx: connection });
-      const hasUnplannedBudgetAmountColumn = await hasFinanceRequestColumn('unplanned_budget_amount', { tx: connection });
-      const hasUnplannedBudgetDescriptionColumn = await hasFinanceRequestColumn('unplanned_budget_description', { tx: connection });
-      const hasAnnexureTypeColumn = await hasFinanceRequestColumn('annexure_type', { tx: connection });
-      const hasAnnexureFileNameColumn = await hasFinanceRequestColumn('annexure_file_name', { tx: connection });
-      const hasAnnexureStorageNameColumn = await hasFinanceRequestColumn('annexure_storage_name', { tx: connection });
-      const hasAnnexureFilePathColumn = await hasFinanceRequestColumn('annexure_file_path', { tx: connection });
-      const hasAnnexureMimeTypeColumn = await hasFinanceRequestColumn('annexure_mime_type', { tx: connection });
-      const hasAnnexureFileSizeColumn = await hasFinanceRequestColumn('annexure_file_size', { tx: connection });
-      const hasPrimaryHeadIdColumn = await hasFinanceRequestColumn('primary_head_id', { tx: connection });
-      const hasEventSubHeadIdColumn = await hasFinanceRequestColumn('event_sub_head_id', { tx: connection });
+      const hasUnplannedBudgetEnabledColumn = await hasFinanceRequestColumn(
+        'unplanned_budget_enabled',
+        { tx: connection },
+      );
+      const hasUnplannedBudgetAmountColumn = await hasFinanceRequestColumn(
+        'unplanned_budget_amount',
+        { tx: connection },
+      );
+      const hasUnplannedBudgetDescriptionColumn = await hasFinanceRequestColumn(
+        'unplanned_budget_description',
+        { tx: connection },
+      );
+      const hasAnnexureTypeColumn = await hasFinanceRequestColumn('annexure_type', {
+        tx: connection,
+      });
+      const hasAnnexureFileNameColumn = await hasFinanceRequestColumn('annexure_file_name', {
+        tx: connection,
+      });
+      const hasAnnexureStorageNameColumn = await hasFinanceRequestColumn('annexure_storage_name', {
+        tx: connection,
+      });
+      const hasAnnexureFilePathColumn = await hasFinanceRequestColumn('annexure_file_path', {
+        tx: connection,
+      });
+      const hasAnnexureMimeTypeColumn = await hasFinanceRequestColumn('annexure_mime_type', {
+        tx: connection,
+      });
+      const hasAnnexureFileSizeColumn = await hasFinanceRequestColumn('annexure_file_size', {
+        tx: connection,
+      });
+      const hasPrimaryHeadIdColumn = await hasFinanceRequestColumn('primary_head_id', {
+        tx: connection,
+      });
+      const hasEventSubHeadIdColumn = await hasFinanceRequestColumn('event_sub_head_id', {
+        tx: connection,
+      });
       const budgetTagSelectSql = hasBudgetTagColumn ? 'fr.budget_tag' : 'NULL AS budget_tag';
       const unplannedBudgetEnabledSelectSql = hasUnplannedBudgetEnabledColumn
         ? 'fr.unplanned_budget_enabled'
@@ -2488,7 +2864,7 @@ const financeModel = {
          LEFT JOIN users u ON u.id = fr.created_by
          WHERE fr.id = ?
          LIMIT 1`,
-        [id]
+        [id],
       );
 
       if (!existingRows.length) {
@@ -2504,7 +2880,10 @@ const financeModel = {
         primary_head: financeData.primary_head ?? existingRecord.primary_head,
         event_sub_head: financeData.event_sub_head ?? existingRecord.event_sub_head,
       };
-      const workflowContext = await resolveFinanceWorkflowContext(connection, mergedRecordForContext);
+      const workflowContext = await resolveFinanceWorkflowContext(
+        connection,
+        mergedRecordForContext,
+      );
       const hasBudgetRowsInput = Object.prototype.hasOwnProperty.call(financeData, 'budget_rows');
       const hasIncomeRowsInput = Object.prototype.hasOwnProperty.call(financeData, 'income_rows');
       const hasAnnexuresInput = Object.prototype.hasOwnProperty.call(financeData, 'annexures');
@@ -2513,52 +2892,54 @@ const financeModel = {
         : [];
       const budgetRows = hasBudgetRowsInput
         ? await enrichBudgetRowsWithBudgetRefs(
-          connection,
-          toPositiveInt(existingRecord.created_by),
-          normalizeText(existingRecord.created_by_email) || null,
-          normalizedBudgetRows,
-          {
-            excludeFinanceId: id,
-            beneficiaryType: mergedRecordForContext.beneficiary_type,
-            beneficiaryValue: mergedRecordForContext.beneficiary_value,
-            departmentId: workflowContext.departmentId,
-            beneficiaryEntityId: workflowContext.beneficiaryEntityId,
-            lookupBudgetHead: mergedRecordForContext.primary_head,
-            lookupSubHead: mergedRecordForContext.event_sub_head,
-          }
-        )
+            connection,
+            toPositiveInt(existingRecord.created_by),
+            normalizeText(existingRecord.created_by_email) || null,
+            normalizedBudgetRows,
+            {
+              excludeFinanceId: id,
+              beneficiaryType: mergedRecordForContext.beneficiary_type,
+              beneficiaryValue: mergedRecordForContext.beneficiary_value,
+              departmentId: workflowContext.departmentId,
+              beneficiaryEntityId: workflowContext.beneficiaryEntityId,
+              lookupBudgetHead: mergedRecordForContext.primary_head,
+              lookupSubHead: mergedRecordForContext.event_sub_head,
+            },
+          )
         : [];
       const incomeRows = hasIncomeRowsInput
         ? normalizeIncomeRows(Array.isArray(financeData.income_rows) ? financeData.income_rows : [])
         : [];
       const annexures = hasAnnexuresInput
-        ? await normalizeFinanceAnnexures(Array.isArray(financeData.annexures) ? financeData.annexures : [])
+        ? await normalizeFinanceAnnexures(
+            Array.isArray(financeData.annexures) ? financeData.annexures : [],
+          )
         : [];
       const previousAnnexures = hasAnnexuresInput
         ? await getFinanceAnnexures(id, { tx: connection })
         : [];
       const [previousBudgetRows] = hasBudgetRowsInput
         ? await connection.query(
-          `SELECT budget_head, sub_head, amount
+            `SELECT budget_head, sub_head, amount
                FROM finance_budget_breakup
                WHERE finance_id = ?
                ORDER BY sort_order ASC, id ASC`,
-          [id]
-        )
+            [id],
+          )
         : [[]];
       const [previousIncomeRows] = hasIncomeRowsInput
         ? await connection.query(
-          `SELECT income_source, contribution, amount, status, remarks, credit_account
+            `SELECT income_source, contribution, amount, status, remarks, credit_account
                FROM finance_income_rows
                WHERE finance_id = ?
                ORDER BY sort_order ASC, id ASC`,
-          [id]
-        )
+            [id],
+          )
         : [[]];
       const updateData = Object.fromEntries(
         Object.entries(financeData)
           .filter(([_, value]) => value !== undefined)
-          .map(([key, value]) => [key, value === '' ? null : value])
+          .map(([key, value]) => [key, value === '' ? null : value]),
       );
       delete updateData.budget_rows;
       delete updateData.income_rows;
@@ -2589,20 +2970,25 @@ const financeModel = {
       if (Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount')) {
         if (hasUnplannedBudgetAmountColumn) {
           const normalizedUnplanned = normalizeUnplannedBudgetPayload({
-            unplanned_budget_enabled:
-              Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled')
-                ? updateData.unplanned_budget_enabled
-                : existingRecord.unplanned_budget_enabled,
+            unplanned_budget_enabled: Object.prototype.hasOwnProperty.call(
+              updateData,
+              'unplanned_budget_enabled',
+            )
+              ? updateData.unplanned_budget_enabled
+              : existingRecord.unplanned_budget_enabled,
             unplanned_budget_amount: updateData.unplanned_budget_amount,
           });
-          updateData.unplanned_budget_amount = normalizedUnplanned.enabled ? normalizedUnplanned.amount : null;
+          updateData.unplanned_budget_amount = normalizedUnplanned.enabled
+            ? normalizedUnplanned.amount
+            : null;
         } else {
           delete updateData.unplanned_budget_amount;
         }
       }
       if (Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_description')) {
         if (hasUnplannedBudgetDescriptionColumn) {
-          updateData.unplanned_budget_description = normalizeText(updateData.unplanned_budget_description) || null;
+          updateData.unplanned_budget_description =
+            normalizeText(updateData.unplanned_budget_description) || null;
         } else {
           delete updateData.unplanned_budget_description;
         }
@@ -2633,7 +3019,8 @@ const financeModel = {
       }
       if (Object.prototype.hasOwnProperty.call(updateData, 'annexure_storage_name')) {
         if (hasAnnexureStorageNameColumn) {
-          updateData.annexure_storage_name = normalizeText(updateData.annexure_storage_name) || null;
+          updateData.annexure_storage_name =
+            normalizeText(updateData.annexure_storage_name) || null;
         } else {
           delete updateData.annexure_storage_name;
         }
@@ -2655,7 +3042,9 @@ const financeModel = {
       if (Object.prototype.hasOwnProperty.call(updateData, 'annexure_file_size')) {
         if (hasAnnexureFileSizeColumn) {
           const parsedAnnexureSize = Number(updateData.annexure_file_size);
-          updateData.annexure_file_size = Number.isFinite(parsedAnnexureSize) ? parsedAnnexureSize : null;
+          updateData.annexure_file_size = Number.isFinite(parsedAnnexureSize)
+            ? parsedAnnexureSize
+            : null;
         } else {
           delete updateData.annexure_file_size;
         }
@@ -2666,15 +3055,17 @@ const financeModel = {
         if (hasAnnexureTypeColumn) {
           updateData.annexure_type = firstAnnexure
             ? firstAnnexure.annexure_type || null
-            : (normalizeText(updateData.annexure_type) || null);
+            : normalizeText(updateData.annexure_type) || null;
         }
         if (hasAnnexureFileNameColumn) {
           updateData.annexure_file_name = firstAnnexure
-            ? (firstAnnexure.original_name || firstAnnexure.stored_name || null)
+            ? firstAnnexure.original_name || firstAnnexure.stored_name || null
             : null;
         }
         if (hasAnnexureStorageNameColumn) {
-          updateData.annexure_storage_name = firstAnnexure ? firstAnnexure.stored_name || null : null;
+          updateData.annexure_storage_name = firstAnnexure
+            ? firstAnnexure.stored_name || null
+            : null;
         }
         if (hasAnnexureFilePathColumn) {
           updateData.annexure_file_path = firstAnnexure ? firstAnnexure.file_path || null : null;
@@ -2689,7 +3080,9 @@ const financeModel = {
       }
 
       if (Object.prototype.hasOwnProperty.call(updateData, 'beneficiary_type')) {
-        updateData.beneficiary_type = normalizeBeneficiaryTypeForStorage(updateData.beneficiary_type);
+        updateData.beneficiary_type = normalizeBeneficiaryTypeForStorage(
+          updateData.beneficiary_type,
+        );
       }
 
       updateData.department_id = workflowContext.departmentId;
@@ -2698,14 +3091,18 @@ const financeModel = {
       if (hasBudgetRowsInput) {
         await replaceBudgetRows(connection, id, budgetRows);
         const totalBudget = calculateFinanceTotalBudget(budgetRows, {
-          unplanned_budget_enabled:
-            Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled')
-              ? updateData.unplanned_budget_enabled
-              : existingRecord.unplanned_budget_enabled,
-          unplanned_budget_amount:
-            Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount')
-              ? updateData.unplanned_budget_amount
-              : existingRecord.unplanned_budget_amount,
+          unplanned_budget_enabled: Object.prototype.hasOwnProperty.call(
+            updateData,
+            'unplanned_budget_enabled',
+          )
+            ? updateData.unplanned_budget_enabled
+            : existingRecord.unplanned_budget_enabled,
+          unplanned_budget_amount: Object.prototype.hasOwnProperty.call(
+            updateData,
+            'unplanned_budget_amount',
+          )
+            ? updateData.unplanned_budget_amount
+            : existingRecord.unplanned_budget_amount,
         });
         updateData.total_budget = totalBudget;
       } else if (
@@ -2713,19 +3110,20 @@ const financeModel = {
         Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount')
       ) {
         const plannedTotal = await getFinanceBreakupTotal(connection, id);
-        const totalBudget = calculateFinanceTotalBudget(
-          [{ amount: plannedTotal }],
-          {
-            unplanned_budget_enabled:
-              Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled')
-                ? updateData.unplanned_budget_enabled
-                : existingRecord.unplanned_budget_enabled,
-            unplanned_budget_amount:
-              Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount')
-                ? updateData.unplanned_budget_amount
-                : existingRecord.unplanned_budget_amount,
-          }
-        );
+        const totalBudget = calculateFinanceTotalBudget([{ amount: plannedTotal }], {
+          unplanned_budget_enabled: Object.prototype.hasOwnProperty.call(
+            updateData,
+            'unplanned_budget_enabled',
+          )
+            ? updateData.unplanned_budget_enabled
+            : existingRecord.unplanned_budget_enabled,
+          unplanned_budget_amount: Object.prototype.hasOwnProperty.call(
+            updateData,
+            'unplanned_budget_amount',
+          )
+            ? updateData.unplanned_budget_amount
+            : existingRecord.unplanned_budget_amount,
+        });
         updateData.total_budget = totalBudget;
       }
 
@@ -2735,20 +3133,20 @@ const financeModel = {
           Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled') ||
           Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount'));
       if (shouldRecalculateApprovedTotals) {
-        const approvedTotals = await calculateApprovedFinanceTotalsSnapshot(
-          connection,
-          id,
-          {
-            unplanned_budget_enabled:
-              Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled')
-                ? updateData.unplanned_budget_enabled
-                : existingRecord.unplanned_budget_enabled,
-            unplanned_budget_amount:
-              Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount')
-                ? updateData.unplanned_budget_amount
-                : existingRecord.unplanned_budget_amount,
-          },
-        );
+        const approvedTotals = await calculateApprovedFinanceTotalsSnapshot(connection, id, {
+          unplanned_budget_enabled: Object.prototype.hasOwnProperty.call(
+            updateData,
+            'unplanned_budget_enabled',
+          )
+            ? updateData.unplanned_budget_enabled
+            : existingRecord.unplanned_budget_enabled,
+          unplanned_budget_amount: Object.prototype.hasOwnProperty.call(
+            updateData,
+            'unplanned_budget_amount',
+          )
+            ? updateData.unplanned_budget_amount
+            : existingRecord.unplanned_budget_amount,
+        });
         updateData.approved_total_amount = approvedTotals.approvedTotalAmount;
         updateData.balance_amount = approvedTotals.balanceAmount;
       }
@@ -2762,9 +3160,11 @@ const financeModel = {
 
       // NEW: keep primary_head_id / event_sub_head_id in sync with the
       // snapshot text when an edit changes the head/sub-head.
-      if ((hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn)
-          && (Object.prototype.hasOwnProperty.call(updateData, 'primary_head')
-            || Object.prototype.hasOwnProperty.call(updateData, 'event_sub_head'))) {
+      if (
+        (hasPrimaryHeadIdColumn || hasEventSubHeadIdColumn) &&
+        (Object.prototype.hasOwnProperty.call(updateData, 'primary_head') ||
+          Object.prototype.hasOwnProperty.call(updateData, 'event_sub_head'))
+      ) {
         const headName = Object.prototype.hasOwnProperty.call(updateData, 'primary_head')
           ? updateData.primary_head
           : existingRecord.primary_head;
@@ -2780,7 +3180,10 @@ const financeModel = {
         if (hasEventSubHeadIdColumn) updateData.event_sub_head_id = event_sub_head_id;
       }
 
-      const [result] = await connection.query('UPDATE finance_requests SET ? WHERE id = ?', [updateData, id]);
+      const [result] = await connection.query('UPDATE finance_requests SET ? WHERE id = ?', [
+        updateData,
+        id,
+      ]);
 
       try {
         const previousBudgetSnapshot = previousBudgetRows.map((row) => ({
@@ -2815,8 +3218,12 @@ const financeModel = {
           updateData,
           budgetRowsInput: hasBudgetRowsInput ? budgetRows : null,
           incomeRowsInput: hasIncomeRowsInput ? incomeRows : null,
-          budgetRowsChanged: hasBudgetRowsInput && JSON.stringify(previousBudgetSnapshot) !== JSON.stringify(nextBudgetSnapshot),
-          incomeRowsChanged: hasIncomeRowsInput && JSON.stringify(previousIncomeSnapshot) !== JSON.stringify(nextIncomeSnapshot),
+          budgetRowsChanged:
+            hasBudgetRowsInput &&
+            JSON.stringify(previousBudgetSnapshot) !== JSON.stringify(nextBudgetSnapshot),
+          incomeRowsChanged:
+            hasIncomeRowsInput &&
+            JSON.stringify(previousIncomeSnapshot) !== JSON.stringify(nextIncomeSnapshot),
           actor,
         });
 
@@ -2829,10 +3236,15 @@ const financeModel = {
             toPositiveInt(actor?.id) || null,
             normalizeText(actor?.email) || null,
             normalizeText(actor?.role).toLowerCase() || null,
-            Boolean(actor?.isSuperAdmin || ['admin', 'super_admin', 'superadmin'].includes(normalizeText(actor?.role).toLowerCase())) ? 1 : 0,
+            actor?.isSuperAdmin ||
+            ['admin', 'super_admin', 'superadmin'].includes(
+              normalizeText(actor?.role).toLowerCase(),
+            )
+              ? 1
+              : 0,
             audit.summary,
             JSON.stringify(audit.details),
-          ]
+          ],
         );
       } catch (auditError) {
         if (auditError?.code !== 'ER_NO_SUCH_TABLE') {
@@ -2847,14 +3259,14 @@ const financeModel = {
           [
             ...previousAnnexures.map((row) => normalizeText(row?.stored_name)),
             normalizeText(existingRecord?.annexure_storage_name),
-          ].filter(Boolean)
+          ].filter(Boolean),
         );
         const nextStoredNames = new Set(
-          annexures.map((row) => normalizeText(row?.stored_name)).filter(Boolean)
+          annexures.map((row) => normalizeText(row?.stored_name)).filter(Boolean),
         );
 
         const removedStoredNames = Array.from(previousStoredNames).filter(
-          (storedName) => !nextStoredNames.has(storedName)
+          (storedName) => !nextStoredNames.has(storedName),
         );
 
         await cleanupOrphanFinanceAnnexureFiles(removedStoredNames);
@@ -2862,7 +3274,9 @@ const financeModel = {
 
       return {
         ...result,
-        affectedRows: result.affectedRows || (hasBudgetRowsInput || hasIncomeRowsInput || hasAnnexuresInput ? 1 : 0),
+        affectedRows:
+          result.affectedRows ||
+          (hasBudgetRowsInput || hasIncomeRowsInput || hasAnnexuresInput ? 1 : 0),
       };
     } catch (error) {
       await connection.rollback();
@@ -2880,7 +3294,7 @@ const financeModel = {
          WHERE fr.id = ?
            AND ${FINANCE_NOT_DELETED_CONDITION_SQL}
          LIMIT 1`,
-        ['', '', id]
+        ['', '', id],
       );
 
       if (!rows.length) return null;
@@ -2920,7 +3334,9 @@ const financeModel = {
       query += ' ORDER BY fr.created_at DESC';
 
       const [rows] = await db.query(query, params);
-      const principalDocuments = await getFinancePrincipalDocumentsByFinanceIds(rows.map((row) => row.id));
+      const principalDocuments = await getFinancePrincipalDocumentsByFinanceIds(
+        rows.map((row) => row.id),
+      );
 
       return rows.map((row) => ({
         ...row,
@@ -2955,7 +3371,7 @@ const financeModel = {
          LEFT JOIN users u ON u.id = fr.created_by
          WHERE fr.id = ?
          LIMIT 1`,
-        [financeId]
+        [financeId],
       );
 
       if (!ownerRows.length) {
@@ -2976,7 +3392,7 @@ const financeModel = {
           beneficiaryEntityId: toPositiveInt(ownerRows[0].beneficiary_entity_id),
           lookupBudgetHead: ownerRows[0].primary_head,
           lookupSubHead: ownerRows[0].event_sub_head,
-        }
+        },
       );
       await replaceBudgetRows(connection, financeId, enrichedRows);
       const [financeRows] = await connection.query(
@@ -2984,7 +3400,7 @@ const financeModel = {
          FROM finance_requests
          WHERE id = ?
          LIMIT 1`,
-        [financeId]
+        [financeId],
       );
       const financeRow = financeRows[0] || {};
       const totalBudget = calculateFinanceTotalBudget(enrichedRows, {
@@ -2992,7 +3408,10 @@ const financeModel = {
         unplanned_budget_amount: financeRow.unplanned_budget_amount,
       });
 
-      await connection.query('UPDATE finance_requests SET total_budget = ? WHERE id = ?', [totalBudget, financeId]);
+      await connection.query('UPDATE finance_requests SET total_budget = ? WHERE id = ?', [
+        totalBudget,
+        financeId,
+      ]);
 
       await connection.commit();
       return true;
@@ -3028,7 +3447,7 @@ const financeModel = {
          FROM finance_budget_breakup
          WHERE finance_id = ?
          ORDER BY sort_order ASC, id ASC`,
-        [financeId]
+        [financeId],
       );
       return rows;
     } catch (error) {
@@ -3055,7 +3474,7 @@ const financeModel = {
          FROM finance_income_rows
          WHERE finance_id = ?
          ORDER BY sort_order ASC, id ASC`,
-        [financeId]
+        [financeId],
       );
       return rows;
     } catch (error) {
@@ -3090,7 +3509,7 @@ const financeModel = {
               COALESCE(NULLIF(TRIM(u.email), ''), NULLIF(TRIM(fr.email), '')) COLLATE utf8mb4_unicode_ci
          WHERE fr.id = ?
          LIMIT 1`,
-        [financeId]
+        [financeId],
       );
 
       const submissionRows = requestRows.map((row) => ({
@@ -3145,7 +3564,7 @@ const financeModel = {
        WHERE wa.module_key = 'finance'
          AND wa.record_id = ?
        ORDER BY wa.decided_at ASC, wa.id ASC`,
-        [financeId]
+        [financeId],
       );
 
       let editRows = [];
@@ -3181,7 +3600,7 @@ const financeModel = {
               e.edited_by_email COLLATE utf8mb4_unicode_ci
          WHERE e.finance_request_id = ?
          ORDER BY e.created_at ASC, e.id ASC`,
-          [financeId]
+          [financeId],
         );
         editRows = rows;
       } catch (error) {
@@ -3219,7 +3638,7 @@ const financeModel = {
         WHERE fr.id = ?
           AND ${FINANCE_NOT_DELETED_CONDITION_SQL}
         LIMIT 1`,
-      [id]
+      [id],
     );
     return rows.length > 0;
   },
@@ -3253,7 +3672,7 @@ const financeModel = {
            FROM finance_requests
           WHERE id = ?
           FOR UPDATE`,
-        [id]
+        [id],
       );
 
       if (!rows.length) {
@@ -3281,9 +3700,10 @@ const financeModel = {
 
       const nextState = {
         ...previousState,
-        flow: Array.isArray(previousState.flow) && previousState.flow.length
-          ? previousState.flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
-          : ['level1', 'dof', 'principal', 'chairman'],
+        flow:
+          Array.isArray(previousState.flow) && previousState.flow.length
+            ? previousState.flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
+            : ['level1', 'dof', 'principal', 'chairman'],
         status: 'deleted',
         currentStage: 'deleted',
         isEditableByApplicant: false,
@@ -3296,7 +3716,9 @@ const financeModel = {
         updatedAt: nowIso,
       };
 
-      const canUseDeletedOverallStatus = await supportsFinanceOverallStatusDeletedValue({ tx: connection });
+      const canUseDeletedOverallStatus = await supportsFinanceOverallStatusDeletedValue({
+        tx: connection,
+      });
       const nextOverallStatus = canUseDeletedOverallStatus ? 'deleted' : 'archived';
 
       await connection.query(
@@ -3305,7 +3727,7 @@ const financeModel = {
                 overall_status = ?,
                 updated_at = CURRENT_TIMESTAMP
           WHERE id = ?`,
-        [JSON.stringify(nextState), nextOverallStatus, id]
+        [JSON.stringify(nextState), nextOverallStatus, id],
       );
 
       await connection.query(
@@ -3340,7 +3762,7 @@ const financeModel = {
               route: 'DELETE /api/finance-requests/:id',
             },
           }),
-        ]
+        ],
       );
 
       await connection.commit();
@@ -3371,7 +3793,7 @@ const financeModel = {
         WHERE e.email = ?
           AND e.status = 'Active'
         LIMIT 1`,
-        [email]
+        [email],
       );
 
       return rows.length > 0 ? rows[0] : null;
@@ -3387,7 +3809,7 @@ const financeModel = {
          FROM budget_tags
          WHERE is_active = 1
            AND is_deleted = 0
-         ORDER BY tag_name ASC`
+         ORDER BY tag_name ASC`,
       );
       return rows;
     } catch (error) {
@@ -3527,7 +3949,7 @@ const financeModel = {
         AND LOWER(TRIM(CONVERT(scope_dept.name USING utf8mb4) COLLATE utf8mb4_unicode_ci))
           = LOWER(TRIM(CONVERT(fr.beneficiary_value USING utf8mb4) COLLATE utf8mb4_unicode_ci))
        WHERE fr.id = ?${lockClause}`,
-      [normalizedRecordId]
+      [normalizedRecordId],
     );
 
     if (!rows.length) {
@@ -3557,7 +3979,7 @@ const financeModel = {
        FROM finance_requests
        WHERE id = ?
        FOR UPDATE`,
-      [normalizedRecordId]
+      [normalizedRecordId],
     );
 
     if (!previousRows.length) {
@@ -3577,7 +3999,7 @@ const financeModel = {
               overall_status = ?,
               updated_at = CURRENT_TIMESTAMP
         WHERE id = ?`,
-      [workflowStatePayload, overallStatus, normalizedRecordId]
+      [workflowStatePayload, overallStatus, normalizedRecordId],
     );
 
     if (result.affectedRows > 0 && previousStatus !== 'completed' && nextStatus === 'completed') {
@@ -3588,7 +4010,7 @@ const financeModel = {
            AND record_id = ?
          ORDER BY decided_at DESC, id DESC
          LIMIT 1`,
-        [normalizedRecordId]
+        [normalizedRecordId],
       );
       const actorUserId = toPositiveInt(actorRows?.[0]?.actor_user_id);
       await consumeBudgetForApprovedFinance(tx, normalizedRecordId, actorUserId);
@@ -3597,12 +4019,11 @@ const financeModel = {
     return result.affectedRows > 0;
   },
 
-  async forceWorkflowTransition(recordId, {
-    decision,
-    feedback = null,
-    actor = {},
-    stageHint = null,
-  } = {}, { tx = db } = {}) {
+  async forceWorkflowTransition(
+    recordId,
+    { decision, feedback = null, actor = {}, stageHint = null } = {},
+    { tx = db } = {},
+  ) {
     const normalizedRecordId = toPositiveInt(recordId);
     const normalizedDecision = normalizeText(decision).toLowerCase();
 
@@ -3619,7 +4040,7 @@ const financeModel = {
        FROM finance_requests
        WHERE id = ?
        FOR UPDATE`,
-      [normalizedRecordId]
+      [normalizedRecordId],
     );
 
     if (!rows.length) {
@@ -3631,9 +4052,10 @@ const financeModel = {
       throw new Error('Workflow state not found');
     }
 
-    const flow = Array.isArray(previousState.flow) && previousState.flow.length
-      ? previousState.flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
-      : ['level1', 'dof', 'principal', 'chairman'];
+    const flow =
+      Array.isArray(previousState.flow) && previousState.flow.length
+        ? previousState.flow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean)
+        : ['level1', 'dof', 'principal', 'chairman'];
     const fallbackStage =
       normalizeText(stageHint).toLowerCase() ||
       normalizeText(previousState.currentStage).toLowerCase() ||
@@ -3687,12 +4109,13 @@ const financeModel = {
           moduleMetaVersion: 1,
           moduleMeta: {
             trigger: 'super_admin_forced_transition',
-            route: normalizedDecision === 'archived'
-              ? 'PATCH /api/finance-requests/:id/archive-toggle'
-              : 'PATCH /api/finance-requests/:id/approval',
+            route:
+              normalizedDecision === 'archived'
+                ? 'PATCH /api/finance-requests/:id/archive-toggle'
+                : 'PATCH /api/finance-requests/:id/approval',
           },
         }),
-      ]
+      ],
     );
 
     const updated = await this.updateFinanceWorkflowSnapshot(normalizedRecordId, nextState, { tx });
@@ -3723,7 +4146,7 @@ const financeModel = {
          AND decision = 'archived'
        ORDER BY decided_at DESC, id DESC
        LIMIT 1`,
-      [normalizedRecordId]
+      [normalizedRecordId],
     );
 
     if (!rows.length) {
@@ -3735,11 +4158,9 @@ const financeModel = {
       return { restored: false, reason: 'Archived snapshot is not restorable' };
     }
 
-    const updated = await this.updateFinanceWorkflowSnapshot(
-      normalizedRecordId,
-      previousState,
-      { tx }
-    );
+    const updated = await this.updateFinanceWorkflowSnapshot(normalizedRecordId, previousState, {
+      tx,
+    });
 
     return {
       restored: Boolean(updated),
@@ -3763,7 +4184,7 @@ const financeModel = {
          AND decision = 'archived'
        ORDER BY decided_at DESC, id DESC
        LIMIT 1`,
-      [normalizedRecordId]
+      [normalizedRecordId],
     );
 
     if (!rows.length) {
@@ -3787,7 +4208,13 @@ const financeModel = {
     const statusStageScope = isAllProposals ? 'all' : normalizedStage;
     const level1Role = normalizeText(filters.level1Role).toLowerCase();
     const requestedStatusCategory = normalizeText(filters.statusCategory).toLowerCase();
-    const statusCategoryFilter = ['pending', 'approved', 'returned', 'rejected', 'archived'].includes(requestedStatusCategory)
+    const statusCategoryFilter = [
+      'pending',
+      'approved',
+      'returned',
+      'rejected',
+      'archived',
+    ].includes(requestedStatusCategory)
       ? requestedStatusCategory
       : '';
     const searchTerm = normalizeText(filters.q || filters.search);
@@ -3811,6 +4238,13 @@ const financeModel = {
            WHERE fbb_fy.finance_id = fr.id
              AND bp_fy.fiscal_year = ?
         )
+        OR EXISTS (
+          SELECT 1
+            FROM finance_carry_forward_allocations cf_fy
+           WHERE cf_fy.finance_request_id = fr.id
+             AND cf_fy.target_fiscal_year = ?
+             AND LOWER(TRIM(cf_fy.status)) = 'active'
+        )
         OR (
           NOT EXISTS (
             SELECT 1
@@ -3823,7 +4257,7 @@ const financeModel = {
           ) = ?
         )
       )`);
-      whereParams.push(fiscalYear, fiscalYear);
+      whereParams.push(fiscalYear, fiscalYear, fiscalYear);
     }
 
     if (workflowStatus === 'all') {
@@ -3841,7 +4275,7 @@ const financeModel = {
                 AND LOWER(TRIM(wa.stage)) = ?
                 AND wa.decision IN ('approved', 'returned', 'rejected', 'archived')
             )
-          )`
+          )`,
         );
         whereParams.push(normalizedStage, normalizedStage);
       }
@@ -3862,7 +4296,9 @@ const financeModel = {
 
     if (!scopeFilters.forceAll) {
       if (scopeFilters.scopeType === 'department') {
-        const departmentIds = Array.from(scopeFilters.departmentIds || []).map((id) => toPositiveInt(id)).filter(Boolean);
+        const departmentIds = Array.from(scopeFilters.departmentIds || [])
+          .map((id) => toPositiveInt(id))
+          .filter(Boolean);
         if (scopeFilters.forceEmpty || departmentIds.length === 0) {
           return { items: [], total: 0, page, limit };
         }
@@ -3881,7 +4317,9 @@ const financeModel = {
       }
 
       if (scopeFilters.scopeType === 'entity') {
-        const entityIds = Array.from(scopeFilters.entityIds || []).map((id) => toPositiveInt(id)).filter(Boolean);
+        const entityIds = Array.from(scopeFilters.entityIds || [])
+          .map((id) => toPositiveInt(id))
+          .filter(Boolean);
         if (scopeFilters.forceEmpty || entityIds.length === 0) {
           return { items: [], total: 0, page, limit };
         }
@@ -3914,7 +4352,7 @@ const financeModel = {
           OR LOWER(COALESCE(fr.primary_head, '')) LIKE LOWER(?)
           OR LOWER(COALESCE(fr.event_sub_head, '')) LIKE LOWER(?)
           OR LOWER(COALESCE(fr.description, '')) LIKE LOWER(?)
-        )`
+        )`,
       );
       whereParams.push(
         searchLike,
@@ -3925,7 +4363,7 @@ const financeModel = {
         searchLike,
         searchLike,
         searchLike,
-        searchLike
+        searchLike,
       );
     }
 
@@ -3949,7 +4387,7 @@ const financeModel = {
            )
              AND LOWER(TRIM(latest_terminal.stage)) = ?
              AND latest_terminal.decision IN ('returned', 'rejected')
-        )`
+        )`,
       );
       whereParams.push(priorTerminalStage);
     }
@@ -3960,7 +4398,7 @@ const financeModel = {
       `SELECT COUNT(*) AS total
          FROM finance_requests fr
          ${baseWhereClause}`,
-      whereParams
+      whereParams,
     );
 
     const total = Number(countRows?.[0]?.total || 0);
@@ -4008,7 +4446,14 @@ const financeModel = {
            ${baseWhereClause}
          ) scoped_status
        ) categorized_status`,
-      [statusStageScope, statusStageScope, statusStageScope, statusStageScope, statusStageScope, ...whereParams]
+      [
+        statusStageScope,
+        statusStageScope,
+        statusStageScope,
+        statusStageScope,
+        statusStageScope,
+        ...whereParams,
+      ],
     );
 
     const statusCounts = {
@@ -4064,9 +4509,16 @@ const financeModel = {
             COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.lastDecision')), '')
           )) LIKE '%completed%' THEN 'approved'
           ELSE CASE WHEN ? = 'all' THEN 'pending' ELSE 'other' END
-        END) = ?`
+        END) = ?`,
       );
-      whereParams.push(statusStageScope, statusStageScope, statusStageScope, statusStageScope, statusStageScope, statusCategoryFilter);
+      whereParams.push(
+        statusStageScope,
+        statusStageScope,
+        statusStageScope,
+        statusStageScope,
+        statusStageScope,
+        statusCategoryFilter,
+      );
     }
 
     const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
@@ -4088,19 +4540,20 @@ const financeModel = {
          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.resubmittedAt')), '') DESC,
          fr.created_at DESC
        LIMIT ? OFFSET ?`,
-      [statusStageScope, statusStageScope, ...whereParams, limit, offset]
+      [statusStageScope, statusStageScope, ...whereParams, limit, offset],
     );
     const financeIds = rows.map((row) => row.id);
     const principalDocuments = await getFinancePrincipalDocumentsByFinanceIds(financeIds, { tx });
     const annexuresByFinanceId = await getFinanceAnnexuresByFinanceIds(financeIds, { tx });
 
-      return {
+    return {
       items: rows.map((row) => ({
         ...row,
         enclosures: safeParseJSON(row.enclosures, []),
         workflow_state: normalizeWorkflowState(row.workflow_state),
         level1_route_type: resolveFinanceLevel1RouteType(row),
-        annexures: annexuresByFinanceId.get(toPositiveInt(row.id)) || getLegacyAnnexureFromRecord(row),
+        annexures:
+          annexuresByFinanceId.get(toPositiveInt(row.id)) || getLegacyAnnexureFromRecord(row),
         principal_document: principalDocuments.get(toPositiveInt(row.id)) || null,
       })),
       total: filteredTotal,
@@ -4117,7 +4570,7 @@ const financeModel = {
         WHERE ${FINANCE_NOT_DELETED_CONDITION_SQL}
           AND beneficiary_type IS NOT NULL
           AND TRIM(beneficiary_type) <> ''
-        ORDER BY TRIM(beneficiary_type) ASC`
+        ORDER BY TRIM(beneficiary_type) ASC`,
     );
 
     const dedup = new Map();
@@ -4153,14 +4606,224 @@ const financeModel = {
                   FROM finance_budget_breakup fbb
                  WHERE fbb.finance_id = fr.id
               )
+           UNION
+           SELECT cf.target_fiscal_year AS fiscal_year
+             FROM finance_carry_forward_allocations cf
+             JOIN finance_requests fr ON fr.id = cf.finance_request_id
+            WHERE ${FINANCE_NOT_DELETED_CONDITION_SQL}
+              AND LOWER(TRIM(cf.status)) = 'active'
          ) years
         WHERE fiscal_year IS NOT NULL
-        ORDER BY fiscal_year DESC`
+        ORDER BY fiscal_year DESC`,
     );
 
-    return (rows || [])
-      .map((row) => toPositiveInt(row?.fiscal_year))
-      .filter(Boolean);
+    return (rows || []).map((row) => toPositiveInt(row?.fiscal_year)).filter(Boolean);
+  },
+
+  async getCarryForwardSummary(recordId, { tx = db } = {}) {
+    const normalizedRecordId = toPositiveInt(recordId);
+    if (!normalizedRecordId) {
+      throw new Error('Invalid finance request ID');
+    }
+
+    const [rows] = await tx.query(
+      `SELECT
+         fr.id,
+         fr.request_date,
+         fr.created_at,
+         COALESCE(
+           NULLIF(fr.approved_total_amount, 0),
+           NULLIF(fr.total_budget, 0),
+           NULLIF(fr.proposed_amount, 0),
+           0
+         ) AS approved_amount,
+         LOWER(TRIM(COALESCE(fr.overall_status, ''))) AS overall_status,
+         LOWER(TRIM(COALESCE(fr.workflow_status, ''))) AS workflow_status,
+         LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.status')), ''))) AS workflow_state_status
+       FROM finance_requests fr
+       WHERE fr.id = ?
+       LIMIT 1`,
+      [normalizedRecordId],
+    );
+
+    const record = rows?.[0] || null;
+    if (!record) {
+      throw new Error('Finance request not found');
+    }
+
+    const approvedStatuses = new Set(['approved', 'completed']);
+    if (
+      !approvedStatuses.has(normalizeText(record.overall_status).toLowerCase()) &&
+      !approvedStatuses.has(normalizeText(record.workflow_status).toLowerCase()) &&
+      !approvedStatuses.has(normalizeText(record.workflow_state_status).toLowerCase())
+    ) {
+      throw new Error('Only approved finance requests can be carried forward');
+    }
+
+    const sourceFiscalYear = await resolveFinanceSourceFiscalYear(
+      tx,
+      normalizedRecordId,
+      record.request_date,
+      record.created_at,
+    );
+    const sourceFyAdvanceSnapshot = await getFinanceAdvanceSettlementSnapshotForFiscalYear(
+      tx,
+      normalizedRecordId,
+      sourceFiscalYear,
+    );
+    const usage = await getFinanceUsageSnapshot(tx, normalizedRecordId);
+    const approvedAmount = toMoney(record.approved_amount);
+    const balanceAmount = sourceFyAdvanceSnapshot.unsettledAdvanceAmount;
+    const isEligible = sourceFyAdvanceSnapshot.unsettledAdvanceAmount > 0;
+
+    const [allocationRows] = await tx.query(
+      `SELECT
+         id,
+         source_fiscal_year,
+         target_fiscal_year,
+         carry_forward_amount,
+         used_amount,
+         remarks,
+         status,
+         created_by_user_id,
+         created_by_email,
+         created_at
+       FROM finance_carry_forward_allocations
+       WHERE finance_request_id = ?
+       ORDER BY target_fiscal_year DESC, id DESC`,
+      [normalizedRecordId],
+    );
+
+    return {
+      financeRequestId: normalizedRecordId,
+      sourceFiscalYear,
+      approvedAmount,
+      advanceAmount: usage.advanceAmount,
+      settlementAmount: usage.settlementAmount,
+      expenditureAmount: usage.expenditureAmount,
+      sourceFiscalYearAdvanceAmount: sourceFyAdvanceSnapshot.advanceAmount,
+      sourceFiscalYearSettlementAmount: sourceFyAdvanceSnapshot.settlementAmount,
+      unsettledAdvanceAmount: sourceFyAdvanceSnapshot.unsettledAdvanceAmount,
+      carryForwardMode: 'card_visibility',
+      isEligible,
+      eligibilityMessage: isEligible
+        ? ''
+        : 'Carry forward is available only for cards with an unsettled Initial/Interim Advance in the source FY.',
+      activeCarryForwardAmount: 0,
+      balanceAmount,
+      allocations: (allocationRows || []).map((row) => ({
+        id: toPositiveInt(row.id),
+        sourceFiscalYear: toPositiveInt(row.source_fiscal_year),
+        targetFiscalYear: toPositiveInt(row.target_fiscal_year),
+        carryForwardAmount: toMoney(row.carry_forward_amount),
+        usedAmount: toMoney(row.used_amount),
+        remarks: normalizeText(row.remarks),
+        status: normalizeText(row.status).toLowerCase() || 'active',
+        createdByUserId: toPositiveInt(row.created_by_user_id),
+        createdByEmail: normalizeText(row.created_by_email),
+        createdAt: row.created_at || null,
+      })),
+    };
+  },
+
+  async createCarryForwardAllocation(recordId, payload = {}, actor = {}) {
+    const normalizedRecordId = toPositiveInt(recordId);
+    const targetFiscalYear = toPositiveInt(payload.targetFiscalYear || payload.target_fiscal_year);
+    const remarks = normalizeText(payload.remarks);
+
+    if (!normalizedRecordId) {
+      throw new Error('Invalid finance request ID');
+    }
+    if (!targetFiscalYear) {
+      throw new Error('Target fiscal year is required');
+    }
+    if (!remarks) {
+      throw new Error('Carry-forward remarks are required');
+    }
+
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [lockRows] = await conn.query(
+        `SELECT id
+           FROM finance_requests
+          WHERE id = ?
+          LIMIT 1
+          FOR UPDATE`,
+        [normalizedRecordId],
+      );
+      if (!lockRows.length) {
+        throw new Error('Finance request not found');
+      }
+
+      const summary = await this.getCarryForwardSummary(normalizedRecordId, { tx: conn });
+
+      if (targetFiscalYear <= summary.sourceFiscalYear) {
+        throw new Error('Target fiscal year must be after the source fiscal year');
+      }
+      if (!summary.isEligible) {
+        throw new Error(
+          summary.eligibilityMessage ||
+            'Carry forward is available only for cards with unsettled advance',
+        );
+      }
+
+      const existingActive = summary.allocations.find(
+        (allocation) =>
+          allocation.targetFiscalYear === targetFiscalYear && allocation.status === 'active',
+      );
+      if (existingActive) {
+        throw new Error(
+          `Carry-forward is already active for FY ${targetFiscalYear}-${String(targetFiscalYear + 1).slice(2)}`,
+        );
+      }
+
+      const targetBudgetAvailability = await getCarryForwardTargetBudgetAvailability(
+        conn,
+        normalizedRecordId,
+        targetFiscalYear,
+      );
+      if (!targetBudgetAvailability.hasBudget) {
+        const sourceHeadLabel = targetBudgetAvailability.sourceHeads.length
+          ? ` for ${targetBudgetAvailability.sourceHeads.join(', ')}`
+          : '';
+        throw new Error(
+          `No approved FY ${targetFiscalYear}-${String(targetFiscalYear + 1).slice(2)} budget exists${sourceHeadLabel}. Create the target FY budget before carrying forward this card.`,
+        );
+      }
+
+      const [result] = await conn.query(
+        `INSERT INTO finance_carry_forward_allocations
+           (finance_request_id, source_fiscal_year, target_fiscal_year,
+            carry_forward_amount, remarks, status, created_by_user_id, created_by_email)
+         VALUES (?, ?, ?, ?, ?, 'active', ?, ?)`,
+        [
+          normalizedRecordId,
+          summary.sourceFiscalYear,
+          targetFiscalYear,
+          0,
+          remarks,
+          toPositiveInt(actor?.id || actor?.userId),
+          normalizeText(actor?.email) || null,
+        ],
+      );
+
+      await conn.commit();
+      return {
+        id: result.insertId,
+        financeRequestId: normalizedRecordId,
+        sourceFiscalYear: summary.sourceFiscalYear,
+        targetFiscalYear,
+        carryForwardAmount: 0,
+        unsettledAdvanceAmount: summary.unsettledAdvanceAmount,
+        mode: summary.carryForwardMode,
+      };
+    } catch (error) {
+      await conn.rollback();
+      throw error;
+    } finally {
+      conn.release();
+    }
   },
 
   async getFinanceOwner(recordId) {
@@ -4174,7 +4837,7 @@ const financeModel = {
          FROM finance_requests
          WHERE id = ?
          LIMIT 1`,
-      [normalizedRecordId]
+      [normalizedRecordId],
     );
 
     return rows.length ? rows[0] : null;
@@ -4216,7 +4879,7 @@ const financeModel = {
       `UPDATE finance_requests
           SET ${targetColumn} = ?
         WHERE id = ?`,
-      [normalizedRemark, normalizedRecordId]
+      [normalizedRemark, normalizedRecordId],
     );
 
     return true;

@@ -1,0 +1,220 @@
+tags:
+  - name: Budget
+    description: Budget proposals, tracking, and approval workflow
+
+components:
+  schemas:
+    BudgetProposal:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Proposal ID
+        applicant_name:
+          type: string
+          description: Name of the applicant
+        applicant_email:
+          type: string
+          description: Email of the applicant
+        applicant_designation:
+          type: string
+          description: Designation of the applicant
+        department_name:
+          type: string
+          description: Name of the department
+        beneficiary_type:
+          type: string
+          enum: [DEPARTMENT, CELL, CENTRE, CLUB, FACULTY]
+          description: The type of organizational unit or category
+        beneficiary_entity_id:
+          type: integer
+          description: ID of the department or entity/cell
+        fiscal_year:
+          type: integer
+          description: Year of the proposal (e.g. 2026)
+        total_amount:
+          type: number
+          format: float
+          description: Total budgeted amount requested
+        status:
+          type: string
+          description: Current workflow status
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+paths:
+  /budget:
+    post:
+      summary: Create a new budget proposal
+      tags: [Budget]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - beneficiary_type
+                - beneficiary_entity_id
+                - fiscal_year
+                - lines
+              properties:
+                beneficiary_type:
+                  type: string
+                beneficiary_entity_id:
+                  type: integer
+                fiscal_year:
+                  type: integer
+                lines:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        200:
+          description: Budget proposal created successfully
+        401:
+          description: Unauthorized
+
+  /budget/{id}:
+    get:
+      summary: Get details of a specific budget proposal
+      tags: [Budget]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Budget details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetProposal'
+        404:
+          description: Proposal not found
+
+    put:
+      summary: Update a budget proposal
+      tags: [Budget]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Budget updated successfully
+
+    delete:
+      summary: Delete a budget proposal
+      tags: [Budget]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Budget deleted successfully
+
+  /budget/my:
+    get:
+      summary: List budget proposals submitted by the current user
+      tags: [Budget]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of proposals
+
+  /budget/my/kpi-stats:
+    get:
+      summary: Get KPI statistics for current user's budgets
+      tags: [Budget]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: KPI stats (Approved, Pending, Total spent)
+
+  /budget/{id}/approval:
+    patch:
+      summary: Process workflow approval / rejection action for a budget proposal
+      tags: [Budget]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - action
+              properties:
+                action:
+                  type: string
+                  enum: [APPROVE, REJECT, CLARIFY]
+                comments:
+                  type: string
+      responses:
+        200:
+          description: Action processed successfully
+
+  /budget/{id}/upload:
+    post:
+      summary: Upload sanction letter or other attachments for a budget
+      tags: [Budget]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                sanctionLetter:
+                  type: string
+                  format: binary
+                attachments:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        200:
+          description: Files uploaded successfully

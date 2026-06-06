@@ -129,7 +129,9 @@
 /* ─── Chevron ─── */
 .sb-chevron {
   flex-shrink: 0;
-  transition: transform 0.2s, opacity 0.2s ease;
+  transition:
+    transform 0.2s,
+    opacity 0.2s ease;
   opacity: 0.5;
 }
 

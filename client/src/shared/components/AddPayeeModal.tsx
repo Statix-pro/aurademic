@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
 import { CheckCircle2, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+
 import CustomDropdown, { OptionType } from './ui/CustomDropdown';
 import './AddPayeeModal.css';
 
@@ -285,7 +286,8 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
 }) => {
   const [beneficiaryType, setBeneficiaryType] = useState<AddPayeeBeneficiaryType>('individual');
   const [individualData, setIndividualData] = useState<PayeeTypeDraft>(emptyIndividualData);
-  const [organizationData, setOrganizationData] = useState<OrganizationDraft>(emptyOrganizationData);
+  const [organizationData, setOrganizationData] =
+    useState<OrganizationDraft>(emptyOrganizationData);
   const [newPayeeName, setNewPayeeName] = useState('');
   const [newAccountName, setNewAccountName] = useState('');
   const [newPanNumber, setNewPanNumber] = useState('');
@@ -423,7 +425,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
     const accountNo = normalizePayeeText(newAccountNo);
     const confirmAccountNo = normalizePayeeText(newConfirmAccountNo);
     const bankName = normalizePayeeText(newBankName);
-     const branchName = capitalizeFirstLetter(newBranchName);
+    const branchName = capitalizeFirstLetter(newBranchName);
     const ifsc = sanitizeUppercaseAlphaNumeric(newIfsc, 11);
     const beneficiary = normalizePayeeText(newPayeeName);
     const accountName = normalizePayeeText(newAccountName).toUpperCase();
@@ -442,13 +444,15 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
     if (!accountName) missingFields.push('Account Name');
     if (beneficiaryType === 'individual') {
       if (!panNumber) missingFields.push('PAN Number');
-      else if (!isExactUppercaseAlphaNumeric(panNumber, 10)) missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
+      else if (!isExactUppercaseAlphaNumeric(panNumber, 10))
+        missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
     } else {
       if (!organizationType) missingFields.push('Organization Type');
       if (!msme) missingFields.push('MSME');
       if (!gstin) missingFields.push('GSTIN');
       if (!orgPan) missingFields.push('PAN Number');
-      else if (!isExactUppercaseAlphaNumeric(orgPan, 10)) missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
+      else if (!isExactUppercaseAlphaNumeric(orgPan, 10))
+        missingFields.push('PAN Number (must be exactly 10 uppercase alphanumeric characters)');
       if (!tdsDetails) missingFields.push('TDS Details');
       if (tdsDetails === 'Yes' && !tdsSection) missingFields.push('TDS Section');
     }
@@ -459,7 +463,8 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
     if (!bankName) missingFields.push('Bank Name');
     if (!branchName) missingFields.push('Branch Name');
     if (!ifsc) missingFields.push('IFSC Code');
-    else if (!isExactUppercaseAlphaNumeric(ifsc, 11)) missingFields.push('IFSC Code (must be exactly 11 uppercase alphanumeric characters)');
+    else if (!isExactUppercaseAlphaNumeric(ifsc, 11))
+      missingFields.push('IFSC Code (must be exactly 11 uppercase alphanumeric characters)');
 
     if (missingFields.length > 0) {
       showAlert?.(`Please fill all mandatory fields: ${missingFields.join(', ')}`, 'warning');
@@ -506,7 +511,12 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
         if (event.target === event.currentTarget && !isSubmitting) onClose();
       }}
     >
-      <div className="add-payee-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="add-payee-modal"
+        role="dialog"
+        aria-modal="true"
+        onClick={(event) => event.stopPropagation()}
+      >
         <button
           type="button"
           className="add-payee-modal-close"
@@ -574,7 +584,9 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
                   className="payee-modal-field-input"
                   type="text"
                   value={newPanNumber}
-                  onChange={(event) => setNewPanNumber(sanitizeUppercaseAlphaNumeric(event.target.value, 10))}
+                  onChange={(event) =>
+                    setNewPanNumber(sanitizeUppercaseAlphaNumeric(event.target.value, 10))
+                  }
                   placeholder="Enter PAN number"
                   maxLength={10}
                   minLength={10}
@@ -620,7 +632,10 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
                 <label>Organization Type</label>
                 <CustomDropdown
                   className="organization-type-dropdown"
-                  options={ORGANIZATION_TYPE_OPTIONS.map((option) => ({ value: option, label: option }))}
+                  options={ORGANIZATION_TYPE_OPTIONS.map((option) => ({
+                    value: option,
+                    label: option,
+                  }))}
                   value={orgType ? { value: orgType, label: orgType } : null}
                   onChange={(option) => {
                     const selected = option as OptionType | null;
@@ -628,7 +643,10 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
                   }}
                   placeholder="Select Organization Type"
                   isDisabled={isSubmitting}
-                  styles={{ ...dropdownBaseStyles, menuPortal: (base: any) => ({ ...base, zIndex: 9999 }) }}
+                  styles={{
+                    ...dropdownBaseStyles,
+                    menuPortal: (base: any) => ({ ...base, zIndex: 9999 }),
+                  }}
                 />
               </div>
               <div className="add-payee-modal-row">
@@ -675,7 +693,9 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
                   className="payee-modal-field-input"
                   type="text"
                   value={orgPanNumber}
-                  onChange={(event) => setOrgPanNumber(sanitizeUppercaseAlphaNumeric(event.target.value, 10))}
+                  onChange={(event) =>
+                    setOrgPanNumber(sanitizeUppercaseAlphaNumeric(event.target.value, 10))
+                  }
                   placeholder="Enter PAN number"
                   maxLength={10}
                   minLength={10}
@@ -708,18 +728,28 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
                     />
                     <span>No</span>
                   </label>
-                  <div className={`add-payee-modal-tds-section ${tdsValue === 'Yes' ? 'visible' : ''}`}>
+                  <div
+                    className={`add-payee-modal-tds-section ${tdsValue === 'Yes' ? 'visible' : ''}`}
+                  >
                     <CustomDropdown
                       className="tds-section-dropdown"
-                      options={TDS_SECTION_OPTIONS.map((option) => ({ value: option, label: option }))}
-                      value={tdsSectionValue ? { value: tdsSectionValue, label: tdsSectionValue } : null}
+                      options={TDS_SECTION_OPTIONS.map((option) => ({
+                        value: option,
+                        label: option,
+                      }))}
+                      value={
+                        tdsSectionValue ? { value: tdsSectionValue, label: tdsSectionValue } : null
+                      }
                       onChange={(option) => {
                         const selected = option as OptionType | null;
                         setTdsSectionValue(selected?.value ? String(selected.value) : '');
                       }}
                       placeholder="Select TDS Section"
                       isDisabled={isSubmitting || tdsValue !== 'Yes'}
-                      styles={{ ...dropdownBaseStyles, container: (base: any) => ({ ...base, width: '100%', flex: 1 }) }}
+                      styles={{
+                        ...dropdownBaseStyles,
+                        container: (base: any) => ({ ...base, width: '100%', flex: 1 }),
+                      }}
                     />
                   </div>
                 </div>
@@ -728,47 +758,47 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
           )}
 
           <div className="add-payee-modal-section add-payee-modal-section--bank">
-              <div className="add-payee-modal-row">
-                <label>Account Number</label>
+            <div className="add-payee-modal-row">
+              <label>Account Number</label>
+              <input
+                className="payee-modal-field-input"
+                type="text"
+                value={newAccountNo}
+                onChange={(event) => setNewAccountNo(event.target.value)}
+                placeholder="Enter account number"
+                inputMode="numeric"
+                disabled={isSubmitting}
+              />
+            </div>
+            <div className="add-payee-modal-row">
+              <label>Re-enter Account No</label>
+              <div className="payee-modal-confirm-field">
                 <input
-                  className="payee-modal-field-input"
+                  className={`payee-modal-field-input ${newConfirmAccountNo && newAccountNo && newConfirmAccountNo !== newAccountNo ? 'is-invalid' : ''}`}
                   type="text"
-                  value={newAccountNo}
-                  onChange={(event) => setNewAccountNo(event.target.value)}
-                  placeholder="Enter account number"
+                  value={newConfirmAccountNo}
+                  onChange={(event) => setNewConfirmAccountNo(event.target.value)}
+                  onPaste={(event) => event.preventDefault()}
+                  onDrop={(event) => event.preventDefault()}
+                  placeholder="Re-enter account number"
                   inputMode="numeric"
                   disabled={isSubmitting}
                 />
+                {newConfirmAccountNo && newAccountNo && newConfirmAccountNo === newAccountNo && (
+                  <CheckCircle2 className="payee-modal-confirm-icon" size={18} aria-hidden="true" />
+                )}
               </div>
-              <div className="add-payee-modal-row">
-                <label>Re-enter Account No</label>
-                <div className="payee-modal-confirm-field">
-                  <input
-                    className={`payee-modal-field-input ${newConfirmAccountNo && newAccountNo && newConfirmAccountNo !== newAccountNo ? 'is-invalid' : ''}`}
-                    type="text"
-                    value={newConfirmAccountNo}
-                    onChange={(event) => setNewConfirmAccountNo(event.target.value)}
-                    onPaste={(event) => event.preventDefault()}
-                    onDrop={(event) => event.preventDefault()}
-                    placeholder="Re-enter account number"
-                    inputMode="numeric"
-                    disabled={isSubmitting}
-                  />
-                  {newConfirmAccountNo && newAccountNo && newConfirmAccountNo === newAccountNo && (
-                    <CheckCircle2 className="payee-modal-confirm-icon" size={18} aria-hidden="true" />
-                  )}
-                </div>
+            </div>
+            {newConfirmAccountNo && newAccountNo && newConfirmAccountNo !== newAccountNo && (
+              <div className="add-payee-modal-row add-payee-modal-row--helper">
+                <span className="add-payee-modal-helper-text add-payee-modal-helper-text--error">
+                  Account numbers do not match
+                </span>
               </div>
-              {newConfirmAccountNo && newAccountNo && newConfirmAccountNo !== newAccountNo && (
-                <div className="add-payee-modal-row add-payee-modal-row--helper">
-                  <span className="add-payee-modal-helper-text add-payee-modal-helper-text--error">
-                    Account numbers do not match
-                  </span>
-                </div>
-              )}
-              <div className="add-payee-modal-row">
-                <label>Account Type</label>
-                <div className="add-payee-modal-radio-group">
+            )}
+            <div className="add-payee-modal-row">
+              <label>Account Type</label>
+              <div className="add-payee-modal-radio-group">
                 <label className="add-payee-modal-radio">
                   <input
                     type="radio"
@@ -809,23 +839,25 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
               />
             </div>
             <div className="add-payee-modal-row">
-                <label>Branch Name</label>
-                <input
-                  className="payee-modal-field-input"
-                  type="text"
-                  value={newBranchName}
-                  onChange={(event) => setNewBranchName(capitalizeFirstLetter(event.target.value))}
-                  placeholder="Enter branch name"
-                  disabled={isSubmitting}
-                />
-              </div>
+              <label>Branch Name</label>
+              <input
+                className="payee-modal-field-input"
+                type="text"
+                value={newBranchName}
+                onChange={(event) => setNewBranchName(capitalizeFirstLetter(event.target.value))}
+                placeholder="Enter branch name"
+                disabled={isSubmitting}
+              />
+            </div>
             <div className="add-payee-modal-row">
               <label>IFSC Code</label>
               <input
                 className="payee-modal-field-input"
                 type="text"
                 value={newIfsc}
-                onChange={(event) => setNewIfsc(sanitizeUppercaseAlphaNumeric(event.target.value, 11))}
+                onChange={(event) =>
+                  setNewIfsc(sanitizeUppercaseAlphaNumeric(event.target.value, 11))
+                }
                 placeholder="Enter IFSC code"
                 maxLength={11}
                 minLength={11}

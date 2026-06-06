@@ -92,7 +92,7 @@ const PublicationsPage: React.FC = () => {
     page: number,
     perPage: number,
     status: string = 'all',
-    sort: string = 'updated_at'
+    sort: string = 'updated_at',
   ) => {
     try {
       setError(null);
@@ -115,11 +115,7 @@ const PublicationsPage: React.FC = () => {
         params,
       })) as JournalsResponse;
 
-      if (
-        apiResponseData &&
-        Array.isArray(apiResponseData.data) &&
-        apiResponseData.pagination
-      ) {
+      if (apiResponseData && Array.isArray(apiResponseData.data) && apiResponseData.pagination) {
         setJournals(apiResponseData.data);
         setTotalPages(apiResponseData.pagination.total_pages || 0);
       } else {
@@ -133,9 +129,7 @@ const PublicationsPage: React.FC = () => {
         message?: string;
       };
       setError(
-        axiosError.response?.data?.message ||
-        axiosError.message ||
-        'Failed to fetch journals'
+        axiosError.response?.data?.message || axiosError.message || 'Failed to fetch journals',
       );
       setJournals([]);
       setTotalPages(0);
@@ -151,32 +145,21 @@ const PublicationsPage: React.FC = () => {
       })) as JournalsResponse;
 
       if (response && Array.isArray(response.data)) {
-        const publishedItems = response.data.filter(
-          (item) => item.status === 'published'
-        );
+        const publishedItems = response.data.filter((item) => item.status === 'published');
 
-        const conferenceTypes = [
-          'Conference',
-          'Conference Paper',
-          'Conference Proceedings',
-        ];
+        const conferenceTypes = ['Conference', 'Conference Paper', 'Conference Proceedings'];
         const bookTypes = ['Book', 'Monograph'];
         const bookChapterTypes = ['Book Chapter', 'Chapter'];
 
         const kpis: KpiData = {
-          conference: publishedItems.filter((item) =>
-            conferenceTypes.includes(item.type)
-          ).length,
-          book: publishedItems.filter((item) => bookTypes.includes(item.type))
-            .length,
-          bookChapter: publishedItems.filter((item) =>
-            bookChapterTypes.includes(item.type)
-          ).length,
+          conference: publishedItems.filter((item) => conferenceTypes.includes(item.type)).length,
+          book: publishedItems.filter((item) => bookTypes.includes(item.type)).length,
+          bookChapter: publishedItems.filter((item) => bookChapterTypes.includes(item.type)).length,
           journal: publishedItems.filter(
             (item) =>
               !conferenceTypes.includes(item.type) &&
               !bookTypes.includes(item.type) &&
-              !bookChapterTypes.includes(item.type)
+              !bookChapterTypes.includes(item.type),
           ).length,
         };
         setKpiData(kpis);
@@ -233,7 +216,7 @@ const PublicationsPage: React.FC = () => {
     } catch (err: any) {
       console.error('Error deleting journal:', err);
       setError(err.response?.data?.message || 'Failed to delete journal');
-      // Optional: keep modal open if error, or close it. 
+      // Optional: keep modal open if error, or close it.
       // For now, let's close it so the error alert on page is visible (if set).
       setShowDeleteModal(false);
     } finally {
@@ -266,7 +249,7 @@ const PublicationsPage: React.FC = () => {
 
     try {
       const response = (await authenticityUtility.post(
-        `/edit-requests/journals/${selectedJournalForEditRequest.id}`
+        `/edit-requests/journals/${selectedJournalForEditRequest.id}`,
       )) as any;
 
       if (response && response.success === true) {
@@ -337,10 +320,7 @@ const PublicationsPage: React.FC = () => {
             </div>
 
             <div className="mb-2 text-truncate-2-lines">
-              <span
-                className="text-muted"
-                style={{ fontSize: '0.9rem', marginRight: '5px' }}
-              >
+              <span className="text-muted" style={{ fontSize: '0.9rem', marginRight: '5px' }}>
                 Authors:
               </span>
               <span style={{ fontSize: '0.95rem', color: '#393939' }}>
@@ -374,15 +354,13 @@ const PublicationsPage: React.FC = () => {
               </span>
               <span className="mx-2">•</span>
               <span className="me-2">
-                Publisher:{' '}
-                <span className="text-dark">{journal.publisher || 'Not specified'}</span>
+                Publisher: <span className="text-dark">{journal.publisher || 'Not specified'}</span>
               </span>
             </div>
 
             {approvalStatus === 'rejected' && journal.admin_approval_comment ? (
               <div className="approval-comment mt-2">
-                <span className="fw-semibold">Admin Comment:</span>{' '}
-                {journal.admin_approval_comment}
+                <span className="fw-semibold">Admin Comment:</span> {journal.admin_approval_comment}
               </div>
             ) : null}
           </div>
@@ -423,9 +401,7 @@ const PublicationsPage: React.FC = () => {
                 <a
                   className="action-btn share-btn"
                   href={
-                    journal.doi.startsWith('http')
-                      ? journal.doi
-                      : `https://doi.org/${journal.doi}`
+                    journal.doi.startsWith('http') ? journal.doi : `https://doi.org/${journal.doi}`
                   }
                   target="_blank"
                   rel="noopener noreferrer"
@@ -486,9 +462,7 @@ const PublicationsPage: React.FC = () => {
                     : 'Delete is disabled after admin approval and publication'
                 }
                 aria-label="Delete publication"
-                style={
-                  canDelete ? undefined : { opacity: 0.4, cursor: 'not-allowed' }
-                }
+                style={canDelete ? undefined : { opacity: 0.4, cursor: 'not-allowed' }}
               >
                 <i className="fas fa-trash" aria-hidden="true"></i>
               </button>
@@ -523,10 +497,7 @@ const PublicationsPage: React.FC = () => {
                   ? formatMonthYear(journal.available_online_date)
                   : formatDate(journal.date_of_submission)}
                 <span className="mx-2">•</span>
-                <span
-                  className="research-id"
-                  aria-label={`Publication ID ${journal.id}`}
-                >
+                <span className="research-id" aria-label={`Publication ID ${journal.id}`}>
                   ID: {journal.id}
                 </span>
               </span>
@@ -538,12 +509,10 @@ const PublicationsPage: React.FC = () => {
   };
 
   const waitingJournals = journals.filter((journal) =>
-    ['pending', 'rejected'].includes(
-      normalizeApprovalStatus(journal.admin_approval_status)
-    )
+    ['pending', 'rejected'].includes(normalizeApprovalStatus(journal.admin_approval_status)),
   );
   const approvedJournals = journals.filter(
-    (journal) => normalizeApprovalStatus(journal.admin_approval_status) === 'approved'
+    (journal) => normalizeApprovalStatus(journal.admin_approval_status) === 'approved',
   );
 
   if (loading) return <div>Loading...</div>;
@@ -551,7 +520,6 @@ const PublicationsPage: React.FC = () => {
 
   return (
     <div>
-
       <div className="body-mode-dashboard publications-page container-fluid">
         <div className="row">
           <div className="col-12 main-content">
@@ -633,11 +601,7 @@ const PublicationsPage: React.FC = () => {
                     <option value="date_of_submission">Sort: Submitted Date</option>
                     <option value="available_online_date">Sort: Published Date</option>
                   </select>
-                  <button
-                    className="add-btn"
-                    onClick={handleAdd}
-                    style={{ whiteSpace: 'nowrap' }}
-                  >
+                  <button className="add-btn" onClick={handleAdd} style={{ whiteSpace: 'nowrap' }}>
                     Add +
                   </button>
                 </div>
@@ -649,7 +613,9 @@ const PublicationsPage: React.FC = () => {
                   onClick={() => setIsWaitingCollapsed(!isWaitingCollapsed)}
                   style={{ cursor: 'pointer' }}
                 >
-                  <h6 className="publication-section-title mb-0">Waiting / Unapproved ({waitingJournals.length})</h6>
+                  <h6 className="publication-section-title mb-0">
+                    Waiting / Unapproved ({waitingJournals.length})
+                  </h6>
                   <i className={`fas fa-chevron-${isWaitingCollapsed ? 'down' : 'up'}`}></i>
                 </div>
                 {!isWaitingCollapsed && (
@@ -669,7 +635,9 @@ const PublicationsPage: React.FC = () => {
                   onClick={() => setIsApprovedCollapsed(!isApprovedCollapsed)}
                   style={{ cursor: 'pointer' }}
                 >
-                  <h6 className="publication-section-title mb-0">Approved / Published ({approvedJournals.length})</h6>
+                  <h6 className="publication-section-title mb-0">
+                    Approved / Published ({approvedJournals.length})
+                  </h6>
                   <i className={`fas fa-chevron-${isApprovedCollapsed ? 'down' : 'up'}`}></i>
                 </div>
                 {!isApprovedCollapsed && (
@@ -712,10 +680,7 @@ const PublicationsPage: React.FC = () => {
 
         {showCategoryModal && (
           <div className="category-modal-overlay" onClick={handleCloseModal}>
-            <div
-              className="category-modal"
-              onClick={(e: MouseEvent) => e.stopPropagation()}
-            >
+            <div className="category-modal" onClick={(e: MouseEvent) => e.stopPropagation()}>
               <div className="category-modal-header">
                 <h5 className="category-modal-title">Select Publication Type</h5>
                 <button
@@ -773,10 +738,7 @@ const PublicationsPage: React.FC = () => {
 
         {showEditRequestModal && selectedJournalForEditRequest && (
           <div className="category-modal-overlay" onClick={handleCancelEditRequest}>
-            <div
-              className="category-modal"
-              onClick={(e: MouseEvent) => e.stopPropagation()}
-            >
+            <div className="category-modal" onClick={(e: MouseEvent) => e.stopPropagation()}>
               <div className="category-modal-header">
                 <h5 className="category-modal-title">Request Edit Access</h5>
                 <button
@@ -790,8 +752,7 @@ const PublicationsPage: React.FC = () => {
               </div>
               <div className="category-modal-body">
                 <p>
-                  Send edit request for{' '}
-                  <strong>{selectedJournalForEditRequest.title}</strong>?
+                  Send edit request for <strong>{selectedJournalForEditRequest.title}</strong>?
                 </p>
                 <div className="d-flex justify-content-end gap-2 mt-4">
                   <button

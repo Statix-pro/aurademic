@@ -5,7 +5,7 @@ const uniqueStringArray = (values = []) => [
     values
       .filter((value) => typeof value === 'string')
       .map((value) => value.trim())
-      .filter(Boolean)
+      .filter(Boolean),
   ),
 ];
 
@@ -31,10 +31,7 @@ export const hasPermission = (user: User | null | undefined, permissionKey: stri
   return normalizePermissionKeys(user).includes(permissionKey);
 };
 
-export const hasAnyPermission = (
-  user: User | null | undefined,
-  permissionKeys: string[]
-) => {
+export const hasAnyPermission = (user: User | null | undefined, permissionKeys: string[]) => {
   if (!permissionKeys.length) {
     return false;
   }
@@ -93,13 +90,15 @@ export const canAccessBudgetApproval = (user?: User | null) => {
 };
 
 const getWorkflowPermissionPrefix = (moduleKey: string) => {
-  const normalizedModule = String(moduleKey || '').trim().toLowerCase();
+  const normalizedModule = String(moduleKey || '')
+    .trim()
+    .toLowerCase();
   return normalizedModule ? `${normalizedModule}.workflow.` : '';
 };
 
 export const getWorkflowPermissionsForModule = (
   user: User | null | undefined,
-  moduleKey: string
+  moduleKey: string,
 ) => {
   const workflowPrefix = getWorkflowPermissionPrefix(moduleKey);
 
@@ -108,14 +107,11 @@ export const getWorkflowPermissionsForModule = (
   }
 
   return normalizePermissionKeys(user).filter((permissionKey) =>
-    permissionKey.startsWith(workflowPrefix)
+    permissionKey.startsWith(workflowPrefix),
   );
 };
 
-export const canAccessModuleWorkflow = (
-  user: User | null | undefined,
-  moduleKey: string
-) => {
+export const canAccessModuleWorkflow = (user: User | null | undefined, moduleKey: string) => {
   if (!user) {
     return false;
   }
@@ -124,7 +120,12 @@ export const canAccessModuleWorkflow = (
     return true;
   }
 
-  if (String(moduleKey || '').trim().toLowerCase() === 'expenditure' && canAccessAdminArea(user)) {
+  if (
+    String(moduleKey || '')
+      .trim()
+      .toLowerCase() === 'expenditure' &&
+    canAccessAdminArea(user)
+  ) {
     return true;
   }
 
@@ -144,8 +145,16 @@ const isAdminOrWorkflowRole = (user?: User | null) => {
   }
 
   const normalizedRoles = normalizeRoleCodes(user);
-  const workflowRoles = ['admin', 'hod', 'coordinator', 'dof', 'principal', 'chairman', 'entity_approver'];
-  
+  const workflowRoles = [
+    'admin',
+    'hod',
+    'coordinator',
+    'dof',
+    'principal',
+    'chairman',
+    'entity_approver',
+  ];
+
   return normalizedRoles.some((role) => workflowRoles.includes(role.toLowerCase()));
 };
 

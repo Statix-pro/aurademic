@@ -1,4 +1,4 @@
-import authenticityUtility from "./authenticityUtility";
+import authenticityUtility from './authenticityUtility';
 
 export interface AccountOption {
   id: number;
@@ -11,13 +11,13 @@ const normalizeAccountOptions = (rows: unknown): AccountOption[] => {
   return rows
     .map((row: any) => ({
       id: Number(row?.id || 0),
-      name: String(row?.name ?? row?.account_name ?? "").trim(),
+      name: String(row?.name ?? row?.account_name ?? '').trim(),
     }))
     .filter((row) => row.id > 0 && row.name);
 };
 
 export const fetchAccountOptions = async (): Promise<AccountOption[]> => {
-  const response = await authenticityUtility.get("/account-options") as {
+  const response = (await authenticityUtility.get('/account-options')) as {
     success?: boolean;
     data?: unknown;
     message?: string;
@@ -28,13 +28,13 @@ export const fetchAccountOptions = async (): Promise<AccountOption[]> => {
     return normalizeAccountOptions(response.data);
   }
 
-  throw new Error(response.message || response.error || "Failed to load account options");
+  throw new Error(response.message || response.error || 'Failed to load account options');
 };
 
 export const createAccountOption = async (name: string): Promise<AccountOption> => {
-  const response = await authenticityUtility.post("/account-options", {
-    name: String(name || "").trim(),
-  }) as {
+  const response = (await authenticityUtility.post('/account-options', {
+    name: String(name || '').trim(),
+  })) as {
     success?: boolean;
     data?: unknown;
     message?: string;
@@ -45,13 +45,13 @@ export const createAccountOption = async (name: string): Promise<AccountOption> 
     return options[0];
   }
 
-  throw new Error(response.message || "Failed to add account option");
+  throw new Error(response.message || 'Failed to add account option');
 };
 
 export const updateAccountOption = async (id: number, name: string): Promise<AccountOption> => {
-  const response = await authenticityUtility.patch(`/account-options/${id}`, {
-    name: String(name || "").trim(),
-  }) as {
+  const response = (await authenticityUtility.patch(`/account-options/${id}`, {
+    name: String(name || '').trim(),
+  })) as {
     success?: boolean;
     data?: unknown;
     message?: string;
@@ -62,16 +62,16 @@ export const updateAccountOption = async (id: number, name: string): Promise<Acc
     return options[0];
   }
 
-  throw new Error(response.message || "Failed to update account option");
+  throw new Error(response.message || 'Failed to update account option');
 };
 
 export const deleteAccountOption = async (id: number): Promise<void> => {
-  const response = await authenticityUtility.delete(`/account-options/${id}`) as {
+  const response = (await authenticityUtility.delete(`/account-options/${id}`)) as {
     success?: boolean;
     message?: string;
   };
 
   if (response.success !== true) {
-    throw new Error(response.message || "Failed to delete account option");
+    throw new Error(response.message || 'Failed to delete account option');
   }
 };

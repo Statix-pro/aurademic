@@ -1,0 +1,189 @@
+tags:
+  - name: Finance
+    description: Pre-event finance request workflows, budget checks, and approvals
+
+components:
+  schemas:
+    FinanceRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Request ID
+        event_name:
+          type: string
+          description: Name of the event requesting finance
+        applicant_name:
+          type: string
+          description: Applicant employee name
+        department_name:
+          type: string
+          description: Department name
+        beneficiary_type:
+          type: string
+          enum: [DEPARTMENT, CELL, CENTRE, CLUB, FACULTY]
+        total_requested:
+          type: number
+          format: float
+        status:
+          type: string
+          description: Current approval workflow stage
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+paths:
+  /finance-requests:
+    get:
+      summary: List finance requests (filtered by role queues or ownership)
+      tags: [Finance]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of finance requests
+        401:
+          description: Unauthorized
+
+    post:
+      summary: Create a new pre-event finance request
+      tags: [Finance]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - event_name
+                - beneficiary_type
+                - total_requested
+              properties:
+                event_name:
+                  type: string
+                beneficiary_type:
+                  type: string
+                total_requested:
+                  type: number
+      responses:
+        200:
+          description: Finance request created successfully
+
+  /finance-requests/{id}:
+    get:
+      summary: Get details of a finance request
+      tags: [Finance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Detailed finance request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinanceRequest'
+        404:
+          description: Request not found
+
+    put:
+      summary: Update a finance request
+      tags: [Finance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Request updated successfully
+
+    delete:
+      summary: Delete a finance request
+      tags: [Finance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Request deleted successfully
+
+  /finance-requests/budget-availability:
+    get:
+      summary: Check remaining budget balance for a given department/entity
+      tags: [Finance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: beneficiary_type
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: beneficiary_entity_id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: fiscal_year
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Remaining allocated budget details
+
+  /finance-requests/{id}/approval:
+    patch:
+      summary: Approve or reject a finance request stage
+      tags: [Finance]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - action
+              properties:
+                action:
+                  type: string
+                  enum: [APPROVE, REJECT, CLARIFY]
+                comments:
+                  type: string
+      responses:
+        200:
+          description: Stage updated successfully

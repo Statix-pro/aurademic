@@ -61,7 +61,10 @@
   min-height: 96px;
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
   cursor: pointer;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
   border: 1px solid #d8e1ec;
   text-align: left;
 }
@@ -74,7 +77,9 @@
 
 .stats-card.active {
   border-color: rgba(0, 105, 171, 0.28);
-  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.14), 0 14px 28px rgba(0, 105, 171, 0.16);
+  box-shadow:
+    0 0 0 3px rgba(0, 105, 171, 0.14),
+    0 14px 28px rgba(0, 105, 171, 0.16);
 }
 
 .stats-card:first-child {
@@ -88,7 +93,9 @@
 
 .stats-card:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 4px rgba(0, 105, 171, 0.16), 0 14px 30px rgba(15, 23, 42, 0.12);
+  box-shadow:
+    0 0 0 4px rgba(0, 105, 171, 0.16),
+    0 14px 30px rgba(15, 23, 42, 0.12);
 }
 
 .stats-icon-box {
@@ -196,7 +203,9 @@
   background-repeat: no-repeat;
   background-position: right 14px center;
   background-size: 10px 6px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .filter-item select:focus,
@@ -850,7 +859,7 @@
 }
 
 .finance-status-line-connector::before {
-  content: "";
+  content: '';
   position: absolute;
   top: 50%;
   left: 0;
@@ -882,7 +891,9 @@
   font-size: 0.82rem;
   font-weight: 700;
   border: 1px solid transparent;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .finance-status-pill {
@@ -901,12 +912,36 @@
   box-shadow: 0 0 0 2px rgba(0, 105, 171, 0.12);
 }
 
-.status-submitted { background: #eaf3ff; color: #1661a9; border-color: #b8d4ef; }
-.status-pending { background: #fff4d6; color: #a97900; border-color: #f3d58f; }
-.status-approved { background: #e7f8ef; color: #137a3a; border-color: #b9e5c6; }
-.status-rejected { background: #fdecec; color: #c64848; border-color: #f0c2c2; }
-.status-returned { background: #fff4d6; color: #a97900; border-color: #f3d58f; }
-.status-archived { background: #edf4fb; color: #5e7289; border-color: #d3e0eb; }
+.status-submitted {
+  background: #eaf3ff;
+  color: #1661a9;
+  border-color: #b8d4ef;
+}
+.status-pending {
+  background: #fff4d6;
+  color: #a97900;
+  border-color: #f3d58f;
+}
+.status-approved {
+  background: #e7f8ef;
+  color: #137a3a;
+  border-color: #b9e5c6;
+}
+.status-rejected {
+  background: #fdecec;
+  color: #c64848;
+  border-color: #f0c2c2;
+}
+.status-returned {
+  background: #fff4d6;
+  color: #a97900;
+  border-color: #f3d58f;
+}
+.status-archived {
+  background: #edf4fb;
+  color: #5e7289;
+  border-color: #d3e0eb;
+}
 
 /* Quick Action Circle Buttons */
 .status-quick-actions {
@@ -932,11 +967,26 @@
   transform: scale(1.1);
 }
 
-
-.financecard-page .btn-success:hover { background: #ecfdf5; color: #059669; border-color: #10b981; }
-.financecard-page .btn-warning:hover { background: #fff7ed; color: #ea580c; border-color: #f97316; }
-.financecard-page .btn-danger:hover { background: #fef2f2; color: #dc2626; border-color: #ef4444; }
-.financecard-page .btn-info:hover { background: #eff6ff; color: #2563eb; border-color: #3b82f6; }
+.financecard-page .btn-success:hover {
+  background: #ecfdf5;
+  color: #059669;
+  border-color: #10b981;
+}
+.financecard-page .btn-warning:hover {
+  background: #fff7ed;
+  color: #ea580c;
+  border-color: #f97316;
+}
+.financecard-page .btn-danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #ef4444;
+}
+.financecard-page .btn-info:hover {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #3b82f6;
+}
 
 /* Responsive */
 @media (max-width: 1024px) {

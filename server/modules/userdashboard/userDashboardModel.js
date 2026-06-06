@@ -33,20 +33,20 @@ const userDashboardModel = {
     `;
 
     // Check if research_collaborations exists or use placeholder
-    // Assuming it follows similar pattern or might be a simple table. 
+    // Assuming it follows similar pattern or might be a simple table.
     // For now, returning 0 if we are unsure, but let's try a simple query if it exists.
     // If table doesn't exist, we should just return 0 to avoid crash.
     // Safe approach:
 
     const [projectRes, journalRes] = await Promise.all([
       db.query(projectQuery, [user.email]),
-      db.query(journalQuery, [user.email])
+      db.query(journalQuery, [user.email]),
     ]);
 
     return {
       project_count: projectRes[0][0].count || 0,
       publication_count: journalRes[0][0].count || 0,
-      collaboration_count: 0 // Placeholder until collaboration schema is verified
+      collaboration_count: 0, // Placeholder until collaboration schema is verified
     };
   },
 
@@ -164,7 +164,12 @@ const userDashboardModel = {
         : [userId, userId, user.email, perPage, offset];
 
       // Validate and sanitize sortBy to prevent SQL injection
-      const allowedSortColumns = ['updated_at', 'date_of_submission', 'available_online_date', 'created_at'];
+      const allowedSortColumns = [
+        'updated_at',
+        'date_of_submission',
+        'available_online_date',
+        'created_at',
+      ];
       const orderByColumn = allowedSortColumns.includes(sortBy) ? `j.${sortBy}` : 'j.updated_at';
 
       // Modified query to ensure proper joins and data retrieval
@@ -374,16 +379,12 @@ const userDashboardModel = {
           .split('T')[0];
       }
       if (result[0].project_duration_start_date) {
-        result[0].project_duration_start_date = new Date(
-          result[0].project_duration_start_date
-        )
+        result[0].project_duration_start_date = new Date(result[0].project_duration_start_date)
           .toISOString()
           .split('T')[0];
       }
       if (result[0].project_duration_end_date) {
-        result[0].project_duration_end_date = new Date(
-          result[0].project_duration_end_date
-        )
+        result[0].project_duration_end_date = new Date(result[0].project_duration_end_date)
           .toISOString()
           .split('T')[0];
       }
@@ -489,7 +490,7 @@ const userDashboardModel = {
             )
           GROUP BY j.id, jo.journal_name, jo.publisher, jo.website, jo.print_issn, jo.online_issn, j.admin_approval_status, j.admin_approval_comment, uer.status
         `,
-        [userId, userId, journalId, user.email]
+        [userId, userId, journalId, user.email],
       );
 
       if (!rows[0]) {
@@ -541,7 +542,7 @@ const userDashboardModel = {
           LIMIT 1
           FOR UPDATE
         `,
-        [journalId, user.email]
+        [journalId, user.email],
       );
 
       if (!journalRows.length) {
@@ -551,21 +552,17 @@ const userDashboardModel = {
 
       const journal = journalRows[0];
 
-      if (
-        journal.status === 'published' &&
-        journal.admin_approval_status === 'approved'
-      ) {
+      if (journal.status === 'published' && journal.admin_approval_status === 'approved') {
         const lockedError = new Error(
-          'Delete is disabled once publication is approved and published.'
+          'Delete is disabled once publication is approved and published.',
         );
         lockedError.statusCode = 403;
         throw lockedError;
       }
 
-      const [deleteResult] = await connection.query(
-        'DELETE FROM journals WHERE id = ?',
-        [journalId]
-      );
+      const [deleteResult] = await connection.query('DELETE FROM journals WHERE id = ?', [
+        journalId,
+      ]);
 
       await connection.commit();
       return deleteResult.affectedRows > 0;

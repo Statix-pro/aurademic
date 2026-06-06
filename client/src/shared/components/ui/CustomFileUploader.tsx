@@ -1,6 +1,6 @@
+import { Upload, Trash2, FileText } from 'lucide-react';
 import React, { useRef, useState, useEffect } from 'react';
 import { Form, Button } from 'react-bootstrap';
-import { Upload, Trash2, FileText } from 'lucide-react';
 import './common.css';
 
 interface CustomFileUploaderProps {
@@ -30,7 +30,7 @@ const CustomFileUploader: React.FC<CustomFileUploaderProps> = ({
   disabled = false,
   error,
   className = '',
-  buttonText = "Upload File"
+  buttonText = 'Upload File',
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -128,8 +128,8 @@ const CustomFileUploader: React.FC<CustomFileUploaderProps> = ({
             <span
               className="text-truncate"
               style={{
-                cursor: (previewUrl || fileUrl) ? 'pointer' : 'default',
-                color: (previewUrl || fileUrl) ? '#0069ab' : 'inherit',
+                cursor: previewUrl || fileUrl ? 'pointer' : 'default',
+                color: previewUrl || fileUrl ? '#0069ab' : 'inherit',
               }}
               title={fileName}
               onClick={handleFileClick}

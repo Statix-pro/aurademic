@@ -43,11 +43,7 @@ const accountOptionsModel = {
          is_active = 1,
          is_deleted = 0,
          updated_by = VALUES(updated_by)`,
-      [
-        normalizedAccountName,
-        toPositiveInt(actorUserId),
-        toPositiveInt(actorUserId),
-      ],
+      [normalizedAccountName, toPositiveInt(actorUserId), toPositiveInt(actorUserId)],
     );
 
     return { id: result.insertId, name: normalizedAccountName };

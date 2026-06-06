@@ -19,7 +19,9 @@
   background-color: #ffffff;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.06);
   margin-bottom: 0;
   border-collapse: separate;
   border-spacing: 0;
@@ -248,8 +250,8 @@
 }
 
 /* Add New Button in header */
-.journal-management>.d-flex>.btn-primary,
-.project-management>.d-flex>.btn-primary {
+.journal-management > .d-flex > .btn-primary,
+.project-management > .d-flex > .btn-primary {
   padding: 10px 20px;
   font-weight: 600;
   font-size: 0.9rem;
@@ -260,8 +262,8 @@
   transition: all 0.2s ease;
 }
 
-.journal-management>.d-flex>.btn-primary:hover,
-.project-management>.d-flex>.btn-primary:hover {
+.journal-management > .d-flex > .btn-primary:hover,
+.project-management > .d-flex > .btn-primary:hover {
   background: linear-gradient(135deg, #005492 0%, #004a7a 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 105, 171, 0.4);
@@ -384,7 +386,6 @@
 
 /* ===== Responsive Adjustments ===== */
 @media (max-width: 992px) {
-
   .journal-management .table,
   .project-management .table {
     table-layout: auto;
@@ -405,7 +406,6 @@
 }
 
 @media (max-width: 768px) {
-
   .journal-management,
   .project-management {
     padding: 16px;

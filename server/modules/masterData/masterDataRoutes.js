@@ -1,9 +1,7 @@
 import express from 'express';
+
 import masterDataController from './masterDataController.js';
-import {
-    authMiddleware,
-    superAdminMiddleware,
-} from '../../middleware/authMiddleware.js';
+import { authMiddleware, superAdminMiddleware } from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
 

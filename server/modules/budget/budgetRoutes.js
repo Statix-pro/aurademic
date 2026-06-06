@@ -1,9 +1,7 @@
 import express from 'express';
+
 import * as BudgetController from './budgetController.js';
-import {
-  authMiddleware,
-  permissionMiddleware,
-} from '../../middleware/authMiddleware.js';
+import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
 import upload from '../../middleware/uploadMiddleware.js';
 
 const router = express.Router();
@@ -65,7 +63,7 @@ router.post(
     { name: 'sanctionLetter', maxCount: 1 },
     { name: 'attachments', maxCount: 5 },
   ]),
-  BudgetController.uploadFiles
+  BudgetController.uploadFiles,
 );
 
 router.get('/:id(\\d+)', BudgetController.get);

@@ -1,7 +1,8 @@
 import express from 'express';
+
 import journalController from './journalController.js';
-import upload from '../../middleware/uploadMiddleware.js';
 import { authMiddleware } from '../../middleware/authMiddleware.js'; // Add this import
+import upload from '../../middleware/uploadMiddleware.js';
 
 const router = express.Router();
 
@@ -28,22 +29,15 @@ router.post('/journals/:id/indexes', journalController.addIndex);
 router.get('/journals/:id/indexes', journalController.getIndexes);
 
 // Status Update operations
-router.post(
-  '/journals/:id/status-updates',
-  journalController.createStatusUpdate
-);
+router.post('/journals/:id/status-updates', journalController.createStatusUpdate);
 router.get('/journals/:id/status-updates', journalController.getStatusUpdates);
 router.put(
   '/status-updates/:statusUpdateId/admin-reply',
-  journalController.updateStatusUpdateAdminReply
+  journalController.updateStatusUpdateAdminReply,
 );
 
 //Uploads
-router.post(
-  '/journals/:id/upload',
-  upload.single('file'),
-  journalController.uploadFile
-);
+router.post('/journals/:id/upload', upload.single('file'), journalController.uploadFile);
 
 // Journal Request routes
 router.post('/journal-requests', journalController.createJournalRequest);

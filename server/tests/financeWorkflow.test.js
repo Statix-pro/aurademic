@@ -1,0 +1,192 @@
+import jwt from 'jsonwebtoken';
+import request from 'supertest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import app from '../server.js';
+
+process.env.JWT_SECRET = 'test-secret-key';
+
+import financeModel from '../modules/finance/financeModel.js';
+import workflowService from '../modules/shared/workflow/workflowService.js';
+import accessControlModel from '../modules/accessControl/accessControlModel.js';
+
+// Mock the model
+vi.mock('../modules/finance/financeModel.js', () => {
+  return {
+    default: {
+      getFinanceRequestById: vi.fn(),
+      updateFinanceWorkflowSnapshot: vi.fn(),
+      doesFinanceExist: vi.fn(),
+      getBudgetAvailabilityForUser: vi.fn(),
+      createFinanceRequest: vi.fn(),
+      addBudgetBreakup: vi.fn(),
+      hardDeleteFinanceRequest: vi.fn(),
+    },
+  };
+});
+
+// Mock the workflow service
+vi.mock('../modules/shared/workflow/workflowService.js', () => {
+  return {
+    default: {
+      startWorkflow: vi.fn(),
+      actOnWorkflow: vi.fn(),
+    },
+  };
+});
+
+// Mock access control
+vi.mock('../modules/accessControl/accessControlModel.js', () => {
+  return {
+    default: {
+      getUserAuthorizationSnapshot: vi.fn(),
+    },
+  };
+});
+
+describe('Finance Workflow Integration Tests', () => {
+  let token;
+
+  const generateTestToken = (payload) => {
+    return jwt.sign(payload, process.env.JWT_SECRET);
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    token = generateTestToken({
+      userId: 1,
+      email: 'test-user@ksrct.ac.in',
+      name: 'Test User',
+      roles: ['faculty'],
+      permissions: ['finance.create'],
+    });
+  });
+
+  describe('POST /api/finance-requests - Create Request', () => {
+    it('creates a finance request successfully (Happy Path)', async () => {
+      const payload = {
+        employee_id: 1,
+        applicant_name: 'Test User',
+        request_date: '2026-06-06',
+        beneficiary_type: 'Department',
+        beneficiary_value: 'CSE',
+        primary_head: 'Research',
+        total_budget: 12000,
+        budget_rows: [
+          {
+            budget_head_id: 1,
+            budget_head: 'Research',
+            sub_head: 'Lab Equipment',
+            amount: 12000,
+          },
+        ],
+      };
+
+      accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue({
+        roles: ['faculty'],
+        permissions: [],
+        isAdmin: false,
+        isSuperAdmin: false,
+      });
+
+      financeModel.createFinanceRequest.mockResolvedValue(201);
+      workflowService.startWorkflow.mockResolvedValue({
+        state: { currentStage: 'level1', status: 'in_progress' },
+      });
+      financeModel.getFinanceRequestById.mockResolvedValue({
+        id: 201,
+        proposal_ref: '#F-2026-0001',
+      });
+
+      const response = await request(app)
+        .post('/api/finance-requests')
+        .set('Authorization', `Bearer ${token}`)
+        .send(payload);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual({
+        success: true,
+        message: 'Finance request created successfully',
+        data: expect.objectContaining({
+          id: 201,
+          requestRef: '#F-2026-0001',
+        }),
+      });
+      expect(financeModel.createFinanceRequest).toHaveBeenCalled();
+      expect(workflowService.startWorkflow).toHaveBeenCalled();
+    });
+
+    it('returns 400 if required fields are missing (Error Path)', async () => {
+      const invalidPayload = {
+        employee_id: 1,
+        // missing request_date and primary_head
+      };
+
+      accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue({
+        roles: ['faculty'],
+        permissions: [],
+      });
+
+      const response = await request(app)
+        .post('/api/finance-requests')
+        .set('Authorization', `Bearer ${token}`)
+        .send(invalidPayload);
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toContain('Missing required fields');
+    });
+  });
+
+  describe('PATCH /api/finance-requests/:id/approval - Approve Workflow', () => {
+    it('successfully processes approval from the workflow stage (Happy Path)', async () => {
+      const mockFinanceRequest = {
+        id: 201,
+        proposal_ref: '#F-2026-0001',
+        created_by: 1,
+        workflow_state: {
+          status: 'in_progress',
+          currentStage: 'level1',
+        },
+      };
+
+      const approverToken = generateTestToken({
+        userId: 10,
+        email: 'approver@ksrct.ac.in',
+        name: 'Approver User',
+        roles: ['coordinator'],
+        permissions: ['finance.workflow.level1'],
+      });
+
+      accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue({
+        roles: ['coordinator'],
+        permissions: ['finance.workflow.level1'],
+        isAdmin: false,
+        isSuperAdmin: false,
+      });
+
+      financeModel.getFinanceRequestById.mockResolvedValue(mockFinanceRequest);
+      workflowService.actOnWorkflow.mockResolvedValue({
+        decision: 'approved',
+        stage: 'level1',
+        previousState: { currentStage: 'level1' },
+        currentState: { currentStage: 'dof' },
+      });
+
+      const response = await request(app)
+        .patch('/api/finance-requests/201/approval')
+        .set('Authorization', `Bearer ${approverToken}`)
+        .send({ decision: 'approved', feedback: 'Approved' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toContain('Workflow approved at stage level1');
+      expect(workflowService.actOnWorkflow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recordId: 201,
+          decision: 'approved',
+        }),
+      );
+    });
+  });
+});

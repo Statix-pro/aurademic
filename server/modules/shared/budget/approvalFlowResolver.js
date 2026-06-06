@@ -5,28 +5,28 @@
  * based on beneficiary type, entity type, and tags (e.g., IT Head stage).
  */
 
-import db from '../../../config/connection.js';
 import { normalizeBeneficiaryType, normalizeText, isEntityBeneficiaryType } from './budgetUtils.js';
+import db from '../../../config/connection.js';
 
 const parseJsonFlow = (rawFlow) => {
-    if (!rawFlow) return [];
+  if (!rawFlow) return [];
 
-    if (Array.isArray(rawFlow)) {
-        return rawFlow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean);
+  if (Array.isArray(rawFlow)) {
+    return rawFlow.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean);
+  }
+
+  if (typeof rawFlow === 'string') {
+    try {
+      const parsed = JSON.parse(rawFlow);
+      if (Array.isArray(parsed)) {
+        return parsed.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean);
+      }
+    } catch {
+      return [];
     }
+  }
 
-    if (typeof rawFlow === 'string') {
-        try {
-            const parsed = JSON.parse(rawFlow);
-            if (Array.isArray(parsed)) {
-                return parsed.map((stage) => normalizeText(stage).toLowerCase()).filter(Boolean);
-            }
-        } catch {
-            return [];
-        }
-    }
-
-    return [];
+  return [];
 };
 
 /**
@@ -38,17 +38,22 @@ const parseJsonFlow = (rawFlow) => {
  * @param {object} options - Additional options including budgetTag
  * @returns {Promise<object>} Resolved flow configuration
  */
-export async function resolveApprovalFlow(beneficiaryType, entityTypeCode = null, conn = db, { budgetTag = '' } = {}) {
-    const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
+export async function resolveApprovalFlow(
+  beneficiaryType,
+  entityTypeCode = null,
+  conn = db,
+  { budgetTag = '' } = {},
+) {
+  const normalizedBeneficiaryType = normalizeBeneficiaryType(beneficiaryType);
 
-    if (!normalizedBeneficiaryType) {
-        return { requiresLevel1: 0, requiresIthead: 0, requiresDof: 1, requiresPrincipal: 1 };
-    }
+  if (!normalizedBeneficiaryType) {
+    return { requiresLevel1: 0, requiresIthead: 0, requiresDof: 1, requiresPrincipal: 1 };
+  }
 
-    const normalizedEntityTypeCode = normalizeText(entityTypeCode).toUpperCase() || null;
+  const normalizedEntityTypeCode = normalizeText(entityTypeCode).toUpperCase() || null;
 
-    const [rows] = await conn.execute(
-        `SELECT flow
+  const [rows] = await conn.execute(
+    `SELECT flow
          FROM approval_flow_config
          WHERE is_active = 1
            AND LOWER(TRIM(module_key)) IN ('budget', '*')
@@ -68,42 +73,41 @@ export async function resolveApprovalFlow(beneficiaryType, entityTypeCode = null
              ELSE 2
            END
          LIMIT 1`,
-        [
-            normalizedBeneficiaryType,
-            normalizedEntityTypeCode,
-            normalizedEntityTypeCode,
-            normalizedEntityTypeCode,
-            normalizedBeneficiaryType,
-            normalizedEntityTypeCode,
-            normalizedEntityTypeCode,
-        ]
-    );
+    [
+      normalizedBeneficiaryType,
+      normalizedEntityTypeCode,
+      normalizedEntityTypeCode,
+      normalizedEntityTypeCode,
+      normalizedBeneficiaryType,
+      normalizedEntityTypeCode,
+      normalizedEntityTypeCode,
+    ],
+  );
 
-    const resolvedStages = rows.length > 0
-        ? parseJsonFlow(rows[0].flow)
-        : [];
+  const resolvedStages = rows.length > 0 ? parseJsonFlow(rows[0].flow) : [];
 
-    const resolvedFlow = resolvedStages.length > 0
-        ? {
-            requiresLevel1: resolvedStages.includes('level1') ? 1 : 0,
-            requiresIthead: resolvedStages.includes('ithead') ? 1 : 0,
-            requiresDof: resolvedStages.includes('dof') ? 1 : 0,
-            requiresPrincipal: resolvedStages.includes('principal') ? 1 : 0,
+  const resolvedFlow =
+    resolvedStages.length > 0
+      ? {
+          requiresLevel1: resolvedStages.includes('level1') ? 1 : 0,
+          requiresIthead: resolvedStages.includes('ithead') ? 1 : 0,
+          requiresDof: resolvedStages.includes('dof') ? 1 : 0,
+          requiresPrincipal: resolvedStages.includes('principal') ? 1 : 0,
         }
-        : ['Faculty', 'Staff', 'Department'].includes(normalizedBeneficiaryType)
-            ? { requiresLevel1: 1, requiresIthead: 0, requiresDof: 1, requiresPrincipal: 1 }
-            : { requiresLevel1: 0, requiresIthead: 0, requiresDof: 1, requiresPrincipal: 1 };
+      : ['Faculty', 'Staff', 'Department'].includes(normalizedBeneficiaryType)
+        ? { requiresLevel1: 1, requiresIthead: 0, requiresDof: 1, requiresPrincipal: 1 }
+        : { requiresLevel1: 0, requiresIthead: 0, requiresDof: 1, requiresPrincipal: 1 };
 
-    // Entity beneficiaries must always pass through Level 1 before DoF/Principal.
-    if (isEntityBeneficiaryType(normalizedBeneficiaryType)) {
-        resolvedFlow.requiresLevel1 = 1;
-    }
+  // Entity beneficiaries must always pass through Level 1 before DoF/Principal.
+  if (isEntityBeneficiaryType(normalizedBeneficiaryType)) {
+    resolvedFlow.requiresLevel1 = 1;
+  }
 
-    // Tag-based IT Head stage injection
-    const normalizedTag = normalizeText(budgetTag).toLowerCase().replace(/\s+/g, ' ').trim();
-    if (normalizedTag === 'it infrastructure') {
-        resolvedFlow.requiresIthead = 1;
-    }
+  // Tag-based IT Head stage injection
+  const normalizedTag = normalizeText(budgetTag).toLowerCase().replace(/\s+/g, ' ').trim();
+  if (normalizedTag === 'it infrastructure') {
+    resolvedFlow.requiresIthead = 1;
+  }
 
-    return resolvedFlow;
+  return resolvedFlow;
 }
