@@ -809,6 +809,10 @@ const expenditureController = {
         data: payee,
       });
     } catch (err) {
+      const message = normalizeText(err.message);
+      if (message.includes('required') || message.includes('must be')) {
+        return sendError(res, 400, message);
+      }
       return handleError(res, err, 'Error creating payee');
     }
   },
@@ -834,8 +838,18 @@ const expenditureController = {
       }
       if (data.payment_details) {
         const paymentDetails = data.payment_details;
-        if (!paymentDetails.account_no || !paymentDetails.ifsc || !paymentDetails.bank_name) {
-          return sendError(res, 400, 'payment_details must include account_no, ifsc and bank_name');
+        if (
+          !paymentDetails.account_no ||
+          !paymentDetails.ifsc ||
+          !paymentDetails.bank_name ||
+          !paymentDetails.beneficiary_org ||
+          !paymentDetails.account_type
+        ) {
+          return sendError(
+            res,
+            400,
+            'payment_details must include account_no, ifsc, bank_name, beneficiary_org and account_type',
+          );
         }
       }
 
@@ -1078,7 +1092,6 @@ const expenditureController = {
             'Invalid request type. Expected Advance, Settlement, or Expenditure.',
           );
         }
-
         const uploads = getExpenditureUploads(req);
 
         const result = await expenditureModel.updateExpenditureRequest(

@@ -177,6 +177,11 @@ const sanitizeUppercaseAlphaNumeric = (value: unknown, maxLength: number): strin
     .replace(/[^A-Z0-9]/g, '')
     .slice(0, maxLength);
 
+const extractPanFromGstin = (value: unknown): string => {
+  const gstin = sanitizeUppercaseAlphaNumeric(value, 15);
+  return gstin.length >= 12 ? gstin.slice(2, 12) : '';
+};
+
 const isExactUppercaseAlphaNumeric = (value: unknown, length: number): boolean =>
   new RegExp(`^[A-Z0-9]{${length}}$`).test(normalizePayeeText(value).toUpperCase());
 
@@ -430,10 +435,13 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
     const beneficiary = normalizePayeeText(newPayeeName);
     const accountName = normalizePayeeText(newAccountName).toUpperCase();
     const panNumber = sanitizeUppercaseAlphaNumeric(newPanNumber, 10);
-    const orgPan = normalizePayeeText(orgPanNumber).toUpperCase();
+    const orgPan = sanitizeUppercaseAlphaNumeric(
+      orgPanNumber || extractPanFromGstin(gstinValue),
+      10,
+    );
     const organizationType = normalizePayeeText(orgType);
     const msme = normalizePayeeText(msmeValue);
-    const gstin = normalizePayeeText(gstinValue).toUpperCase();
+    const gstin = sanitizeUppercaseAlphaNumeric(gstinValue, 15);
     const tdsDetails = normalizePayeeText(tdsValue);
     const tdsSection = normalizePayeeText(tdsSectionValue);
     const accountType = normalizePayeeText(newAccountType);
@@ -550,7 +558,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
           {beneficiaryType === 'individual' && (
             <div className="add-payee-modal-section">
               <div className="add-payee-modal-row">
-                <label>Beneficiary</label>
+                <label>Beneficiary *</label>
                 <div className="add-payee-modal-radio-group">
                   {BENEFICIARY_ORG_OPTIONS.map((option) => (
                     <label key={option} className="add-payee-modal-radio">
@@ -600,7 +608,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
           {beneficiaryType === 'organization' && (
             <div className="add-payee-modal-section">
               <div className="add-payee-modal-row">
-                <label>Beneficiary</label>
+                <label>Beneficiary *</label>
                 <div className="add-payee-modal-radio-group">
                   {BENEFICIARY_ORG_OPTIONS.map((option) => (
                     <label key={option} className="add-payee-modal-radio">
@@ -682,8 +690,14 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
                   className="payee-modal-field-input"
                   type="text"
                   value={gstinValue}
-                  onChange={(event) => setGstinValue(event.target.value.toUpperCase())}
+                  onChange={(event) => {
+                    const gstin = sanitizeUppercaseAlphaNumeric(event.target.value, 15);
+                    setGstinValue(gstin);
+                    const extractedPan = extractPanFromGstin(gstin);
+                    if (extractedPan) setOrgPanNumber(extractedPan);
+                  }}
                   placeholder="Enter GSTIN"
+                  maxLength={15}
                   disabled={isSubmitting}
                 />
               </div>
@@ -775,7 +789,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
               <div className="payee-modal-confirm-field">
                 <input
                   className={`payee-modal-field-input ${newConfirmAccountNo && newAccountNo && newConfirmAccountNo !== newAccountNo ? 'is-invalid' : ''}`}
-                  type="text"
+                  type="password"
                   value={newConfirmAccountNo}
                   onChange={(event) => setNewConfirmAccountNo(event.target.value)}
                   onPaste={(event) => event.preventDefault()}
@@ -797,7 +811,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
               </div>
             )}
             <div className="add-payee-modal-row">
-              <label>Account Type</label>
+              <label>Account Type *</label>
               <div className="add-payee-modal-radio-group">
                 <label className="add-payee-modal-radio">
                   <input

@@ -220,6 +220,11 @@ const sanitizeUppercaseAlphaNumeric = (value: unknown, maxLength: number): strin
     .replace(/[^A-Z0-9]/g, '')
     .slice(0, maxLength);
 
+const extractPanFromGstin = (value: unknown): string => {
+  const gstin = sanitizeUppercaseAlphaNumeric(value, 15);
+  return gstin.length >= 12 ? gstin.slice(2, 12) : '';
+};
+
 const isExactUppercaseAlphaNumeric = (value: unknown, length: number): boolean =>
   new RegExp(`^[A-Z0-9]{${length}}$`).test(normalizePayeeText(value).toUpperCase());
 
@@ -428,14 +433,52 @@ const PayeeDetailModal: React.FC<{
   if (!isOpen || !payeeId) return null;
 
   const updateDraft = (key: keyof PayeeFormDraft, value: string) => {
-    setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
+    setDraft((prev) => {
+      if (!prev) return prev;
+
+      if (key === 'gstin') {
+        const gstin = sanitizeUppercaseAlphaNumeric(value, 15);
+        const extractedPan = extractPanFromGstin(gstin);
+        return {
+          ...prev,
+          gstin,
+          ...(String(prev.beneficiary_type || '').toLowerCase() === 'organization' && extractedPan
+            ? { pan_number: extractedPan }
+            : {}),
+        };
+      }
+
+      if (key === 'beneficiary_type') {
+        const beneficiaryType = value === 'organization' ? 'organization' : 'individual';
+        return {
+          ...prev,
+          beneficiary_type: beneficiaryType,
+          ...(beneficiaryType === 'organization'
+            ? {
+                pan_number: extractPanFromGstin(prev.gstin) || prev.pan_number,
+              }
+            : {
+                organization_type: '',
+                msme: '',
+                gstin: '',
+                tds_details: '',
+                tds_section: '',
+              }),
+        };
+      }
+
+      return { ...prev, [key]: value };
+    });
   };
 
   const handleSave = async () => {
     if (!draft) return;
     const accountName = normalizePayeeText(draft.payee_name).toUpperCase();
     const beneficiaryOrg = normalizePayeeText(draft.beneficiary_org);
-    const panNumber = sanitizeUppercaseAlphaNumeric(draft.pan_number, 10);
+    const panNumber = sanitizeUppercaseAlphaNumeric(
+      draft.pan_number || extractPanFromGstin(draft.gstin),
+      10,
+    );
     const ifsc = sanitizeUppercaseAlphaNumeric(draft.ifsc, 11);
     const accountNo = normalizePayeeText(draft.account_no);
     const confirmAccountNo = normalizePayeeText(draft.confirm_account_no);
@@ -447,7 +490,7 @@ const PayeeDetailModal: React.FC<{
         : 'individual';
     const organizationType = normalizePayeeText(draft.organization_type);
     const msme = normalizePayeeText(draft.msme);
-    const gstin = normalizePayeeText(draft.gstin).toUpperCase();
+    const gstin = sanitizeUppercaseAlphaNumeric(draft.gstin, 15);
     const tdsDetails = normalizePayeeText(draft.tds_details);
     const tdsSection = normalizePayeeText(draft.tds_section);
     const accountType = normalizePayeeText(draft.account_type);
@@ -642,12 +685,16 @@ const PayeeDetailModal: React.FC<{
                 />
               </div>
               <div>
-                <label style={labelStyle}>Account Type</label>
-                <input
+                <label style={labelStyle}>Account Type *</label>
+                <select
                   style={inputStyle}
                   value={draft.account_type || ''}
                   onChange={(e) => updateDraft('account_type', e.target.value)}
-                />
+                >
+                  <option value="">Select Account Type</option>
+                  <option value="Savings">Savings</option>
+                  <option value="Current">Current</option>
+                </select>
               </div>
               <div>
                 <label style={labelStyle}>PAN Number</label>
@@ -668,7 +715,7 @@ const PayeeDetailModal: React.FC<{
                 }}
               >
                 <div>
-                  <label style={labelStyle}>Beneficiary Org</label>
+                  <label style={labelStyle}>Beneficiary Org *</label>
                   <select
                     style={inputStyle}
                     value={draft.beneficiary_org || ''}
@@ -702,6 +749,7 @@ const PayeeDetailModal: React.FC<{
                     style={inputStyle}
                     value={draft.gstin || ''}
                     onChange={(e) => updateDraft('gstin', e.target.value)}
+                    maxLength={15}
                   />
                 </div>
                 <div>
@@ -1084,7 +1132,42 @@ const PayeeFormModal: React.FC<{
   if (!isOpen || !payeeId) return null;
 
   const updateDraft = (key: keyof PayeeFormDraft, value: string) => {
-    setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
+    setDraft((prev) => {
+      if (!prev) return prev;
+
+      if (key === 'gstin') {
+        const gstin = sanitizeUppercaseAlphaNumeric(value, 15);
+        const extractedPan = extractPanFromGstin(gstin);
+        return {
+          ...prev,
+          gstin,
+          ...(String(prev.beneficiary_type || '').toLowerCase() === 'organization' && extractedPan
+            ? { pan_number: extractedPan }
+            : {}),
+        };
+      }
+
+      if (key === 'beneficiary_type') {
+        const beneficiaryType = value === 'organization' ? 'organization' : 'individual';
+        return {
+          ...prev,
+          beneficiary_type: beneficiaryType,
+          ...(beneficiaryType === 'organization'
+            ? {
+                pan_number: extractPanFromGstin(prev.gstin) || prev.pan_number,
+              }
+            : {
+                organization_type: '',
+                msme: '',
+                gstin: '',
+                tds_details: '',
+                tds_section: '',
+              }),
+        };
+      }
+
+      return { ...prev, [key]: value };
+    });
   };
 
   const resetToView = () => {
@@ -1103,7 +1186,10 @@ const PayeeFormModal: React.FC<{
       normalizePayeeText(draft.beneficiary_org) || normalizePayeeText(original.beneficiary_org);
     const originalPan = normalizePayeeText(original.pan_number).toUpperCase();
     const originalIfsc = normalizePayeeText(original.ifsc).toUpperCase();
-    const panNumber = sanitizeUppercaseAlphaNumeric(draft.pan_number, 10);
+    const panNumber = sanitizeUppercaseAlphaNumeric(
+      draft.pan_number || extractPanFromGstin(draft.gstin),
+      10,
+    );
     const ifsc = sanitizeUppercaseAlphaNumeric(draft.ifsc, 11);
     const originalPanChanged = panNumber !== sanitizeUppercaseAlphaNumeric(originalPan, 10);
     const originalIfscChanged = ifsc !== sanitizeUppercaseAlphaNumeric(originalIfsc, 11);
@@ -1113,12 +1199,13 @@ const PayeeFormModal: React.FC<{
     const branchName = capitalizeFirstLetter(draft.branch_name);
     const organizationType = normalizePayeeText(draft.organization_type);
     const msme = normalizePayeeText(draft.msme);
-    const gstin = normalizePayeeText(draft.gstin).toUpperCase();
+    const gstin = sanitizeUppercaseAlphaNumeric(draft.gstin, 15);
     const tdsDetails = normalizePayeeText(draft.tds_details);
     const tdsSection = normalizePayeeText(draft.tds_section);
     const accountType = normalizePayeeText(draft.account_type);
 
     const missingFields: string[] = [];
+    if (!beneficiaryOrg) missingFields.push('Beneficiary');
     if (!accountName) missingFields.push('Account Name');
     if (beneficiaryType === 'organization') {
       if (!organizationType) missingFields.push('Organization Type');
@@ -1287,7 +1374,7 @@ const PayeeFormModal: React.FC<{
 
               <div className="add-payee-modal-section">
                 <div className="add-payee-modal-row">
-                  <label>Beneficiary</label>
+                  <label>Beneficiary *</label>
                   <div className="add-payee-modal-radio-group">
                     {BENEFICIARY_ORG_OPTIONS.map((option) => (
                       <label key={option} className="add-payee-modal-radio">
@@ -1405,6 +1492,7 @@ const PayeeFormModal: React.FC<{
                           !isReadOnly && updateDraft('gstin', event.target.value.toUpperCase())
                         }
                         placeholder="Enter GSTIN"
+                        maxLength={15}
                         readOnly={isReadOnly}
                         disabled={busy}
                       />
@@ -1509,7 +1597,7 @@ const PayeeFormModal: React.FC<{
                   <div className="payee-modal-confirm-field">
                     <input
                       className={`payee-modal-field-input ${!isReadOnly && formDraft.confirm_account_no && formDraft.account_no && formDraft.confirm_account_no !== formDraft.account_no ? 'is-invalid' : ''}`}
-                      type="text"
+                      type="password"
                       value={String(formDraft.confirm_account_no || '')}
                       onChange={(event) =>
                         !isReadOnly && updateDraft('confirm_account_no', event.target.value)
@@ -1544,7 +1632,7 @@ const PayeeFormModal: React.FC<{
                     </div>
                   )}
                 <div className="add-payee-modal-row">
-                  <label>Account Type</label>
+                  <label>Account Type *</label>
                   <div className="add-payee-modal-radio-group">
                     <label className="add-payee-modal-radio">
                       <input

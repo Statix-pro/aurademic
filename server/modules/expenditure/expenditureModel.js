@@ -21,9 +21,23 @@ import { searchApplicant as searchEmployeeApplicants } from '../shared/budget/us
 
 const normalizeText = (v) => String(v || '').trim();
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
+const ACCOUNT_TYPE_OPTIONS = ['Savings', 'Current'];
 const EXPENDITURE_REQUEST_COLUMN_EXISTS_CACHE = new Map();
 
 const isBeneficiaryOrgValue = (value) => BENEFICIARY_ORG_OPTIONS.includes(normalizeText(value));
+const normalizeAccountType = (value) =>
+  ACCOUNT_TYPE_OPTIONS.find(
+    (option) => option.toLowerCase() === normalizeText(value).toLowerCase(),
+  ) || null;
+const sanitizeAlphaNumericUpper = (value, maxLength) =>
+  normalizeText(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, maxLength);
+const extractPanFromGstin = (value) => {
+  const gstin = sanitizeAlphaNumericUpper(value, 15);
+  return gstin.length >= 12 ? gstin.slice(2, 12) : '';
+};
 
 const hasExpenditureRequestColumn = async (columnName, { tx = db } = {}) => {
   const normalizedColumn = normalizeText(columnName);
@@ -1809,10 +1823,18 @@ export async function updatePayeeById(id, payeeData = {}) {
   const beneficiaryOrg = BENEFICIARY_ORG_OPTIONS.includes(beneficiaryOrgRaw)
     ? beneficiaryOrgRaw
     : null;
+  const accountType = normalizeAccountType(payeeData.account_type);
+  const gstin = sanitizeAlphaNumericUpper(payeeData.gstin, 15);
+  const panNumber = sanitizeAlphaNumericUpper(
+    payeeData.pan_number || extractPanFromGstin(gstin),
+    10,
+  );
 
   if (!canonicalPayeeName || !accountNo || !ifsc || !bankName || !branchName) {
     throw new Error('payee_name, account_no, ifsc, bank_name and branch_name are required');
   }
+  if (!beneficiaryOrg) throw new Error('beneficiary_org is required');
+  if (!accountType) throw new Error('account_type must be Savings or Current');
 
   const [existingRows] = await db.execute(
     'SELECT id FROM expenditure_payees WHERE id = ? AND is_active = 1 LIMIT 1',
@@ -1846,9 +1868,9 @@ export async function updatePayeeById(id, payeeData = {}) {
     [
       canonicalPayeeName,
       canonicalPayeeName || null,
-      normalizeText(payeeData.pan_number) || null,
+      panNumber || null,
       accountNo,
-      normalizeText(payeeData.account_type) || null,
+      accountType,
       ifsc,
       bankName,
       branchName,
@@ -1856,7 +1878,7 @@ export async function updatePayeeById(id, payeeData = {}) {
       beneficiaryOrg,
       normalizeText(payeeData.organization_type) || null,
       normalizeText(payeeData.msme) || null,
-      normalizeText(payeeData.gstin) || null,
+      beneficiaryType === 'organization' ? gstin || null : null,
       normalizeText(payeeData.tds_details) || null,
       normalizeText(payeeData.tds_section) || null,
       payeeId,
@@ -1928,42 +1950,44 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
   const financeParams = [uid];
   const expenditureParams = [uid];
   let financeFySql = '';
-  let expenditureFySql = '';
+  let requestFinanceFySql = '';
 
-  if (fyStart) {
-    const fyFrom = `${fyStart}-04-01`;
-    const fyTo = `${fyStart + 1}-04-01`;
-    financeFySql = ` AND (
+  const buildDashboardFinanceFySql = (financeAlias) => ` AND (
       COALESCE(
         (
           SELECT MIN(bp_card.fiscal_year)
             FROM finance_budget_breakup fbb_card
             JOIN budget_proposals bp_card ON bp_card.id = fbb_card.budget_proposal_id
-           WHERE fbb_card.finance_id = fr.id
+           WHERE fbb_card.finance_id = ${financeAlias}.id
         ),
-        YEAR(COALESCE(fr.request_date, fr.created_at))
-          - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+        YEAR(COALESCE(${financeAlias}.request_date, ${financeAlias}.created_at))
+          - (MONTH(COALESCE(${financeAlias}.request_date, ${financeAlias}.created_at)) < 4)
       ) = ?
       OR EXISTS (
         SELECT 1
           FROM finance_carry_forward_allocations cf_card
-         WHERE cf_card.finance_request_id = fr.id
+         WHERE cf_card.finance_request_id = ${financeAlias}.id
            AND cf_card.target_fiscal_year = ?
            AND LOWER(TRIM(cf_card.status)) = 'active'
       )
       OR EXISTS (
         SELECT 1
           FROM expenditure_requests er_fy
-         WHERE er_fy.finance_request_id = fr.id
+         WHERE er_fy.finance_request_id = ${financeAlias}.id
            AND er_fy.created_by = ?
            AND LOWER(TRIM(COALESCE(er_fy.overall_status, 'pending'))) <> 'deleted'
            AND er_fy.request_date >= ?
            AND er_fy.request_date < ?
       )
     )`;
-    expenditureFySql = ' AND er.request_date >= ? AND er.request_date < ?';
+
+  if (fyStart) {
+    const fyFrom = `${fyStart}-04-01`;
+    const fyTo = `${fyStart + 1}-04-01`;
+    financeFySql = buildDashboardFinanceFySql('fr');
+    requestFinanceFySql = buildDashboardFinanceFySql('fr_req');
     financeParams.push(fyStart, fyStart, uid, fyFrom, fyTo);
-    expenditureParams.push(fyFrom, fyTo);
+    expenditureParams.push(fyStart, fyStart, uid, fyFrom, fyTo);
   }
 
   const [cardRows] = await db.execute(
@@ -2077,6 +2101,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) AS overall_status,
          er.created_at
        FROM expenditure_requests er
+       JOIN finance_requests fr_req ON fr_req.id = er.finance_request_id
        LEFT JOIN master_employees emp ON emp.id = er.employee_id
        LEFT JOIN finance_request_refs frr ON frr.finance_request_id = er.finance_request_id
        LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
@@ -2119,7 +2144,12 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        ) sample_row ON sample_row.expenditure_id = er.id
        WHERE er.created_by = ?
        AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
-       ${expenditureFySql}
+       AND (
+         LOWER(TRIM(COALESCE(fr_req.overall_status, ''))) = 'approved'
+         OR LOWER(TRIM(COALESCE(fr_req.workflow_status, ''))) IN ('approved', 'completed')
+         OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr_req.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
+       )
+       ${requestFinanceFySql}
      ORDER BY er.created_at DESC, er.id DESC`,
     expenditureParams,
   );
@@ -2259,7 +2289,15 @@ export async function upsertPayee(payeeData, userId, conn = db) {
   const beneficiaryOrg = BENEFICIARY_ORG_OPTIONS.includes(beneficiaryOrgRaw)
     ? beneficiaryOrgRaw
     : null;
+  const accountType = normalizeAccountType(payeeData.account_type);
+  const gstin = sanitizeAlphaNumericUpper(payeeData.gstin, 15);
+  const panNumber = sanitizeAlphaNumericUpper(
+    payeeData.pan_number || extractPanFromGstin(gstin),
+    10,
+  );
   if (!accountNo || !ifsc) throw new Error('account_no and ifsc are required');
+  if (!beneficiaryOrg) throw new Error('beneficiary_org is required');
+  if (!accountType) throw new Error('account_type must be Savings or Current');
 
   const [existing] = await conn.execute(
     'SELECT id FROM expenditure_payees WHERE account_no = ? AND ifsc = ? LIMIT 1',
@@ -2293,15 +2331,15 @@ export async function upsertPayee(payeeData, userId, conn = db) {
       [
         canonicalPayeeName || null,
         canonicalPayeeName || null,
-        payeeData.pan_number || null,
-        payeeData.account_type || null,
+        panNumber || null,
+        accountType,
         payeeData.bank_name || null,
         payeeData.branch_name || null,
         beneficiaryType,
         beneficiaryOrg,
         payeeData.organization_type || null,
         payeeData.msme || null,
-        payeeData.gstin || null,
+        beneficiaryType === 'organization' ? gstin || null : null,
         payeeData.tds_details || null,
         payeeData.tds_section || null,
         existing[0].id,
@@ -2322,7 +2360,7 @@ export async function upsertPayee(payeeData, userId, conn = db) {
       canonicalPayeeName,
       canonicalPayeeName || null,
       accountNo,
-      payeeData.account_type || null,
+      accountType,
       normalizeText(payeeData.bank_name),
       normalizeText(payeeData.branch_name || ''),
       ifsc,
@@ -2330,8 +2368,8 @@ export async function upsertPayee(payeeData, userId, conn = db) {
       beneficiaryOrg,
       payeeData.organization_type || null,
       payeeData.msme || null,
-      payeeData.pan_number || null,
-      payeeData.gstin || null,
+      panNumber || null,
+      beneficiaryType === 'organization' ? gstin || null : null,
       payeeData.tds_details || null,
       payeeData.tds_section || null,
       userId || null,
@@ -2606,6 +2644,8 @@ async function createExpenditureLegacy(data, userId) {
           account_name: data.payment_details.account_name || null,
           account_type: data.payment_details.account_type || null,
           pan_number: data.payment_details.pan_number || null,
+          beneficiary_org: data.payment_details.beneficiary_org || null,
+          beneficiary_type: data.payment_details.beneficiary_type || 'individual',
         },
         userId,
         conn,
@@ -3077,6 +3117,15 @@ async function insertSettlementRows(
   expenditureId,
   rows = [],
   budgetSnapshotsByLine = new Map(),
+  {
+    userId = null,
+    financeRequestId = null,
+    rowIndex = null,
+    sourceRequestId = null,
+    dashboardRowId = null,
+    workflowRowRef = null,
+    excludeExpenditureId = null,
+  } = {},
 ) {
   const validRows = Array.isArray(rows) ? rows : [];
   let sortOrder = 0;
@@ -3087,12 +3136,25 @@ async function insertSettlementRows(
     const budgetProposalId = toPositiveInt(row.budgetProposalId || row.budget_proposal_id);
     const budgetLineId = toPositiveInt(row.budgetLineId || row.budget_line_id);
     const budgetSnapshot = budgetSnapshotsByLine.get(budgetLineId) || null;
-    const advanceAmount = moneyOrNull(row.advance);
     const settlementAmount = toMoney(row.settlement || row.settlement_amount);
     if (!budgetHead && !subHead && settlementAmount === 0) continue;
 
     // NEW: catalog IDs alongside snapshot text.
     const setIds = await resolveCatalogIds(conn, budgetHead, subHead);
+    const advanceAmount = await getSettlementAdvanceAmount(conn, row, {
+      userId,
+      financeRequestId,
+      rowIndex,
+      sourceRequestId,
+      dashboardRowId,
+      workflowRowRef,
+      excludeExpenditureId,
+      budgetHead,
+      subHead,
+      budgetLineId,
+      budgetHeadId: setIds.budget_head_id,
+      budgetSubHeadId: setIds.budget_sub_head_id,
+    });
 
     await conn.execute(
       `INSERT INTO expenditure_settlement_rows
@@ -3120,6 +3182,150 @@ async function insertSettlementRows(
     );
     sortOrder += 1;
   }
+}
+
+async function getSettlementAdvanceAmount(
+  conn,
+  row = {},
+  {
+    userId = null,
+    financeRequestId = null,
+    rowIndex = null,
+    sourceRequestId = null,
+    dashboardRowId = null,
+    workflowRowRef = null,
+    excludeExpenditureId = null,
+    budgetHead = null,
+    subHead = null,
+    budgetLineId = null,
+    budgetHeadId = null,
+    budgetSubHeadId = null,
+  } = {},
+) {
+  const uid = toPositiveInt(userId);
+  const resolvedBudgetHead = sanitizeRowValue(budgetHead || row.budgetHead || row.budget_head);
+  const resolvedSubHead = sanitizeRowValue(subHead || row.subHead || row.sub_head);
+  const resolvedBudgetLineId = toPositiveInt(
+    budgetLineId || row.budgetLineId || row.budget_line_id,
+  );
+
+  if (!uid || (!resolvedBudgetLineId && (!resolvedBudgetHead || !resolvedSubHead))) {
+    return toMoney(row.advance || row.advance_amount);
+  }
+
+  const resolvedIds =
+    budgetHeadId || budgetSubHeadId
+      ? {
+          budget_head_id: toPositiveInt(budgetHeadId),
+          budget_sub_head_id: toPositiveInt(budgetSubHeadId),
+        }
+      : await resolveCatalogIds(conn, resolvedBudgetHead, resolvedSubHead);
+
+  const summary = await getCumulativeAdvanceSummary(conn, {
+    userId: uid,
+    budgetLineId: resolvedBudgetLineId,
+    head: resolvedBudgetHead,
+    subHead: resolvedSubHead,
+    budgetHeadId: resolvedIds.budget_head_id,
+    budgetSubHeadId: resolvedIds.budget_sub_head_id,
+    financeRequestId,
+    rowIndex,
+    sourceRequestId,
+    dashboardRowId,
+    workflowRowRef,
+    excludeExpenditureId,
+  });
+
+  return toMoney(summary.preAdvance);
+}
+
+async function getSettlementAdvanceTotal(
+  conn,
+  rows = [],
+  {
+    userId = null,
+    financeRequestId = null,
+    rowIndex = null,
+    sourceRequestId = null,
+    dashboardRowId = null,
+    workflowRowRef = null,
+    excludeExpenditureId = null,
+  } = {},
+) {
+  const validRows = Array.isArray(rows) ? rows : [];
+  let total = 0;
+
+  for (const row of validRows) {
+    const settlementAmount = toMoney(row.settlement || row.settlement_amount);
+    const budgetHead = sanitizeRowValue(row.budgetHead || row.budget_head);
+    const subHead = sanitizeRowValue(row.subHead || row.sub_head);
+    if (!budgetHead && !subHead && settlementAmount === 0) continue;
+
+    total += await getSettlementAdvanceAmount(conn, row, {
+      userId,
+      financeRequestId,
+      rowIndex,
+      sourceRequestId,
+      dashboardRowId,
+      workflowRowRef,
+      excludeExpenditureId,
+    });
+  }
+
+  return toMoney(total);
+}
+
+const formatMoney = (value) =>
+  toMoney(value).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+async function assertSettlementPayeesMatchAdjustment(
+  conn,
+  {
+    requestType,
+    settlementRows = [],
+    payeeRows = [],
+    normalizedUnplanned = { amount: 0 },
+    userId = null,
+    financeRequestId = null,
+    rowIndex = null,
+    sourceRequestId = null,
+    dashboardRowId = null,
+    workflowRowRef = null,
+    excludeExpenditureId = null,
+  } = {},
+) {
+  if (requestType !== 'Settlement') return;
+
+  const settlementTotal = toMoney(
+    settlementRows.reduce((sum, row) => sum + toMoney(row.settlement || row.settlement_amount), 0) +
+      toMoney(normalizedUnplanned.amount),
+  );
+  const advanceTotal = await getSettlementAdvanceTotal(conn, settlementRows, {
+    userId,
+    financeRequestId,
+    rowIndex,
+    sourceRequestId,
+    dashboardRowId,
+    workflowRowRef,
+    excludeExpenditureId,
+  });
+  const expectedPayeeTotal = Math.abs(toMoney(settlementTotal - advanceTotal));
+  const submittedPayeeTotal = toMoney(payeeRows.reduce((sum, row) => sum + toMoney(row.amount), 0));
+
+  if (toMoney(expectedPayeeTotal) === submittedPayeeTotal) return;
+
+  if (toMoney(expectedPayeeTotal) === 0) {
+    throw new Error(
+      `Settlement expenditure and advance are equal, so there is no amount to be received or returned. Payee transaction amount must be ₹ ${formatMoney(0)}.`,
+    );
+  }
+
+  throw new Error(
+    `Settlement adjustment amount is ₹ ${formatMoney(expectedPayeeTotal)} and total payee transaction amount is ₹ ${formatMoney(submittedPayeeTotal)}. Both must be exactly the same.`,
+  );
 }
 
 async function insertExpenditureRows(
@@ -3658,61 +3864,6 @@ async function assertRequestTotalWithinApprovedFinanceAmount(
   }
 }
 
-async function getUnsettledAdvanceAmount(
-  conn,
-  financeRequestId,
-  { excludeExpenditureId = null } = {},
-) {
-  const normalizedFinanceRequestId = toPositiveInt(financeRequestId);
-  if (!normalizedFinanceRequestId) return 0;
-  const excludedRequestId = toPositiveInt(excludeExpenditureId);
-
-  const [rows] = await conn.execute(
-    `SELECT
-       COALESCE(SUM(CASE
-         WHEN er.request_type = 'Advance'
-          AND ${FINALIZED_EXPENDITURE_REQUEST_STATUS_SQL}
-         THEN COALESCE(er.advance_total_amount, er.total_amount, 0)
-         ELSE 0
-       END), 0) AS advance_amount,
-       COALESCE(SUM(CASE
-         WHEN er.request_type = 'Settlement'
-          AND ${FINALIZED_EXPENDITURE_REQUEST_STATUS_SQL}
-         THEN COALESCE(er.settlement_total_amount, er.total_amount, 0)
-         ELSE 0
-       END), 0) AS settlement_amount
-     FROM expenditure_requests er
-     WHERE er.finance_request_id = ?
-       AND (? IS NULL OR er.id <> ?)`,
-    [normalizedFinanceRequestId, excludedRequestId, excludedRequestId],
-  );
-
-  return Math.max(
-    0,
-    toMoney(toMoney(rows?.[0]?.advance_amount) - toMoney(rows?.[0]?.settlement_amount)),
-  );
-}
-
-async function assertSettlementWithinUnsettledAdvance(
-  conn,
-  financeRequestId,
-  settlementAmount,
-  { excludeExpenditureId = null } = {},
-) {
-  const normalizedSettlementAmount = toMoney(settlementAmount);
-  if (normalizedSettlementAmount <= 0) return;
-
-  const unsettledAdvanceAmount = await getUnsettledAdvanceAmount(conn, financeRequestId, {
-    excludeExpenditureId,
-  });
-
-  if (normalizedSettlementAmount > unsettledAdvanceAmount) {
-    throw new Error(
-      `Settlement amount ${normalizedSettlementAmount.toFixed(2)} exceeds unsettled advance ${unsettledAdvanceAmount.toFixed(2)}. Create a separate Expenditure request for the extra amount.`,
-    );
-  }
-}
-
 async function applyBudgetUsageDelta(conn, usageRows = [], multiplier = 1) {
   for (const usageRow of usageRows) {
     const budgetLineId = toPositiveInt(usageRow.budgetLineId);
@@ -4008,16 +4159,25 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
       allowZeroSettlement,
     });
 
+    await assertSettlementPayeesMatchAdjustment(conn, {
+      requestType,
+      settlementRows,
+      payeeRows,
+      normalizedUnplanned,
+      userId: uid,
+      financeRequestId,
+      rowIndex: workflowRowIdentity.rowIndex,
+      sourceRequestId,
+      dashboardRowId: workflowRowIdentity.dashboardRowId,
+      workflowRowRef: workflowRowIdentity.workflowRowRef,
+    });
+
     await assertRequestTotalWithinApprovedFinanceAmount(
       conn,
       financeRequestId,
       requestType,
       activeRequestTotal,
     );
-    if (requestType === 'Settlement') {
-      await assertSettlementWithinUnsettledAdvance(conn, financeRequestId, activeRequestTotal);
-    }
-
     if (requestType === 'Expenditure') {
       await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows);
     }
@@ -4192,7 +4352,14 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
       workflowRowRef: workflowRowIdentity.workflowRowRef,
       sourceRequestId,
     });
-    await insertSettlementRows(conn, expenditureId, settlementRows, budgetSnapshotsByLine);
+    await insertSettlementRows(conn, expenditureId, settlementRows, budgetSnapshotsByLine, {
+      userId: uid,
+      financeRequestId,
+      rowIndex: workflowRowIdentity.rowIndex,
+      dashboardRowId: workflowRowIdentity.dashboardRowId,
+      workflowRowRef: workflowRowIdentity.workflowRowRef,
+      sourceRequestId,
+    });
     await insertExpenditureRows(conn, expenditureId, expenditureRows, budgetSnapshotsByLine);
     await insertUnplannedRows(conn, expenditureId, normalizedUnplanned.rows);
     await insertBillFiles(conn, expenditureId, uploads.billFiles);
@@ -4435,18 +4602,26 @@ export async function updateExpenditureRequest(
       }
     }
 
+    await assertSettlementPayeesMatchAdjustment(conn, {
+      requestType,
+      settlementRows,
+      payeeRows,
+      normalizedUnplanned,
+      userId: uid,
+      financeRequestId,
+      rowIndex: workflowRowIdentity.rowIndex,
+      sourceRequestId,
+      dashboardRowId: workflowRowIdentity.dashboardRowId,
+      workflowRowRef: workflowRowIdentity.workflowRowRef,
+      excludeExpenditureId: normalizedExpenditureId,
+    });
+
     await assertRequestTotalWithinApprovedFinanceAmount(
       conn,
       financeRequestId,
       requestType,
       activeRequestTotal,
     );
-    if (requestType === 'Settlement') {
-      await assertSettlementWithinUnsettledAdvance(conn, financeRequestId, activeRequestTotal, {
-        excludeExpenditureId: normalizedExpenditureId,
-      });
-    }
-
     if (requestType === 'Expenditure') {
       await assertExpenditureRowsWithinApprovedHeadTotals(conn, financeRequestId, expenditureRows, {
         excludeExpenditureId: normalizedExpenditureId,
@@ -4665,6 +4840,15 @@ export async function updateExpenditureRequest(
       normalizedExpenditureId,
       settlementRows,
       budgetSnapshotsByLine,
+      {
+        userId: uid,
+        financeRequestId,
+        rowIndex: workflowRowIdentity.rowIndex,
+        dashboardRowId: workflowRowIdentity.dashboardRowId,
+        workflowRowRef: workflowRowIdentity.workflowRowRef,
+        sourceRequestId,
+        excludeExpenditureId: normalizedExpenditureId,
+      },
     );
     await insertExpenditureRows(
       conn,

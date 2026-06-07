@@ -5118,65 +5118,65 @@ const FinanceApproval: React.FC = () => {
                               >
                                 ₹ {totalIncome}
                               </td>
-                              <td colSpan={3} style={{ border: '1px solid #e0e0e0' }}></td>
+                              <td
+                                colSpan={3}
+                                style={{
+                                  padding: '12px 16px',
+                                  border: '1px solid #e0e0e0',
+                                  color: '#0b3d75',
+                                  fontWeight: 600,
+                                  textAlign: 'center',
+                                }}
+                              >
+                                <span>Rupees (in words): </span>
+                                <span>
+                                  {numberToIndianWords(totalIncome)
+                                    .replace(/\b\w/g, (l) => l.toUpperCase())
+                                    .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
+                                </span>
+                              </td>
                             </tr>
-                            {shouldShowManagementRequestAmount && (
-                              <tr style={{ backgroundColor: '#fff8e8' }}>
-                                <td
-                                  colSpan={2}
-                                  style={{
-                                    padding: '12px',
-                                    border: '1px solid #e0e0e0',
-                                    textAlign: 'right',
-                                    paddingRight: '15px',
-                                    fontWeight: '600',
-                                    color: '#7a4b00',
-                                  }}
-                                >
-                                  Amount requested from Management
-                                </td>
-                                <td
-                                  style={{
-                                    padding: '12px',
-                                    border: '1px solid #e0e0e0',
-                                    fontWeight: '600',
-                                    color: '#7a4b00',
-                                    textAlign: 'center',
-                                  }}
-                                >
-                                  ₹ {amountRequestedFromManagement}
-                                </td>
-                                <td colSpan={3} style={{ border: '1px solid #e0e0e0' }}></td>
-                              </tr>
-                            )}
                           </tfoot>
                         </table>
 
-                        {/* Rupees in words */}
-                        <div
-                          style={{
-                            marginTop: '10px',
-                            padding: '10px 14px',
-                            borderRadius: '10px',
-                            backgroundColor: '#f0f6ff',
-                            border: '1px solid #cfe2ff',
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            gap: '8px',
-                            fontSize: '0.9rem',
-                            color: '#0b3d75',
-                            textAlign: 'center',
-                            width: '100%',
-                          }}
-                        >
-                          <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                          <span style={{ fontWeight: 600 }}>
-                            {numberToIndianWords(totalIncome)
-                              .replace(/\b\w/g, (l) => l.toUpperCase())
-                              .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
-                          </span>
-                        </div>
+                        {shouldShowManagementRequestAmount && (
+                          <div
+                            style={{
+                              marginTop: '10px',
+                              padding: '12px 16px',
+                              borderRadius: '10px',
+                              backgroundColor: '#fff8e1',
+                              border: '1px solid #f2d38b',
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              gap: '12px',
+                              flexWrap: 'wrap',
+                              fontSize: '0.95rem',
+                              color: '#7a4b00',
+                              textAlign: 'center',
+                              width: '100%',
+                              fontWeight: 700,
+                            }}
+                          >
+                            <span>Amount requested from Management:</span>
+                            <span>₹ {amountRequestedFromManagement}</span>
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                width: '1px',
+                                height: '20px',
+                                backgroundColor: '#d8a84a',
+                              }}
+                            />
+                            <span>
+                              Rupees (in words):{' '}
+                              {numberToIndianWords(amountRequestedFromManagement)
+                                .replace(/\b\w/g, (l) => l.toUpperCase())
+                                .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
+                            </span>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -6290,15 +6290,51 @@ const FinanceApproval: React.FC = () => {
                             </React.Fragment>
                           ))}
                         </tbody>
-                        {shouldShowManagementRequestAmount && (
-                          <tfoot>
-                            <tr style={{ backgroundColor: '#f8f8f8', fontWeight: 'bold' }}>
+                        <tfoot>
+                          <tr style={{ backgroundColor: '#f0f6ff', fontWeight: 'bold' }}>
+                            <td
+                              colSpan={3}
+                              style={{
+                                padding: '3px 4px',
+                                border: '1px solid #000',
+                                textAlign: 'right',
+                                color: '#0b3d75',
+                              }}
+                            >
+                              Total Income
+                            </td>
+                            <td
+                              style={{
+                                padding: '3px 4px',
+                                border: '1px solid #000',
+                                textAlign: 'right',
+                                color: '#0b3d75',
+                              }}
+                            >
+                              ₹ {totalIncome}
+                            </td>
+                            <td
+                              style={{
+                                padding: '3px 4px',
+                                border: '1px solid #000',
+                                color: '#0b3d75',
+                              }}
+                            >
+                              Rupees (in words):{' '}
+                              {numberToIndianWords(totalIncome)
+                                .replace(/\b\w/g, (l) => l.toUpperCase())
+                                .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
+                            </td>
+                          </tr>
+                          {shouldShowManagementRequestAmount && (
+                            <tr style={{ backgroundColor: '#fff8e1', fontWeight: 'bold' }}>
                               <td
                                 colSpan={3}
                                 style={{
                                   padding: '3px 4px',
                                   border: '1px solid #000',
                                   textAlign: 'right',
+                                  color: '#7a4b00',
                                 }}
                               >
                                 Amount requested from Management
@@ -6308,14 +6344,26 @@ const FinanceApproval: React.FC = () => {
                                   padding: '3px 4px',
                                   border: '1px solid #000',
                                   textAlign: 'right',
+                                  color: '#7a4b00',
                                 }}
                               >
                                 ₹ {amountRequestedFromManagement}
                               </td>
-                              <td style={{ padding: '3px 4px', border: '1px solid #000' }} />
+                              <td
+                                style={{
+                                  padding: '3px 4px',
+                                  border: '1px solid #000',
+                                  color: '#7a4b00',
+                                }}
+                              >
+                                Rupees (in words):{' '}
+                                {numberToIndianWords(amountRequestedFromManagement)
+                                  .replace(/\b\w/g, (l) => l.toUpperCase())
+                                  .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
+                              </td>
                             </tr>
-                          </tfoot>
-                        )}
+                          )}
+                        </tfoot>
                       </table>
                     ) : (
                       <div style={{ textAlign: 'center', fontSize: '14px' }}>

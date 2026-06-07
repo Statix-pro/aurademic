@@ -44,8 +44,8 @@ import {
   subscribeBudgetCatalog,
 } from '../../shared/hooks/budgetCatalogStore';
 import { useBudgetCatalog } from '../../shared/hooks/useBudgetCatalog';
-import authenticityUtility from '../../shared/utils/authenticityUtility';
 import { AccountOption, fetchAccountOptions } from '../../shared/utils/accountOptionsApi';
+import authenticityUtility from '../../shared/utils/authenticityUtility';
 
 interface SelectOption {
   value: string;
@@ -2683,6 +2683,13 @@ const ExpenditureApproval: React.FC = () => {
     totalSettlementAmount + (activeTab === 'Settlement' ? unplannedBudgetTotal : 0);
   const totalExpenditureDisplayAmount =
     totalExpenditureAmount + (activeTab === 'Expenditure' ? unplannedBudgetTotal : 0);
+  const settlementAdjustmentDifference = Number(
+    (totalSettlementDisplayAmount - totalSettlementAdvanceAmount).toFixed(2),
+  );
+  const settlementAdjustmentAmount = Math.abs(settlementAdjustmentDifference);
+  const hasSettlementAdjustment = activeTab === 'Settlement' && settlementAdjustmentAmount > 0;
+  const settlementAdjustmentLabel =
+    settlementAdjustmentDifference > 0 ? 'Amount to be received' : 'Amount to be returned';
 
   const getPayeeTransactionTotal = (rows: PayeeRow[]): number =>
     rows.reduce((sum, row) => {
@@ -2807,12 +2814,68 @@ const ExpenditureApproval: React.FC = () => {
       budgetHead: budgetHeadValue,
       subHead: '',
       budget: '',
+      advance: '',
       budgetLineId: null,
       budgetProposalId: null,
     }));
   };
 
-  const handleSettlementSubHeadChange = (
+  const loadSettlementAdvanceSummary = async (
+    rowId: string,
+    budgetLineId: number | null,
+    budgetHead: string | number,
+    subHead: string | number,
+  ) => {
+    const normalizedHead = String(budgetHead || '').trim();
+    const normalizedSubHead = String(subHead || '').trim();
+
+    if (!budgetLineId && (!normalizedHead || !normalizedSubHead)) {
+      updateSettlementRow(rowId, (row) => ({ ...row, advance: '0' }));
+      return;
+    }
+
+    try {
+      const query = new URLSearchParams();
+      if (budgetLineId) query.set('budget_line_id', String(budgetLineId));
+      if (normalizedHead) query.set('head', normalizedHead);
+      if (normalizedSubHead) query.set('sub_head', normalizedSubHead);
+      if (resolvedFinanceRequestId)
+        query.set('finance_request_id', String(resolvedFinanceRequestId));
+      if (dashboardRowIdFromState) query.set('dashboard_row_id', dashboardRowIdFromState);
+      if (workflowRowRefFromState ?? rowReferenceIdFromState) {
+        query.set('workflowrowref', workflowRowRefFromState ?? rowReferenceIdFromState ?? '');
+      }
+      if (sourceRequestIdFromState)
+        query.set('source_request_id', String(sourceRequestIdFromState));
+      if (
+        !dashboardRowIdFromState &&
+        !(workflowRowRefFromState ?? rowReferenceIdFromState) &&
+        rowIndexFromState
+      ) {
+        query.set('row_index', String(rowIndexFromState));
+      }
+
+      const response = (await authenticityUtility.get(
+        `/expenditure/advance-summary?${query.toString()}`,
+      )) as {
+        success?: boolean;
+        status?: string;
+        data?: { preAdvance?: number };
+      };
+
+      if (response.success === true || response.status === 'success') {
+        const advance = Number(response.data?.preAdvance || 0);
+        updateSettlementRow(rowId, (row) => ({
+          ...row,
+          advance: String(advance),
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to load settlement advance summary:', error);
+    }
+  };
+
+  const handleSettlementSubHeadChange = async (
     rowId: string,
     subHeadValue: string,
     selected?: OptionType | null,
@@ -2832,9 +2895,19 @@ const ExpenditureApproval: React.FC = () => {
       budgetLineId: selectedBudget?.budgetLineId ?? null,
       budgetProposalId: selectedBudget?.budgetProposalId ?? null,
     }));
+
+    await loadSettlementAdvanceSummary(
+      rowId,
+      selectedBudget?.budgetLineId ?? null,
+      budgetHeadValue,
+      subHeadValue,
+    );
   };
 
-  const handleSettlementBudgetHeadSearchChange = (rowId: string, selected: OptionType | null) => {
+  const handleSettlementBudgetHeadSearchChange = async (
+    rowId: string,
+    selected: OptionType | null,
+  ) => {
     const budgetHeadValue = String(selected?.budgetHead || selected?.value || '')
       .replace(/^head::/, '')
       .trim();
@@ -2858,6 +2931,13 @@ const ExpenditureApproval: React.FC = () => {
       budgetLineId: selectedBudget?.budgetLineId ?? null,
       budgetProposalId: selectedBudget?.budgetProposalId ?? null,
     }));
+
+    await loadSettlementAdvanceSummary(
+      rowId,
+      selectedBudget?.budgetLineId ?? null,
+      budgetHeadValue,
+      subHeadValue,
+    );
   };
 
   const handleExpenditureBudgetHeadChange = (rowId: string, budgetHeadValue: string) => {
@@ -4066,6 +4146,13 @@ const ExpenditureApproval: React.FC = () => {
     return totalExpenditureDisplayAmount;
   };
 
+  const getActiveTabPayeeExpectedAmount = (
+    tab: 'Advance' | 'Settlement' | 'Expenditure',
+  ): number => {
+    if (tab === 'Settlement') return settlementAdjustmentAmount;
+    return getActiveTabTransactionAmount(tab);
+  };
+
   const getWorkflowRowEnteredAmount = (
     row: WorkflowFormRow | null | undefined,
     tab: 'Advance' | 'Settlement' | 'Expenditure' | null,
@@ -4095,7 +4182,7 @@ const ExpenditureApproval: React.FC = () => {
   const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     if (!/^\d*\.?\d*$/.test(nextValue)) return;
 
-    const workflowAmount = activeTab ? getActiveTabTransactionAmount(activeTab) : 0;
+    const workflowAmount = activeTab ? getActiveTabPayeeExpectedAmount(activeTab) : 0;
     let exceededLimit = false;
 
     setPayeeRows((prev) => {
@@ -4103,7 +4190,11 @@ const ExpenditureApproval: React.FC = () => {
         row.id === rowId ? { ...row, amount: nextValue } : row,
       );
 
-      if (workflowAmount > 0 && getPayeeTransactionTotal(updatedRows) > workflowAmount) {
+      const updatedPayeeTotal = getPayeeTransactionTotal(updatedRows);
+      if (
+        (activeTab === 'Settlement' && workflowAmount === 0 && updatedPayeeTotal > 0) ||
+        (workflowAmount > 0 && updatedPayeeTotal > workflowAmount)
+      ) {
         exceededLimit = true;
         return prev;
       }
@@ -4112,8 +4203,20 @@ const ExpenditureApproval: React.FC = () => {
     });
 
     if (exceededLimit && activeTab) {
+      if (activeTab === 'Settlement' && workflowAmount === 0) {
+        showAlert(
+          'Settlement expenditure and advance are equal, so there is no amount to be received or returned. Payee transaction amount must be ₹ 0.00.',
+          'warning',
+        );
+        return;
+      }
+
+      const amountLabel =
+        activeTab === 'Settlement' && hasSettlementAdjustment
+          ? settlementAdjustmentLabel.toLowerCase()
+          : `${activeTab.toLowerCase()} amount`;
       showAlert(
-        `Total payee transaction amount cannot exceed the ${activeTab.toLowerCase()} amount of ₹ ${workflowAmount.toLocaleString('en-IN')}.`,
+        `Total payee transaction amount cannot exceed the ${amountLabel} of ₹ ${workflowAmount.toLocaleString('en-IN')}.`,
         'warning',
       );
     }
@@ -4123,7 +4226,7 @@ const ExpenditureApproval: React.FC = () => {
       return null;
     }
 
-    const difference = Number((totalSettlementAmount - totalSettlementAdvanceAmount).toFixed(2));
+    const difference = settlementAdjustmentDifference;
     if (difference === 0) {
       return null;
     }
@@ -4148,22 +4251,7 @@ const ExpenditureApproval: React.FC = () => {
       };
     }
 
-    return {
-      title: 'Settlement Adjustment',
-      message: (
-        <div style={{ lineHeight: 1.6 }}>
-          <div>
-            Settlement is ₹{' '}
-            {difference.toLocaleString('en-IN', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}{' '}
-            more than the advance amount.
-          </div>
-          <div>The excess amount will be reduced from the balance.</div>
-        </div>
-      ),
-    };
+    return null;
   };
 
   const getComputedBalanceAmount = () => {
@@ -4352,8 +4440,12 @@ const ExpenditureApproval: React.FC = () => {
       }
 
       const effectivePayeeRows = payeeRows.filter((row) => hasAnyPayeeRowValue(row));
+      const normalizedWorkflowAmount = Number(
+        getActiveTabPayeeExpectedAmount(activeTab).toFixed(2),
+      );
+      const requiresPayeeRows = !(activeTab === 'Settlement' && normalizedWorkflowAmount === 0);
 
-      if (effectivePayeeRows.length === 0) {
+      if (requiresPayeeRows && effectivePayeeRows.length === 0) {
         showAlert('Please add at least one payee transaction row before submitting.', 'warning');
         return;
       }
@@ -4383,11 +4475,22 @@ const ExpenditureApproval: React.FC = () => {
       const normalizedTotalPayeeTransactionAmount = Number(
         getPayeeTransactionTotal(effectivePayeeRows).toFixed(2),
       );
-      const normalizedWorkflowAmount = Number(getActiveTabTransactionAmount(activeTab).toFixed(2));
+      const amountLabel =
+        activeTab === 'Settlement' && hasSettlementAdjustment
+          ? settlementAdjustmentLabel.toLowerCase()
+          : `${activeTab.toLowerCase()} amount`;
 
       if (normalizedTotalPayeeTransactionAmount !== normalizedWorkflowAmount) {
+        if (activeTab === 'Settlement' && normalizedWorkflowAmount === 0) {
+          showAlert(
+            'Settlement expenditure and advance are equal, so there is no amount to be received or returned. Payee transaction amount must be ₹ 0.00.',
+            'warning',
+          );
+          return;
+        }
+
         showAlert(
-          `${activeTab} amount is ₹ ${normalizedWorkflowAmount.toLocaleString('en-IN', {
+          `${amountLabel} is ₹ ${normalizedWorkflowAmount.toLocaleString('en-IN', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           })} and total payee transaction amount is ₹ ${normalizedTotalPayeeTransactionAmount.toLocaleString(
@@ -6865,7 +6968,7 @@ const ExpenditureApproval: React.FC = () => {
                   <tr style={{ backgroundColor: '#f0f6ff' }}>
                     <th
                       style={{
-                        width: '8%',
+                        width: '6%',
                         padding: '12px',
                         border: '1px solid #e0e0e0',
                         color: '#0069ab',
@@ -6877,7 +6980,7 @@ const ExpenditureApproval: React.FC = () => {
                     </th>
                     <th
                       style={{
-                        width: '25%',
+                        width: '35%',
                         padding: '12px',
                         border: '1px solid #e0e0e0',
                         color: '#0069ab',
@@ -6889,7 +6992,7 @@ const ExpenditureApproval: React.FC = () => {
                     </th>
                     <th
                       style={{
-                        width: '25%',
+                        width: '35%',
                         padding: '12px',
                         border: '1px solid #e0e0e0',
                         color: '#0069ab',
@@ -6913,19 +7016,7 @@ const ExpenditureApproval: React.FC = () => {
                     </th>
                     <th
                       style={{
-                        width: '13%',
-                        padding: '12px',
-                        border: '1px solid #e0e0e0',
-                        color: '#0069ab',
-                        fontWeight: '600',
-                        textAlign: 'center',
-                      }}
-                    >
-                      Settlement
-                    </th>
-                    <th
-                      style={{
-                        width: '15%',
+                        width: '10%',
                         padding: '12px',
                         border: '1px solid #e0e0e0',
                         color: '#0069ab',
@@ -6939,240 +7030,287 @@ const ExpenditureApproval: React.FC = () => {
                 </thead>
                 <tbody>
                   {settlementRows.map((row, idx) => (
-                    <tr key={row.id} style={{ borderBottom: '1px solid #e0e0e0' }}>
-                      <td
-                        style={{
-                          padding: '12px',
-                          border: '1px solid #e0e0e0',
-                          textAlign: 'center',
-                          verticalAlign: 'middle',
-                          color: '#495057',
-                        }}
-                      >
-                        {idx + 1}
-                      </td>
-                      <td
-                        style={{
-                          padding: '12px',
-                          border: '1px solid #e0e0e0',
-                          verticalAlign: 'middle',
-                          textAlign: 'center',
-                        }}
-                      >
-                        <CustomDropdown
-                          className="mb-0"
-                          options={getApprovedBudgetHeadSearchOptions()}
-                          value={getApprovedBudgetHeadSelectedOption(
-                            row.budgetHead,
-                            row.subHead,
-                            row.budgetLineId,
-                          )}
-                          onChange={(option) =>
-                            handleSettlementBudgetHeadSearchChange(
-                              row.id,
-                              option as OptionType | null,
-                            )
-                          }
-                          filterOption={filterApprovedBudgetHeadOption}
-                          placeholder={isApprovedBudgetLoading ? 'Loading...' : 'Select Head'}
-                        />
-                      </td>
-                      <td
-                        style={{
-                          padding: '12px',
-                          border: '1px solid #e0e0e0',
-                          verticalAlign: 'middle',
-                          textAlign: 'center',
-                        }}
-                      >
-                        <CustomDropdown
-                          className="mb-0"
-                          options={getApprovedSubHeadOptionsForAdvance(row.budgetHead)}
-                          value={getApprovedSubHeadSelectedOption(
-                            row.budgetHead,
-                            row.subHead,
-                            row.budgetLineId,
-                          )}
-                          onChange={(option) => {
-                            const selected = option as OptionType | null;
-                            const val = String(selected?.subHead || '');
-                            handleSettlementSubHeadChange(row.id, val, selected);
-                          }}
-                          placeholder="Select Sub Head"
-                          isDisabled={!row.budgetHead}
-                        />
-                      </td>
-                      <td
-                        style={{
-                          padding: '12px',
-                          border: '1px solid #e0e0e0',
-                          verticalAlign: 'middle',
-                          textAlign: 'center',
-                        }}
-                      >
-                        <input
-                          type="text"
-                          value={getBudgetDisplayValue(row.budget)}
-                          readOnly
+                    <Fragment key={row.id}>
+                      <tr>
+                        <td
+                          rowSpan={2}
                           style={{
+                            padding: '12px',
                             border: '1px solid #e0e0e0',
-                            borderRadius: '12px',
-                            padding: '10px 15px',
-                            fontSize: '0.95rem',
-                            width: '100%',
-                            height: '45px',
-                            boxSizing: 'border-box',
-                            fontFamily: 'inherit',
-                            backgroundColor: '#f8f9fa',
-                            color: '#6c757d',
                             textAlign: 'center',
-                            outline: 'none',
-                            cursor: 'not-allowed',
-                          }}
-                        />
-                      </td>
-                      <td
-                        style={{
-                          padding: '12px',
-                          border: '1px solid #e0e0e0',
-                          verticalAlign: 'middle',
-                          textAlign: 'center',
-                        }}
-                      >
-                        <input
-                          type="text"
-                          placeholder="₹ 0"
-                          value={row.settlement}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            if (!/^\d*\.?\d*$/.test(value)) return;
-
-                            const updated = settlementRows.map((r) =>
-                              r.id === row.id ? { ...r, settlement: value } : r,
-                            );
-                            setSettlementRows(updated);
-                          }}
-                          style={{
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '12px',
-                            padding: '10px 15px',
-                            fontSize: '0.95rem',
-                            width: '100%',
-                            height: '45px',
-                            boxSizing: 'border-box',
-                            fontFamily: 'inherit',
-                            backgroundColor: '#fcfdff',
-                            color: '#000',
-                            outline: 'none',
-                            textAlign: 'center',
-                          }}
-                          onFocus={(e) => {
-                            e.currentTarget.style.borderColor = '#0069ab';
-                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                          }}
-                          onBlur={(e) => {
-                            e.currentTarget.style.borderColor = '#e0e0e0';
-                            e.currentTarget.style.boxShadow = 'none';
-                          }}
-                        />
-                      </td>
-                      <td
-                        style={{
-                          padding: '12px',
-                          border: '1px solid #e0e0e0',
-                          textAlign: 'center',
-                          verticalAlign: 'middle',
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'center',
-                            gap: '10px',
+                            verticalAlign: 'middle',
+                            color: '#495057',
                           }}
                         >
-                          {settlementRows.length > 1 && (
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                removeSettlementRow(row.id);
+                          {idx + 1}
+                        </td>
+                        <td
+                          style={{
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                          }}
+                        >
+                          <CustomDropdown
+                            className="mb-0"
+                            options={getApprovedBudgetHeadSearchOptions()}
+                            value={getApprovedBudgetHeadSelectedOption(
+                              row.budgetHead,
+                              row.subHead,
+                              row.budgetLineId,
+                            )}
+                            onChange={(option) =>
+                              void handleSettlementBudgetHeadSearchChange(
+                                row.id,
+                                option as OptionType | null,
+                              )
+                            }
+                            filterOption={filterApprovedBudgetHeadOption}
+                            placeholder={isApprovedBudgetLoading ? 'Loading...' : 'Select Head'}
+                          />
+                        </td>
+                        <td
+                          style={{
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                          }}
+                        >
+                          <CustomDropdown
+                            className="mb-0"
+                            options={getApprovedSubHeadOptionsForAdvance(row.budgetHead)}
+                            value={getApprovedSubHeadSelectedOption(
+                              row.budgetHead,
+                              row.subHead,
+                              row.budgetLineId,
+                            )}
+                            onChange={(option) => {
+                              const selected = option as OptionType | null;
+                              const val = String(selected?.subHead || '');
+                              void handleSettlementSubHeadChange(row.id, val, selected);
+                            }}
+                            placeholder="Select Sub Head"
+                            isDisabled={!row.budgetHead}
+                          />
+                        </td>
+                        <td
+                          style={{
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                          }}
+                        >
+                          <input
+                            type="text"
+                            value={getBudgetDisplayValue(row.budget)}
+                            readOnly
+                            style={{
+                              border: '1px solid #d7dee7',
+                              borderRadius: '12px',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              height: '45px',
+                              backgroundColor: '#f3f5f7',
+                              color: '#51627d',
+                              textAlign: 'center',
+                              outline: 'none',
+                            }}
+                          />
+                        </td>
+                        <td
+                          rowSpan={2}
+                          style={{
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                            textAlign: 'center',
+                            verticalAlign: 'middle',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'center',
+                              gap: '10px',
+                            }}
+                          >
+                            {settlementRows.length > 1 && (
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  removeSettlementRow(row.id);
+                                }}
+                                style={deleteIconBtn}
+                                title="Delete Row"
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.backgroundColor = '#ffdede')
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.backgroundColor = '#ffe6e6')
+                                }
+                              >
+                                <X size={14} strokeWidth={2.5} />
+                              </button>
+                            )}
+                            {idx === settlementRows.length - 1 &&
+                              (() => {
+                                const isFilled =
+                                  row.budgetHead && row.subHead && row.settlement !== '';
+                                return (
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      addSettlementRow();
+                                    }}
+                                    disabled={!isFilled}
+                                    style={{
+                                      ...iconBtn,
+                                      opacity: isFilled ? 1 : 0.5,
+                                      cursor: isFilled ? 'pointer' : 'not-allowed',
+                                    }}
+                                    title="Add Row"
+                                    onMouseEnter={(e) => {
+                                      if (isFilled)
+                                        e.currentTarget.style.backgroundColor = '#eceef2';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      if (isFilled)
+                                        e.currentTarget.style.backgroundColor = '#f5f6f8';
+                                    }}
+                                  >
+                                    <Plus size={14} strokeWidth={2.5} />
+                                  </button>
+                                );
+                              })()}
+                          </div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td
+                          style={{
+                            padding: '12px 16px',
+                            border: '1px solid #e0e0e0',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                            }}
+                          >
+                            <span
+                              style={{
+                                minWidth: '110px',
+                                color: '#364152',
+                                fontSize: '1rem',
+                                fontWeight: 500,
                               }}
-                              style={deleteIconBtn}
-                              title="Delete Row"
-                              onMouseEnter={(e) =>
-                                (e.currentTarget.style.backgroundColor = '#ffdede')
-                              }
-                              onMouseLeave={(e) =>
-                                (e.currentTarget.style.backgroundColor = '#ffe6e6')
-                              }
                             >
-                              <X size={14} strokeWidth={2.5} />
-                            </button>
-                          )}
-                          {idx === settlementRows.length - 1 &&
-                            (() => {
-                              const isFilled =
-                                row.budgetHead && row.subHead && row.settlement !== '';
-                              return (
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    addSettlementRow();
-                                  }}
-                                  disabled={!isFilled}
-                                  style={{
-                                    ...iconBtn,
-                                    opacity: isFilled ? 1 : 0.5,
-                                    cursor: isFilled ? 'pointer' : 'not-allowed',
-                                  }}
-                                  title="Add Row"
-                                  onMouseEnter={(e) => {
-                                    if (isFilled) e.currentTarget.style.backgroundColor = '#eceef2';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    if (isFilled) e.currentTarget.style.backgroundColor = '#f5f6f8';
-                                  }}
-                                >
-                                  <Plus size={14} strokeWidth={2.5} />
-                                </button>
-                              );
-                            })()}
-                        </div>
-                      </td>
-                    </tr>
+                              Advance
+                            </span>
+                            <input
+                              type="text"
+                              value={getBudgetDisplayValue(row.advance)}
+                              readOnly
+                              style={{
+                                border: '1px solid #d7dee7',
+                                borderRadius: '12px',
+                                padding: '10px 15px',
+                                fontSize: '0.95rem',
+                                width: '100%',
+                                maxWidth: '100%',
+                                height: '45px',
+                                backgroundColor: '#f3f5f7',
+                                color: '#51627d',
+                                textAlign: 'center',
+                                outline: 'none',
+                              }}
+                            />
+                          </div>
+                        </td>
+                        <td
+                          colSpan={2}
+                          style={{
+                            padding: '12px 16px',
+                            border: '1px solid #e0e0e0',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'minmax(110px, auto) minmax(160px, 1fr)',
+                              alignItems: 'center',
+                              gap: '8px',
+                            }}
+                          >
+                            <span
+                              style={{
+                                color: '#364152',
+                                fontSize: '1rem',
+                                fontWeight: 500,
+                              }}
+                            >
+                              Expenditure
+                            </span>
+                            <input
+                              type="text"
+                              placeholder="₹ 0"
+                              value={row.settlement}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (!/^\d*\.?\d*$/.test(value)) return;
+
+                                const updated = settlementRows.map((r) =>
+                                  r.id === row.id ? { ...r, settlement: value } : r,
+                                );
+                                setSettlementRows(updated);
+                              }}
+                              style={{
+                                border: '1px solid #e0e0e0',
+                                borderRadius: '12px',
+                                padding: '10px 15px',
+                                fontSize: '0.95rem',
+                                width: '100%',
+                                height: '45px',
+                                boxSizing: 'border-box',
+                                fontFamily: 'inherit',
+                                backgroundColor: '#fcfdff',
+                                color: '#000',
+                                outline: 'none',
+                              }}
+                              onFocus={(e) => {
+                                e.currentTarget.style.borderColor = '#0069ab';
+                                e.currentTarget.style.boxShadow =
+                                  '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                              }}
+                              onBlur={(e) => {
+                                e.currentTarget.style.borderColor = '#e0e0e0';
+                                e.currentTarget.style.boxShadow = 'none';
+                              }}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    </Fragment>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr style={{ backgroundColor: '#f0f6ff' }}>
                     <td
-                      colSpan={4}
+                      colSpan={5}
                       style={{
-                        padding: '12px',
+                        padding: '16px 20px',
                         border: '1px solid #e0e0e0',
                         textAlign: 'right',
-                        paddingRight: '15px',
-                        fontWeight: 600,
+                        fontWeight: '700',
                         color: '#0069ab',
+                        fontSize: '1.05rem',
                       }}
                     >
-                      Total Settlement
-                    </td>
-                    <td
-                      style={{
-                        padding: '12px',
-                        border: '1px solid #e0e0e0',
-                        fontWeight: 600,
-                        color: '#0069ab',
-                        textAlign: 'center',
-                      }}
-                    >
-                      ₹{' '}
+                      Total Expenditure: ₹{' '}
                       {totalSettlementDisplayAmount.toLocaleString('en-IN', {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
                     </td>
-                    <td style={{ border: '1px solid #e0e0e0' }}></td>
                   </tr>
                 </tfoot>
               </table>
