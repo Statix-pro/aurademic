@@ -773,17 +773,37 @@ async function getCumulativeAdvanceSummary(
     rowIdentityClauses.push(`${WORKFLOW_ROW_INDEX_SQL_EXPR} = ?`);
     scopeParams.push(currentRowIndex);
   }
-  if (financeId && rowIdentityClauses.length) {
-    scopeClause = `
-        AND er.finance_request_id = ?
-        AND (${rowIdentityClauses.join(' OR ')})
-      `;
-    scopeParams = [financeId, ...scopeParams];
+
+  if (financeId) {
+    if (rowIdentityClauses.length) {
+      scopeClause = `
+          AND er.finance_request_id = ?
+          AND (${rowIdentityClauses.join(' OR ')})
+        `;
+      scopeParams = [financeId, ...scopeParams];
+    } else {
+      scopeClause = `
+          AND er.finance_request_id = ?
+        `;
+      scopeParams = [financeId];
+    }
   } else if (rowIdentityClauses.length) {
     scopeClause = `
         AND (${rowIdentityClauses.join(' OR ')})
       `;
   }
+
+  let targetUid = uid;
+  if (financeId) {
+    const [frOwnerRows] = await source.execute(
+      `SELECT created_by FROM finance_requests WHERE id = ? LIMIT 1`,
+      [financeId],
+    );
+    if (frOwnerRows && frOwnerRows.length > 0) {
+      targetUid = toPositiveInt(frOwnerRows[0].created_by) || uid;
+    }
+  }
+
   const exclusionClause = excludedExpenditureId ? 'AND er.id <> ?' : '';
   const exclusionParams = excludedExpenditureId ? [excludedExpenditureId] : [];
 
@@ -890,11 +910,11 @@ async function getCumulativeAdvanceSummary(
         )
      ) AS legacy_totals`,
     [
-      uid,
+      targetUid,
       ...scopeParams,
       ...exclusionParams,
       ...rowMatchParams,
-      uid,
+      targetUid,
       ...scopeParams,
       ...exclusionParams,
       ...legacyMatchParams,

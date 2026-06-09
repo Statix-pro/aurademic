@@ -464,6 +464,12 @@ const isDomainValidationError = (message = '') =>
     'cannot be created',
     'outstanding advance',
     'Create a new row',
+    'Please select a valid',
+    'must be greater than',
+    'is not linked',
+    'are equal, so there is no amount',
+    'must be Savings or Current',
+    'are required',
   ].some((fragment) => unwrapTransactionMessage(message).includes(fragment));
 
 const sendDomainValidationError = (res, err) => {
