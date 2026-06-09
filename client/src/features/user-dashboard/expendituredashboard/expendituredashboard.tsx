@@ -849,34 +849,6 @@ const ExpenditureDashboard: React.FC = () => {
 
   const formatAmount = (amount: number) => `₹${Number(amount || 0).toLocaleString('en-IN')}`;
 
-  const getSettlementDashboardAdjustment = (row: WorkflowRow) => {
-    if (!row.settlementRequestId) return null;
-
-    const totalAdvanceAmount = Number(row.advanceAmount || 0) + Number(row.advanceAmount2 || 0);
-    const settlementAmount = Number(row.settlementAmount || 0);
-    const difference = Number((settlementAmount - totalAdvanceAmount).toFixed(2));
-
-    if (difference > 0) {
-      return {
-        label: 'Amount to be received',
-        compactLabel: 'Receivable',
-        amount: difference,
-        tone: 'receive' as const,
-      };
-    }
-
-    if (difference < 0) {
-      return {
-        label: 'Amount to be returned',
-        compactLabel: 'Returnable',
-        amount: Math.abs(difference),
-        tone: 'return' as const,
-      };
-    }
-
-    return null;
-  };
-
   const formatDateTime = (value?: string | null) => {
     if (!value) return '-';
     const date = new Date(value);
@@ -2177,7 +2149,6 @@ const ExpenditureDashboard: React.FC = () => {
                                   normalizeStatus(row.latestWorkflowStatus) === 'returned';
                                 const isRejectedRow =
                                   normalizeStatus(row.latestWorkflowStatus) === 'rejected';
-                                const settlementAdjustment = getSettlementDashboardAdjustment(row);
                                 const canAddWorkflowRow =
                                   !isReturnedRow && !isRejectedRow && isLastRow && canAddRow;
                                 const canEditRow =
@@ -2315,19 +2286,6 @@ const ExpenditureDashboard: React.FC = () => {
                                               </button>
                                             );
                                           })}
-                                          {settlementAdjustment && (
-                                            <div
-                                              className={`expenditure-demo-adjustment-card expenditure-demo-adjustment-card--${settlementAdjustment.tone}`}
-                                              title={`${settlementAdjustment.label}: ${formatAmount(settlementAdjustment.amount)}`}
-                                            >
-                                              <span className="expenditure-demo-adjustment-card__label">
-                                                {settlementAdjustment.compactLabel}
-                                              </span>
-                                              <strong className="expenditure-demo-adjustment-card__amount">
-                                                {formatAmount(settlementAdjustment.amount)}
-                                              </strong>
-                                            </div>
-                                          )}
                                         </div>
                                       </div>
 

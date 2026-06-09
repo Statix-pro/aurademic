@@ -59,6 +59,28 @@ const hasExpenditureRequestColumn = async (columnName, { tx = db } = {}) => {
   return exists;
 };
 
+const FINANCE_REQUEST_COLUMN_EXISTS_CACHE = new Map();
+
+const hasFinanceRequestColumn = async (columnName, { tx = db } = {}) => {
+  const normalizedColumn = normalizeText(columnName);
+  if (!normalizedColumn) return false;
+  if (FINANCE_REQUEST_COLUMN_EXISTS_CACHE.has(normalizedColumn)) {
+    return FINANCE_REQUEST_COLUMN_EXISTS_CACHE.get(normalizedColumn) === true;
+  }
+
+  const [rows] = await tx.query(
+    `SELECT COUNT(*) AS count
+       FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'finance_requests'
+        AND COLUMN_NAME = ?`,
+    [normalizedColumn],
+  );
+  const exists = Number(rows?.[0]?.count || 0) > 0;
+  FINANCE_REQUEST_COLUMN_EXISTS_CACHE.set(normalizedColumn, exists);
+  return exists;
+};
+
 const resolveCanonicalPayeeName = (payeeName, accountName) => {
   const normalizedPayeeName = normalizeText(payeeName);
   const normalizedAccountName = normalizeText(accountName);
@@ -1498,41 +1520,29 @@ export async function getApprovedBudgets({
       budgetLineIds: financeRows.map((row) => row.budget_line_id),
     });
 
-    const groupedByHead = new Map();
+    return financeRows
+      .map((r) => {
+        const totalAmount = toMoney(r.total_amount);
+        const usedAmount = toMoney(usageByLineId.get(toPositiveInt(r.budget_line_id)));
+        const head = normalizeText(r.head);
+        const subHead = normalizeText(r.sub_head);
+        if (!head || !subHead || totalAmount <= 0) return null;
 
-    financeRows.forEach((r) => {
-      const totalAmount = toMoney(r.total_amount);
-      const usedAmount = toMoney(usageByLineId.get(toPositiveInt(r.budget_line_id)));
-      const head = normalizeText(r.head);
-      const subHead = normalizeText(r.sub_head);
-      if (!head) return;
-
-      const key = head.toLowerCase();
-      const existing = groupedByHead.get(key);
-
-      if (existing) {
-        existing.totalAmount = toMoney(existing.totalAmount + totalAmount);
-        existing.usedAmount = toMoney(existing.usedAmount + usedAmount);
-        existing.remainingAmount = toMoney(Math.max(0, existing.totalAmount - existing.usedAmount));
-        return;
-      }
-
-      groupedByHead.set(key, {
-        budgetLineId: toPositiveInt(r.budget_line_id),
-        budgetProposalId: toPositiveInt(r.budget_proposal_id),
-        financeRequestRef: normalizeText(r.finance_request_ref),
-        fiscalYear: Number(r.fiscal_year) || new Date().getFullYear(),
-        head,
-        subHead,
-        totalAmount,
-        usedAmount,
-        remainingAmount: toMoney(Math.max(0, totalAmount - usedAmount)),
-        beneficiaryType: normalizeText(r.beneficiary_type),
-        beneficiaryValue: normalizeText(r.beneficiary_value),
-      });
-    });
-
-    return Array.from(groupedByHead.values());
+        return {
+          budgetLineId: toPositiveInt(r.budget_line_id),
+          budgetProposalId: toPositiveInt(r.budget_proposal_id),
+          financeRequestRef: normalizeText(r.finance_request_ref),
+          fiscalYear: Number(r.fiscal_year) || new Date().getFullYear(),
+          head,
+          subHead,
+          totalAmount,
+          usedAmount,
+          remainingAmount: toMoney(Math.max(0, totalAmount - usedAmount)),
+          beneficiaryType: normalizeText(r.beneficiary_type),
+          beneficiaryValue: normalizeText(r.beneficiary_value),
+        };
+      })
+      .filter(Boolean);
   } catch (error) {
     if (error?.code === 'ER_NO_SUCH_TABLE') return [];
     throw error;
@@ -2203,7 +2213,10 @@ export async function getFinanceRequestContext(financeRequestId) {
   const financeId = toPositiveInt(financeRequestId);
   if (!financeId) return null;
 
-  const [rows] = await db.execute(
+  const hasBudgetTag = await hasFinanceRequestColumn('budget_tag');
+  const budgetTagSql = hasBudgetTag ? 'fr.budget_tag,' : 'NULL AS budget_tag,';
+
+  const [rows] = await db.query(
     `SELECT
        fr.id AS finance_request_id,
        fr.created_by,
@@ -2224,6 +2237,7 @@ export async function getFinanceRequestContext(financeRequestId) {
        fr.beneficiary_value,
        fr.primary_head,
        fr.event_sub_head,
+       ${budgetTagSql}
        COALESCE(
          NULLIF(fr.approved_total_amount, 0),
          NULLIF(fr.total_budget, 0),
@@ -2264,6 +2278,7 @@ export async function getFinanceRequestContext(financeRequestId) {
     primary_head: normalizeText(row.primary_head),
     event_sub_head: normalizeText(row.event_sub_head),
     approved_amount: toMoney(row.approved_amount),
+    budget_tag: row.budget_tag ? normalizeText(row.budget_tag) : null,
   };
 }
 

@@ -700,50 +700,6 @@
   max-width: 100%;
 }
 
-.expenditure-demo-adjustment-card {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  min-height: 50px;
-  width: 112px;
-  min-width: 112px;
-  max-width: 132px;
-  padding: 6px 8px;
-  border-radius: 10px;
-  border: 1px solid #f2d38b;
-  background: #fff8e1;
-  color: #7a4b00;
-  font-weight: 800;
-  white-space: nowrap;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-
-.expenditure-demo-adjustment-card__label {
-  font-size: 10px;
-  line-height: 1.1;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.expenditure-demo-adjustment-card__amount {
-  font-size: 15px;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.expenditure-demo-adjustment-card--receive .expenditure-demo-adjustment-card__amount {
-  color: #087f23;
-}
-
-.expenditure-demo-adjustment-card--return .expenditure-demo-adjustment-card__amount {
-  color: #c62828;
-}
-
 .expenditure-demo-row__amounts {
   display: grid;
   grid-template-columns: repeat(2, 145px);
