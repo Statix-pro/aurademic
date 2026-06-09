@@ -1160,7 +1160,11 @@ const ExpenditureApproval: React.FC = () => {
         }
 
         const nextTag = resolvedPrefillTag || financeContextTagRaw || financeTagFromState || '';
-        setSelectedTag((prev) => prev || nextTag);
+        setSelectedTag((prev) => {
+          const apiTag = resolvedPrefillTag || financeContextTagRaw;
+          if (apiTag) return apiTag;
+          return prev || nextTag;
+        });
         if (nextTag) {
           setPendingPrefillTag(nextTag);
         }
@@ -2206,7 +2210,7 @@ const ExpenditureApproval: React.FC = () => {
           budgetProposalId: budget.budgetProposalId,
         };
       })
-      .filter((option) => Boolean(option.subHead));
+      .filter((option) => Boolean(option.subHead)) as OptionType[];
   };
 
   const getApprovedSubHeadSelectedOption = (
@@ -2690,6 +2694,7 @@ const ExpenditureApproval: React.FC = () => {
   const hasSettlementAdjustment = activeTab === 'Settlement' && settlementAdjustmentAmount > 0;
   const settlementAdjustmentLabel =
     settlementAdjustmentDifference > 0 ? 'Amount to be received' : 'Amount to be returned';
+  const settlementAdjustmentColor = settlementAdjustmentDifference > 0 ? '#087f23' : '#c62828';
 
   const getPayeeTransactionTotal = (rows: PayeeRow[]): number =>
     rows.reduce((sum, row) => {
@@ -7318,24 +7323,63 @@ const ExpenditureApproval: React.FC = () => {
               <div
                 style={{
                   marginTop: '14px',
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  backgroundColor: '#f0f6ff',
-                  border: '1px solid #cfe2ff',
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '0.9rem',
-                  color: '#0b3d75',
-                  textAlign: 'center',
+                  gap: '12px',
+                  flexWrap: 'wrap',
                   width: '100%',
                 }}
               >
-                <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                <span style={{ fontWeight: 600 }}>
-                  {numberToIndianWords(totalSettlementDisplayAmount)}
-                </span>
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    backgroundColor: '#f0f6ff',
+                    border: '1px solid #cfe2ff',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '0.9rem',
+                    color: '#0b3d75',
+                    textAlign: 'center',
+                    flex: '1 1 360px',
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
+                  <span style={{ fontWeight: 600 }}>
+                    {numberToIndianWords(totalSettlementDisplayAmount)}
+                  </span>
+                </div>
+
+                {hasSettlementAdjustment && (
+                  <div
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '10px',
+                      backgroundColor: '#fff8e1',
+                      border: '1px solid #f2d38b',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      gap: '10px',
+                      flexWrap: 'wrap',
+                      textAlign: 'center',
+                      flex: '1 1 320px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    <span style={{ color: '#7a4b00' }}>{settlementAdjustmentLabel}:</span>
+                    <span style={{ color: settlementAdjustmentColor, fontSize: '1rem' }}>
+                      ₹{' '}
+                      {settlementAdjustmentAmount.toLocaleString('en-IN', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
