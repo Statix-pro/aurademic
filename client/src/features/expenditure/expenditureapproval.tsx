@@ -2220,18 +2220,30 @@ const ExpenditureApproval: React.FC = () => {
   ): OptionType | null => {
     const options = getApprovedSubHeadOptionsForAdvance(budgetHead);
     const parsedBudgetLineId = parsePositiveIntLike(budgetLineId);
+    const normalizedSubHead = normalizeBudgetToken(subHead);
+
+    if (parsedBudgetLineId && normalizedSubHead) {
+      const matchedByBoth = options.find(
+        (option) =>
+          parsePositiveIntLike(option.budgetLineId) === parsedBudgetLineId &&
+          normalizeBudgetToken(option.subHead) === normalizedSubHead,
+      );
+      if (matchedByBoth) return matchedByBoth;
+    }
+
+    if (normalizedSubHead) {
+      const matchedBySubHead = options.find(
+        (option) => normalizeBudgetToken(option.subHead) === normalizedSubHead,
+      );
+      if (matchedBySubHead) return matchedBySubHead;
+    }
+
     if (parsedBudgetLineId) {
       const matchedByLineId = options.find(
         (option) => parsePositiveIntLike(option.budgetLineId) === parsedBudgetLineId,
       );
       if (matchedByLineId) return matchedByLineId;
     }
-
-    const normalizedSubHead = normalizeBudgetToken(subHead);
-    const matched = options.find(
-      (option) => normalizeBudgetToken(option.subHead) === normalizedSubHead,
-    );
-    if (matched) return matched;
 
     const fallbackHead = String(budgetHead || '').trim();
     const fallbackSubHead = String(subHead || '').trim();
@@ -2252,24 +2264,35 @@ const ExpenditureApproval: React.FC = () => {
     budgetLineId?: number | string | null,
   ) => {
     const parsedBudgetLineId = parsePositiveIntLike(budgetLineId);
-    if (parsedBudgetLineId) {
-      const byLineId = approvedBudgetOptions.find(
-        (budget) => parsePositiveIntLike(budget.budgetLineId) === parsedBudgetLineId,
-      );
-      if (byLineId) return byLineId;
-    }
-
     const normalizedHead = normalizeBudgetToken(budgetHead);
     const normalizedSubHead = normalizeBudgetToken(subHead);
-    if (!normalizedHead || !normalizedSubHead) return null;
 
-    return (
-      approvedBudgetOptions.find(
+    if (parsedBudgetLineId && normalizedSubHead) {
+      const matchedByBoth = approvedBudgetOptions.find(
+        (budget) =>
+          parsePositiveIntLike(budget.budgetLineId) === parsedBudgetLineId &&
+          normalizeBudgetToken(budget.subHead) === normalizedSubHead,
+      );
+      if (matchedByBoth) return matchedByBoth;
+    }
+
+    if (normalizedHead && normalizedSubHead) {
+      const matchedByHeadAndSubHead = approvedBudgetOptions.find(
         (budget) =>
           normalizeBudgetToken(budget.head) === normalizedHead &&
           normalizeBudgetToken(budget.subHead) === normalizedSubHead,
-      ) || null
-    );
+      );
+      if (matchedByHeadAndSubHead) return matchedByHeadAndSubHead;
+    }
+
+    if (parsedBudgetLineId) {
+      const matchedByLineId = approvedBudgetOptions.find(
+        (budget) => parsePositiveIntLike(budget.budgetLineId) === parsedBudgetLineId,
+      );
+      if (matchedByLineId) return matchedByLineId;
+    }
+
+    return null;
   };
 
   const getApprovedBudgetAmount = (budget: ApprovedBudgetOption | null) =>
@@ -6862,44 +6885,46 @@ const ExpenditureApproval: React.FC = () => {
                       style={{
                         padding: '16px 20px',
                         border: '1px solid #e0e0e0',
-                        textAlign: 'right',
                         fontWeight: '700',
                         color: '#0069ab',
                         fontSize: '1.05rem',
                       }}
                     >
-                      Total Advance: ₹{' '}
-                      {totalAdvanceDisplayAmount.toLocaleString('en-IN', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '12px',
+                          width: '100%',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.9rem',
+                            color: '#0b3d75',
+                            fontWeight: 600,
+                          }}
+                        >
+                          <span>Rupees (in words):</span>
+                          <span>{numberToIndianWords(totalAdvanceDisplayAmount)}</span>
+                        </div>
+                        <div>
+                          Total Advance: ₹{' '}
+                          {totalAdvanceDisplayAmount.toLocaleString('en-IN', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 </tfoot>
               </table>
-
-              <div
-                style={{
-                  marginTop: '10px',
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  backgroundColor: '#f0f6ff',
-                  border: '1px solid #cfe2ff',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '0.9rem',
-                  color: '#0b3d75',
-                  textAlign: 'center',
-                  width: '100%',
-                }}
-              >
-                <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                <span style={{ fontWeight: 600 }}>
-                  {numberToIndianWords(totalAdvanceDisplayAmount)}
-                </span>
-              </div>
 
               <div
                 style={{
@@ -7304,83 +7329,74 @@ const ExpenditureApproval: React.FC = () => {
                       style={{
                         padding: '16px 20px',
                         border: '1px solid #e0e0e0',
-                        textAlign: 'right',
                         fontWeight: '700',
                         color: '#0069ab',
                         fontSize: '1.05rem',
                       }}
                     >
-                      Total Expenditure: ₹{' '}
-                      {totalSettlementDisplayAmount.toLocaleString('en-IN', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '12px',
+                          width: '100%',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.9rem',
+                            color: '#0b3d75',
+                            fontWeight: 600,
+                          }}
+                        >
+                          <span>Rupees (in words):</span>
+                          <span>{numberToIndianWords(totalSettlementDisplayAmount)}</span>
+                        </div>
+                        <div>
+                          Total Expenditure: ₹{' '}
+                          {totalSettlementDisplayAmount.toLocaleString('en-IN', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 </tfoot>
               </table>
 
-              <div
-                style={{
-                  marginTop: '14px',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  gap: '12px',
-                  flexWrap: 'wrap',
-                  width: '100%',
-                }}
-              >
+              {hasSettlementAdjustment && (
                 <div
                   style={{
-                    padding: '10px 14px',
+                    marginTop: '14px',
+                    padding: '10px 16px',
                     borderRadius: '10px',
-                    backgroundColor: '#f0f6ff',
-                    border: '1px solid #cfe2ff',
+                    backgroundColor: '#fff8e1',
+                    border: '1px solid #f2d38b',
                     display: 'flex',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '0.9rem',
-                    color: '#0b3d75',
+                    gap: '10px',
                     textAlign: 'center',
-                    flex: '1 1 360px',
+                    width: '100%',
+                    fontWeight: 700,
                   }}
                 >
-                  <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                  <span style={{ fontWeight: 600 }}>
-                    {numberToIndianWords(totalSettlementDisplayAmount)}
+                  <span style={{ color: '#7a4b00' }}>{settlementAdjustmentLabel}:</span>
+                  <span style={{ color: settlementAdjustmentColor, fontSize: '1.05rem' }}>
+                    ₹{' '}
+                    {settlementAdjustmentAmount.toLocaleString('en-IN', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </span>
                 </div>
-
-                {hasSettlementAdjustment && (
-                  <div
-                    style={{
-                      padding: '10px 16px',
-                      borderRadius: '10px',
-                      backgroundColor: '#fff8e1',
-                      border: '1px solid #f2d38b',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      gap: '10px',
-                      flexWrap: 'wrap',
-                      textAlign: 'center',
-                      flex: '1 1 320px',
-                      fontWeight: 700,
-                    }}
-                  >
-                    <span style={{ color: '#7a4b00' }}>{settlementAdjustmentLabel}:</span>
-                    <span style={{ color: settlementAdjustmentColor, fontSize: '1rem' }}>
-                      ₹{' '}
-                      {settlementAdjustmentAmount.toLocaleString('en-IN', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           </div>
         )}
@@ -7758,46 +7774,48 @@ const ExpenditureApproval: React.FC = () => {
                     <td
                       colSpan={5}
                       style={{
-                        padding: '12px',
+                        padding: '16px 20px',
                         border: '1px solid #e0e0e0',
-                        textAlign: 'right',
-                        paddingRight: '18px',
-                        fontWeight: '600',
+                        fontWeight: '700',
                         color: '#0069ab',
+                        fontSize: '1.05rem',
                       }}
                     >
-                      Total Expenditure: &#8377;{' '}
-                      {totalExpenditureDisplayAmount.toLocaleString('en-IN', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '12px',
+                          width: '100%',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.9rem',
+                            color: '#0b3d75',
+                            fontWeight: 600,
+                          }}
+                        >
+                          <span>Rupees (in words):</span>
+                          <span>{numberToIndianWords(totalExpenditureDisplayAmount)}</span>
+                        </div>
+                        <div>
+                          Total Expenditure: &#8377;{' '}
+                          {totalExpenditureDisplayAmount.toLocaleString('en-IN', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 </tfoot>
               </table>
-
-              <div
-                style={{
-                  marginTop: '14px',
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  backgroundColor: '#f0f6ff',
-                  border: '1px solid #cfe2ff',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '0.9rem',
-                  color: '#0b3d75',
-                  textAlign: 'center',
-                  width: '100%',
-                }}
-              >
-                <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                <span style={{ fontWeight: 600 }}>
-                  {numberToIndianWords(totalExpenditureDisplayAmount)}
-                </span>
-              </div>
             </div>
           </div>
         )}
