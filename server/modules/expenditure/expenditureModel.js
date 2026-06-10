@@ -731,6 +731,9 @@ async function getCumulativeAdvanceSummary(
   const excludedExpenditureId = toPositiveInt(excludeExpenditureId);
   const normalizedDashboardRowId = normalizeText(dashboardRowId).toLowerCase();
   const normalizedWorkflowRowRef = normalizeText(workflowRowRef).toLowerCase();
+  const normalizedWorkflowRowRefForAdvance = normalizedWorkflowRowRef
+    .replace('-settlement-', '-advance-')
+    .replace('-expenditure-', '-advance-');
   const normalizedHead = normalizeText(head).toLowerCase();
   const normalizedSubHead = normalizeText(subHead).toLowerCase();
 
@@ -758,7 +761,7 @@ async function getCumulativeAdvanceSummary(
   }
   if (normalizedWorkflowRowRef) {
     rowIdentityClauses.push(`${WORKFLOW_ROW_REF_SQL_EXPR} = ?`);
-    scopeParams.push(normalizedWorkflowRowRef);
+    scopeParams.push(normalizedWorkflowRowRefForAdvance);
   }
   if (anchorRequestIds.length) {
     rowIdentityClauses.push(`er.id IN (${anchorRequestIds.map(() => '?').join(', ')})`);
@@ -804,6 +807,9 @@ async function getCumulativeAdvanceSummary(
     }
   }
 
+  const creatorClause = financeId ? '1 = 1' : 'er.created_by = ?';
+  const creatorParams = financeId ? [] : [targetUid];
+
   const exclusionClause = excludedExpenditureId ? 'AND er.id <> ?' : '';
   const exclusionParams = excludedExpenditureId ? [excludedExpenditureId] : [];
 
@@ -839,8 +845,17 @@ async function getCumulativeAdvanceSummary(
       ? [lineId, headIdVal, subIdVal, normalizedHead, normalizedSubHead]
       : [lineId, normalizedHead, normalizedSubHead];
     if (hasLegacyBudgetLine) {
-      legacyMatchClause = 'er.budget_line_id = ?';
-      legacyMatchParams = [lineId];
+      legacyMatchClause = `
+        (
+          er.budget_line_id = ?
+          OR (
+            er.budget_line_id IS NULL
+            AND LOWER(TRIM(er.head)) = ?
+            AND LOWER(TRIM(er.sub_head)) = ?
+          )
+        )
+      `;
+      legacyMatchParams = [lineId, normalizedHead, normalizedSubHead];
     }
   } else if (!lineId) {
     // NEW: prefer ID match; fall back to text for un-backfilled rows.
@@ -885,7 +900,7 @@ async function getCumulativeAdvanceSummary(
          COUNT(DISTINCT er.id)               AS cnt
        FROM expenditure_advance_rows ar
        JOIN expenditure_requests er ON er.id = ar.expenditure_id
-      WHERE er.created_by = ?
+      WHERE ${creatorClause}
         AND er.request_type = 'Advance'
         AND ${activeStatusClause}
         ${scopeClause}
@@ -897,7 +912,7 @@ async function getCumulativeAdvanceSummary(
          COALESCE(SUM(${legacyAmountExpr}), 0) AS total_advanced,
          COUNT(*)                              AS cnt
        FROM expenditure_requests er
-      WHERE er.created_by = ?
+      WHERE ${creatorClause}
         AND er.request_type = 'Advance'
         AND ${activeStatusClause}
         ${scopeClause}
@@ -910,11 +925,11 @@ async function getCumulativeAdvanceSummary(
         )
      ) AS legacy_totals`,
     [
-      targetUid,
+      ...creatorParams,
       ...scopeParams,
       ...exclusionParams,
       ...rowMatchParams,
-      targetUid,
+      ...creatorParams,
       ...scopeParams,
       ...exclusionParams,
       ...legacyMatchParams,
@@ -6348,10 +6363,41 @@ export async function listAvailableFiscalYears({ tx = db } = {}) {
 export async function hardDeleteExpenditureRequest(id) {
   const expenditureId = toPositiveInt(id);
   if (!expenditureId) return false;
-  const [result] = await db.execute('DELETE FROM expenditure_requests WHERE id = ?', [
-    expenditureId,
-  ]);
-  return result.affectedRows > 0;
+
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    await connection.query(
+      'DELETE FROM expenditure_request_refs WHERE expenditure_request_id = ?',
+      [expenditureId],
+    );
+    await connection.query('DELETE FROM expenditure_advance_rows WHERE expenditure_id = ?', [
+      expenditureId,
+    ]);
+    await connection.query('DELETE FROM expenditure_line_rows WHERE expenditure_id = ?', [
+      expenditureId,
+    ]);
+    await connection.query('DELETE FROM expenditure_settlement_rows WHERE expenditure_id = ?', [
+      expenditureId,
+    ]);
+    await connection.query('DELETE FROM expenditure_income_rows WHERE expenditure_id = ?', [
+      expenditureId,
+    ]);
+    await connection.query('DELETE FROM expenditure_request_bills WHERE expenditure_id = ?', [
+      expenditureId,
+    ]);
+    await connection.query('DELETE FROM expenditure_requests WHERE id = ?', [expenditureId]);
+
+    await connection.commit();
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    throw new Error(`Error deleting expenditure request: ${error.message}`);
+  } finally {
+    connection.release();
+  }
 }
 
 export async function revertBudgetUsage(id) {

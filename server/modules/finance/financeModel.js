@@ -3649,6 +3649,10 @@ const financeModel = {
     try {
       await connection.beginTransaction();
 
+      await connection.query('DELETE FROM finance_request_refs WHERE finance_request_id = ?', [id]);
+      await connection.query('DELETE FROM finance_budget_breakup WHERE finance_id = ?', [id]);
+      await connection.query('DELETE FROM finance_income_rows WHERE finance_id = ?', [id]);
+      await connection.query('DELETE FROM finance_request_annexures WHERE finance_id = ?', [id]);
       await connection.query('DELETE FROM finance_requests WHERE id = ?', [id]);
 
       await connection.commit();
