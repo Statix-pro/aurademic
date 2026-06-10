@@ -283,6 +283,7 @@ interface AdvanceFormRow {
   advance: string;
   budgetLineId?: number | null;
   budgetProposalId?: number | null;
+  groupedBudgets?: ApprovedBudgetOption[] | null;
 }
 interface SettlementFormRow {
   id: string;
@@ -293,6 +294,7 @@ interface SettlementFormRow {
   settlement: string;
   budgetLineId?: number | null;
   budgetProposalId?: number | null;
+  groupedBudgets?: ApprovedBudgetOption[] | null;
 }
 interface ExpenditureFormRow {
   id: string;
@@ -303,6 +305,7 @@ interface ExpenditureFormRow {
   autoSum: string;
   budgetLineId?: number | null;
   budgetProposalId?: number | null;
+  groupedBudgets?: ApprovedBudgetOption[] | null;
 }
 interface UnplannedBudgetRow {
   id: string;
@@ -1202,6 +1205,37 @@ const ExpenditureApproval: React.FC = () => {
 
     let isCancelled = false;
 
+    const safeSum = (val1: string | number, val2: string | number): string => {
+      const sum = (Number(val1) || 0) + (Number(val2) || 0);
+      return sum % 1 === 0 ? String(sum) : sum.toFixed(2);
+    };
+
+    const groupLoadedRows = (rows: any[], type: 'advance' | 'settlement' | 'expenditure') => {
+      const grouped = new Map<string, any>();
+      rows.forEach((row) => {
+        const key = `${normalizeBudgetToken(row.budgetHead)}::${normalizeBudgetToken(row.subHead)}`;
+        if (grouped.has(key)) {
+          const existing = grouped.get(key);
+          if (type === 'advance') {
+            existing.advance = safeSum(existing.advance, row.advance);
+            existing.preAdvance = safeSum(existing.preAdvance, row.preAdvance);
+            existing.budget = safeSum(existing.budget, row.budget);
+          } else if (type === 'settlement') {
+            existing.settlement = safeSum(existing.settlement, row.settlement);
+            existing.advance = safeSum(existing.advance, row.advance);
+            existing.budget = safeSum(existing.budget, row.budget);
+          } else if (type === 'expenditure') {
+            existing.expenditure = safeSum(existing.expenditure, row.expenditure);
+            existing.autoSum = safeSum(existing.autoSum, row.autoSum);
+            existing.budget = safeSum(existing.budget, row.budget);
+          }
+        } else {
+          grouped.set(key, { ...row });
+        }
+      });
+      return Array.from(grouped.values());
+    };
+
     const loadSubmittedRequest = async () => {
       try {
         const response = (await authenticityUtility.get(
@@ -1467,12 +1501,20 @@ const ExpenditureApproval: React.FC = () => {
               ? requestType
               : null),
         );
-        setAdvanceRows(mapAdvanceRows.length > 0 ? mapAdvanceRows : [createAdvanceRow()]);
+        setAdvanceRows(
+          mapAdvanceRows.length > 0
+            ? groupLoadedRows(mapAdvanceRows, 'advance')
+            : [createAdvanceRow()],
+        );
         setSettlementRows(
-          mapSettlementRows.length > 0 ? mapSettlementRows : [createSettlementRow()],
+          mapSettlementRows.length > 0
+            ? groupLoadedRows(mapSettlementRows, 'settlement')
+            : [createSettlementRow()],
         );
         setExpenditureSubRows(
-          mapExpenditureRows.length > 0 ? mapExpenditureRows : [createExpenditureRow()],
+          mapExpenditureRows.length > 0
+            ? groupLoadedRows(mapExpenditureRows, 'expenditure')
+            : [createExpenditureRow()],
         );
         setPayeeRows(mapPayeeRows.length > 0 ? mapPayeeRows : [createPayeeRow()]);
         setPaymentDetails({
@@ -2101,9 +2143,8 @@ const ExpenditureApproval: React.FC = () => {
     const options: OptionType[] = [];
     const seen = new Set<string>();
 
-    approvedBudgetOptions.forEach((budget, index) => {
+    approvedBudgetOptions.forEach((budget) => {
       const head = String(budget.head || '').trim();
-      const subHead = String(budget.subHead || '').trim();
       if (!head) return;
 
       const headKey = `head::${normalizeBudgetToken(head)}`;
@@ -2116,18 +2157,32 @@ const ExpenditureApproval: React.FC = () => {
           subHead: '',
         });
       }
+    });
 
-      if (!subHead) return;
-      const subKey = `sub::${normalizeBudgetToken(head)}::${normalizeBudgetToken(subHead)}::${budget.budgetLineId || budget.budgetProposalId || index}`;
-      if (seen.has(subKey)) return;
-      seen.add(subKey);
+    const groupedSubHeads = new Map<string, ApprovedBudgetOption[]>();
+    approvedBudgetOptions.forEach((budget) => {
+      const head = String(budget.head || '').trim();
+      const subHead = String(budget.subHead || '').trim();
+      if (!head || !subHead) return;
+
+      const key = `${normalizeBudgetToken(head)}::${normalizeBudgetToken(subHead)}`;
+      if (!groupedSubHeads.has(key)) {
+        groupedSubHeads.set(key, []);
+      }
+      groupedSubHeads.get(key)!.push(budget);
+    });
+
+    groupedSubHeads.forEach((list, key) => {
+      const first = list[0];
+      const totalRemaining = list.reduce((sum, item) => sum + item.remainingAmount, 0);
       options.push({
-        value: `sub::${budget.budgetLineId || budget.budgetProposalId || index}::${head}::${subHead}`,
-        label: `${subHead} (${head})`,
-        budgetHead: head,
-        subHead,
-        budgetLineId: budget.budgetLineId,
-        budgetProposalId: budget.budgetProposalId,
+        value: `sub::grouped::${list.map((item) => item.budgetLineId).join(',')}::${first.head}::${first.subHead}`,
+        label: `${first.subHead} (${first.head}) (Bal: ₹ ${totalRemaining.toLocaleString('en-IN')})`,
+        budgetHead: first.head,
+        subHead: first.subHead,
+        budgetLineId: first.budgetLineId,
+        budgetProposalId: first.budgetProposalId,
+        groupedBudgets: list,
       });
     });
 
@@ -2197,17 +2252,31 @@ const ExpenditureApproval: React.FC = () => {
   const getApprovedSubHeadOptionsForAdvance = (budgetHead: string | number): OptionType[] => {
     const normalizedHead = normalizeBudgetToken(budgetHead);
     if (!normalizedHead) return [];
-    return approvedBudgetOptions
+
+    const grouped = new Map<string, ApprovedBudgetOption[]>();
+    approvedBudgetOptions
       .filter((budget) => normalizeBudgetToken(budget.head) === normalizedHead)
-      .map((budget, index) => {
-        const subHead = String(budget.subHead || '').trim();
+      .forEach((budget) => {
+        const subKey = normalizeBudgetToken(budget.subHead);
+        if (!grouped.has(subKey)) {
+          grouped.set(subKey, []);
+        }
+        grouped.get(subKey)!.push(budget);
+      });
+
+    return Array.from(grouped.entries())
+      .map(([subKey, list]) => {
+        const first = list[0];
+        const totalRemaining = list.reduce((sum, item) => sum + item.remainingAmount, 0);
+
         return {
-          value: `sub::${budget.budgetLineId || budget.budgetProposalId || index}::${subHead}`,
-          label: subHead,
-          budgetHead: budget.head,
-          subHead,
-          budgetLineId: budget.budgetLineId,
-          budgetProposalId: budget.budgetProposalId,
+          value: `sub::grouped::${list.map((item) => item.budgetLineId).join(',')}::${first.subHead}`,
+          label: `${first.subHead} (Bal: ₹ ${totalRemaining.toLocaleString('en-IN')})`,
+          budgetHead: first.head,
+          subHead: first.subHead,
+          budgetLineId: first.budgetLineId,
+          budgetProposalId: first.budgetProposalId,
+          groupedBudgets: list,
         };
       })
       .filter((option) => Boolean(option.subHead)) as OptionType[];
@@ -2225,7 +2294,11 @@ const ExpenditureApproval: React.FC = () => {
     if (parsedBudgetLineId && normalizedSubHead) {
       const matchedByBoth = options.find(
         (option) =>
-          parsePositiveIntLike(option.budgetLineId) === parsedBudgetLineId &&
+          (parsePositiveIntLike(option.budgetLineId) === parsedBudgetLineId ||
+            (option.groupedBudgets &&
+              option.groupedBudgets.some(
+                (b: any) => parsePositiveIntLike(b.budgetLineId) === parsedBudgetLineId,
+              ))) &&
           normalizeBudgetToken(option.subHead) === normalizedSubHead,
       );
       if (matchedByBoth) return matchedByBoth;
@@ -2240,7 +2313,12 @@ const ExpenditureApproval: React.FC = () => {
 
     if (parsedBudgetLineId) {
       const matchedByLineId = options.find(
-        (option) => parsePositiveIntLike(option.budgetLineId) === parsedBudgetLineId,
+        (option) =>
+          parsePositiveIntLike(option.budgetLineId) === parsedBudgetLineId ||
+          (option.groupedBudgets &&
+            option.groupedBudgets.some(
+              (b: any) => parsePositiveIntLike(b.budgetLineId) === parsedBudgetLineId,
+            )),
       );
       if (matchedByLineId) return matchedByLineId;
     }
@@ -2530,6 +2608,7 @@ const ExpenditureApproval: React.FC = () => {
       budget: string;
       budgetLineId?: number | null;
       budgetProposalId?: number | null;
+      groupedBudgets?: ApprovedBudgetOption[] | null;
     },
   >(
     rows: T[],
@@ -2537,32 +2616,28 @@ const ExpenditureApproval: React.FC = () => {
     if (!approvedBudgetOptions.length) return rows;
 
     return rows.map((row) => {
-      const budgetLineId = Number(row.budgetLineId || 0) || null;
       const normalizedHead = normalizeBudgetToken(row.budgetHead);
       const normalizedSubHead = normalizeBudgetToken(row.subHead);
-      const matchedBudget = budgetLineId
-        ? approvedBudgetOptions.find(
-            (budget) =>
-              Number(budget.budgetLineId || 0) === budgetLineId &&
-              normalizeBudgetToken(budget.head) === normalizedHead &&
-              normalizeBudgetToken(budget.subHead) === normalizedSubHead,
-          ) ||
-          approvedBudgetOptions.find(
-            (budget) =>
-              normalizeBudgetToken(budget.head) === normalizedHead &&
-              normalizeBudgetToken(budget.subHead) === normalizedSubHead,
-          )
-        : null;
 
-      if (!matchedBudget) return row;
+      const matchingBudgets = approvedBudgetOptions.filter(
+        (budget) =>
+          normalizeBudgetToken(budget.head) === normalizedHead &&
+          normalizeBudgetToken(budget.subHead) === normalizedSubHead,
+      );
+
+      if (!matchingBudgets.length) return row;
+
+      const firstMatched = matchingBudgets[0];
+      const totalAmount = matchingBudgets.reduce((sum, b) => sum + b.totalAmount, 0);
 
       return {
         ...row,
-        budgetHead: row.budgetHead || matchedBudget.head,
-        subHead: row.subHead || matchedBudget.subHead,
-        budget: getApprovedBudgetAmount(matchedBudget),
-        budgetLineId: row.budgetLineId ?? matchedBudget.budgetLineId,
-        budgetProposalId: row.budgetProposalId ?? matchedBudget.budgetProposalId,
+        budgetHead: row.budgetHead || firstMatched.head,
+        subHead: row.subHead || firstMatched.subHead,
+        budget: Number.isFinite(totalAmount) ? String(totalAmount) : '',
+        budgetLineId: row.budgetLineId ?? firstMatched.budgetLineId,
+        budgetProposalId: row.budgetProposalId ?? firstMatched.budgetProposalId,
+        groupedBudgets: matchingBudgets,
       };
     });
   };
@@ -2601,23 +2676,34 @@ const ExpenditureApproval: React.FC = () => {
     setExpenditureSubRows((prev) => prev.map((row) => (row.id === rowId ? updater(row) : row)));
   };
 
-  const loadPreAdvanceSummary = async (
+  const loadPreAdvanceSummaryGrouped = async (
     rowId: string,
-    budgetLineId: number | null,
+    groupedBudgets: ApprovedBudgetOption[],
     budgetHead: string | number,
     subHead: string | number,
+    type: 'advance' | 'settlement',
   ) => {
     const normalizedHead = String(budgetHead || '').trim();
     const normalizedSubHead = String(subHead || '').trim();
 
-    if (!budgetLineId && (!normalizedHead || !normalizedSubHead)) {
-      updateAdvanceRow(rowId, (row) => ({ ...row, preAdvance: '0' }));
+    if (!groupedBudgets.length && (!normalizedHead || !normalizedSubHead)) {
+      if (type === 'advance') {
+        updateAdvanceRow(rowId, (row) => ({ ...row, preAdvance: '0' }));
+      } else {
+        updateSettlementRow(rowId, (row) => ({ ...row, advance: '0' }));
+      }
       return;
     }
 
     try {
+      // The grouped option already represents *all* budget lines that share this
+      // head+sub. The advance-summary endpoint, when given head+sub WITHOUT a
+      // budget_line_id, aggregates across every line for that head/sub in a single
+      // query. Calling it once per grouped line while still passing head+sub would
+      // re-count every NULL-budget_line_id (legacy) row once per line, inflating the
+      // pre-advance. So we deliberately omit budget_line_id and make a single call.
+      let totalPreAdvance = 0;
       const query = new URLSearchParams();
-      if (budgetLineId) query.set('budget_line_id', String(budgetLineId));
       if (normalizedHead) query.set('head', normalizedHead);
       if (normalizedSubHead) query.set('sub_head', normalizedSubHead);
       if (resolvedFinanceRequestId)
@@ -2645,10 +2731,18 @@ const ExpenditureApproval: React.FC = () => {
       };
 
       if (response.success === true || response.status === 'success') {
-        const preAdvance = Number(response.data?.preAdvance || 0);
+        totalPreAdvance = Number(response.data?.preAdvance || 0);
+      }
+
+      if (type === 'advance') {
         updateAdvanceRow(rowId, (row) => ({
           ...row,
-          preAdvance: String(preAdvance),
+          preAdvance: String(totalPreAdvance),
+        }));
+      } else {
+        updateSettlementRow(rowId, (row) => ({
+          ...row,
+          advance: String(totalPreAdvance),
         }));
       }
     } catch (error) {
@@ -2768,6 +2862,14 @@ const ExpenditureApproval: React.FC = () => {
     }));
   };
 
+  const getGroupedBudgetForSubHead = (budgetHead: string | number, subHead: string | number) => {
+    const subHeadOptions = getApprovedSubHeadOptionsForAdvance(budgetHead);
+    const matched = subHeadOptions.find(
+      (opt) => normalizeBudgetToken(opt.subHead) === normalizeBudgetToken(subHead),
+    );
+    return matched || null;
+  };
+
   const handleAdvanceSubHeadChange = async (
     rowId: string,
     subHeadValue: string,
@@ -2776,26 +2878,27 @@ const ExpenditureApproval: React.FC = () => {
     const row = advanceRows.find((entry) => entry.id === rowId);
     const budgetHeadValue = String(row?.budgetHead || '').trim();
 
-    const selectedBudget = findApprovedBudgetOption(
-      budgetHeadValue,
-      subHeadValue,
-      selected?.budgetLineId,
-    );
+    const matchedOption = getGroupedBudgetForSubHead(budgetHeadValue, subHeadValue);
+    const totalAmount = matchedOption?.groupedBudgets
+      ? matchedOption.groupedBudgets.reduce((sum: number, b: any) => sum + b.totalAmount, 0)
+      : 0;
 
     updateAdvanceRow(rowId, (currentRow) => ({
       ...currentRow,
       subHead: subHeadValue,
-      budget: getApprovedBudgetAmount(selectedBudget),
+      budget: matchedOption ? String(totalAmount) : '',
       preAdvance: '',
-      budgetLineId: selectedBudget?.budgetLineId ?? null,
-      budgetProposalId: selectedBudget?.budgetProposalId ?? null,
+      budgetLineId: matchedOption?.budgetLineId ?? null,
+      budgetProposalId: matchedOption?.budgetProposalId ?? null,
+      groupedBudgets: matchedOption?.groupedBudgets ?? null,
     }));
 
-    await loadPreAdvanceSummary(
+    await loadPreAdvanceSummaryGrouped(
       rowId,
-      selectedBudget?.budgetLineId ?? null,
+      matchedOption?.groupedBudgets ?? [],
       budgetHeadValue,
       subHeadValue,
+      'advance',
     );
   };
 
@@ -2813,26 +2916,28 @@ const ExpenditureApproval: React.FC = () => {
       return;
     }
 
-    const selectedBudget = findApprovedBudgetOption(
-      budgetHeadValue,
-      subHeadValue,
-      selected?.budgetLineId,
-    );
+    const matchedOption = getGroupedBudgetForSubHead(budgetHeadValue, subHeadValue);
+    const totalAmount = matchedOption?.groupedBudgets
+      ? matchedOption.groupedBudgets.reduce((sum: number, b: any) => sum + b.totalAmount, 0)
+      : 0;
+
     updateAdvanceRow(rowId, (row) => ({
       ...row,
       budgetHead: budgetHeadValue,
       subHead: subHeadValue,
-      budget: getApprovedBudgetAmount(selectedBudget),
+      budget: matchedOption ? String(totalAmount) : '',
       preAdvance: '',
-      budgetLineId: selectedBudget?.budgetLineId ?? null,
-      budgetProposalId: selectedBudget?.budgetProposalId ?? null,
+      budgetLineId: matchedOption?.budgetLineId ?? null,
+      budgetProposalId: matchedOption?.budgetProposalId ?? null,
+      groupedBudgets: matchedOption?.groupedBudgets ?? null,
     }));
 
-    await loadPreAdvanceSummary(
+    await loadPreAdvanceSummaryGrouped(
       rowId,
-      selectedBudget?.budgetLineId ?? null,
+      matchedOption?.groupedBudgets ?? [],
       budgetHeadValue,
       subHeadValue,
+      'advance',
     );
   };
 
@@ -2848,61 +2953,6 @@ const ExpenditureApproval: React.FC = () => {
     }));
   };
 
-  const loadSettlementAdvanceSummary = async (
-    rowId: string,
-    budgetLineId: number | null,
-    budgetHead: string | number,
-    subHead: string | number,
-  ) => {
-    const normalizedHead = String(budgetHead || '').trim();
-    const normalizedSubHead = String(subHead || '').trim();
-
-    if (!budgetLineId && (!normalizedHead || !normalizedSubHead)) {
-      updateSettlementRow(rowId, (row) => ({ ...row, advance: '0' }));
-      return;
-    }
-
-    try {
-      const query = new URLSearchParams();
-      if (budgetLineId) query.set('budget_line_id', String(budgetLineId));
-      if (normalizedHead) query.set('head', normalizedHead);
-      if (normalizedSubHead) query.set('sub_head', normalizedSubHead);
-      if (resolvedFinanceRequestId)
-        query.set('finance_request_id', String(resolvedFinanceRequestId));
-      if (dashboardRowIdFromState) query.set('dashboard_row_id', dashboardRowIdFromState);
-      if (workflowRowRefFromState ?? rowReferenceIdFromState) {
-        query.set('workflowrowref', workflowRowRefFromState ?? rowReferenceIdFromState ?? '');
-      }
-      if (sourceRequestIdFromState)
-        query.set('source_request_id', String(sourceRequestIdFromState));
-      if (
-        !dashboardRowIdFromState &&
-        !(workflowRowRefFromState ?? rowReferenceIdFromState) &&
-        rowIndexFromState
-      ) {
-        query.set('row_index', String(rowIndexFromState));
-      }
-
-      const response = (await authenticityUtility.get(
-        `/expenditure/advance-summary?${query.toString()}`,
-      )) as {
-        success?: boolean;
-        status?: string;
-        data?: { preAdvance?: number };
-      };
-
-      if (response.success === true || response.status === 'success') {
-        const advance = Number(response.data?.preAdvance || 0);
-        updateSettlementRow(rowId, (row) => ({
-          ...row,
-          advance: String(advance),
-        }));
-      }
-    } catch (error) {
-      console.error('Failed to load settlement advance summary:', error);
-    }
-  };
-
   const handleSettlementSubHeadChange = async (
     rowId: string,
     subHeadValue: string,
@@ -2910,25 +2960,27 @@ const ExpenditureApproval: React.FC = () => {
   ) => {
     const row = settlementRows.find((entry) => entry.id === rowId);
     const budgetHeadValue = String(row?.budgetHead || '').trim();
-    const selectedBudget = findApprovedBudgetOption(
-      budgetHeadValue,
-      subHeadValue,
-      selected?.budgetLineId,
-    );
+
+    const matchedOption = getGroupedBudgetForSubHead(budgetHeadValue, subHeadValue);
+    const totalAmount = matchedOption?.groupedBudgets
+      ? matchedOption.groupedBudgets.reduce((sum: number, b: any) => sum + b.totalAmount, 0)
+      : 0;
 
     updateSettlementRow(rowId, (currentRow) => ({
       ...currentRow,
       subHead: subHeadValue,
-      budget: getApprovedBudgetAmount(selectedBudget),
-      budgetLineId: selectedBudget?.budgetLineId ?? null,
-      budgetProposalId: selectedBudget?.budgetProposalId ?? null,
+      budget: matchedOption ? String(totalAmount) : '',
+      budgetLineId: matchedOption?.budgetLineId ?? null,
+      budgetProposalId: matchedOption?.budgetProposalId ?? null,
+      groupedBudgets: matchedOption?.groupedBudgets ?? null,
     }));
 
-    await loadSettlementAdvanceSummary(
+    await loadPreAdvanceSummaryGrouped(
       rowId,
-      selectedBudget?.budgetLineId ?? null,
+      matchedOption?.groupedBudgets ?? [],
       budgetHeadValue,
       subHeadValue,
+      'settlement',
     );
   };
 
@@ -2946,25 +2998,27 @@ const ExpenditureApproval: React.FC = () => {
       return;
     }
 
-    const selectedBudget = findApprovedBudgetOption(
-      budgetHeadValue,
-      subHeadValue,
-      selected?.budgetLineId,
-    );
+    const matchedOption = getGroupedBudgetForSubHead(budgetHeadValue, subHeadValue);
+    const totalAmount = matchedOption?.groupedBudgets
+      ? matchedOption.groupedBudgets.reduce((sum: number, b: any) => sum + b.totalAmount, 0)
+      : 0;
+
     updateSettlementRow(rowId, (row) => ({
       ...row,
       budgetHead: budgetHeadValue,
       subHead: subHeadValue,
-      budget: getApprovedBudgetAmount(selectedBudget),
-      budgetLineId: selectedBudget?.budgetLineId ?? null,
-      budgetProposalId: selectedBudget?.budgetProposalId ?? null,
+      budget: matchedOption ? String(totalAmount) : '',
+      budgetLineId: matchedOption?.budgetLineId ?? null,
+      budgetProposalId: matchedOption?.budgetProposalId ?? null,
+      groupedBudgets: matchedOption?.groupedBudgets ?? null,
     }));
 
-    await loadSettlementAdvanceSummary(
+    await loadPreAdvanceSummaryGrouped(
       rowId,
-      selectedBudget?.budgetLineId ?? null,
+      matchedOption?.groupedBudgets ?? [],
       budgetHeadValue,
       subHeadValue,
+      'settlement',
     );
   };
 
@@ -2986,18 +3040,19 @@ const ExpenditureApproval: React.FC = () => {
   ) => {
     const row = expenditureSubRows.find((entry) => entry.id === rowId);
     const budgetHeadValue = String(row?.budgetHead || '').trim();
-    const selectedBudget = findApprovedBudgetOption(
-      budgetHeadValue,
-      subHeadValue,
-      selected?.budgetLineId,
-    );
+
+    const matchedOption = getGroupedBudgetForSubHead(budgetHeadValue, subHeadValue);
+    const totalAmount = matchedOption?.groupedBudgets
+      ? matchedOption.groupedBudgets.reduce((sum: number, b: any) => sum + b.totalAmount, 0)
+      : 0;
 
     updateExpenditureRow(rowId, (currentRow) => ({
       ...currentRow,
       subHead: subHeadValue,
-      budget: getApprovedBudgetAmount(selectedBudget),
-      budgetLineId: selectedBudget?.budgetLineId ?? null,
-      budgetProposalId: selectedBudget?.budgetProposalId ?? null,
+      budget: matchedOption ? String(totalAmount) : '',
+      budgetLineId: matchedOption?.budgetLineId ?? null,
+      budgetProposalId: matchedOption?.budgetProposalId ?? null,
+      groupedBudgets: matchedOption?.groupedBudgets ?? null,
     }));
   };
 
@@ -3012,18 +3067,19 @@ const ExpenditureApproval: React.FC = () => {
       return;
     }
 
-    const selectedBudget = findApprovedBudgetOption(
-      budgetHeadValue,
-      subHeadValue,
-      selected?.budgetLineId,
-    );
+    const matchedOption = getGroupedBudgetForSubHead(budgetHeadValue, subHeadValue);
+    const totalAmount = matchedOption?.groupedBudgets
+      ? matchedOption.groupedBudgets.reduce((sum: number, b: any) => sum + b.totalAmount, 0)
+      : 0;
+
     updateExpenditureRow(rowId, (row) => ({
       ...row,
       budgetHead: budgetHeadValue,
       subHead: subHeadValue,
-      budget: getApprovedBudgetAmount(selectedBudget),
-      budgetLineId: selectedBudget?.budgetLineId ?? null,
-      budgetProposalId: selectedBudget?.budgetProposalId ?? null,
+      budget: matchedOption ? String(totalAmount) : '',
+      budgetLineId: matchedOption?.budgetLineId ?? null,
+      budgetProposalId: matchedOption?.budgetProposalId ?? null,
+      groupedBudgets: matchedOption?.groupedBudgets ?? null,
     }));
   };
 
@@ -4567,6 +4623,9 @@ const ExpenditureApproval: React.FC = () => {
         };
       });
 
+      // Duplicate head+sub lines are consolidated into one option and stored as a
+      // single row (against the representative budget_line_id). We deliberately do
+      // NOT split the amount back across the underlying lines.
       const selectedAdvanceRows = activeTab === 'Advance' ? advanceRows : [];
 
       const selectedSettlementRows = activeTab === 'Settlement' ? settlementRows : [];
@@ -6472,6 +6531,7 @@ const ExpenditureApproval: React.FC = () => {
                 transition: 'all 0.3s ease',
                 resize: 'vertical',
                 outline: 'none',
+                pointerEvents: 'auto',
               }}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = '#0069ab';
@@ -8056,8 +8116,11 @@ const ExpenditureApproval: React.FC = () => {
                 Remarks
               </label>
               <textarea
+                data-readonly-scrollable="true"
                 value={activeTab === 'Settlement' ? settlementRemarks : expenditureRemarks}
+                readOnly={isReadOnlyView}
                 onChange={(event) => {
+                  if (isReadOnlyView) return;
                   if (activeTab === 'Settlement') {
                     setSettlementRemarks(event.target.value);
                   } else {
@@ -8078,6 +8141,7 @@ const ExpenditureApproval: React.FC = () => {
                   color: '#2a3f5e',
                   outline: 'none',
                   fontFamily: 'inherit',
+                  pointerEvents: 'auto',
                 }}
               />
             </div>
