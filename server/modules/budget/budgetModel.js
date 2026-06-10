@@ -517,8 +517,57 @@ export async function resolveApprovalFlow(
   return resolveSharedApprovalFlow(beneficiaryType, entityTypeCode, conn, options);
 }
 
+// Merge proposal lines that share the same budget_head + sub_head into a single
+// line so the database never stores duplicate head/sub rows. This is the
+// authoritative guard: the client consolidates too, but duplicates can still
+// arrive via the API, other clients, or imports. Storing one line per head/sub
+// keeps downstream matching (expenditure/finance) from ever seeing — and having
+// to group/split — duplicate sub-heads.
+function consolidateProposalLines(lines) {
+  if (!Array.isArray(lines)) return [];
+  const grouped = new Map();
+  for (const line of lines) {
+    const head = String(line.budget_head || '').trim();
+    const subHead = String(line.sub_head || '').trim();
+    const key = `${head.toLowerCase()}::${subHead.toLowerCase()}`;
+    const lineTotal = (Number(line.unit_amount) || 0) * (Number(line.quantity) || 1);
+
+    if (grouped.has(key)) {
+      const existing = grouped.get(key);
+      const existingTotal = (Number(existing.unit_amount) || 0) * (Number(existing.quantity) || 1);
+      existing.unit_amount = existingTotal + lineTotal;
+      existing.quantity = 1;
+
+      const desc = String(line.line_description || '').trim();
+      if (desc) {
+        const existingDesc = String(existing.line_description || '').trim();
+        if (!existingDesc) {
+          existing.line_description = desc;
+        } else if (!existingDesc.includes(desc)) {
+          existing.line_description = `${existingDesc}; ${desc}`;
+        }
+      }
+
+      const combinedMonths = { ...(existing.month_allocations || {}) };
+      Object.entries(line.month_allocations || {}).forEach(([month, amount]) => {
+        combinedMonths[month] = (Number(combinedMonths[month]) || 0) + (Number(amount) || 0);
+      });
+      existing.month_allocations = combinedMonths;
+    } else {
+      grouped.set(key, {
+        ...line,
+        budget_head: head,
+        sub_head: subHead,
+        month_allocations: { ...(line.month_allocations || {}) },
+      });
+    }
+  }
+  return Array.from(grouped.values());
+}
+
 export async function create(payload, options = {}) {
   return withTransaction(async (conn) => {
+    payload = { ...payload, lines: consolidateProposalLines(payload.lines) };
     const calculatedTotal = (payload.lines || []).reduce((sum, line) => {
       const amount = Number(line.unit_amount) || 0;
       const qty = Number(line.quantity) || 1;
@@ -1066,6 +1115,7 @@ export async function update(
       }
       return out;
     };
+    payload = { ...payload, lines: consolidateProposalLines(payload.lines) };
     const incomingLines = Array.isArray(payload.lines) ? payload.lines : [];
     const lineChangeDetails = [];
     const proposalChanges = [];

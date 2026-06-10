@@ -1019,6 +1019,42 @@ const Budget: React.FC = () => {
       month_allocations: line.monthAmounts || {},
     }));
 
+    const consolidatedLines = (() => {
+      const grouped = new Map<string, any>();
+      formattedLines.forEach((line) => {
+        const key = `${String(line.budget_head || '')
+          .trim()
+          .toLowerCase()}::${String(line.sub_head || '')
+          .trim()
+          .toLowerCase()}`;
+        if (grouped.has(key)) {
+          const existing = grouped.get(key);
+          const existingTotal = Number(existing.unit_amount || 0) * Number(existing.quantity || 1);
+          const currentTotal = Number(line.unit_amount || 0) * Number(line.quantity || 1);
+          existing.unit_amount = existingTotal + currentTotal;
+          existing.quantity = 1;
+          if (line.line_description && line.line_description.trim()) {
+            if (
+              existing.line_description &&
+              !existing.line_description.includes(line.line_description)
+            ) {
+              existing.line_description += `; ${line.line_description}`;
+            } else if (!existing.line_description) {
+              existing.line_description = line.line_description;
+            }
+          }
+          const combinedMonths = { ...existing.month_allocations };
+          Object.entries(line.month_allocations || {}).forEach(([m, v]) => {
+            combinedMonths[m] = String(Number(combinedMonths[m] || 0) + Number(v || 0));
+          });
+          existing.month_allocations = combinedMonths;
+        } else {
+          grouped.set(key, { ...line });
+        }
+      });
+      return Array.from(grouped.values());
+    })();
+
     const payload = {
       request_date: date,
       fiscal_year: fiscalYearInt,
@@ -1038,7 +1074,7 @@ const Budget: React.FC = () => {
       applicant_name: applicantName?.trim(),
       applicant_entity: applicantEntity?.trim() || null,
       budget_tag: selectedTag?.trim(),
-      lines: formattedLines,
+      lines: consolidatedLines,
       ...(isReturnedResubmit ? { resubmission_remarks: normalizedResubmitRemarks } : {}),
     };
 

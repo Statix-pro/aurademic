@@ -216,3 +216,78 @@ Backfill with `LOWER(REPLACE(name, ' ', '-'))` then make admin UI auto-suggest.
 - Deactivate a head → new budgets can't pick it; existing finance flows still work.
 - Run availability calculation → numbers match pre-migration.
 - Soft-delete a sub-head → vanishes from new dropdowns, retains in audit views.
+
+---
+
+## Duplicate head/sub-head lines (June 2026)
+
+### The problem
+
+`budget_proposal_lines` could hold **multiple lines with the same `budget_head` +
+`sub_head`** within one proposal (e.g. the user added "Consumables / Chemicals"
+on three separate rows). Nothing prevented it on submit. Downstream this forced
+the Expenditure module to _group_ duplicate sub-heads in its dropdowns and then
+_split_ an entered amount back across the underlying lines — fragile logic that
+double-counted pre-advances and risked re-allocation drift on resubmit.
+
+### Root-cause fix — server-side consolidation guard
+
+The authoritative fix is to never **store** duplicates. `budget/budgetModel.js`
+has a `consolidateProposalLines()` helper applied at the top of **both** `create`
+and `update` transactions:
+
+- Merges lines sharing `LOWER(TRIM(budget_head)) :: LOWER(TRIM(sub_head))`.
+- Sums `unit_amount × quantity` into one line with `quantity = 1`.
+- Concatenates distinct descriptions; sums month allocations per month.
+
+Because it runs in the model (not the client), duplicates can't enter via the UI,
+the API, other clients, or imports. The client `budget.tsx` also consolidates —
+that's now defense-in-depth, not the guarantee.
+
+Expenditure side: the amount-splitting logic was removed. A consolidated sub-head
+now submits as a **single row** against the representative `budget_line_id`, and
+the pre-advance summary is fetched once by head/sub (not per line), so legacy
+duplicates still display/compute correctly without any data change.
+
+### Legacy data — audited, NOT migrated (deliberate)
+
+Read-only audit: `server/scripts/budget_duplicate_lines_audit.sql`.
+
+Prod snapshot (June 2026): **113 duplicate groups**, **278 surplus lines**, across
+**68 proposals**. ~109 groups are on `completed` proposals. Only **6** duplicate
+lines carry financial references; zero `expenditure_budget_ledger` (RESTRICT) refs.
+
+**Decision: no destructive prod migration.** Reasoning:
+
+- The guard fixes all _future_ data; the Expenditure grouping handles _legacy_
+  duplicates correctly with no DB change.
+- Merging completed proposals would require rewriting **approved snapshot** data —
+  `approved_unit_amount`, `approved_line_total`, and especially
+  `approved_month_allocations_json` (a per-row JSON blob). A wrong JSON merge
+  silently corrupts approved monthly figures on already-spent budgets. High risk,
+  zero functional gain.
+
+If a clean "no duplicates anywhere" invariant is ever wanted, the **only** safe
+path is: restore a prod dump into dev → run the merge there → reconcile totals →
+then (and only then) consider prod. Never first-run it on prod.
+
+A correct merge must, per duplicate group (survivor = lowest `id`):
+
+| Referencing table                                              | Cascade                          | Action on merge                                                                       |
+| -------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------- |
+| `budget_line_month_allocations`                                | CASCADE, unique `(line,month)`   | **SUM** per month into survivor, then delete others                                   |
+| `finance_budget_line_usage`                                    | CASCADE, **PK = budget_line_id** | **SUM** `consumed_amount` into survivor (repoint alone = PK collision), delete others |
+| `finance_budget_usage_ledger`                                  | CASCADE                          | repoint `budget_line_id` → survivor                                                   |
+| `expenditure_line_rows` / `_advance_rows` / `_settlement_rows` | SET NULL                         | repoint → survivor                                                                    |
+| `expenditure_budget_ledger`                                    | RESTRICT                         | repoint → survivor (0 in prod, but blocks delete if present)                          |
+
+Then update the survivor `budget_proposal_lines` row: sum `line_total` **and
+`approved_line_total` separately** (preserve approved figures), set `quantity = 1`,
+merge `approved_month_allocations_json`, concat descriptions — all inside one
+transaction with a before/after total-reconciliation assertion. Delete non-survivors last.
+
+### Non-goals
+
+- **Don't auto-merge prod history.** The guard + grouping make it unnecessary.
+- **Don't overwrite `approved_*` snapshots with proposed sums** — approved totals
+  may differ from proposed and are part of the audit record.
