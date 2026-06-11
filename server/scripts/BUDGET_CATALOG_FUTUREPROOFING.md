@@ -244,10 +244,22 @@ Because it runs in the model (not the client), duplicates can't enter via the UI
 the API, other clients, or imports. The client `budget.tsx` also consolidates —
 that's now defense-in-depth, not the guarantee.
 
-Expenditure side: the amount-splitting logic was removed. A consolidated sub-head
-now submits as a **single row** against the representative `budget_line_id`, and
-the pre-advance summary is fetched once by head/sub (not per line), so legacy
-duplicates still display/compute correctly without any data change.
+Expenditure side: the UI shows **one row** per head/sub and the pre-advance
+summary is fetched once by head/sub (not per line). On submit, an **internal
+split** (`splitRowsForSubmit`) distributes the entered amount across the
+underlying approved budget lines when a legacy head/sub is still backed by more
+than one line (e.g. Lab Equipment = ₹30L + ₹10L). This is required because the
+backend validates each `budget_line_id` against its own remaining budget
+([assertUsageRowsWithinRemainingBudget](../modules/expenditure/expenditureModel.js));
+without the split the whole amount would land on one line and fail that line's
+check even though it fits the head/sub total. The split is invisible to the user
+(still one row) and is a no-op for new/consolidated budgets that have a single
+line per head/sub. It fills the highest-remaining line first, clamps overspent
+lines to zero capacity, and emits no ₹0 rows.
+
+> Note: an earlier iteration removed the split entirely (assuming consolidation
+> meant one line per head/sub). That broke legacy budgets whose head/sub still
+> spans two lines, so the corrected internal split was reinstated.
 
 ### Legacy data — audited, NOT migrated (deliberate)
 
