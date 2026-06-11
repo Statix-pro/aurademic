@@ -2870,6 +2870,104 @@ const ExpenditureApproval: React.FC = () => {
     return matched || null;
   };
 
+  const getRowAmountValue = (row: any, tab: string): number => {
+    if (tab === 'Advance') {
+      return (
+        Number(
+          String(row.advance || '')
+            .replace(/,/g, '')
+            .trim(),
+        ) || 0
+      );
+    }
+    if (tab === 'Settlement') {
+      return (
+        Number(
+          String(row.settlement || '')
+            .replace(/,/g, '')
+            .trim(),
+        ) || 0
+      );
+    }
+    return (
+      Number(
+        String(row.autoSum || row.expenditure || '')
+          .replace(/,/g, '')
+          .trim(),
+      ) || 0
+    );
+  };
+
+  const setRowAmountValue = (row: any, tab: string, value: number) => {
+    const formattedVal = value % 1 === 0 ? String(value) : value.toFixed(2);
+    if (tab === 'Advance') {
+      return { ...row, advance: formattedVal, advance_amount: value };
+    }
+    if (tab === 'Settlement') {
+      return { ...row, settlement: formattedVal, settlement_amount: value };
+    }
+    return { ...row, expenditure: formattedVal, autoSum: formattedVal, auto_sum_amount: value };
+  };
+
+  // The UI shows one consolidated row per head/sub, but a legacy budget may still
+  // have that head/sub split across multiple approved budget lines (e.g. Lab
+  // Equipment = ₹30L + ₹10L). The backend validates each line independently, so
+  // the single entered amount must be distributed across the underlying lines or
+  // it would land entirely on one line and fail that line's remaining-budget check.
+  // This split is internal only — the user still sees and edits one row.
+  // New/consolidated budgets have a single line per head/sub, so no split happens.
+  const splitRowsForSubmit = (rows: any[], tab: string) => {
+    const result: any[] = [];
+    rows.forEach((row) => {
+      const matchedOption = getGroupedBudgetForSubHead(row.budgetHead, row.subHead);
+      const groupedBudgets = matchedOption?.groupedBudgets || [];
+
+      if (groupedBudgets.length > 1) {
+        let remaining = getRowAmountValue(row, tab);
+        // Fill the lines with the most balance first so the entered amount fits
+        // within each line's capacity wherever possible.
+        const sortedBudgets = [...groupedBudgets].sort(
+          (a, b) => b.remainingAmount - a.remainingAmount,
+        );
+        let emitted = 0;
+        for (let i = 0; i < sortedBudgets.length; i += 1) {
+          const budget = sortedBudgets[i];
+          // Clamp overspent lines (remainingAmount < 0) to zero capacity so they
+          // never produce a negative allocation that inflates the total.
+          const available = Math.max(0, budget.remainingAmount);
+          const isLast = i === sortedBudgets.length - 1;
+          // Any overflow beyond the combined balance lands on the last line; the
+          // backend's per-line check will then correctly reject a genuine overspend.
+          const allocated = isLast ? remaining : Math.min(remaining, available);
+
+          // Skip zero/negative allocations (no spurious ₹0 lines) but always emit
+          // at least one row so the entry is never dropped.
+          if (allocated <= 0 && !(isLast && emitted === 0)) {
+            continue;
+          }
+
+          result.push(
+            setRowAmountValue(
+              {
+                ...row,
+                id: `${row.id}_split_${i}`,
+                budgetLineId: budget.budgetLineId,
+                budgetProposalId: budget.budgetProposalId,
+              },
+              tab,
+              Math.max(0, allocated),
+            ),
+          );
+          emitted += 1;
+          remaining = Math.max(0, remaining - allocated);
+        }
+      } else {
+        result.push(row);
+      }
+    });
+    return result;
+  };
+
   const handleAdvanceSubHeadChange = async (
     rowId: string,
     subHeadValue: string,
@@ -4623,14 +4721,18 @@ const ExpenditureApproval: React.FC = () => {
         };
       });
 
-      // Duplicate head+sub lines are consolidated into one option and stored as a
-      // single row (against the representative budget_line_id). We deliberately do
-      // NOT split the amount back across the underlying lines.
-      const selectedAdvanceRows = activeTab === 'Advance' ? advanceRows : [];
+      // The UI shows one row per head/sub, but legacy budgets may back that head/sub
+      // with multiple approved lines. splitRowsForSubmit distributes the entered
+      // amount across those underlying lines so each passes the backend's per-line
+      // budget check. Single-line (consolidated) budgets pass through unchanged.
+      const selectedAdvanceRows =
+        activeTab === 'Advance' ? splitRowsForSubmit(advanceRows, 'Advance') : [];
 
-      const selectedSettlementRows = activeTab === 'Settlement' ? settlementRows : [];
+      const selectedSettlementRows =
+        activeTab === 'Settlement' ? splitRowsForSubmit(settlementRows, 'Settlement') : [];
 
-      const selectedExpenditureRows = activeTab === 'Expenditure' ? expenditureSubRows : [];
+      const selectedExpenditureRows =
+        activeTab === 'Expenditure' ? splitRowsForSubmit(expenditureSubRows, 'Expenditure') : [];
 
       const normalizedUnplannedRows = effectiveUnplannedRows.map((row) => ({
         head_of_account: unplannedHeadOfAccount.trim(),
