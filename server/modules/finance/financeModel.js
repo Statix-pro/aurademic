@@ -1318,15 +1318,28 @@ const resolveBudgetAvailabilityForUser = async (
        bp.beneficiary_value,
        COALESCE(bpl.approved_line_total, bpl.line_total, 0) AS budget_line_amount,
        COALESCE(fblu.consumed_amount, 0) AS consumed_amount,
+       COALESCE(own_consumed.amount, 0) AS own_consumed_amount,
        COALESCE(frbr.reserved_amount, 0) AS reserved_amount,
        (
          COALESCE(bpl.approved_line_total, bpl.line_total, 0)
-         - COALESCE(fblu.consumed_amount, 0)
+         - GREATEST(0, COALESCE(fblu.consumed_amount, 0) - COALESCE(own_consumed.amount, 0))
          - COALESCE(frbr.reserved_amount, 0)
        ) AS available_amount
      FROM budget_proposal_lines bpl
      JOIN budget_proposals bp ON bp.id = bpl.budget_proposal_id
      LEFT JOIN finance_budget_line_usage fblu ON fblu.budget_line_id = bpl.id
+     LEFT JOIN (
+       -- When editing an existing (already-approved) finance request, its own
+       -- consumed amount is still rolled up in finance_budget_line_usage. Add it
+       -- back so the editor can re-enter/adjust what they already had instead of
+       -- being blocked by their own prior consumption. Only 'consume' entries
+       -- exist (no release/adjust), so SUM of consume = this finance's usage.
+       -- finance_id = NULL (no excludeFinanceId) matches no rows -> 0, a no-op.
+       SELECT budget_line_id, SUM(amount) AS amount
+       FROM finance_budget_usage_ledger
+       WHERE operation = 'consume' AND finance_id = ?
+       GROUP BY budget_line_id
+     ) own_consumed ON own_consumed.budget_line_id = bpl.id
      LEFT JOIN (
        SELECT
          fbb.budget_line_id,
@@ -1354,12 +1367,13 @@ const resolveBudgetAvailabilityForUser = async (
      ORDER BY
        (
          COALESCE(bpl.approved_line_total, bpl.line_total, 0)
-         - COALESCE(fblu.consumed_amount, 0)
+         - GREATEST(0, COALESCE(fblu.consumed_amount, 0) - COALESCE(own_consumed.amount, 0))
          - COALESCE(frbr.reserved_amount, 0)
        ) DESC,
        bp.updated_at DESC,
        bpl.id DESC`,
     [
+      normalizedExcludeFinanceId,
       normalizedExcludeFinanceId,
       normalizedExcludeFinanceId,
       ...ownerScopeParams,

@@ -5962,6 +5962,16 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
          WHERE lr_fy.expenditure_id = er.id
            AND bp_fy.fiscal_year = ?
       )
+      OR EXISTS (
+        -- Carry-forward: a proposal carried into the target year must surface
+        -- under that target year for approvers too — matching finance/budget
+        -- (financeModel.listFinanceQueueRecords) and the creator dashboard.
+        SELECT 1
+          FROM finance_carry_forward_allocations cf_fy
+         WHERE cf_fy.finance_request_id = er.finance_request_id
+           AND cf_fy.target_fiscal_year = ?
+           AND LOWER(TRIM(COALESCE(cf_fy.status, 'active'))) = 'active'
+      )
       OR (
         NOT EXISTS (SELECT 1 FROM expenditure_advance_rows ar_any WHERE ar_any.expenditure_id = er.id AND ar_any.budget_proposal_id IS NOT NULL)
         AND NOT EXISTS (SELECT 1 FROM expenditure_settlement_rows sr_any WHERE sr_any.expenditure_id = er.id AND sr_any.budget_proposal_id IS NOT NULL)
@@ -5972,7 +5982,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
         ) = ?
       )
     )`);
-    whereParams.push(fiscalYear, fiscalYear, fiscalYear, fiscalYear);
+    whereParams.push(fiscalYear, fiscalYear, fiscalYear, fiscalYear, fiscalYear);
   }
 
   if (workflowStatus === 'all') {
@@ -6352,6 +6362,15 @@ export async function listAvailableFiscalYears({ tx = db } = {}) {
             AND NOT EXISTS (SELECT 1 FROM expenditure_advance_rows ar WHERE ar.expenditure_id = er.id AND ar.budget_proposal_id IS NOT NULL)
             AND NOT EXISTS (SELECT 1 FROM expenditure_settlement_rows sr WHERE sr.expenditure_id = er.id AND sr.budget_proposal_id IS NOT NULL)
             AND NOT EXISTS (SELECT 1 FROM expenditure_line_rows lr WHERE lr.expenditure_id = er.id AND lr.budget_proposal_id IS NOT NULL)
+         UNION
+         -- Carry-forward target years, so approvers can select the year a
+         -- proposal was carried into (mirrors finance listAvailableFiscalYears).
+         SELECT cf.target_fiscal_year AS fiscal_year
+           FROM finance_carry_forward_allocations cf
+           JOIN expenditure_requests er ON er.finance_request_id = cf.finance_request_id
+          WHERE LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+            AND LOWER(TRIM(COALESCE(cf.status, 'active'))) = 'active'
+            AND cf.target_fiscal_year IS NOT NULL
        ) years
       WHERE fiscal_year IS NOT NULL
       ORDER BY fiscal_year DESC`,
