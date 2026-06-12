@@ -657,6 +657,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [deleteCountdown, setDeleteCountdown] = useState<number>(5);
   const [carryForwardPopupOpen, setCarryForwardPopupOpen] = useState(false);
   const [carryForwardRecordId, setCarryForwardRecordId] = useState<number | string | null>(null);
+  // Carry-forward is always a FINANCE-request action (allocation keyed to
+  // finance_request_id). On the expenditure Advance card we target the parent
+  // finance request via this id and the finance API base, not the expenditure id.
+  const [carryForwardFinanceId, setCarryForwardFinanceId] = useState<number | string | null>(null);
   const [carryForwardRef, setCarryForwardRef] = useState('');
   const [carryForwardSourceYear, setCarryForwardSourceYear] = useState<number>(
     getRunningFiscalYearStart(),
@@ -2554,6 +2558,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     if (carryForwardSubmitting) return;
     setCarryForwardPopupOpen(false);
     setCarryForwardRecordId(null);
+    setCarryForwardFinanceId(null);
     setCarryForwardRef('');
     setCarryForwardAvailableAmount(0);
     setCarryForwardRemarks('');
@@ -2568,8 +2573,22 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         return;
       }
 
+      // Carry-forward always runs against the finance request. On the expenditure
+      // Advance card, resolve the parent finance id + use the finance API base.
+      const isExpenditureModule = config.moduleKey === 'expenditure';
+      const carryForwardBasePath = isExpenditureModule ? '/finance-requests' : config.apiBasePath;
+      const carryForwardTargetId = isExpenditureModule
+        ? Number(record.finance_request_id ?? record.financeRequestId ?? 0) || null
+        : recordId;
+
+      if (!carryForwardTargetId) {
+        setError('Unable to carry forward: linked finance request not found.');
+        return;
+      }
+
       const proposalRef = getRecordProposalRef(record);
       setCarryForwardRecordId(recordId);
+      setCarryForwardFinanceId(carryForwardTargetId);
       setCarryForwardRef(proposalRef);
       setCarryForwardPopupOpen(true);
       setCarryForwardLoading(true);
@@ -2577,7 +2596,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
       try {
         const response: any = await authenticityUtility.get(
-          `${config.apiBasePath}/${recordId}/carry-forward`,
+          `${carryForwardBasePath}/${carryForwardTargetId}/carry-forward`,
         );
         const envelope =
           response?.data && typeof response.data === 'object' ? response.data : response;
@@ -2612,21 +2631,31 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         setCarryForwardLoading(false);
       }
     },
-    [closeCarryForwardPopup, config.apiBasePath, getRecordId, getRecordProposalRef, showAlert],
+    [
+      closeCarryForwardPopup,
+      config.apiBasePath,
+      config.moduleKey,
+      getRecordId,
+      getRecordProposalRef,
+      showAlert,
+    ],
   );
 
   const submitCarryForward = useCallback(async () => {
-    if (!carryForwardRecordId || carryForwardSubmitting) return;
+    if (!carryForwardFinanceId || carryForwardSubmitting) return;
 
     if (!carryForwardRemarks.trim()) {
       showAlert('Carry-forward remarks are required.', 'warning');
       return;
     }
 
+    const carryForwardBasePath =
+      config.moduleKey === 'expenditure' ? '/finance-requests' : config.apiBasePath;
+
     setCarryForwardSubmitting(true);
     try {
       const response: any = await authenticityUtility.post(
-        `${config.apiBasePath}/${carryForwardRecordId}/carry-forward`,
+        `${carryForwardBasePath}/${carryForwardFinanceId}/carry-forward`,
         {
           targetFiscalYear: carryForwardTargetYear,
           remarks: carryForwardRemarks.trim(),
@@ -2652,12 +2681,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
   }, [
     activeStage,
-    carryForwardRecordId,
+    carryForwardFinanceId,
     carryForwardRemarks,
     carryForwardSubmitting,
     carryForwardTargetYear,
     closeCarryForwardPopup,
     config.apiBasePath,
+    config.moduleKey,
     loadQueue,
     page,
     showAlert,
@@ -3187,8 +3217,16 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                             record.carryForwardUnsettledAdvanceAmount ??
                             0,
                         );
+                        // Carry-forward now lives on the expenditure ADVANCE card
+                        // (moved off the finance request). It carries the parent
+                        // finance request's unsettled advance into the next FY.
+                        const isAdvanceCard =
+                          String(record.request_type || '')
+                            .trim()
+                            .toLowerCase() === 'advance';
                         const canCarryForwardCard =
-                          config.moduleKey === 'finance' &&
+                          config.moduleKey === 'expenditure' &&
+                          isAdvanceCard &&
                           isSuperAdminView &&
                           !isArchived &&
                           statusCategory === 'approved' &&
