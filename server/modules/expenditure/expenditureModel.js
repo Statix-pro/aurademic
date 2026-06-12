@@ -6245,6 +6245,30 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
        er.id,
        COALESCE(err.request_ref, CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))) AS proposal_ref,
        er.request_type,
+       er.finance_request_id,
+       (
+         -- Carry-forward eligibility for the Advance card: unsettled advance for
+         -- this finance request = all approved advances - all approved settlements.
+         -- Attributed to the budget's FY (no request-date filter), matching how the
+         -- rest of expenditure auto-uses the budget year. Drives the advance-card icon.
+         SELECT GREATEST(0, COALESCE(SUM(CASE
+           WHEN ecf.request_type = 'Advance'
+             AND (
+               LOWER(TRIM(COALESCE(ecf.overall_status, ''))) IN ('approved', 'completed')
+               OR LOWER(TRIM(COALESCE(ecf.workflow_status, ''))) IN ('approved', 'completed')
+             )
+           THEN COALESCE(ecf.advance_total_amount, ecf.total_amount, 0)
+           WHEN ecf.request_type = 'Settlement'
+             AND (
+               LOWER(TRIM(COALESCE(ecf.overall_status, ''))) IN ('approved', 'completed')
+               OR LOWER(TRIM(COALESCE(ecf.workflow_status, ''))) IN ('approved', 'completed')
+             )
+           THEN -COALESCE(ecf.settlement_total_amount, ecf.total_amount, 0)
+           ELSE 0
+         END), 0))
+         FROM expenditure_requests ecf
+         WHERE ecf.finance_request_id = er.finance_request_id
+       ) AS carry_forward_unsettled_advance_amount,
        er.created_by,
        er.beneficiary_type,
        er.beneficiary_value,
