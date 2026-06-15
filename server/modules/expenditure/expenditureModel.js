@@ -2046,24 +2046,17 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
            AND cf_card.target_fiscal_year = ?
            AND LOWER(TRIM(cf_card.status)) = 'active'
       )
-      OR EXISTS (
-        SELECT 1
-          FROM expenditure_requests er_fy
-         WHERE er_fy.finance_request_id = ${financeAlias}.id
-           AND er_fy.created_by = ?
-           AND LOWER(TRIM(COALESCE(er_fy.overall_status, 'pending'))) <> 'deleted'
-           AND er_fy.request_date >= ?
-           AND er_fy.request_date < ?
-      )
     )`;
+  // A card belongs to its BUDGET fiscal year (or carry-forward target year), NOT
+  // the year an advance/settlement was entered. Matching by expenditure request
+  // date pulled cards into the next FY before any carry-forward — removed so a card
+  // only appears in the target FY once it has actually been carried forward.
 
   if (fyStart) {
-    const fyFrom = `${fyStart}-04-01`;
-    const fyTo = `${fyStart + 1}-04-01`;
     financeFySql = buildDashboardFinanceFySql('fr');
     requestFinanceFySql = buildDashboardFinanceFySql('fr_req');
-    financeParams.push(fyStart, fyStart, uid, fyFrom, fyTo);
-    expenditureParams.push(fyStart, fyStart, uid, fyFrom, fyTo);
+    financeParams.push(fyStart, fyStart);
+    expenditureParams.push(fyStart, fyStart);
   }
 
   const [cardRows] = await db.execute(
@@ -3302,9 +3295,27 @@ async function getSettlementAdvanceAmount(
         }
       : await resolveCatalogIds(conn, resolvedBudgetHead, resolvedSubHead);
 
+  // For a carry-forward settlement the original advance sits on the SOURCE-year
+  // budget line while the settlement uses the TARGET-year line — so an exact
+  // budget_line_id match never finds the advance (advanceTotal = 0). When this
+  // finance request has an active carry-forward, match the advance by head/sub
+  // instead; the row-identity scope (finance + dashboard row) already pins the
+  // correct card, and head/sub is stable across the year boundary.
+  let advanceMatchLineId = resolvedBudgetLineId;
+  if (advanceMatchLineId && toPositiveInt(financeRequestId)) {
+    const [cfRows] = await conn.execute(
+      `SELECT 1 FROM finance_carry_forward_allocations
+        WHERE finance_request_id = ?
+          AND LOWER(TRIM(COALESCE(status, 'active'))) = 'active'
+        LIMIT 1`,
+      [toPositiveInt(financeRequestId)],
+    );
+    if (cfRows.length) advanceMatchLineId = null;
+  }
+
   const summary = await getCumulativeAdvanceSummary(conn, {
     userId: uid,
-    budgetLineId: resolvedBudgetLineId,
+    budgetLineId: advanceMatchLineId,
     head: resolvedBudgetHead,
     subHead: resolvedSubHead,
     budgetHeadId: resolvedIds.budget_head_id,
@@ -3397,24 +3408,6 @@ async function assertSettlementPayeesMatchAdjustment(
   const submittedPayeeTotal = toMoney(payeeRows.reduce((sum, row) => sum + toMoney(row.amount), 0));
 
   if (toMoney(expectedPayeeTotal) === submittedPayeeTotal) return;
-
-  // DEBUG: temporary trace to diagnose settlement<->advance mismatch (advanceTotal=0).
-  // Remove once the carry-forward settlement matching issue is resolved.
-   
-  console.error('[DEBUG settlement-advance match]', {
-    financeRequestId,
-    scope: { rowIndex, sourceRequestId, dashboardRowId, workflowRowRef },
-    settlementTotal,
-    advanceTotal,
-    expectedPayeeTotal,
-    submittedPayeeTotal,
-    settlementRows: settlementRows.map((row) => ({
-      budget_line_id: row.budgetLineId ?? row.budget_line_id,
-      budget_head: row.budgetHead ?? row.budget_head,
-      sub_head: row.subHead ?? row.sub_head,
-      settlement: row.settlement ?? row.settlement_amount,
-    })),
-  });
 
   if (toMoney(expectedPayeeTotal) === 0) {
     throw new Error(
