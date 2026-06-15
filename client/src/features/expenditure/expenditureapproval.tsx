@@ -2139,7 +2139,64 @@ const ExpenditureApproval: React.FC = () => {
     }));
   };
 
-  const getApprovedBudgetHeadSearchOptions = (): OptionType[] => {
+  const getSettlementReservedAmountForSubHead = (
+    budgetHead: string | number,
+    subHead: string | number,
+    excludeRowId?: string,
+  ): number => {
+    const normalizedHead = normalizeBudgetToken(budgetHead);
+    const normalizedSubHead = normalizeBudgetToken(subHead);
+    if (activeTab !== 'Settlement' || !normalizedHead || !normalizedSubHead) return 0;
+
+    return settlementRows.reduce((sum, row) => {
+      if (excludeRowId && row.id === excludeRowId) return sum;
+      if (
+        normalizeBudgetToken(row.budgetHead) !== normalizedHead ||
+        normalizeBudgetToken(row.subHead) !== normalizedSubHead
+      ) {
+        return sum;
+      }
+
+      return sum + parseAmountValue(row.settlement);
+    }, 0);
+  };
+
+  const getSettlementReservedAdvanceForSubHead = (
+    budgetHead: string | number,
+    subHead: string | number,
+    excludeRowId?: string,
+  ): number => {
+    const normalizedHead = normalizeBudgetToken(budgetHead);
+    const normalizedSubHead = normalizeBudgetToken(subHead);
+    if (!normalizedHead || !normalizedSubHead) return 0;
+
+    return settlementRows.reduce((sum, row) => {
+      if (excludeRowId && row.id === excludeRowId) return sum;
+      if (
+        normalizeBudgetToken(row.budgetHead) !== normalizedHead ||
+        normalizeBudgetToken(row.subHead) !== normalizedSubHead
+      ) {
+        return sum;
+      }
+
+      return sum + parseAmountValue(row.advance);
+    }, 0);
+  };
+
+  const getBudgetListDisplayRemaining = (
+    list: ApprovedBudgetOption[],
+    excludeSettlementRowId?: string,
+  ): number => {
+    const first = list[0];
+    const totalRemaining = list.reduce((sum, item) => sum + item.remainingAmount, 0);
+    const localReserved =
+      first && activeTab === 'Settlement'
+        ? getSettlementReservedAmountForSubHead(first.head, first.subHead, excludeSettlementRowId)
+        : 0;
+    return Math.max(0, totalRemaining - localReserved);
+  };
+
+  const getApprovedBudgetHeadSearchOptions = (excludeSettlementRowId?: string): OptionType[] => {
     const options: OptionType[] = [];
     const seen = new Set<string>();
 
@@ -2174,7 +2231,7 @@ const ExpenditureApproval: React.FC = () => {
 
     groupedSubHeads.forEach((list, key) => {
       const first = list[0];
-      const totalRemaining = list.reduce((sum, item) => sum + item.remainingAmount, 0);
+      const totalRemaining = getBudgetListDisplayRemaining(list, excludeSettlementRowId);
       options.push({
         value: `sub::grouped::${list.map((item) => item.budgetLineId).join(',')}::${first.head}::${first.subHead}`,
         label: `${first.subHead} (${first.head}) (Bal: ₹ ${totalRemaining.toLocaleString('en-IN')})`,
@@ -2193,8 +2250,9 @@ const ExpenditureApproval: React.FC = () => {
     budgetHead: string | number,
     _subHead: string | number,
     budgetLineId?: number | string | null,
+    excludeSettlementRowId?: string,
   ): OptionType | null => {
-    const options = getApprovedBudgetHeadSearchOptions();
+    const options = getApprovedBudgetHeadSearchOptions(excludeSettlementRowId);
     const parsedBudgetLineId = parsePositiveIntLike(budgetLineId);
     const normalizedHead = normalizeBudgetToken(budgetHead);
     let selectedHead = normalizedHead;
@@ -2249,7 +2307,10 @@ const ExpenditureApproval: React.FC = () => {
       .some((value) => value.includes(query));
   };
 
-  const getApprovedSubHeadOptionsForAdvance = (budgetHead: string | number): OptionType[] => {
+  const getApprovedSubHeadOptionsForAdvance = (
+    budgetHead: string | number,
+    excludeSettlementRowId?: string,
+  ): OptionType[] => {
     const normalizedHead = normalizeBudgetToken(budgetHead);
     if (!normalizedHead) return [];
 
@@ -2267,7 +2328,7 @@ const ExpenditureApproval: React.FC = () => {
     return Array.from(grouped.entries())
       .map(([subKey, list]) => {
         const first = list[0];
-        const totalRemaining = list.reduce((sum, item) => sum + item.remainingAmount, 0);
+        const totalRemaining = getBudgetListDisplayRemaining(list, excludeSettlementRowId);
 
         return {
           value: `sub::grouped::${list.map((item) => item.budgetLineId).join(',')}::${first.subHead}`,
@@ -2286,8 +2347,9 @@ const ExpenditureApproval: React.FC = () => {
     budgetHead: string | number,
     subHead: string | number,
     budgetLineId?: number | string | null,
+    excludeSettlementRowId?: string,
   ): OptionType | null => {
-    const options = getApprovedSubHeadOptionsForAdvance(budgetHead);
+    const options = getApprovedSubHeadOptionsForAdvance(budgetHead, excludeSettlementRowId);
     const parsedBudgetLineId = parsePositiveIntLike(budgetLineId);
     const normalizedSubHead = normalizeBudgetToken(subHead);
 
@@ -2740,9 +2802,15 @@ const ExpenditureApproval: React.FC = () => {
           preAdvance: String(totalPreAdvance),
         }));
       } else {
+        const reservedAdvance = getSettlementReservedAdvanceForSubHead(
+          normalizedHead,
+          normalizedSubHead,
+          rowId,
+        );
+        const rowAdvance = Math.max(0, totalPreAdvance - reservedAdvance);
         updateSettlementRow(rowId, (row) => ({
           ...row,
-          advance: String(totalPreAdvance),
+          advance: String(rowAdvance),
         }));
       }
     } catch (error) {
@@ -7244,11 +7312,12 @@ const ExpenditureApproval: React.FC = () => {
                         >
                           <CustomDropdown
                             className="mb-0"
-                            options={getApprovedBudgetHeadSearchOptions()}
+                            options={getApprovedBudgetHeadSearchOptions(row.id)}
                             value={getApprovedBudgetHeadSelectedOption(
                               row.budgetHead,
                               row.subHead,
                               row.budgetLineId,
+                              row.id,
                             )}
                             onChange={(option) =>
                               void handleSettlementBudgetHeadSearchChange(
@@ -7268,11 +7337,12 @@ const ExpenditureApproval: React.FC = () => {
                         >
                           <CustomDropdown
                             className="mb-0"
-                            options={getApprovedSubHeadOptionsForAdvance(row.budgetHead)}
+                            options={getApprovedSubHeadOptionsForAdvance(row.budgetHead, row.id)}
                             value={getApprovedSubHeadSelectedOption(
                               row.budgetHead,
                               row.subHead,
                               row.budgetLineId,
+                              row.id,
                             )}
                             onChange={(option) => {
                               const selected = option as OptionType | null;
