@@ -1448,6 +1448,25 @@ async function getApprovedCarryForwardFiscalYearBudgets({
 
   const { sql: scopeSql, params: scopeParams } = buildBudgetProposalScope(scope);
   const source = connOrDb || db;
+
+  // Carry-forward "shows the same card in the target FY", so the settlement may
+  // only use the SOURCE request's head/sub combinations — not every budget line
+  // in the department's target-year budget. Build the allowed head::sub keys from
+  // this finance request's budget breakup and filter the target-year lines to them.
+  const [sourceHeadRows] = await source.execute(
+    `SELECT DISTINCT
+       LOWER(TRIM(COALESCE(NULLIF(TRIM(fbb.budget_head), ''), bpl.budget_head, ''))) AS h,
+       LOWER(TRIM(COALESCE(NULLIF(TRIM(fbb.sub_head), ''), bpl.sub_head, '')))       AS s
+     FROM finance_budget_breakup fbb
+     LEFT JOIN budget_proposal_lines bpl ON bpl.id = fbb.budget_line_id
+     WHERE fbb.finance_id = ?`,
+    [financeId],
+  );
+  const allowedHeadSubKeys = new Set(
+    sourceHeadRows
+      .map((row) => `${normalizeText(row.h).toLowerCase()}::${normalizeText(row.s).toLowerCase()}`)
+      .filter((key) => key !== '::'),
+  );
   const [rows] = await source.execute(
     `SELECT
        bpl.id AS budget_line_id,
@@ -1477,25 +1496,37 @@ async function getApprovedCarryForwardFiscalYearBudgets({
     { excludeExpenditureId },
   );
 
-  return rows
-    .map((row) => {
-      const totalAmount = toMoney(row.total_amount);
-      const usedAmount = toMoney(usageByLineId.get(toPositiveInt(row.budget_line_id)));
-      return {
-        budgetLineId: toPositiveInt(row.budget_line_id),
-        budgetProposalId: toPositiveInt(row.budget_proposal_id),
-        financeRequestRef: normalizeText(row.finance_request_ref),
-        fiscalYear: Number(row.fiscal_year) || targetYear,
-        head: normalizeText(row.head),
-        subHead: normalizeText(row.sub_head),
-        totalAmount,
-        usedAmount,
-        remainingAmount: toMoney(Math.max(0, totalAmount - usedAmount)),
-        beneficiaryType: normalizeText(row.beneficiary_type),
-        beneficiaryValue: normalizeText(row.beneficiary_value),
-      };
-    })
-    .filter((row) => row.budgetLineId && row.head && row.subHead);
+  return (
+    rows
+      .map((row) => {
+        const totalAmount = toMoney(row.total_amount);
+        const usedAmount = toMoney(usageByLineId.get(toPositiveInt(row.budget_line_id)));
+        return {
+          budgetLineId: toPositiveInt(row.budget_line_id),
+          budgetProposalId: toPositiveInt(row.budget_proposal_id),
+          financeRequestRef: normalizeText(row.finance_request_ref),
+          fiscalYear: Number(row.fiscal_year) || targetYear,
+          head: normalizeText(row.head),
+          subHead: normalizeText(row.sub_head),
+          totalAmount,
+          usedAmount,
+          remainingAmount: toMoney(Math.max(0, totalAmount - usedAmount)),
+          beneficiaryType: normalizeText(row.beneficiary_type),
+          beneficiaryValue: normalizeText(row.beneficiary_value),
+        };
+      })
+      .filter((row) => row.budgetLineId && row.head && row.subHead)
+      // Restrict to the source card's head/sub combinations (carry-forward shows the
+      // same card). If the source had no resolvable head/sub keys, fall back to the
+      // full scoped list rather than hiding everything.
+      .filter(
+        (row) =>
+          allowedHeadSubKeys.size === 0 ||
+          allowedHeadSubKeys.has(
+            `${normalizeText(row.head).toLowerCase()}::${normalizeText(row.subHead).toLowerCase()}`,
+          ),
+      )
+  );
 }
 
 export async function getApprovedBudgets({
@@ -3366,6 +3397,24 @@ async function assertSettlementPayeesMatchAdjustment(
   const submittedPayeeTotal = toMoney(payeeRows.reduce((sum, row) => sum + toMoney(row.amount), 0));
 
   if (toMoney(expectedPayeeTotal) === submittedPayeeTotal) return;
+
+  // DEBUG: temporary trace to diagnose settlement<->advance mismatch (advanceTotal=0).
+  // Remove once the carry-forward settlement matching issue is resolved.
+   
+  console.error('[DEBUG settlement-advance match]', {
+    financeRequestId,
+    scope: { rowIndex, sourceRequestId, dashboardRowId, workflowRowRef },
+    settlementTotal,
+    advanceTotal,
+    expectedPayeeTotal,
+    submittedPayeeTotal,
+    settlementRows: settlementRows.map((row) => ({
+      budget_line_id: row.budgetLineId ?? row.budget_line_id,
+      budget_head: row.budgetHead ?? row.budget_head,
+      sub_head: row.subHead ?? row.sub_head,
+      settlement: row.settlement ?? row.settlement_amount,
+    })),
+  });
 
   if (toMoney(expectedPayeeTotal) === 0) {
     throw new Error(

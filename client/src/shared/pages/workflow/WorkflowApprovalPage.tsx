@@ -2662,10 +2662,12 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         },
       );
 
-      const envelope =
-        response?.data && typeof response.data === 'object' ? response.data : response;
-      if (envelope?.success !== true && envelope?.status !== 'success') {
-        throw new Error(envelope?.message || 'Unable to carry forward this card.');
+      // authenticityUtility returns the response BODY ({ success, message, data }).
+      // The success flag sits on this top level — don't unwrap into `.data` (the
+      // allocation object), which has no `success` and would falsely read as failure.
+      const succeeded = response?.success === true || response?.status === 'success';
+      if (!succeeded) {
+        throw new Error(response?.message || 'Unable to carry forward this card.');
       }
 
       closeCarryForwardPopup();
@@ -3927,14 +3929,20 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <span style={{ fontSize: 13, fontWeight: 600 }}>Target FY</span>
-              <input
+              <select
                 className="form-control"
-                type="number"
-                min={carryForwardSourceYear + 1}
                 value={carryForwardTargetYear}
                 onChange={(event) => setCarryForwardTargetYear(Number(event.target.value))}
                 disabled={carryForwardLoading || carryForwardSubmitting}
-              />
+              >
+                {Array.from({ length: 5 }, (_, offset) => carryForwardSourceYear + 1 + offset).map(
+                  (year) => (
+                    <option key={year} value={year}>
+                      {`FY ${year}-${String(year + 1).slice(2)}`}
+                    </option>
+                  ),
+                )}
+              </select>
             </label>
           </div>
           <div style={{ marginBottom: 12, color: '#475569', fontSize: 13 }}>
