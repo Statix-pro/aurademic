@@ -3633,15 +3633,6 @@ function addUnplannedUsageRows(usageRows = [], normalizedUnplanned = {}) {
   return usageRows;
 }
 
-function markCarryForwardSettlementUsageRows(requestType, usageRows = [], budgetFiscalYear = null) {
-  if (requestType !== 'Settlement' || !toPositiveInt(budgetFiscalYear)) return usageRows;
-  return usageRows.map((row) => ({
-    ...row,
-    countsAgainstRemaining: true,
-    direction: -1,
-  }));
-}
-
 // Validate that the usage rows do not exceed the remaining budget per line.
 // Amounts must be aggregated by budget line before comparing: a single request can
 // carry multiple rows for the same line (e.g. a normal draw plus the unplanned
@@ -4212,17 +4203,13 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
       0,
     );
     const normalizedUnplanned = normalizeUnplannedBudgetPayload(data);
-    const usageRows = markCarryForwardSettlementUsageRows(
-      requestType,
-      addUnplannedUsageRows(
-        collectUsageRowsForRequestType(requestType, {
-          advanceRows,
-          settlementRows,
-          expenditureRows,
-        }),
-        normalizedUnplanned,
-      ),
-      budgetFiscalYear,
+    const usageRows = addUnplannedUsageRows(
+      collectUsageRowsForRequestType(requestType, {
+        advanceRows,
+        settlementRows,
+        expenditureRows,
+      }),
+      normalizedUnplanned,
     );
     const activeRequestTotal = toMoney(
       (requestType === 'Advance'
@@ -4619,17 +4606,13 @@ export async function updateExpenditureRequest(
       0,
     );
     const normalizedUnplanned = normalizeUnplannedBudgetPayload(data);
-    const usageRows = markCarryForwardSettlementUsageRows(
-      requestType,
-      addUnplannedUsageRows(
-        collectUsageRowsForRequestType(requestType, {
-          advanceRows,
-          settlementRows,
-          expenditureRows,
-        }),
-        normalizedUnplanned,
-      ),
-      budgetFiscalYear,
+    const usageRows = addUnplannedUsageRows(
+      collectUsageRowsForRequestType(requestType, {
+        advanceRows,
+        settlementRows,
+        expenditureRows,
+      }),
+      normalizedUnplanned,
     );
     const activeRequestTotal = toMoney(
       (requestType === 'Advance'
