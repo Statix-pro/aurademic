@@ -1833,7 +1833,18 @@ const getFinanceAdvanceSettlementSnapshotForFiscalYear = async (conn, financeId,
     `SELECT
        COALESCE(SUM(CASE
          WHEN er.request_type = 'Advance'
-          AND (
+          -- Attribute the advance to its BUDGET's fiscal year, not the date it was
+          -- entered. Faculty enter advances in the current year against an older-FY
+          -- budget, so a request-date filter wrongly excluded them and blocked
+          -- carry-forward. Falls back to the request-date FY only when the request
+          -- has no linked budget. Mirrors resolveFinanceSourceFiscalYear.
+          AND COALESCE(
+            (
+              SELECT MIN(bp_src.fiscal_year)
+                FROM finance_budget_breakup fbb_src
+                JOIN budget_proposals bp_src ON bp_src.id = fbb_src.budget_proposal_id
+               WHERE fbb_src.finance_id = er.finance_request_id
+            ),
             YEAR(COALESCE(er.request_date, er.created_at))
               - (MONTH(COALESCE(er.request_date, er.created_at)) < 4)
           ) = ?
