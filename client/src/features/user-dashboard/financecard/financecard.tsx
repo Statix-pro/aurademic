@@ -4,6 +4,7 @@ import './financecard.css';
 import {
   Eye,
   Edit2,
+  PlusCircle,
   Briefcase,
   Clock,
   XCircle,
@@ -833,6 +834,14 @@ const FinanceCard: React.FC = () => {
     navigate(`/finance/${item.id}/edit`);
   };
 
+  const canTopupRequest = (item: FinanceCardItem) =>
+    ['approved', 'completed'].includes(getNormalizedStatus(item));
+
+  const handleTopupClick = (item: FinanceCardItem) => {
+    if (!canTopupRequest(item)) return;
+    navigate(`/finance/${item.id}/edit?topup=true`);
+  };
+
   const canDeleteRequest = (item: FinanceCardItem) => {
     const normalizedStatus = getNormalizedStatus(item);
     const currentStage = getCurrentStage(item);
@@ -1127,15 +1136,27 @@ const FinanceCard: React.FC = () => {
                               >
                                 <Eye size={18} />
                               </button>
-                              <button
-                                type="button"
-                                className="icon-btn-subtle"
-                                title={canEdit ? 'Edit' : 'Edit unavailable in current status'}
-                                onClick={() => handleEditClick(item)}
-                                disabled={!canEdit}
-                              >
-                                <Edit2 size={18} />
-                              </button>
+                              {canTopupRequest(item) && (
+                                <button
+                                  type="button"
+                                  className="financecard-topup-btn"
+                                  title="Topup"
+                                  onClick={() => handleTopupClick(item)}
+                                >
+                                  <PlusCircle size={18} />
+                                  
+                                </button>
+                              )}
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  className="icon-btn-subtle"
+                                  title="Edit"
+                                  onClick={() => handleEditClick(item)}
+                                >
+                                  <Edit2 size={18} />
+                                </button>
+                              )}
                               {canDelete && (
                                 <button
                                   type="button"

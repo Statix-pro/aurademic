@@ -19,6 +19,12 @@ const safeParseJSON = (value, fallback = null) => {
 };
 
 const normalizeText = (value) => String(value || '').trim();
+const parseBooleanLike = (value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  const normalized = normalizeText(value).toLowerCase();
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+};
 const normalizeSubHeadForLookup = (value) => {
   const normalized = normalizeText(value);
   if (!normalized) return '';
@@ -2912,6 +2918,9 @@ const financeModel = {
       const hasBudgetRowsInput = Object.prototype.hasOwnProperty.call(financeData, 'budget_rows');
       const hasIncomeRowsInput = Object.prototype.hasOwnProperty.call(financeData, 'income_rows');
       const hasAnnexuresInput = Object.prototype.hasOwnProperty.call(financeData, 'annexures');
+      const isTopupModeInput = Boolean(
+        parseBooleanLike(financeData.topup_mode || financeData.topupMode),
+      );
       const normalizedBudgetRows = hasBudgetRowsInput
         ? normalizeBudgetRows(Array.isArray(financeData.budget_rows) ? financeData.budget_rows : [])
         : [];
@@ -2969,6 +2978,8 @@ const financeModel = {
       delete updateData.budget_rows;
       delete updateData.income_rows;
       delete updateData.annexures;
+      delete updateData.topup_mode;
+      delete updateData.topupMode;
       if (updateData.enclosures) {
         updateData.enclosures = JSON.stringify(updateData.enclosures);
       }
@@ -3154,6 +3165,7 @@ const financeModel = {
 
       const shouldRecalculateApprovedTotals =
         toMoney(existingRecord.approved_total_amount) > 0 &&
+        !isTopupModeInput &&
         (hasBudgetRowsInput ||
           Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled') ||
           Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount'));
