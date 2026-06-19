@@ -9,6 +9,13 @@ import path from 'path';
 
 const normalizeText = (value) => String(value || '').trim();
 
+const parseBooleanLike = (value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  const normalized = normalizeText(value).toLowerCase();
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+};
+
 const toPositiveInt = (value) => {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
@@ -100,7 +107,12 @@ const parseDateMs = (value) => {
 
 const resolveCurrentCycleStartMs = (financeRecord, entries = []) => {
   const workflowState = financeRecord?.workflow_state || {};
+  const topupAtMs = parseDateMs(workflowState.topupAt);
   const resubmittedAtMs = parseDateMs(workflowState.resubmittedAt);
+
+  if (topupAtMs) {
+    return topupAtMs;
+  }
 
   if (resubmittedAtMs) {
     // Include the latest return action that led to resubmission so edit/resubmit logs are visible.
@@ -499,6 +511,9 @@ const financeController = {
       const isCreator = Boolean(userId && toPositiveInt(finance.created_by) === userId);
       const isWorkflowEditor = hasFinanceWorkflowEditorAccess(req);
       const workflowStatus = normalizeText(finance.workflow_state?.status).toLowerCase();
+      const isTopupMode = parseBooleanLike(req.body?.topup_mode || req.body?.topupMode);
+      const isTopupEditable =
+        isTopupMode && ['approved', 'completed'].includes(workflowStatus);
       const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(
         workflowStatus,
       );
@@ -517,30 +532,114 @@ const financeController = {
         workflowStatus === 'submitted' ||
         currentStage === 'level1';
 
-      if (isCreator && !isWorkflowEditor && !isApplicantEditable) {
+      if (isCreator && !isWorkflowEditor && !isApplicantEditable && !isTopupEditable) {
         return res.status(403).json({
           success: false,
           message: 'This request is not editable in current workflow state',
         });
       }
 
-      if (isWorkflowEditor && isTerminalWorkflow && !isSuperAdminRequest(req)) {
+      if (isWorkflowEditor && isTerminalWorkflow && !isSuperAdminRequest(req) && !isTopupEditable) {
         return res.status(403).json({
           success: false,
           message: 'This request is not editable in current workflow state',
         });
       }
+
+      const updatePayload = isTopupEditable
+        ? {
+            ...(req.body || {}),
+            employee_id: finance.employee_id ?? null,
+            applicant_name: finance.applicant_name ?? null,
+            designation: finance.designation ?? null,
+            department: finance.department ?? null,
+            email: finance.email ?? null,
+            mobile: finance.mobile ?? null,
+            request_date: finance.request_date ?? null,
+            description: finance.description ?? null,
+            beneficiary_type: finance.beneficiary_type ?? null,
+            beneficiary_value: finance.beneficiary_value ?? null,
+            budget_tag: finance.budget_tag ?? null,
+            primary_head: finance.primary_head ?? null,
+            event_sub_head: finance.event_sub_head ?? null,
+            is_budget_proposed: finance.is_budget_proposed ?? null,
+            proposed_amount: finance.proposed_amount ?? null,
+            balance_amount: finance.balance_amount ?? null,
+            unplanned_budget_enabled: finance.unplanned_budget_enabled ?? null,
+            unplanned_budget_amount: finance.unplanned_budget_amount ?? null,
+            unplanned_budget_description: finance.unplanned_budget_description ?? null,
+            income_type: finance.income_type ?? null,
+            income_status: finance.income_status ?? null,
+            income_amount_type: finance.income_amount_type ?? null,
+            credit_status: finance.credit_status ?? null,
+            debit_status: finance.debit_status ?? null,
+            partial_amount: finance.partial_amount ?? null,
+            annexure_type: finance.annexure_type ?? null,
+            annexure_file_name: finance.annexure_file_name ?? null,
+            annexure_storage_name: finance.annexure_storage_name ?? null,
+            annexure_file_path: finance.annexure_file_path ?? null,
+            annexure_mime_type: finance.annexure_mime_type ?? null,
+            annexure_file_size: finance.annexure_file_size ?? null,
+            annexures: Array.isArray(finance.annexures) ? finance.annexures : [],
+            income_rows: Array.isArray(req.body?.income_rows)
+              ? req.body.income_rows
+              : Array.isArray(finance.income_rows)
+                ? finance.income_rows
+                : [],
+          }
+        : req.body || {};
+
+      const topupStartedAt = isTopupEditable ? new Date().toISOString() : null;
 
       const result = await financeModel.updateFinanceRequest(
         financeId,
-        req.body || {},
+        updatePayload,
         normalizeActor(req),
       );
 
       if (result.affectedRows > 0) {
+        if (isTopupEditable) {
+          const financeMeta = {
+            unplannedBudgetEnabled: Boolean(finance.unplanned_budget_enabled),
+            unplannedBudgetAmount:
+              finance.unplanned_budget_amount !== undefined && finance.unplanned_budget_amount !== null
+                ? Number(finance.unplanned_budget_amount)
+                : null,
+            unplannedBudgetDescription:
+              normalizeText(finance.unplanned_budget_description) || null,
+            topupMode: true,
+          };
+
+          const restartResult = await workflowService.startWorkflow({
+            moduleKey: 'finance',
+            recordId: financeId,
+            metadata: {
+              origin: 'topup',
+              requestId: null,
+              moduleMetaVersion: 1,
+              moduleMeta: {
+                trigger: 'finance_topup',
+                amountBand: Number(finance.total_budget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+                beneficiaryType: normalizeText(finance.beneficiary_type) || null,
+                financeMeta,
+              },
+            },
+          });
+
+          await financeModel.updateFinanceWorkflowSnapshot(financeId, {
+            ...(restartResult.state || {}),
+            topupAt: topupStartedAt,
+            updatedAt: topupStartedAt,
+            lastDecision: 'topup_submitted',
+            lastFeedback: null,
+          });
+        }
+
         return res.status(200).json({
           success: true,
-          message: 'Finance request updated successfully',
+          message: isTopupEditable
+            ? 'Finance topup submitted successfully'
+            : 'Finance request updated successfully',
           data: {
             id: financeId,
             requestRef: finance.proposal_ref || null,

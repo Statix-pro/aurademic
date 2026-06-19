@@ -8,6 +8,7 @@ import {
   Upload,
   Eye,
   Trash2,
+  PlusCircle,
 } from 'lucide-react';
 import React, {
   useState,
@@ -865,6 +866,7 @@ const FinanceApproval: React.FC = () => {
   const [debitStatus, setDebitStatus] = useState<'credited' | 'reimbursement' | ''>('');
   const [email, setEmail] = useState<string>('');
   const [budgetRows, setBudgetRows] = useState([{ category: '', head: '', amount: '' }]);
+  const [initialBudgetRowCount, setInitialBudgetRowCount] = useState<number>(0);
   const [showIncomeSection, setShowIncomeSection] = useState<boolean>(false);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([createIncomeRow()]);
   const [accountOptions, setAccountOptions] = useState<AccountOption[]>([]);
@@ -1746,6 +1748,9 @@ const FinanceApproval: React.FC = () => {
     return getBudgetRowMissingFields(row).length === 0;
   };
 
+  const canAddBudgetRowFromIndex = (index: number): boolean =>
+    isBudgetRowReadyForAdd(index) || (isTopupWorkflow && index >= initialBudgetRowCount - 1);
+
   const getBudgetAddTooltip = (index: number): string => {
     const row = budgetRows[index];
     if (!hasFilledText(primaryHead)) {
@@ -2047,6 +2052,7 @@ const FinanceApproval: React.FC = () => {
         credit_status: primaryIncomeRow?.status || '',
         debit_status: debitStatus || null,
         partial_amount: primaryIncomeRow?.amount || null,
+        topup_mode: isTopupWorkflow,
         budget_rows: budgetRows.map((row, index) => {
           const normalizedBudgetHead = normalizeText(primaryHead) || normalizeText(row.category);
           const normalizedSubHead = normalizeText(row.head);
@@ -2117,13 +2123,16 @@ const FinanceApproval: React.FC = () => {
           result.data?.proposal_ref ||
           proposalRef,
       );
+      const successMessage = isTopupWorkflow
+        ? 'Topup submitted successfully!'
+        : isEditMode
+          ? 'Finance request updated successfully!'
+          : 'Finance request submitted successfully!';
 
       showAlert(
         <div>
           <div>
-            {isEditMode
-              ? 'Finance request updated successfully!'
-              : 'Finance request submitted successfully!'}
+            {successMessage}
           </div>
           {refNo && (
             <div style={{ marginTop: '8px', fontWeight: 'bold' }}>Reference No.: {refNo}</div>
@@ -2334,6 +2343,7 @@ const FinanceApproval: React.FC = () => {
       setUnplannedBudgetAmount('');
       setUnplannedBudgetDescription('');
       setBudgetRows([{ category: '', head: '', amount: '' }]);
+      setInitialBudgetRowCount(0);
       setBudgetLineMetaByRow({});
       setAmountProposed('');
       setShowIncomeSection(false);
@@ -2434,6 +2444,7 @@ const FinanceApproval: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const isEditMode = Boolean(id && location.pathname.includes('edit'));
   const isViewMode = Boolean(id && !isEditMode);
+  const isTopupRoute = new URLSearchParams(location.search).get('topup') === 'true';
   const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
   const isApprovalMode = isViewMode && isAdminWorkflowContext;
   const routeFiscalYearStart = normalizeFiscalYearStart((location.state as any)?.fiscalYear);
@@ -2485,6 +2496,12 @@ const FinanceApproval: React.FC = () => {
   }, [isApprovalMode]);
 
   const normalizedWorkflowStatus = String(loadedWorkflowStatus || '').toLowerCase();
+  const isTopupWorkflow = Boolean(
+    isEditMode && isTopupRoute && ['approved', 'completed'].includes(normalizedWorkflowStatus),
+  );
+  const proposalFieldsReadOnly = isViewMode || isTopupWorkflow;
+  const isLockedBudgetRow = (index: number) => isTopupWorkflow && index < initialBudgetRowCount;
+  const isBudgetRowEditable = (index: number) => !isViewMode && !isLockedBudgetRow(index);
   const hasDofApproval = statusUpdates.some((update: any) => {
     const stage = String(update?.stage || update?.role || '').toLowerCase();
     const decision = String(update?.decision || update?.status || '').toLowerCase();
@@ -2762,6 +2779,7 @@ const FinanceApproval: React.FC = () => {
         );
         setShowIncomeSection(incomeRowsFromApi.length > 0);
         const groupedBudgetRows = groupFinanceBudgetRowsForForm(budgetRowsFromApi);
+        setInitialBudgetRowCount(groupedBudgetRows.rows.length);
         setBudgetRows(
           groupedBudgetRows.rows.length > 0
             ? groupedBudgetRows.rows
@@ -3118,6 +3136,27 @@ const FinanceApproval: React.FC = () => {
     >
       {!showPreview && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
+          {isTopupWorkflow && (
+            <div
+              style={{
+                marginTop: '18px',
+                marginBottom: '12px',
+                padding: '14px 18px',
+                borderRadius: '14px',
+                background: 'linear-gradient(135deg, #ecfff2 0%, #dff7e6 100%)',
+                border: '1px solid #bfe6cc',
+                color: '#156b45',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+              }}
+            >
+              <PlusCircle size={18} />
+              Topup mode is active. The approved proposal is locked, and only additional budget
+              rows can be added.
+            </div>
+          )}
           <div
             style={
               isViewMode && !canSuperAdminEditTerminalFinance
@@ -3269,16 +3308,16 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="text"
                             value={
-                              isViewMode
+                              proposalFieldsReadOnly
                                 ? applicantName
                                 : isExternalApplicant
                                   ? applicantName
                                   : applicantSearchQuery
                             }
-                            disabled={isViewMode}
-                            readOnly={isViewMode}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                              if (isViewMode) return;
+                              if (proposalFieldsReadOnly) return;
                               if (isExternalApplicant) {
                                 setApplicantName(e.target.value);
                               } else {
@@ -3314,7 +3353,7 @@ const FinanceApproval: React.FC = () => {
                                 : 'Search employee by name or ERP ID'
                             }
                           />
-                          {!isViewMode &&
+                          {!proposalFieldsReadOnly &&
                             showApplicantDropdown &&
                             applicantSearchResults.length > 0 && (
                               <div
@@ -3385,7 +3424,7 @@ const FinanceApproval: React.FC = () => {
                                 ))}
                               </div>
                             )}
-                          {!isViewMode &&
+                          {!proposalFieldsReadOnly &&
                             showApplicantDropdown &&
                             applicantSearchQuery.length >= 2 &&
                             applicantSearchResults.length === 0 && (
@@ -3448,10 +3487,10 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="date"
                             value={date}
-                            disabled={isViewMode}
-                            readOnly={isViewMode}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                              if (isViewMode) return;
+                              if (proposalFieldsReadOnly) return;
                               setDate(e.target.value);
                             }}
                             style={{
@@ -3496,10 +3535,10 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="text"
                             value={department}
-                            disabled={isViewMode}
-                            readOnly={isViewMode}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                              if (isViewMode) return;
+                              if (proposalFieldsReadOnly) return;
                               setDepartment(e.target.value);
                             }}
                             style={{
@@ -3541,10 +3580,10 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="text"
                             value={designation}
-                            disabled={isViewMode}
-                            readOnly={isViewMode}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                              if (isViewMode) return;
+                              if (proposalFieldsReadOnly) return;
                               setDesignation(e.target.value);
                             }}
                             style={{
@@ -3589,10 +3628,10 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="email"
                             value={email}
-                            disabled={isViewMode}
-                            readOnly={isViewMode}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             onChange={(e) => {
-                              if (isViewMode) return;
+                              if (proposalFieldsReadOnly) return;
                               setEmail(e.target.value);
                             }}
                             style={{
@@ -3634,10 +3673,10 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="tel"
                             value={mobile}
-                            disabled={isViewMode}
-                            readOnly={isViewMode}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                              if (isViewMode) return;
+                              if (proposalFieldsReadOnly) return;
                               setMobile(e.target.value);
                             }}
                             style={{
@@ -3716,7 +3755,9 @@ const FinanceApproval: React.FC = () => {
                                 ? { value: beneficiaryType, label: beneficiaryType }
                                 : null
                             }
+                            isDisabled={proposalFieldsReadOnly}
                             onChange={(option) => {
+                              if (proposalFieldsReadOnly) return;
                               const selected = option as OptionType | null;
                               const next = selected?.value ? String(selected.value) : '';
                               setBeneficiaryType(next);
@@ -3752,15 +3793,18 @@ const FinanceApproval: React.FC = () => {
                               type="text"
                               value={beneficiarySearchQuery || beneficiaryValue}
                               onChange={(e) => {
+                                if (proposalFieldsReadOnly) return;
                                 setBeneficiaryValue(e.target.value);
                                 setBeneficiaryEmployeeId(null);
                                 setBeneficiarySearchQuery(e.target.value);
                                 handleBeneficiarySearch(e.target.value);
                               }}
+                              disabled={proposalFieldsReadOnly}
+                              readOnly={proposalFieldsReadOnly}
                               onFocus={(e) => {
                                 e.currentTarget.style.borderColor = '#0069ab';
                                 e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,105,171,0.15)';
-                                if (!showBeneficiaryDropdown)
+                                if (!showBeneficiaryDropdown && !proposalFieldsReadOnly)
                                   handleBeneficiarySearch(beneficiarySearchQuery);
                               }}
                               onBlur={(e) => {
@@ -3849,6 +3893,7 @@ const FinanceApproval: React.FC = () => {
                               type="text"
                               value="K.S.Rangasamy College of Technology"
                               readOnly
+                              disabled={proposalFieldsReadOnly}
                               style={{
                                 borderRadius: 12,
                                 border: '1px solid #e0e0e0',
@@ -3885,7 +3930,9 @@ const FinanceApproval: React.FC = () => {
                                 beneficiaryValue,
                                 subcategoryOptionsByType['Professional Body'] || [],
                               )}
+                              isDisabled={proposalFieldsReadOnly}
                               onChange={(option) => {
+                                if (proposalFieldsReadOnly) return;
                                 const selected = option as OptionType | null;
                                 setBeneficiaryValue(selected?.value ? String(selected.value) : '');
                                 setCategorySelections([]);
@@ -3932,7 +3979,9 @@ const FinanceApproval: React.FC = () => {
                                   name="beneficiaryValue"
                                   options={subcategoryOptions}
                                   value={getSelectedOption(beneficiaryValue, subcategoryOptions)}
+                                  isDisabled={proposalFieldsReadOnly}
                                   onChange={(option) => {
+                                    if (proposalFieldsReadOnly) return;
                                     const selected = option as OptionType | null;
                                     setBeneficiaryValue(
                                       selected?.value ? String(selected.value) : '',
@@ -3966,7 +4015,9 @@ const FinanceApproval: React.FC = () => {
                               value={
                                 selectedTag ? { value: selectedTag, label: selectedTag } : null
                               }
+                              isDisabled={proposalFieldsReadOnly}
                               onChange={(option) => {
+                                if (proposalFieldsReadOnly) return;
                                 const selected = option as OptionType | null;
                                 setSelectedTag(selected?.value ? String(selected.value) : '');
                               }}
@@ -3994,7 +4045,12 @@ const FinanceApproval: React.FC = () => {
                 </label>
                 <textarea
                   value={description}
-                  onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
+                  onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
+                    if (proposalFieldsReadOnly) return;
+                    setDescription(e.target.value);
+                  }}
+                  disabled={proposalFieldsReadOnly}
+                  readOnly={proposalFieldsReadOnly}
                   style={{
                     borderRadius: '12px',
                     border: '1px solid #e0e0e0',
@@ -4075,7 +4131,9 @@ const FinanceApproval: React.FC = () => {
                                 padding: '0 12px',
                               }),
                             }}
+                            isDisabled={proposalFieldsReadOnly}
                             onChange={(option) => {
+                              if (proposalFieldsReadOnly) return;
                               const selected = option as OptionType | null;
                               setPrimaryHead(selected?.value ? String(selected.value) : '');
                               setEventSubHead('');
@@ -4092,7 +4150,9 @@ const FinanceApproval: React.FC = () => {
                             options={hoacSubheadDropdownOptions}
                             value={getSelectedOption(eventSubHead, hoacSubheadDropdownOptions)}
                             className="mb-0"
+                            isDisabled={proposalFieldsReadOnly}
                             onChange={(option) => {
+                              if (proposalFieldsReadOnly) return;
                               const selected = option as OptionType | null;
                               setEventSubHead(selected?.value ? String(selected.value) : '');
                               setEventSubHeadError('');
@@ -4118,7 +4178,8 @@ const FinanceApproval: React.FC = () => {
                             name="unplannedBudgetToggle"
                             label=""
                             checked={showUnplannedBudget}
-                            onChange={handleUnplannedBudgetToggle}
+                            onChange={proposalFieldsReadOnly ? () => {} : handleUnplannedBudgetToggle}
+                            disabled={proposalFieldsReadOnly}
                           />
                         </div>
                       </div>
@@ -4151,7 +4212,9 @@ const FinanceApproval: React.FC = () => {
                                 padding: '0 12px',
                               }),
                             }}
+                            isDisabled={proposalFieldsReadOnly}
                             onChange={(option) => {
+                              if (proposalFieldsReadOnly) return;
                               const selected = option as OptionType | null;
                               setPrimaryHead(selected?.value ? String(selected.value) : '');
                               setEventSubHead('');
@@ -4176,7 +4239,8 @@ const FinanceApproval: React.FC = () => {
                             name="unplannedBudgetToggle"
                             label=""
                             checked={showUnplannedBudget}
-                            onChange={handleUnplannedBudgetToggle}
+                            onChange={proposalFieldsReadOnly ? () => {} : handleUnplannedBudgetToggle}
+                            disabled={proposalFieldsReadOnly}
                           />
                         </div>
                       </div>
@@ -4313,6 +4377,7 @@ const FinanceApproval: React.FC = () => {
                                 : null
                             }
                             onChange={(option) => {
+                              if (!isBudgetRowEditable(index)) return;
                               handleBudgetHeadSelection(index, option as OptionType | null);
                             }}
                             filterOption={(candidate: any, input: string) => {
@@ -4332,7 +4397,7 @@ const FinanceApproval: React.FC = () => {
                               return budgetHead.includes(query);
                             }}
                             placeholder="Select"
-                            isDisabled={!primaryHead}
+                            isDisabled={!primaryHead || !isBudgetRowEditable(index)}
                           />
                         </td>
                         <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
@@ -4350,6 +4415,7 @@ const FinanceApproval: React.FC = () => {
                                 : null)
                             }
                             onChange={(option) => {
+                              if (!isBudgetRowEditable(index)) return;
                               const selected = option as OptionType | null;
                               handleBudgetChange(
                                 index,
@@ -4358,7 +4424,11 @@ const FinanceApproval: React.FC = () => {
                               );
                             }}
                             placeholder="Select"
-                            isDisabled={!row.category || !primaryHead}
+                            isDisabled={
+                              !row.category ||
+                              !primaryHead ||
+                              !isBudgetRowEditable(index)
+                            }
                           />
                         </td>
                         <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
@@ -4366,9 +4436,11 @@ const FinanceApproval: React.FC = () => {
                             type="text"
                             value={row.amount}
                             onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                              handleBudgetChange(index, 'amount', e.target.value)
+                              !isBudgetRowEditable(index)
+                                ? undefined
+                                : handleBudgetChange(index, 'amount', e.target.value)
                             }
-                            disabled={!primaryHead}
+                            disabled={!primaryHead || !isBudgetRowEditable(index)}
                             placeholder={`₹  ${getRemainingAvailableForRow(index)}`}
                             style={{
                               border: '1px solid #e0e0e0',
@@ -4379,7 +4451,7 @@ const FinanceApproval: React.FC = () => {
                               fontFamily: 'inherit',
                               backgroundColor: primaryHead ? '#fcfdff' : '#f8f9fa',
                               color: primaryHead ? '#000' : '#6c757d',
-                              cursor: primaryHead ? 'pointer' : 'not-allowed',
+                              cursor: primaryHead && isBudgetRowEditable(index) ? 'pointer' : 'not-allowed',
                               outline: 'none',
                               textAlign: 'left',
                               margin: '0 auto',
@@ -4404,7 +4476,9 @@ const FinanceApproval: React.FC = () => {
                               gap: '10px',
                             }}
                           >
-                            {(index > 0 || (index === 0 && budgetRows.length > 1)) && (
+                            {((index > 0 || (index === 0 && budgetRows.length > 1)) &&
+                              !isLockedBudgetRow(index) &&
+                              isBudgetRowEditable(index)) && (
                               <button
                                 onClick={(e: MouseEvent<HTMLButtonElement>) => {
                                   e.preventDefault();
@@ -4444,25 +4518,27 @@ const FinanceApproval: React.FC = () => {
                                   e.preventDefault();
                                   handleAddRow();
                                 }}
-                                disabled={!isBudgetRowReadyForAdd(index)}
+                                disabled={!canAddBudgetRowFromIndex(index)}
                                 style={{
                                   width: '36px',
                                   height: '36px',
                                   borderRadius: '50%',
                                   border: 'none',
                                   background: '#f5f6f8',
-                                  cursor: isBudgetRowReadyForAdd(index) ? 'pointer' : 'not-allowed',
+                                  cursor: canAddBudgetRowFromIndex(index)
+                                    ? 'pointer'
+                                    : 'not-allowed',
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   fontSize: '18px',
                                   transition: 'all 0.15s ease',
-                                  opacity: isBudgetRowReadyForAdd(index) ? 1 : 0.5,
+                                  opacity: canAddBudgetRowFromIndex(index) ? 1 : 0.5,
                                   color: '#0069ab',
                                 }}
                                 title={getBudgetAddTooltip(index)}
                                 onMouseEnter={(e) => {
-                                  if (isBudgetRowReadyForAdd(index)) {
+                                  if (canAddBudgetRowFromIndex(index)) {
                                     (e.currentTarget as HTMLButtonElement).style.background =
                                       '#e8f5e9';
                                   }
@@ -5218,8 +5294,9 @@ const FinanceApproval: React.FC = () => {
                           name="annexureType"
                           options={toOptions(ANNEXURE_TYPE_OPTIONS)}
                           value={getSelectedOption(annexureType, toOptions(ANNEXURE_TYPE_OPTIONS))}
-                          isDisabled={isViewMode}
+                          isDisabled={proposalFieldsReadOnly}
                           onChange={(option) => {
+                            if (proposalFieldsReadOnly) return;
                             const selected = option as OptionType | null;
                             setAnnexureType(selected?.value ? String(selected.value) : '');
                           }}
@@ -5246,7 +5323,8 @@ const FinanceApproval: React.FC = () => {
                             multiple
                             style={{ display: 'none' }}
                             disabled={
-                              isViewMode || String(annexureType || '').trim() === 'Not Applicable'
+                              proposalFieldsReadOnly ||
+                              String(annexureType || '').trim() === 'Not Applicable'
                             }
                             onChange={handleAnnexureFileChange}
                           />
@@ -5254,7 +5332,7 @@ const FinanceApproval: React.FC = () => {
                             type="button"
                             onClick={() => {
                               if (
-                                !isViewMode &&
+                                !proposalFieldsReadOnly &&
                                 String(annexureType || '').trim() !== 'Not Applicable' &&
                                 hasFilledText(annexureType)
                               ) {
@@ -5264,26 +5342,28 @@ const FinanceApproval: React.FC = () => {
                             style={{
                               ...annexureUploadButtonStyle,
                               opacity:
-                                !isViewMode &&
+                                !proposalFieldsReadOnly &&
                                 hasFilledText(annexureType) &&
                                 String(annexureType || '').trim() !== 'Not Applicable'
                                   ? 1
                                   : 0.55,
                               cursor:
-                                !isViewMode &&
+                                !proposalFieldsReadOnly &&
                                 hasFilledText(annexureType) &&
                                 String(annexureType || '').trim() !== 'Not Applicable'
                                   ? 'pointer'
                                   : 'not-allowed',
                             }}
                             disabled={
-                              isViewMode ||
+                              proposalFieldsReadOnly ||
                               !hasFilledText(annexureType) ||
                               String(annexureType || '').trim() === 'Not Applicable'
                             }
                             title={
-                              isViewMode
-                                ? 'View mode'
+                              proposalFieldsReadOnly
+                                ? isTopupWorkflow
+                                  ? 'Topup mode'
+                                  : 'View mode'
                                 : String(annexureType || '').trim() === 'Not Applicable'
                                   ? 'Upload disabled for Not Applicable'
                                   : hasFilledText(annexureType)
@@ -5292,7 +5372,7 @@ const FinanceApproval: React.FC = () => {
                             }
                             onMouseEnter={(e) => {
                               if (
-                                !isViewMode &&
+                                !proposalFieldsReadOnly &&
                                 hasFilledText(annexureType) &&
                                 String(annexureType || '').trim() !== 'Not Applicable'
                               ) {
@@ -5344,7 +5424,7 @@ const FinanceApproval: React.FC = () => {
                                   >
                                     <Eye size={18} />
                                   </button>
-                                  {!isViewMode && (
+                                  {!proposalFieldsReadOnly && (
                                     <button
                                       type="button"
                                       onClick={() => deleteAnnexureFile(fileRow.id)}
@@ -5502,9 +5582,11 @@ const FinanceApproval: React.FC = () => {
               >
                 {isLoading
                   ? 'Submitting...'
-                  : isEditMode || canSuperAdminEditTerminalFinance
-                    ? 'Update Form'
-                    : 'Submit Form'}
+                  : isTopupWorkflow
+                    ? 'Submit Topup'
+                    : isEditMode || canSuperAdminEditTerminalFinance
+                      ? 'Update Form'
+                      : 'Submit Form'}
               </button>
             )}
 
@@ -5735,6 +5817,7 @@ const FinanceApproval: React.FC = () => {
                   borderCollapse: 'collapse',
                 }}
               >
+                <tbody>
                 <tr>
                   <td
                     style={{
@@ -5804,6 +5887,7 @@ const FinanceApproval: React.FC = () => {
                     )}
                   </td>
                 </tr>
+                </tbody>
               </table>
 
               <h2
@@ -5829,6 +5913,7 @@ const FinanceApproval: React.FC = () => {
                   margin: '0 auto 14px auto',
                 }}
               >
+                <tbody>
                 <tr>
                   <td
                     style={{
@@ -6476,6 +6561,7 @@ const FinanceApproval: React.FC = () => {
                     ) : null}
                   </td>
                 </tr>
+                </tbody>
               </table>
 
               {(isApprovalMode || canActOnCurrentStage) && !hideWorkflowActionsForFinalStatus ? (

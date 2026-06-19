@@ -13,15 +13,16 @@ import accessControlModel from '../modules/accessControl/accessControlModel.js';
 // Mock the model
 vi.mock('../modules/finance/financeModel.js', () => {
   return {
-    default: {
-      getFinanceRequestById: vi.fn(),
-      updateFinanceWorkflowSnapshot: vi.fn(),
-      doesFinanceExist: vi.fn(),
-      getBudgetAvailabilityForUser: vi.fn(),
-      createFinanceRequest: vi.fn(),
-      addBudgetBreakup: vi.fn(),
-      hardDeleteFinanceRequest: vi.fn(),
-    },
+      default: {
+        getFinanceRequestById: vi.fn(),
+        updateFinanceWorkflowSnapshot: vi.fn(),
+        doesFinanceExist: vi.fn(),
+        getBudgetAvailabilityForUser: vi.fn(),
+        createFinanceRequest: vi.fn(),
+        updateFinanceRequest: vi.fn(),
+        addBudgetBreakup: vi.fn(),
+        hardDeleteFinanceRequest: vi.fn(),
+      },
   };
 });
 
@@ -187,6 +188,79 @@ describe('Finance Workflow Integration Tests', () => {
           decision: 'approved',
         }),
       );
+    });
+  });
+
+  describe('PUT /api/finance-requests/:id - Topup Update', () => {
+    it('restarts workflow when a topup is submitted for an approved request', async () => {
+      const approvedFinanceRequest = {
+        id: 201,
+        proposal_ref: '#F-2026-0001',
+        created_by: 1,
+        total_budget: 12000,
+        unplanned_budget_enabled: 0,
+        unplanned_budget_amount: null,
+        unplanned_budget_description: null,
+        beneficiary_type: 'Department',
+        workflow_state: {
+          status: 'approved',
+          currentStage: null,
+        },
+      };
+
+      financeModel.getFinanceRequestById.mockResolvedValue(approvedFinanceRequest);
+      financeModel.updateFinanceRequest.mockResolvedValue({ affectedRows: 1 });
+      workflowService.startWorkflow.mockResolvedValue({
+        state: { currentStage: 'level1', status: 'in_progress' },
+      });
+      financeModel.updateFinanceWorkflowSnapshot.mockResolvedValue(true);
+
+      const response = await request(app)
+        .put('/api/finance-requests/201')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          topup_mode: true,
+          budget_rows: [
+            {
+              budget_head: 'Research',
+              sub_head: 'Lab Equipment',
+              amount: 5000,
+            },
+          ],
+          income_rows: [
+            {
+              incomeSource: 'Grant',
+              contribution: 'Sponsor',
+              amount: '2500',
+              status: 'credited',
+              remarks: 'Topup income',
+              creditAccount: 'General Account',
+            },
+          ],
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toContain('topup submitted');
+      expect(workflowService.startWorkflow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recordId: 201,
+          moduleKey: 'finance',
+        }),
+      );
+      expect(financeModel.updateFinanceRequest).toHaveBeenCalledWith(
+        201,
+        expect.objectContaining({
+          income_rows: expect.arrayContaining([
+            expect.objectContaining({
+              incomeSource: 'Grant',
+              amount: '2500',
+            }),
+          ]),
+        }),
+        expect.any(Object),
+      );
+      expect(financeModel.updateFinanceWorkflowSnapshot).toHaveBeenCalled();
     });
   });
 });
