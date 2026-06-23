@@ -1,8 +1,9 @@
-import React, { useState } from "react";
-import { Trash2, Eye, Plus, CloudUpload } from "lucide-react";
-import "../styles/EventForm.css";
-import { v4 as uuidv4 } from "uuid";
-import authenticityUtility from "../../../shared/utils/authenticityUtility";
+import { Trash2, Eye, Plus, CloudUpload } from 'lucide-react';
+import React, { useState } from 'react';
+import '../styles/EventForm.css';
+import { v4 as uuidv4 } from 'uuid';
+
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
 // Type definitions
 interface IncomeRow {
@@ -85,10 +86,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
 }) => {
   // Add/Delete Income
   const addIncomeRow = (): void => {
-    setIncomeRows([
-      ...incomeRows,
-      { id: uuidv4(), incomeHead: "", agency: "", income: "" },
-    ]);
+    setIncomeRows([...incomeRows, { id: uuidv4(), incomeHead: '', agency: '', income: '' }]);
   };
 
   const deleteIncomeRow = (id: string): void => {
@@ -102,9 +100,9 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
       ...expenditureRows,
       {
         id: uuidv4(),
-        budgetHead: "",
-        amountProposed: "",
-        actualExpenditure: "",
+        budgetHead: '',
+        amountProposed: '',
+        actualExpenditure: '',
       },
     ]);
   };
@@ -116,7 +114,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
 
   // Add/Delete Budget
   const addBudgetRow = (): void => {
-    setBudgetRows([...budgetRows, { id: uuidv4(), head: "", amount: "" }]);
+    setBudgetRows([...budgetRows, { id: uuidv4(), head: '', amount: '' }]);
   };
 
   const deleteBudgetRow = (id: string): void => {
@@ -127,17 +125,17 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
   // Totals
   const totalIncome: number = incomeRows.reduce(
     (sum, row) => sum + (parseFloat(row.income) || 0),
-    0
+    0,
   );
   const totalExpenditure: number = expenditureRows.reduce(
     (sum, row) => sum + (parseFloat(row.actualExpenditure) || 0),
-    0
+    0,
   );
 
   const handleViewFile = (file: File | null): void => {
     if (file) {
       const fileURL = URL.createObjectURL(file);
-      window.open(fileURL, "_blank");
+      window.open(fileURL, '_blank');
     }
   };
 
@@ -146,7 +144,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
       {/* Income Section */}
       <div className="event-finance-card">
         <div className="event-card-header">
-          <h3 style={{ fontSize: "20px" }}>Income</h3>
+          <h3 style={{ fontSize: '20px' }}>Income</h3>
         </div>
         <table className="event-finance-table">
           <thead>
@@ -166,7 +164,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                 <tr key={row.id}>
                   <td>{index + 1}</td>
                   <td>
-                    {row.incomeHead !== "Others" ? (
+                    {row.incomeHead !== 'Others' ? (
                       <select
                         value={row.incomeHead}
                         onChange={(e) =>
@@ -174,42 +172,37 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                             incomeRows.map((r) =>
                               r.id === row.id
                                 ? {
-                                  ...r,
-                                  incomeHead: e.target.value,
-                                  incomeHeadOther: "", // clear the other input
-                                }
-                                : r
-                            )
+                                    ...r,
+                                    incomeHead: e.target.value,
+                                    incomeHeadOther: '', // clear the other input
+                                  }
+                                : r,
+                            ),
                           )
                         }
                       >
                         <option value="">-- Select --</option>
-                        <option value="Registration Fee">
-                          Registration Fee
-                        </option>
+                        <option value="Registration Fee">Registration Fee</option>
                         <option value="Sponsorship">Sponsorship</option>
-                        <option value="Management Contribution">
-                          Management Contribution
-                        </option>
+                        <option value="Management Contribution">Management Contribution</option>
                         <option value="Others">Others</option>
                       </select>
                     ) : (
                       <input
                         type="text"
-                        value={row.incomeHeadOther || ""}
+                        value={row.incomeHeadOther || ''}
                         placeholder="Enter other"
                         onChange={(e) =>
                           setIncomeRows(
                             incomeRows.map((r) =>
                               r.id === row.id
                                 ? {
-                                  ...r,
-                                  incomeHeadOther: e.target.value,
-                                  incomeHead:
-                                    e.target.value === "" ? "" : "Others", // switch back if cleared
-                                }
-                                : r
-                            )
+                                    ...r,
+                                    incomeHeadOther: e.target.value,
+                                    incomeHead: e.target.value === '' ? '' : 'Others', // switch back if cleared
+                                  }
+                                : r,
+                            ),
                           )
                         }
                         autoFocus
@@ -224,10 +217,8 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                       onChange={(e) =>
                         setIncomeRows(
                           incomeRows.map((r) =>
-                            r.id === row.id
-                              ? { ...r, agency: e.target.value }
-                              : r
-                          )
+                            r.id === row.id ? { ...r, agency: e.target.value } : r,
+                          ),
                         )
                       }
                     />
@@ -239,10 +230,8 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                       onChange={(e) =>
                         setIncomeRows(
                           incomeRows.map((r) =>
-                            r.id === row.id
-                              ? { ...r, income: e.target.value }
-                              : r
-                          )
+                            r.id === row.id ? { ...r, income: e.target.value } : r,
+                          ),
                         )
                       }
                     />
@@ -298,10 +287,10 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
 
             {/* Total row */}
             <tr className="event-total-row">
-              <td colSpan={3} style={{ textAlign: "right", fontWeight: "600" }}>
+              <td colSpan={3} style={{ textAlign: 'right', fontWeight: '600' }}>
                 Total Income:
               </td>
-              <td colSpan={2} style={{ fontWeight: "600" }}>
+              <td colSpan={2} style={{ fontWeight: '600' }}>
                 {totalIncome}
               </td>
             </tr>
@@ -312,7 +301,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
       {/* Expenditure Section */}
       <div className="event-finance-card">
         <div className="event-card-header">
-          <h3 style={{ fontSize: "20px" }}>Expenditure</h3>
+          <h3 style={{ fontSize: '20px' }}>Expenditure</h3>
         </div>
         <table className="event-finance-table">
           <thead>
@@ -333,7 +322,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                 <tr key={row.id}>
                   <td>{index + 1}</td>
                   <td>
-                    {row.budgetHead !== "Others" ? (
+                    {row.budgetHead !== 'Others' ? (
                       <select
                         value={row.budgetHead}
                         onChange={(e) =>
@@ -341,12 +330,12 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                             expenditureRows.map((r) =>
                               r.id === row.id
                                 ? {
-                                  ...r,
-                                  budgetHead: e.target.value,
-                                  budgetHeadOther: "",
-                                }
-                                : r
-                            )
+                                    ...r,
+                                    budgetHead: e.target.value,
+                                    budgetHeadOther: '',
+                                  }
+                                : r,
+                            ),
                           )
                         }
                       >
@@ -362,21 +351,19 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                     ) : (
                       <input
                         type="text"
-                        value={row.budgetHeadOther || ""}
+                        value={row.budgetHeadOther || ''}
                         placeholder="Enter other"
                         onChange={(e) =>
                           setExpenditureRows(
                             expenditureRows.map((r) =>
                               r.id === row.id
                                 ? {
-                                  ...r,
-                                  budgetHeadOther: e.target.value,
-                                  budgetHead: e.target.value.trim()
-                                    ? "Others"
-                                    : "",
-                                }
-                                : r
-                            )
+                                    ...r,
+                                    budgetHeadOther: e.target.value,
+                                    budgetHead: e.target.value.trim() ? 'Others' : '',
+                                  }
+                                : r,
+                            ),
                           )
                         }
                         autoFocus
@@ -390,10 +377,8 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                       onChange={(e) =>
                         setExpenditureRows(
                           expenditureRows.map((r) =>
-                            r.id === row.id
-                              ? { ...r, amountProposed: e.target.value }
-                              : r
-                          )
+                            r.id === row.id ? { ...r, amountProposed: e.target.value } : r,
+                          ),
                         )
                       }
                     />
@@ -405,66 +390,54 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                       onChange={(e) =>
                         setExpenditureRows(
                           expenditureRows.map((r) =>
-                            r.id === row.id
-                              ? { ...r, actualExpenditure: e.target.value }
-                              : r
-                          )
+                            r.id === row.id ? { ...r, actualExpenditure: e.target.value } : r,
+                          ),
                         )
                       }
                     />
                   </td>
 
                   {/* Upload Document Column */}
-                  <td style={{ verticalAlign: "middle", padding: "8px" }}>
+                  <td style={{ verticalAlign: 'middle', padding: '8px' }}>
                     <div
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "15px",
-                        justifyContent: "center",
-                        height: "100%",
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '15px',
+                        justifyContent: 'center',
+                        height: '100%',
                       }}
                     >
                       <label
                         className="event-upload-icon"
                         title="Upload document"
-                        style={{ cursor: "pointer" }}
+                        style={{ cursor: 'pointer' }}
                       >
                         <CloudUpload size={18} />
                         <input
                           type="file"
-                          style={{ display: "none" }}
+                          style={{ display: 'none' }}
                           onChange={(e) => {
                             const file = e.target.files?.[0] || null;
                             setExpenditureRows((prevRows) =>
-                              prevRows.map((r) =>
-                                r.id === row.id ? { ...r, file } : r
-                              )
+                              prevRows.map((r) => (r.id === row.id ? { ...r, file } : r)),
                             );
                           }}
                           accept=".pdf,.doc,.docx,.jpg,.png"
                         />
                       </label>
                       <span
-                        className={`event-eye-icon ${!row.file ? "disabled" : ""}`}
+                        className={`event-eye-icon ${!row.file ? 'disabled' : ''}`}
                         onClick={() => {
-                          if (row.file)
-                            window.open(
-                              URL.createObjectURL(row.file),
-                              "_blank"
-                            );
+                          if (row.file) window.open(URL.createObjectURL(row.file), '_blank');
                         }}
-                        title={
-                          row.file
-                            ? "View uploaded document"
-                            : "No document uploaded"
-                        }
+                        title={row.file ? 'View uploaded document' : 'No document uploaded'}
                         style={{
-                          cursor: row.file ? "pointer" : "default",
-                          color: row.file ? "#3182ce" : "#ccc",
-                          display: "flex",
-                          alignItems: "center",
-                          height: "100%",
+                          cursor: row.file ? 'pointer' : 'default',
+                          color: row.file ? '#3182ce' : '#ccc',
+                          display: 'flex',
+                          alignItems: 'center',
+                          height: '100%',
                         }}
                       >
                         <Eye size={18} />
@@ -520,10 +493,10 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
 
             {/* Total row */}
             <tr className="event-total-row">
-              <td colSpan={4} style={{ textAlign: "right", fontWeight: "600" }}>
+              <td colSpan={4} style={{ textAlign: 'right', fontWeight: '600' }}>
                 Total Expenditure:
               </td>
-              <td colSpan={2} style={{ fontWeight: "600" }}>
+              <td colSpan={2} style={{ fontWeight: '600' }}>
                 {totalExpenditure}
               </td>
             </tr>
@@ -532,7 +505,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
 
         <div className="event-docs-grid">
           {Object.keys(financeDocs)
-            .filter((doc) => doc !== "Bill Copies") // exclude Bill Copies
+            .filter((doc) => doc !== 'Bill Copies') // exclude Bill Copies
             .map((doc) => {
               const { active, file } = financeDocs[doc];
               return (
@@ -551,13 +524,11 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                     />
                     <span className="event-slider"></span>
                   </label>
-                  <label
-                    className={`event-upload-icon ${!active ? "disabled" : ""}`}
-                  >
+                  <label className={`event-upload-icon ${!active ? 'disabled' : ''}`}>
                     <CloudUpload size={18} />
                     <input
                       type="file"
-                      style={{ display: "none" }}
+                      style={{ display: 'none' }}
                       disabled={!active}
                       onChange={(e) =>
                         setFinanceDocs((prev) => ({
@@ -571,7 +542,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                     />
                   </label>
                   <span
-                    className={`event-eye-icon ${!file ? "disabled" : ""}`}
+                    className={`event-eye-icon ${!file ? 'disabled' : ''}`}
                     onClick={() => file && handleViewFile(file)}
                   >
                     <Eye size={18} />
@@ -590,34 +561,34 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
   const [enabled, setEnabled] = useState<boolean>(true);
 
   const initialDocStates: DocState[] = [
-    { name: "Sanction Order", enabled: false, file: null },
-    { name: "Utilization Certificate", enabled: false, file: null },
-    { name: "Bank Statement", enabled: false, file: null },
-    { name: "Statement of Expenditure", enabled: false, file: null },
+    { name: 'Sanction Order', enabled: false, file: null },
+    { name: 'Utilization Certificate', enabled: false, file: null },
+    { name: 'Bank Statement', enabled: false, file: null },
+    { name: 'Statement of Expenditure', enabled: false, file: null },
   ];
 
   const [agencies, setAgencies] = useState<Agency[]>([
     {
       id: uuidv4(),
-      agency: "",
-      sanctionDetails: { orderNo: "", amount: "", date: "" },
+      agency: '',
+      sanctionDetails: { orderNo: '', amount: '', date: '' },
       docStates: initialDocStates,
     },
   ]);
 
   // Finance section states
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([
-    { id: uuidv4(), incomeHead: "", agency: "", income: "" },
+    { id: uuidv4(), incomeHead: '', agency: '', income: '' },
   ]);
   const [expenditureRows, setExpenditureRows] = useState<ExpenditureRow[]>([
-    { id: uuidv4(), budgetHead: "", amountProposed: "", actualExpenditure: "" },
+    { id: uuidv4(), budgetHead: '', amountProposed: '', actualExpenditure: '' },
   ]);
   const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([
-    { id: uuidv4(), head: "", amount: "" },
+    { id: uuidv4(), head: '', amount: '' },
   ]);
   const [financeDocs, setFinanceDocs] = useState<FinanceDocs>({
-    "Finance Approval Documents": { active: true, file: null },
-    "Bill Copies": { active: false, file: null },
+    'Finance Approval Documents': { active: true, file: null },
+    'Bill Copies': { active: false, file: null },
   });
 
   const addAgency = (): void => {
@@ -625,8 +596,8 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
       ...agencies,
       {
         id: uuidv4(),
-        agency: "",
-        sanctionDetails: { orderNo: "", amount: "", date: "" },
+        agency: '',
+        sanctionDetails: { orderNo: '', amount: '', date: '' },
         docStates: initialDocStates,
       },
     ]);
@@ -638,9 +609,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
   };
 
   const handleAgencyChange = (id: string, value: string): void => {
-    setAgencies(
-      agencies.map((a) => (a.id === id ? { ...a, agency: value } : a))
-    );
+    setAgencies(agencies.map((a) => (a.id === id ? { ...a, agency: value } : a)));
   };
 
   const handleSanctionChange = (id: string, field: keyof SanctionDetails, value: string): void => {
@@ -648,11 +617,11 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
       agencies.map((a) =>
         a.id === id
           ? {
-            ...a,
-            sanctionDetails: { ...a.sanctionDetails, [field]: value },
-          }
-          : a
-      )
+              ...a,
+              sanctionDetails: { ...a.sanctionDetails, [field]: value },
+            }
+          : a,
+      ),
     );
   };
 
@@ -661,15 +630,13 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
       agencies.map((a) =>
         a.id === agencyId
           ? {
-            ...a,
-            docStates: a.docStates.map((doc, i) =>
-              i === index
-                ? { ...doc, enabled: !doc.enabled, file: null }
-                : doc
-            ),
-          }
-          : a
-      )
+              ...a,
+              docStates: a.docStates.map((doc, i) =>
+                i === index ? { ...doc, enabled: !doc.enabled, file: null } : doc,
+              ),
+            }
+          : a,
+      ),
     );
   };
 
@@ -678,20 +645,18 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
       agencies.map((a) =>
         a.id === agencyId
           ? {
-            ...a,
-            docStates: a.docStates.map((doc, i) =>
-              i === index ? { ...doc, file } : doc
-            ),
-          }
-          : a
-      )
+              ...a,
+              docStates: a.docStates.map((doc, i) => (i === index ? { ...doc, file } : doc)),
+            }
+          : a,
+      ),
     );
   };
 
   const viewFile = (file: File | null): void => {
     if (file) {
       const fileURL = URL.createObjectURL(file);
-      window.open(fileURL, "_blank");
+      window.open(fileURL, '_blank');
     }
   };
 
@@ -717,13 +682,13 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
         })),
       sponsoring_agencies: enabled
         ? agencies
-          .filter((agency) => agency.agency)
-          .map((agency) => ({
-            agency_name: agency.agency,
-            order_no: agency.sanctionDetails.orderNo,
-            amount: parseFloat(agency.sanctionDetails.amount) || null,
-            date: agency.sanctionDetails.date,
-          }))
+            .filter((agency) => agency.agency)
+            .map((agency) => ({
+              agency_name: agency.agency,
+              order_no: agency.sanctionDetails.orderNo,
+              amount: parseFloat(agency.sanctionDetails.amount) || null,
+              date: agency.sanctionDetails.date,
+            }))
         : [],
       supporting_docs: Object.keys(financeDocs)
         .filter((doc) => financeDocs[doc].active && financeDocs[doc].file)
@@ -744,17 +709,14 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
     // console.log("🔴 Prepared finance data:", financeData);
 
     try {
-      const response = await authenticityUtility.post("/finance", financeData);
+      const response = await authenticityUtility.post('/finance', financeData);
       // console.log("🟢 Finance backend response:", response);
-      alert("✅ Finance data submitted successfully!");
-      goToTab("updates");
+      alert('✅ Finance data submitted successfully!');
+      goToTab('updates');
     } catch (error: any) {
-      console.error("🔴 Finance frontend error:", error);
-      console.error("🔴 Error response:", error.response?.data);
-      alert(
-        `❌ Failed to submit finance data: ${error.response?.data?.error || error.message
-        }`
-      );
+      console.error('🔴 Finance frontend error:', error);
+      console.error('🔴 Error response:', error.response?.data);
+      alert(`❌ Failed to submit finance data: ${error.response?.data?.error || error.message}`);
     }
   };
 
@@ -779,11 +741,11 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
                         setAgencies([
                           {
                             id: uuidv4(),
-                            agency: "",
+                            agency: '',
                             sanctionDetails: {
-                              orderNo: "",
-                              amount: "",
-                              date: "",
+                              orderNo: '',
+                              amount: '',
+                              date: '',
                             },
                             docStates: initialDocStates,
                           },
@@ -817,9 +779,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
                           className="event-input-field"
                           placeholder="Enter Agency Name"
                           value={agency.agency}
-                          onChange={(e) =>
-                            handleAgencyChange(agency.id, e.target.value)
-                          }
+                          onChange={(e) => handleAgencyChange(agency.id, e.target.value)}
                           disabled={!enabled}
                         />
                       </td>
@@ -876,7 +836,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
                 {/* Sanction Order Details */}
                 <div className="event-sanction-card enabled">
                   <div className="event-sanction-header">
-                    <h4 style={{ fontSize: "20px" }}>Sanction Order Details</h4>
+                    <h4 style={{ fontSize: '20px' }}>Sanction Order Details</h4>
                   </div>
 
                   <div className="event-form-row event-inline-fields">
@@ -885,44 +845,27 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
                       className="event-input-field"
                       placeholder="Order No."
                       value={agency.sanctionDetails.orderNo}
-                      onChange={(e) =>
-                        handleSanctionChange(
-                          agency.id,
-                          "orderNo",
-                          e.target.value
-                        )
-                      }
+                      onChange={(e) => handleSanctionChange(agency.id, 'orderNo', e.target.value)}
                     />
                     <input
                       type="number"
                       className="event-input-field"
                       placeholder="Amount"
                       value={agency.sanctionDetails.amount}
-                      onChange={(e) =>
-                        handleSanctionChange(
-                          agency.id,
-                          "amount",
-                          e.target.value
-                        )
-                      }
+                      onChange={(e) => handleSanctionChange(agency.id, 'amount', e.target.value)}
                     />
                     <input
                       type="date"
                       className="event-input-field"
                       value={agency.sanctionDetails.date}
-                      onChange={(e) =>
-                        handleSanctionChange(agency.id, "date", e.target.value)
-                      }
+                      onChange={(e) => handleSanctionChange(agency.id, 'date', e.target.value)}
                     />
                   </div>
 
                   {/* Supporting Docs */}
                   <div className="event-docs-grid">
                     {agency.docStates.map((doc, i) => (
-                      <div
-                        className="event-doc-row event-compact-doc-row"
-                        key={i}
-                      >
+                      <div className="event-doc-row event-compact-doc-row" key={i}>
                         <span className="event-doc-label">{doc.name}</span>
                         <label className="event-switch">
                           <input
@@ -933,32 +876,25 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
                           <span className="event-slider"></span>
                         </label>
                         <label
-                          className={`event-upload-icon ${!doc.enabled ? "disabled" : ""
-                            }`}
+                          className={`event-upload-icon ${!doc.enabled ? 'disabled' : ''}`}
                           onClick={() =>
                             doc.enabled &&
-                            document
-                              .getElementById(`file-upload-${agency.id}-${i}`)
-                              ?.click()
+                            document.getElementById(`file-upload-${agency.id}-${i}`)?.click()
                           }
                         >
                           <CloudUpload size={18} />
                           <input
                             type="file"
                             onChange={(e) =>
-                              handleFileChange(
-                                agency.id,
-                                i,
-                                e.target.files?.[0] || null
-                              )
+                              handleFileChange(agency.id, i, e.target.files?.[0] || null)
                             }
-                            style={{ display: "none" }}
+                            style={{ display: 'none' }}
                             disabled={!doc.enabled}
                             id={`file-upload-${agency.id}-${i}`}
                           />
                         </label>
                         <span
-                          className={`event-eye-icon ${!doc.file ? "disabled" : ""}`}
+                          className={`event-eye-icon ${!doc.file ? 'disabled' : ''}`}
                           onClick={() => doc.file && viewFile(doc.file)}
                         >
                           <Eye size={18} />
@@ -989,18 +925,10 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
 
       {/* Navigation */}
       <div className="event-section-navigation">
-        <button
-          type="button"
-          className="event-prev-btn"
-          onClick={() => goToTab("pre-event")}
-        >
+        <button type="button" className="event-prev-btn" onClick={() => goToTab('pre-event')}>
           ← Previous
         </button>
-        <button
-          type="button"
-          className="event-save-next-btn"
-          onClick={handleSubmitToBackend}
-        >
+        <button type="button" className="event-save-next-btn" onClick={handleSubmitToBackend}>
           Save & Next →
         </button>
       </div>

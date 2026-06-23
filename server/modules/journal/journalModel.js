@@ -23,7 +23,7 @@ const journalModel = {
         const placeholderName = journalData.title || 'Placeholder';
         const [existingOptions] = await connection.query(
           'SELECT id FROM journal_options WHERE journal_name = ?',
-          [placeholderName]
+          [placeholderName],
         );
 
         if (existingOptions.length > 0) {
@@ -31,13 +31,7 @@ const journalModel = {
         } else {
           const [result] = await connection.query(
             'INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn) VALUES (?, ?, ?, ?, ?)',
-            [
-              placeholderName,
-              '',
-              '',
-              '',
-              '',
-            ]
+            [placeholderName, '', '', '', ''],
           );
           journalOptionsId = result.insertId;
         }
@@ -45,7 +39,7 @@ const journalModel = {
         // For Journal type, use the normal logic
         const [existingOptions] = await connection.query(
           'SELECT id FROM journal_options WHERE journal_name = ?',
-          [journalData.journal_name]
+          [journalData.journal_name],
         );
 
         if (existingOptions.length > 0) {
@@ -53,12 +47,9 @@ const journalModel = {
 
           // Update existing journal_options with new data if provided
           const updateData = {};
-          if (journalData.publisher !== undefined)
-            updateData.publisher = journalData.publisher;
-          if (journalData.website !== undefined)
-            updateData.website = journalData.website;
-          if (journalData.print_issn !== undefined)
-            updateData.print_issn = journalData.print_issn;
+          if (journalData.publisher !== undefined) updateData.publisher = journalData.publisher;
+          if (journalData.website !== undefined) updateData.website = journalData.website;
+          if (journalData.print_issn !== undefined) updateData.print_issn = journalData.print_issn;
           if (journalData.online_issn !== undefined)
             updateData.online_issn = journalData.online_issn;
 
@@ -78,7 +69,7 @@ const journalModel = {
               journalData.website || '',
               journalData.print_issn || '',
               journalData.online_issn || '',
-            ]
+            ],
           );
           journalOptionsId = result.insertId;
         }
@@ -118,14 +109,15 @@ const journalModel = {
         reference_number: journalData.reference_number,
         accepted_date: journalData.accepted_date,
         available_online_date: journalData.available_online_date,
-        publication_details: journalData.publication_details ? JSON.stringify(journalData.publication_details) : null,
+        publication_details: journalData.publication_details
+          ? JSON.stringify(journalData.publication_details)
+          : null,
+        scopus_id: journalData.scopus_id,
+        scie_id: journalData.scie_id,
       };
 
       // Insert journal
-      const [journalResult] = await connection.query(
-        'INSERT INTO journals SET ?',
-        [journalEntry]
-      );
+      const [journalResult] = await connection.query('INSERT INTO journals SET ?', [journalEntry]);
 
       await connection.commit();
 
@@ -137,7 +129,7 @@ const journalModel = {
                 JOIN journal_options jo ON j.journal_options_id = jo.id
                 WHERE j.id = ?
             `,
-        [journalResult.insertId]
+        [journalResult.insertId],
       );
 
       return journal[0];
@@ -152,9 +144,7 @@ const journalModel = {
   async update(id, journalData) {
     try {
       const filteredData = Object.fromEntries(
-        Object.entries(journalData).filter(
-          ([_, value]) => value !== null && value !== undefined
-        )
+        Object.entries(journalData).filter(([_, value]) => value !== null && value !== undefined),
       );
 
       // Handle publication_details JSON field
@@ -165,17 +155,11 @@ const journalModel = {
         filteredData.publication_details = JSON.stringify(filteredData.publication_details);
       }
       // Handle external_details JSON field
-      if (
-        filteredData.external_details &&
-        typeof filteredData.external_details === 'object'
-      ) {
+      if (filteredData.external_details && typeof filteredData.external_details === 'object') {
         filteredData.external_details = JSON.stringify(filteredData.external_details);
       }
 
-      const [result] = await db.query('UPDATE journals SET ? WHERE id = ?', [
-        filteredData,
-        id,
-      ]);
+      const [result] = await db.query('UPDATE journals SET ? WHERE id = ?', [filteredData, id]);
       return result;
     } catch (error) {
       throw new Error(`Error updating journal: ${error.message}`);
@@ -186,12 +170,7 @@ const journalModel = {
     try {
       const [result] = await db.query(
         'UPDATE author_journal SET is_first_author = ?, is_primary = ? WHERE id = ? AND journal_id = ?',
-        [
-          authorData.is_first_author ? 1 : 0,
-          authorData.is_primary ? 1 : 0,
-          dbAuthorId,
-          journalId,
-        ]
+        [authorData.is_first_author ? 1 : 0, authorData.is_primary ? 1 : 0, dbAuthorId, journalId],
       );
       return result;
     } catch (error) {
@@ -202,10 +181,9 @@ const journalModel = {
   async updateJournalAndOptions(journalId, journalData, journalOptionsData) {
     try {
       // Retrieve the journal_options_id from the journals table using the journalId directly
-      const [journalRows] = await db.query(
-        'SELECT journal_options_id FROM journals WHERE id = ?',
-        [journalId]
-      );
+      const [journalRows] = await db.query('SELECT journal_options_id FROM journals WHERE id = ?', [
+        journalId,
+      ]);
       if (!journalRows || journalRows.length === 0) {
         throw new Error('Journal not found');
       }
@@ -221,10 +199,7 @@ const journalModel = {
 
       // Update the journals table if there is data to update
       if (Object.keys(journalData).length > 0) {
-        await db.query('UPDATE journals SET ? WHERE id = ?', [
-          journalData,
-          journalId,
-        ]);
+        await db.query('UPDATE journals SET ? WHERE id = ?', [journalData, journalId]);
       }
 
       return { success: true };
@@ -235,9 +210,7 @@ const journalModel = {
 
   async delete(id) {
     try {
-      const [result] = await db.query('DELETE FROM journals WHERE id = ?', [
-        id,
-      ]);
+      const [result] = await db.query('DELETE FROM journals WHERE id = ?', [id]);
       return result;
     } catch (error) {
       throw new Error(`Error deleting journal: ${error.message}`);
@@ -251,16 +224,8 @@ const journalModel = {
 
       let authorId;
       let isExternalAuthor = false;
-      const {
-        designation,
-        author_id,
-        name,
-        department,
-        organization,
-        country,
-        state,
-        email,
-      } = authorData;
+      const { designation, author_id, name, department, organization, country, state, email } =
+        authorData;
 
       if (designation === 'faculty') {
         if (!author_id) throw new Error('Faculty ERP ID is required.');
@@ -268,7 +233,7 @@ const journalModel = {
         // Look up in master_employees using erp_id
         const [employeeRows] = await connection.query(
           'SELECT id, email, first_name, last_name FROM master_employees WHERE erp_id = ?',
-          [author_id]
+          [author_id],
         );
 
         if (employeeRows.length === 0) {
@@ -280,7 +245,7 @@ const journalModel = {
         // Check if an author entry already exists for this employee
         const [existingAuthorRows] = await connection.query(
           'SELECT id FROM authors WHERE employee_id = ?',
-          [employee.id]
+          [employee.id],
         );
 
         if (existingAuthorRows.length > 0) {
@@ -290,7 +255,7 @@ const journalModel = {
           // Create new author entry linked to employee
           const [authorInsert] = await connection.query(
             `INSERT INTO authors (employee_id, name, email, designation) VALUES (?, ?, ?, 'faculty')`,
-            [employee.id, null, null]  // name and email come from master_employees via view
+            [employee.id, null, null], // name and email come from master_employees via view
           );
           authorId = authorInsert.insertId;
         }
@@ -301,7 +266,7 @@ const journalModel = {
         let studentId;
         const [existingStudentRows] = await connection.query(
           'SELECT id FROM author_students WHERE student_unique_id = ?',
-          [author_id]
+          [author_id],
         );
 
         if (existingStudentRows.length > 0) {
@@ -309,7 +274,7 @@ const journalModel = {
         } else {
           const [studentInsert] = await connection.query(
             'INSERT INTO author_students (student_unique_id, name, department, organization, country) VALUES (?, ?, ?, ?, ?)',
-            [author_id, name, department, organization, country]
+            [author_id, name, department, organization, country],
           );
           studentId = studentInsert.insertId;
         }
@@ -317,7 +282,7 @@ const journalModel = {
         // Reuse or create corresponding author row that references this student
         const [existingAuthorRows] = await connection.query(
           'SELECT id FROM authors WHERE student_ref = ?',
-          [studentId]
+          [studentId],
         );
 
         if (existingAuthorRows.length > 0) {
@@ -325,7 +290,7 @@ const journalModel = {
           // Optionally keep author details in sync with latest student info
           await connection.query(
             'UPDATE authors SET name = ?, department = ?, organization = ?, country = ?, email = ? WHERE id = ?',
-            [name, department, organization, country, email || null, authorId]
+            [name, department, organization, country, email || null, authorId],
           );
         } else {
           const studentAuthorData = {
@@ -338,24 +303,21 @@ const journalModel = {
             email: email || null,
           };
 
-          const [result] = await connection.query(
-            'INSERT INTO authors SET ?',
-            studentAuthorData
-          );
+          const [result] = await connection.query('INSERT INTO authors SET ?', studentAuthorData);
           authorId = result.insertId;
         }
       } else if (designation === 'external') {
         // External authors are stored in journals.external_details JSON, not in authors table
         if (!name || !department || !organization || !country) {
           throw new Error(
-            'Name, Department, Organization, and Country are required for external authors.'
+            'Name, Department, Organization, and Country are required for external authors.',
           );
         }
 
         // Fetch existing external_details for this journal
         const [journalRows] = await connection.query(
           'SELECT external_details FROM journals WHERE id = ? FOR UPDATE',
-          [journalId]
+          [journalId],
         );
         if (!journalRows || journalRows.length === 0) {
           throw new Error('Journal not found while adding external author.');
@@ -366,9 +328,7 @@ const journalModel = {
         if (rawExternal) {
           try {
             externalDetails =
-              typeof rawExternal === 'string'
-                ? JSON.parse(rawExternal)
-                : rawExternal;
+              typeof rawExternal === 'string' ? JSON.parse(rawExternal) : rawExternal;
             if (!Array.isArray(externalDetails)) externalDetails = [];
           } catch (e) {
             externalDetails = [];
@@ -386,10 +346,10 @@ const journalModel = {
           is_primary: !!authorData.is_primary,
         });
 
-        await connection.query(
-          'UPDATE journals SET external_details = ? WHERE id = ?',
-          [JSON.stringify(externalDetails), journalId]
-        );
+        await connection.query('UPDATE journals SET external_details = ? WHERE id = ?', [
+          JSON.stringify(externalDetails),
+          journalId,
+        ]);
         // Mark as external-only so we skip author_journal insert
         isExternalAuthor = true;
       } else {
@@ -401,12 +361,7 @@ const journalModel = {
         const [insertResult] = await connection.query(
           `INSERT INTO author_journal (author_id, journal_id, is_first_author, is_primary) 
                  VALUES (?, ?, ?, ?)`,
-          [
-            authorId,
-            journalId,
-            authorData.is_first_author ? 1 : 0,
-            authorData.is_primary ? 1 : 0,
-          ]
+          [authorId, journalId, authorData.is_first_author ? 1 : 0, authorData.is_primary ? 1 : 0],
         );
         authorJournalResult = insertResult;
       }
@@ -445,7 +400,7 @@ const journalModel = {
         FROM v_authors v
         JOIN author_journal aj ON v.author_id = aj.author_id
         WHERE aj.journal_id = ?`,
-        [journalId]
+        [journalId],
       );
       return rows;
     } catch (error) {
@@ -466,7 +421,7 @@ const journalModel = {
         // Return top 20 active faculty if query is empty
         sql = `SELECT 
           e.id,
-          CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+          TRIM(CONCAT(e.first_name, ' ', COALESCE(e.last_name, ''))) AS name,
           e.email,
           e.designation,
           e.erp_id AS author_id,
@@ -485,7 +440,7 @@ const journalModel = {
         // Search by query
         sql = `SELECT 
           e.id,
-          CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
+          TRIM(CONCAT(e.first_name, ' ', COALESCE(e.last_name, ''))) AS name,
           e.email,
           e.designation,
           e.erp_id AS author_id,
@@ -507,7 +462,13 @@ const journalModel = {
           )
         ORDER BY e.first_name, e.last_name
         LIMIT 20`;
-        params = [`%${queryStr}%`, `%${queryStr}%`, `%${queryStr}%`, `${queryStr}%`, `%${queryStr}%`];
+        params = [
+          `%${queryStr}%`,
+          `%${queryStr}%`,
+          `%${queryStr}%`,
+          `${queryStr}%`,
+          `%${queryStr}%`,
+        ];
       }
 
       const [rows] = await db.query(sql, params);
@@ -532,10 +493,9 @@ const journalModel = {
 
   async getIndexes(journalId) {
     try {
-      const [rows] = await db.query(
-        'SELECT * FROM journal_indexes WHERE journal_id = ?',
-        [journalId]
-      );
+      const [rows] = await db.query('SELECT * FROM journal_indexes WHERE journal_id = ?', [
+        journalId,
+      ]);
       return rows;
     } catch (error) {
       throw new Error(`Error retrieving indexes: ${error.message} `);
@@ -592,9 +552,7 @@ const journalModel = {
   },
 
   async doesJournalExist(journalId) {
-    const [rows] = await db.query('SELECT 1 FROM journals WHERE id = ?', [
-      journalId,
-    ]);
+    const [rows] = await db.query('SELECT 1 FROM journals WHERE id = ?', [journalId]);
     return rows.length > 0;
   },
 
@@ -632,7 +590,7 @@ const journalModel = {
           WHERE j.id = ?
           LIMIT 1
         `,
-        [userEmail, userId, userId, journalId]
+        [userEmail, userId, userId, journalId],
       );
 
       if (!rows.length) {
@@ -666,7 +624,7 @@ j.*,
                 JOIN journal_options jo ON j.journal_options_id = jo.id
                 WHERE j.id = ?
   `,
-        [id]
+        [id],
       );
 
       if (!journal[0]) return null;
@@ -690,13 +648,13 @@ v.author_id AS id,
         FROM v_authors v
         JOIN author_journal aj ON v.author_id = aj.author_id
         WHERE aj.journal_id = ? `,
-        [id]
+        [id],
       );
 
       // Get indexes
       const [indexes] = await db.query(
         'SELECT index_name FROM journal_indexes WHERE journal_id = ?',
-        [id]
+        [id],
       );
 
       // Helper function to safely parse JSON fields
@@ -721,10 +679,7 @@ v.author_id AS id,
       journalResult.sdgs = safeParseJSON(journalResult.sdgs, []);
       journalResult.credit_to = safeParseJSON(journalResult.credit_to, []);
       journalResult.publication_details = safeParseJSON(journalResult.publication_details, null);
-      journalResult.external_details = safeParseJSON(
-        journalResult.external_details,
-        []
-      );
+      journalResult.external_details = safeParseJSON(journalResult.external_details, []);
 
       return {
         ...journalResult,
@@ -752,14 +707,13 @@ v.author_id AS id,
           requestData.cite_score || null,
           requestData.category || 'National',
           'pending', // Default status
-        ]
+        ],
       );
 
       // Return the created request
-      const [request] = await db.query(
-        'SELECT * FROM journal_requests WHERE id = ?',
-        [result.insertId]
-      );
+      const [request] = await db.query('SELECT * FROM journal_requests WHERE id = ?', [
+        result.insertId,
+      ]);
 
       return request[0];
     } catch (error) {
@@ -771,7 +725,7 @@ v.author_id AS id,
     try {
       const [requests] = await db.query(
         'SELECT * FROM journal_requests WHERE user_id = ? ORDER BY created_at DESC',
-        [userId]
+        [userId],
       );
       return requests;
     } catch (error) {
@@ -783,7 +737,7 @@ v.author_id AS id,
     try {
       const [requests] = await db.query(
         'SELECT * FROM journal_requests WHERE id = ? AND user_id = ?',
-        [id, userId]
+        [id, userId],
       );
       return requests[0] || null;
     } catch (error) {
@@ -796,7 +750,7 @@ v.author_id AS id,
     try {
       const [result] = await db.query(
         'INSERT INTO journal_status_updates (journal_id, user_id, status, user_comment) VALUES (?, ?, ?, ?)',
-        [journalId, userId, statusData.status, statusData.user_comment || null]
+        [journalId, userId, statusData.status, statusData.user_comment || null],
       );
       return result.insertId;
     } catch (error) {
@@ -812,7 +766,7 @@ v.author_id AS id,
                  JOIN users u ON jsu.user_id = u.id
                  WHERE jsu.journal_id = ?
   ORDER BY jsu.created_at ASC`,
-        [journalId]
+        [journalId],
       );
       return rows;
     } catch (error) {
@@ -824,7 +778,7 @@ v.author_id AS id,
     try {
       const [result] = await db.query(
         'UPDATE journal_status_updates SET admin_reply = ? WHERE id = ?',
-        [adminReply, statusUpdateId]
+        [adminReply, statusUpdateId],
       );
       return result;
     } catch (error) {

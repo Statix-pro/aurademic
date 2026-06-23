@@ -9,7 +9,7 @@ const DEFAULT_CSV_PATH = path.join(
   '..',
   'schema',
   'migrations',
-  'Employee Database 2026-02-21 162053 Sheet1 (1).csv'
+  'Employee Database 2026-02-21 162053 Sheet1 (1).csv',
 );
 
 function normalize(value) {
@@ -110,7 +110,11 @@ async function main() {
     for (const row of records) {
       const erpId = getFirstValue(row, ['Prime ERP Code', 'ERP ID']);
       const email = getFirstValue(row, ['Official EMail ID', 'Email']).toLowerCase();
-      const parentDepartmentRaw = getFirstValue(row, ['Parent Department', 'Parent Dept.', 'Parent Dept']);
+      const parentDepartmentRaw = getFirstValue(row, [
+        'Parent Department',
+        'Parent Dept.',
+        'Parent Dept',
+      ]);
 
       if (!erpId && !email) {
         stats.missingIdentifier += 1;
@@ -126,14 +130,14 @@ async function main() {
         parentDepartmentRaw,
         deptByCode,
         deptByName,
-        aliases
+        aliases,
       );
 
       if (!parentDepartmentId) {
         stats.unresolvedParentDepartment += 1;
         unresolvedValues.set(
           parentDepartmentRaw,
-          (unresolvedValues.get(parentDepartmentRaw) || 0) + 1
+          (unresolvedValues.get(parentDepartmentRaw) || 0) + 1,
         );
         continue;
       }
@@ -143,7 +147,7 @@ async function main() {
 
       const [employeeRows] = await connection.query(
         `SELECT id, parent_department_id FROM master_employees WHERE ${whereClause} LIMIT 1`,
-        [whereValue]
+        [whereValue],
       );
 
       if (!employeeRows.length) {
@@ -160,7 +164,7 @@ async function main() {
       if (!isDryRun) {
         await connection.query(
           'UPDATE master_employees SET parent_department_id = ? WHERE id = ?',
-          [parentDepartmentId, employee.id]
+          [parentDepartmentId, employee.id],
         );
       }
 
@@ -168,7 +172,7 @@ async function main() {
     }
 
     const unresolvedSummary = Array.from(unresolvedValues.entries()).sort((a, b) =>
-      a[0].localeCompare(b[0])
+      a[0].localeCompare(b[0]),
     );
 
     console.log(`CSV: ${csvPath}`);

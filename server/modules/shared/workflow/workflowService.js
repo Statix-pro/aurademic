@@ -1,5 +1,5 @@
-import db from '../../../config/connection.js';
 import { getWorkflowModule } from './workflowModuleRegistry.js';
+import { assertRecordScopeAccess, resolveQueueScopeFilters } from './workflowScopeResolver.js';
 import {
   WorkflowError,
   normalizeText,
@@ -11,10 +11,7 @@ import {
   isSuperAdminActor,
   normalizePermissionSet,
 } from './workflowValidators.js';
-import {
-  assertRecordScopeAccess,
-  resolveQueueScopeFilters,
-} from './workflowScopeResolver.js';
+import db from '../../../config/connection.js';
 
 const DEFAULT_FLOW = Object.freeze(['level1', 'dof', 'principal']);
 const TERMINAL_STATUSES = new Set(['completed', 'rejected', 'archived']);
@@ -57,7 +54,12 @@ const parseWorkflowState = (rawState) => {
   return state;
 };
 
-async function getWorkflowStateFromRecord(conn, moduleConfig, recordId, { forUpdate = false } = {}) {
+async function getWorkflowStateFromRecord(
+  conn,
+  moduleConfig,
+  recordId,
+  { forUpdate = false } = {},
+) {
   const tableName = ensureSafeIdentifier(moduleConfig.tableName, 'tableName');
   const idColumn = ensureSafeIdentifier(moduleConfig.idColumn, 'idColumn');
   const stateColumn = ensureSafeIdentifier(moduleConfig.stateColumn, 'stateColumn');
@@ -70,9 +72,9 @@ async function getWorkflowStateFromRecord(conn, moduleConfig, recordId, { forUpd
   const lockClause = forUpdate ? ' FOR UPDATE' : '';
   const [rows] = await conn.query(
     `SELECT \`${stateColumn}\` AS workflow_state
-       FROM \`${tableName}\`
-       WHERE \`${idColumn}\` = ?${lockClause}`,
-    [normalizedRecordId]
+     FROM \`${tableName}\`
+     WHERE \`${idColumn}\` = ?${lockClause}`,
+    [normalizedRecordId],
   );
 
   if (!rows.length) {
@@ -91,11 +93,11 @@ async function resolveEntityTypeCodeFromContext(conn, context = {}) {
 
   const [rows] = await conn.query(
     `SELECT met.code
-       FROM master_entities me
-       JOIN master_entity_types met ON met.id = me.entity_type_id
-      WHERE me.id = ?
-      LIMIT 1`,
-    [beneficiaryEntityId]
+     FROM master_entities me
+     JOIN master_entity_types met ON met.id = me.entity_type_id
+     WHERE me.id = ?
+     LIMIT 1`,
+    [beneficiaryEntityId],
   );
 
   if (!rows.length) {
@@ -112,27 +114,27 @@ async function resolveFlowConfig(conn, { moduleKey, beneficiaryType, entityTypeC
 
   const [rows] = await conn.query(
     `SELECT id, module_key, beneficiary_type, entity_type_code, flow
-       FROM approval_flow_config
-      WHERE is_active = 1
-        AND LOWER(TRIM(module_key)) IN (?, '*')
-        AND LOWER(TRIM(beneficiary_type)) IN (?, '*')
-        AND (
-          (? IS NULL AND entity_type_code IS NULL)
-          OR (? IS NOT NULL AND (
-              UPPER(TRIM(entity_type_code)) = ?
-              OR entity_type_code IS NULL
-          ))
-        )
-      ORDER BY
-        CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END,
-        CASE WHEN LOWER(TRIM(beneficiary_type)) = ? THEN 0 ELSE 1 END,
-        CASE
-          WHEN ? IS NOT NULL AND UPPER(TRIM(entity_type_code)) = ? THEN 0
-          WHEN entity_type_code IS NULL THEN 1
-          ELSE 2
-        END,
-        id ASC
-      LIMIT 1`,
+     FROM approval_flow_config
+     WHERE is_active = 1
+       AND LOWER(TRIM(module_key)) IN (?, '*')
+       AND LOWER(TRIM(beneficiary_type)) IN (?, '*')
+       AND (
+         (? IS NULL AND entity_type_code IS NULL)
+         OR (? IS NOT NULL AND (
+           UPPER(TRIM(entity_type_code)) = ?
+           OR entity_type_code IS NULL
+         ))
+       )
+     ORDER BY
+       CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END,
+       CASE WHEN LOWER(TRIM(beneficiary_type)) = ? THEN 0 ELSE 1 END,
+       CASE
+         WHEN ? IS NOT NULL AND UPPER(TRIM(entity_type_code)) = ? THEN 0
+         WHEN entity_type_code IS NULL THEN 1
+         ELSE 2
+       END,
+       id ASC
+     LIMIT 1`,
     [
       normalizedModuleKey,
       normalizedBeneficiaryType,
@@ -143,7 +145,7 @@ async function resolveFlowConfig(conn, { moduleKey, beneficiaryType, entityTypeC
       normalizedBeneficiaryType,
       normalizedEntityTypeCode,
       normalizedEntityTypeCode,
-    ]
+    ],
   );
 
   if (!rows.length) {
@@ -159,13 +161,13 @@ async function resolveStagePolicy(conn, { moduleKey, stageKey }) {
 
   const [rows] = await conn.query(
     `SELECT module_key, stage_key, scope_type, meta
-       FROM workflow_stage_policies
-      WHERE is_active = 1
-        AND LOWER(TRIM(stage_key)) = ?
-        AND LOWER(TRIM(module_key)) IN (?, '*')
-      ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END
-      LIMIT 1`,
-    [normalizedStageKey, normalizedModuleKey, normalizedModuleKey]
+     FROM workflow_stage_policies
+     WHERE is_active = 1
+       AND LOWER(TRIM(stage_key)) = ?
+       AND LOWER(TRIM(module_key)) IN (?, '*')
+     ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END
+     LIMIT 1`,
+    [normalizedStageKey, normalizedModuleKey, normalizedModuleKey],
   );
 
   if (!rows.length) {
@@ -251,7 +253,11 @@ const assertWorkflowActionable = (state) => {
   }
 
   if (!ACTIONABLE_STATUSES.has(status)) {
-    throw new WorkflowError(`Workflow cannot be acted on in status: ${status}`, 409, 'WORKFLOW_NOT_ACTIONABLE');
+    throw new WorkflowError(
+      `Workflow cannot be acted on in status: ${status}`,
+      409,
+      'WORKFLOW_NOT_ACTIONABLE',
+    );
   }
 
   if (!currentStage) {
@@ -259,7 +265,11 @@ const assertWorkflowActionable = (state) => {
   }
 
   if (!flow.includes(currentStage)) {
-    throw new WorkflowError('Workflow current stage is not present in flow', 409, 'WORKFLOW_STAGE_INVALID');
+    throw new WorkflowError(
+      'Workflow current stage is not present in flow',
+      409,
+      'WORKFLOW_STAGE_INVALID',
+    );
   }
 
   return {
@@ -286,7 +296,11 @@ const computeNextWorkflowState = ({ state, decision, feedback }) => {
   const normalizedFeedback = normalizeText(feedback) || null;
 
   if (['rejected', 'returned'].includes(decision) && !normalizedFeedback) {
-    throw new WorkflowError('Feedback is required for returned/rejected decisions', 400, 'FEEDBACK_REQUIRED');
+    throw new WorkflowError(
+      'Feedback is required for returned/rejected decisions',
+      400,
+      'FEEDBACK_REQUIRED',
+    );
   }
 
   clonedState.lastDecision = decision;
@@ -338,30 +352,150 @@ const computeNextWorkflowState = ({ state, decision, feedback }) => {
 };
 
 const assertDecisionPermission = ({ moduleKey, currentStage, actor }) => {
+  const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
+  const normalizedStageKey = normalizeText(currentStage).toLowerCase();
+
+  // Super admin: always allowed
   if (isSuperAdminActor(actor)) {
     return;
   }
 
-  const permissionSet = normalizePermissionSet(actor);
-  const requiredPermission = `${moduleKey}.workflow.${currentStage}`;
+  // Role-based access (hod / coordinator / dof / principal / chairman)
+  if (
+    canAccessStageByRole({ moduleKey: normalizedModuleKey, actor, stageKey: normalizedStageKey })
+  ) {
+    return;
+  }
 
-  if (!permissionSet.has(requiredPermission)) {
+  const permissionSet = normalizePermissionSet(actor);
+
+  // For expenditure, also accept finance.workflow.* permissions
+  const permissionModuleKeys =
+    normalizedModuleKey === 'expenditure' ? ['expenditure', 'finance'] : [normalizedModuleKey];
+
+  const hasPermission = permissionModuleKeys.some((mk) =>
+    permissionSet.has(`${mk}.workflow.${normalizedStageKey}`),
+  );
+
+  if (!hasPermission) {
     throw new WorkflowError(
-      `Insufficient permission for stage: ${currentStage}`,
+      `Insufficient permission for stage: ${normalizedStageKey}`,
       403,
-      'WORKFLOW_PERMISSION_DENIED'
+      'WORKFLOW_PERMISSION_DENIED',
     );
   }
 };
 
-const normalizeActorPayload = (actor = {}) => ({
-  userId: toPositiveInt(actor?.userId || actor?.id),
-  email: normalizeText(actor?.email).toLowerCase() || null,
-  role: normalizeText(actor?.role).toLowerCase() || null,
-  roles: Array.isArray(actor?.roles) ? actor.roles : [],
-  permissions: Array.isArray(actor?.permissions) ? actor.permissions : [],
-  isSuperAdmin: Boolean(actor?.isSuperAdmin || actor?.is_super_admin),
-});
+const extractToken = (value) => {
+  if (typeof value === 'string') return normalizeText(value);
+  if (value && typeof value === 'object') {
+    const candidates = [
+      value.role,
+      value.role_code,
+      value.roleCode,
+      value.permission,
+      value.permission_key,
+      value.permissionKey,
+      value.code,
+      value.name,
+      value.value,
+    ];
+    for (const candidate of candidates) {
+      const normalized = normalizeText(candidate);
+      if (normalized) return normalized;
+    }
+  }
+  return '';
+};
+
+const normalizeTokenList = (value) => {
+  const list = Array.isArray(value) ? value : [value];
+  return list.map((item) => extractToken(item)).filter(Boolean);
+};
+
+const normalizeActorPayload = (actor = {}) => {
+  const roles = normalizeTokenList(actor?.roles);
+  const role = normalizeText(actor?.role).toLowerCase() || null;
+  if (role && !roles.some((item) => normalizeText(item).toLowerCase() === role)) {
+    roles.push(role);
+  }
+
+  return {
+    userId: toPositiveInt(actor?.userId || actor?.id),
+    email: normalizeText(actor?.email).toLowerCase() || null,
+    role,
+    roles,
+    permissions: normalizeTokenList(actor?.permissions),
+    isSuperAdmin: Boolean(actor?.isSuperAdmin || actor?.is_super_admin),
+  };
+};
+
+const getNormalizedActorRoles = (actor = {}) =>
+  (Array.isArray(actor?.roles) ? actor.roles : [])
+    .map((role) => extractToken(role).toLowerCase())
+    .filter(Boolean);
+
+const canAccessExpenditureStageByRole = (actor = {}, stageKey = '') => {
+  const normalizedStage = normalizeText(stageKey).toLowerCase();
+  if (!normalizedStage) {
+    return false;
+  }
+
+  if (isSuperAdminActor(actor)) {
+    return true;
+  }
+
+  const roles = getNormalizedActorRoles(actor);
+  if (!roles.length) {
+    return false;
+  }
+
+  if (normalizedStage === 'level1') {
+    return roles.some((role) => ['hod', 'coordinator', 'entity_approver'].includes(role));
+  }
+
+  if (normalizedStage === 'dof') {
+    return roles.includes('dof');
+  }
+
+  if (normalizedStage === 'principal') {
+    return roles.includes('principal');
+  }
+
+  return false;
+};
+
+const canAccessStageByRole = ({ moduleKey, actor = {}, stageKey = '' }) => {
+  const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
+  const normalizedStage = normalizeText(stageKey).toLowerCase();
+  if (!normalizedModuleKey || !normalizedStage) {
+    return false;
+  }
+
+  if (normalizedStage === 'level1') {
+    const roles = getNormalizedActorRoles(actor);
+    return roles.some((role) => ['hod', 'coordinator', 'entity_approver'].includes(role));
+  }
+
+  if (normalizedStage === 'dof') {
+    const roles = getNormalizedActorRoles(actor);
+    return roles.includes('dof');
+  }
+
+  if (normalizedStage === 'principal') {
+    const roles = getNormalizedActorRoles(actor);
+    return roles.includes('principal');
+  }
+
+  if (normalizedStage === 'chairman') {
+    const roles = getNormalizedActorRoles(actor);
+    return normalizedModuleKey === 'finance' && roles.includes('chairman');
+  }
+
+  return normalizedModuleKey === 'expenditure'
+    ? canAccessExpenditureStageByRole(actor, normalizedStage)
+    : false;
+};
 
 export async function startWorkflow({ moduleKey, recordId, metadata = {} }) {
   const moduleConfig = getWorkflowModule(moduleKey);
@@ -376,17 +510,6 @@ export async function startWorkflow({ moduleKey, recordId, metadata = {} }) {
       throw new WorkflowError('Record not found', 404, 'WORKFLOW_RECORD_NOT_FOUND');
     }
 
-    const entityTypeCode = await resolveEntityTypeCodeFromContext(conn, context);
-
-    const flow = await resolveFlowConfig(conn, {
-      moduleKey,
-      beneficiaryType: context.beneficiaryType,
-      entityTypeCode,
-    });
-
-    const initialState = buildInitialState(flow, {
-      submittedTotalBudget: Number(context.totalBudget || 0),
-    });
     const normalizedMeta = await validateAdapterModuleMeta({
       moduleConfig,
       normalizedMeta: validateWorkflowMeta(metadata),
@@ -395,10 +518,40 @@ export async function startWorkflow({ moduleKey, recordId, metadata = {} }) {
       context,
     });
 
+    const entityTypeCode = await resolveEntityTypeCodeFromContext(conn, context);
+    const adapterFlowResolver = moduleConfig?.adapter?.resolveStartFlow;
+    const adapterResolvedFlow =
+      typeof adapterFlowResolver === 'function'
+        ? adapterFlowResolver({
+            context,
+            metadata: normalizedMeta,
+          })
+        : null;
+
+    const flow =
+      Array.isArray(adapterResolvedFlow) && adapterResolvedFlow.length > 0
+        ? validateFlowArray(adapterResolvedFlow, { field: 'workflow adapter start flow' })
+        : await resolveFlowConfig(conn, {
+            moduleKey,
+            beneficiaryType: context.beneficiaryType,
+            entityTypeCode,
+          });
+
+    const initialState = buildInitialState(flow, {
+      submittedTotalBudget: Number(context.totalBudget || 0),
+    });
+
     const financeMeta = normalizedMeta?.moduleMeta?.financeMeta;
     if (financeMeta && typeof financeMeta === 'object' && !Array.isArray(financeMeta)) {
       initialState.financeMeta = {
         ...financeMeta,
+      };
+    }
+
+    const expenditureMeta = normalizedMeta?.moduleMeta?.expenditureMeta;
+    if (expenditureMeta && typeof expenditureMeta === 'object' && !Array.isArray(expenditureMeta)) {
+      initialState.expenditureMeta = {
+        ...expenditureMeta,
       };
     }
 
@@ -427,7 +580,14 @@ export async function getWorkflow({ moduleKey, recordId }) {
   }
 }
 
-export async function actOnWorkflow({ moduleKey, recordId, decision, feedback, actor, metadata = {} }) {
+export async function actOnWorkflow({
+  moduleKey,
+  recordId,
+  decision,
+  feedback,
+  actor,
+  metadata = {},
+}) {
   const moduleConfig = getWorkflowModule(moduleKey);
   const normalizedDecision = validateDecision(decision);
   const normalizedActor = normalizeActorPayload(actor);
@@ -509,7 +669,7 @@ export async function actOnWorkflow({ moduleKey, recordId, decision, feedback, a
         normalizedActor.role,
         JSON.stringify(previousState),
         JSON.stringify(normalizedMeta),
-      ]
+      ],
     );
 
     await moduleConfig.adapter.updateRecordWorkflowSnapshot(recordId, nextState, {
@@ -567,7 +727,7 @@ export async function listQueue({ moduleKey, stage, actor, filters = {} }) {
         isSuperAdmin: isSuperAdminActor(normalizedActor),
         scopeFilters,
       },
-      { tx: conn }
+      { tx: conn },
     );
   } finally {
     conn.release();
@@ -600,7 +760,7 @@ export async function getTimeline({ moduleKey, recordId }) {
       WHERE module_key = ?
         AND record_id = ?
       ORDER BY decided_at ASC, id ASC`,
-    [normalizedModuleKey, normalizedRecordId]
+    [normalizedModuleKey, normalizedRecordId],
   );
 
   return rows.map((row) => ({
@@ -619,6 +779,54 @@ export async function getTimeline({ moduleKey, recordId }) {
   }));
 }
 
+export async function logWorkflowResubmission({
+  moduleKey,
+  recordId,
+  stage,
+  feedback = null,
+  actor = {},
+  snapshotBefore = null,
+  metadata = {},
+}) {
+  const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
+  const normalizedRecordId = toPositiveInt(recordId);
+  const normalizedStage = normalizeText(stage).toLowerCase() || 'level1';
+
+  if (!normalizedModuleKey || !normalizedRecordId) {
+    throw new WorkflowError('Invalid module or record ID', 400, 'INVALID_RESUBMIT_LOG_REQUEST');
+  }
+
+  const actorUserId = toPositiveInt(actor?.userId || actor?.id);
+  const actorEmail = normalizeText(actor?.email).toLowerCase() || null;
+  const actorRole = normalizeText(actor?.role).toLowerCase() || null;
+
+  await db.query(
+    `INSERT INTO workflow_actions (
+        module_key,
+        record_id,
+        stage,
+        decision,
+        feedback,
+        actor_user_id,
+        actor_email,
+        actor_role,
+        snapshot_before,
+        meta
+      ) VALUES (?, ?, ?, 'resubmitted', ?, ?, ?, ?, ?, ?)`,
+    [
+      normalizedModuleKey,
+      normalizedRecordId,
+      normalizedStage,
+      normalizeText(feedback) || null,
+      actorUserId,
+      actorEmail,
+      actorRole,
+      JSON.stringify(snapshotBefore || {}),
+      JSON.stringify(validateWorkflowMeta(metadata)),
+    ],
+  );
+}
+
 export async function getWorkflowMetadata({ moduleKey, actor }) {
   const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
   const normalizedActor = normalizeActorPayload(actor);
@@ -628,18 +836,18 @@ export async function getWorkflowMetadata({ moduleKey, actor }) {
     db.query(
       `SELECT flow
          FROM approval_flow_config
-        WHERE is_active = 1
-          AND LOWER(TRIM(module_key)) IN (?, '*')
-        ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END, id ASC`,
-      [normalizedModuleKey, normalizedModuleKey]
+         WHERE is_active = 1
+           AND LOWER(TRIM(module_key)) IN (?, '*')
+         ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END, id ASC`,
+      [normalizedModuleKey, normalizedModuleKey],
     ),
     db.query(
       `SELECT stage_key
          FROM workflow_stage_policies
-        WHERE is_active = 1
-          AND LOWER(TRIM(module_key)) IN (?, '*')
-        ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END, id ASC`,
-      [normalizedModuleKey, normalizedModuleKey]
+         WHERE is_active = 1
+           AND LOWER(TRIM(module_key)) IN (?, '*')
+         ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END, id ASC`,
+      [normalizedModuleKey, normalizedModuleKey],
     ),
   ]);
 
@@ -685,9 +893,23 @@ export async function getWorkflowMetadata({ moduleKey, actor }) {
   }
 
   const allStageKeys = orderedStages;
-  const permittedStageKeys = isSuperAdminActor(normalizedActor)
+  let permittedStageKeys = isSuperAdminActor(normalizedActor)
     ? allStageKeys
-    : allStageKeys.filter((stageKey) => permissionSet.has(`${normalizedModuleKey}.workflow.${stageKey}`));
+    : allStageKeys.filter(
+        (stageKey) =>
+          permissionSet.has(`${normalizedModuleKey}.workflow.${stageKey}`) ||
+          canAccessStageByRole({
+            moduleKey: normalizedModuleKey,
+            actor: normalizedActor,
+            stageKey,
+          }),
+      );
+
+  if (!permittedStageKeys.length) {
+    permittedStageKeys = allStageKeys.filter((stageKey) =>
+      canAccessStageByRole({ moduleKey: normalizedModuleKey, actor: normalizedActor, stageKey }),
+    );
+  }
 
   return {
     moduleKey: normalizedModuleKey,
@@ -703,5 +925,6 @@ export default {
   listQueue,
   getTimeline,
   getWorkflow,
+  logWorkflowResubmission,
   getWorkflowMetadata,
 };

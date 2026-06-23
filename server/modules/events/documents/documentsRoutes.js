@@ -1,7 +1,8 @@
+import fs from 'fs';
+import path from 'path';
+
 import express from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
 
 import {
   getDocumentsAndParticipants,
@@ -26,9 +27,7 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
     const stamp = Date.now();
-    const safe = file.originalname
-      .replace(/\s+/g, '_')
-      .replace(/[^a-zA-Z0-9_.-]/g, '');
+    const safe = file.originalname.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_.-]/g, '');
     cb(null, `${stamp}_${safe}`);
   },
 });
@@ -41,11 +40,7 @@ router.post('/:eventId/participant', upsertParticipant); // Add/Update participa
 router.delete('/participant/:participantId', deleteParticipant); // Delete participant (fixed param)
 
 // File Upload APIs
-router.post(
-  '/:eventId/doc/:docName/upload',
-  upload.single('file'),
-  uploadDocumentFile
-); // Upload document file
+router.post('/:eventId/doc/:docName/upload', upload.single('file'), uploadDocumentFile); // Upload document file
 
 // Important Links APIs
 router.get('/:eventId/links', getImportantLinks); // Get important links

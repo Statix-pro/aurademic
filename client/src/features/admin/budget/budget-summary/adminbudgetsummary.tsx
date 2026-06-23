@@ -1,9 +1,10 @@
+import { ChevronUp, ChevronDown } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Form } from 'react-bootstrap';
+
 import { useAuth } from '../../../../contexts/AuthContext';
-import { hasPermission, isSuperAdmin } from '../../../../shared/utils/permissionUtils';
 import authenticityUtility from '../../../../shared/utils/authenticityUtility';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import { hasPermission, isSuperAdmin } from '../../../../shared/utils/permissionUtils';
 import './adminbudgetsummary.css';
 
 type Option = {
@@ -80,12 +81,12 @@ const AdminBudgetSummary: React.FC = () => {
   const roleKey = useMemo(() => {
     const roleCodes = Array.isArray(user?.roles)
       ? user.roles
-        .map((role: any) => {
-          if (!role) return '';
-          if (typeof role === 'string') return role;
-          return role.role_code || role.role_name || '';
-        })
-        .map((role) => String(role).toLowerCase())
+          .map((role: any) => {
+            if (!role) return '';
+            if (typeof role === 'string') return role;
+            return role.role_code || role.role_name || '';
+          })
+          .map((role) => String(role).toLowerCase())
       : [];
 
     if (isSuperAdmin(user)) {
@@ -96,7 +97,10 @@ const AdminBudgetSummary: React.FC = () => {
       return 'principal';
     }
 
-    if (roleCodes.some((code) => code.includes('dof')) || hasPermission(user, 'budget.workflow.dof')) {
+    if (
+      roleCodes.some((code) => code.includes('dof')) ||
+      hasPermission(user, 'budget.workflow.dof')
+    ) {
       return 'dof';
     }
 
@@ -104,7 +108,11 @@ const AdminBudgetSummary: React.FC = () => {
       return 'coordinator';
     }
 
-    if (roleCodes.some((code) => code.includes('ithead') || code.includes('it-head') || code.includes('it_head'))) {
+    if (
+      roleCodes.some(
+        (code) => code.includes('ithead') || code.includes('it-head') || code.includes('it_head'),
+      )
+    ) {
       return 'ithead';
     }
 
@@ -176,7 +184,9 @@ const AdminBudgetSummary: React.FC = () => {
         const seen = new Set<string>();
 
         rows.forEach((unit: any) => {
-          const rawType = String(unit?.type_code || '').trim().toUpperCase();
+          const rawType = String(unit?.type_code || '')
+            .trim()
+            .toUpperCase();
           const mappedTypeLabel = ENTITY_TYPE_TO_LABEL[rawType];
           if (!mappedTypeLabel || !BENEFICIARY_TYPES.includes(mappedTypeLabel)) return;
 
@@ -249,13 +259,17 @@ const AdminBudgetSummary: React.FC = () => {
           const initialAmount = Number.parseFloat(item.initial_total_amount ?? 0);
           const additionalAmount = Number.parseFloat(item.additional_total_amount ?? 0);
           const expenditureAmount = Number.parseFloat(item.expenditure_total_amount ?? 0);
-          const balanceAmount = Number.parseFloat(item.balance_total_amount ?? (initialAmount + additionalAmount - expenditureAmount));
+          const balanceAmount = Number.parseFloat(
+            item.balance_total_amount ?? initialAmount + additionalAmount - expenditureAmount,
+          );
 
           return {
             id: Number(item.id),
             beneficiaryType: item.beneficiary_type || '',
             departmentName: item.department || '',
-            departmentId: Number.isInteger(Number(item.department_id)) ? Number(item.department_id) : null,
+            departmentId: Number.isInteger(Number(item.department_id))
+              ? Number(item.department_id)
+              : null,
             beneficiaryEntityId: Number.isInteger(Number(item.beneficiary_entity_id))
               ? Number(item.beneficiary_entity_id)
               : null,
@@ -302,10 +316,7 @@ const AdminBudgetSummary: React.FC = () => {
       if (!query) return true;
       const proposalId = String(proposal?.id ?? '').toLowerCase();
       const beneficiaryLabel = normalizeText(label).toLowerCase();
-      return (
-        proposalId.includes(query)
-        || beneficiaryLabel.includes(query)
-      );
+      return proposalId.includes(query) || beneficiaryLabel.includes(query);
     };
 
     const ensureRow = (key: string, label: string, typeKey: string, typeLabel: string) => {
@@ -329,24 +340,26 @@ const AdminBudgetSummary: React.FC = () => {
       const proposalType = normalizeText(proposal.beneficiaryType).toLowerCase();
       const isFacultyOrStaff = proposalType === 'faculty' || proposalType === 'staff';
       const rawType = normalizeText(proposal.beneficiaryType);
-      const typeLabel = isFacultyOrStaff || proposalType === 'department'
-        ? 'Department'
-        : (rawType ? titleCase(rawType) : 'Unknown');
+      const typeLabel =
+        isFacultyOrStaff || proposalType === 'department'
+          ? 'Department'
+          : rawType
+            ? titleCase(rawType)
+            : 'Unknown';
       const typeKey = typeLabel.toLowerCase();
 
-      const beneficiaryId = isFacultyOrStaff || typeKey === 'department'
-        ? Number(proposal.departmentId || 0)
-        : Number(proposal.beneficiaryEntityId || 0);
+      const beneficiaryId =
+        isFacultyOrStaff || typeKey === 'department'
+          ? Number(proposal.departmentId || 0)
+          : Number(proposal.beneficiaryEntityId || 0);
 
-      const label = normalizeText(proposal.beneficiaryLabel)
-        || (isFacultyOrStaff
-          ? normalizeText(proposal.departmentName)
-          : '')
-        || `Unknown ${titleCase(typeLabel)}`;
+      const label =
+        normalizeText(proposal.beneficiaryLabel) ||
+        (isFacultyOrStaff ? normalizeText(proposal.departmentName) : '') ||
+        `Unknown ${titleCase(typeLabel)}`;
 
-      const key = beneficiaryId > 0
-        ? `${typeKey}::${beneficiaryId}`
-        : `${typeKey}::${label.toLowerCase()}`;
+      const key =
+        beneficiaryId > 0 ? `${typeKey}::${beneficiaryId}` : `${typeKey}::${label.toLowerCase()}`;
 
       return { key, typeKey, typeLabel, label };
     };
@@ -358,7 +371,7 @@ const AdminBudgetSummary: React.FC = () => {
         master.key,
         master.beneficiaryLabel,
         master.beneficiaryTypeKey,
-        master.beneficiaryTypeLabel
+        master.beneficiaryTypeLabel,
       );
     });
 
@@ -394,9 +407,9 @@ const AdminBudgetSummary: React.FC = () => {
           expenditure: acc.expenditure + row.expenditure,
           balance: acc.balance + row.balance,
         }),
-        { proposed: 0, approved: 0, initial: 0, additional: 0, expenditure: 0, balance: 0 }
+        { proposed: 0, approved: 0, initial: 0, additional: 0, expenditure: 0, balance: 0 },
       ),
-    [beneficiarySummaryRows]
+    [beneficiarySummaryRows],
   );
 
   const allTypeRows = useMemo(() => {
@@ -410,7 +423,9 @@ const AdminBudgetSummary: React.FC = () => {
     });
     const preferredTypes = BENEFICIARY_TYPES.map((type) => ({
       type,
-      rows: (grouped.get(type) || []).sort((a, b) => a.beneficiaryLabel.localeCompare(b.beneficiaryLabel)),
+      rows: (grouped.get(type) || []).sort((a, b) =>
+        a.beneficiaryLabel.localeCompare(b.beneficiaryLabel),
+      ),
     }));
     const remainingTypes = [...grouped.entries()]
       .filter(([type]) => !BENEFICIARY_TYPES.includes(type))
@@ -462,16 +477,16 @@ const AdminBudgetSummary: React.FC = () => {
           <div className="adminbudgetsummary-header">
             <div className="adminbudgetsummary-header-left">
               <h1 className="adminbudgetsummary-title">Consolidated Summary</h1>
-              <span className="adminbudgetsummary-role-pill">
-                {userRoleLabel}
-              </span>
+              <span className="adminbudgetsummary-role-pill">{userRoleLabel}</span>
             </div>
             <div className="adminbudgetsummary-header-right">
               <div className="adminbudgetsummary-filter adminbudgetsummary-filter--fy">
                 <Form.Select
                   value={financialYear?.value || ''}
                   onChange={(e) => {
-                    const selected = financialYearOptions.find((option) => option.value === e.target.value) || null;
+                    const selected =
+                      financialYearOptions.find((option) => option.value === e.target.value) ||
+                      null;
                     setFinancialYear(selected);
                   }}
                   className="adminbudgetsummary-select"
@@ -489,7 +504,12 @@ const AdminBudgetSummary: React.FC = () => {
                   type="button"
                   className="adminbudgetsummary-toggle-btn"
                   onClick={toggleAllSections}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
                 >
                   {isAllExpanded ? (
                     <>
@@ -521,110 +541,201 @@ const AdminBudgetSummary: React.FC = () => {
                 You do not have access to this summary.
               </div>
             )}
-            {canAccessSummary && loading && <div className="adminbudgetsummary-state">Loading...</div>}
+            {canAccessSummary && loading && (
+              <div className="adminbudgetsummary-state">Loading...</div>
+            )}
             {canAccessSummary && !loading && error && (
-              <div className="adminbudgetsummary-state adminbudgetsummary-state--error">{error}</div>
+              <div className="adminbudgetsummary-state adminbudgetsummary-state--error">
+                {error}
+              </div>
             )}
-        {canAccessSummary && !loading && !error && (
-          <div className="adminbudgetsummary-table-section">
-            {(() => {
-              let globalIndex = 0;
-              return allTypeRows.map(({ type, rows }) => {
-                const isExpanded = expandedByType[type] ?? isAllExpanded;
-                return (
-                  <div key={type} className="adminbudgetsummary-type-section">
-                    <div className="adminbudgetsummary-type-header">
-                      <h3>{type} ({rows.length})</h3>
-                      <button
-                        type="button"
-                        className="adminbudgetsummary-section-toggle-btn"
-                        onClick={() => toggleSection(type)}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                      >
-                        {isExpanded ? (
-                          <>
-                            <ChevronUp size={16} /> Collapse
-                          </>
-                        ) : (
-                          <>
-                            <ChevronDown size={16} /> Expand
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    <div className="adminbudgetsummary-table-wrapper">
-                      <table className="adminbudgetsummary-table">
-                        {isExpanded && (
-                          <thead>
-                            <tr>
-                              <th>S.No</th>
-                              <th>Beneficiary</th>
-                              <th>Proposed</th>
-                              <th>Approved</th>
-                              <th>Initial</th>
-                              <th>Additional</th>
-                              <th>Expenditure</th>
-                              <th>Balance</th>
-                            </tr>
-                          </thead>
-                        )}
-                        {isExpanded && (
-                          <tbody>
-                            {rows.map((row) => {
-                              globalIndex += 1;
-                              return (
-                                <tr key={row.beneficiaryKey}>
-                                  <td>{globalIndex}</td>
-                                  <td>{row.beneficiaryLabel}</td>
-                                  <td>{rupeeSymbol}{formatINR(row.proposed)}</td>
-                                  <td>{rupeeSymbol}{formatINR(row.approved)}</td>
-                                  <td>{rupeeSymbol}{formatINR(row.initial)}</td>
-                                  <td>{rupeeSymbol}{formatINR(row.additional)}</td>
-                                  <td>{rupeeSymbol}{formatINR(row.expenditure)}</td>
-                                  <td>{rupeeSymbol}{formatINR(row.balance)}</td>
+            {canAccessSummary && !loading && !error && (
+              <div className="adminbudgetsummary-table-section">
+                {(() => {
+                  let globalIndex = 0;
+                  return allTypeRows.map(({ type, rows }) => {
+                    const isExpanded = expandedByType[type] ?? isAllExpanded;
+                    return (
+                      <div key={type} className="adminbudgetsummary-type-section">
+                        <div className="adminbudgetsummary-type-header">
+                          <h3>
+                            {type} ({rows.length})
+                          </h3>
+                          <button
+                            type="button"
+                            className="adminbudgetsummary-section-toggle-btn"
+                            onClick={() => toggleSection(type)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                            }}
+                          >
+                            {isExpanded ? (
+                              <>
+                                <ChevronUp size={16} /> Collapse
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown size={16} /> Expand
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <div className="adminbudgetsummary-table-wrapper">
+                          <table className="adminbudgetsummary-table">
+                            {isExpanded && (
+                              <thead>
+                                <tr>
+                                  <th>S.No</th>
+                                  <th>Beneficiary</th>
+                                  <th>Initial</th>
+                                  <th>Additional</th>
+                                  <th>Proposed</th>
+                                  <th>Approved</th>
+                                  <th>Expenditure</th>
+                                  <th>Balance</th>
                                 </tr>
-                              );
-                            })}
-                          </tbody>
-                        )}
-                        <tfoot>
-                          <tr className="adminbudgetsummary-type-total-row">
-                            <td></td>
-                            <td><strong>{type} Total</strong></td>
-                            <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.proposed, 0))}</strong></td>
-                            <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.approved, 0))}</strong></td>
-                            <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.initial, 0))}</strong></td>
-                            <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.additional, 0))}</strong></td>
-                            <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.expenditure, 0))}</strong></td>
-                            <td><strong>{rupeeSymbol}{formatINR(rows.reduce((sum, r) => sum + r.balance, 0))}</strong></td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  </div>
-                );
-              });
-            })()}
-            {allTypeRows.length > 0 && (
-              <table className="adminbudgetsummary-grand-table">
-                <tbody>
-                  <tr>
-                    <td></td>
-                    <td><strong>GRAND TOTAL</strong></td>
-                    <td><strong>{rupeeSymbol}{formatINR(summaryTotals.proposed)}</strong></td>
-                    <td><strong>{rupeeSymbol}{formatINR(summaryTotals.approved)}</strong></td>
-                    <td><strong>{rupeeSymbol}{formatINR(summaryTotals.initial)}</strong></td>
-                    <td><strong>{rupeeSymbol}{formatINR(summaryTotals.additional)}</strong></td>
-                    <td><strong>{rupeeSymbol}{formatINR(summaryTotals.expenditure)}</strong></td>
-                    <td><strong>{rupeeSymbol}{formatINR(summaryTotals.balance)}</strong></td>
-                  </tr>
-                </tbody>
-              </table>
+                              </thead>
+                            )}
+                            {isExpanded && (
+                              <tbody>
+                                {rows.map((row) => {
+                                  globalIndex += 1;
+                                  return (
+                                    <tr key={row.beneficiaryKey}>
+                                      <td>{globalIndex}</td>
+                                      <td>{row.beneficiaryLabel}</td>
+                                      <td>
+                                        {rupeeSymbol}
+                                        {formatINR(row.initial)}
+                                      </td>
+                                      <td>
+                                        {rupeeSymbol}
+                                        {formatINR(row.additional)}
+                                      </td>
+                                      <td>
+                                        {rupeeSymbol}
+                                        {formatINR(row.proposed)}
+                                      </td>
+                                      <td>
+                                        {rupeeSymbol}
+                                        {formatINR(row.approved)}
+                                      </td>
+                                      <td>
+                                        {rupeeSymbol}
+                                        {formatINR(row.expenditure)}
+                                      </td>
+                                      <td>
+                                        {rupeeSymbol}
+                                        {formatINR(row.balance)}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            )}
+                            <tfoot>
+                              <tr className="adminbudgetsummary-type-total-row">
+                                <td></td>
+                                <td>
+                                  <strong>{type} Total</strong>
+                                </td>
+                                <td>
+                                  <strong>
+                                    {rupeeSymbol}
+                                    {formatINR(rows.reduce((sum, r) => sum + r.initial, 0))}
+                                  </strong>
+                                </td>
+                                <td>
+                                  <strong>
+                                    {rupeeSymbol}
+                                    {formatINR(rows.reduce((sum, r) => sum + r.additional, 0))}
+                                  </strong>
+                                </td>
+                                <td>
+                                  <strong>
+                                    {rupeeSymbol}
+                                    {formatINR(rows.reduce((sum, r) => sum + r.proposed, 0))}
+                                  </strong>
+                                </td>
+                                <td>
+                                  <strong>
+                                    {rupeeSymbol}
+                                    {formatINR(rows.reduce((sum, r) => sum + r.approved, 0))}
+                                  </strong>
+                                </td>
+                                <td>
+                                  <strong>
+                                    {rupeeSymbol}
+                                    {formatINR(rows.reduce((sum, r) => sum + r.expenditure, 0))}
+                                  </strong>
+                                </td>
+                                <td>
+                                  <strong>
+                                    {rupeeSymbol}
+                                    {formatINR(rows.reduce((sum, r) => sum + r.balance, 0))}
+                                  </strong>
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+                {allTypeRows.length > 0 && (
+                  <table className="adminbudgetsummary-grand-table">
+                    <tbody>
+                      <tr>
+                        <td></td>
+                        <td>
+                          <strong>GRAND TOTAL</strong>
+                        </td>
+                        <td>
+                          <strong>
+                            {rupeeSymbol}
+                            {formatINR(summaryTotals.initial)}
+                          </strong>
+                        </td>
+                        <td>
+                          <strong>
+                            {rupeeSymbol}
+                            {formatINR(summaryTotals.additional)}
+                          </strong>
+                        </td>
+                        <td>
+                          <strong>
+                            {rupeeSymbol}
+                            {formatINR(summaryTotals.proposed)}
+                          </strong>
+                        </td>
+                        <td>
+                          <strong>
+                            {rupeeSymbol}
+                            {formatINR(summaryTotals.approved)}
+                          </strong>
+                        </td>
+                        <td>
+                          <strong>
+                            {rupeeSymbol}
+                            {formatINR(summaryTotals.expenditure)}
+                          </strong>
+                        </td>
+                        <td>
+                          <strong>
+                            {rupeeSymbol}
+                            {formatINR(summaryTotals.balance)}
+                          </strong>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
+              </div>
             )}
-          </div>
-        )}
-
-
           </div>
         </div>
       </div>

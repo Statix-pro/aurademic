@@ -42,7 +42,7 @@
 }
 
 .custom-tooltip .tooltip-text::after {
-  content: "";
+  content: '';
   position: absolute;
   top: 100%;
   left: 50%;
@@ -110,11 +110,11 @@
   transition: transform 0.2s ease-in-out;
 }
 
-.radio-item input[type='radio']:checked+label::before {
+.radio-item input[type='radio']:checked + label::before {
   border-color: #0069ab;
 }
 
-.radio-item input[type='radio']:checked+label::after {
+.radio-item input[type='radio']:checked + label::after {
   transform: translateY(-50%) scale(1);
 }
 
@@ -558,10 +558,10 @@ hr {
   border-radius: 50%;
 }
 
-.toggle-switch input:checked+.slider {
+.toggle-switch input:checked + .slider {
   background-color: #6a5acd;
 }
 
-.toggle-switch input:checked+.slider:before {
+.toggle-switch input:checked + .slider:before {
   transform: translateX(20px);
 }

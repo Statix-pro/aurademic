@@ -11,13 +11,13 @@ components:
           type: integer
         project_category:
           type: string
-          example: "Sponsored"
+          example: 'Sponsored'
         category:
           type: string
-          example: "Research"
+          example: 'Research'
         title:
           type: string
-          example: "AI for Health"
+          example: 'AI for Health'
         duration_years:
           type: integer
           example: 2
@@ -32,7 +32,7 @@ components:
           format: date
         submission_status:
           type: string
-          default: "waiting"
+          default: 'waiting'
         is_collaboration_enabled:
           type: boolean
           default: false
@@ -40,7 +40,7 @@ components:
           type: string
         application_number:
           type: string
-          example: "APP-2023-001"
+          example: 'APP-2023-001'
         created_at:
           type: string
           format: date-time
@@ -64,7 +64,7 @@ components:
           enum: [agency, scheme, agency_type]
         name:
           type: string
-          example: "New Agency Name"
+          example: 'New Agency Name'
         description:
           type: string
         status:
@@ -89,7 +89,7 @@ components:
           type: integer
         agency:
           type: string
-          example: "DST"
+          example: 'DST'
         amount:
           type: number
           format: float
@@ -106,10 +106,10 @@ components:
           type: integer
         fiscal_year:
           type: string
-          example: "2023-24"
+          example: '2023-24'
         agency:
           type: string
-          example: "DST"
+          example: 'DST'
         amount:
           type: number
           format: float
@@ -312,7 +312,16 @@ components:
           type: integer
         document_type:
           type: string
-          enum: [sanctionOrder, utilizationCertificate, statementOfExpenditure, projectReport, bankStatement, sanctionLetter, ucAndSoe]
+          enum:
+            [
+              sanctionOrder,
+              utilizationCertificate,
+              statementOfExpenditure,
+              projectReport,
+              bankStatement,
+              sanctionLetter,
+              ucAndSoe,
+            ]
         file_path:
           type: string
 

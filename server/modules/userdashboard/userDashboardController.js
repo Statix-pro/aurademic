@@ -49,7 +49,7 @@ const userDashboardController = {
       const { projects, total } = await userDashboardModel.getUserProjects(
         req.user.id,
         page,
-        perPage
+        perPage,
       );
 
       // Modify response structure to match frontend expectations
@@ -93,7 +93,7 @@ const userDashboardController = {
         page,
         perPage,
         status,
-        sortBy
+        sortBy,
       );
 
       // The journals array is directly what we want to send
@@ -119,10 +119,7 @@ const userDashboardController = {
   async getProjectDetails(req, res) {
     try {
       const projectId = parseInt(req.params.id);
-      const project = await userDashboardModel.getProjectDetails(
-        req.user.id,
-        projectId
-      );
+      const project = await userDashboardModel.getProjectDetails(req.user.id, projectId);
 
       // Log the full project data for debugging
       // console.log('Project Data:', project);
@@ -150,10 +147,7 @@ const userDashboardController = {
   async getJournalDetails(req, res) {
     try {
       const journalId = parseInt(req.params.id);
-      const journal = await userDashboardModel.getJournalDetails(
-        req.user.id,
-        journalId
-      );
+      const journal = await userDashboardModel.getJournalDetails(req.user.id, journalId);
 
       if (!journal) {
         return res.status(404).json({
@@ -177,10 +171,7 @@ const userDashboardController = {
 
   async deleteJournal(req, res) {
     try {
-      const result = await userDashboardModel.deleteJournal(
-        req.user.id,
-        req.params.id
-      );
+      const result = await userDashboardModel.deleteJournal(req.user.id, req.params.id);
       if (!result) {
         return res.status(404).json({
           status: 'error',
@@ -218,25 +209,26 @@ const userDashboardController = {
         page: parseInt(page),
         limit: parseInt(perpage),
         status: status || undefined,
-        fiscalYear: fiscalYear ? parseInt(fiscalYear) : undefined
+        fiscalYear: fiscalYear ? parseInt(fiscalYear) : undefined,
       });
 
       res.json({
         status: 'success',
         data: budgets.budgets,
         pagination: budgets.pagination,
-        currentFiscalYear: fiscalYear ? parseInt(fiscalYear) : BudgetModel.getCurrentFinancialYear()
+        currentFiscalYear: fiscalYear
+          ? parseInt(fiscalYear)
+          : BudgetModel.getCurrentFinancialYear(),
       });
     } catch (error) {
       console.error('Error fetching user budgets:', error);
       res.status(500).json({
         status: 'error',
         message: 'Failed to fetch budgets',
-        error: error.message
+        error: error.message,
       });
     }
   },
-
 };
 
 export default userDashboardController;

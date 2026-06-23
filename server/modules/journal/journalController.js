@@ -1,19 +1,24 @@
-import journalModel from './journalModel.js';
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
 import util from 'util';
 
+import journalModel from './journalModel.js';
+
 const rename = util.promisify(fs.rename);
-const isRequesterAdmin = (requestUser = {}) =>
-  Boolean(requestUser.isAdmin ?? requestUser.is_admin);
+const isRequesterAdmin = (requestUser = {}) => Boolean(requestUser.isAdmin ?? requestUser.is_admin);
 
 const isRequesterSuperAdmin = (requestUser = {}) => {
-  if (Boolean(requestUser.isSuperAdmin ?? requestUser.is_super_admin)) {
+  if (requestUser.isSuperAdmin ?? requestUser.is_super_admin) {
     return true;
   }
 
   const roleTokens = Array.isArray(requestUser.roles) ? requestUser.roles : [];
-  return roleTokens.some((role) => String(role || '').trim().toLowerCase() === 'super_admin');
+  return roleTokens.some(
+    (role) =>
+      String(role || '')
+        .trim()
+        .toLowerCase() === 'super_admin',
+  );
 };
 
 const hasAdminOverride = (requestUser = {}) =>
@@ -81,10 +86,17 @@ const journalController = {
       // Handle file upload if present
       if (req.files && req.files.file) {
         const file = req.files.file;
-        const uploadPath = path.join(__dirname, '../../uploads/', file.name);
+        const sanitizedFileName = `${Date.now()}-${path.basename(file.name).replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const uploadDir = path.join(process.cwd(), 'uploads');
+
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        const uploadPath = path.join(uploadDir, sanitizedFileName);
 
         await file.mv(uploadPath);
-        const filePath = `/uploads/${file.name}`;
+        const filePath = `/uploads/${sanitizedFileName}`;
         await journalModel.update(journal.id, { file_path: filePath });
       }
 
@@ -140,7 +152,7 @@ const journalController = {
       const workflowAccess = await journalModel.getJournalWorkflowAccess(
         id,
         req.user.id,
-        req.user.email
+        req.user.email,
       );
 
       if (!workflowAccess) {
@@ -162,8 +174,7 @@ const journalController = {
 
       if (!requesterHasAdminOverride && !canDirectEdit) {
         return res.status(403).json({
-          message:
-            'Direct edit is disabled for approved publications. Please request edit access.',
+          message: 'Direct edit is disabled for approved publications. Please request edit access.',
         });
       }
 
@@ -239,30 +250,23 @@ const journalController = {
       // Filter data for each table
       const journalUpdateData = Object.fromEntries(
         Object.entries(journalData).filter(
-          ([key, value]) =>
-            journalFields.includes(key) && value !== null && value !== undefined
-        )
+          ([key, value]) => journalFields.includes(key) && value !== null && value !== undefined,
+        ),
       );
 
       const journalOptionsUpdateData = Object.fromEntries(
         Object.entries(journalData).filter(
           ([key, value]) =>
-            journalOptionsFields.includes(key) &&
-            value !== null &&
-            value !== undefined
-        )
+            journalOptionsFields.includes(key) && value !== null && value !== undefined,
+        ),
       );
 
       // Handle JSON fields
       if (journalUpdateData.acknowledgement) {
-        journalUpdateData.acknowledgement = JSON.stringify(
-          journalUpdateData.acknowledgement
-        );
+        journalUpdateData.acknowledgement = JSON.stringify(journalUpdateData.acknowledgement);
       }
       if (journalUpdateData.author_affiliation) {
-        journalUpdateData.author_affiliation = JSON.stringify(
-          journalUpdateData.author_affiliation
-        );
+        journalUpdateData.author_affiliation = JSON.stringify(journalUpdateData.author_affiliation);
       }
       if (journalUpdateData.sdgs) {
         journalUpdateData.sdgs = JSON.stringify(journalUpdateData.sdgs);
@@ -272,13 +276,11 @@ const journalController = {
       }
       if (journalUpdateData.publication_details) {
         journalUpdateData.publication_details = JSON.stringify(
-          journalUpdateData.publication_details
+          journalUpdateData.publication_details,
         );
       }
       if (journalUpdateData.external_details) {
-        journalUpdateData.external_details = JSON.stringify(
-          journalUpdateData.external_details
-        );
+        journalUpdateData.external_details = JSON.stringify(journalUpdateData.external_details);
       }
 
       if (
@@ -300,15 +302,23 @@ const journalController = {
       const result = await journalModel.updateJournalAndOptions(
         id,
         journalUpdateData,
-        journalOptionsUpdateData
+        journalOptionsUpdateData,
       );
 
       // Handle file upload if present
       if (req.files && req.files.file) {
         const file = req.files.file;
-        const uploadPath = path.join(__dirname, '../uploads/', file.name);
+        const sanitizedFileName = `${Date.now()}-${path.basename(file.name).replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const uploadDir = path.join(process.cwd(), 'uploads');
+
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        const uploadPath = path.join(uploadDir, sanitizedFileName);
+
         await file.mv(uploadPath);
-        const filePath = `/uploads/${file.name}`;
+        const filePath = `/uploads/${sanitizedFileName}`;
         await journalModel.update(id, { file_path: filePath });
       }
 
@@ -332,11 +342,10 @@ const journalController = {
       const dbAuthorId = req.params.dbAuthorId;
       const { is_first_author, is_primary } = req.body;
 
-      const result = await journalModel.updateAuthorInJournal(
-        journalId,
-        dbAuthorId,
-        { is_first_author, is_primary }
-      );
+      const result = await journalModel.updateAuthorInJournal(journalId, dbAuthorId, {
+        is_first_author,
+        is_primary,
+      });
 
       if (result.affectedRows > 0) {
         res.status(200).json({ message: 'Author updated successfully' });
@@ -345,9 +354,7 @@ const journalController = {
       }
     } catch (error) {
       console.error('Error in updateAuthor:', error);
-      res
-        .status(500)
-        .json({ message: 'Error updating author', error: error.message });
+      res.status(500).json({ message: 'Error updating author', error: error.message });
     }
   },
 
@@ -359,7 +366,7 @@ const journalController = {
       const workflowAccess = await journalModel.getJournalWorkflowAccess(
         id,
         req.user.id,
-        req.user.email
+        req.user.email,
       );
 
       if (!workflowAccess) {
@@ -378,8 +385,7 @@ const journalController = {
         workflowAccess.admin_approval_status === 'approved'
       ) {
         return res.status(403).json({
-          message:
-            'Delete is disabled once publication is approved and published.',
+          message: 'Delete is disabled once publication is approved and published.',
         });
       }
 
@@ -390,9 +396,7 @@ const journalController = {
         res.status(404).json({ message: 'Journal not found' });
       }
     } catch (error) {
-      res
-        .status(500)
-        .json({ message: 'Error deleting journal', error: error.message });
+      res.status(500).json({ message: 'Error deleting journal', error: error.message });
     }
   },
 
@@ -403,9 +407,7 @@ const journalController = {
 
       if (authorData.designation === 'faculty') {
         if (!authorData.author_id) {
-          return res
-            .status(400)
-            .json({ status: 'error', message: 'Faculty ID is required' });
+          return res.status(400).json({ status: 'error', message: 'Faculty ID is required' });
         }
       } else if (authorData.designation === 'student') {
         if (
@@ -414,13 +416,11 @@ const journalController = {
           !authorData.department ||
           !authorData.organization
         ) {
-          return res
-            .status(400)
-            .json({
-              status: 'error',
-              message:
-                'Register Number, Name, Department, and Organization are required for students',
-            });
+          return res.status(400).json({
+            status: 'error',
+            message:
+              'Register Number, Name, Department, and Organization are required for students',
+          });
         }
       } else if (authorData.designation === 'external') {
         if (
@@ -429,40 +429,32 @@ const journalController = {
           !authorData.organization ||
           !authorData.country
         ) {
-          return res
-            .status(400)
-            .json({
-              status: 'error',
-              message:
-                'Name, Department, Organization, and Country are required for external authors',
-            });
+          return res.status(400).json({
+            status: 'error',
+            message:
+              'Name, Department, Organization, and Country are required for external authors',
+          });
         }
       } else {
-        return res
-          .status(400)
-          .json({
-            status: 'error',
-            message: 'Valid designation (student/faculty/external) is required',
-          });
+        return res.status(400).json({
+          status: 'error',
+          message: 'Valid designation (student/faculty/external) is required',
+        });
       }
 
       const result = await journalModel.addAuthor(journalId, authorData);
 
-      res
-        .status(201)
-        .json({
-          status: 'success',
-          message: 'Author added successfully',
-          data: result,
-        });
+      res.status(201).json({
+        status: 'success',
+        message: 'Author added successfully',
+        data: result,
+      });
     } catch (error) {
       console.error('Error adding author:', error);
-      res
-        .status(500)
-        .json({
-          status: 'error',
-          message: error.message || 'An internal server error occurred.',
-        });
+      res.status(500).json({
+        status: 'error',
+        message: error.message || 'An internal server error occurred.',
+      });
     }
   },
 
@@ -472,9 +464,7 @@ const journalController = {
       const authors = await journalModel.getAuthors(journalId);
       res.status(200).json(authors);
     } catch (error) {
-      res
-        .status(500)
-        .json({ message: 'Error retrieving authors', error: error.message });
+      res.status(500).json({ message: 'Error retrieving authors', error: error.message });
     }
   },
 
@@ -492,9 +482,7 @@ const journalController = {
       }
     } catch (error) {
       console.error('Controller error:', error);
-      res
-        .status(500)
-        .json({ message: 'Error searching for author', error: error.message });
+      res.status(500).json({ message: 'Error searching for author', error: error.message });
     }
   },
 
@@ -503,13 +491,9 @@ const journalController = {
       const { id: journalId } = req.params;
       const { indexName } = req.body;
       const result = await journalModel.addIndex(journalId, indexName);
-      res
-        .status(201)
-        .json({ message: 'Index added successfully', id: result.insertId });
+      res.status(201).json({ message: 'Index added successfully', id: result.insertId });
     } catch (error) {
-      res
-        .status(500)
-        .json({ message: 'Error adding index', error: error.message });
+      res.status(500).json({ message: 'Error adding index', error: error.message });
     }
   },
 
@@ -519,9 +503,7 @@ const journalController = {
       const indexes = await journalModel.getIndexes(journalId);
       res.status(200).json(indexes);
     } catch (error) {
-      res
-        .status(500)
-        .json({ message: 'Error retrieving indexes', error: error.message });
+      res.status(500).json({ message: 'Error retrieving indexes', error: error.message });
     }
   },
 
@@ -539,16 +521,15 @@ const journalController = {
       }
 
       const file = req.file;
-      const uploadDir = path.join(
-        process.cwd(),
-        'uploads',
-        'journalform-articles'
-      );
+      const uploadDir = path.join(process.cwd(), 'uploads', 'journalform-articles');
 
       // Ensure the final upload directory exists
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
+      // Not tested
+      // if (!fs.existsSync(uploadDir)) {
+      //   fs.mkdirSync(uploadDir, { recursive: true });
+      // }
+
+      await fs.promises.mkdir(uploadDir, { recursive: true });
 
       // Create unique filename
       const uniqueFilename = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
@@ -639,8 +620,7 @@ const journalController = {
 
       res.status(201).json({
         status: 'success',
-        message:
-          'Journal request submitted successfully. It will be reviewed by an administrator.',
+        message: 'Journal request submitted successfully. It will be reviewed by an administrator.',
         data: request,
       });
     } catch (error) {
@@ -720,14 +700,10 @@ const journalController = {
         });
       }
 
-      const statusUpdateId = await journalModel.createStatusUpdate(
-        journalId,
-        userId,
-        {
-          status: status.trim(),
-          user_comment: user_comment?.trim() || null,
-        }
-      );
+      const statusUpdateId = await journalModel.createStatusUpdate(journalId, userId, {
+        status: status.trim(),
+        user_comment: user_comment?.trim() || null,
+      });
 
       res.status(201).json({
         status: 'success',
@@ -786,7 +762,7 @@ const journalController = {
 
       const result = await journalModel.updateStatusUpdateAdminReply(
         statusUpdateId,
-        admin_reply.trim()
+        admin_reply.trim(),
       );
 
       if (result.affectedRows > 0) {

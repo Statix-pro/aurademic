@@ -1,6 +1,8 @@
-import eventDb from '../../../config/connection.js';
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
+
+import eventDb from '../../../config/connection.js';
+import { safeResolvePath } from '../../../utils/pathSecurity.js';
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 
@@ -23,14 +25,14 @@ export const getDocumentsAndParticipants = async (req, res) => {
        LEFT JOIN events_uploads u ON d.upload_id = u.id 
        WHERE d.event_id=?
        ORDER BY d.doc_name`,
-      [eventId]
+      [eventId],
     );
     const participants = await query(
       `SELECT id, type, count, count_verified 
        FROM participants 
        WHERE event_id=?
        ORDER BY type`,
-      [eventId]
+      [eventId],
     );
 
     // Transform documents for frontend compatibility
@@ -40,13 +42,13 @@ export const getDocumentsAndParticipants = async (req, res) => {
       active: Boolean(doc.active),
       upload: doc.upload_id
         ? {
-          id: doc.upload_id,
-          filename: doc.filename,
-          originalName: doc.originalName,
-          mime: doc.mime,
-          size: doc.size,
-          uploadedAt: doc.uploadedAt,
-        }
+            id: doc.upload_id,
+            filename: doc.filename,
+            originalName: doc.originalName,
+            mime: doc.mime,
+            size: doc.size,
+            uploadedAt: doc.uploadedAt,
+          }
         : null,
     }));
 
@@ -89,7 +91,7 @@ export const updateDocument = async (req, res) => {
   try {
     const existing = await query(
       'SELECT id, active, upload_id FROM documents WHERE doc_name=? AND event_id=?',
-      [docName, eventId]
+      [docName, eventId],
     );
 
     let documentId;
@@ -98,7 +100,7 @@ export const updateDocument = async (req, res) => {
     if (existing.length === 0) {
       const [result] = await eventDb.query(
         'INSERT INTO documents (doc_name, active, upload_id, event_id) VALUES (?, ?, ?, ?)',
-        [docName, active ? 1 : 0, upload_id || null, eventId]
+        [docName, active ? 1 : 0, upload_id || null, eventId],
       );
       documentId = result.insertId;
     } else {
@@ -107,10 +109,7 @@ export const updateDocument = async (req, res) => {
       const currentActive = Boolean(existing[0].active);
       const currentUploadId = existing[0].upload_id;
 
-      if (
-        currentActive !== Boolean(active) ||
-        currentUploadId !== (upload_id || null)
-      ) {
+      if (currentActive !== Boolean(active) || currentUploadId !== (upload_id || null)) {
         await query('UPDATE documents SET active=?, upload_id=? WHERE id=?', [
           active ? 1 : 0,
           upload_id || null,
@@ -128,7 +127,7 @@ export const updateDocument = async (req, res) => {
        FROM documents d
        LEFT JOIN events_uploads u ON d.upload_id = u.id 
        WHERE d.id=?`,
-      [documentId]
+      [documentId],
     );
 
     const response = {
@@ -137,13 +136,13 @@ export const updateDocument = async (req, res) => {
       active: Boolean(updated.active),
       upload: updated.upload_id
         ? {
-          id: updated.upload_id,
-          filename: updated.filename,
-          originalName: updated.originalName,
-          mime: updated.mime,
-          size: updated.size,
-          uploadedAt: updated.uploadedAt,
-        }
+            id: updated.upload_id,
+            filename: updated.filename,
+            originalName: updated.originalName,
+            mime: updated.mime,
+            size: updated.size,
+            uploadedAt: updated.uploadedAt,
+          }
         : null,
       wasCreated: existing.length === 0,
       wasUpdated,
@@ -164,9 +163,7 @@ export const upsertParticipant = async (req, res) => {
 
   try {
     // Check if event exists
-    const eventCheck = await query('SELECT id FROM events WHERE id=?', [
-      eventId,
-    ]);
+    const eventCheck = await query('SELECT id FROM events WHERE id=?', [eventId]);
     if (!eventCheck.length) {
       return res.status(404).json({ error: 'Event not found' });
     }
@@ -177,14 +174,12 @@ export const upsertParticipant = async (req, res) => {
 
     const participantCount = parseInt(count) || 0;
     if (participantCount < 0) {
-      return res
-        .status(400)
-        .json({ error: 'Participant count must be non-negative' });
+      return res.status(400).json({ error: 'Participant count must be non-negative' });
     }
 
     const existing = await query(
       'SELECT id, count, count_verified FROM participants WHERE event_id=? AND type=?',
-      [eventId, type]
+      [eventId, type],
     );
 
     let participantId;
@@ -193,22 +188,23 @@ export const upsertParticipant = async (req, res) => {
     if (existing.length === 0) {
       const [result] = await eventDb.query(
         'INSERT INTO participants (event_id, type, count, count_verified) VALUES (?, ?, ?, ?)',
-        [eventId, type, participantCount, count_verified ? 1 : 0]
+        [eventId, type, participantCount, count_verified ? 1 : 0],
       );
       participantId = result.insertId;
       wasCreated = true;
     } else {
       participantId = existing[0].id;
-      await query(
-        'UPDATE participants SET count=?, count_verified=? WHERE id=?',
-        [participantCount, count_verified ? 1 : 0, participantId]
-      );
+      await query('UPDATE participants SET count=?, count_verified=? WHERE id=?', [
+        participantCount,
+        count_verified ? 1 : 0,
+        participantId,
+      ]);
     }
 
     // Fetch all updated participants for the event
     const allParticipants = await query(
       'SELECT id, type, count, count_verified FROM participants WHERE event_id=? ORDER BY type',
-      [eventId]
+      [eventId],
     );
 
     // Transform for frontend compatibility
@@ -255,10 +251,9 @@ export const deleteParticipant = async (req, res) => {
 
   try {
     // First check if participant exists and get event_id for response
-    const [existing] = await query(
-      'SELECT event_id, type FROM participants WHERE id=?',
-      [participantId]
-    );
+    const [existing] = await query('SELECT event_id, type FROM participants WHERE id=?', [
+      participantId,
+    ]);
 
     if (!existing) {
       return res.status(404).json({ error: 'Participant not found' });
@@ -266,20 +261,16 @@ export const deleteParticipant = async (req, res) => {
 
     const eventId = existing.event_id;
 
-    const result = await query('DELETE FROM participants WHERE id=?', [
-      participantId,
-    ]);
+    const result = await query('DELETE FROM participants WHERE id=?', [participantId]);
 
     if (result.affectedRows === 0) {
-      return res
-        .status(404)
-        .json({ error: 'Participant not found or already deleted' });
+      return res.status(404).json({ error: 'Participant not found or already deleted' });
     }
 
     // Fetch remaining participants for the event
     const remainingParticipants = await query(
       'SELECT id, type, count, count_verified FROM participants WHERE event_id=? ORDER BY type',
-      [eventId]
+      [eventId],
     );
 
     // Transform for frontend compatibility
@@ -330,8 +321,8 @@ export const uploadDocumentFile = async (req, res) => {
     const maxSize = 10 * 1024 * 1024; // 10MB
     if (size > maxSize) {
       // Clean up uploaded file
-      const filepath = path.join(UPLOAD_DIR, filename);
-      if (fs.existsSync(filepath)) {
+      const filepath = safeResolvePath(UPLOAD_DIR, filename);
+      if (filepath && fs.existsSync(filepath)) {
         fs.unlinkSync(filepath);
       }
       return res.status(400).json({ error: 'File size exceeds 10MB limit' });
@@ -340,20 +331,20 @@ export const uploadDocumentFile = async (req, res) => {
     // Insert upload record
     const [uploadResult] = await eventDb.query(
       `INSERT INTO events_uploads (event_id, filename, original_name, mime, size) VALUES (?, ?, ?, ?, ?)`,
-      [eventId, filename, originalname, mimetype, size]
+      [eventId, filename, originalname, mimetype, size],
     );
 
     // Update or create document with upload_id
     const existing = await query(
       'SELECT id, active FROM documents WHERE doc_name=? AND event_id=?',
-      [docName, eventId]
+      [docName, eventId],
     );
 
     let documentId;
     if (existing.length === 0) {
-      const [docResult] = await db.query(
+      const [docResult] = await eventDb.query(
         'INSERT INTO documents (doc_name, active, upload_id, event_id) VALUES (?, ?, ?, ?)',
-        [docName, 1, uploadResult.insertId, eventId]
+        [docName, 1, uploadResult.insertId, eventId],
       );
       documentId = docResult.insertId;
     } else {
@@ -367,7 +358,7 @@ export const uploadDocumentFile = async (req, res) => {
     // Fetch the complete upload record
     const [inserted] = await query(
       'SELECT id, event_id, filename, original_name as originalName, mime, size, uploaded_at as uploadedAt FROM events_uploads WHERE id=?',
-      [uploadResult.insertId]
+      [uploadResult.insertId],
     );
 
     const response = {
@@ -397,8 +388,8 @@ export const uploadDocumentFile = async (req, res) => {
 
     // Clean up uploaded file in case of error
     if (req.file && req.file.filename) {
-      const filepath = path.join(UPLOAD_DIR, req.file.filename);
-      if (fs.existsSync(filepath)) {
+      const filepath = safeResolvePath(UPLOAD_DIR, req.file.filename);
+      if (filepath && fs.existsSync(filepath)) {
         fs.unlinkSync(filepath);
       }
     }
@@ -415,14 +406,14 @@ export const getImportantLinks = async (req, res) => {
     const mainLinks = await query(
       `SELECT registration_enabled, registration_url, feedback_enabled, feedback_url, youtube_enabled
         FROM important_links WHERE event_id=?`,
-      [eventId]
+      [eventId],
     );
 
     const links = mainLinks.length > 0 ? mainLinks[0] : {};
 
     const youtubeLinks = await query(
       'SELECT id, url, enabled, sort_order FROM youtube_links WHERE event_id=? ORDER BY sort_order',
-      [eventId]
+      [eventId],
     );
 
     const result = {
@@ -437,11 +428,11 @@ export const getImportantLinks = async (req, res) => {
       youtube:
         youtubeLinks.length > 0
           ? youtubeLinks.map((yt) => ({
-            id: yt.id,
-            enabled: Boolean(yt.enabled),
-            url: yt.url || '',
-            sort_order: yt.sort_order,
-          }))
+              id: yt.id,
+              enabled: Boolean(yt.enabled),
+              url: yt.url || '',
+              sort_order: yt.sort_order,
+            }))
           : [{ enabled: false, url: '' }],
     };
 
@@ -461,10 +452,7 @@ export const updateImportantLinks = async (req, res) => {
   try {
     await conn.beginTransaction();
 
-    const existing = await query(
-      'SELECT id FROM important_links WHERE event_id=?',
-      [eventId]
-    );
+    const existing = await query('SELECT id FROM important_links WHERE event_id=?', [eventId]);
 
     if (existing.length) {
       await conn.query(
@@ -480,7 +468,7 @@ export const updateImportantLinks = async (req, res) => {
           feedback?.url || null,
           youtube?.length > 0 && youtube[0]?.enabled ? 1 : 0,
           eventId,
-        ]
+        ],
       );
     } else {
       await conn.query(
@@ -494,7 +482,7 @@ export const updateImportantLinks = async (req, res) => {
           feedback?.enabled ? 1 : 0,
           feedback?.url || null,
           youtube?.length > 0 && youtube[0]?.enabled ? 1 : 0,
-        ]
+        ],
       );
     }
 
@@ -506,7 +494,7 @@ export const updateImportantLinks = async (req, res) => {
         if (yt.url && yt.url.trim()) {
           await conn.query(
             'INSERT INTO youtube_links (event_id, url, enabled, sort_order) VALUES (?, ?, ?, ?)',
-            [eventId, yt.url.trim(), yt.enabled ? 1 : 0, i]
+            [eventId, yt.url.trim(), yt.enabled ? 1 : 0, i],
           );
         }
       }
@@ -536,10 +524,7 @@ export const submitForApproval = async (req, res) => {
   const eventId = Number(req.params.eventId);
 
   try {
-    const eventCheck = await query(
-      'SELECT id, title, status FROM events WHERE id=?',
-      [eventId]
-    );
+    const eventCheck = await query('SELECT id, title, status FROM events WHERE id=?', [eventId]);
 
     if (!eventCheck.length) {
       return res.status(404).json({ error: 'Event not found' });
@@ -565,7 +550,7 @@ export const submitForApproval = async (req, res) => {
 
     const updateResult = await query(
       "UPDATE events SET status='submitted', updated_at=CURRENT_TIMESTAMP WHERE id=?",
-      [eventId]
+      [eventId],
     );
 
     if (updateResult.affectedRows === 0) {
@@ -586,14 +571,11 @@ export const submitForApproval = async (req, res) => {
     console.error('❌ Full error details:', err);
 
     // Handle case where status column doesn't exist yet
-    if (
-      err.message.includes('Unknown column') ||
-      err.message.includes('status')
-    ) {
+    if (err.message.includes('Unknown column') || err.message.includes('status')) {
       try {
         const updateResult = await query(
           'UPDATE events SET updated_at=CURRENT_TIMESTAMP WHERE id=?',
-          [eventId]
+          [eventId],
         );
 
         if (updateResult.affectedRows > 0) {
@@ -621,10 +603,7 @@ export const requestEdit = async (req, res) => {
   const { reason } = req.body;
 
   try {
-    const eventCheck = await query(
-      'SELECT id, title, status FROM events WHERE id=?',
-      [eventId]
-    );
+    const eventCheck = await query('SELECT id, title, status FROM events WHERE id=?', [eventId]);
 
     if (!eventCheck.length) {
       return res.status(404).json({ error: 'Event not found' });
@@ -634,7 +613,7 @@ export const requestEdit = async (req, res) => {
 
     const updateResult = await query(
       "UPDATE events SET status='draft', updated_at=CURRENT_TIMESTAMP WHERE id=?",
-      [eventId]
+      [eventId],
     );
 
     if (updateResult.affectedRows === 0) {
@@ -656,14 +635,11 @@ export const requestEdit = async (req, res) => {
     console.error('❌ Full error details:', err);
 
     // Handle case where status column doesn't exist yet
-    if (
-      err.message.includes('Unknown column') ||
-      err.message.includes('status')
-    ) {
+    if (err.message.includes('Unknown column') || err.message.includes('status')) {
       try {
         const updateResult = await query(
           'UPDATE events SET updated_at=CURRENT_TIMESTAMP WHERE id=?',
-          [eventId]
+          [eventId],
         );
 
         if (updateResult.affectedRows > 0) {
@@ -693,7 +669,7 @@ export const getEventStatus = async (req, res) => {
   try {
     const eventData = await query(
       'SELECT id, title, status, created_at, updated_at FROM events WHERE id=?',
-      [eventId]
+      [eventId],
     );
 
     if (!eventData.length) {
@@ -705,12 +681,12 @@ export const getEventStatus = async (req, res) => {
     // Get additional statistics
     const [docCount] = await query(
       'SELECT COUNT(*) as count FROM documents WHERE event_id=? AND active=1',
-      [eventId]
+      [eventId],
     );
 
     const [participantCount] = await query(
       'SELECT COALESCE(SUM(count), 0) as total FROM participants WHERE event_id=?',
-      [eventId]
+      [eventId],
     );
 
     const response = {
@@ -733,14 +709,11 @@ export const getEventStatus = async (req, res) => {
     console.error('❌ Full error details:', err);
 
     // Handle case where status column doesn't exist yet
-    if (
-      err.message.includes('Unknown column') ||
-      err.message.includes('status')
-    ) {
+    if (err.message.includes('Unknown column') || err.message.includes('status')) {
       try {
         const eventData = await query(
           'SELECT id, title, created_at, updated_at FROM events WHERE id=?',
-          [eventId]
+          [eventId],
         );
 
         if (eventData.length) {
@@ -775,9 +748,7 @@ export const deleteUpload = async (req, res) => {
   const uploadId = Number(req.params.uploadId);
 
   try {
-    const uploadData = await query('SELECT * FROM events_uploads WHERE id=?', [
-      uploadId,
-    ]);
+    const uploadData = await query('SELECT * FROM events_uploads WHERE id=?', [uploadId]);
 
     if (!uploadData.length) {
       return res.status(404).json({ error: 'Upload not found' });
@@ -786,28 +757,23 @@ export const deleteUpload = async (req, res) => {
     const uploadRecord = uploadData[0];
 
     // Check if upload is referenced by documents
-    const referencingDocs = await query(
-      'SELECT id, doc_name FROM documents WHERE upload_id=?',
-      [uploadId]
-    );
+    const referencingDocs = await query('SELECT id, doc_name FROM documents WHERE upload_id=?', [
+      uploadId,
+    ]);
 
     if (referencingDocs.length > 0) {
       // Clear references before deletion
-      await query('UPDATE documents SET upload_id=NULL WHERE upload_id=?', [
-        uploadId,
-      ]);
+      await query('UPDATE documents SET upload_id=NULL WHERE upload_id=?', [uploadId]);
     }
 
     // Remove physical file
-    const filepath = path.join(UPLOAD_DIR, uploadRecord.filename);
-    if (fs.existsSync(filepath)) {
+    const filepath = safeResolvePath(UPLOAD_DIR, uploadRecord.filename);
+    if (filepath && fs.existsSync(filepath)) {
       fs.unlinkSync(filepath);
     }
 
     // Remove database record
-    const deleteResult = await query('DELETE FROM events_uploads WHERE id=?', [
-      uploadId,
-    ]);
+    const deleteResult = await query('DELETE FROM events_uploads WHERE id=?', [uploadId]);
 
     res.json({
       success: true,
@@ -834,7 +800,7 @@ export const getUploadDetails = async (req, res) => {
     const uploadData = await query(
       `SELECT id, event_id, filename, original_name, mime, size, uploaded_at
         FROM events_uploads WHERE id=?`,
-      [uploadId]
+      [uploadId],
     );
 
     if (!uploadData.length) {
@@ -844,10 +810,9 @@ export const getUploadDetails = async (req, res) => {
     const upload = uploadData[0];
 
     // Check if upload is used by documents
-    const referencingDocs = await query(
-      'SELECT id, doc_name FROM documents WHERE upload_id=?',
-      [uploadId]
-    );
+    const referencingDocs = await query('SELECT id, doc_name FROM documents WHERE upload_id=?', [
+      uploadId,
+    ]);
 
     const response = {
       upload: {
@@ -888,7 +853,7 @@ export const getDocumentByName = async (req, res) => {
         FROM documents d
         LEFT JOIN events_uploads u ON d.upload_id = u.id
         WHERE d.event_id=? AND d.doc_name=?`,
-      [eventId, docName]
+      [eventId, docName],
     );
 
     if (!docData.length) {
@@ -902,13 +867,13 @@ export const getDocumentByName = async (req, res) => {
       active: Boolean(doc.active),
       upload: doc.upload_id
         ? {
-          id: doc.upload_id,
-          filename: doc.filename,
-          originalName: doc.originalName,
-          mime: doc.mime,
-          size: doc.size,
-          uploadedAt: doc.uploadedAt,
-        }
+            id: doc.upload_id,
+            filename: doc.filename,
+            originalName: doc.originalName,
+            mime: doc.mime,
+            size: doc.size,
+            uploadedAt: doc.uploadedAt,
+          }
         : null,
     };
 
@@ -928,7 +893,7 @@ export const bulkUpdateDocuments = async (req, res) => {
     return res.status(400).json({ error: 'Documents array is required' });
   }
 
-  const conn = await db.getConnection();
+  const conn = await eventDb.getConnection();
   try {
     await conn.beginTransaction();
 
@@ -943,19 +908,20 @@ export const bulkUpdateDocuments = async (req, res) => {
 
       const existing = await query(
         'SELECT id, active FROM documents WHERE doc_name=? AND event_id=?',
-        [docName, eventId]
+        [docName, eventId],
       );
 
       if (existing.length) {
-        await conn.query(
-          'UPDATE documents SET active=?, upload_id=? WHERE id=?',
-          [active ? 1 : 0, upload_id || null, existing[0].id]
-        );
+        await conn.query('UPDATE documents SET active=?, upload_id=? WHERE id=?', [
+          active ? 1 : 0,
+          upload_id || null,
+          existing[0].id,
+        ]);
         results.push({ docName, action: 'updated', id: existing[0].id });
       } else {
         const [result] = await conn.query(
           'INSERT INTO documents (doc_name, active, upload_id, event_id) VALUES (?, ?, ?, ?)',
-          [docName, active ? 1 : 0, upload_id || null, eventId]
+          [docName, active ? 1 : 0, upload_id || null, eventId],
         );
         results.push({ docName, action: 'created', id: result.insertId });
       }

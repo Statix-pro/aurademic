@@ -1,6 +1,8 @@
-import eventDb from '../../../config/connection.js';
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
+
+import eventDb from '../../../config/connection.js';
+import { safeResolvePath } from '../../../utils/pathSecurity.js';
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 
@@ -24,19 +26,16 @@ export const getEventDetails = async (req, res) => {
 
     // Fetch publicity data
     const publicity =
-      (await query('SELECT * FROM publicity WHERE event_id=?', [eventId]))[0] ||
-      null;
+      (await query('SELECT * FROM publicity WHERE event_id=?', [eventId]))[0] || null;
 
     // Fetch resource persons with location field
     const resourcePersons = await query(
       'SELECT id, name, designation, organization, email, linkedin, location FROM resource_persons WHERE event_id=?',
-      [eventId]
+      [eventId],
     );
 
     // Fetch letters organized by sections
-    const letters = await query('SELECT * FROM letters WHERE event_id=?', [
-      eventId,
-    ]);
+    const letters = await query('SELECT * FROM letters WHERE event_id=?', [eventId]);
 
     // Organize letters by sections for frontend compatibility
     const predefinedSections = [
@@ -53,27 +52,24 @@ export const getEventDetails = async (req, res) => {
       const letterData = letters.find((l) => l.section_name === section);
       lettersData[section] = letterData
         ? {
-          id: letterData.id,
-          active: Boolean(letterData.active),
-          mode: letterData.mode || 'Letter/ Email',
-          date: letterData.letter_date,
-          upload_id: letterData.upload_id,
-          file: null, // Will be populated if upload_id exists
-        }
+            id: letterData.id,
+            active: Boolean(letterData.active),
+            mode: letterData.mode || 'Letter/ Email',
+            date: letterData.letter_date,
+            upload_id: letterData.upload_id,
+            file: null, // Will be populated if upload_id exists
+          }
         : {
-          active: false,
-          mode: 'Letter/ Email',
-          date: null,
-          upload_id: null,
-          file: null,
-        };
+            active: false,
+            mode: 'Letter/ Email',
+            date: null,
+            upload_id: null,
+            file: null,
+          };
     });
 
     // Fetch uploads/files
-    const uploads = await query(
-      'SELECT * FROM events_uploads WHERE event_id=?',
-      [eventId]
-    );
+    const uploads = await query('SELECT * FROM events_uploads WHERE event_id=?', [eventId]);
 
     // Map uploads to letters data
     uploads.forEach((upload) => {
@@ -96,25 +92,20 @@ export const getEventDetails = async (req, res) => {
              FROM documents d
              LEFT JOIN events_uploads u ON d.upload_id = u.id
              WHERE d.event_id=?`,
-      [eventId]
+      [eventId],
     );
 
     // Fetch participants
-    const participants = await query(
-      'SELECT * FROM participants WHERE event_id=?',
-      [eventId]
-    );
+    const participants = await query('SELECT * FROM participants WHERE event_id=?', [eventId]);
 
     // Fetch important links
     const importantLinks =
-      (
-        await query('SELECT * FROM important_links WHERE event_id=?', [eventId])
-      )[0] || null;
+      (await query('SELECT * FROM important_links WHERE event_id=?', [eventId]))[0] || null;
 
     // Fetch YouTube links
     const youtubeLinks = await query(
       'SELECT * FROM youtube_links WHERE event_id=? ORDER BY sort_order',
-      [eventId]
+      [eventId],
     );
 
     // Format response for frontend compatibility
@@ -138,12 +129,12 @@ export const getEventDetails = async (req, res) => {
         active: Boolean(doc.active),
         file: doc.filename
           ? {
-            id: doc.upload_id,
-            filename: doc.filename,
-            original_name: doc.original_name,
-            mime: doc.mime,
-            size: doc.size,
-          }
+              id: doc.upload_id,
+              filename: doc.filename,
+              original_name: doc.original_name,
+              mime: doc.mime,
+              size: doc.size,
+            }
           : null,
       })),
       participants: participants.map((p) => ({
@@ -154,12 +145,12 @@ export const getEventDetails = async (req, res) => {
       })),
       importantLinks: importantLinks
         ? {
-          registration_enabled: Boolean(importantLinks.registration_enabled),
-          registration_url: importantLinks.registration_url,
-          feedback_enabled: Boolean(importantLinks.feedback_enabled),
-          feedback_url: importantLinks.feedback_url,
-          youtube_enabled: Boolean(importantLinks.youtube_enabled),
-        }
+            registration_enabled: Boolean(importantLinks.registration_enabled),
+            registration_url: importantLinks.registration_url,
+            feedback_enabled: Boolean(importantLinks.feedback_enabled),
+            feedback_url: importantLinks.feedback_url,
+            youtube_enabled: Boolean(importantLinks.youtube_enabled),
+          }
         : null,
       youtubeLinks,
     };
@@ -204,31 +195,21 @@ export const updatePublicity = async (req, res) => {
       return res.status(400).json({ error: 'No valid fields provided' });
     }
 
-    const existing = await query('SELECT id FROM publicity WHERE event_id=?', [
-      eventId,
-    ]);
+    const existing = await query('SELECT id FROM publicity WHERE event_id=?', [eventId]);
 
     if (existing.length) {
       values.push(eventId);
-      await query(
-        `UPDATE publicity SET ${updates.join(',')} WHERE event_id=?`,
-        values
-      );
+      await query(`UPDATE publicity SET ${updates.join(',')} WHERE event_id=?`, values);
     } else {
-      const cols = [
-        'event_id',
-        ...allowed.filter((k) => req.body.hasOwnProperty(k)),
-      ];
+      const cols = ['event_id', ...allowed.filter((k) => req.body.hasOwnProperty(k))];
       const vals = [eventId, ...values];
       await query(
         `INSERT INTO publicity (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`,
-        vals
+        vals,
       );
     }
 
-    const updated = (
-      await query('SELECT * FROM publicity WHERE event_id=?', [eventId])
-    )[0];
+    const updated = (await query('SELECT * FROM publicity WHERE event_id=?', [eventId]))[0];
 
     res.json({
       success: true,
@@ -256,12 +237,10 @@ export const addResourcePerson = async (req, res) => {
     const r = await query(
       `INSERT INTO resource_persons (event_id, name, designation, organization, email, linkedin, location)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [eventId, name, designation, organization, email, linkedin, location]
+      [eventId, name, designation, organization, email, linkedin, location],
     );
 
-    const inserted = (
-      await query('SELECT * FROM resource_persons WHERE id=?', [r.insertId])
-    )[0];
+    const inserted = (await query('SELECT * FROM resource_persons WHERE id=?', [r.insertId]))[0];
 
     res.status(201).json({
       success: true,
@@ -287,14 +266,7 @@ export const updateResourcePerson = async (req, res) => {
 
     const fields = [],
       vals = [];
-    [
-      'name',
-      'designation',
-      'organization',
-      'email',
-      'linkedin',
-      'location',
-    ].forEach((k) => {
+    ['name', 'designation', 'organization', 'email', 'linkedin', 'location'].forEach((k) => {
       if (k in req.body) {
         fields.push(`${k}=?`);
         vals.push(req.body[k]);
@@ -306,14 +278,9 @@ export const updateResourcePerson = async (req, res) => {
     }
 
     vals.push(pid);
-    await query(
-      `UPDATE resource_persons SET ${fields.join(',')} WHERE id=?`,
-      vals
-    );
+    await query(`UPDATE resource_persons SET ${fields.join(',')} WHERE id=?`, vals);
 
-    const updated = (
-      await query('SELECT * FROM resource_persons WHERE id=?', [pid])
-    )[0];
+    const updated = (await query('SELECT * FROM resource_persons WHERE id=?', [pid]))[0];
 
     res.json({
       success: true,
@@ -337,9 +304,7 @@ export const deleteResourcePerson = async (req, res) => {
   try {
     const pid = Number(req.params.pid);
 
-    const result = await query('DELETE FROM resource_persons WHERE id=?', [
-      pid,
-    ]);
+    const result = await query('DELETE FROM resource_persons WHERE id=?', [pid]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Resource person not found' });
@@ -362,26 +327,21 @@ export const upsertLetter = async (req, res) => {
       return res.status(400).json({ error: 'section_name required' });
     }
 
-    const existing = await query(
-      'SELECT * FROM letters WHERE event_id=? AND section_name=?',
-      [eventId, section_name]
-    );
+    const existing = await query('SELECT * FROM letters WHERE event_id=? AND section_name=?', [
+      eventId,
+      section_name,
+    ]);
 
     if (existing.length) {
-      await query(
-        `UPDATE letters SET active=?, mode=?, letter_date=?, upload_id=? WHERE id=?`,
-        [
-          active ? 1 : 0,
-          mode || 'Letter/ Email',
-          letter_date || null,
-          upload_id || null,
-          existing[0].id,
-        ]
-      );
+      await query(`UPDATE letters SET active=?, mode=?, letter_date=?, upload_id=? WHERE id=?`, [
+        active ? 1 : 0,
+        mode || 'Letter/ Email',
+        letter_date || null,
+        upload_id || null,
+        existing[0].id,
+      ]);
 
-      const updated = (
-        await query('SELECT * FROM letters WHERE id=?', [existing[0].id])
-      )[0];
+      const updated = (await query('SELECT * FROM letters WHERE id=?', [existing[0].id]))[0];
 
       res.json({
         success: true,
@@ -405,12 +365,10 @@ export const upsertLetter = async (req, res) => {
           mode || 'Letter/ Email',
           letter_date || null,
           upload_id || null,
-        ]
+        ],
       );
 
-      const inserted = (
-        await query('SELECT * FROM letters WHERE id=?', [r.insertId])
-      )[0];
+      const inserted = (await query('SELECT * FROM letters WHERE id=?', [r.insertId]))[0];
 
       res.status(201).json({
         success: true,
@@ -440,10 +398,10 @@ export const upsertDocument = async (req, res) => {
       return res.status(400).json({ error: 'doc_name required' });
     }
 
-    const existing = await query(
-      'SELECT * FROM documents WHERE event_id=? AND doc_name=?',
-      [eventId, doc_name]
-    );
+    const existing = await query('SELECT * FROM documents WHERE event_id=? AND doc_name=?', [
+      eventId,
+      doc_name,
+    ]);
 
     if (existing.length) {
       await query('UPDATE documents SET active=?, upload_id=? WHERE id=?', [
@@ -452,19 +410,15 @@ export const upsertDocument = async (req, res) => {
         existing[0].id,
       ]);
 
-      const updated = (
-        await query('SELECT * FROM documents WHERE id=?', [existing[0].id])
-      )[0];
+      const updated = (await query('SELECT * FROM documents WHERE id=?', [existing[0].id]))[0];
       res.json({ success: true, document: updated });
     } else {
       const r = await query(
         'INSERT INTO documents (event_id, doc_name, active, upload_id) VALUES (?, ?, ?, ?)',
-        [eventId, doc_name, active ? 1 : 0, upload_id || null]
+        [eventId, doc_name, active ? 1 : 0, upload_id || null],
       );
 
-      const inserted = (
-        await query('SELECT * FROM documents WHERE id=?', [r.insertId])
-      )[0];
+      const inserted = (await query('SELECT * FROM documents WHERE id=?', [r.insertId]))[0];
       res.status(201).json({ success: true, document: inserted });
     }
   } catch (err) {
@@ -483,30 +437,27 @@ export const upsertParticipant = async (req, res) => {
       return res.status(400).json({ error: 'type required' });
     }
 
-    const existing = await query(
-      'SELECT * FROM participants WHERE event_id=? AND type=?',
-      [eventId, type]
-    );
+    const existing = await query('SELECT * FROM participants WHERE event_id=? AND type=?', [
+      eventId,
+      type,
+    ]);
 
     if (existing.length) {
-      await query(
-        'UPDATE participants SET count=?, count_verified=? WHERE id=?',
-        [parseInt(count) || 0, count_verified ? 1 : 0, existing[0].id]
-      );
+      await query('UPDATE participants SET count=?, count_verified=? WHERE id=?', [
+        parseInt(count) || 0,
+        count_verified ? 1 : 0,
+        existing[0].id,
+      ]);
 
-      const updated = (
-        await query('SELECT * FROM participants WHERE id=?', [existing[0].id])
-      )[0];
+      const updated = (await query('SELECT * FROM participants WHERE id=?', [existing[0].id]))[0];
       res.json({ success: true, participant: updated });
     } else {
       const r = await query(
         'INSERT INTO participants (event_id, type, count, count_verified) VALUES (?, ?, ?, ?)',
-        [eventId, type, parseInt(count) || 0, count_verified ? 1 : 0]
+        [eventId, type, parseInt(count) || 0, count_verified ? 1 : 0],
       );
 
-      const inserted = (
-        await query('SELECT * FROM participants WHERE id=?', [r.insertId])
-      )[0];
+      const inserted = (await query('SELECT * FROM participants WHERE id=?', [r.insertId]))[0];
       res.status(201).json({ success: true, participant: inserted });
     }
   } catch (err) {
@@ -527,10 +478,7 @@ export const upsertImportantLinks = async (req, res) => {
       youtube_enabled,
     } = req.body;
 
-    const existing = await query(
-      'SELECT id FROM important_links WHERE event_id=?',
-      [eventId]
-    );
+    const existing = await query('SELECT id FROM important_links WHERE event_id=?', [eventId]);
 
     if (existing.length) {
       await query(
@@ -543,7 +491,7 @@ export const upsertImportantLinks = async (req, res) => {
           feedback_url || null,
           youtube_enabled ? 1 : 0,
           eventId,
-        ]
+        ],
       );
     } else {
       await query(
@@ -556,13 +504,11 @@ export const upsertImportantLinks = async (req, res) => {
           feedback_enabled ? 1 : 0,
           feedback_url || null,
           youtube_enabled ? 1 : 0,
-        ]
+        ],
       );
     }
 
-    const updated = (
-      await query('SELECT * FROM important_links WHERE event_id=?', [eventId])
-    )[0];
+    const updated = (await query('SELECT * FROM important_links WHERE event_id=?', [eventId]))[0];
     res.json({ success: true, importantLinks: updated });
   } catch (err) {
     console.error('❌ Error in upsertImportantLinks:', err.message);
@@ -582,12 +528,10 @@ export const addYouTubeLink = async (req, res) => {
 
     const r = await query(
       'INSERT INTO youtube_links (event_id, url, enabled, sort_order) VALUES (?, ?, ?, ?)',
-      [eventId, url, enabled ? 1 : 0, parseInt(sort_order) || 0]
+      [eventId, url, enabled ? 1 : 0, parseInt(sort_order) || 0],
     );
 
-    const inserted = (
-      await query('SELECT * FROM youtube_links WHERE id=?', [r.insertId])
-    )[0];
+    const inserted = (await query('SELECT * FROM youtube_links WHERE id=?', [r.insertId]))[0];
     res.status(201).json({ success: true, youtubeLink: inserted });
   } catch (err) {
     console.error('❌ Error in addYouTubeLink:', err.message);
@@ -607,12 +551,10 @@ export const handleUpload = async (req, res) => {
 
     const r = await query(
       `INSERT INTO events_uploads (event_id, filename, original_name, mime, size) VALUES (?, ?, ?, ?, ?)`,
-      [eventId, filename, originalname, mimetype, size]
+      [eventId, filename, originalname, mimetype, size],
     );
 
-    const inserted = (
-      await query('SELECT * FROM events_uploads WHERE id=?', [r.insertId])
-    )[0];
+    const inserted = (await query('SELECT * FROM events_uploads WHERE id=?', [r.insertId]))[0];
 
     res.status(201).json({
       success: true,
@@ -634,8 +576,8 @@ export const deleteUpload = async (req, res) => {
       return res.status(404).json({ error: 'Upload not found' });
     }
 
-    const filepath = path.join(UPLOAD_DIR, rows[0].filename);
-    if (fs.existsSync(filepath)) {
+    const filepath = safeResolvePath(UPLOAD_DIR, rows[0].filename);
+    if (filepath && fs.existsSync(filepath)) {
       fs.unlinkSync(filepath);
     }
 

@@ -31,12 +31,15 @@ export const parseJsonValue = (value, fallback = null) => {
   }
 };
 
-const uniqueStringArray = (values = []) =>
-  [...new Set(values.map((value) => normalizeText(value)).filter(Boolean))];
+const uniqueStringArray = (values = []) => [
+  ...new Set(values.map((value) => normalizeText(value)).filter(Boolean)),
+];
 
 export const validateFlowArray = (flow, { field = 'flow' } = {}) => {
   const parsed = parseJsonValue(flow, flow);
-  const stages = Array.isArray(parsed) ? parsed.map((stage) => normalizeText(stage).toLowerCase()) : [];
+  const stages = Array.isArray(parsed)
+    ? parsed.map((stage) => normalizeText(stage).toLowerCase())
+    : [];
 
   if (!stages.length) {
     throw new WorkflowError(`${field} must be a non-empty array`, 500, 'INVALID_WORKFLOW_FLOW');
@@ -47,7 +50,7 @@ export const validateFlowArray = (flow, { field = 'flow' } = {}) => {
       throw new WorkflowError(
         `${field} contains invalid stage key: ${stage}`,
         500,
-        'INVALID_WORKFLOW_STAGE_KEY'
+        'INVALID_WORKFLOW_STAGE_KEY',
       );
     }
   }
@@ -58,7 +61,7 @@ export const validateFlowArray = (flow, { field = 'flow' } = {}) => {
     throw new WorkflowError(
       `${field} contains duplicate stage keys`,
       500,
-      'DUPLICATE_WORKFLOW_STAGE_KEY'
+      'DUPLICATE_WORKFLOW_STAGE_KEY',
     );
   }
 
@@ -73,7 +76,7 @@ export const validateDecision = (decision) => {
     throw new WorkflowError(
       `Invalid workflow decision: ${decision}`,
       400,
-      'INVALID_WORKFLOW_DECISION'
+      'INVALID_WORKFLOW_DECISION',
     );
   }
 
@@ -91,7 +94,11 @@ export const validateWorkflowMeta = (meta = {}) => {
   let requestId = null;
   if (payload.requestId !== undefined && payload.requestId !== null) {
     if (typeof payload.requestId !== 'string') {
-      throw new WorkflowError('workflow meta.requestId must be string or null', 400, 'INVALID_WORKFLOW_META');
+      throw new WorkflowError(
+        'workflow meta.requestId must be string or null',
+        400,
+        'INVALID_WORKFLOW_META',
+      );
     }
     requestId = normalizeText(payload.requestId) || null;
   }
@@ -100,23 +107,28 @@ export const validateWorkflowMeta = (meta = {}) => {
   if (payload.moduleMetaVersion !== undefined && payload.moduleMetaVersion !== null) {
     const moduleMetaVersionValue = Number.parseInt(payload.moduleMetaVersion, 10);
     if (!Number.isInteger(moduleMetaVersionValue) || moduleMetaVersionValue <= 0) {
-      throw new WorkflowError('workflow meta.moduleMetaVersion must be a positive integer', 400, 'INVALID_WORKFLOW_META');
+      throw new WorkflowError(
+        'workflow meta.moduleMetaVersion must be a positive integer',
+        400,
+        'INVALID_WORKFLOW_META',
+      );
     }
     moduleMetaVersion = moduleMetaVersionValue;
   }
 
   const moduleMetaRaw = payload.moduleMeta ?? null;
-  const moduleMeta = moduleMetaRaw === null
-    ? null
-    : typeof moduleMetaRaw === 'object' && !Array.isArray(moduleMetaRaw)
-      ? moduleMetaRaw
-      : null;
+  const moduleMeta =
+    moduleMetaRaw === null
+      ? null
+      : typeof moduleMetaRaw === 'object' && !Array.isArray(moduleMetaRaw)
+        ? moduleMetaRaw
+        : null;
 
   if (moduleMetaRaw !== null && moduleMeta === null) {
     throw new WorkflowError(
       'workflow meta.moduleMeta must be an object or null',
       400,
-      'INVALID_WORKFLOW_META'
+      'INVALID_WORKFLOW_META',
     );
   }
 
@@ -137,14 +149,18 @@ export const validateStagePolicyMeta = ({ scopeType, meta }) => {
       throw new WorkflowError(
         'workflow stage policy meta must be null for global scope',
         500,
-        'INVALID_STAGE_POLICY_META'
+        'INVALID_STAGE_POLICY_META',
       );
     }
     return null;
   }
 
   if (!['department', 'entity'].includes(normalizedScopeType)) {
-    throw new WorkflowError(`Unsupported workflow scope type: ${scopeType}`, 500, 'INVALID_SCOPE_TYPE');
+    throw new WorkflowError(
+      `Unsupported workflow scope type: ${scopeType}`,
+      500,
+      'INVALID_SCOPE_TYPE',
+    );
   }
 
   const payload = parseJsonValue(meta, meta);
@@ -153,7 +169,7 @@ export const validateStagePolicyMeta = ({ scopeType, meta }) => {
     throw new WorkflowError(
       `workflow stage policy meta is required for ${normalizedScopeType} scope`,
       500,
-      'INVALID_STAGE_POLICY_META'
+      'INVALID_STAGE_POLICY_META',
     );
   }
 
@@ -161,7 +177,7 @@ export const validateStagePolicyMeta = ({ scopeType, meta }) => {
     throw new WorkflowError(
       'workflow stage policy meta.assignmentRoleCodes must be an array',
       500,
-      'INVALID_STAGE_POLICY_META'
+      'INVALID_STAGE_POLICY_META',
     );
   }
 
@@ -169,7 +185,7 @@ export const validateStagePolicyMeta = ({ scopeType, meta }) => {
     throw new WorkflowError(
       'workflow stage policy meta.assignmentRoleCodes must contain only strings',
       500,
-      'INVALID_STAGE_POLICY_META'
+      'INVALID_STAGE_POLICY_META',
     );
   }
 
@@ -177,12 +193,12 @@ export const validateStagePolicyMeta = ({ scopeType, meta }) => {
     throw new WorkflowError(
       'workflow stage policy meta.requireAssignment must be a boolean',
       500,
-      'INVALID_STAGE_POLICY_META'
+      'INVALID_STAGE_POLICY_META',
     );
   }
 
   const assignmentRoleCodes = uniqueStringArray(payload.assignmentRoleCodes).map((roleCode) =>
-    roleCode.toLowerCase()
+    roleCode.toLowerCase(),
   );
   const requireAssignment = payload.requireAssignment;
 
@@ -203,5 +219,7 @@ export const isSuperAdminActor = (actor = {}) => {
 
 export const normalizePermissionSet = (actor = {}) => {
   const permissions = Array.isArray(actor.permissions) ? actor.permissions : [];
-  return new Set(permissions.map((permission) => normalizeText(permission)).filter(Boolean));
+  return new Set(
+    permissions.map((permission) => normalizeText(permission).toLowerCase()).filter(Boolean),
+  );
 };

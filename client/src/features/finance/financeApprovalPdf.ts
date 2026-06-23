@@ -73,15 +73,28 @@ export const numberToIndianWords = (num: number): string => {
   if (num === 0) return 'Zero rupees only';
 
   const a = [
-    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six',
-    'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve',
-    'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
-    'Seventeen', 'Eighteen', 'Nineteen',
+    '',
+    'One',
+    'Two',
+    'Three',
+    'Four',
+    'Five',
+    'Six',
+    'Seven',
+    'Eight',
+    'Nine',
+    'Ten',
+    'Eleven',
+    'Twelve',
+    'Thirteen',
+    'Fourteen',
+    'Fifteen',
+    'Sixteen',
+    'Seventeen',
+    'Eighteen',
+    'Nineteen',
   ];
-  const b = [
-    '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty',
-    'Sixty', 'Seventy', 'Eighty', 'Ninety',
-  ];
+  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 
   const inWordsBelowThousand = (n: number): string => {
     let str = '';
@@ -124,7 +137,8 @@ export const numberToIndianWords = (num: number): string => {
     result += inWordsBelowThousand(n);
   }
 
-  const titleCased = result.trim()
+  const titleCased = result
+    .trim()
     .replace(/\b\w/g, (l) => l.toUpperCase())
     .replace(/[A-Z]{2,}/g, (m) => m.charAt(0) + m.slice(1).toLowerCase());
 
@@ -196,8 +210,12 @@ const getWorkflowDecisionLabel = (update: any): string => {
 };
 
 const getWorkflowActorLabel = (update: any, fallback = '-'): string => {
-  const name = String(getWorkflowField(update, ['userName', 'user_name', 'actorName', 'actor_name'])).trim();
-  const email = String(getWorkflowField(update, ['actorEmail', 'actor_email', 'email', 'userEmail', 'user_email'])).trim();
+  const name = String(
+    getWorkflowField(update, ['userName', 'user_name', 'actorName', 'actor_name']),
+  ).trim();
+  const email = String(
+    getWorkflowField(update, ['actorEmail', 'actor_email', 'email', 'userEmail', 'user_email']),
+  ).trim();
 
   if (name) return name;
   if (email) return email;
@@ -218,7 +236,9 @@ const parseWorkflowDetails = (rawDetails: any): any => {
 };
 
 const getWorkflowUpdateSummary = (update: any) => {
-  const summary = normalizeWorkflowText(getWorkflowField(update, ['summary', 'comment', 'feedback']));
+  const summary = normalizeWorkflowText(
+    getWorkflowField(update, ['summary', 'comment', 'feedback']),
+  );
   const details = parseWorkflowDetails(update?.details);
   if (!details) {
     return {
@@ -273,40 +293,40 @@ const getWorkflowUpdateSummary = (update: any) => {
 
 export const getWorkflowTimeline = (
   updates: any[],
-  fallback?: { name: string; email: string; date: string }
+  fallback?: { name: string; email: string; date: string },
 ): WorkflowTimelineEntry[] => {
   if (!Array.isArray(updates) || updates.length === 0) {
     return fallback
-      ? [{
-        label: 'Submitted',
-        actor: fallback.name || fallback.email || '-',
-        email: fallback.email || '',
-        timestamp: fallback.date || '',
-        stage: '',
-      }]
+      ? [
+          {
+            label: 'Submitted',
+            actor: fallback.name || fallback.email || '-',
+            email: fallback.email || '',
+            timestamp: fallback.date || '',
+            stage: '',
+          },
+        ]
       : [];
   }
 
-  const currentFlowUpdates = updates
-    .slice()
-    .sort((left, right) => {
-      const leftTime = parseWorkflowDateMs(
-        getWorkflowField(left, ['decidedAt', 'decided_at', 'createdAt', 'created_at'])
-      );
-      const rightTime = parseWorkflowDateMs(
-        getWorkflowField(right, ['decidedAt', 'decided_at', 'createdAt', 'created_at'])
-      );
+  const currentFlowUpdates = updates.slice().sort((left, right) => {
+    const leftTime = parseWorkflowDateMs(
+      getWorkflowField(left, ['decidedAt', 'decided_at', 'createdAt', 'created_at']),
+    );
+    const rightTime = parseWorkflowDateMs(
+      getWorkflowField(right, ['decidedAt', 'decided_at', 'createdAt', 'created_at']),
+    );
 
-      // Keep malformed/undated rows at the end so valid history stays chronological.
-      if (leftTime === null && rightTime === null) {
-        return (Number(left?.id) || 0) - (Number(right?.id) || 0);
-      }
-      if (leftTime === null) return 1;
-      if (rightTime === null) return -1;
-
-      if (leftTime !== rightTime) return leftTime - rightTime;
+    // Keep malformed/undated rows at the end so valid history stays chronological.
+    if (leftTime === null && rightTime === null) {
       return (Number(left?.id) || 0) - (Number(right?.id) || 0);
-    });
+    }
+    if (leftTime === null) return 1;
+    if (rightTime === null) return -1;
+
+    if (leftTime !== rightTime) return leftTime - rightTime;
+    return (Number(left?.id) || 0) - (Number(right?.id) || 0);
+  });
 
   const timeline = currentFlowUpdates
     .map((update, idx) => {
@@ -317,9 +337,17 @@ export const getWorkflowTimeline = (
         key: `${label.toLowerCase()}-${update?.id || idx}`,
         label,
         actor: getWorkflowActorLabel(update),
-        email: String(getWorkflowField(update, ['actorEmail', 'actor_email', 'email', 'userEmail', 'user_email'])).trim(),
+        email: String(
+          getWorkflowField(update, [
+            'actorEmail',
+            'actor_email',
+            'email',
+            'userEmail',
+            'user_email',
+          ]),
+        ).trim(),
         timestamp: formatWorkflowTimestamp(
-          getWorkflowField(update, ['decidedAt', 'decided_at', 'createdAt', 'created_at'])
+          getWorkflowField(update, ['decidedAt', 'decided_at', 'createdAt', 'created_at']),
         ),
         stage: String(getWorkflowField(update, ['stage', 'role'])).toLowerCase(),
         decision,
@@ -336,25 +364,30 @@ export const getWorkflowTimeline = (
     .filter((item): item is WorkflowTimelineEntry => Boolean(item));
 
   if (timeline.length === 0 && fallback) {
-    return [{
-      label: 'Submitted',
-      actor: fallback.name || fallback.email || '-',
-      email: fallback.email || '',
-      timestamp: fallback.date || '',
-      stage: '',
-    }];
+    return [
+      {
+        label: 'Submitted',
+        actor: fallback.name || fallback.email || '-',
+        email: fallback.email || '',
+        timestamp: fallback.date || '',
+        stage: '',
+      },
+    ];
   }
 
   return timeline;
 };
 
-export const formatWorkflowPersonText = (name?: string, mail?: string, timestamp?: string): string => {
+export const formatWorkflowPersonText = (
+  name?: string,
+  mail?: string,
+  timestamp?: string,
+): string => {
   const trimmedName = String(name || '').trim();
   const trimmedMail = String(mail || '').trim();
   const trimmedTime = String(timestamp || '').trim();
   const actorAlreadyHasMail =
-    trimmedMail.length > 0 &&
-    trimmedName.toLowerCase().includes(trimmedMail.toLowerCase());
+    trimmedMail.length > 0 && trimmedName.toLowerCase().includes(trimmedMail.toLowerCase());
 
   const displayName = trimmedName || '-';
   const displayMail = trimmedMail && !actorAlreadyHasMail ? ` (${trimmedMail})` : '';
@@ -366,16 +399,57 @@ export const formatWorkflowPersonText = (name?: string, mail?: string, timestamp
 export const getSubmittedTimestamp = (
   timeline: WorkflowTimelineEntry[],
   fallbackDate?: string,
-  fallbackToCurrent = false
+  fallbackToCurrent = false,
 ): string => {
   const explicitFallback = String(fallbackDate || '').trim();
   if (explicitFallback) return explicitFallback;
 
-  const submittedEntry = timeline.find((entry) => entry.label === 'Submitted' && String(entry.timestamp || '').trim());
+  const submittedEntry = timeline.find(
+    (entry) => entry.label === 'Submitted' && String(entry.timestamp || '').trim(),
+  );
   if (submittedEntry) return submittedEntry.timestamp;
 
   return fallbackToCurrent ? getCurrentWorkflowTimestamp() : '';
 };
+
+const getWorkflowDecisionText = (entry: WorkflowTimelineEntry): string => {
+  const stageToken = String(entry.stage || '').toLowerCase();
+  if (entry.label === 'Approved') {
+    return stageToken.includes('principal') ? 'Approved by' : 'Recommended by';
+  }
+  return `${entry.label} by`;
+};
+
+const getLatestApprovalEntry = (
+  approvalHistory: WorkflowTimelineEntry[],
+  stageKeys: string[],
+): WorkflowTimelineEntry | null => {
+  const stages = stageKeys.map((stage) => String(stage || '').toLowerCase());
+  const approved = approvalHistory.filter((entry) => {
+    const stage = String(entry.stage || '').toLowerCase();
+    const decision = String(entry.decision || '').toLowerCase();
+    return (
+      stages.includes(stage) &&
+      entry.label === 'Approved' &&
+      (decision === 'approved' || decision.includes('approved') || !decision)
+    );
+  });
+
+  return approved.length ? approved[approved.length - 1] : null;
+};
+
+const formatSeniorApprovalRow = (
+  actionLabel: 'Recommended by' | 'Approved by',
+  entry: WorkflowTimelineEntry | null,
+): any[] | null =>
+  entry
+    ? [
+        {
+          content: `${actionLabel} ${formatWorkflowPersonText(entry.actor, entry.email, entry.timestamp)}`,
+          colSpan: 2,
+        },
+      ]
+    : null;
 
 export const getAnnexureOpenUrl = (row: FinancePdfAnnexureRow, baseUrl: string): string => {
   const sourceUrl = String(row.previewUrl || row.filePath || '').trim();
@@ -386,7 +460,10 @@ export const getAnnexureOpenUrl = (row: FinancePdfAnnexureRow, baseUrl: string):
   return `${baseUrl}${sourceUrl}`;
 };
 
-const triggerPdfDownload = (bytes: ArrayBuffer | Uint8Array, fileName = 'FinanceApprovalRequest.pdf') => {
+const triggerPdfDownload = (
+  bytes: ArrayBuffer | Uint8Array,
+  fileName = 'FinanceApprovalRequest.pdf',
+) => {
   let blobPart: BlobPart;
   if (bytes instanceof Uint8Array) {
     const backingBuffer = bytes.buffer;
@@ -418,7 +495,7 @@ const mergeAndDownloadPdfWithAnnexures = async (
   annexureFiles: FinancePdfAnnexureRow[],
   baseUrl: string,
   authToken?: string | null,
-  fileName = 'FinanceApprovalRequest.pdf'
+  fileName = 'FinanceApprovalRequest.pdf',
 ): Promise<string[]> => {
   const annexures = annexureFiles.filter((row) => String(row.filePath || '').trim());
   if (!annexures.length) {
@@ -434,7 +511,9 @@ const mergeAndDownloadPdfWithAnnexures = async (
   const skippedFiles: string[] = [];
 
   for (const annexure of annexures) {
-    const fileLabel = String(annexure.originalName || annexure.storedName || annexure.filePath || 'Annexure').trim();
+    const fileLabel = String(
+      annexure.originalName || annexure.storedName || annexure.filePath || 'Annexure',
+    ).trim();
     const annexureUrl = getAnnexureOpenUrl(annexure, baseUrl);
     if (!annexureUrl) {
       skippedFiles.push(fileLabel);
@@ -450,7 +529,11 @@ const mergeAndDownloadPdfWithAnnexures = async (
       const mimeType = String(annexure.mimeType || '').toLowerCase();
       const isPdf = mimeType.includes('pdf') || lowerName.endsWith('.pdf');
       const isPng = mimeType.includes('png') || lowerName.endsWith('.png');
-      const isJpg = mimeType.includes('jpeg') || mimeType.includes('jpg') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg');
+      const isJpg =
+        mimeType.includes('jpeg') ||
+        mimeType.includes('jpg') ||
+        lowerName.endsWith('.jpg') ||
+        lowerName.endsWith('.jpeg');
 
       if (isPdf) {
         const annexurePdf = await PDFDocument.load(annexureBytes);
@@ -515,7 +598,9 @@ interface GenerateFinancePdfInput {
   fileName?: string;
 }
 
-export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInput): Promise<string[]> => {
+export const generateAndDownloadFinancePdf = async (
+  input: GenerateFinancePdfInput,
+): Promise<string[]> => {
   const {
     applicantName,
     requestDate,
@@ -580,17 +665,26 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     margin: { left: margin, right: margin },
     theme: 'grid',
     tableWidth,
-    styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.3, valign: 'middle' },
+    styles: {
+      fontSize: 9,
+      cellPadding: 2,
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+      valign: 'middle',
+    },
     columnStyles: {
       0: { cellWidth: 22, halign: 'center' },
       1: { cellWidth: tableWidth - 22 - 22, halign: 'center' },
       2: { cellWidth: 22, halign: 'center' },
     },
-    body: [[
-      { content: '', styles: { minCellHeight: 22 } },
-      { content: '', styles: { minCellHeight: 22 } },
-      { content: '', styles: { minCellHeight: 22 } },
-    ]],
+    body: [
+      [
+        { content: '', styles: { minCellHeight: 22 } },
+        { content: '', styles: { minCellHeight: 22 } },
+        { content: '', styles: { minCellHeight: 22 } },
+      ],
+    ],
     didDrawCell: (data: any) => {
       if (data.column.index === 0 && data.row.index === 0 && compressedLogo) {
         const logoSize = 15;
@@ -604,12 +698,16 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
 
         pdf.setFontSize(16);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('K.S.RANGASAMY COLLEGE OF TECHNOLOGY', cellCenterX, cellCenterY - 4, { align: 'center' });
+        pdf.text('K.S.RANGASAMY COLLEGE OF TECHNOLOGY', cellCenterX, cellCenterY - 4, {
+          align: 'center',
+        });
 
         pdf.setFontSize(9);
         pdf.setFont('helvetica', 'normal');
         pdf.text('(Autonomous)', cellCenterX, cellCenterY + 1, { align: 'center' });
-        pdf.text('Tiruchengode - 637 215, Namakkal Dt. Tamil Nadu', cellCenterX, cellCenterY + 6, { align: 'center' });
+        pdf.text('Tiruchengode - 637 215, Namakkal Dt. Tamil Nadu', cellCenterX, cellCenterY + 6, {
+          align: 'center',
+        });
       }
       if (data.column.index === 2 && data.row.index === 0) {
         const cellCenterX = data.cell.x + data.cell.width / 2;
@@ -639,8 +737,14 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     ['Name', applicantName || '', 'Date', formattedDate],
     ['Department', department || '', 'Designation', designation || ''],
     ['Email', email || '', 'Mobile', mobile || ''],
-    [{ content: 'Beneficiary', styles: { fontStyle: 'bold' } }, { content: beneficiaryText, colSpan: 3 }],
-    [{ content: 'Description', styles: { fontStyle: 'bold' } }, { content: description || '', colSpan: 3 }],
+    [
+      { content: 'Beneficiary', styles: { fontStyle: 'bold' } },
+      { content: beneficiaryText, colSpan: 3 },
+    ],
+    [
+      { content: 'Description', styles: { fontStyle: 'bold' } },
+      { content: description || '', colSpan: 3 },
+    ],
     [
       { content: 'Head of Accounts', styles: { fontStyle: 'bold' } },
       { content: headOfAccountsText },
@@ -654,7 +758,14 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     margin: { left: margin, right: margin },
     theme: 'grid',
     tableWidth,
-    styles: { fontSize: 10, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, valign: 'middle' },
+    styles: {
+      fontSize: 10,
+      cellPadding: 2,
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.25,
+      valign: 'middle',
+    },
     columnStyles: {
       0: { cellWidth: 34, fontStyle: 'bold' },
       1: { cellWidth: 79 },
@@ -672,28 +783,37 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     if (showUnplannedBudget && isLastRow) {
       return [
         [
-          { content: String(index + 1), rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
+          {
+            content: String(index + 1),
+            rowSpan: 2,
+            styles: { halign: 'center', valign: 'middle' },
+          },
           row.category || '',
           row.head || '',
           'Rs. ' + Number(row.amount || 0),
         ],
         [
-          { content: `Unplanned Budget: ${unplannedBudgetDescription || ''}`, colSpan: 2, styles: { fontStyle: 'bold', overflow: 'linebreak' } },
+          {
+            content: `Unplanned Expenditure: ${unplannedBudgetDescription || ''}`,
+            colSpan: 2,
+            styles: { fontStyle: 'bold', overflow: 'linebreak' },
+          },
           'Rs. ' + Number(unplannedBudgetAmount || 0),
-        ]
+        ],
       ];
     }
 
-    return [[
-      String(index + 1),
-      row.category || '',
-      row.head || '',
-      'Rs. ' + Number(row.amount || 0),
-    ]];
+    return [
+      [String(index + 1), row.category || '', row.head || '', 'Rs. ' + Number(row.amount || 0)],
+    ];
   });
 
   budgetTableBody.push([
-    { content: 'Total Budget:', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' as const } } as any,
+    {
+      content: 'Total Budget:',
+      colSpan: 3,
+      styles: { fontStyle: 'bold', halign: 'right' as const },
+    } as any,
     { content: 'Rs. ' + totalBudget, styles: { fontStyle: 'bold' } },
   ]);
 
@@ -708,14 +828,28 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
       textColor: [0, 0, 0],
       lineColor: [0, 0, 0],
       lineWidth: 0.25,
-      valign: 'middle'
+      valign: 'middle',
     },
-    head: [[
-      { content: 'S.No', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-      { content: 'Budget Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-      { content: 'Sub Head', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-      { content: 'Amount', styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] } },
-    ]],
+    head: [
+      [
+        {
+          content: 'S.No',
+          styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] },
+        },
+        {
+          content: 'Budget Head',
+          styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] },
+        },
+        {
+          content: 'Sub Head',
+          styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] },
+        },
+        {
+          content: 'Amount',
+          styles: { fontStyle: 'bold', halign: 'center', fillColor: [245, 245, 245] },
+        },
+      ],
+    ],
     body: budgetTableBody as any,
     columnStyles: {
       0: { cellWidth: 16, halign: 'center' },
@@ -737,14 +871,21 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     margin: { left: margin, right: margin },
     theme: 'grid',
     tableWidth,
-    styles: { fontSize: 10, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, halign: 'center' },
+    styles: {
+      fontSize: 10,
+      cellPadding: 2,
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.25,
+      halign: 'center',
+    },
     body: [['Rupees in Words: ' + amountInWords]],
   });
 
   yPos = (pdf as any).lastAutoTable.finalY;
 
   if (showIncomeSection) {
-    const incomeTableBody = incomeRows.flatMap((row, index) => ([
+    const incomeTableBody = incomeRows.flatMap((row, index) => [
       [
         { content: String(index + 1), rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
         { content: row.incomeSource || '' },
@@ -753,25 +894,39 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
         { content: row.remarks || '' },
       ],
       [
-        { content: `Contribution${row.contribution ? ` - ${row.contribution}` : ''}`, colSpan: 1, styles: { fontStyle: 'bold' } },
-        { content: `Credit Account: ${row.creditAccount || ''}`, colSpan: 3, styles: { overflow: 'linebreak' } },
+        {
+          content: `Contribution${row.contribution ? ` - ${row.contribution}` : ''}`,
+          colSpan: 1,
+          styles: { fontStyle: 'bold' },
+        },
+        {
+          content: `Credit Account: ${row.creditAccount || ''}`,
+          colSpan: 3,
+          styles: { overflow: 'linebreak' },
+        },
       ],
-    ]));
+    ]);
 
     autoTable(pdf, {
       startY: yPos,
       margin: { left: margin, right: margin },
       theme: 'grid',
       tableWidth,
-      styles: { fontSize: 10, cellPadding: 2, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25, valign: 'middle' },
-      head: [[
-        'S.No',
-        'Income Source',
-        'Status',
-        'Amount',
-        'Remarks',
-      ]],
-      headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+      styles: {
+        fontSize: 10,
+        cellPadding: 2,
+        textColor: [0, 0, 0],
+        lineColor: [0, 0, 0],
+        lineWidth: 0.25,
+        valign: 'middle',
+      },
+      head: [['S.No', 'Income Source', 'Status', 'Amount', 'Remarks']],
+      headStyles: {
+        fillColor: [245, 245, 245],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        halign: 'center',
+      },
       columnStyles: {
         0: { cellWidth: 16, halign: 'center' },
         1: { cellWidth: 40, halign: 'center' },
@@ -785,35 +940,44 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     yPos = (pdf as any).lastAutoTable.finalY;
   }
 
-  const approvalSteps = approvalHistory.filter((entry) =>
-    entry.label === 'Approved' &&
-    !(totalBudget > 10000 && (String(entry.stage).includes('principal') || String(entry.stage).includes('chairman')))
+  const approvalSteps = approvalHistory.filter(
+    (entry) =>
+      entry.label === 'Approved' &&
+      !(
+        totalBudget > 10000 &&
+        (String(entry.stage).includes('principal') || String(entry.stage).includes('chairman'))
+      ),
   );
   const submittedByUi = approvalHistory.find((entry) => entry.label === 'Submitted') || submittedBy;
   const showSeniorApprovalRow = totalBudget > 10000;
+  const principalApprovalEntry = getLatestApprovalEntry(approvalHistory, ['principal']);
+  const chairmanApprovalEntry = getLatestApprovalEntry(approvalHistory, ['chairman']);
   const seniorApprovalRows = showSeniorApprovalRow
-    ? [[
-      {
-        content: 'Principal',
-        styles: { halign: 'left', fontStyle: 'bold', minCellHeight: 15, fontSize: 11 },
-      },
-      {
-        content: 'Chairman',
-        styles: { halign: 'left', fontStyle: 'bold', minCellHeight: 15, fontSize: 11 },
-      },
-
-    ],
-    ]
+    ? [
+        formatSeniorApprovalRow('Recommended by', principalApprovalEntry),
+        formatSeniorApprovalRow('Approved by', chairmanApprovalEntry),
+      ].filter((row): row is any[] => Boolean(row))
     : [];
   const digitalSignRows: any[] = [
-    [{ content: 'Submission and Approval Status', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'center' } }],
-    [{ content: `Submitted by ${formatWorkflowPersonText(submittedByUi.actor, submittedByUi.email, submittedByUi.timestamp)}`, colSpan: 2 }],
-    ...approvalSteps.map((entry) => ([
+    [
       {
-        content: `${entry.label} by ${formatWorkflowPersonText(entry.actor, entry.email, entry.timestamp)}`,
+        content: 'Submission and Approval Status',
+        colSpan: 2,
+        styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'center' },
+      },
+    ],
+    [
+      {
+        content: `Submitted by ${formatWorkflowPersonText(submittedByUi.actor, submittedByUi.email, submittedByUi.timestamp)}`,
         colSpan: 2,
       },
-    ])),
+    ],
+    ...approvalSteps.map((entry) => [
+      {
+        content: `${getWorkflowDecisionText(entry)} ${formatWorkflowPersonText(entry.actor, entry.email, entry.timestamp)}`,
+        colSpan: 2,
+      },
+    ]),
     ...(approvalHistory.length === 0
       ? [[{ content: 'No approval history available', colSpan: 2 }]]
       : []),
@@ -825,7 +989,13 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     margin: { left: margin, right: margin },
     theme: 'grid',
     tableWidth,
-    styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.25 },
+    styles: {
+      fontSize: 9,
+      cellPadding: 3,
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.25,
+    },
     head: [],
     columnStyles: {
       0: { cellWidth: tableWidth / 2, halign: 'left' },
@@ -839,14 +1009,17 @@ export const generateAndDownloadFinancePdf = async (input: GenerateFinancePdfInp
     pdf.setPage(i);
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
-    pdf.text('Page ' + i, pageWidth - margin, pdf.internal.pageSize.getHeight() - 6, { align: 'right' });
+    pdf.text('Page ' + i, pageWidth - margin, pdf.internal.pageSize.getHeight() - 6, {
+      align: 'right',
+    });
   }
 
   const primaryPdfBuffer = pdf.output('arraybuffer');
-  return mergeAndDownloadPdfWithAnnexures(primaryPdfBuffer, annexureFiles, baseUrl, authToken, fileName);
+  return mergeAndDownloadPdfWithAnnexures(
+    primaryPdfBuffer,
+    annexureFiles,
+    baseUrl,
+    authToken,
+    fileName,
+  );
 };
-
-
-
-
-

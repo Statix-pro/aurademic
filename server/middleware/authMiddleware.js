@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+
 import accessControlModel from '../modules/accessControl/accessControlModel.js';
 
 const extractToken = (req) => {
@@ -49,12 +50,17 @@ const uniqueStringArray = (values = []) => [
     values
       .filter((value) => typeof value === 'string')
       .map((value) => value.trim())
-      .filter(Boolean)
+      .filter(Boolean),
   ),
 ];
 
 const normalizeDecodedUser = (decoded) => {
   const userId = decoded.userId || decoded.id;
+  const decodedRoles = Array.isArray(decoded.roles)
+    ? decoded.roles
+    : decoded.role
+      ? [decoded.role]
+      : [];
 
   return {
     id: userId,
@@ -62,10 +68,8 @@ const normalizeDecodedUser = (decoded) => {
     name: decoded.name,
     isAdmin: Boolean(decoded.isAdmin ?? decoded.is_admin),
     isSuperAdmin: Boolean(decoded.isSuperAdmin ?? decoded.is_super_admin),
-    roles: uniqueStringArray(Array.isArray(decoded.roles) ? decoded.roles : []),
-    permissions: uniqueStringArray(
-      Array.isArray(decoded.permissions) ? decoded.permissions : []
-    ),
+    roles: uniqueStringArray(decodedRoles),
+    permissions: uniqueStringArray(Array.isArray(decoded.permissions) ? decoded.permissions : []),
   };
 };
 
@@ -75,9 +79,15 @@ const normalizeRequestUser = (requestUser = {}) => ({
   name: requestUser.name,
   isAdmin: Boolean(requestUser.isAdmin ?? requestUser.is_admin),
   isSuperAdmin: Boolean(requestUser.isSuperAdmin ?? requestUser.is_super_admin),
-  roles: uniqueStringArray(Array.isArray(requestUser.roles) ? requestUser.roles : []),
+  roles: uniqueStringArray(
+    Array.isArray(requestUser.roles)
+      ? requestUser.roles
+      : requestUser.role
+        ? [requestUser.role]
+        : [],
+  ),
   permissions: uniqueStringArray(
-    Array.isArray(requestUser.permissions) ? requestUser.permissions : []
+    Array.isArray(requestUser.permissions) ? requestUser.permissions : [],
   ),
 });
 
@@ -88,6 +98,7 @@ const toRequestUser = (user) => ({
   isAdmin: Boolean(user.isAdmin),
   isSuperAdmin: Boolean(user.isSuperAdmin),
   roles: uniqueStringArray(user.roles),
+  role: uniqueStringArray(user.roles)[0] || null,
   permissions: uniqueStringArray(user.permissions),
   authorizationResolved: Boolean(user.authorizationResolved),
   // Backward compatibility for older handlers/components
@@ -100,14 +111,10 @@ const mergeAuthorizationSnapshot = async (user) => {
     return user;
   }
 
-  const authorization = await accessControlModel.getUserAuthorizationSnapshot(
-    user.id
-  );
+  const authorization = await accessControlModel.getUserAuthorizationSnapshot(user.id);
 
   const roles =
-    authorization.roles.length > 0
-      ? authorization.roles
-      : uniqueStringArray(user.roles);
+    authorization.roles.length > 0 ? authorization.roles : uniqueStringArray(user.roles);
   const permissions =
     authorization.permissions.length > 0
       ? authorization.permissions
@@ -156,6 +163,24 @@ const ensureLatestUserAuthorization = async (req, res) => {
   });
 
   return req.user;
+};
+
+export const authorizationSnapshotMiddleware = async (req, res, next) => {
+  try {
+    const user = await ensureLatestUserAuthorization(req, res);
+
+    if (!user) {
+      return;
+    }
+
+    return next();
+  } catch (error) {
+    console.error('Authorization snapshot refresh error:', error);
+
+    return res.status(500).json({
+      message: 'Failed to validate permissions',
+    });
+  }
 };
 
 export const authMiddleware = (req, res, next) => {
@@ -239,14 +264,9 @@ export const superAdminMiddleware = async (req, res, next) => {
   }
 };
 
-export const permissionMiddleware = (
-  requiredPermissions,
-  { requireAll = false } = {}
-) => {
+export const permissionMiddleware = (requiredPermissions, { requireAll = false } = {}) => {
   const requiredPermissionList = uniqueStringArray(
-    Array.isArray(requiredPermissions)
-      ? requiredPermissions
-      : [requiredPermissions]
+    Array.isArray(requiredPermissions) ? requiredPermissions : [requiredPermissions],
   );
 
   return async (req, res, next) => {

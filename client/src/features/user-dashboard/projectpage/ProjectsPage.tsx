@@ -54,9 +54,9 @@ const ProjectsPage: React.FC = () => {
     try {
       setLoading(true);
 
-      const response = await authenticityUtility.get('/dashboard/projects', {
+      const response = (await authenticityUtility.get('/dashboard/projects', {
         params: { page, per_page: perPage },
-      }) as ProjectsResponse;
+      })) as ProjectsResponse;
 
       if (response?.data && Array.isArray(response.data)) {
         setProjects(response.data);
@@ -80,20 +80,30 @@ const ProjectsPage: React.FC = () => {
 
   const fetchKpiData = async () => {
     try {
-      const response = await authenticityUtility.get('/dashboard/projects', {
+      const response = (await authenticityUtility.get('/dashboard/projects', {
         params: { page: 1, per_page: 1000 },
-      }) as ProjectsResponse;
+      })) as ProjectsResponse;
 
       if (response && Array.isArray(response.data)) {
         const kpis: KpiData = {
           ongoing: response.data.filter(
-            (item) => item.submission_status === 'approved' || item.submission_status === 'ongoing' || item.submission_status === 'active'
+            (item) =>
+              item.submission_status === 'approved' ||
+              item.submission_status === 'ongoing' ||
+              item.submission_status === 'active',
           ).length,
           completed: response.data.filter(
-            (item) => item.submission_status === 'completed' || item.submission_status === 'finished' || item.submission_status === 'closed'
+            (item) =>
+              item.submission_status === 'completed' ||
+              item.submission_status === 'finished' ||
+              item.submission_status === 'closed',
           ).length,
           pending: response.data.filter(
-            (item) => item.submission_status === 'waiting' || item.submission_status === 'pending' || item.submission_status === 'draft' || item.submission_status === 'under_review'
+            (item) =>
+              item.submission_status === 'waiting' ||
+              item.submission_status === 'pending' ||
+              item.submission_status === 'draft' ||
+              item.submission_status === 'under_review',
           ).length,
           total: response.data.length,
         };
@@ -136,7 +146,6 @@ const ProjectsPage: React.FC = () => {
 
   return (
     <div>
-
       <div className="body-mode-dashboard projects-page container-fluid">
         <div className="row">
           <div className="col-12 main-content">
@@ -160,28 +169,36 @@ const ProjectsPage: React.FC = () => {
 
               <div className="kpi-cards">
                 <div className="kpi-card">
-                  <div className="kpi-icon"><i className="fas fa-play-circle"></i></div>
+                  <div className="kpi-icon">
+                    <i className="fas fa-play-circle"></i>
+                  </div>
                   <div className="kpi-content">
                     <span className="kpi-label">Ongoing</span>
                     <span className="kpi-value">{kpiData.ongoing}</span>
                   </div>
                 </div>
                 <div className="kpi-card">
-                  <div className="kpi-icon"><i className="fas fa-check-circle"></i></div>
+                  <div className="kpi-icon">
+                    <i className="fas fa-check-circle"></i>
+                  </div>
                   <div className="kpi-content">
                     <span className="kpi-label">Completed</span>
                     <span className="kpi-value">{kpiData.completed}</span>
                   </div>
                 </div>
                 <div className="kpi-card">
-                  <div className="kpi-icon"><i className="fas fa-clock"></i></div>
+                  <div className="kpi-icon">
+                    <i className="fas fa-clock"></i>
+                  </div>
                   <div className="kpi-content">
                     <span className="kpi-label">Pending</span>
                     <span className="kpi-value">{kpiData.pending}</span>
                   </div>
                 </div>
                 <div className="kpi-card">
-                  <div className="kpi-icon"><i className="fas fa-folder"></i></div>
+                  <div className="kpi-icon">
+                    <i className="fas fa-folder"></i>
+                  </div>
                   <div className="kpi-content">
                     <span className="kpi-label">Total</span>
                     <span className="kpi-value">{kpiData.total}</span>
@@ -193,7 +210,9 @@ const ProjectsPage: React.FC = () => {
             <div className="research-details">
               <div className="research-details-header">
                 <h5 className="research-details-title">List of Details</h5>
-                <button className="add-btn" onClick={handleAdd}>Add +</button>
+                <button className="add-btn" onClick={handleAdd}>
+                  Add +
+                </button>
               </div>
 
               <div className="research-grid">
@@ -214,7 +233,9 @@ const ProjectsPage: React.FC = () => {
                             <span className="detail-separator">•</span>
                             <span className="detail-item">
                               <span className="detail-label">Agency:</span>
-                              <span className="detail-value">{project.agency_name || 'Not specified'}</span>
+                              <span className="detail-value">
+                                {project.agency_name || 'Not specified'}
+                              </span>
                             </span>
                             <span className="detail-separator">•</span>
                             <span className="detail-item">
@@ -224,7 +245,9 @@ const ProjectsPage: React.FC = () => {
                             <span className="detail-separator">•</span>
                             <span className="detail-item">
                               <span className="detail-label">Amount:</span>
-                              <span className="detail-value">{project.sanction_order_amount || 'Not set'}</span>
+                              <span className="detail-value">
+                                {project.sanction_order_amount || 'Not set'}
+                              </span>
                             </span>
                             <span className="detail-separator">•</span>
                             <span className="detail-item">
@@ -233,38 +256,69 @@ const ProjectsPage: React.FC = () => {
                                 {project.duration_years ? `${project.duration_years}y` : ''}
                                 {project.duration_months ? ` ${project.duration_months}m` : ''}
                                 {project.duration_days ? ` ${project.duration_days}d` : ''}
-                                {!project.duration_years && !project.duration_months && !project.duration_days && 'Not specified'}
+                                {!project.duration_years &&
+                                  !project.duration_months &&
+                                  !project.duration_days &&
+                                  'Not specified'}
                               </span>
                             </span>
                           </div>
                         </div>
 
                         {/* Right side: ID, Actions, Status */}
-                        <div className="metadata-fixed-column text-end" style={{ minWidth: '220px', flexShrink: 0 }}>
+                        <div
+                          className="metadata-fixed-column text-end"
+                          style={{ minWidth: '220px', flexShrink: 0 }}
+                        >
                           {/* ID Row at top */}
                           <div className="d-flex justify-content-end align-items-center mb-2">
-                            <span className="research-id" aria-label={`Project ID ${project.id}`}>{project.id}</span>
+                            <span className="research-id" aria-label={`Project ID ${project.id}`}>
+                              {project.id}
+                            </span>
                           </div>
 
                           {/* Action buttons */}
-                          <div className="research-actions mb-3 d-flex justify-content-end align-items-center" role="group" aria-label="Project actions">
-                            <button className="action-btn view-btn" onClick={() => handleView(project.id)} title="View project details" aria-label="View project details">
+                          <div
+                            className="research-actions mb-3 d-flex justify-content-end align-items-center"
+                            role="group"
+                            aria-label="Project actions"
+                          >
+                            <button
+                              className="action-btn view-btn"
+                              onClick={() => handleView(project.id)}
+                              title="View project details"
+                              aria-label="View project details"
+                            >
                               <i className="fas fa-eye" aria-hidden="true"></i>
                             </button>
-                            <button className="action-btn share-btn" title="Share project" aria-label="Share project">
+                            <button
+                              className="action-btn share-btn"
+                              title="Share project"
+                              aria-label="Share project"
+                            >
                               <i className="fas fa-link" aria-hidden="true"></i>
                             </button>
-                            <button className="action-btn edit-btn" title="Edit project" aria-label="Edit project">
+                            <button
+                              className="action-btn edit-btn"
+                              title="Edit project"
+                              aria-label="Edit project"
+                            >
                               <i className="fas fa-edit" aria-hidden="true"></i>
                             </button>
-                            <button className="action-btn delete-btn" title="Delete project" aria-label="Delete project">
+                            <button
+                              className="action-btn delete-btn"
+                              title="Delete project"
+                              aria-label="Delete project"
+                            >
                               <i className="fas fa-trash" aria-hidden="true"></i>
                             </button>
                           </div>
 
                           {/* Status and Date - Stacked */}
                           <div className="d-flex flex-column align-items-end gap-1">
-                            <span className={`status-badge status-${project.submission_status?.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}>
+                            <span
+                              className={`status-badge status-${project.submission_status?.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                            >
                               {project.submission_status}
                             </span>
                             <span className="text-muted" style={{ fontSize: '0.75rem' }}>
@@ -287,9 +341,21 @@ const ProjectsPage: React.FC = () => {
                   <option value={20}>20 per page</option>
                   <option value={50}>50 per page</option>
                 </select>
-                <span>Page {currentPage} of {totalPages || 1}</span>
-                <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}>Previous</button>
-                <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages || totalPages === 0}>Next</button>
+                <span>
+                  Page {currentPage} of {totalPages || 1}
+                </span>
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                >
+                  Next
+                </button>
               </div>
             </div>
           </div>
@@ -300,4 +366,3 @@ const ProjectsPage: React.FC = () => {
 };
 
 export default ProjectsPage;
-

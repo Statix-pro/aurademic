@@ -7,9 +7,9 @@ import('./server.js')
     console.log('Successfully loaded ES Module server.js via wrapper.');
     // Your server.js should handle its own logging like 'listening on port...'
   })
-  .catch(err => {
+  .catch((err) => {
     // Log any error that occurs during the dynamic import
     console.error('Error dynamically importing server.js from wrapper:', err);
     // Exit the process with an error code so iisnode knows it failed
-    process.exit(1); 
+    process.exit(1);
   });

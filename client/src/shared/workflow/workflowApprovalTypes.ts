@@ -8,6 +8,7 @@ export interface WorkflowMeta {
   permittedStages: string[];
   isSuperAdmin: boolean;
   availableBeneficiaryTypes?: string[];
+  availableFiscalYears?: number[];
 }
 
 export interface WorkflowTimelineItem {
@@ -37,9 +38,19 @@ export interface WorkflowQueueResult<TRecord extends Record<string, any> = Recor
   total: number;
   page: number;
   limit: number;
+  statusCounts?: {
+    total: number;
+    pending: number;
+    approved: number;
+    returned: number;
+    rejected: number;
+    archived: number;
+  };
 }
 
-export interface WorkflowApprovalModuleConfig<TRecord extends Record<string, any> = Record<string, any>> {
+export interface WorkflowApprovalModuleConfig<
+  TRecord extends Record<string, any> = Record<string, any>,
+> {
   moduleKey: string;
   title: string;
   apiBasePath: string;
@@ -53,6 +64,14 @@ export interface WorkflowApprovalModuleConfig<TRecord extends Record<string, any
   getQueueEndpoint?: (stage: string) => string;
   getApprovalEndpoint?: (id: number | string) => string;
   getTimelineEndpoint?: (id: number | string) => string;
+  getViewRoute?: (id: number | string) => string;
+  getEditRoute?: (id: number | string) => string;
+  enablePdfPreview?: boolean;
+  enableSuperAdminDelete?: boolean;
+  enableLevel1RoleTabs?: boolean;
+  enableSuperAdminAllProposals?: boolean;
+  enableSecondaryFilter?: boolean;
+  deleteEntityLabel?: string;
   queueParams?: {
     page?: number;
     limit?: number;

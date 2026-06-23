@@ -1,0 +1,112 @@
+tags:
+  - name: Master Data
+    description: Department registries, organizational entities, and employee profiles administration
+
+paths:
+  /master-data/departments:
+    get:
+      summary: Retrieve all departments (requires super admin)
+      tags: [Master Data]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of departments
+
+    post:
+      summary: Create a new department
+      tags: [Master Data]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - code
+              properties:
+                name:
+                  type: string
+                code:
+                  type: string
+      responses:
+        200:
+          description: Department created
+
+  /master-data/entities:
+    get:
+      summary: Retrieve all cells, clubs, centres, or administrative entities
+      tags: [Master Data]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of entities
+
+    post:
+      summary: Create a new administrative entity
+      tags: [Master Data]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - entity_type_id
+              properties:
+                name:
+                  type: string
+                entity_type_id:
+                  type: integer
+      responses:
+        200:
+          description: Entity created
+
+  /master-data/employees:
+    get:
+      summary: Retrieve list of employees
+      tags: [Master Data]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of employees
+
+    post:
+      summary: Create a new employee profile
+      tags: [Master Data]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Employee created successfully
+
+  /master-data/employees/lookup:
+    get:
+      summary: Search employees for fast autocompletion lookups
+      tags: [Master Data]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+          description: Search query matching name or email
+      responses:
+        200:
+          description: List of matching employee summaries

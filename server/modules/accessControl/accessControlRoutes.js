@@ -1,4 +1,5 @@
 import express from 'express';
+
 // import rateLimit from 'express-rate-limit';
 import accessControlController from './accessControlController.js';
 import {
@@ -11,10 +12,7 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
-const canReadAccessControl = permissionMiddleware([
-  'access_control.read',
-  'access_control.manage',
-]);
+const canReadAccessControl = permissionMiddleware(['access_control.read', 'access_control.manage']);
 const canManageAccessControl = permissionMiddleware(['access_control.manage']);
 
 // Rate limiter: 100 requests per 15 minutes
@@ -31,12 +29,12 @@ router.post('/permissions', canManageAccessControl, accessControlController.crea
 router.put(
   '/permissions/:permissionId',
   canManageAccessControl,
-  accessControlController.updatePermission
+  accessControlController.updatePermission,
 );
 router.delete(
   '/permissions/:permissionId',
   canManageAccessControl,
-  accessControlController.deletePermission
+  accessControlController.deletePermission,
 );
 
 router.get('/roles', canReadAccessControl, accessControlController.getRoles);
@@ -46,7 +44,7 @@ router.delete('/roles/:roleId', canManageAccessControl, accessControlController.
 router.put(
   '/roles/:roleId/permissions',
   canManageAccessControl,
-  accessControlController.updateRolePermissions
+  accessControlController.updateRolePermissions,
 );
 
 router.get('/users', canReadAccessControl, accessControlController.getUsers);
@@ -54,7 +52,7 @@ router.put('/users/:userId/roles', canManageAccessControl, accessControlControll
 router.put(
   '/users/:userId/super-admin',
   superAdminMiddleware,
-  accessControlController.setUserSuperAdmin
+  accessControlController.setUserSuperAdmin,
 );
 
 // manual sync endpoint

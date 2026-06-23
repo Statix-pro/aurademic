@@ -2,8 +2,7 @@ import editRequestModel from './editRequestModel.js';
 import journalModel from '../journal/journalModel.js';
 import projectModel from '../project/projectModel.js';
 
-const isRequesterAdmin = (requestUser = {}) =>
-  Boolean(requestUser.isAdmin ?? requestUser.is_admin);
+const isRequesterAdmin = (requestUser = {}) => Boolean(requestUser.isAdmin ?? requestUser.is_admin);
 
 const editRequestController = {
   async createEditRequest(req, res) {
@@ -35,7 +34,7 @@ const editRequestController = {
           workflowAccess = await journalModel.getJournalWorkflowAccess(
             entityId,
             userId,
-            req.user.email
+            req.user.email,
           );
           entityExists = Boolean(workflowAccess);
           break;
@@ -63,18 +62,13 @@ const editRequestController = {
         if (workflowAccess.admin_approval_status !== 'approved') {
           return res.status(400).json({
             success: false,
-            message:
-              'Edit requests are available only after admin approval.',
+            message: 'Edit requests are available only after admin approval.',
           });
         }
       }
 
       // Check for an existing edit request
-      const existingRequest = await editRequestModel.findEditRequest(
-        entityId,
-        userId,
-        entityType
-      );
+      const existingRequest = await editRequestModel.findEditRequest(entityId, userId, entityType);
 
       if (existingRequest && existingRequest.status === 'pending') {
         // Only block if the request is already pending
@@ -84,15 +78,14 @@ const editRequestController = {
         });
       } else if (
         existingRequest &&
-        (existingRequest.status === 'none' ||
-          existingRequest.status === 'rejected')
+        (existingRequest.status === 'none' || existingRequest.status === 'rejected')
       ) {
         // Resubmit by updating the status to 'pending'
         await editRequestModel.updateEditRequestStatusByEntity(
           entityId,
           entityType,
           'pending',
-          userId
+          userId,
         );
         return res.status(200).json({
           success: true,
@@ -130,11 +123,7 @@ const editRequestController = {
       }
 
       // const request = await editRequestModel.findPendingEditRequest(entityId, userId, entityType);
-      const request = await editRequestModel.findEditRequest(
-        entityId,
-        userId,
-        entityType
-      );
+      const request = await editRequestModel.findEditRequest(entityId, userId, entityType);
 
       if (!request) {
         return res.status(200).json({ data: { status: 'none' } });
@@ -179,7 +168,7 @@ const editRequestController = {
         entityId,
         entityType,
         status,
-        userId
+        userId,
       );
 
       if (result.affectedRows === 0) {
@@ -206,10 +195,7 @@ const editRequestController = {
   async approveEditRequest(req, res) {
     try {
       const { requestId } = req.params;
-      const result = await editRequestModel.updateEditRequestStatus(
-        requestId,
-        'approved'
-      );
+      const result = await editRequestModel.updateEditRequestStatus(requestId, 'approved');
       if (result.affectedRows === 0) {
         return res.status(404).json({
           success: false,
@@ -233,10 +219,7 @@ const editRequestController = {
   async rejectEditRequest(req, res) {
     try {
       const { requestId } = req.params;
-      const result = await editRequestModel.updateEditRequestStatus(
-        requestId,
-        'rejected'
-      );
+      const result = await editRequestModel.updateEditRequestStatus(requestId, 'rejected');
 
       if (result.affectedRows === 0) {
         return res.status(404).json({

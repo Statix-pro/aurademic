@@ -74,9 +74,13 @@ export async function resolveSubmissionDepartment(req, beneficiaryType, payload 
 
   if (['Faculty', 'Staff'].includes(normalizedBeneficiaryType)) {
     if (Number.isInteger(parsedBeneficiaryEmployeeId) && parsedBeneficiaryEmployeeId > 0) {
-      const employeeDepartment = await BudgetModel.getEmployeeDepartmentByEmployeeId(parsedBeneficiaryEmployeeId);
+      const employeeDepartment = await BudgetModel.getEmployeeDepartmentByEmployeeId(
+        parsedBeneficiaryEmployeeId,
+      );
       const resolvedFacultyDepartment = normalizeText(
-        employeeDepartment?.parent_department_name || employeeDepartment?.name || employeeDepartment?.entity_name
+        employeeDepartment?.parent_department_name ||
+          employeeDepartment?.name ||
+          employeeDepartment?.entity_name,
       );
 
       if (resolvedFacultyDepartment) {
@@ -85,7 +89,9 @@ export async function resolveSubmissionDepartment(req, beneficiaryType, payload 
     }
 
     if (!userDepartment) {
-      throw new Error(`Department not set for ${normalizedBeneficiaryType.toLowerCase()} beneficiary`);
+      throw new Error(
+        `Department not set for ${normalizedBeneficiaryType.toLowerCase()} beneficiary`,
+      );
     }
 
     return userDepartment;
@@ -97,7 +103,6 @@ export async function resolveSubmissionDepartment(req, beneficiaryType, payload 
 
   return userDepartment || null;
 }
-
 
 export async function getFacultyDetails(req, res) {
   try {
@@ -117,9 +122,7 @@ export async function getFacultyDetails(req, res) {
 
     // 3. Fallback to token data if DB data is missing
     const department =
-      empData?.parent_department_name ||
-      empData?.name ||
-      await resolveUserDepartment(req);
+      empData?.parent_department_name || empData?.name || (await resolveUserDepartment(req));
     const role = resolveAccessRoleFromPermissions(req);
 
     return res.json({
@@ -164,7 +167,8 @@ export async function getFreezeConfig(req, res) {
     if (error?.code === 'ER_NO_SUCH_TABLE') {
       return res.status(500).json({
         success: false,
-        message: 'Freeze config table is missing. Run migration: 20260308_add_budget_time_freeze_config.sql',
+        message:
+          'Freeze config table is missing. Run migration: 20260308_add_budget_time_freeze_config.sql',
       });
     }
     return res.status(500).json({
@@ -214,7 +218,9 @@ export async function getOrgUnits(req, res) {
   try {
     const mappedType = normalizeEntityTypeParam(req.params.type);
 
-    if (!['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(mappedType)) {
+    if (
+      !['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(mappedType)
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -268,13 +274,6 @@ export async function getAllOrgUnits(req, res) {
   }
 }
 
-
-
-
-
-
-
-
 export async function create(req, res) {
   try {
     const payload = req.body || {};
@@ -304,7 +303,10 @@ export async function create(req, res) {
 
     const normalizedBeneficiaryType = normalizeBeneficiaryType(payload.beneficiary_type);
 
-    if (!VALID_BENEFICIARY_TYPES.includes(payload.beneficiary_type) && !VALID_BENEFICIARY_TYPES.includes(normalizedBeneficiaryType)) {
+    if (
+      !VALID_BENEFICIARY_TYPES.includes(payload.beneficiary_type) &&
+      !VALID_BENEFICIARY_TYPES.includes(normalizedBeneficiaryType)
+    ) {
       return res.status(400).json({
         success: false,
         message: `Invalid beneficiary_type: ${payload.beneficiary_type}. Valid: ${VALID_BENEFICIARY_TYPES.join(', ')}`,
@@ -318,7 +320,10 @@ export async function create(req, res) {
       });
     }
 
-    if (!['Faculty', 'Institution'].includes(normalizedBeneficiaryType) && !normalizeText(payload.beneficiary_value)) {
+    if (
+      !['Faculty', 'Institution'].includes(normalizedBeneficiaryType) &&
+      !normalizeText(payload.beneficiary_value)
+    ) {
       return res.status(400).json({
         success: false,
         message: `beneficiary_value required for ${normalizedBeneficiaryType}`,
@@ -346,20 +351,25 @@ export async function create(req, res) {
     const resolvedDepartment = await resolveSubmissionDepartment(
       req,
       normalizedBeneficiaryType,
-      payload
+      payload,
     );
 
-    const result = await BudgetModel.create({
-      ...payload,
-      beneficiary_type: normalizedBeneficiaryType,
-      fiscal_year: Number.parseInt(payload.fiscal_year, 10),
-      user_id: userId,
-      user_email: userEmail,
-      applicant_name: normalizeText(payload.applicant_name),
-      budget_tag: normalizeText(payload.budget_tag),
-      employee_id: payload.employee_id || userId,
-      department: resolvedDepartment,
-    });
+    const result = await BudgetModel.create(
+      {
+        ...payload,
+        beneficiary_type: normalizedBeneficiaryType,
+        fiscal_year: Number.parseInt(payload.fiscal_year, 10),
+        user_id: userId,
+        user_email: userEmail,
+        applicant_name: normalizeText(payload.applicant_name),
+        budget_tag: normalizeText(payload.budget_tag),
+        employee_id: payload.employee_id || userId,
+        department: resolvedDepartment,
+      },
+      {
+        submitterRole: resolveAccessRoleFromPermissions(req),
+      },
+    );
 
     return res.status(201).json({
       success: true,
@@ -370,7 +380,9 @@ export async function create(req, res) {
         fiscalYear: result.fyYear,
         approvalFlow: result.approvalFlow,
         initialStage: result.initialStage,
+        currentStage: result.currentStage,
         requiresLevel1: result.requiresLevel1,
+        isDirectDoFSubmission: result.isDirectDoFSubmission,
         departmentId: result.departmentId,
         beneficiaryEntityId: result.beneficiaryEntityId,
       },
@@ -401,9 +413,12 @@ export async function update(req, res) {
     const userDepartment = await resolveUserDepartment(req);
     const userDepartmentId = await resolveUserDepartmentId(req);
     const userRole = resolveAccessRoleFromPermissions(req);
+    const isSuperAdmin = hasSuperAdminAccess(req);
 
-    const canBypassAccessCheck = ['super_admin', 'admin', 'dof', 'principal'].includes(userRole);
-    const canBypassEditStateValidation = canBypassAccessCheck || ['hod', 'ithead'].includes(userRole);
+    const canBypassAccessCheck =
+      isSuperAdmin || ['super_admin', 'admin', 'dof', 'principal'].includes(userRole);
+    const canBypassEditStateValidation =
+      isSuperAdmin || canBypassAccessCheck || ['hod', 'ithead'].includes(userRole);
 
     if (!canBypassAccessCheck) {
       const hasAccess = await BudgetModel.validateUserAccess(
@@ -412,7 +427,7 @@ export async function update(req, res) {
         userEmail,
         userRole,
         userDepartment,
-        userDepartmentId
+        userDepartmentId,
       );
 
       if (!hasAccess) {
@@ -429,7 +444,7 @@ export async function update(req, res) {
     const resolvedDepartment = await resolveSubmissionDepartment(
       req,
       normalizedBeneficiaryType,
-      payload
+      payload,
     );
 
     if (!payload.lines?.length) {
@@ -439,18 +454,28 @@ export async function update(req, res) {
       });
     }
 
-    await BudgetModel.update(proposalId, {
-      ...payload,
-      beneficiary_type: normalizedBeneficiaryType,
-      applicant_name: normalizeText(payload.applicant_name),
-      budget_tag: normalizeText(payload.budget_tag),
-      department: resolvedDepartment,
-    }, {
-      skipEditStateValidation: canBypassEditStateValidation,
-      editedByUserId: userId,
-      editedByEmail: userEmail,
-      editedByRole: userRole,
-    });
+    await BudgetModel.update(
+      proposalId,
+      {
+        ...payload,
+        beneficiary_type: normalizedBeneficiaryType,
+        applicant_name: normalizeText(payload.applicant_name),
+        budget_tag: normalizeText(payload.budget_tag),
+        department: resolvedDepartment,
+      },
+      {
+        skipEditStateValidation: canBypassEditStateValidation,
+        editedByUserId: userId,
+        editedByEmail: userEmail,
+        editedByRole: userRole,
+        resubmissionRemarks: normalizeText(
+          payload.resubmission_remarks ||
+            payload.resubmissionRemarks ||
+            payload.feedback ||
+            payload.remarks,
+        ),
+      },
+    );
 
     return res.json({
       success: true,
@@ -572,7 +597,7 @@ export async function get(req, res) {
       userEmail,
       userRole,
       userDepartment,
-      userDepartmentId
+      userDepartmentId,
     );
 
     if (!hasAccess) {
@@ -601,7 +626,7 @@ export async function get(req, res) {
       if (accessType === 'approver') {
         const isBeneficiary = await BudgetModel.isFacultyBeneficiaryForUser(
           budget.master || budget,
-          uid
+          uid,
         );
         if (isBeneficiary) {
           accessType = 'beneficiary';
@@ -642,7 +667,9 @@ export async function getMyBudgets(req, res) {
       success: true,
       data: budgets.budgets,
       pagination: budgets.pagination,
-      currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
+      currentFiscalYear: fiscalYear
+        ? Number.parseInt(fiscalYear, 10)
+        : BudgetModel.getCurrentFinancialYear(),
     });
   } catch (error) {
     console.error('My budgets error:', error);
@@ -690,7 +717,9 @@ export async function getMyBudgetsFull(req, res) {
       success: true,
       data: fullData,
       pagination: budgets.pagination,
-      currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
+      currentFiscalYear: fiscalYear
+        ? Number.parseInt(fiscalYear, 10)
+        : BudgetModel.getCurrentFinancialYear(),
     });
   } catch (error) {
     console.error('My full budgets error:', error);
@@ -764,7 +793,9 @@ export async function getHodBudgets(req, res) {
       data: budgets.budgets,
       pagination: budgets.pagination,
       department,
-      currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
+      currentFiscalYear: fiscalYear
+        ? Number.parseInt(fiscalYear, 10)
+        : BudgetModel.getCurrentFinancialYear(),
     });
   } catch (error) {
     console.error('HOD budgets error:', error);
@@ -807,7 +838,9 @@ export async function getCoordinatorBudgets(req, res) {
       success: true,
       data: budgets.budgets,
       pagination: budgets.pagination,
-      currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
+      currentFiscalYear: fiscalYear
+        ? Number.parseInt(fiscalYear, 10)
+        : BudgetModel.getCurrentFinancialYear(),
     });
   } catch (error) {
     console.error('Coordinator budgets error:', error);
@@ -837,7 +870,9 @@ export async function getItheadBudgets(req, res) {
       success: true,
       data: budgets.budgets,
       pagination: budgets.pagination,
-      currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
+      currentFiscalYear: fiscalYear
+        ? Number.parseInt(fiscalYear, 10)
+        : BudgetModel.getCurrentFinancialYear(),
     });
   } catch (error) {
     console.error('IT Head budgets error:', error);
@@ -867,7 +902,9 @@ export async function getDofBudgets(req, res) {
       success: true,
       data: budgets.budgets,
       pagination: budgets.pagination,
-      currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
+      currentFiscalYear: fiscalYear
+        ? Number.parseInt(fiscalYear, 10)
+        : BudgetModel.getCurrentFinancialYear(),
     });
   } catch (error) {
     console.error('DoF budgets error:', error);
@@ -897,7 +934,9 @@ export async function getPrincipalBudgets(req, res) {
       success: true,
       data: budgets.budgets,
       pagination: budgets.pagination,
-      currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : BudgetModel.getCurrentFinancialYear(),
+      currentFiscalYear: fiscalYear
+        ? Number.parseInt(fiscalYear, 10)
+        : BudgetModel.getCurrentFinancialYear(),
     });
   } catch (error) {
     console.error('Principal budgets error:', error);
@@ -907,7 +946,6 @@ export async function getPrincipalBudgets(req, res) {
     });
   }
 }
-
 
 export async function approve(req, res) {
   try {
@@ -952,9 +990,9 @@ export async function approve(req, res) {
     }
 
     if (
-      normalizedDecision !== 'archived'
-      && !isSuperAdmin
-      && !hasPermission(req, requiredPermission)
+      normalizedDecision !== 'archived' &&
+      !isSuperAdmin &&
+      !hasPermission(req, requiredPermission)
     ) {
       return res.status(403).json({
         success: false,
@@ -963,9 +1001,9 @@ export async function approve(req, res) {
     }
 
     if (
-      normalizedDecision !== 'archived'
-      && currentStage === 'level1'
-      && level1Route.routeType === 'entity_contact'
+      normalizedDecision !== 'archived' &&
+      currentStage === 'level1' &&
+      level1Route.routeType === 'entity_contact'
     ) {
       const entityAssignee = await BudgetModel.resolveEntityLevel1Assignee(level1Route.entityId);
 
@@ -988,7 +1026,7 @@ export async function approve(req, res) {
       userEmail,
       normalizedDecision === 'archived' ? 'admin' : isSuperAdmin ? 'super_admin' : currentStage,
       userDepartment,
-      userDepartmentId
+      userDepartmentId,
     );
 
     if (!hasAccess) {
@@ -1001,7 +1039,9 @@ export async function approve(req, res) {
     await BudgetModel.processApproval(proposalId, {
       role: currentStage,
       decision: normalizedDecision,
-      feedback: ['rejected', 'returned', 'archived'].includes(normalizedDecision) ? feedback : undefined,
+      feedback: ['rejected', 'returned', 'archived'].includes(normalizedDecision)
+        ? feedback
+        : undefined,
       approverUserId: userId,
       approverEmail: userEmail,
     });
@@ -1036,9 +1076,6 @@ export async function approve(req, res) {
   }
 }
 
-
-
-
 export async function uploadFiles(req, res) {
   try {
     const proposalId = Number.parseInt(req.params.id, 10);
@@ -1062,7 +1099,7 @@ export async function uploadFiles(req, res) {
       userEmail,
       accessRole,
       userDepartment,
-      userDepartmentId
+      userDepartmentId,
     );
 
     if (!hasAccess) {
@@ -1079,10 +1116,10 @@ export async function uploadFiles(req, res) {
         proposalId,
         sanctionLetter: req.files?.sanctionLetter?.[0]
           ? {
-            filename: req.files.sanctionLetter[0].originalname,
-            path: req.files.sanctionLetter[0].path,
-            size: req.files.sanctionLetter[0].size,
-          }
+              filename: req.files.sanctionLetter[0].originalname,
+              path: req.files.sanctionLetter[0].path,
+              size: req.files.sanctionLetter[0].size,
+            }
           : null,
         attachments:
           req.files?.attachments?.map((file) => ({
@@ -1126,7 +1163,7 @@ export async function getHistory(req, res) {
       userEmail,
       userRole,
       userDepartment,
-      userDepartmentId
+      userDepartmentId,
     );
 
     if (!hasAccess) {
@@ -1192,7 +1229,7 @@ export async function getMonthAllocations(req, res) {
       userEmail,
       userRole,
       userDepartment,
-      userDepartmentId
+      userDepartmentId,
     );
 
     if (!hasAccess) {
@@ -1216,8 +1253,6 @@ export async function getMonthAllocations(req, res) {
     });
   }
 }
-
-
 
 export async function getStatus(req, res) {
   try {
@@ -1251,7 +1286,7 @@ export async function getStatus(req, res) {
       userEmail,
       userRole,
       userDepartment,
-      userDepartmentId
+      userDepartmentId,
     );
 
     if (!hasAccess) {

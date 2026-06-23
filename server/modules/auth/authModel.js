@@ -90,10 +90,9 @@ const authModel = {
       let employeeData = null; // Employee data from master_employees
 
       // Check if user exists
-      const [existingUsers] = await db.query(
-        'SELECT * FROM users WHERE email = ?',
-        [userData.email]
-      );
+      const [existingUsers] = await db.query('SELECT * FROM users WHERE email = ?', [
+        userData.email,
+      ]);
 
       if (existingUsers.length > 0) {
         user = existingUsers[0];
@@ -109,7 +108,7 @@ const authModel = {
         const [result] = await db.query(
           `INSERT INTO users (email, name, picture, created_at) 
                      VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
-          [userData.email, userData.name, userData.picture]
+          [userData.email, userData.name, userData.picture],
         );
 
         if (!result.insertId) {
@@ -141,7 +140,7 @@ const authModel = {
           LEFT JOIN master_departments d ON e.department_id = d.id
           WHERE e.email = ? AND e.status = 'Active'
           LIMIT 1`,
-          [user.email]
+          [user.email],
         );
 
         if (employeeRows.length > 0) {
@@ -150,19 +149,17 @@ const authModel = {
           // Link user_id to employee record if not already linked
           await db.query(
             'UPDATE master_employees SET user_id = ? WHERE id = ? AND user_id IS NULL',
-            [user.id, employeeData.employee_id]
+            [user.id, employeeData.employee_id],
           );
         }
       } catch (employeeError) {
         // Log error but don't prevent login if employee lookup fails
-        console.error(
-          `Error fetching employee data for email ${user.email}:`,
-          employeeError
-        );
+        console.error(`Error fetching employee data for email ${user.email}:`, employeeError);
       }
 
-      const authorization =
-        await accessControlModel.getUserAuthorizationSnapshot(user.id);
+      await accessControlModel.ensureUserHasBaseRole(user.id);
+
+      const authorization = await accessControlModel.getUserAuthorizationSnapshot(user.id);
       const computedIsAdmin = authorization.isAdmin || Boolean(user.is_admin);
 
       // Return combined user data including employee info
@@ -192,10 +189,7 @@ const authModel = {
 
   async updateLastLogin(userId) {
     try {
-      await db.query(
-        'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?',
-        [userId]
-      );
+      await db.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [userId]);
     } catch (error) {
       console.error('Failed to update last login:', error);
       throw new Error(`Failed to update last login: ${error.message}`);

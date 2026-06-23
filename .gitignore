@@ -11,8 +11,12 @@ build/
 
 # IDE files
 .vs/
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 
 # Misc
 .DS_Store
 *.log
+
+.claude

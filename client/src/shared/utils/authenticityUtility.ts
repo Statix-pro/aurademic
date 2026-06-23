@@ -52,7 +52,7 @@ authenticityUtility.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 authenticityUtility.interceptors.response.use(
@@ -88,7 +88,7 @@ authenticityUtility.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 authenticityUtility.postFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
@@ -101,10 +101,7 @@ authenticityUtility.postFile = async (endpoint: string, formData: FormData): Pro
     return response;
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: unknown }; message?: string };
-    console.error(
-      'Error in postFile request:',
-      axiosError.response?.data || axiosError.message
-    );
+    console.error('Error in postFile request:', axiosError.response?.data || axiosError.message);
     throw error;
   }
 };

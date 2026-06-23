@@ -1,19 +1,26 @@
-import React, { useState, useRef, CSSProperties, useEffect, useMemo, ChangeEvent, MouseEvent } from 'react';
-import { Info, Library, CheckCircle2, RotateCcw, XCircle, Archive, Upload, Eye, Trash2 } from 'lucide-react';
-import { useReactToPrint } from 'react-to-print';
+import {
+  Info,
+  Library,
+  CheckCircle2,
+  RotateCcw,
+  XCircle,
+  Archive,
+  Upload,
+  Eye,
+  Trash2,
+} from 'lucide-react';
+import React, {
+  useState,
+  useRef,
+  CSSProperties,
+  useEffect,
+  useMemo,
+  ChangeEvent,
+  MouseEvent,
+} from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import './financeapproval.css';
-import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
+import { useReactToPrint } from 'react-to-print';
 
-import authenticityUtility from '../../shared/utils/authenticityUtility';
-import CustomTagInput from '../../shared/components/ui/CustomTagInput';
-import CustomInput from '../../shared/components/ui/CustomInput';
-import CustomDropdown, { OptionType } from '../../shared/components/ui/CustomDropdown';
-import CustomToggle from '../../shared/components/ui/CustomToggle';
-import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
-import CustomModal from '../../shared/components/ui/CustomModal';
 import {
   formatDMY,
   numberToIndianWords,
@@ -25,11 +32,172 @@ import {
   getAnnexureOpenUrl,
   generateAndDownloadFinancePdf,
 } from './financeApprovalPdf';
+import { useAuth } from '../../contexts/AuthContext';
+import 'bootstrap/dist/css/bootstrap.min.css';
+import './financeapproval.css';
+import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
+import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
+import CustomDropdown, { OptionType } from '../../shared/components/ui/CustomDropdown';
+import CustomInput from '../../shared/components/ui/CustomInput';
+import CustomModal from '../../shared/components/ui/CustomModal';
+import CustomTagInput from '../../shared/components/ui/CustomTagInput';
+import CustomToggle from '../../shared/components/ui/CustomToggle';
+import {
+  BUDGET_HEAD_GROUPS,
+  SUB_HEAD_BY_BUDGET_HEAD,
+  HOAC_SUBHEAD_OPTIONS,
+  HEAD_TO_GROUP,
+  subscribeBudgetCatalog,
+} from '../../shared/hooks/budgetCatalogStore';
+import { useBudgetCatalog } from '../../shared/hooks/useBudgetCatalog';
+import { AccountOption, fetchAccountOptions } from '../../shared/utils/accountOptionsApi';
+import authenticityUtility from '../../shared/utils/authenticityUtility';
 
 interface SelectOption {
   value: string;
   label: string;
 }
+
+const FINANCE_CONFLICT_MESSAGE =
+  'Finance request conflicts with approved budget allocation. Please check the budget head amounts and available balance.';
+
+const normalizeErrorMessage = (value: unknown): string =>
+  typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+
+const isGenericConflictMessage = (message: string): boolean => {
+  const normalized = message.toLowerCase();
+  return normalized.includes('page was not displayed') && normalized.includes('conflict');
+};
+
+const resolveTagValue = (value: unknown, options: SelectOption[]) => {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return '';
+
+  const matched = options.find(
+    (option) =>
+      String(option.value ?? '')
+        .trim()
+        .toLowerCase() === normalized.toLowerCase(),
+  );
+
+  return matched?.value || normalized;
+};
+
+const getCurrentFiscalYearStart = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  return String(month >= 4 ? year : year - 1);
+};
+
+const normalizeFiscalYearStart = (value: unknown): string => {
+  const raw = String(value ?? '').trim();
+  if (!raw || raw.toLowerCase() === 'all') return '';
+  const startYear = Number.parseInt(raw.split('-')[0], 10);
+  return Number.isFinite(startYear) && startYear > 0 ? String(startYear) : '';
+};
+
+const parseFinanceBoolean = (value: unknown): boolean => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase();
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+};
+
+const normalizeFinanceRoleCodes = (user: any): string[] => {
+  const extractRoleToken = (value: any): string => {
+    if (typeof value === 'string') return value.trim();
+    if (value && typeof value === 'object') {
+      return String(
+        value.code || value.role_code || value.name || value.role || value.permission_key || '',
+      ).trim();
+    }
+    return '';
+  };
+
+  const candidates = [
+    ...(Array.isArray(user?.roles) ? user.roles : []),
+    ...(Array.isArray(user?.roleCodes) ? user.roleCodes : []),
+    user?.role,
+    user?.role_code,
+    user?.roleCode,
+  ];
+
+  return Array.from(
+    new Set(
+      candidates
+        .map(extractRoleToken)
+        .filter(Boolean)
+        .map((role) => role.toLowerCase()),
+    ),
+  );
+};
+
+const normalizeFinancePermissionKeys = (user: any): string[] => {
+  const extractPermissionToken = (value: any): string => {
+    if (typeof value === 'string') return value.trim();
+    if (value && typeof value === 'object') {
+      return String(
+        value.permission_key || value.permission_name || value.key || value.name || '',
+      ).trim();
+    }
+    return '';
+  };
+
+  const candidates = [
+    ...(Array.isArray(user?.permissions) ? user.permissions : []),
+    ...(Array.isArray(user?.permissionKeys) ? user.permissionKeys : []),
+  ];
+
+  return Array.from(
+    new Set(
+      candidates
+        .map(extractPermissionToken)
+        .filter(Boolean)
+        .map((permission) => permission.toLowerCase()),
+    ),
+  );
+};
+
+const getFinanceSubmitErrorMessage = (error: unknown): string => {
+  const candidate = error as {
+    response?: {
+      data?: unknown;
+      status?: number;
+    };
+    message?: string;
+  };
+  const responseData = candidate.response?.data;
+  const statusCode = candidate.response?.status;
+
+  if (typeof responseData === 'string') {
+    const message = normalizeErrorMessage(responseData);
+    if (message) return isGenericConflictMessage(message) ? FINANCE_CONFLICT_MESSAGE : message;
+  }
+
+  if (responseData && typeof responseData === 'object') {
+    const data = responseData as { message?: unknown; error?: unknown };
+    const message = normalizeErrorMessage(data.message);
+    if (message) return isGenericConflictMessage(message) ? FINANCE_CONFLICT_MESSAGE : message;
+
+    const errorMessage = normalizeErrorMessage(data.error);
+    if (errorMessage)
+      return isGenericConflictMessage(errorMessage) ? FINANCE_CONFLICT_MESSAGE : errorMessage;
+  }
+
+  const fallbackMessage = normalizeErrorMessage(candidate.message);
+  if (fallbackMessage) {
+    return isGenericConflictMessage(fallbackMessage) ? FINANCE_CONFLICT_MESSAGE : fallbackMessage;
+  }
+
+  if (statusCode === 409) {
+    return FINANCE_CONFLICT_MESSAGE;
+  }
+
+  return 'Something went wrong while submitting';
+};
 
 interface BudgetRow {
   category: string;
@@ -89,29 +257,20 @@ const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
 // Fallback options for when API fails
 const FALLBACK_SUBCATEGORY_OPTIONS: Record<string, string[]> = {
   Department: [
-    "Computer Science and Engineering",
-    "Electronics and Communication Engineering",
-    "Mechanical Engineering",
-    "Civil Engineering",
-    "Information Technology",
+    'Computer Science and Engineering',
+    'Electronics and Communication Engineering',
+    'Mechanical Engineering',
+    'Civil Engineering',
+    'Information Technology',
   ],
-  Centre: [
-    "Centre for Research",
-    "Centre for Innovation",
-    "Centre for Industry Collaboration",
-  ],
+  Centre: ['Centre for Research', 'Centre for Innovation', 'Centre for Industry Collaboration'],
   Cell: [
-    "Placement Cell",
-    "Entrepreneurship Development Cell",
-    "Women Empowerment Cell",
-    "Alumni Cell",
+    'Placement Cell',
+    'Entrepreneurship Development Cell',
+    'Women Empowerment Cell',
+    'Alumni Cell',
   ],
-  Club: [
-    "Coding Club",
-    "Robotics Club",
-    "Cultural Club",
-    "Sports Club",
-  ],
+  Club: ['Coding Club', 'Robotics Club', 'Cultural Club', 'Sports Club'],
   'Professional Body': [
     'American Society of Mechanical Engineers (Student Chapter)',
     'Computer Society of India',
@@ -137,78 +296,7 @@ const FALLBACK_TAG_OPTIONS: SelectOption[] = [
   { value: 'Innovation', label: 'Innovation' },
   { value: 'Start-up', label: 'Start-up' },
   { value: 'Entrepreneurship', label: 'Entrepreneurship' },
-];
-
-const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
-  {
-    label: 'Non-Recurring',
-    options: [
-      'Civil Infrastructure',
-      'Electrical Infrastructure',
-      'IT Infrastructure',
-      'Furniture & Fixtures',
-      'Vehicles',
-      'Equipment',
-      'Accessories & Kits',
-      'Library',
-    ],
-  },
-  { label: 'Recurring', options: [] },
-  {
-    label: 'Maintenance & Spares',
-    options: ['Maintenance Charges', 'Spares'],
-  },
-  {
-    label: 'Operational',
-    options: [
-      'Consumables',
-      'Software',
-      'Membership & Subscriptions',
-      'College Essentials',
-      'Printing & Stationery',
-      'Postal Expenses',
-      'Local Conveyance',
-    ],
-  },
-  {
-    label: 'Events & Competitions',
-    options: ['Academic Events', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Event', 'Cultural & Celebrations', 'Sports', 'Competitions'],
-  },
-  {
-    label: 'Meetings & Audits',
-    options: [
-      'Institutional Governance Meetings',
-      'Academic Governance Meetings',
-      'Institutional Audits',
-      'Government Meetings',
-    ],
-  },
-  {
-    label: 'Academics',
-    options: [
-      'Faculty Empowerment',
-      'Staff Empowerment',
-      'Student Empowerment',
-      'Student Capacity Building',
-      'Accreditation Expenses',
-      'Examination Expenses',
-    ],
-  },
-  {
-    label: 'Branding & Outreach',
-    options: ['Advertisement & Branding', 'Public Relations', 'Admissions'],
-  },
-  {
-    label: 'General',
-    options: [
-      'Research & Development',
-      'Administrative Expenses',
-      'Licenses & Taxes',
-      'Salary',
-      'Bills & Payments',
-      'Miscellaneous Expenses',
-    ],
-  },
+  { value: 'CoE Claims', label: 'CoE Claims' },
 ];
 
 const INCOME_SOURCE_OPTIONS = [
@@ -224,26 +312,6 @@ const toOptions = (items: string[]): OptionType[] =>
 
 const CONTRIBUTION_OPTIONS = ['Full', 'Partial'];
 const STATUS_OPTIONS = ['Credited', 'Reimbursement'];
-const CREDIT_ACCOUNT_OPTIONS = [
-  'PRINCIPAL GNERAL A/C | 0751301000015840',
-  'KSRCT-PRINCIPAL COMMON A/C | 0751301000264891',
-  'PRINCIPAL SCHOLARSHIP A/C | 0751301000001328',
-  'PRINCIPAL KSRCT ASSOCIATION ACCOUNT | 0751301000028594',
-  'STAFF CLUB A/C | 0751301000005664',
-  'SOCIETY OF AUTOMOTIVE ENGINEERS (SAE) CLUB KSRCTA/C | 0751301000021422',
-  'KSRCT IETE CHAPTER A/C | 0751301000265626',
-  'KSRCT CIVIL SERB NPDF | 0751301000264860',
-  'KSRCT CIVIL SERB NPDF 2 | 0751301000265593',
-  'K S RANGASAMY COLLEGE OF TECHNOLOGY AUTONOMOUS | 0751302000000224',
-  'KSRCT-CNST A/C | 0751301000045784',
-  'CSI CHAPTER BRANCH OF KSRCT A/C | 0751301000185368',
-  'KSRCT NSS CORPUS FUND | 0751301000047863',
-  'PRINCIPAL NSS UNIT KSRCT | 0751301000004545',
-  'IEEE Student KSRCT | 0751301000059822',
-  'ISTE Student Chapter KSRCT | 0751301000023696',
-  'KSRCT RPS AICTE Project | 0075133800000643',
-];
-
 const ANNEXURE_TYPE_OPTIONS = [
   'Proforma Invoice',
   'Invoice',
@@ -251,6 +319,8 @@ const ANNEXURE_TYPE_OPTIONS = [
   'Bills',
   'Pamphlet',
   'Email',
+  'Not Applicable',
+  'Others',
 ];
 const formatDateForInput = (value: unknown): string => {
   if (value === null || value === undefined || value === '') return '';
@@ -294,71 +364,47 @@ const CATEGORY_TYPE_OPTIONS = [
   'Institution',
 ];
 
-const HOAC_SUBHEAD_OPTIONS: Record<string, string[]> = {
-  'Events & Competitions': [
-    'Remuneration',
-    'Travel',
-    'Accommodation',
-    'Memento & Gifts',
-    'Food & Refreshment',
-    'A/V Arrangements',
-    'Stationary',
-    'Printing',
-    'Prizes',
-    'Publication Charges',
-    'Promotions',
-    'Decorations',
-    'Event Logistics',
-    'Registration Kit',
-    'T-Shirt',
-    'Bag',
-    'Others',
-  ],
-  'Meetings & Audits': [
-    'Remuneration',
-    'Travel',
-    'Accommodation',
-    'Memento & Gifts',
-    'Food & Refreshment',
-    'Stationary',
-    'Printing',
-    'Others',
-  ],
-};
+// 1. Shared HOAC Sub-Heads (for Events & Competitions, Meetings & Audits)
+// Used in the 'extra' top-level dropdown (eventSubHead) when a HOAC group is active.
 
-const flattenOptions = (options: Array<OptionType | { label: string; options: OptionType[] }>): OptionType[] =>
-  options.flatMap((opt) => ('options' in opt ? opt.options : opt));
+const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
+
+const flattenOptions = (
+  options: Array<OptionType | { label: string; options: OptionType[] }>,
+): OptionType[] => options.flatMap((opt) => ('options' in opt ? opt.options : opt));
 
 const getSelectedOption = (
   value: string,
-  options: Array<OptionType | { label: string; options: OptionType[] }>
+  options: Array<OptionType | { label: string; options: OptionType[] }>,
 ): OptionType | null =>
   flattenOptions(options).find((opt) => String(opt.value) === String(value)) ?? null;
 
-const PRIMARY_HEAD_OPTIONS: Array<{ label: string; options: OptionType[] }> =
+const getSelectedOptionWithFallback = (
+  value: string,
+  options: Array<OptionType | { label: string; options: OptionType[] }>,
+): OptionType | null => {
+  const selected = getSelectedOption(value, options);
+  if (selected) return selected;
+  const normalizedValue = String(value || '').trim();
+  return normalizedValue ? { value: normalizedValue, label: normalizedValue } : null;
+};
+
+const getPrimaryHeadOptions = (): Array<{ label: string; options: OptionType[] }> =>
   BUDGET_HEAD_GROUPS.map((group) => ({
     label: group.label,
     options: toOptions(group.options),
   }));
 
-const HEAD_TO_GROUP: Record<string, string> = BUDGET_HEAD_GROUPS.reduce(
-  (acc, group) => {
-    group.options.forEach((option) => {
-      acc[option] = group.label;
-    });
-    return acc;
-  },
-  {} as Record<string, string>
-);
-
-const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
-
 const getHoacGroupForHead = (head: string): string | undefined => {
-  if (!head) return undefined;
   if (HOAC_GROUPS.has(head)) return head;
   const mapped = HEAD_TO_GROUP[head];
   if (mapped && HOAC_GROUPS.has(mapped)) return mapped;
   return undefined;
+};
+
+const shouldUseHeadOnlyAvailabilityMatch = (budgetHead: string, _subHead: string): boolean => {
+  const normalizedHead = String(budgetHead || '').trim();
+  return Boolean(normalizedHead);
 };
 
 const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {
@@ -369,335 +415,12 @@ const SUB_HEAD_CHILD_OPTIONS: Record<string, string[]> = {
   'Guest Lecture': ['Industry', 'Academic'],
 };
 
-const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
-
-  'Civil Infrastructure': [
-    'Construction Works',
-    'Partition Works',
-    'False Ceiling Works',
-    'Plumbing Works',
-    'Canopy', 'Water Cooler'
-  ],
-  'Electrical Infrastructure': [
-    'Electrical Wiring',
-    'Lights & Fans',
-    'Lift Installation',
-    'Air Conditioner',
-    'UPS & Inverter',
-    'Battery', 'Generator'
-  ],
-  'IT Infrastructure': [
-    'Hardwares',
-    'Softwares',
-    'Hard Disks',
-    'Monitors',
-    'Wi-fi Router',
-    'Network Materials',
-    'Laptops',
-    'Interactive Displays',
-    'Desktops Computers',
-    'CCTV Materials',
-    'Television',
-    'Projectors',
-    'Printers',
-    'Mobiles & Tablet',
-    'Mic & Speakers',
-    'Amplifiers',
-    'A/V Equipment',
-    'Intercom',
-    'Xerox Machine', 'Mouse', 'Keyboard', 'CMOS Battery'
-  ],
-  'Furniture & Fixtures': [
-    'Chair',
-    'Faculty Table',
-    'Computer Table',
-    'Discussion Table',
-    'Work Table',
-    'Wooden Cup Boards',
-  ],
-  Vehicles: ['Two Wheeler', 'Light Motor Vehicle', 'Heavy Motor Vehicle'],
-  Equipment: [
-    'Lab Equipment',
-    'Consultancy Equipment',
-    'Research Equipment',
-    'Equipment Upgrade', 'Sports Equipment', 'Office Equipment'
-  ],
-  'Accessories & Kits': [
-    'Power Tools',
-    'Weighing Machine',
-    'Drilling Machine',
-    'Drone Kit', 'Lab Accessories', 'Others'
-  ],
-  'Library': [
-    'Books',
-    'Journals',
-    'Magazines',
-    'Newspapers',
-    'E-Journals',
-    'E-Books',
-    'Remote Access Tool',
-    'Plagiarism Detection Tool',
-    'Non Books (CD etc.)',
-    'Databases',
-    'Membership'
-  ],
-
-  'Maintenance Charges': ['Annual Maintenance Charges', 'Equipment Maintenance',
-    'Software Maintenance',
-    'Building Maintenance',
-    'Computer Maintenance',
-    'Electrical Maintenance',
-    'Furniture Maintenance',
-    'Plumbing Maintenance',
-    'Vehicle Maintenance',
-    'Garden Maintenance',
-    'Infrastructure Maintenance',
-    'AC Maintenance',
-    'UPS Maintenance',
-    'Lift Maintenance',
-    'Printer Maintenance',
-    'Painting', 'Playground Maintenance', 'Office Maintenance',
-    'Housekeeping Expenses', 'General Repairs'
-  ],
-  Spares: ['Printer Donors', 'SMPS', 'Chargers'],
-  'Annual Maintenance Charges': ['Equipment Maintenance', 'Software Maintenance'],
-  Consumables: [
-    'Chemicals',
-    'Glasswares',
-    'Plasticwares',
-    'Electrical Components',
-    'Electronic Components',
-    'Mechanical Components',
-    'Construction Materials',
-    'Cutting Tools',
-    'Oils & Lubricants',
-    'Metals & Alloys',
-    'Carpentary Items',
-    'Others',
-  ],
-  Software: [
-    'Plagiarism',
-    'Grammer Check',
-    'Grievance',
-    'Programming',
-    'Modelling',
-    'Analysis',
-    'Antivirus',
-    'Firewall',
-    'Graphical Design',
-    'AI Tools',
-    'Others',
-  ],
-  'Membership & Subscriptions': [
-    'Professional Body fees',
-    'Membership fees',
-    ' Annual Subscription Charges',
-    'E-Resources',
-    'Data Subscription Charges',
-  ],
-  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Others'],
-  'Printing & Stationery': [
-    'Banner',
-    'Pamphlet',
-    'Brochure',
-    'Vinyl Boards',
-    'Certificates',
-    'Diary',
-    'Calendar',
-    'Visiting Card',
-    'Seal/ Stamp Pad',
-    'Pen/ Pencil/ Eraser',
-    'Stapler/ Punching Machine',
-    'Files/ Folders',
-    'Entry Registers',
-    'Print Sheets',
-    'Others',
-  ],
-  'Postal Expenses': [
-    'Frieght Charges',
-    'Postal Charges',
-    'Courier Charges',
-    'Others',
-  ],
-  'Local Conveyance': [
-    'Travel Expense',
-    'Food & Refreshment',
-    'Beta',
-    'Others',
-  ],
-  'Conferences & Conclaves': ['National Conference', 'International Conference', 'Conclave', 'Convention', 'Networking Event', 'Industry Interaction', 'Consumables'],
-  'Association Activities': ['Association Function', 'Alumni Meeting', 'Alumni Interaction', 'Parents Meeting', 'Consumables'],
-  'Outreach Event': ['School Visit', 'Awareness Program', 'Campaigns', 'Mini Marathon', 'Education Fair', 'Rally', 'Consumables'],
-  'Cultural & Celebrations': ['Celebration Day', 'Festival Celebrations', 'Harmonicks', 'Hostel Day', 'Consumables'],
-  'Sports': ['Sports Meet', 'Sports Day', 'Consumables'],
-  'Competitions': ['Hackathons', 'Competitions', 'Club Activities', 'Project Expo', 'Ideathon', 'Start-up meet', 'Consumables'],
-
-  'Institutional Governance Meetings': ['Governing Body Meeting', 'Research Advisory Board Meeting', 'Finance Committee Meeting', 'Result Passing Board (RPB) Meeting', 'Examination Committee Meeting'
-    , 'Placement Meeting'],
-
-  'Academic Governance Meetings': ['Academic Council Meeting', 'Standing Committee Meeting',
-    'Board of Studies (Bos) Meeting', 'DAB Meeting'],
-  'Institutional Audits': ['Academic Audit', 'Administrative Audit', 'Energy & Green Audit'],
-  'Government Meetings': ['Government Meetings'],
-  'Faculty Empowerment': [
-    'Registration fee',
-    'Travel Allowance',
-    'Food & Refreshment',
-    'Accommodation',
-    'Daily Allowance',
-    'Membership Fees',
-    'Incentives',
-    'Leadership Meet',
-    'Faculty Welfare', 'Medical Expenses'
-  ],
-
-  'Academic Events': [
-    'Seminar',
-    'Webinar',
-    'Guest Lecture',
-    'Workshop',
-    'Hands-on Training',
-    'FDP (Faculty Development Programme)',
-    'STTP (Short-Term Training Programme)',
-    'MoU Inking',
-    'Industry Visit',
-    'Expert Visit',
-    'Consumables'
-  ],
-
-  'College Events': [
-    'Annual Day',
-    'Graduation Day',
-    'Student Induction Programme',
-    'Orientation Session',
-    'Dakshaa',
-    'Science Day',
-    'Womens Day',
-    'Founder Day',
-    'Consumables'
-  ],
-  'Staff Empowerment': [
-    'Registration fee',
-    'Travel Allowance',
-    'Food & Refreshment',
-    'Accommodation',
-    'Daily Allowance',
-    'Incentives',
-    'Staff Welfare', 'Medical Expenses'
-  ],
-  'Sudent Empowerment': [
-    'Registration fee',
-    'Travel Support',
-    'Food & Refreshment',
-    'Accommodation',
-    'Certification Costs',
-    'Medical Expense',
-    'Incentives',
-    'Prizes',
-    'Student Welfare',
-    'Student Uniform',
-  ],
-  'Student Capacity Building': [
-    'Skill Development Training',
-    'ApptitudeTraining',
-    'Higher Education Coaching',
-    'Competitive Exam Coaching',
-    'Placement Training',
-    'Placement Drives',
-    'One Credit Course',
-    'Value Added Course',
-    'Certification Programs',
-    'Internship',
-    'International Connect',
-    'Exposure Visit',
-    'Language Proficiency Courses',
-    'Others',
-  ],
-
-  'Accreditation Expenses': [
-    'NAAC Fees',
-    'NBA Fees',
-    'NAAC Inspection',
-    'NBA Inspection',
-  ],
-  'Examination Expenses': [
-    'Autonomous Exam Remuneration', 'Online Exam Remuneration',
-    'Government Exam Remuneration',
-  ],
-  'Advertisement & Branding': ['News Paper Advertisement', 'Digital Promotion'],
-  'Public Relations': [
-    'Press & Media',
-    'Promotions',
-    'Branding',
-    'Corporate Gift', 'Sponsorship',
-    'CSR Activity'
-  ],
-  Admissions: [
-    'Stalls',
-    'School Visits',
-    'Field Visits',
-    'Student Directory',
-    'Consultant Charges',
-  ],
-  'Research & Development': [
-    'Seed Fund (Product Development)',
-    'Seed Fund (IPR Charges)',
-    'Seed Fund (Travel)',
-    'Institute Research Fellowship',
-    'Research Grant',
-    'Publication Support',
-    'Consultancy',
-    'Research Cenre Renewal',
-    'HI Contribution',
-  ],
-  'Administrative Expenses': [
-    'AICTE Fees',
-    'Affiliation Fees',
-    'Anna University Fees',
-    'DOTE Fees',
-    'Consortium Fees',
-    'Inspection Expenses',
-    'Autonomous Charges',
-    'Insurance Charges',
-    'Stamp Charges', 'Audit Fees',
-    'Flag Day Expenses',
-    'Fee Fixation Expenses',
-    'Scholarship Expenses',
-    'International Travel',
-    'Testing Charges', 'Legal Expenses'
-  ],
-  'Licenses & Taxes': ['DTCP Approval', 'Water Tax', 'Road Tax', 'Property Tax', 'Building Tax', 'Spirit License', 'License Renewal'],
-  'Salary:': [
-    'Monthly Salary',
-    'Provident Fund',
-    'Emoluments',
-    'Professional Payments',
-    'Wages', 'ESI Scheme', 'Allowances'
-  ],
-  'Bills & Payments': [
-    'Electricity Charges',
-    'Internet Charges',
-    'Telephone Charges', 'Diesel Expenses'
-  ],
-  'Miscellaneous Expenses': [
-    'Bank Charges',
-    'Bank Interest',
-    'Loan Processing Charges',
-    'General Expenses',
-    'Sewage Treatment',
-    'Laundry Service',
-    'RO  Mineral Water',
-    'Pooja Expenses',
-    'Fire Extinguisher',
-    'First Aid Kit Expenses',
-    'Irrecovable Fee', 'Legal Expenses', 'Others'
-  ],
-};
-
+// 2. Specific Budget Sub-Heads (Head-specific mapping)
+// Used in the row-level budget table (subHead-${index}) to pick specific expenses for a head.
 const getSubHeadOptionsForHeadSearch = (budgetHead: string): string[] => {
-  const headGroup = HEAD_TO_GROUP[budgetHead];
-  if (headGroup && HOAC_GROUPS.has(headGroup) && HOAC_SUBHEAD_OPTIONS[headGroup]) {
-    return HOAC_SUBHEAD_OPTIONS[headGroup];
+  const hoacGroup = getHoacGroupForHead(budgetHead);
+  if (hoacGroup && HOAC_SUBHEAD_OPTIONS[hoacGroup]) {
+    return HOAC_SUBHEAD_OPTIONS[hoacGroup];
   }
   return SUB_HEAD_BY_BUDGET_HEAD[budgetHead] ?? [];
 };
@@ -732,7 +455,10 @@ const getSubHeadDropdownOptions = (budgetHead: string): OptionType[] => {
   return options;
 };
 
-const BUDGET_HEAD_SEARCH_OPTIONS: Array<{ label: string; options: BudgetHeadSearchOption[] }> =
+const getBudgetHeadSearchOptions = (): Array<{
+  label: string;
+  options: BudgetHeadSearchOption[];
+}> =>
   BUDGET_HEAD_GROUPS.map((group) => ({
     label: group.label,
     options: group.options.flatMap((head) => {
@@ -756,9 +482,10 @@ const BUDGET_HEAD_SEARCH_OPTIONS: Array<{ label: string; options: BudgetHeadSear
   }));
 
 const createIncomeRow = (): IncomeRow => ({
-  id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  id:
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
   incomeSource: '',
   contribution: '',
   amount: '',
@@ -767,8 +494,95 @@ const createIncomeRow = (): IncomeRow => ({
   creditAccount: '',
 });
 
-const normalizeText = (value: string | null | undefined): string =>
-  String(value || '').trim();
+const normalizeText = (value: string | null | undefined): string => String(value || '').trim();
+
+const isFinanceBeneficiarySelectionComplete = (
+  beneficiaryType: string | null | undefined,
+  beneficiaryValue: string | null | undefined,
+): boolean => {
+  const normalizedType = normalizeText(beneficiaryType);
+  if (!normalizedType) return false;
+  if (normalizedType === 'Institution') return true;
+  return Boolean(normalizeText(beneficiaryValue));
+};
+
+const hasFinanceWorkflowStagePermission = (permissions: string[], stage: string): boolean => {
+  const normalizedStage = normalizeText(stage).toLowerCase();
+  if (!normalizedStage) return false;
+  return permissions.some((permission) => {
+    const normalizedPermission = normalizeText(permission).toLowerCase();
+    return (
+      normalizedPermission === 'finance.workflow.*' ||
+      normalizedPermission === `finance.workflow.${normalizedStage}`
+    );
+  });
+};
+
+const normalizeBudgetGroupKey = (budgetHead: unknown, subHead: unknown): string =>
+  `${normalizeText(String(budgetHead || '')).toLowerCase()}|${normalizeText(String(subHead || '')).toLowerCase()}`;
+
+const groupFinanceBudgetRowsForForm = (
+  rows: any[],
+): { rows: BudgetRow[]; meta: Record<number, BudgetLineMeta> } => {
+  const groupedRows: BudgetRow[] = [];
+  const groupedMeta: Record<number, BudgetLineMeta> = {};
+  const indexByKey = new Map<string, number>();
+  const lineIdsByGroup = new Map<number, Set<number>>();
+  const proposalIdsByGroup = new Map<number, Set<number>>();
+
+  rows.forEach((row: any) => {
+    const category = normalizeText(String(row?.budget_head || ''));
+    const head = normalizeText(String(row?.sub_head || ''));
+    const key = normalizeBudgetGroupKey(category, head);
+    const amount = Number(row?.amount || 0);
+    const availableAmount = Number(row?.available_amount_snapshot ?? 0);
+    let groupIndex = indexByKey.get(key);
+
+    if (groupIndex === undefined) {
+      groupIndex = groupedRows.length;
+      indexByKey.set(key, groupIndex);
+      groupedRows.push({
+        category,
+        head,
+        amount: Number.isFinite(amount) ? String(amount) : '',
+      });
+      groupedMeta[groupIndex] = {
+        budgetLineId: null,
+        budgetProposalId: null,
+        availableAmount: Number.isFinite(availableAmount) ? availableAmount : 0,
+      };
+      lineIdsByGroup.set(groupIndex, new Set<number>());
+      proposalIdsByGroup.set(groupIndex, new Set<number>());
+    } else {
+      const existingAmount = Number(groupedRows[groupIndex].amount || 0);
+      groupedRows[groupIndex].amount = String(
+        existingAmount + (Number.isFinite(amount) ? amount : 0),
+      );
+      groupedMeta[groupIndex].availableAmount += Number.isFinite(availableAmount)
+        ? availableAmount
+        : 0;
+    }
+
+    const lineId = Number(row?.budget_line_id || 0);
+    if (Number.isFinite(lineId) && lineId > 0) {
+      lineIdsByGroup.get(groupIndex)?.add(lineId);
+    }
+
+    const proposalId = Number(row?.budget_proposal_id || 0);
+    if (Number.isFinite(proposalId) && proposalId > 0) {
+      proposalIdsByGroup.get(groupIndex)?.add(proposalId);
+    }
+  });
+
+  groupedRows.forEach((_row, index) => {
+    const lineIds = Array.from(lineIdsByGroup.get(index) || []);
+    const proposalIds = Array.from(proposalIdsByGroup.get(index) || []);
+    groupedMeta[index].budgetLineId = lineIds.length === 1 ? lineIds[0] : null;
+    groupedMeta[index].budgetProposalId = proposalIds.length === 1 ? proposalIds[0] : null;
+  });
+
+  return { rows: groupedRows, meta: groupedMeta };
+};
 
 interface SearchBudgetModalProps {
   show: boolean;
@@ -795,15 +609,11 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
   onSelectHead,
   onSelectSubHead,
 }) => {
-  const allData = useMemo(
-    () =>
-      BUDGET_HEAD_GROUPS.flatMap((group) =>
-        group.options.map((head) => ({
-          head,
-          subheads: SUB_HEAD_BY_BUDGET_HEAD[head] || [],
-        }))
-      ),
-    []
+  const allData = BUDGET_HEAD_GROUPS.flatMap((group) =>
+    group.options.map((head) => ({
+      head,
+      subheads: getSubHeadOptionsForHeadSearch(head),
+    })),
   );
 
   const query = searchTerm.trim().toLowerCase();
@@ -824,7 +634,7 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
           const bScore = b.head.toLowerCase().includes(query) ? 0 : 1;
           return aScore - bScore;
         }),
-    [allData, query]
+    [allData, query],
   );
 
   useEffect(() => {
@@ -1029,6 +839,9 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
 };
 
 const FinanceApproval: React.FC = () => {
+  useBudgetCatalog();
+  const [catalogVersion, setCatalogVersion] = useState(0);
+  useEffect(() => subscribeBudgetCatalog(() => setCatalogVersion((n) => n + 1)), []);
   const [applicantName, setApplicantName] = useState<string>('');
   const [date, setDate] = useState<string>(getLocalTodayYmd());
   const [designation, setDesignation] = useState<string>('');
@@ -1043,6 +856,7 @@ const FinanceApproval: React.FC = () => {
   const [principalPriority, setPrincipalPriority] = useState<string>('');
   const [chairmanComments, setChairmanComments] = useState<string>('');
   const [chairmanStatus, setChairmanStatus] = useState<string>('');
+  const [stageRemarkInput, setStageRemarkInput] = useState<string>('');
   const [showPreview, setShowPreview] = useState<boolean>(false);
   const [autoDownloadPdf, setAutoDownloadPdf] = useState<boolean>(false);
   const [submittedAt, setSubmittedAt] = useState<string>('');
@@ -1050,30 +864,51 @@ const FinanceApproval: React.FC = () => {
   const [balanceAmount, setBalanceAmount] = useState<string>('');
   const [debitStatus, setDebitStatus] = useState<'credited' | 'reimbursement' | ''>('');
   const [email, setEmail] = useState<string>('');
-  const [budgetRows, setBudgetRows] = useState([
-    { category: "", head: "", amount: "" },
-  ]);
+  const [budgetRows, setBudgetRows] = useState([{ category: '', head: '', amount: '' }]);
   const [showIncomeSection, setShowIncomeSection] = useState<boolean>(false);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([createIncomeRow()]);
-  const [budgetLineMetaByRow, setBudgetLineMetaByRow] = useState<Record<number, BudgetLineMeta>>({});
+  const [accountOptions, setAccountOptions] = useState<AccountOption[]>([]);
+  const [accountOptionsError, setAccountOptionsError] = useState<string>('');
+  const [budgetLineMetaByRow, setBudgetLineMetaByRow] = useState<Record<number, BudgetLineMeta>>(
+    {},
+  );
   const [statusUpdates, setStatusUpdates] = useState<any[]>([]);
   const [proposalRef, setProposalRef] = useState<string>('');
-  const [expandedTimelineDetails, setExpandedTimelineDetails] = useState<Record<string, boolean>>({});
+  const [expandedTimelineDetails, setExpandedTimelineDetails] = useState<Record<string, boolean>>(
+    {},
+  );
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [isExternalApplicant, setIsExternalApplicant] = useState<boolean>(false);
   const [applicantSearchQuery, setApplicantSearchQuery] = useState<string>('');
-  const [applicantSearchResults, setApplicantSearchResults] = useState<Array<{ employee_id: number; name: string; designation: string; department: string; email: string; mobile: string; employee_type: string }>>([]);
+  const [applicantSearchResults, setApplicantSearchResults] = useState<
+    Array<{
+      employee_id: number;
+      name: string;
+      designation: string;
+      department: string;
+      email: string;
+      mobile: string;
+      employee_type: string;
+    }>
+  >([]);
   const [showApplicantDropdown, setShowApplicantDropdown] = useState<boolean>(false);
   const componentRef = useRef<HTMLDivElement>(null);
   const autoDownloadTriggeredRef = useRef<boolean>(false);
   const [showUnplannedBudget, setShowUnplannedBudget] = useState<boolean>(false);
   const [unplannedBudgetAmount, setUnplannedBudgetAmount] = useState<string>('');
   const [unplannedBudgetDescription, setUnplannedBudgetDescription] = useState<string>('');
+  const [hasPrincipalDocument, setHasPrincipalDocument] = useState<boolean>(false);
+  const [principalApprovalPopupOpen, setPrincipalApprovalPopupOpen] = useState(false);
+  const [principalApprovalFile, setPrincipalApprovalFile] = useState<File | null>(null);
+  const [principalApprovalSubmitting, setPrincipalApprovalSubmitting] = useState(false);
   // State for dynamic subcategory options (Department, Centre, Cell, Club, Professional Body)
-  const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
+  const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<
+    Record<string, SelectOption[]>
+  >({});
   const [annexureType, setAnnexureType] = useState<string>('');
   const [annexureFiles, setAnnexureFiles] = useState<AnnexureFileRow[]>([]);
+  const [eventSubHeadError, setEventSubHeadError] = useState<string>('');
   const annexureFileInputRef = useRef<HTMLInputElement>(null);
   const annexureFilesRef = useRef<AnnexureFileRow[]>([]);
 
@@ -1088,23 +923,44 @@ const FinanceApproval: React.FC = () => {
     onConfirm?: () => void;
     showCancel?: boolean;
     confirmText?: string;
+    cancelText?: string;
   }>({
     show: false,
-    message: "",
-    type: "info"
+    message: '',
+    type: 'info',
   });
 
-  const showAlert = (message: React.ReactNode, type: AlertType = "info", title?: string, showCancel = false, confirmText = "OK", onConfirm?: () => void) => {
-    setAlertConfig({ show: true, message, type, title, onConfirm, showCancel, confirmText });
+  const showAlert = (
+    message: React.ReactNode,
+    type: AlertType = 'info',
+    title?: string,
+    showCancel = false,
+    confirmText = 'OK',
+    onConfirm?: () => void,
+    cancelText = 'Cancel',
+  ) => {
+    setAlertConfig({
+      show: true,
+      message,
+      type,
+      title,
+      onConfirm,
+      showCancel,
+      confirmText,
+      cancelText,
+    });
   };
 
-  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+  const closeAlert = () => setAlertConfig((prev) => ({ ...prev, show: false }));
 
   // Action popup state (custom modal for return/reject comments)
   const [wfActionPopupOpen, setWfActionPopupOpen] = useState(false);
   const [wfActionType, setWfActionType] = useState<'returned' | 'rejected' | null>(null);
   const [wfActionComment, setWfActionComment] = useState('');
   const [wfActionSubmitting, setWfActionSubmitting] = useState(false);
+  const [resubmitPopupOpen, setResubmitPopupOpen] = useState(false);
+  const [resubmitComment, setResubmitComment] = useState('');
+  const [resubmitSubmitting, setResubmitSubmitting] = useState(false);
 
   useEffect(() => {
     setExpandedTimelineDetails({});
@@ -1138,25 +994,31 @@ const FinanceApproval: React.FC = () => {
       const nextOptions: Record<string, SelectOption[]> = {};
 
       try {
-        const response = await authenticityUtility.get('budget/org-units') as any;
+        const response = (await authenticityUtility.get('budget/org-units')) as any;
         const grouped = response?.data?.grouped;
 
         if (grouped && typeof grouped === 'object') {
-          Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).forEach(([beneficiaryKey, apiType]) => {
-            const rows = Array.isArray((grouped as Record<string, any[]>)[apiType])
-              ? (grouped as Record<string, any[]>)[apiType]
-              : [];
-            nextOptions[beneficiaryKey] = toOptions(rows);
-          });
+          Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).forEach(
+            ([beneficiaryKey, apiType]) => {
+              const rows = Array.isArray((grouped as Record<string, any[]>)[apiType])
+                ? (grouped as Record<string, any[]>)[apiType]
+                : [];
+              nextOptions[beneficiaryKey] = toOptions(rows);
+            },
+          );
         } else {
           throw new Error('Grouped org-units payload unavailable');
         }
       } catch (bulkError) {
         console.error('Failed to fetch bulk org units, falling back to per-type calls:', bulkError);
 
-        for (const [beneficiaryKey, apiType] of Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE)) {
+        for (const [beneficiaryKey, apiType] of Object.entries(
+          BENEFICIARY_TYPE_TO_ENTITY_API_TYPE,
+        )) {
           try {
-            const response = await authenticityUtility.get(`/finance-requests/org-units/${apiType}`) as any;
+            const response = (await authenticityUtility.get(
+              `/finance-requests/org-units/${apiType}`,
+            )) as any;
             const rows = Array.isArray(response?.data) ? response.data : [];
             nextOptions[beneficiaryKey] = toOptions(rows);
           } catch (error) {
@@ -1186,8 +1048,11 @@ const FinanceApproval: React.FC = () => {
   useEffect(() => {
     const loadTagOptions = async () => {
       try {
-        const response = await authenticityUtility.get('/finance-requests/tags') as any;
-        if (response?.success && Array.isArray(response?.data)) {
+        const response = (await authenticityUtility.get('/finance-requests/tags')) as any;
+        if (
+          (response?.status === 'success' || response?.success === true) &&
+          Array.isArray(response?.data)
+        ) {
           const options = response.data
             .map((row: any) => ({
               value: String(row?.tag_name || '').trim(),
@@ -1212,8 +1077,22 @@ const FinanceApproval: React.FC = () => {
   const handleApplicantSearch = async (query: string) => {
     setApplicantSearchQuery(query);
     try {
-      const response = await authenticityUtility.get(`/finance-requests/search-applicant?q=${encodeURIComponent(query)}`) as { status: string; data: Array<{ employee_id: number; name: string; designation: string; department: string; email: string; mobile: string; employee_type: string }> };
-      if (response.status === 'success') {
+      const response = (await authenticityUtility.get(
+        `/finance-requests/search-applicant?q=${encodeURIComponent(query)}`,
+      )) as {
+        success?: boolean;
+        status?: string;
+        data?: Array<{
+          employee_id: number;
+          name: string;
+          designation: string;
+          department: string;
+          email: string;
+          mobile: string;
+          employee_type: string;
+        }>;
+      };
+      if (response.success === true || response.status === 'success') {
         setApplicantSearchResults(response.data || []);
         setShowApplicantDropdown(true);
       }
@@ -1223,7 +1102,14 @@ const FinanceApproval: React.FC = () => {
   };
 
   // Select applicant from search results
-  const handleSelectApplicant = (emp: { employee_id: number; name: string; designation: string; department: string; email: string; mobile: string }) => {
+  const handleSelectApplicant = (emp: {
+    employee_id: number;
+    name: string;
+    designation: string;
+    department: string;
+    email: string;
+    mobile: string;
+  }) => {
     setEmployeeId(emp.employee_id);
     setApplicantName(emp.name.trim());
     setDesignation(emp.designation || '');
@@ -1275,7 +1161,7 @@ const FinanceApproval: React.FC = () => {
 }
 
     `,
-    documentTitle: "Finance_Approval_Request",
+    documentTitle: 'Finance_Approval_Request',
   });
 
   const generatePDF = async (): Promise<void> => {
@@ -1293,7 +1179,7 @@ const FinanceApproval: React.FC = () => {
         timestamp: getSubmittedTimestamp(
           approvalHistory,
           submittedAt ? formatWorkflowTimestamp(submittedAt) : '',
-          !id
+          !id,
         ),
       };
 
@@ -1324,7 +1210,8 @@ const FinanceApproval: React.FC = () => {
         mobile,
         beneficiaryText,
         description,
-        headOfAccountsText: primaryHead + (extraDropdownVisible && eventSubHead ? ` - ${eventSubHead}` : ''),
+        headOfAccountsText:
+          primaryHead + (extraDropdownVisible && eventSubHead ? ` - ${eventSubHead}` : ''),
         budgetRows,
         showUnplannedBudget,
         unplannedBudgetAmount,
@@ -1344,7 +1231,7 @@ const FinanceApproval: React.FC = () => {
       if (skippedFiles.length) {
         showAlert(
           `Downloaded combined PDF. Skipped unsupported annexure files: ${skippedFiles.join(', ')}`,
-          'warning'
+          'warning',
         );
       }
     } catch (error) {
@@ -1361,7 +1248,7 @@ const FinanceApproval: React.FC = () => {
         isAdminWorkflowContext && totalBudget > 10000
           ? 'You can download the PDF once the DOF approval is completed.'
           : 'You can download the PDF once the proposal is approved.',
-        'warning'
+        'warning',
       );
       return;
     }
@@ -1388,13 +1275,13 @@ const FinanceApproval: React.FC = () => {
     const firstRowCategory = budgetRows[0]?.category || '';
     const newIndex = budgetRows.length;
 
-    setBudgetRows(prev => [
+    setBudgetRows((prev) => [
       ...prev,
       {
         category: firstRowCategory,
         head: '',
-        amount: ''
-      }
+        amount: '',
+      },
     ]);
     setBudgetLineMetaByRow((prev) => ({
       ...prev,
@@ -1433,6 +1320,10 @@ const FinanceApproval: React.FC = () => {
     const effectiveHead = normalizeText(primaryHead) || normalizeText(row?.category);
     const effectiveSubHead =
       (extraDropdownVisible ? normalizeText(eventSubHead) : '') || normalizeText(row?.head);
+    const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(effectiveHead, effectiveSubHead);
+    if (headOnlyMatch) {
+      return `head:${effectiveHead}|mode:head-only`;
+    }
     return `head:${effectiveHead}|sub:${effectiveSubHead}`;
   };
 
@@ -1450,12 +1341,26 @@ const FinanceApproval: React.FC = () => {
 
     return Math.max(0, baseAvailable - reservedByPreviousRows);
   };
+
+  const handleUnplannedBudgetToggle = (checked: boolean): void => {
+    setShowUnplannedBudget(checked);
+    if (!checked) {
+      setUnplannedBudgetAmount('');
+      setUnplannedBudgetDescription('');
+    }
+  };
+
   const fetchBudgetAvailability = async (rowIndex: number, budgetHead: string, subHead: string) => {
     const normalizedHead = normalizeText(primaryHead) || normalizeText(budgetHead);
     const normalizedSubHead =
       (extraDropdownVisible ? normalizeText(eventSubHead) : '') || normalizeText(subHead);
+    const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(normalizedHead, normalizedSubHead);
+    const hasBeneficiarySelection = isFinanceBeneficiarySelectionComplete(
+      beneficiaryType,
+      beneficiaryValue,
+    );
 
-    if (!normalizedHead || !normalizedSubHead) {
+    if (!hasBeneficiarySelection || !normalizedHead || (!headOnlyMatch && !normalizedSubHead)) {
       setBudgetLineMetaByRow((prev) => ({
         ...prev,
         [rowIndex]: {
@@ -1468,16 +1373,18 @@ const FinanceApproval: React.FC = () => {
     }
 
     try {
-      const response = await authenticityUtility.get('/finance-requests/budget-availability', {
+      const response = (await authenticityUtility.get('/finance-requests/budget-availability', {
         params: {
           budget_head: normalizedHead,
-          sub_head: normalizeSubHeadForDb(normalizedSubHead),
-          head_only_match: '0',
+          ...(normalizedSubHead ? { sub_head: normalizeSubHeadForDb(normalizedSubHead) } : {}),
+          head_only_match: headOnlyMatch ? '1' : '0',
           finance_id: isEditMode && id ? id : undefined,
           beneficiary_type: beneficiaryType || undefined,
           beneficiary_value: beneficiaryValue || undefined,
+          fiscal_year: budgetAvailabilityFiscalYear || undefined,
         },
-      }) as {
+      })) as {
+        success?: boolean;
         status: string;
         data?: {
           selected?: {
@@ -1490,13 +1397,25 @@ const FinanceApproval: React.FC = () => {
       };
 
       const selected = response?.data?.selected || null;
-      const availableAmount = Number(selected?.availableAmount ?? response?.data?.totalAvailable ?? 0);
+      const availableAmount = Number(
+        headOnlyMatch
+          ? (response?.data?.totalAvailable ?? selected?.availableAmount ?? 0)
+          : (selected?.availableAmount ?? response?.data?.totalAvailable ?? 0),
+      );
 
       setBudgetLineMetaByRow((prev) => ({
         ...prev,
         [rowIndex]: {
-          budgetLineId: selected?.budgetLineId ? Number(selected.budgetLineId) : null,
-          budgetProposalId: selected?.budgetProposalId ? Number(selected.budgetProposalId) : null,
+          budgetLineId: headOnlyMatch
+            ? null
+            : selected?.budgetLineId
+              ? Number(selected.budgetLineId)
+              : null,
+          budgetProposalId: headOnlyMatch
+            ? null
+            : selected?.budgetProposalId
+              ? Number(selected.budgetProposalId)
+              : null,
           availableAmount: Number.isFinite(availableAmount) ? availableAmount : 0,
         },
       }));
@@ -1526,13 +1445,20 @@ const FinanceApproval: React.FC = () => {
         },
       }));
     } else if (field === 'amount') {
-      let num = Number(value) || 0;
+      const raw = String(value ?? '').trim();
+      if (raw === '') {
+        updated[index][field] = '';
+        setBudgetRows(updated);
+        return;
+      }
+
+      let num = Number(raw) || 0;
       if (num > MAX_AMOUNT) num = MAX_AMOUNT;
       const remainingAmount = getRemainingAvailableForRow(index);
       if (num > remainingAmount) {
         showAlert(
           `Row ${index + 1}: Requested amount cannot exceed available balance  ${remainingAmount}.`,
-          'warning'
+          'warning',
         );
         num = remainingAmount;
       }
@@ -1540,8 +1466,11 @@ const FinanceApproval: React.FC = () => {
     } else {
       updated[index][field] = value;
       if (field === 'head') {
-        const selectedHead = updated[index].category;
-        fetchBudgetAvailability(index, selectedHead, normalizeSubHeadForDb(value));
+        fetchBudgetAvailability(
+          index,
+          normalizeText(primaryHead) || updated[index].category,
+          normalizeSubHeadForDb(value),
+        );
       }
     }
     setBudgetRows(updated);
@@ -1558,13 +1487,17 @@ const FinanceApproval: React.FC = () => {
         ...updated[index],
         category: selectedHead,
         head: selectedSubHead,
-        amount: selectedHead ? '' : updated[index].amount,
       };
       return updated;
     });
 
-    if (selectedHead && selectedSubHead) {
-      fetchBudgetAvailability(index, selectedHead, normalizeSubHeadForDb(selectedSubHead));
+    const effectiveLookupHead = normalizeText(primaryHead) || selectedHead;
+    const canFetchWithHeadOnly = shouldUseHeadOnlyAvailabilityMatch(
+      effectiveLookupHead,
+      selectedSubHead,
+    );
+    if (effectiveLookupHead && (selectedSubHead || canFetchWithHeadOnly)) {
+      fetchBudgetAvailability(index, effectiveLookupHead, normalizeSubHeadForDb(selectedSubHead));
     } else {
       setBudgetLineMetaByRow((prev) => ({
         ...prev,
@@ -1576,6 +1509,8 @@ const FinanceApproval: React.FC = () => {
       }));
     }
   };
+
+  const availabilityFetchKeyByRowRef = useRef<Record<number, string>>({});
 
   const handleAddIncomeRow = () => {
     const lastIndex = incomeRows.length - 1;
@@ -1593,24 +1528,75 @@ const FinanceApproval: React.FC = () => {
   };
 
   const handleIncomeRowChange = (id: string, field: keyof IncomeRow, value: string) =>
-  setIncomeRows((prev) =>
-    prev.map((row) =>
-      row.id === id
-        ? {
-            ...row,
-            [field]: field === "amount" ? value.replace(/\D/g, "") : value,
-          }
-        : row
-    )
-  );
+    setIncomeRows((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? {
+              ...row,
+              [field]: field === 'amount' ? value.replace(/\D/g, '') : value,
+            }
+          : row,
+      ),
+    );
+
+  const accountDropdownOptions = accountOptions.map((account) => ({
+    value: account.name,
+    label: account.name,
+    id: account.id,
+  }));
+
+  const loadAccountOptionsFromApi = async (isMounted = () => true) => {
+    try {
+      const options = await fetchAccountOptions();
+      if (!isMounted()) return;
+      setAccountOptions(options);
+      setAccountOptionsError('');
+    } catch (error) {
+      console.error('Failed to load account options', error);
+      if (!isMounted()) return;
+      setAccountOptions([]);
+      setAccountOptionsError(
+        'Credit account options could not be loaded. Please refresh or contact admin.',
+      );
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    void loadAccountOptionsFromApi(() => mounted);
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const createAnnexureRowId = () => `annexure-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
 
   const handleAnnexureFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
 
+    if (String(annexureType || '').trim() === 'Not Applicable') {
+      showAlert('File upload is disabled when Annexure Type is "Not Applicable".', 'warning');
+      if (annexureFileInputRef.current) {
+        annexureFileInputRef.current.value = '';
+      }
+      return;
+    }
+
     if (!String(annexureType || '').trim()) {
       showAlert('Please select annexure type before uploading files.', 'warning');
+      if (annexureFileInputRef.current) {
+        annexureFileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    const invalidFiles = files.filter(
+      (file) => file.type !== 'application/pdf' || file.size >= 2 * 1024 * 1024,
+    );
+
+    if (invalidFiles.length > 0) {
+      showAlert('Only PDF files with a size less than 2MB are allowed.', 'warning');
       if (annexureFileInputRef.current) {
         annexureFileInputRef.current.value = '';
       }
@@ -1665,7 +1651,11 @@ const FinanceApproval: React.FC = () => {
 
   const unplannedBudgetTotal = showUnplannedBudget ? Number(unplannedBudgetAmount || 0) : 0;
   const hasUnplannedBudgetPreview = showUnplannedBudget || Number(unplannedBudgetAmount || 0) > 0;
-  const totalBudget = budgetRows.reduce((sum, row) => sum + Number(row.amount || 0), 0) + unplannedBudgetTotal;
+  const totalBudget =
+    budgetRows.reduce((sum, row) => sum + Number(row.amount || 0), 0) + unplannedBudgetTotal;
+  const totalIncome = incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+  const amountRequestedFromManagement = Math.max(totalBudget - totalIncome, 0);
+  const shouldShowManagementRequestAmount = showIncomeSection && amountRequestedFromManagement > 0;
   const actionCell: CSSProperties = {
     display: 'flex',
     justifyContent: 'center',
@@ -1691,7 +1681,7 @@ const FinanceApproval: React.FC = () => {
     ...iconBtn,
     background: '#ffe6e6',
     alignItems: 'center',
-    color:'#dc3545'
+    color: '#dc3545',
   };
   const annexureUploadButtonStyle: CSSProperties = {
     display: 'inline-flex',
@@ -1721,7 +1711,6 @@ const FinanceApproval: React.FC = () => {
     padding: '8px',
     border: '1px solid #e0e0e0',
     textAlign: 'left',
-
   };
   const incomeSubRowLabelStyle: CSSProperties = {
     padding: '8px',
@@ -1732,17 +1721,15 @@ const FinanceApproval: React.FC = () => {
     color: '#374151',
   };
 
-  const hasFilledText = (value: string | null | undefined): boolean => normalizeText(value).length > 0;
+  const hasFilledText = (value: string | null | undefined): boolean =>
+    normalizeText(value).length > 0;
 
   const getBudgetRowMissingFields = (row: BudgetRow): string[] => {
     const missing: string[] = [];
+    const normalizedBudgetHead = normalizeText(row.category);
 
-    if (!hasFilledText(row.category)) {
+    if (!normalizedBudgetHead) {
       missing.push('Budget Head');
-    }
-
-    if (!hasFilledText(row.head)) {
-      missing.push('Sub Head');
     }
 
     if (!(Number(row.amount || 0) > 0)) {
@@ -1756,7 +1743,6 @@ const FinanceApproval: React.FC = () => {
     const row = budgetRows[index];
     if (!row) return false;
     if (!hasFilledText(primaryHead)) return false;
-    if (extraDropdownVisible && !hasFilledText(eventSubHead)) return false;
     return getBudgetRowMissingFields(row).length === 0;
   };
 
@@ -1764,9 +1750,6 @@ const FinanceApproval: React.FC = () => {
     const row = budgetRows[index];
     if (!hasFilledText(primaryHead)) {
       return 'Select Head of Accounts first';
-    }
-    if (extraDropdownVisible && !hasFilledText(eventSubHead)) {
-      return 'Select the sub head for Head of Accounts first';
     }
     if (!row) {
       return 'Fill the current budget row first';
@@ -1807,18 +1790,38 @@ const FinanceApproval: React.FC = () => {
 
   const getAnnexureRowMissingFields = (row: AnnexureFileRow): string[] => {
     const missing: string[] = [];
+    const isNotApplicable = String(row.annexureType || '').trim() === 'Not Applicable';
 
     if (!hasFilledText(row.annexureType)) missing.push('Annexure Type');
-    if (!hasFilledText(row.originalName) && !hasFilledText(row.storedName) && !hasFilledText(row.filePath)) {
+    if (
+      !isNotApplicable &&
+      !hasFilledText(row.originalName) &&
+      !hasFilledText(row.storedName) &&
+      !hasFilledText(row.filePath)
+    ) {
       missing.push('File');
     }
 
     return missing;
   };
 
-  const handleSubmit = async (): Promise<void> => {
+  const closeResubmitPopup = (force = false) => {
+    if (resubmitSubmitting && !force) return;
+    setResubmitPopupOpen(false);
+    setResubmitComment('');
+  };
+
+  const handleSubmit = async (resubmissionComment?: string): Promise<void> => {
     try {
-      if (isViewMode) {
+      if (isViewMode && !canSuperAdminEditTerminalFinance) {
+        return;
+      }
+
+      const shouldResubmitAfterSave =
+        isEditMode && loadedWorkflowStatus === 'returned' && !isAdminWorkflowContext;
+      if (shouldResubmitAfterSave && resubmissionComment === undefined) {
+        setResubmitComment('');
+        setResubmitPopupOpen(true);
         return;
       }
 
@@ -1867,16 +1870,17 @@ const FinanceApproval: React.FC = () => {
         return;
       }
       if (extraDropdownVisible && !hasFilledText(eventSubHead)) {
-        showAlert('Please select the sub head for Head of Accounts.', 'warning');
+        setEventSubHeadError('Please select Sub Head.');
+        showAlert('Please select Sub Head.', 'warning');
         return;
       }
       if (showUnplannedBudget) {
         if (!hasFilledText(unplannedBudgetDescription)) {
-          showAlert('Please enter Unplanned Budget description.', 'warning');
+          showAlert('Please enter Unplanned Expenditure description.', 'warning');
           return;
         }
         if (!(Number(unplannedBudgetAmount || 0) > 0)) {
-          showAlert('Please enter a valid Unplanned Budget amount.', 'warning');
+          showAlert('Please enter a valid Unplanned Expenditure amount.', 'warning');
           return;
         }
       }
@@ -1888,14 +1892,17 @@ const FinanceApproval: React.FC = () => {
         const missingFields = getBudgetRowMissingFields(row);
 
         if (missingFields.length > 0) {
-          showAlert(`Please fill ${missingFields.join(', ')} for budget row ${index + 1}.`, 'warning');
+          showAlert(
+            `Please fill ${missingFields.join(', ')} for budget row ${index + 1}.`,
+            'warning',
+          );
           return;
         }
 
         if (requestedAmount > remainingAmount) {
           showAlert(
             `Row ${index + 1}: Requested amount (${requestedAmount}) exceeds available balance (${remainingAmount}).`,
-            'warning'
+            'warning',
           );
           return;
         }
@@ -1907,13 +1914,18 @@ const FinanceApproval: React.FC = () => {
           const missingFields = getIncomeRowMissingFields(row);
 
           if (missingFields.length > 0) {
-            showAlert(`Please fill ${missingFields.join(', ')} for income row ${index + 1}.`, 'warning');
+            showAlert(
+              `Please fill ${missingFields.join(', ')} for income row ${index + 1}.`,
+              'warning',
+            );
             return;
           }
         }
       }
 
-      if (annexureFiles.length === 0) {
+      const isAnnexureNotApplicable = String(annexureType || '').trim() === 'Not Applicable';
+
+      if (!isAnnexureNotApplicable && annexureFiles.length === 0) {
         showAlert('Please add at least one annexure.', 'warning');
         return;
       }
@@ -1924,7 +1936,10 @@ const FinanceApproval: React.FC = () => {
           const missingFields = getAnnexureRowMissingFields(row);
 
           if (missingFields.length > 0) {
-            showAlert(`Please fill ${missingFields.join(', ')} for annexure row ${index + 1}.`, 'warning');
+            showAlert(
+              `Please fill ${missingFields.join(', ')} for annexure row ${index + 1}.`,
+              'warning',
+            );
             return;
           }
         }
@@ -1943,7 +1958,11 @@ const FinanceApproval: React.FC = () => {
         if (row.file) {
           const formData = new FormData();
           formData.append('file', row.file);
-          const uploadResponse = await authenticityUtility.postFile('/finance-requests/annexure/upload', formData) as {
+          const uploadResponse = (await authenticityUtility.postFile(
+            '/finance-requests/annexure/upload',
+            formData,
+          )) as {
+            success?: boolean;
             status?: string;
             data?: {
               originalName?: string;
@@ -1954,15 +1973,18 @@ const FinanceApproval: React.FC = () => {
             };
             message?: string;
           };
+          const isUploadSuccess =
+            uploadResponse?.success === true || uploadResponse?.status === 'success';
 
-          if (uploadResponse?.status !== 'success' || !uploadResponse?.data) {
+          if (!isUploadSuccess || !uploadResponse?.data) {
             showAlert(uploadResponse?.message || 'Failed to upload annexure file', 'error');
             return;
           }
 
           annexuresPayload.push({
             annexure_type: row.annexureType || null,
-            original_name: uploadResponse.data.originalName || row.originalName || row.file.name || null,
+            original_name:
+              uploadResponse.data.originalName || row.originalName || row.file.name || null,
             stored_name: uploadResponse.data.storedName || null,
             file_path: uploadResponse.data.filePath || null,
             mime_type: uploadResponse.data.mimeType || row.mimeType || null,
@@ -2007,12 +2029,15 @@ const FinanceApproval: React.FC = () => {
         balance_amount: balanceAmount || null,
         unplanned_budget_enabled: showUnplannedBudget,
         unplanned_budget_amount: showUnplannedBudget ? Number(unplannedBudgetAmount || 0) : null,
-        unplanned_budget_description: showUnplannedBudget ? (normalizeText(unplannedBudgetDescription) || null) : null,
+        unplanned_budget_description: showUnplannedBudget
+          ? normalizeText(unplannedBudgetDescription) || null
+          : null,
 
         income_type: primaryIncomeRow?.incomeSource || '',
         income_status: primaryIncomeRow?.creditAccount || '',
         income_amount_type: primaryIncomeRow?.contribution || '',
-        annexure_type: primaryAnnexure?.annexure_type || null,
+        annexure_type:
+          primaryAnnexure?.annexure_type || (isAnnexureNotApplicable ? annexureType : null),
         annexure_file_name: primaryAnnexure?.original_name || null,
         annexure_storage_name: primaryAnnexure?.stored_name || null,
         annexure_file_path: primaryAnnexure?.file_path || null,
@@ -2022,54 +2047,122 @@ const FinanceApproval: React.FC = () => {
         credit_status: primaryIncomeRow?.status || '',
         debit_status: debitStatus || null,
         partial_amount: primaryIncomeRow?.amount || null,
-        budget_rows: budgetRows.map((row, index) => ({
-          budget_head: normalizeText(primaryHead) || row.category,
-          sub_head: (extraDropdownVisible ? normalizeText(eventSubHead) : '') || row.head,
-          head_only_match: false,
-          amount: Number(row.amount || 0),
-          budget_line_id: budgetLineMetaByRow[index]?.budgetLineId || null,
-          budget_proposal_id: budgetLineMetaByRow[index]?.budgetProposalId || null,
-          available_amount_snapshot: budgetLineMetaByRow[index]?.availableAmount ?? null,
-        })),
+        budget_rows: budgetRows.map((row, index) => {
+          const normalizedBudgetHead = normalizeText(primaryHead) || normalizeText(row.category);
+          const normalizedSubHead = normalizeText(row.head);
+          const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(
+            normalizedBudgetHead,
+            normalizedSubHead,
+          );
+          return {
+            budget_head: normalizedBudgetHead,
+            sub_head: normalizedSubHead,
+            head_only_match: headOnlyMatch,
+            amount: Number(row.amount || 0),
+            budget_line_id: headOnlyMatch ? null : budgetLineMetaByRow[index]?.budgetLineId || null,
+            budget_proposal_id: headOnlyMatch
+              ? null
+              : budgetLineMetaByRow[index]?.budgetProposalId || null,
+            fiscal_year: budgetAvailabilityFiscalYear || null,
+            available_amount_snapshot: budgetLineMetaByRow[index]?.availableAmount ?? null,
+          };
+        }),
         income_rows: showIncomeSection ? incomeRows : [],
       };
 
-      const result = (isEditMode && id
-        ? await authenticityUtility.put(`/finance-requests/${id}`, payload)
-        : await authenticityUtility.post('/finance-requests', payload)) as { status: string; message?: string };
+      const result = (
+        isEditMode && id
+          ? await authenticityUtility.put(`/finance-requests/${id}`, payload)
+          : await authenticityUtility.post('/finance-requests', payload)
+      ) as {
+        success?: boolean;
+        status?: string;
+        message?: string;
+        data?: {
+          id?: number | string;
+          requestRef?: string | null;
+          request_ref?: string | null;
+          proposal_ref?: string | null;
+        };
+      };
 
-      if (result.status !== 'success') {
+      if (result.success !== true && result.status !== 'success') {
         showAlert(result.message || 'Submission failed', 'error');
         return;
       }
 
-      if (isEditMode && loadedWorkflowStatus === 'returned' && !isAdminWorkflowContext) {
-        const resubmitResult = await authenticityUtility.post(`/finance-requests/${id}/resubmit`, {}) as { status?: string; message?: string };
-        if (resubmitResult.status !== 'success') {
-          showAlert(resubmitResult.message || 'Finance request updated, but resubmission failed', 'error');
+      if (shouldResubmitAfterSave) {
+        const comment = normalizeText(resubmissionComment);
+        if (!comment) {
+          showAlert('Please enter resubmission comments.', 'warning');
           return;
         }
+
+        const resubmitResult = (await authenticityUtility.post(`/finance-requests/${id}/resubmit`, {
+          feedback: comment,
+        })) as { success?: boolean; status?: string; message?: string };
+        if (resubmitResult.success !== true && resubmitResult.status !== 'success') {
+          showAlert(
+            resubmitResult.message || 'Finance request updated, but resubmission failed',
+            'error',
+          );
+          return;
+        }
+        closeResubmitPopup(true);
       }
 
+      const refNo = normalizeText(
+        result.data?.requestRef ||
+          result.data?.request_ref ||
+          result.data?.proposal_ref ||
+          proposalRef,
+      );
+
       showAlert(
-        isEditMode ? 'Finance request updated successfully' : 'Finance request submitted successfully',
+        <div>
+          <div>
+            {isEditMode
+              ? 'Finance request updated successfully!'
+              : 'Finance request submitted successfully!'}
+          </div>
+          {refNo && (
+            <div style={{ marginTop: '8px', fontWeight: 'bold' }}>Reference No.: {refNo}</div>
+          )}
+        </div>,
         'success',
-        undefined,
+        'Success',
         false,
         'OK',
-        () => navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard')
+        () => {
+          closeAlert();
+          navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard');
+        },
       );
     } catch (error) {
       console.error('Finance submit error:', error);
-      const apiMessage =
-        (error as any)?.response?.data?.message ||
-        (error as any)?.response?.data?.error ||
-        (error as any)?.message;
-      showAlert(apiMessage ? String(apiMessage) : 'Something went wrong while submitting', 'error');
+      showAlert(getFinanceSubmitErrorMessage(error), 'error');
     }
   };
 
-  const handleWorkflowAction = async (decision: 'approved' | 'returned' | 'rejected' | 'archived') => {
+  const submitResubmissionWithComment = async () => {
+    if (resubmitSubmitting) return;
+    const comment = resubmitComment.trim();
+    if (!comment) {
+      showAlert('Please enter resubmission comments.', 'warning');
+      return;
+    }
+
+    setResubmitSubmitting(true);
+    try {
+      await handleSubmit(comment);
+    } finally {
+      setResubmitSubmitting(false);
+    }
+  };
+
+  const handleWorkflowAction = async (
+    decision: 'approved' | 'returned' | 'rejected' | 'archived',
+  ) => {
     if (!id) return;
 
     // For return/reject, open the custom comment modal instead of window.prompt
@@ -2080,43 +2173,57 @@ const FinanceApproval: React.FC = () => {
       return;
     }
 
+    if (decision === 'approved' || decision === 'archived') {
+      const isArchivedAction = decision === 'archived';
+      showAlert(
+        isArchivedAction
+          ? 'Are you sure you want to archive this request?'
+          : 'Are you sure you want to approve this request?',
+        'warning',
+        isArchivedAction ? 'Confirm Archive' : 'Confirm Approval',
+        true,
+        isArchivedAction ? 'Archive' : 'Approve',
+        () => {
+          closeAlert();
+          executeWorkflowAction(decision);
+        },
+      );
+      return;
+    }
+
     await executeWorkflowAction(decision);
   };
 
-  const executeWorkflowAction = async (decision: 'approved' | 'returned' | 'rejected' | 'archived', feedback?: string) => {
+  const executeWorkflowAction = async (
+    decision: 'approved' | 'returned' | 'rejected' | 'archived',
+    feedback?: string,
+  ) => {
     if (!id) return;
 
     try {
       setIsLoading(true);
 
-      const response = (decision === 'archived'
-        ? await authenticityUtility.patch(`/finance-requests/${id}/archive-toggle`, {})
-        : await authenticityUtility.patch(`/finance-requests/${id}/approval`, {
-          decision,
-          feedback,
-        })) as { status?: string; success?: boolean; message?: string; data?: { message?: string } };
+      const response = (
+        decision === 'archived'
+          ? await authenticityUtility.patch(`/finance-requests/${id}/archive-toggle`, {})
+          : await authenticityUtility.patch(`/finance-requests/${id}/approval`, {
+              decision,
+              feedback,
+              stageRemark: normalizeText(stageRemarkInput) || undefined,
+            })
+      ) as { status?: string; success?: boolean; message?: string; data?: { message?: string } };
 
       if (response?.status !== 'success' && response?.success !== true) {
         showAlert(response?.message || response?.data?.message || `Failed to ${decision}`, 'error');
         return;
       }
 
-      showAlert(
-        decision === 'approved'
-          ? 'Finance request approved successfully'
-          : decision === 'returned'
-            ? 'Finance request returned successfully'
-            : decision === 'rejected'
-              ? 'Finance request rejected successfully'
-              : 'Finance request archived successfully',
-        'success',
-        undefined,
-        false,
-        'OK',
-        () => navigate('/workflow/finance')
-      );
+      navigate('/workflow/finance');
     } catch (error: any) {
-      showAlert(error?.response?.data?.message || error?.message || `Failed to ${decision}`, 'error');
+      showAlert(
+        error?.response?.data?.message || error?.message || `Failed to ${decision}`,
+        'error',
+      );
     } finally {
       setIsLoading(false);
     }
@@ -2147,7 +2254,61 @@ const FinanceApproval: React.FC = () => {
     setWfActionComment('');
   };
 
- const handleReset = (force = false): void => {
+  const uploadPrincipalDocument = async (file: File): Promise<boolean> => {
+    if (!id) return false;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      setIsLoading(true);
+      const response = (await authenticityUtility.postFile(
+        `/finance-requests/${id}/principal-document`,
+        formData,
+      )) as any;
+      const isUploadSuccess = response?.success === true || response?.status === 'success';
+      if (!isUploadSuccess) {
+        showAlert(response?.message || 'Failed to upload principal document', 'error');
+        return false;
+      }
+      setHasPrincipalDocument(true);
+      return true;
+    } catch (error: any) {
+      showAlert(
+        error?.response?.data?.message || error?.message || 'Failed to upload principal document',
+        'error',
+      );
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const closePrincipalApprovalPopup = () => {
+    if (principalApprovalSubmitting) return;
+    setPrincipalApprovalPopupOpen(false);
+    setPrincipalApprovalFile(null);
+  };
+
+  const submitPrincipalApproval = async () => {
+    if (principalApprovalSubmitting) return;
+    if (!principalApprovalFile) {
+      showAlert('Please select a PDF document to upload before approving.', 'warning');
+      return;
+    }
+
+    setPrincipalApprovalSubmitting(true);
+    try {
+      const success = await uploadPrincipalDocument(principalApprovalFile);
+      if (success) {
+        await executeWorkflowAction('approved');
+        setPrincipalApprovalPopupOpen(false);
+        setPrincipalApprovalFile(null);
+      }
+    } finally {
+      setPrincipalApprovalSubmitting(false);
+    }
+  };
+
+  const handleReset = (force = false): void => {
     const performReset = () => {
       setApplicantName('');
       setDate('');
@@ -2174,7 +2335,7 @@ const FinanceApproval: React.FC = () => {
       setUnplannedBudgetDescription('');
       setBudgetRows([{ category: '', head: '', amount: '' }]);
       setBudgetLineMetaByRow({});
-      setAmountProposed("");
+      setAmountProposed('');
       setShowIncomeSection(false);
       setIncomeRows([createIncomeRow()]);
       setAnnexureType('');
@@ -2202,25 +2363,28 @@ const FinanceApproval: React.FC = () => {
         () => {
           closeAlert();
           performReset();
-        }
+        },
       );
     }
   };
 
   const getSubcategoryLabel = (category: string) => {
-    if (!category) return "Sub category";
+    if (!category) return 'Sub category';
     return category;
   };
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(true);
   const [beneficiaryType, setBeneficiaryType] = useState<string>('');
   const [beneficiaryValue, setBeneficiaryValue] = useState<string>('');
   // Get subcategory options from the loaded data (dynamic from API) - SAME AS BUDGET.TSX
   // SAME AS BUDGET.TSX - Dynamic subcategory list from API
   // SAME AS BUDGET.TSX
-  const subcategoryOptions: SelectOption[] = beneficiaryType ? subcategoryOptionsByType[beneficiaryType] || [] : [];
-  const subcategoryList = subcategoryOptions.map(option => option.value);
+  const subcategoryOptions: SelectOption[] = beneficiaryType
+    ? subcategoryOptionsByType[beneficiaryType] || []
+    : [];
+  const subcategoryList = subcategoryOptions.map((option) => option.value);
   const hasSubcategories = subcategoryList.length > 0;
 
   const getBeneficiaryDisplayText = () => {
@@ -2234,13 +2398,12 @@ const FinanceApproval: React.FC = () => {
     return `${type} - ${value}`;
   };
 
-
-  const isMultipleSelect = (type: string) =>
-    type === "Faculty" || type === "Staff";
+  const isMultipleSelect = (type: string) => type === 'Faculty' || type === 'Staff';
 
   const [categorySelections, setCategorySelections] = useState<string[]>([]);
 
   const [primaryHead, setPrimaryHead] = useState<string>('');
+  // eventSubHead: Shared sub-head for the entire request (appears for HOAC groups)
   const [eventSubHead, setEventSubHead] = useState<string>('');
   const MAX_AMOUNT = 999999999;
   const [selectedBudgetHeadForModal, setSelectedBudgetHeadForModal] = useState<string>('');
@@ -2248,9 +2411,14 @@ const FinanceApproval: React.FC = () => {
 
   // Beneficiary search (for Faculty/Staff types)
   const [beneficiarySearchQuery, setBeneficiarySearchQuery] = useState<string>('');
-  const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<Array<{
-    employeeid: number; name: string; designation: string; department: string;
-  }>>([]);
+  const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<
+    Array<{
+      employeeid: number;
+      name: string;
+      designation: string;
+      department: string;
+    }>
+  >([]);
   const [showBeneficiaryDropdown, setShowBeneficiaryDropdown] = useState(false);
   const [beneficiaryEmployeeId, setBeneficiaryEmployeeId] = useState<number | null>(null);
 
@@ -2258,47 +2426,110 @@ const FinanceApproval: React.FC = () => {
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [loadedWorkflowStatus, setLoadedWorkflowStatus] = useState<string>('');
   const [loadedCurrentStage, setLoadedCurrentStage] = useState<string>('');
+  const [workflowPermittedStages, setWorkflowPermittedStages] = useState<string[]>([]);
 
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
   const { id } = useParams<{ id?: string }>();
   const isEditMode = Boolean(id && location.pathname.includes('edit'));
-const isViewMode = Boolean(id && !isEditMode);
-const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
-const isApprovalMode = isViewMode && isAdminWorkflowContext;
+  const isViewMode = Boolean(id && !isEditMode);
+  const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
+  const isApprovalMode = isViewMode && isAdminWorkflowContext;
+  const routeFiscalYearStart = normalizeFiscalYearStart((location.state as any)?.fiscalYear);
+  const budgetAvailabilityFiscalYear =
+    routeFiscalYearStart || (!isEditMode && !isViewMode ? getCurrentFiscalYearStart() : '');
 
-const normalizedWorkflowStatus = String(
-  loadedWorkflowStatus || ''
-).toLowerCase();
-const hasDofApproval = statusUpdates.some((update: any) => {
-  const stage = String(update?.stage || update?.role || '').toLowerCase();
-  const decision = String(update?.decision || update?.status || '').toLowerCase();
-  return stage.includes('dof') && (decision === 'approved' || decision.includes('approved'));
-});
-const canDownloadPdf =
-  ['approved', 'completed'].includes(normalizedWorkflowStatus) ||
-  (isAdminWorkflowContext && totalBudget > 10000 && hasDofApproval);
+  useEffect(() => {
+    if (!isApprovalMode) {
+      setWorkflowPermittedStages([]);
+      return;
+    }
 
-const routeStateIsActionablePending = (location.state as any)?.isActionablePending;
-const hideWorkflowActionsForFinalStatus =
-  routeStateIsActionablePending === false ||
-  normalizedWorkflowStatus.includes('approved') ||
-  normalizedWorkflowStatus.includes('returned') ||
-  normalizedWorkflowStatus.includes('completed') ||
-  normalizedWorkflowStatus.includes('rejected') ||
-  normalizedWorkflowStatus.includes('archived');
+    let cancelled = false;
 
-// Only allow the respective stage head to act (not super admin)
-const canActOnCurrentStage = (() => {
-  if (!isApprovalMode || !loadedCurrentStage) return false;
-  // Super admin cannot approve/reject — only the respective head can
-  if (user?.is_super_admin) return false;
-  const userPermissions = (user?.permissions || []).map(p => String(p).toLowerCase());
-  return userPermissions.includes(`finance.workflow.${loadedCurrentStage}`);
-})();
+    const loadWorkflowMeta = async () => {
+      try {
+        const response = (await authenticityUtility.get('/finance-requests/workflow/meta')) as {
+          success?: boolean;
+          status?: string;
+          data?: {
+            permittedStages?: unknown[];
+          };
+        };
 
-const isSuperAdminUser = Boolean(user?.is_super_admin);
+        const isSuccessResponse = response?.success === true || response?.status === 'success';
+        if (cancelled || !isSuccessResponse) {
+          return;
+        }
+
+        const permittedStages = Array.isArray(response.data?.permittedStages)
+          ? response.data.permittedStages
+              .map((stage) => normalizeText(String(stage || '')).toLowerCase())
+              .filter(Boolean)
+          : [];
+
+        setWorkflowPermittedStages(permittedStages);
+      } catch (error) {
+        if (!cancelled) {
+          setWorkflowPermittedStages([]);
+        }
+      }
+    };
+
+    loadWorkflowMeta();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isApprovalMode]);
+
+  const normalizedWorkflowStatus = String(loadedWorkflowStatus || '').toLowerCase();
+  const hasDofApproval = statusUpdates.some((update: any) => {
+    const stage = String(update?.stage || update?.role || '').toLowerCase();
+    const decision = String(update?.decision || update?.status || '').toLowerCase();
+    return stage.includes('dof') && (decision === 'approved' || decision.includes('approved'));
+  });
+  const canDownloadPdf =
+    ['approved', 'completed'].includes(normalizedWorkflowStatus) ||
+    (isAdminWorkflowContext && totalBudget > 10000 && hasDofApproval);
+
+  const isSuperAdminUser =
+    Boolean(user?.is_super_admin || (user as any)?.isSuperAdmin) ||
+    (Array.isArray(user?.roles) &&
+      user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin'));
+  const canSuperAdminEditTerminalFinance =
+    isSuperAdminUser && isViewMode && ['approved', 'completed'].includes(normalizedWorkflowStatus);
+
+  const routeStateIsActionablePending = (location.state as any)?.isActionablePending;
+  const hideWorkflowActionsForFinalStatus =
+    !isSuperAdminUser &&
+    (routeStateIsActionablePending === false ||
+      normalizedWorkflowStatus.includes('approved') ||
+      normalizedWorkflowStatus.includes('returned') ||
+      normalizedWorkflowStatus.includes('completed') ||
+      normalizedWorkflowStatus.includes('rejected') ||
+      normalizedWorkflowStatus.includes('archived'));
+
+  // Only allow the respective stage head to act (not super admin)
+  const canActOnCurrentStage = (() => {
+    if (!isViewMode || !loadedCurrentStage) return false;
+    // Super admin cannot approve/reject — only the respective head can
+    if (isSuperAdminUser) return false;
+    const userPermissions = normalizeFinancePermissionKeys(user);
+    if (hasFinanceWorkflowStagePermission(userPermissions, loadedCurrentStage)) return true;
+    if (workflowPermittedStages.includes(loadedCurrentStage)) return true;
+
+    const stageRoleFallback: Record<string, string[]> = {
+      dof: ['dof'],
+      principal: ['principal'],
+      chairman: ['chairman'],
+    };
+    const userRoles = normalizeFinanceRoleCodes(user);
+    return (stageRoleFallback[loadedCurrentStage] || []).some((role) => userRoles.includes(role));
+  })();
+  const canEditStageRemark =
+    canActOnCurrentStage && ['dof', 'principal', 'chairman'].includes(loadedCurrentStage);
 
   // Tag auto-selection based on beneficiary type
   useEffect(() => {
@@ -2318,13 +2549,28 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
       if (beneficiaryType === 'Department') {
         return '';
       }
-      if (beneficiaryType === 'Centre' || beneficiaryType === 'Cell' ||
-        beneficiaryType === 'Club' || beneficiaryType === 'Section' || beneficiaryType === 'Institution' || beneficiaryType === 'Professional Body') {
+      if (
+        beneficiaryType === 'Centre' ||
+        beneficiaryType === 'Cell' ||
+        beneficiaryType === 'Club' ||
+        beneficiaryType === 'Section' ||
+        beneficiaryType === 'Institution' ||
+        beneficiaryType === 'Professional Body'
+      ) {
         return 'Essentials';
       }
       return '';
     });
   }, [beneficiaryType]);
+
+  useEffect(() => {
+    if (!selectedTag) return;
+
+    const resolvedTag = resolveTagValue(selectedTag, tagOptions);
+    if (resolvedTag !== selectedTag) {
+      setSelectedTag(resolvedTag);
+    }
+  }, [selectedTag, tagOptions]);
 
   useEffect(() => {
     if (!id) {
@@ -2341,19 +2587,27 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
     const loadFinanceRequest = async () => {
       try {
         setIsLoading(true);
-        const response = await authenticityUtility.get(`/finance-requests/${requestId}`) as {
+        const response = (await authenticityUtility.get(`/finance-requests/${requestId}`)) as {
+          success?: boolean;
           status?: string;
           data?: any;
           message?: string;
         };
 
-        if (response?.status !== 'success' || !response?.data || cancelled) {
+        const isSuccessResponse = response?.success === true || response?.status === 'success';
+        if (!isSuccessResponse || !response?.data || cancelled) {
           return;
         }
 
         const record = response.data;
+        const currentStageFromRecord = String(
+          record.workflow_state?.currentStage || record.workflow_stage || '',
+        ).toLowerCase();
         const budgetRowsFromApi = Array.isArray(record.budget) ? record.budget : [];
         const incomeRowsFromApi = Array.isArray(record.income_rows) ? record.income_rows : [];
+        const statusUpdatesFromApi = Array.isArray(record.status_updates)
+          ? record.status_updates
+          : [];
 
         const resolvedApplicantName = String(record.applicant_name || '').trim();
         setApplicantName(resolvedApplicantName);
@@ -2370,23 +2624,19 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
         setSubmittedAt(
           String(
             record.workflow_state?.submittedAt ||
-            record.workflow_state?.submitted_at ||
-            record.workflow_state?.startedAt ||
-            record.workflow_state?.started_at ||
-            record.created_at ||
-            record.submitted_at ||
-            ''
-          ).trim()
+              record.workflow_state?.submitted_at ||
+              record.workflow_state?.startedAt ||
+              record.workflow_state?.started_at ||
+              record.created_at ||
+              record.submitted_at ||
+              '',
+          ).trim(),
         );
         const workflowFinanceMeta = record.workflow_state?.financeMeta || {};
-        const recordUnplannedBudgetEnabled =
-          record.unplanned_budget_enabled ??
-          workflowFinanceMeta.unplannedBudgetEnabled ??
-          false;
+        const rawRecordUnplannedBudgetEnabled =
+          record.unplanned_budget_enabled ?? workflowFinanceMeta.unplannedBudgetEnabled;
         const recordUnplannedBudgetAmount =
-          record.unplanned_budget_amount ??
-          workflowFinanceMeta.unplannedBudgetAmount ??
-          '';
+          record.unplanned_budget_amount ?? workflowFinanceMeta.unplannedBudgetAmount ?? '';
         const hasUnplannedBudgetAmount =
           recordUnplannedBudgetAmount !== null &&
           recordUnplannedBudgetAmount !== undefined &&
@@ -2396,36 +2646,58 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
           record.unplanned_budget_description ??
           workflowFinanceMeta.unplannedBudgetDescription ??
           '';
-        setShowUnplannedBudget(Boolean(recordUnplannedBudgetEnabled || hasUnplannedBudgetAmount));
+        const hasExplicitUnplannedFlag =
+          rawRecordUnplannedBudgetEnabled !== null &&
+          rawRecordUnplannedBudgetEnabled !== undefined &&
+          String(rawRecordUnplannedBudgetEnabled).trim() !== '';
+        const isUnplannedBudgetEnabled = hasExplicitUnplannedFlag
+          ? parseFinanceBoolean(rawRecordUnplannedBudgetEnabled)
+          : hasUnplannedBudgetAmount;
+        setShowUnplannedBudget(isUnplannedBudgetEnabled);
         setUnplannedBudgetAmount(
-          recordUnplannedBudgetAmount !== null && recordUnplannedBudgetAmount !== undefined
+          isUnplannedBudgetEnabled &&
+            recordUnplannedBudgetAmount !== null &&
+            recordUnplannedBudgetAmount !== undefined
             ? String(recordUnplannedBudgetAmount)
-            : ''
+            : '',
         );
-        setUnplannedBudgetDescription(String(recordUnplannedBudgetDescription || ''));
+        setUnplannedBudgetDescription(
+          isUnplannedBudgetEnabled ? String(recordUnplannedBudgetDescription || '') : '',
+        );
         setBeneficiaryType(record.beneficiary_type || '');
         setBeneficiaryValue(record.beneficiary_value || '');
         setPrimaryHead(record.primary_head || '');
         setEventSubHead(record.event_sub_head || '');
         setIsBudgetProposed(record.is_budget_proposed || 'No');
-        setAmountProposed(record.proposed_amount !== null && record.proposed_amount !== undefined ? String(record.proposed_amount) : '');
-        setBalanceAmount(record.balance_amount !== null && record.balance_amount !== undefined ? String(record.balance_amount) : '');
+        setAmountProposed(
+          record.proposed_amount !== null && record.proposed_amount !== undefined
+            ? String(record.proposed_amount)
+            : '',
+        );
+        setBalanceAmount(
+          record.balance_amount !== null && record.balance_amount !== undefined
+            ? String(record.balance_amount)
+            : '',
+        );
         setDebitStatus(record.debit_status || '');
-        setSelectedTag(record.budget_tag || '');
-        const annexuresFromApi = Array.isArray(record.annexures)
-          ? record.annexures
-          : [];
-        const fallbackLegacyAnnexure = (record.annexure_file_path && record.annexure_storage_name)
-          ? [{
-            annexure_type: record.annexure_type || '',
-            original_name: record.annexure_file_name || record.annexure_storage_name || '',
-            stored_name: record.annexure_storage_name || '',
-            file_path: record.annexure_file_path || '',
-            mime_type: record.annexure_mime_type || '',
-            file_size: record.annexure_file_size,
-          }]
-          : [];
-        const effectiveAnnexures = annexuresFromApi.length ? annexuresFromApi : fallbackLegacyAnnexure;
+        setSelectedTag(resolveTagValue(record.budget_tag, tagOptions));
+        const annexuresFromApi = Array.isArray(record.annexures) ? record.annexures : [];
+        const fallbackLegacyAnnexure =
+          record.annexure_file_path && record.annexure_storage_name
+            ? [
+                {
+                  annexure_type: record.annexure_type || '',
+                  original_name: record.annexure_file_name || record.annexure_storage_name || '',
+                  stored_name: record.annexure_storage_name || '',
+                  file_path: record.annexure_file_path || '',
+                  mime_type: record.annexure_mime_type || '',
+                  file_size: record.annexure_file_size,
+                },
+              ]
+            : [];
+        const effectiveAnnexures = annexuresFromApi.length
+          ? annexuresFromApi
+          : fallbackLegacyAnnexure;
         setAnnexureFiles((prev) => {
           prev.forEach((row) => {
             if (row.previewUrl) {
@@ -2437,59 +2709,82 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
             annexureType: String(row?.annexure_type || ''),
             file: null,
             previewUrl: '',
-            originalName: String(row?.original_name || row?.annexure_file_name || row?.stored_name || row?.annexure_storage_name || ''),
+            originalName: String(
+              row?.original_name ||
+                row?.annexure_file_name ||
+                row?.stored_name ||
+                row?.annexure_storage_name ||
+                '',
+            ),
             storedName: String(row?.stored_name || row?.annexure_storage_name || ''),
             filePath: String(row?.file_path || row?.annexure_file_path || ''),
             mimeType: String(row?.mime_type || row?.annexure_mime_type || ''),
-            size: row?.file_size !== null && row?.file_size !== undefined ? Number(row.file_size) : null,
+            size:
+              row?.file_size !== null && row?.file_size !== undefined
+                ? Number(row.file_size)
+                : null,
           }));
         });
-        setAnnexureType(String((effectiveAnnexures[0] as any)?.annexure_type || ''));
+        setAnnexureType(
+          String((effectiveAnnexures[0] as any)?.annexure_type || record.annexure_type || ''),
+        );
         if (annexureFileInputRef.current) {
           annexureFileInputRef.current.value = '';
         }
-        setLoadedWorkflowStatus(String(record.workflow_state?.status || record.workflow_status || record.overall_status || '').toLowerCase());
-        setLoadedCurrentStage(String(record.workflow_state?.currentStage || record.workflow_stage || '').toLowerCase());
+        setLoadedWorkflowStatus(
+          String(
+            record.workflow_state?.status || record.workflow_status || record.overall_status || '',
+          ).toLowerCase(),
+        );
+        setLoadedCurrentStage(
+          String(record.workflow_state?.currentStage || record.workflow_stage || '').toLowerCase(),
+        );
+        setDirectorComments(String(record.director_comment || ''));
+        setDirectorStatus(String(record.director_status || '').toLowerCase());
+        setPrincipalComments(String(record.principal_comment || ''));
+        setPrincipalStatus(String(record.principal_status || '').toLowerCase());
+        setChairmanComments(String(record.chairman_comment || ''));
+        setChairmanStatus(String(record.chairman_status || '').toLowerCase());
+        if (currentStageFromRecord === 'dof') {
+          setStageRemarkInput(String(record.director_comment || ''));
+        } else if (currentStageFromRecord === 'principal') {
+          setStageRemarkInput(String(record.principal_comment || ''));
+        } else if (currentStageFromRecord === 'chairman') {
+          setStageRemarkInput(String(record.chairman_comment || ''));
+        } else {
+          setStageRemarkInput('');
+        }
         setCategorySelections(
           String(record.beneficiary_value || '')
             .split(',')
             .map((item: string) => item.trim())
-            .filter(Boolean)
+            .filter(Boolean),
         );
         setShowIncomeSection(incomeRowsFromApi.length > 0);
+        const groupedBudgetRows = groupFinanceBudgetRowsForForm(budgetRowsFromApi);
         setBudgetRows(
-          budgetRowsFromApi.length > 0
-            ? budgetRowsFromApi.map((row: any) => ({
-              category: String(row?.budget_head || ''),
-              head: String(row?.sub_head || ''),
-              amount: String(row?.amount ?? ''),
-            }))
-            : [{ category: '', head: '', amount: '' }]
+          groupedBudgetRows.rows.length > 0
+            ? groupedBudgetRows.rows
+            : [{ category: '', head: '', amount: '' }],
         );
-        setBudgetLineMetaByRow(
-          budgetRowsFromApi.reduce((acc: Record<number, BudgetLineMeta>, row: any, index: number) => {
-            acc[index] = {
-              budgetLineId: row?.budget_line_id ? Number(row.budget_line_id) : null,
-              budgetProposalId: row?.budget_proposal_id ? Number(row.budget_proposal_id) : null,
-              availableAmount: Number(row?.available_amount_snapshot ?? 0),
-            };
-            return acc;
-          }, {})
-        );
+        setBudgetLineMetaByRow(groupedBudgetRows.meta);
         setIncomeRows(
           incomeRowsFromApi.length > 0
             ? incomeRowsFromApi.map((row: any, index: number) => ({
-              id: row?.id ? String(row.id) : `${Date.now()}-${index}`,
-              incomeSource: String(row?.income_source || ''),
-              contribution: String(row?.contribution || ''),
-              amount: String(row?.amount ?? ''),
-              status: String(row?.status || ''),
-              remarks: String(row?.remarks || ''),
-              creditAccount: String(row?.credit_account || ''),
-            }))
-            : [createIncomeRow()]
+                id: row?.id ? String(row.id) : `${Date.now()}-${index}`,
+                incomeSource: String(row?.income_source || ''),
+                contribution: String(row?.contribution || ''),
+                amount: String(row?.amount ?? ''),
+                status: String(row?.status || ''),
+                remarks: String(row?.remarks || ''),
+                creditAccount: String(row?.credit_account || ''),
+              }))
+            : [createIncomeRow()],
         );
-        setStatusUpdates(record.status_updates || []);
+        setHasPrincipalDocument(
+          Boolean(record.principal_document && record.principal_document.file_path),
+        );
+        setStatusUpdates(statusUpdatesFromApi);
       } catch (error) {
         console.error('Failed to load finance request', error);
       } finally {
@@ -2515,7 +2810,8 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
 
     const loadLoggedInApplicant = async () => {
       try {
-        const response = await authenticityUtility.get('/finance-requests/me') as {
+        const response = (await authenticityUtility.get('/finance-requests/me')) as {
+          success?: boolean;
           status?: string;
           data?: {
             employee_id?: number | null;
@@ -2527,7 +2823,8 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
           };
         };
 
-        if (cancelled || response?.status !== 'success' || !response?.data) {
+        const isSuccessResponse = response?.success === true || response?.status === 'success';
+        if (cancelled || !isSuccessResponse || !response?.data) {
           return;
         }
 
@@ -2540,7 +2837,7 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
         setEmployeeId(
           Number.isInteger(Number(data.employee_id)) && Number(data.employee_id) > 0
             ? Number(data.employee_id)
-            : null
+            : null,
         );
         setApplicantName(resolvedName);
         setApplicantSearchQuery(resolvedName);
@@ -2560,16 +2857,20 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
     };
   }, [id, applicantName, isExternalApplicant]);
 
+  useEffect(() => {
+    setIsApplicantCardOpen(!id);
+  }, [id]);
+
   const handleBeneficiarySearch = async (query: string) => {
     setBeneficiarySearchQuery(query);
     try {
       let typeParam = '';
       if (beneficiaryType === 'Faculty') typeParam = '&type=Teaching';
       else if (beneficiaryType === 'Staff') typeParam = '&type=Non-Teaching';
-      const response = await (authenticityUtility as any).get(
-        `finance-requests/search-applicant?q=${encodeURIComponent(query)}${typeParam}`
-      ) as any;
-      if (response.status === 'success') {
+      const response = (await (authenticityUtility as any).get(
+        `finance-requests/search-applicant?q=${encodeURIComponent(query)}${typeParam}`,
+      )) as any;
+      if (response?.success === true || response?.status === 'success') {
         setBeneficiarySearchResults(response.data);
         setShowBeneficiaryDropdown(true);
       }
@@ -2579,7 +2880,12 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
     }
   };
 
-  const handleSelectBeneficiary = (emp: { employeeid: number; name: string; designation: string; department: string }) => {
+  const handleSelectBeneficiary = (emp: {
+    employeeid: number;
+    name: string;
+    designation: string;
+    department: string;
+  }) => {
     setBeneficiaryValue(emp.name.trim());
     setBeneficiaryEmployeeId(emp.employeeid);
     setBeneficiarySearchQuery(emp.name.trim());
@@ -2595,7 +2901,20 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
   }, [showPreview, applicantName, department, totalBudget]);
 
   useEffect(() => {
-    const routeState = location.state as { openPreview?: boolean; autoDownloadPdf?: boolean; isActionablePending?: boolean } | null;
+    const queryParams = new URLSearchParams(location.search);
+    const isPreviewParam = queryParams.get('preview') === 'true';
+    const routeState = location.state as {
+      openPreview?: boolean;
+      autoDownloadPdf?: boolean;
+      isActionablePending?: boolean;
+    } | null;
+
+    if (isPreviewParam) {
+      setShowPreview(true);
+      setAutoDownloadPdf(false);
+      return;
+    }
+
     if (!routeState) {
       setShowPreview(false);
       setAutoDownloadPdf(false);
@@ -2607,7 +2926,7 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
     }
 
     setAutoDownloadPdf(Boolean(routeState.autoDownloadPdf));
-  }, [location.state]);
+  }, [location.state, location.search]);
 
   useEffect(() => {
     autoDownloadTriggeredRef.current = false;
@@ -2628,19 +2947,81 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
     // on every render due function identity churn; guards above keep it safe.
   }, [autoDownloadPdf, canDownloadPdf, isLoading, showPreview]);
 
-  const activeHoacGroup = getHoacGroupForHead(primaryHead);
+  const activeHoacGroup = getHoacGroupForHead(primaryHead) || '';
   const extraDropdownVisible = Boolean(activeHoacGroup);
-  const hoacSubheadDropdownOptions = toOptions(
-    SUB_HEAD_BY_BUDGET_HEAD[primaryHead] ||
-    HOAC_SUBHEAD_OPTIONS[activeHoacGroup || ''] ||
-    []
-  );
-  const firstBudgetRowAutoSyncRef = useRef<{ category: string; head: string }>({ category: '', head: '' });
+  const hoacSubheadDropdownOptions = useMemo(() => {
+    if (!activeHoacGroup) return [];
+    const firstLevelSubHeads = SUB_HEAD_BY_BUDGET_HEAD[primaryHead] || [];
+    if (firstLevelSubHeads.length > 0) {
+      return toOptions(firstLevelSubHeads);
+    }
+    const groupSubHeads = HOAC_SUBHEAD_OPTIONS[activeHoacGroup] || [];
+    return toOptions(groupSubHeads);
+  }, [primaryHead, activeHoacGroup, catalogVersion]);
+  useEffect(() => {
+    const nextFetchKeys: Record<number, string> = {};
+    const normalizedBeneficiaryType = normalizeText(beneficiaryType);
+    const normalizedBeneficiaryValue = normalizeText(beneficiaryValue);
+    const normalizedFinanceId = isEditMode && id ? String(id) : '';
+    const hasBeneficiarySelection = isFinanceBeneficiarySelectionComplete(
+      normalizedBeneficiaryType,
+      normalizedBeneficiaryValue,
+    );
+
+    if (!hasBeneficiarySelection) {
+      availabilityFetchKeyByRowRef.current = {};
+      setBudgetLineMetaByRow((prev) => (Object.keys(prev).length > 0 ? {} : prev));
+      return;
+    }
+
+    budgetRows.forEach((row, index) => {
+      const normalizedHead = normalizeText(primaryHead) || normalizeText(row.category);
+      const rowSubHead = normalizeText(row.head);
+      const effectiveSubHead =
+        (extraDropdownVisible ? normalizeText(eventSubHead) : '') || rowSubHead;
+      const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(normalizedHead, effectiveSubHead);
+
+      if (!normalizedHead || (!headOnlyMatch && !effectiveSubHead)) {
+        return;
+      }
+
+      const fetchKey = [
+        normalizedHead,
+        effectiveSubHead,
+        headOnlyMatch ? '1' : '0',
+        normalizedBeneficiaryType,
+        normalizedBeneficiaryValue,
+        normalizedFinanceId,
+        budgetAvailabilityFiscalYear,
+      ].join('|');
+      nextFetchKeys[index] = fetchKey;
+      if (availabilityFetchKeyByRowRef.current[index] === fetchKey) {
+        return;
+      }
+
+      fetchBudgetAvailability(index, normalizedHead, rowSubHead);
+    });
+
+    availabilityFetchKeyByRowRef.current = nextFetchKeys;
+  }, [
+    budgetRows,
+    primaryHead,
+    eventSubHead,
+    extraDropdownVisible,
+    beneficiaryType,
+    beneficiaryValue,
+    isEditMode,
+    id,
+    budgetAvailabilityFiscalYear,
+  ]);
+  const firstBudgetRowAutoSyncRef = useRef<{ category: string; head: string }>({
+    category: '',
+    head: '',
+  });
   useEffect(() => {
     if (!primaryHead) return;
 
     const nextCategory = normalizeText(primaryHead);
-    const nextHead = normalizeText(eventSubHead);
 
     setBudgetRows((rows) => {
       if (rows.length === 0) return rows;
@@ -2658,17 +3039,17 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
 
       if (!shouldAutoFill) return rows;
 
-      const syncedHead = nextHead || '';
-      firstBudgetRowAutoSyncRef.current = { category: nextCategory, head: syncedHead };
+      // Only auto-sync the budget head (category); leave sub head for the
+      // user to pick from the HOAC sub-head options in the table dropdown.
+      firstBudgetRowAutoSyncRef.current = { category: nextCategory, head: firstRow.head || '' };
 
       return rows.map((row, index) =>
         index === 0
           ? {
               ...row,
               category: nextCategory,
-              head: syncedHead,
             }
-          : row
+          : row,
       );
     });
   }, [primaryHead, eventSubHead]);
@@ -2676,318 +3057,645 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [expandedHead, setExpandedHead] = useState<string>('');
   const [activeSubHead, setActiveSubHead] = useState<string>('');
+  const stageRemarksForDisplay = [
+    { label: 'DOF', status: directorStatus, remarks: directorComments },
+    { label: 'Principal', status: principalStatus, remarks: principalComments },
+    { label: 'Chairman', status: chairmanStatus, remarks: chairmanComments },
+  ].filter((entry) => {
+    const labelToStageMap: Record<string, string> = {
+      dof: 'dof',
+      principal: 'principal',
+      chairman: 'chairman',
+    };
+    const entryStage = labelToStageMap[String(entry.label || '').toLowerCase()] || '';
+    if (canEditStageRemark && entryStage === loadedCurrentStage) {
+      return true;
+    }
+    return hasFilledText(entry.status) || hasFilledText(entry.remarks);
+  });
+
+  const handleViewModeFocusCapture = (event: React.FocusEvent<HTMLDivElement>) => {
+    if (!isViewMode || canSuperAdminEditTerminalFinance) return;
+    const target = event.target as HTMLElement | null;
+    if (
+      !target ||
+      target.closest('[data-readonly-applicant-card="true"]') ||
+      target.closest('[data-readonly-workflow-modal="true"]') ||
+      target.closest('[data-workflow-stage-remark-input="true"]')
+    )
+      return;
+    if (target.matches('input, textarea, select, button, [tabindex]')) {
+      target.blur();
+    }
+  };
+
+  const handleViewModeKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!isViewMode || canSuperAdminEditTerminalFinance) return;
+    const target = event.target as HTMLElement | null;
+    if (
+      !target ||
+      target.closest('[data-readonly-applicant-card="true"]') ||
+      target.closest('[data-readonly-workflow-modal="true"]') ||
+      target.closest('[data-workflow-stage-remark-input="true"]')
+    )
+      return;
+    if (target.matches('input, textarea, select, button, [tabindex]') && event.key !== 'Tab') {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
 
   return (
-    <div className="finance-approval-body" style={{ padding: '0', backgroundColor: '#f0f6ff', minHeight: '100vh' }}>
-
+    <div
+      className={`finance-approval-body${showPreview ? ' finance-approval-body--preview' : ''}`}
+      onFocusCapture={handleViewModeFocusCapture}
+      onKeyDownCapture={handleViewModeKeyDownCapture}
+      style={{
+        padding: '0',
+        backgroundColor: showPreview ? '#ffffff' : '#f0f6ff',
+        minHeight: '100vh',
+      }}
+    >
       {!showPreview && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
-          <div style={isViewMode ? { pointerEvents: 'none', userSelect: 'none' } : undefined}>
+          <div
+            style={
+              isViewMode && !canSuperAdminEditTerminalFinance
+                ? { pointerEvents: 'none', userSelect: 'none' }
+                : undefined
+            }
+          >
             {/* Applicant Details Section */}
-            <div style={{
-              backgroundColor: '#fff',
-              padding: '24px',
-              marginBottom: '30px',
-              marginTop: '30px',
-              borderRadius: '18px',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.06)',
-            }}>
-              <div className="row mb-3" style={{ marginBottom: '15px' }}>
-                <div className="col-md-7">
-                  <div className="form-group" style={{ position: 'relative' }}>
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-                      Applicant Name
-                      {isExternalApplicant && <span style={{ fontSize: '12px', color: '#6c757d', marginLeft: '8px' }}>(External)</span>}
-                    </label>
-                    <CustomInput
-                      name="applicantName"
-                      type="text"
-                      value={isViewMode ? applicantName : (isExternalApplicant ? applicantName : applicantSearchQuery)}
-                      onChange={(value) => {
-                        if (isExternalApplicant) {
-                          setApplicantName(value);
-                        } else {
-                          handleApplicantSearch(value);
-                        }
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                        if (!isExternalApplicant && !showApplicantDropdown) {
-                          handleApplicantSearch(applicantSearchQuery);
-                        }
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                        setTimeout(() => setShowApplicantDropdown(false), 200);
-                      }}
-                      placeholder={isExternalApplicant ? "Enter external applicant name" : "Search employee by name or ERP ID"}
-                    />
-                    {showApplicantDropdown && applicantSearchResults.length > 0 && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        backgroundColor: '#fff',
-                        border: '1px solid #e0e0e0',
-                        borderRadius: '12px',
-                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                        zIndex: 1000,
-                        maxHeight: '250px',
-                        overflowY: 'auto',
-                        marginTop: '4px'
-                      }}>
-                        <div
-                          onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
+            <div
+              data-readonly-applicant-card="true"
+              style={{
+                backgroundColor: '#fff',
+                padding: '24px',
+                marginBottom: '30px',
+                marginTop: '30px',
+                borderRadius: '18px',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.06)',
+                pointerEvents: 'auto',
+                userSelect: 'auto',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  padding: '0 0 15px 0',
+                  borderBottom: '1px solid #e0e0e0',
+                }}
+                onClick={() => setIsApplicantCardOpen((prev) => !prev)}
+              >
+                <h5 style={{ margin: 0, fontSize: '16px', color: '#0069ab', fontWeight: 600 }}>
+                  Applicant Details
+                </h5>
+                <svg
+                  width="12"
+                  height="8"
+                  viewBox="0 0 12 8"
+                  style={{
+                    transform: isApplicantCardOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.3s ease',
+                  }}
+                >
+                  <polyline
+                    points="1.5,1.5 6,5.5 10.5,1.5"
+                    stroke="#0069ab"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                </svg>
+              </div>
+
+              <div style={{ paddingTop: '20px' }}>
+                {!isApplicantCardOpen && (
+                  <div className="row">
+                    <div className="col-md-7">
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label
                           style={{
-                            padding: '10px 15px',
-                            cursor: 'pointer',
-                            backgroundColor: '#f8f9fa',
-                            color: '#0069ab',
-                            fontWeight: '600',
-                            borderBottom: '2px solid #e0e0e0'
+                            fontSize: '14px',
+                            color: '#495057',
+                            marginBottom: '8px',
+                            fontWeight: 600,
+                            display: 'block',
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
                         >
-                          + Add External Applicant
-                        </div>
-                        {applicantSearchResults.map((emp) => (
-                          <div
-                            key={emp.employee_id}
-                            onMouseDown={(e) => { e.preventDefault(); handleSelectApplicant(emp); }}
+                          Applicant Name
+                        </label>
+                        <input
+                          type="text"
+                          value={applicantName}
+                          disabled
+                          readOnly
+                          style={{
+                            borderRadius: '12px',
+                            border: '1px solid #e0e0e0',
+                            padding: '10px 15px',
+                            fontSize: '0.95rem',
+                            width: '100%',
+                            fontFamily: 'inherit',
+                            backgroundColor: '#fcfdff',
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => setIsApplicantCardOpen(true)}
+                        />
+                      </div>
+                    </div>
+                    <div className="col-md-5">
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label
+                          style={{
+                            fontSize: '14px',
+                            color: '#495057',
+                            marginBottom: '8px',
+                            fontWeight: 600,
+                            display: 'block',
+                          }}
+                        >
+                          Date
+                        </label>
+                        <input
+                          type="date"
+                          value={date}
+                          disabled
+                          readOnly
+                          style={{
+                            borderRadius: '12px',
+                            border: '1px solid #e0e0e0',
+                            padding: '10px 15px',
+                            fontSize: '0.95rem',
+                            width: '100%',
+                            fontFamily: 'inherit',
+                            backgroundColor: '#fcfdff',
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => setIsApplicantCardOpen(true)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isApplicantCardOpen && (
+                  <>
+                    <div className="row mb-3" style={{ marginBottom: '15px' }}>
+                      <div className="col-md-7">
+                        <div className="form-group" style={{ position: 'relative' }}>
+                          <label
                             style={{
-                              padding: '10px 15px',
-                              cursor: 'pointer',
-                              borderBottom: '1px solid #f0f0f0',
-                              transition: 'background-color 0.2s'
+                              fontSize: '14px',
+                              color: '#495057',
+                              marginBottom: '8px',
+                              fontWeight: '600',
+                              display: 'block',
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
                           >
-                            <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
-                            <div style={{ fontSize: '12px', color: '#6c757d' }}>
-                              {emp.designation} | {emp.department}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {showApplicantDropdown && applicantSearchQuery.length >= 2 && applicantSearchResults.length === 0 && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        backgroundColor: '#fff',
-                        border: '1px solid #e0e0e0',
-                        borderRadius: '12px',
-                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                        zIndex: 1000,
-                        marginTop: '4px'
-                      }}>
-                        <div style={{ padding: '10px 15px', color: '#6c757d' }}>No employees found</div>
-                        <div
-                          onMouseDown={(e) => { e.preventDefault(); handleAddExternalApplicant(); }}
-                          style={{
-                            padding: '10px 15px',
-                            cursor: 'pointer',
-                            backgroundColor: '#f8f9fa',
-                            color: '#0069ab',
-                            fontWeight: '600',
-                            borderTop: '1px solid #e0e0e0'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e9ecef'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                        >
-                          + Add External Applicant
+                            Applicant Name
+                            {isExternalApplicant && (
+                              <span
+                                style={{ fontSize: '12px', color: '#6c757d', marginLeft: '8px' }}
+                              >
+                                (External)
+                              </span>
+                            )}
+                          </label>
+                          <input
+                            type="text"
+                            value={
+                              isViewMode
+                                ? applicantName
+                                : isExternalApplicant
+                                  ? applicantName
+                                  : applicantSearchQuery
+                            }
+                            disabled={isViewMode}
+                            readOnly={isViewMode}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (isViewMode) return;
+                              if (isExternalApplicant) {
+                                setApplicantName(e.target.value);
+                              } else {
+                                handleApplicantSearch(e.target.value);
+                              }
+                            }}
+                            style={{
+                              borderRadius: '12px',
+                              border: '1px solid #e0e0e0',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              transition: 'all 0.3s ease',
+                              outline: 'none',
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                              if (!isExternalApplicant && !showApplicantDropdown) {
+                                handleApplicantSearch(applicantSearchQuery);
+                              }
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                              setTimeout(() => setShowApplicantDropdown(false), 200);
+                            }}
+                            placeholder={
+                              isExternalApplicant
+                                ? 'Enter external applicant name'
+                                : 'Search employee by name or ERP ID'
+                            }
+                          />
+                          {!isViewMode &&
+                            showApplicantDropdown &&
+                            applicantSearchResults.length > 0 && (
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  top: '100%',
+                                  left: 0,
+                                  right: 0,
+                                  backgroundColor: '#fff',
+                                  border: '1px solid #e0e0e0',
+                                  borderRadius: '12px',
+                                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                                  zIndex: 1000,
+                                  maxHeight: '250px',
+                                  overflowY: 'auto',
+                                  marginTop: '4px',
+                                }}
+                              >
+                                <div
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    handleAddExternalApplicant();
+                                  }}
+                                  style={{
+                                    padding: '10px 15px',
+                                    cursor: 'pointer',
+                                    backgroundColor: '#f8f9fa',
+                                    color: '#0069ab',
+                                    fontWeight: '600',
+                                    borderBottom: '2px solid #e0e0e0',
+                                  }}
+                                  onMouseEnter={(e) =>
+                                    (e.currentTarget.style.backgroundColor = '#e9ecef')
+                                  }
+                                  onMouseLeave={(e) =>
+                                    (e.currentTarget.style.backgroundColor = '#f8f9fa')
+                                  }
+                                >
+                                  + Add External Applicant
+                                </div>
+                                {applicantSearchResults.map((emp) => (
+                                  <div
+                                    key={emp.employee_id}
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      handleSelectApplicant(emp);
+                                    }}
+                                    style={{
+                                      padding: '10px 15px',
+                                      cursor: 'pointer',
+                                      borderBottom: '1px solid #f0f0f0',
+                                      transition: 'background-color 0.2s',
+                                    }}
+                                    onMouseEnter={(e) =>
+                                      (e.currentTarget.style.backgroundColor = '#f8f9fa')
+                                    }
+                                    onMouseLeave={(e) =>
+                                      (e.currentTarget.style.backgroundColor = '#fff')
+                                    }
+                                  >
+                                    <div style={{ fontWeight: '600', color: '#333' }}>
+                                      {emp.name}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                                      {emp.designation} | {emp.department}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          {!isViewMode &&
+                            showApplicantDropdown &&
+                            applicantSearchQuery.length >= 2 &&
+                            applicantSearchResults.length === 0 && (
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  top: '100%',
+                                  left: 0,
+                                  right: 0,
+                                  backgroundColor: '#fff',
+                                  border: '1px solid #e0e0e0',
+                                  borderRadius: '12px',
+                                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                                  zIndex: 1000,
+                                  marginTop: '4px',
+                                }}
+                              >
+                                <div style={{ padding: '10px 15px', color: '#6c757d' }}>
+                                  No employees found
+                                </div>
+                                <div
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    handleAddExternalApplicant();
+                                  }}
+                                  style={{
+                                    padding: '10px 15px',
+                                    cursor: 'pointer',
+                                    backgroundColor: '#f8f9fa',
+                                    color: '#0069ab',
+                                    fontWeight: '600',
+                                    borderTop: '1px solid #e0e0e0',
+                                  }}
+                                  onMouseEnter={(e) =>
+                                    (e.currentTarget.style.backgroundColor = '#e9ecef')
+                                  }
+                                  onMouseLeave={(e) =>
+                                    (e.currentTarget.style.backgroundColor = '#f8f9fa')
+                                  }
+                                >
+                                  + Add External Applicant
+                                </div>
+                              </div>
+                            )}
                         </div>
                       </div>
-                    )}
-                  </div>
-                </div>
-                <div className="col-md-5">
-                  <div className="form-group">
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-                      Date
-                    </label>
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setDate(e.target.value)}
-                      style={{
-                        borderRadius: '12px',
-                        border: '1px solid #e0e0e0',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
-                        width: '100%',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#fcfdff',
-                        transition: 'all 0.3s ease',
-                        outline: 'none'
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
+                      <div className="col-md-5">
+                        <div className="form-group">
+                          <label
+                            style={{
+                              fontSize: '14px',
+                              color: '#495057',
+                              marginBottom: '8px',
+                              fontWeight: '600',
+                              display: 'block',
+                            }}
+                          >
+                            Date
+                          </label>
+                          <input
+                            type="date"
+                            value={date}
+                            disabled={isViewMode}
+                            readOnly={isViewMode}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (isViewMode) return;
+                              setDate(e.target.value);
+                            }}
+                            style={{
+                              borderRadius: '12px',
+                              border: '1px solid #e0e0e0',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              transition: 'all 0.3s ease',
+                              outline: 'none',
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="row md-3" style={{ marginBottom: '15px' }}>
-                <div className="col-md-7">
-                  <div className="form-group">
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Department</label>
-                    <input
-                      type="text"
-                      value={department}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setDepartment(e.target.value)}
-                      style={{
-                        borderRadius: '12px',
-                        border: '1px solid #e0e0e0',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
-                        width: '100%',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#fcfdff',
-                        transition: 'all 0.3s ease',
-                        outline: 'none'
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                      placeholder="Department name"
-                    />
-                  </div>
-                </div>
-                <div className="col-md-5">
-                  <div className="form-group">
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Designation</label>
-                    <input
-                      type="text"
-                      value={designation}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setDesignation(e.target.value)}
-                      style={{
-                        borderRadius: '12px',
-                        border: '1px solid #e0e0e0',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
-                        width: '100%',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#fcfdff',
-                        transition: 'all 0.3s ease',
-                        outline: 'none'
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                      placeholder="e.g., Manager, Staff"
-                    />
-                  </div>
-                </div>
-              </div>
+                    <div className="row md-3" style={{ marginBottom: '15px' }}>
+                      <div className="col-md-7">
+                        <div className="form-group">
+                          <label
+                            style={{
+                              fontSize: '14px',
+                              color: '#495057',
+                              marginBottom: '8px',
+                              fontWeight: '600',
+                              display: 'block',
+                            }}
+                          >
+                            Department
+                          </label>
+                          <input
+                            type="text"
+                            value={department}
+                            disabled={isViewMode}
+                            readOnly={isViewMode}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (isViewMode) return;
+                              setDepartment(e.target.value);
+                            }}
+                            style={{
+                              borderRadius: '12px',
+                              border: '1px solid #e0e0e0',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              transition: 'all 0.3s ease',
+                              outline: 'none',
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                            placeholder="Department name"
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-5">
+                        <div className="form-group">
+                          <label
+                            style={{
+                              fontSize: '14px',
+                              color: '#495057',
+                              marginBottom: '8px',
+                              fontWeight: '600',
+                              display: 'block',
+                            }}
+                          >
+                            Designation
+                          </label>
+                          <input
+                            type="text"
+                            value={designation}
+                            disabled={isViewMode}
+                            readOnly={isViewMode}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (isViewMode) return;
+                              setDesignation(e.target.value);
+                            }}
+                            style={{
+                              borderRadius: '12px',
+                              border: '1px solid #e0e0e0',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              transition: 'all 0.3s ease',
+                              outline: 'none',
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                            placeholder="e.g., Manager, Staff"
+                          />
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="row mb-3" style={{ marginBottom: '15px' }}>
-                <div className="col-md-7">
-                  <div className="form-group">
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      style={{
-                        borderRadius: '12px',
-                        border: '1px solid #e0e0e0',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
-                        width: '100%',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#fcfdff',
-                        transition: 'all 0.3s ease',
-                        outline: 'none'
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                      placeholder="example@email.com"
-                    />
-                  </div>
-                </div>
-                <div className="col-md-5">
-                  <div className="form-group">
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '6px', fontWeight: '600', display: 'block' }}>Mobile</label>
-                    <input
-                      type="tel"
-                      value={mobile}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setMobile(e.target.value)}
-                      style={{
-                        borderRadius: '12px',
-                        border: '1px solid #e0e0e0',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
-                        width: '100%',
-                        fontFamily: 'inherit',
-                        backgroundColor: '#fcfdff',
-                        transition: 'all 0.3s ease',
-                        outline: 'none'
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0069ab';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#e0e0e0';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                      placeholder="10 digit mobile"
-                      pattern="[0-9]{10}"
-                      required
-                    />
-                  </div>
-                </div>
+                    <div className="row mb-3" style={{ marginBottom: '15px' }}>
+                      <div className="col-md-7">
+                        <div className="form-group">
+                          <label
+                            style={{
+                              fontSize: '14px',
+                              color: '#495057',
+                              marginBottom: '8px',
+                              fontWeight: '600',
+                              display: 'block',
+                            }}
+                          >
+                            Email
+                          </label>
+                          <input
+                            type="email"
+                            value={email}
+                            disabled={isViewMode}
+                            readOnly={isViewMode}
+                            onChange={(e) => {
+                              if (isViewMode) return;
+                              setEmail(e.target.value);
+                            }}
+                            style={{
+                              borderRadius: '12px',
+                              border: '1px solid #e0e0e0',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              transition: 'all 0.3s ease',
+                              outline: 'none',
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                            placeholder="example@email.com"
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-5">
+                        <div className="form-group">
+                          <label
+                            style={{
+                              fontSize: '14px',
+                              color: '#495057',
+                              marginBottom: '6px',
+                              fontWeight: '600',
+                              display: 'block',
+                            }}
+                          >
+                            Mobile
+                          </label>
+                          <input
+                            type="tel"
+                            value={mobile}
+                            disabled={isViewMode}
+                            readOnly={isViewMode}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (isViewMode) return;
+                              setMobile(e.target.value);
+                            }}
+                            style={{
+                              borderRadius: '12px',
+                              border: '1px solid #e0e0e0',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              transition: 'all 0.3s ease',
+                              outline: 'none',
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#0069ab';
+                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e0e0e0';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                            placeholder="10 digit mobile"
+                            pattern="[0-9]{10}"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
             {/* Beneficiary Section */}
-            <div style={{
-              backgroundColor: '#fff',
-              padding: '30px',
-              borderRadius: '20px',
-              marginBottom: '20px',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
-            }}>
+            <div
+              style={{
+                backgroundColor: '#fff',
+                padding: '30px',
+                borderRadius: '20px',
+                marginBottom: '20px',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+              }}
+            >
               <div className="row mb-3">
                 <div className="col-md-13">
                   <div className="form-group">
                     <div className="row mb-3" style={{ alignItems: 'flex-start' }}>
                       <div className="col-md-3">
                         <div className="form-group">
-                          <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
+                          <label
+                            style={{
+                              fontSize: 14,
+                              color: '#495057',
+                              marginBottom: 8,
+                              fontWeight: 600,
+                              display: 'block',
+                            }}
+                          >
                             Beneficiary
                           </label>
                           <CustomDropdown
@@ -3001,9 +3709,13 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                               { value: 'Club', label: 'Club' },
                               { value: 'Section', label: 'Section' },
                               { value: 'Professional Body', label: 'Professional Body' },
-                              { value: 'Institution', label: 'Institution' }
+                              { value: 'Institution', label: 'Institution' },
                             ]}
-                            value={beneficiaryType ? { value: beneficiaryType, label: beneficiaryType } : null}
+                            value={
+                              beneficiaryType
+                                ? { value: beneficiaryType, label: beneficiaryType }
+                                : null
+                            }
                             onChange={(option) => {
                               const selected = option as OptionType | null;
                               const next = selected?.value ? String(selected.value) : '';
@@ -3014,7 +3726,8 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                               setBeneficiarySearchResults([]);
                               setShowBeneficiaryDropdown(false);
                               setSelectedTag('');
-                              if (next === 'Institution') setBeneficiaryValue('K.S.Rangasamy College of Technology');
+                              if (next === 'Institution')
+                                setBeneficiaryValue('K.S.Rangasamy College of Technology');
                             }}
                           />
                         </div>
@@ -3024,7 +3737,15 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                         {/* Faculty / Staff */}
                         {['Faculty', 'Staff'].includes(beneficiaryType) && (
                           <div className="form-group" style={{ position: 'relative' }}>
-                            <label style={{ fontSize: 14, color: '#495057', marginBottom: '8px', fontWeight: 600, display: 'block' }}>
+                            <label
+                              style={{
+                                fontSize: 14,
+                                color: '#495057',
+                                marginBottom: '8px',
+                                fontWeight: 600,
+                                display: 'block',
+                              }}
+                            >
                               {beneficiaryType === 'Staff' ? 'Staff Name' : 'Faculty Name'}
                             </label>
                             <input
@@ -3039,14 +3760,19 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                               onFocus={(e) => {
                                 e.currentTarget.style.borderColor = '#0069ab';
                                 e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,105,171,0.15)';
-                                if (!showBeneficiaryDropdown) handleBeneficiarySearch(beneficiarySearchQuery);
+                                if (!showBeneficiaryDropdown)
+                                  handleBeneficiarySearch(beneficiarySearchQuery);
                               }}
                               onBlur={(e) => {
                                 e.currentTarget.style.borderColor = '#e0e0e0';
                                 e.currentTarget.style.boxShadow = 'none';
                                 setTimeout(() => setShowBeneficiaryDropdown(false), 200);
                               }}
-                              placeholder={beneficiaryType === 'Staff' ? "Search staff by name or ERP ID" : "Search faculty by name or ERP ID"}
+                              placeholder={
+                                beneficiaryType === 'Staff'
+                                  ? 'Search staff by name or ERP ID'
+                                  : 'Search faculty by name or ERP ID'
+                              }
                               style={{
                                 borderRadius: '12px',
                                 border: '1px solid #e0e0e0',
@@ -3054,19 +3780,50 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                 fontSize: '0.95rem',
                                 width: '100%',
                                 backgroundColor: '#fcfdff',
-                                outline: 'none'
+                                outline: 'none',
                               }}
                               required
                             />
                             {showBeneficiaryDropdown && beneficiarySearchResults.length > 0 && (
-                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 1001, maxHeight: 250, overflowY: 'auto', marginTop: 4 }}>
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  top: '100%',
+                                  left: 0,
+                                  right: 0,
+                                  backgroundColor: '#fff',
+                                  border: '1px solid #e0e0e0',
+                                  borderRadius: 12,
+                                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                                  zIndex: 1001,
+                                  maxHeight: 250,
+                                  overflowY: 'auto',
+                                  marginTop: 4,
+                                }}
+                              >
                                 {beneficiarySearchResults.map((emp) => (
-                                  <div key={emp.employeeid} onMouseDown={(e) => { e.preventDefault(); handleSelectBeneficiary(emp); }}
-                                    style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}
-                                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
-                                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fff')}>
+                                  <div
+                                    key={emp.employeeid}
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      handleSelectBeneficiary(emp);
+                                    }}
+                                    style={{
+                                      padding: '10px 15px',
+                                      cursor: 'pointer',
+                                      borderBottom: '1px solid #f0f0f0',
+                                    }}
+                                    onMouseEnter={(e) =>
+                                      (e.currentTarget.style.backgroundColor = '#f8f9fa')
+                                    }
+                                    onMouseLeave={(e) =>
+                                      (e.currentTarget.style.backgroundColor = '#fff')
+                                    }
+                                  >
                                     <div style={{ fontWeight: 600, color: '#333' }}>{emp.name}</div>
-                                    <div style={{ fontSize: 12, color: '#6c757d' }}>{emp.designation} — {emp.department}</div>
+                                    <div style={{ fontSize: 12, color: '#6c757d' }}>
+                                      {emp.designation} — {emp.department}
+                                    </div>
                                   </div>
                                 ))}
                               </div>
@@ -3077,22 +3834,57 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                         {/* Institution */}
                         {beneficiaryType === 'Institution' && (
                           <div className="form-group">
-                            <label style={{ fontSize: 14, color: '#495057', marginBottom: '25px', fontWeight: 600, display: 'block' }}>Institution</label>
-                            <input type="text" value="K.S.Rangasamy College of Technology" readOnly
-                              style={{ borderRadius: 12, border: '1px solid #e0e0e0', padding: '10px 15px', fontSize: '0.95rem', width: '100%', backgroundColor: '#e9ecef', color: '#495057', cursor: 'not-allowed', outline: 'none' }} />
+                            <label
+                              style={{
+                                fontSize: 14,
+                                color: '#495057',
+                                marginBottom: '8px',
+                                fontWeight: 600,
+                                display: 'block',
+                              }}
+                            >
+                              Institution
+                            </label>
+                            <input
+                              type="text"
+                              value="K.S.Rangasamy College of Technology"
+                              readOnly
+                              style={{
+                                borderRadius: 12,
+                                border: '1px solid #e0e0e0',
+                                padding: '10px 15px',
+                                fontSize: '0.95rem',
+                                width: '100%',
+                                backgroundColor: '#e9ecef',
+                                color: '#495057',
+                                cursor: 'not-allowed',
+                                outline: 'none',
+                              }}
+                            />
                           </div>
                         )}
 
                         {/* Professional Body */}
                         {beneficiaryType === 'Professional Body' && (
                           <div className="form-group">
-                            <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
+                            <label
+                              style={{
+                                fontSize: 14,
+                                color: '#495057',
+                                marginBottom: 8,
+                                fontWeight: 600,
+                                display: 'block',
+                              }}
+                            >
                               Professional Body
                             </label>
                             <CustomDropdown
                               name="professionalBody"
                               options={subcategoryOptionsByType['Professional Body'] || []}
-                              value={getSelectedOption(beneficiaryValue, subcategoryOptionsByType['Professional Body'] || [])}
+                              value={getSelectedOption(
+                                beneficiaryValue,
+                                subcategoryOptionsByType['Professional Body'] || [],
+                              )}
                               onChange={(option) => {
                                 const selected = option as OptionType | null;
                                 setBeneficiaryValue(selected?.value ? String(selected.value) : '');
@@ -3104,46 +3896,76 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                         )}
 
                         {/* Department / Centre / Cell / Club */}
-                        {hasSubcategories && !['Faculty', 'Staff', 'Institution', 'Professional Body'].includes(beneficiaryType) && (
-                          <div className="form-group">
-                            <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>
-                              {getSubcategoryLabel(beneficiaryType)}
-                            </label>
-                            {isMultipleSelect(beneficiaryType) ? (
-                              <CustomTagInput
-                                name="categorySelections"
-                                value={categorySelections}
-                                onChange={(tags) => { setCategorySelections(tags); setBeneficiaryValue(tags.join(', ')); }}
-                                suggestions={subcategoryList.filter((sub) => !categorySelections.includes(sub))}
-                                placeholder=""
-                                disabled={false}
-                                className="mb-0"
-                              />
-                            ) : (
-                              <CustomDropdown
-                                name="beneficiaryValue"
-                                options={subcategoryOptions}
-                                value={getSelectedOption(beneficiaryValue, subcategoryOptions)}
-                                onChange={(option) => {
-                                  const selected = option as OptionType | null;
-                                  setBeneficiaryValue(selected?.value ? String(selected.value) : '');
-                                  setCategorySelections([]);
+                        {hasSubcategories &&
+                          !['Faculty', 'Staff', 'Institution', 'Professional Body'].includes(
+                            beneficiaryType,
+                          ) && (
+                            <div className="form-group">
+                              <label
+                                style={{
+                                  fontSize: 14,
+                                  color: '#495057',
+                                  marginBottom: 8,
+                                  fontWeight: 600,
+                                  display: 'block',
                                 }}
-                                placeholder="Select"
-                              />
-                            )}
-                          </div>
-                        )}
+                              >
+                                {getSubcategoryLabel(beneficiaryType)}
+                              </label>
+                              {isMultipleSelect(beneficiaryType) ? (
+                                <CustomTagInput
+                                  name="categorySelections"
+                                  value={categorySelections}
+                                  onChange={(tags) => {
+                                    setCategorySelections(tags);
+                                    setBeneficiaryValue(tags.join(', '));
+                                  }}
+                                  suggestions={subcategoryList.filter(
+                                    (sub) => !categorySelections.includes(sub),
+                                  )}
+                                  placeholder=""
+                                  disabled={false}
+                                  className="mb-0"
+                                />
+                              ) : (
+                                <CustomDropdown
+                                  name="beneficiaryValue"
+                                  options={subcategoryOptions}
+                                  value={getSelectedOption(beneficiaryValue, subcategoryOptions)}
+                                  onChange={(option) => {
+                                    const selected = option as OptionType | null;
+                                    setBeneficiaryValue(
+                                      selected?.value ? String(selected.value) : '',
+                                    );
+                                    setCategorySelections([]);
+                                  }}
+                                  placeholder="Select"
+                                />
+                              )}
+                            </div>
+                          )}
                       </div>
 
                       <div className="col-md-3">
                         {beneficiaryType && (
                           <div className="form-group">
-                            <label style={{ fontSize: 14, color: '#495057', marginBottom: 8, fontWeight: 600, display: 'block' }}>Tag</label>
+                            <label
+                              style={{
+                                fontSize: 14,
+                                color: '#495057',
+                                marginBottom: 8,
+                                fontWeight: 600,
+                                display: 'block',
+                              }}
+                            >
+                              Tag
+                            </label>
                             <CustomDropdown
                               name="selectedTag"
                               options={tagOptions}
-                              value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
+                              value={
+                                selectedTag ? { value: selectedTag, label: selectedTag } : null
+                              }
                               onChange={(option) => {
                                 const selected = option as OptionType | null;
                                 setSelectedTag(selected?.value ? String(selected.value) : '');
@@ -3159,7 +3981,17 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
               </div>
 
               <div className="form-group">
-                <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>Description</label>
+                <label
+                  style={{
+                    fontSize: '14px',
+                    color: '#495057',
+                    marginBottom: '8px',
+                    fontWeight: '600',
+                    display: 'block',
+                  }}
+                >
+                  Description
+                </label>
                 <textarea
                   value={description}
                   onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
@@ -3173,7 +4005,7 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                     backgroundColor: '#fcfdff',
                     transition: 'all 0.3s ease',
                     resize: 'vertical',
-                    outline: 'none'
+                    outline: 'none',
                   }}
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = '#0069ab';
@@ -3226,12 +4058,28 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                         <div style={{ flex: '1 1 180px', minWidth: '180px' }}>
                           <CustomDropdown
                             name="primaryHead"
-                            options={PRIMARY_HEAD_OPTIONS}
-                            value={getSelectedOption(primaryHead, PRIMARY_HEAD_OPTIONS)}
+                            options={getPrimaryHeadOptions()}
+                            value={getSelectedOptionWithFallback(
+                              primaryHead,
+                              getPrimaryHeadOptions(),
+                            )}
+                            className="mb-0"
+                            styles={{
+                              control: (provided: any, state: any) => ({
+                                ...provided,
+                                boxShadow: state.isFocused ? 'none' : 'none',
+                                padding: '0 2px',
+                              }),
+                              valueContainer: (provided: any) => ({
+                                ...provided,
+                                padding: '0 12px',
+                              }),
+                            }}
                             onChange={(option) => {
                               const selected = option as OptionType | null;
                               setPrimaryHead(selected?.value ? String(selected.value) : '');
                               setEventSubHead('');
+                              setEventSubHeadError('');
                             }}
                             placeholder="Select Primary Head"
                           />
@@ -3239,24 +4087,38 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
 
                         <div style={{ flex: '1 1 180px', minWidth: '180px' }}>
                           <CustomDropdown
+                            // SHARED EVENT/MEETING SUB-HEAD DROPDOWN (Extra Dropdown)
                             name="eventSubHead"
                             options={hoacSubheadDropdownOptions}
                             value={getSelectedOption(eventSubHead, hoacSubheadDropdownOptions)}
+                            className="mb-0"
                             onChange={(option) => {
                               const selected = option as OptionType | null;
                               setEventSubHead(selected?.value ? String(selected.value) : '');
+                              setEventSubHeadError('');
                             }}
                             placeholder="Select Sub Head"
+                            error={eventSubHeadError}
                           />
                         </div>
 
-                        <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
-                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>Unplanned Budget</span>
+                        <div
+                          style={{
+                            flex: '0 0 auto',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>
+                            Unplanned Expenditure
+                          </span>
                           <CustomToggle
                             name="unplannedBudgetToggle"
                             label=""
                             checked={showUnplannedBudget}
-                            onChange={(checked) => setShowUnplannedBudget(checked)}
+                            onChange={handleUnplannedBudgetToggle}
                           />
                         </div>
                       </div>
@@ -3272,23 +4134,49 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                         <div style={{ flex: '1 1 180px', minWidth: '180px' }}>
                           <CustomDropdown
                             name="primaryHead"
-                            options={PRIMARY_HEAD_OPTIONS}
-                            value={getSelectedOption(primaryHead, PRIMARY_HEAD_OPTIONS)}
+                            options={getPrimaryHeadOptions()}
+                            value={getSelectedOptionWithFallback(
+                              primaryHead,
+                              getPrimaryHeadOptions(),
+                            )}
+                            className="mb-0"
+                            styles={{
+                              control: (provided: any, state: any) => ({
+                                ...provided,
+                                boxShadow: state.isFocused ? 'none' : 'none',
+                                padding: '0 2px',
+                              }),
+                              valueContainer: (provided: any) => ({
+                                ...provided,
+                                padding: '0 12px',
+                              }),
+                            }}
                             onChange={(option) => {
                               const selected = option as OptionType | null;
                               setPrimaryHead(selected?.value ? String(selected.value) : '');
                               setEventSubHead('');
+                              setEventSubHeadError('');
                             }}
                             placeholder="Select Primary Head"
                           />
                         </div>
-                        <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
-                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>Unplanned Budget</span>
+                        <div
+                          style={{
+                            flex: '0 0 auto',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>
+                            Unplanned Expenditure
+                          </span>
                           <CustomToggle
                             name="unplannedBudgetToggle"
                             label=""
                             checked={showUnplannedBudget}
-                            onChange={(checked) => setShowUnplannedBudget(checked)}
+                            onChange={handleUnplannedBudgetToggle}
                           />
                         </div>
                       </div>
@@ -3318,38 +4206,112 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
               </div>
 
               <div style={{ overflowX: 'visible' }}>
-                <table style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  backgroundColor: '#fff',
-                  border: '1px solid #e0e0e0'
-                }}>
+                <table
+                  style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    backgroundColor: '#fff',
+                    border: '1px solid #e0e0e0',
+                  }}
+                >
                   <thead>
                     <tr style={{ backgroundColor: '#f0f6ff' }}>
-                      <th style={{ width: '6%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>S.No</th>
-                      <th style={{ width: '30%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Budget Head</th>
-                      <th style={{ width: '30%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Sub Head</th>
-                      <th style={{ width: '15%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Amount</th>
-                      <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Actions</th>
+                      <th
+                        style={{
+                          width: '6%',
+                          padding: '12px',
+                          border: '1px solid #e0e0e0',
+                          color: '#0069ab',
+                          fontWeight: '600',
+                          textAlign: 'center',
+                        }}
+                      >
+                        S.No
+                      </th>
+                      <th
+                        style={{
+                          width: '30%',
+                          padding: '12px',
+                          border: '1px solid #e0e0e0',
+                          color: '#0069ab',
+                          fontWeight: '600',
+                          textAlign: 'center',
+                        }}
+                      >
+                        Budget Head
+                      </th>
+                      <th
+                        style={{
+                          width: '30%',
+                          padding: '12px',
+                          border: '1px solid #e0e0e0',
+                          color: '#0069ab',
+                          fontWeight: '600',
+                          textAlign: 'center',
+                        }}
+                      >
+                        Sub Head
+                      </th>
+                      <th
+                        style={{
+                          width: '15%',
+                          padding: '12px',
+                          border: '1px solid #e0e0e0',
+                          color: '#0069ab',
+                          fontWeight: '600',
+                          textAlign: 'center',
+                        }}
+                      >
+                        Amount
+                      </th>
+                      <th
+                        style={{
+                          width: '10%',
+                          padding: '12px',
+                          border: '1px solid #e0e0e0',
+                          color: '#0069ab',
+                          fontWeight: '600',
+                          textAlign: 'center',
+                        }}
+                      >
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {budgetRows.map((row, index) => (
-                      <tr key={index} style={{ borderBottom: '1px solid #e0e0e0', opacity: primaryHead ? 1 : 0.6 }}>
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', color: '#495057' }}>
+                      <tr
+                        key={index}
+                        style={{
+                          borderBottom: '1px solid #e0e0e0',
+                          opacity: primaryHead ? 1 : 0.6,
+                        }}
+                      >
+                        <td
+                          style={{
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                            textAlign: 'center',
+                            color: '#495057',
+                          }}
+                        >
                           {index + 1}
                         </td>
                         <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
                           <CustomDropdown
                             name={`budgetHead-${index}`}
-                            options={BUDGET_HEAD_SEARCH_OPTIONS}
-                            value={row.category ? {
-                              value: `head::${row.category}`,
-                              label: row.category,
-                              budgetHead: row.category,
-                              subHead: row.head || '',
-                              optionType: 'budget-head',
-                            } : null}
+                            options={getBudgetHeadSearchOptions()}
+                            value={
+                              row.category
+                                ? {
+                                    value: `head::${row.category}`,
+                                    label: row.category,
+                                    budgetHead: row.category,
+                                    subHead: row.head || '',
+                                    optionType: 'budget-head',
+                                  }
+                                : null
+                            }
                             onChange={(option) => {
                               handleBudgetHeadSelection(index, option as OptionType | null);
                             }}
@@ -3375,12 +4337,25 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                         </td>
                         <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
                           <CustomDropdown
+                            // ROW-LEVEL BUDGET SUB-HEAD DROPDOWN
                             name={`subHead-${index}`}
                             options={getSubHeadDropdownOptions(row.category)}
-                            value={getSelectedOption(row.head, getSubHeadDropdownOptions(row.category))}
+                            value={
+                              getSelectedOption(
+                                row.head,
+                                getSubHeadDropdownOptions(row.category),
+                              ) ||
+                              (row.head
+                                ? { value: row.head, label: getSubHeadDisplayText(row.head) }
+                                : null)
+                            }
                             onChange={(option) => {
                               const selected = option as OptionType | null;
-                              handleBudgetChange(index, 'head', selected?.value ? String(selected.value) : '');
+                              handleBudgetChange(
+                                index,
+                                'head',
+                                selected?.value ? String(selected.value) : '',
+                              );
                             }}
                             placeholder="Select"
                             isDisabled={!row.category || !primaryHead}
@@ -3390,7 +4365,9 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                           <input
                             type="text"
                             value={row.amount}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) => handleBudgetChange(index, 'amount', e.target.value)}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                              handleBudgetChange(index, 'amount', e.target.value)
+                            }
                             disabled={!primaryHead}
                             placeholder={`₹  ${getRemainingAvailableForRow(index)}`}
                             style={{
@@ -3406,7 +4383,7 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                               outline: 'none',
                               textAlign: 'left',
                               margin: '0 auto',
-                              display: 'block'
+                              display: 'block',
                             }}
                             onFocus={(e) => {
                               e.currentTarget.style.borderColor = '#0069ab';
@@ -3419,12 +4396,14 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                           />
                         </td>
                         <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                          <div style={{
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            gap: '10px'
-                          }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              gap: '10px',
+                            }}
+                          >
                             {(index > 0 || (index === 0 && budgetRows.length > 1)) && (
                               <button
                                 onClick={(e: MouseEvent<HTMLButtonElement>) => {
@@ -3443,14 +4422,16 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                   justifyContent: 'center',
                                   fontSize: '18px',
                                   transition: 'all 0.15s ease',
-                                  color:'#dc3545'
+                                  color: '#dc3545',
                                 }}
                                 title="Delete Row"
                                 onMouseEnter={(e) => {
-                                  (e.currentTarget as HTMLButtonElement).style.background = '#ffcccc';
+                                  (e.currentTarget as HTMLButtonElement).style.background =
+                                    '#ffcccc';
                                 }}
                                 onMouseLeave={(e) => {
-                                  (e.currentTarget as HTMLButtonElement).style.background = '#ffe6e6';
+                                  (e.currentTarget as HTMLButtonElement).style.background =
+                                    '#ffe6e6';
                                 }}
                               >
                                 ×
@@ -3477,16 +4458,18 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                   fontSize: '18px',
                                   transition: 'all 0.15s ease',
                                   opacity: isBudgetRowReadyForAdd(index) ? 1 : 0.5,
-                                  color:'#0069ab'
+                                  color: '#0069ab',
                                 }}
                                 title={getBudgetAddTooltip(index)}
                                 onMouseEnter={(e) => {
                                   if (isBudgetRowReadyForAdd(index)) {
-                                    (e.currentTarget as HTMLButtonElement).style.background = '#e8f5e9';
+                                    (e.currentTarget as HTMLButtonElement).style.background =
+                                      '#e8f5e9';
                                   }
                                 }}
                                 onMouseLeave={(e) => {
-                                  (e.currentTarget as HTMLButtonElement).style.background = '#f5f6f8';
+                                  (e.currentTarget as HTMLButtonElement).style.background =
+                                    '#f5f6f8';
                                 }}
                               >
                                 +
@@ -3498,15 +4481,34 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                     ))}
                     {hasUnplannedBudgetPreview && (
                       <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
-                        <td colSpan={2} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'center', fontWeight: '600', color: '#0069ab', backgroundColor: '#fafcff' }}>
-                          Unplanned Budget
+                        <td
+                          colSpan={2}
+                          style={{
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                            textAlign: 'center',
+                            fontWeight: '600',
+                            color: '#0069ab',
+                            backgroundColor: '#fafcff',
+                          }}
+                        >
+                          Unplanned Expenditure
                         </td>
-                        <td colSpan={1} style={{ padding: '12px', border: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
+                        <td
+                          colSpan={1}
+                          style={{
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                            backgroundColor: '#fff',
+                          }}
+                        >
                           <input
                             type="text"
                             value={unplannedBudgetDescription}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) => setUnplannedBudgetDescription(e.target.value)}
-                            placeholder="Enter unplanned budget description"
+                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                              setUnplannedBudgetDescription(e.target.value)
+                            }
+                            placeholder="Enter unplanned expenditure description"
                             style={{
                               border: '1px solid #e0e0e0',
                               borderRadius: '8px',
@@ -3528,12 +4530,18 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                             }}
                           />
                         </td>
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0', backgroundColor: '#fff' }}>
+                        <td
+                          style={{
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                            backgroundColor: '#fff',
+                          }}
+                        >
                           <input
                             type="text"
                             value={unplannedBudgetAmount}
                             onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                              setUnplannedBudgetAmount(e.target.value.replace(/\D/g, ""))
+                              setUnplannedBudgetAmount(e.target.value.replace(/\D/g, ''))
                             }
                             placeholder="₹  0"
                             style={{
@@ -3567,10 +4575,28 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                   </tbody>
                   <tfoot>
                     <tr style={{ backgroundColor: '#f0f6ff' }}>
-                      <td colSpan={3} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>
+                      <td
+                        colSpan={3}
+                        style={{
+                          padding: '12px',
+                          border: '1px solid #e0e0e0',
+                          textAlign: 'right',
+                          paddingRight: '15px',
+                          fontWeight: '600',
+                          color: '#0069ab',
+                        }}
+                      >
                         Total Budget
                       </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
+                      <td
+                        style={{
+                          padding: '12px',
+                          border: '1px solid #e0e0e0',
+                          fontWeight: '600',
+                          color: '#0069ab',
+                          textAlign: 'center',
+                        }}
+                      >
                         ₹ {totalBudget}
                       </td>
                       <td style={{ border: '1px solid #e0e0e0' }}></td>
@@ -3580,27 +4606,26 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
 
                 <div
                   style={{
-                    marginTop: "10px",
-                    padding: "10px 14px",
-                    borderRadius: "10px",
-                    backgroundColor: "#f0f6ff",
-                    border: "1px solid #cfe2ff",
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    gap: "8px",
-                    fontSize: "0.9rem",
-                    color: "#0b3d75",
-                    textAlign: "center",
-                    width: "100%",
+                    marginTop: '10px',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    backgroundColor: '#f0f6ff',
+                    border: '1px solid #cfe2ff',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '0.9rem',
+                    color: '#0b3d75',
+                    textAlign: 'center',
+                    width: '100%',
                   }}
                 >
                   <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
                   <span style={{ fontWeight: 600 }}>
                     {numberToIndianWords(totalBudget)
-                      .replace(/\b\w/g, l => l.toUpperCase())
-                      .replace(/[^\s][A-Z]/g, l => l.toLowerCase())
-                    }
+                      .replace(/\b\w/g, (l) => l.toUpperCase())
+                      .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
                   </span>
                 </div>
               </div>
@@ -3615,20 +4640,20 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                 marginBottom: '20px',
                 boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
               }}
-             >
+            >
               <div className="row mt-3">
                 <div className="col-md-12">
                   <div className="form-group">
                     <div>
                       <div
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          marginBottom: "20px",
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: '20px',
                         }}
                       >
-                        <span style={{ fontSize: "16px", color: "#495057", fontWeight: 600 }}>
+                        <span style={{ fontSize: '16px', color: '#495057', fontWeight: 600 }}>
                           Income
                         </span>
                         <CustomToggle
@@ -3639,23 +4664,104 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                       </div>
                       <div
                         style={{
-                          height: "2px",
-                          backgroundColor: "#e0e0e0",
-                          marginBottom: "20px",
+                          height: '2px',
+                          backgroundColor: '#e0e0e0',
+                          marginBottom: '20px',
                         }}
                       />
                     </div>
                     {showIncomeSection && (
                       <>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
+                        <table
+                          style={{
+                            width: '100%',
+                            borderCollapse: 'collapse',
+                            fontSize: '14px',
+                            tableLayout: 'fixed',
+                          }}
+                        >
+                          <colgroup>
+                            <col style={{ width: '6%' }} />
+                            <col style={{ width: '26%' }} />
+                            <col style={{ width: '10%' }} />
+                            <col style={{ width: '20%' }} />
+                            <col style={{ width: '23%' }} />
+                            <col style={{ width: '15%' }} />
+                          </colgroup>
                           <thead>
                             <tr style={{ backgroundColor: '#f0f6ff' }}>
-                              <th style={{ width: '6%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>S.No</th>
-                              <th style={{ width: '28%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Income Source</th>
-                              <th style={{ width: '10%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Amount</th>
-                              <th style={{ width: '20%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Status</th>
-                              <th style={{ width: '26%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Remarks</th>
-                              <th style={{ width: '15%', padding: '12px', border: '1px solid #e0e0e0', color: '#0069ab', fontWeight: '600', textAlign: 'center' }}>Actions</th>
+                              <th
+                                style={{
+                                  width: '6%',
+                                  padding: '12px',
+                                  border: '1px solid #e0e0e0',
+                                  color: '#0069ab',
+                                  fontWeight: '600',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                S.No
+                              </th>
+                              <th
+                                style={{
+                                  width: '26%',
+                                  padding: '12px',
+                                  border: '1px solid #e0e0e0',
+                                  color: '#0069ab',
+                                  fontWeight: '600',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                Income Source
+                              </th>
+                              <th
+                                style={{
+                                  width: '12%',
+                                  padding: '12px',
+                                  border: '1px solid #e0e0e0',
+                                  color: '#0069ab',
+                                  fontWeight: '600',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                Amount
+                              </th>
+                              <th
+                                style={{
+                                  width: '20%',
+                                  padding: '12px',
+                                  border: '1px solid #e0e0e0',
+                                  color: '#0069ab',
+                                  fontWeight: '600',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                Status
+                              </th>
+                              <th
+                                style={{
+                                  width: '25%',
+                                  padding: '12px',
+                                  border: '1px solid #e0e0e0',
+                                  color: '#0069ab',
+                                  fontWeight: '600',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                Remarks
+                              </th>
+                              <th
+                                style={{
+                                  width: '10%',
+                                  padding: '12px',
+                                  border: '1px solid #e0e0e0',
+                                  color: '#0069ab',
+                                  fontWeight: '600',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                Actions
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -3666,16 +4772,33 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                 <React.Fragment key={row.id}>
                                   {/* First Row - Income Details */}
                                   <tr>
-                                    <td style={incomeCellStyle}>{index + 1}</td>
-                                    
+                                    <td
+                                      rowSpan={2}
+                                      style={{
+                                        ...incomeCellStyle,
+                                        textAlign: 'center',
+                                        verticalAlign: 'middle',
+                                      }}
+                                    >
+                                      {index + 1}
+                                    </td>
+
                                     <td style={incomeCellStyle}>
                                       <CustomDropdown
                                         name={`incomeSource-${row.id}`}
                                         options={toOptions(INCOME_SOURCE_OPTIONS)}
-                                        value={getSelectedOption(row.incomeSource, toOptions(INCOME_SOURCE_OPTIONS))}
+                                        className="mb-0"
+                                        value={getSelectedOption(
+                                          row.incomeSource,
+                                          toOptions(INCOME_SOURCE_OPTIONS),
+                                        )}
                                         onChange={(option) => {
                                           const selected = option as OptionType | null;
-                                          handleIncomeRowChange(row.id, "incomeSource", selected?.value ? String(selected.value) : "");
+                                          handleIncomeRowChange(
+                                            row.id,
+                                            'incomeSource',
+                                            selected?.value ? String(selected.value) : '',
+                                          );
                                         }}
                                         placeholder="Select"
                                       />
@@ -3685,8 +4808,12 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                         type="text"
                                         value={row.amount}
                                         onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                                                  handleIncomeRowChange(row.id, "amount", e.target.value.replace(/\D/g, ""))
-                                                }
+                                          handleIncomeRowChange(
+                                            row.id,
+                                            'amount',
+                                            e.target.value.replace(/\D/g, ''),
+                                          )
+                                        }
                                         placeholder="₹  0"
                                         min="0"
                                         step="0"
@@ -3701,11 +4828,12 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                           color: '#000',
                                           cursor: 'pointer',
                                           outline: 'none',
-                                          marginTop: '2px'
+                                          marginTop: '2px',
                                         }}
                                         onFocus={(e) => {
                                           e.currentTarget.style.borderColor = '#0069ab';
-                                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                                          e.currentTarget.style.boxShadow =
+                                            '0 0 0 3px rgba(0, 105, 171, 0.15)';
                                         }}
                                         onBlur={(e) => {
                                           e.currentTarget.style.borderColor = '#e0e0e0';
@@ -3717,10 +4845,18 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                       <CustomDropdown
                                         name={`status-${row.id}`}
                                         options={toOptions(STATUS_OPTIONS)}
-                                        value={getSelectedOption(row.status, toOptions(STATUS_OPTIONS))}
+                                        className="mb-0"
+                                        value={getSelectedOption(
+                                          row.status,
+                                          toOptions(STATUS_OPTIONS),
+                                        )}
                                         onChange={(option) => {
                                           const selected = option as OptionType | null;
-                                          handleIncomeRowChange(row.id, "status", selected?.value ? String(selected.value) : "");
+                                          handleIncomeRowChange(
+                                            row.id,
+                                            'status',
+                                            selected?.value ? String(selected.value) : '',
+                                          );
                                         }}
                                         placeholder="Select"
                                       />
@@ -3730,7 +4866,7 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                         type="text"
                                         value={row.remarks}
                                         onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                                          handleIncomeRowChange(row.id, "remarks", e.target.value)
+                                          handleIncomeRowChange(row.id, 'remarks', e.target.value)
                                         }
                                         placeholder="Enter remarks"
                                         style={{
@@ -3744,11 +4880,12 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                           color: '#000',
                                           cursor: 'text',
                                           outline: 'none',
-                                          marginTop: '2px'
+                                          marginTop: '2px',
                                         }}
                                         onFocus={(e) => {
                                           e.currentTarget.style.borderColor = '#0069ab';
-                                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                                          e.currentTarget.style.boxShadow =
+                                            '0 0 0 3px rgba(0, 105, 171, 0.15)';
                                         }}
                                         onBlur={(e) => {
                                           e.currentTarget.style.borderColor = '#e0e0e0';
@@ -3757,13 +4894,16 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                       />
                                     </td>
                                     {/* Action cell with vertical centering spanning both rows */}
-                                    <td rowSpan={2} style={{
-                                      padding: '8px',
-                                      border: '1px solid #e0e0e0',
-                                      textAlign: 'center',
-                                      verticalAlign: 'middle',
-                                      backgroundColor: '#fff',
-                                      }}>
+                                    <td
+                                      rowSpan={2}
+                                      style={{
+                                        padding: '8px',
+                                        border: '1px solid #e0e0e0',
+                                        textAlign: 'center',
+                                        verticalAlign: 'middle',
+                                        backgroundColor: '#fff',
+                                      }}
+                                    >
                                       <div style={actionCell}>
                                         {(index > 0 || (index === 0 && incomeRows.length > 1)) && (
                                           <button
@@ -3776,15 +4916,19 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                             title="Delete Row"
                                             className="btn-sm"
                                             onMouseEnter={(e) => {
-                                              (e.currentTarget as HTMLButtonElement).style.background = '#ffcccc';
+                                              (
+                                                e.currentTarget as HTMLButtonElement
+                                              ).style.background = '#ffcccc';
                                             }}
                                             onMouseLeave={(e) => {
-                                              (e.currentTarget as HTMLButtonElement).style.background = '#ffe6e6';
+                                              (
+                                                e.currentTarget as HTMLButtonElement
+                                              ).style.background = '#ffe6e6';
                                             }}
                                           >
                                             ×
                                           </button>
-                                    )}
+                                        )}
                                         {isLastRow && (
                                           <button
                                             type="button"
@@ -3799,24 +4943,30 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                               borderRadius: '50%',
                                               border: 'none',
                                               background: '#f5f6f8',
-                                              cursor: isIncomeRowReadyForAdd(row) ? 'pointer' : 'not-allowed',
+                                              cursor: isIncomeRowReadyForAdd(row)
+                                                ? 'pointer'
+                                                : 'not-allowed',
                                               display: 'inline-flex',
                                               alignItems: 'center',
                                               justifyContent: 'center',
                                               fontSize: '18px',
                                               transition: 'all 0.15s ease',
-                                              color:'#0069ab',
+                                              color: '#0069ab',
                                               opacity: isIncomeRowReadyForAdd(row) ? 1 : 0.5,
                                             }}
                                             title={getIncomeAddTooltip(row, index)}
                                             className="btn-sm"
                                             onMouseEnter={(e) => {
                                               if (isIncomeRowReadyForAdd(row)) {
-                                                (e.currentTarget as HTMLButtonElement).style.background = '#e8f5e9';
+                                                (
+                                                  e.currentTarget as HTMLButtonElement
+                                                ).style.background = '#e8f5e9';
                                               }
                                             }}
                                             onMouseLeave={(e) => {
-                                              (e.currentTarget as HTMLButtonElement).style.background = '#f5f6f8';
+                                              (
+                                                e.currentTarget as HTMLButtonElement
+                                              ).style.background = '#f5f6f8';
                                             }}
                                           >
                                             +
@@ -3827,12 +4977,6 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                   </tr>
                                   {/* Second Row - Credit Account (Reduced width) */}
                                   <tr>
-                                    <td
-                                      style={{
-                                        border: '1px solid #e0e0e0',
-                                        backgroundColor: '#fafcff',
-                                      }}
-                                    />
                                     <td
                                       colSpan={1}
                                       style={{
@@ -3852,7 +4996,9 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                           whiteSpace: 'nowrap',
                                         }}
                                       >
-                                        <span style={{ fontWeight: 600, color: '#0069ab' }}>Contribution</span>
+                                        <span style={{ fontWeight: 600, color: '#0069ab' }}>
+                                          Contribution
+                                        </span>
                                         {CONTRIBUTION_OPTIONS.map((option) => (
                                           <label
                                             key={option}
@@ -3873,7 +5019,13 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                               name={`contribution-${row.id}`}
                                               value={option}
                                               checked={row.contribution === option}
-                                              onChange={() => handleIncomeRowChange(row.id, 'contribution', option)}
+                                              onChange={() =>
+                                                handleIncomeRowChange(
+                                                  row.id,
+                                                  'contribution',
+                                                  option,
+                                                )
+                                              }
                                               style={{ accentColor: '#0069ab' }}
                                             />
                                             <span>{option}</span>
@@ -3911,14 +5063,27 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                         <div style={{ flex: 1 }}>
                                           <CustomDropdown
                                             name={`creditAccount-${row.id}`}
-                                            options={toOptions(CREDIT_ACCOUNT_OPTIONS)}
-                                            value={getSelectedOption(row.creditAccount, toOptions(CREDIT_ACCOUNT_OPTIONS))}
+                                            options={accountDropdownOptions}
+                                            className="mb-0"
+                                            value={getSelectedOption(
+                                              row.creditAccount,
+                                              accountDropdownOptions,
+                                            )}
                                             onChange={(option) => {
                                               const selected = option as OptionType | null;
-                                              handleIncomeRowChange(row.id, "creditAccount", selected?.value ? String(selected.value) : "");
+                                              handleIncomeRowChange(
+                                                row.id,
+                                                'creditAccount',
+                                                selected?.value ? String(selected.value) : '',
+                                              );
                                             }}
                                             placeholder="Select"
                                           />
+                                          {accountOptionsError && (
+                                            <div className="text-danger small mt-1">
+                                              {accountOptionsError}
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     </td>
@@ -3929,29 +5094,95 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                           </tbody>
                           <tfoot>
                             <tr style={{ backgroundColor: '#f0f6ff' }}>
-                              <td colSpan={2} style={{ padding: '12px', border: '1px solid #e0e0e0', textAlign: 'right', paddingRight: '15px', fontWeight: '600', color: '#0069ab' }}>Total Income</td>
-                              <td style={{ padding: '12px', border: '1px solid #e0e0e0', fontWeight: '600', color: '#0069ab', textAlign: 'center' }}>
-                                ₹ {incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)}
+                              <td
+                                colSpan={2}
+                                style={{
+                                  padding: '12px',
+                                  border: '1px solid #e0e0e0',
+                                  textAlign: 'right',
+                                  paddingRight: '15px',
+                                  fontWeight: '600',
+                                  color: '#0069ab',
+                                }}
+                              >
+                                Total Income
                               </td>
-                              <td colSpan={3} style={{ border: '1px solid #e0e0e0' }}></td>
+                              <td
+                                style={{
+                                  padding: '12px',
+                                  border: '1px solid #e0e0e0',
+                                  fontWeight: '600',
+                                  color: '#0069ab',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                ₹ {totalIncome}
+                              </td>
+                              <td
+                                colSpan={3}
+                                style={{
+                                  padding: '12px 16px',
+                                  border: '1px solid #e0e0e0',
+                                  color: '#0b3d75',
+                                  fontWeight: 600,
+                                  textAlign: 'center',
+                                }}
+                              >
+                                <span>Rupees (in words): </span>
+                                <span>
+                                  {numberToIndianWords(totalIncome)
+                                    .replace(/\b\w/g, (l) => l.toUpperCase())
+                                    .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
+                                </span>
+                              </td>
                             </tr>
                           </tfoot>
                         </table>
 
-                        {/* Rupees in words */}
-                        <div style={{ marginTop: "10px", padding: "10px 14px", borderRadius: "10px", backgroundColor: "#f0f6ff", border: "1px solid #cfe2ff", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", fontSize: "0.9rem", color: "#0b3d75", textAlign: "center", width: "100%" }}>
-                          <span style={{ fontWeight: 600 }}>Rupees (in words):</span>
-                          <span style={{ fontWeight: 600 }}>
-                            {numberToIndianWords(incomeRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)).replace(/\b\w/g, l => l.toUpperCase()).replace(/[^\s][A-Z]/g, l => l.toLowerCase())}
-                          </span>
-                        </div>
+                        {shouldShowManagementRequestAmount && (
+                          <div
+                            style={{
+                              marginTop: '10px',
+                              padding: '12px 16px',
+                              borderRadius: '10px',
+                              backgroundColor: '#fff8e1',
+                              border: '1px solid #f2d38b',
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              gap: '12px',
+                              flexWrap: 'wrap',
+                              fontSize: '0.95rem',
+                              color: '#7a4b00',
+                              textAlign: 'center',
+                              width: '100%',
+                              fontWeight: 700,
+                            }}
+                          >
+                            <span>Amount requested from Management:</span>
+                            <span>₹ {amountRequestedFromManagement}</span>
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                width: '1px',
+                                height: '20px',
+                                backgroundColor: '#d8a84a',
+                              }}
+                            />
+                            <span>
+                              Rupees (in words):{' '}
+                              {numberToIndianWords(amountRequestedFromManagement)
+                                .replace(/\b\w/g, (l) => l.toUpperCase())
+                                .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
+                            </span>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
                 </div>
               </div>
             </div>
-
           </div>
           <div
             style={{
@@ -3962,11 +5193,19 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
               border: '1px solid #e0e0e0',
             }}
-           >
+          >
             <div className="row mt-3">
               <div className="col-md-12">
                 <div className="form-group">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '20px',
+                      gap: '12px',
+                    }}
+                  >
                     <span style={{ fontSize: '16px', color: '#495057', fontWeight: 600 }}>
                       Annexure
                     </span>
@@ -3975,7 +5214,6 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                   <div className="row g-3">
                     <div className="col-md-6">
                       <div className="form-group mb-0">
-                        
                         <CustomDropdown
                           name="annexureType"
                           options={toOptions(ANNEXURE_TYPE_OPTIONS)}
@@ -3992,35 +5230,72 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
 
                     <div className="col-md-6">
                       <div className="form-group mb-0">
-                        
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '14px',
+                            flexWrap: 'wrap',
+                          }}
+                        >
                           <input
                             ref={annexureFileInputRef}
                             id="annexure-file-input"
                             type="file"
+                            accept="application/pdf,.pdf"
                             multiple
                             style={{ display: 'none' }}
-                            disabled={isViewMode}
+                            disabled={
+                              isViewMode || String(annexureType || '').trim() === 'Not Applicable'
+                            }
                             onChange={handleAnnexureFileChange}
                           />
                           <button
                             type="button"
-                            onClick={() => annexureFileInputRef.current?.click()}
+                            onClick={() => {
+                              if (
+                                !isViewMode &&
+                                String(annexureType || '').trim() !== 'Not Applicable' &&
+                                hasFilledText(annexureType)
+                              ) {
+                                annexureFileInputRef.current?.click();
+                              }
+                            }}
                             style={{
                               ...annexureUploadButtonStyle,
-                              opacity: (!isViewMode && hasFilledText(annexureType)) ? 1 : 0.55,
-                              cursor: (!isViewMode && hasFilledText(annexureType)) ? 'pointer' : 'not-allowed',
+                              opacity:
+                                !isViewMode &&
+                                hasFilledText(annexureType) &&
+                                String(annexureType || '').trim() !== 'Not Applicable'
+                                  ? 1
+                                  : 0.55,
+                              cursor:
+                                !isViewMode &&
+                                hasFilledText(annexureType) &&
+                                String(annexureType || '').trim() !== 'Not Applicable'
+                                  ? 'pointer'
+                                  : 'not-allowed',
                             }}
-                            disabled={isViewMode || !hasFilledText(annexureType)}
+                            disabled={
+                              isViewMode ||
+                              !hasFilledText(annexureType) ||
+                              String(annexureType || '').trim() === 'Not Applicable'
+                            }
                             title={
                               isViewMode
                                 ? 'View mode'
-                                : hasFilledText(annexureType)
-                                ? 'Choose annexure file'
-                                : 'Select annexure type before choosing files'
+                                : String(annexureType || '').trim() === 'Not Applicable'
+                                  ? 'Upload disabled for Not Applicable'
+                                  : hasFilledText(annexureType)
+                                    ? 'Choose annexure file'
+                                    : 'Select annexure type before choosing files'
                             }
                             onMouseEnter={(e) => {
-                              if (!isViewMode && hasFilledText(annexureType)) {
+                              if (
+                                !isViewMode &&
+                                hasFilledText(annexureType) &&
+                                String(annexureType || '').trim() !== 'Not Applicable'
+                              ) {
                                 (e.currentTarget as HTMLButtonElement).style.background = '#005c95';
                               }
                             }}
@@ -4066,7 +5341,7 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
                                       padding: '2px',
                                     }}
                                     title="View uploaded document"
-                                    >
+                                  >
                                     <Eye size={18} />
                                   </button>
                                   {!isViewMode && (
@@ -4107,586 +5382,147 @@ const isSuperAdminUser = Boolean(user?.is_super_admin);
         </div>
       )}
 
-    <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0' }}>
-      <div
-        style={{
-          maxWidth: '100%',
-          margin: '0 auto',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '18px',
-        }}
-      >
-        {!showPreview && !isViewMode && (
-          <button
-            type="button"
-            onClick={handleSubmit}
+      {!showPreview && (
+        <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0' }}>
+          <div
             style={{
-              backgroundColor: '#0069ab',
-              color: '#fff',
-              border: 'none',
-              padding: '12px 24px',
-              borderRadius: '12px',
-              fontSize: '0.95rem',
-              fontWeight: '500',
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              transition: 'all 0.3s ease',
-              minWidth: '140px',
-              opacity: isLoading ? 0.7 : 1,
-              whiteSpace: 'nowrap',
-            }}
-            disabled={isLoading}
-            onMouseEnter={(e) => {
-              if (!isLoading) e.currentTarget.style.backgroundColor = '#005492';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#0069ab';
-            }}
-          >
-            {isLoading ? 'Submitting...' : isEditMode ? 'Update Form' : 'Submit Form'}
-          </button>
-        )}
-
-        {isApprovalMode && !hideWorkflowActionsForFinalStatus && !showPreview ? (
-          <div className="finance-workflow-actions">
-            {!isSuperAdminUser && canActOnCurrentStage && (
-              <>
-                <button
-                  type="button"
-                  className="finance-workflow-btn finance-workflow-btn--approve"
-                  onClick={() => handleWorkflowAction('approved')}
-                  disabled={isLoading}
-                >
-                  <CheckCircle2 size={18} />
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  className="finance-workflow-btn finance-workflow-btn--return"
-                  onClick={() => handleWorkflowAction('returned')}
-                  disabled={isLoading}
-                >
-                  <RotateCcw size={18} />
-                  Return
-                </button>
-                <button
-                  type="button"
-                  className="finance-workflow-btn finance-workflow-btn--reject"
-                  onClick={() => handleWorkflowAction('rejected')}
-                  disabled={isLoading}
-                >
-                  <XCircle size={18} />
-                  Reject
-                </button>
-              </>
-            )}
-            {isSuperAdminUser && (
-              <button
-                type="button"
-                className="finance-workflow-btn finance-workflow-btn--return"
-                onClick={() => handleWorkflowAction('returned')}
-                disabled={isLoading}
-              >
-                <RotateCcw size={18} />
-                Return
-              </button>
-            )}
-            <button
-              type="button"
-              className="finance-workflow-btn finance-workflow-btn--archive"
-              onClick={() => handleWorkflowAction('archived')}
-              disabled={isLoading}
-            >
-              <Archive size={18} />
-              Archive
-            </button>
-          </div>
-        ) : null}
-      </div>
-    </div>
-
-      {showPreview && (() => {
-        const getApprovalDetailUi = (stageKeys: string[]) => {
-  let lastResetIdx = -1;
-
-  for (let i = statusUpdates.length - 1; i >= 0; i--) {
-    const dec = String(statusUpdates[i]?.decision || '').toLowerCase();
-    const stat = String(statusUpdates[i]?.status || '').toLowerCase();
-
-    if (
-      dec === 'returned' ||
-      dec === 'rejected' ||
-      stat === 'returned' ||
-      stat === 'rejected' ||
-      dec === 'resubmitted' ||
-      dec.includes('resubmit')
-    ) {
-      lastResetIdx = i;
-      break;
-    }
-  }
-
-  const currentFlowUpdates = statusUpdates.slice(lastResetIdx + 1);
-
-  const approved = currentFlowUpdates.filter((u: any) => {
-    const stage = String(u?.stage || '').toLowerCase();
-    const decision = String(u?.decision || '').toLowerCase();
-    const status = String(u?.status || '').toLowerCase();
-
-    return (
-      stageKeys.includes(stage) &&
-      (decision === 'approved' || status === 'approved' || status.includes('approved'))
-    );
-  });
-
-  if (approved.length === 0) {
-    return { name: '', email: '', date: '' };
-  }
-
-  approved.sort((a: any, b: any) => {
-    const tA = new Date(a?.decidedat || a?.createdat || 0).getTime();
-    const tB = new Date(b?.decidedat || b?.createdat || 0).getTime();
-    return tB - tA;
-  });
-
-  const latest = approved[0];
-  const dateStr = latest?.decidedat || latest?.createdat;
-
-  const formattedDate = dateStr
-    ? new Date(dateStr).toLocaleString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        hour12: true,
-      })
-    : '';
-
- return {
-  name: latest?.username || latest?.actorname || '',
-  email: latest?.email || latest?.actoremail || latest?.useremail || '',
-  date: formattedDate,
-};
-};
-const getSubmittedDetailUi = () => {
-  const approvalHistory = getWorkflowTimeline(statusUpdates, {
-    name: applicantName || '',
-    email: email || '',
-    date: submittedAt ? formatWorkflowTimestamp(submittedAt) : getCurrentWorkflowTimestamp(),
-  });
-  const submittedTimestamp = getSubmittedTimestamp(
-    approvalHistory,
-    submittedAt ? formatWorkflowTimestamp(submittedAt) : '',
-    !id
-  );
-  const submitted = approvalHistory.find((entry) => entry.label === 'Submitted');
-
-  if (!submitted) {
-    return { name: applicantName || '', email: email || '', date: submittedTimestamp };
-  }
-
-  return {
-    name: submitted.actor || applicantName || '',
-    email: submitted.email || email || '',
-    date: submittedTimestamp || submitted.timestamp || '',
-  };
-};
-
-        const submittedByUi = getSubmittedDetailUi();
-const level1ApprovalUi = getApprovalDetailUi(['level1', 'hod', 'coordinator', 'ithead']);
-const dofApprovalUi = getApprovalDetailUi(['dof']);
-const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
-        const approvalHistory = getWorkflowTimeline(statusUpdates, {
-          name: applicantName || '',
-          email: email || '',
-          date: submittedAt ? formatWorkflowTimestamp(submittedAt) : getCurrentWorkflowTimestamp(),
-        });
-        const approvalSteps = approvalHistory.filter((entry) =>
-          entry.label === 'Approved' &&
-          !(totalBudget > 10000 && (String(entry.stage).includes('principal') || String(entry.stage).includes('chairman')))
-        );
-        const showSeniorApprovalRow = totalBudget > 10000;
-
-  const renderPersonLine = (name?: string, mail?: string, timestamp?: string) => {
-  const trimmedName = String(name || '').trim();
-  const trimmedMail = String(mail || '').trim();
-  const trimmedTime = String(timestamp || '').trim();
-
-  const actorAlreadyHasMail =
-    trimmedMail.length > 0 &&
-    trimmedName.toLowerCase().includes(trimmedMail.toLowerCase());
-
-  const displayName = trimmedName || '-';
-  const displayMail = trimmedMail && !actorAlreadyHasMail ? ` (${trimmedMail})` : '';
-  const displayTime = trimmedTime ? ` on ${trimmedTime}` : '';
-
-  return (
-    <span>
-      {displayName}
-      {displayMail}
-      {displayTime}
-    </span>
-  );
-};
-  const previewTimelineRowStyle: CSSProperties = {
-    padding: '8px 10px',
-    fontSize: '14px',
-    lineHeight: '1.45',
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '4px',
-    alignItems: 'baseline',
-  };
-
-  const previewTimelineLabelStyle: CSSProperties = {
-    fontWeight: 600,
-    whiteSpace: 'nowrap',
-  };
-
-  const previewTimelineValueStyle: CSSProperties = {
-    flex: '1 1 auto',
-    minWidth: 0,
-  };
-        return (
-          <div ref={componentRef} style={{
-            position: 'relative',
-            backgroundColor: '#fff',
-            padding: '22px 18px',
-            width: '210mm',
-            boxSizing: 'border-box',
-            margin: '0 auto',
-          }}>
-            <table style={{
-              marginBottom: "14px",
-              tableLayout: "fixed",
-              width: '94%',
-              margin: '0 auto 14px auto',
-              borderCollapse: 'collapse'
-            }}>
-              <tr>
-                <td style={{
-                  width: "16%",
-                  border: "1px solid #000",
-                  textAlign: "center",
-                  verticalAlign: "middle",
-                  padding: "10px 6px",
-                }}>
-                  <img src={KSRCTLogo} alt="Logo" style={{ width: "75px", height: "75px", objectFit: "contain" }} />
-                </td>
-                <td style={{
-                  width: "68%",
-                  border: "1px solid #000",
-                  textAlign: "center",
-                  verticalAlign: "middle",
-                  padding: "8px 10px",
-                }}>
-                  <div style={{ fontSize: "19px", fontWeight: "bold", color: "#000", lineHeight: "1.05", marginBottom: "4px" }}>
-                    K.S.RANGASAMY COLLEGE OF TECHNOLOGY
-                  </div>
-                  <div style={{ fontSize: "14px", color: "#000", marginBottom: "4px" }}>
-                    (Autonomous)
-                  </div>
-                  <div style={{ fontSize: "16px", color: "#000", lineHeight: "1.2" }}>
-                    Tiruchengode – 637 215, Namakkal Dt. Tamil Nadu
-                  </div>
-                </td>
-                <td style={{
-                  width: "16%",
-                  border: "1px solid #000",
-                  textAlign: "center",
-                  verticalAlign: "middle",
-                  padding: "10px 6px",
-                }}>
-                  <div style={{ fontSize: "16px", fontWeight: "bold", color: "#000" }}>
-                    FINANCE
-                  </div>
-                  {proposalRef && (
-                    <div style={{ fontSize: "13px", fontWeight: "600", color: "#000", marginTop: "4px" }}>
-                      {proposalRef}
-                    </div>
-                  )}
-                </td>
-              </tr>
-            </table>
-
-            <h2 style={{
-              textAlign: 'center',
-              margin: '0 0 18px 0',
-              fontSize: '18px',
-              fontWeight: 'bold',
-              textTransform: 'uppercase',
-              letterSpacing: '0.4px',
-              color: '#000000'
-            }}>
-              APPLICATION FOR FINANCIAL APPROVAL
-            </h2>
-
-            <table style={{
-              marginBottom: "14px",
-              tableLayout: "fixed",
-              width: '94%',
-              borderCollapse: 'collapse',
-              margin: '0 auto 14px auto'
-            }}>
-              <tr>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '18%', fontSize: '14px' }}><strong>Name</strong></td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '32%', fontSize: '14px' }}>{applicantName || '\u00A0'}</td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '20%', fontSize: '14px' }}><strong>Date</strong></td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '30%', fontSize: '14px' }}>{date ? formatDMY(date) : '\u00A0'}</td>
-              </tr>
-              <tr>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Department</strong></td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{department || '\u00A0'}</td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', width: '15%', fontSize: '14px' }}><strong>Designation</strong></td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{designation || '\u00A0'}</td>
-              </tr>
-              <tr>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Email</strong></td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{email || '\u00A0'}</td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}><strong>Mobile</strong></td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}>{mobile || '\u00A0'}</td>
-              </tr>
-              <tr>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Beneficiary</strong></td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={3}>
-                  {getBeneficiaryDisplayText()}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Description</strong></td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px', wordWrap: 'break-word', overflowWrap: 'break-word', wordBreak: 'break-word' }} colSpan={3}>
-                  {description || '\u00A0'}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}><strong>Head of Accounts</strong></td>
-                <td style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }} colSpan={1}>
-                  {primaryHead || '\u00A0'}
-                  {extraDropdownVisible && eventSubHead && ` - ${eventSubHead}`}
-                </td>
-                
-                <td style={{ padding: '8px 5.5px', border: '1px solid #000', fontSize: '14px', verticalAlign: 'middle', height: '42px' }}><strong>Annexure</strong></td>
-                <td  style={{ padding: '8px 5.5px', border: '1px solid #000', fontSize: '14px', verticalAlign: 'middle', height: '42px', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-                  {getAnnexureSummary()}
-                </td>
-              
-              </tr>
-              
-              <tr>
-                <td colSpan={4} style={{ padding: '8px 6px', border: '1px solid #000', verticalAlign: 'top' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', marginTop: '4px', tableLayout: 'fixed' }}>
-                    <colgroup>
-                      <col style={{ width: '8%' }} />
-                      <col style={{ width: '40%' }} />
-                      <col style={{ width: '36%' }} />
-                      <col style={{ width: '16%' }} />
-                    </colgroup>
-                    <thead>
-                      <tr style={{ backgroundColor: '#f8f8f8' }}>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>S.No</th>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Budget Head</th>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Sub Head</th>
-                        <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {budgetRows.map((row, index) => (
-                        <tr key={index}>
-                          <td  style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
-                          <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.category || '\u00A0'}</td>
-                          <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{getSubHeadDisplayText(row.head) || '\u00A0'}</td>
-                          <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>₹  {Number(row.amount || 0)}</td>
-                        </tr>
-                      ))}
-                      {hasUnplannedBudgetPreview && (
-                        <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
-                         <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'left', fontWeight: 'bold' }}>Unplanned Budget:{unplannedBudgetDescription || '\u00A0'}</td>
-                         <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹  {Number(unplannedBudgetAmount || 0)}</td>
-                        </tr>
-                      )}
-                      <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
-                        <td colSpan={3} style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right', fontWeight: 'bold' }}>Total Budget:</td>
-                        <td style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {totalBudget}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </td>
-              </tr>
-              <tr>
-                <td colSpan={4} style={{ padding: '6px 16px', border: '1px solid #000', textAlign: 'center', fontSize: '15px', backgroundColor: '#f8f9fa' }}>
-                  Rupees in Words: {numberToIndianWords(totalBudget).replace(/\b\w/g, l => l.toUpperCase()).replace(/([A-Z])(?=[A-Z][a-z])/, '$1 ').replace(/[A-Z]{2,}/g, m => m.charAt(0) + m.slice(1).toLowerCase())}
-                </td>
-              </tr>
-              <tr>
-                <td colSpan={4} style={{ padding: '6px 8px', border: '1px solid #000' }}>
-                  {showIncomeSection ? (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', tableLayout: 'fixed' }}>
-                    <colgroup>
-                      <col style={{ width: '8%' }} />
-                      <col style={{ width: '25%' }} />
-                      <col style={{ width: '20%' }} />
-                      <col style={{ width: '15%' }} />
-                      <col style={{ width: '27%' }} />
-                    </colgroup>
-                      <thead>
-                        <tr style={{ backgroundColor: '#f8f8f8' }}>
-                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>S.No</th>
-                          
-                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Income Source</th>
-                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Status</th>
-                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Amount</th>
-                          <th style={{ padding: '3px 4px', border: '1px solid #000', textAlign: 'center' }}>Remarks</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {incomeRows.map((row, index) => (
-                          <React.Fragment key={row.id}>
-                            <tr>
-                              <td rowSpan={2}style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{index + 1}</td>
-                             
-                              <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.incomeSource || ''}</td>
-                               <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'center' }}>{row.status || ''}</td>
-                              <td style={{ padding: '2.5px 4px', border: '1px solid #000', textAlign: 'right' }}>₹ {row.amount ? ` ${row.amount}` : ''}</td>
-                              <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>{row.remarks || ''}</td>
-                            </tr>
-                            <tr>
-                              
-                              <td colSpan={1} style={{ padding: '2.5px 4px', border: '1px solid #000', fontWeight: 'bold', backgroundColor: '#f8f8f8' }}>
-                                <strong>Contribution</strong>{row.contribution ? ` - ${row.contribution}` : ''}
-                              </td>
-                              <td colSpan={3} style={{ padding: '2.5px 4px', border: '1px solid #000', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-                                <b>Credit Account:</b>
-                                {row.creditAccount || '\u00A0'}
-                              </td>
-                            </tr>
-                          </React.Fragment>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div style={{ textAlign: 'center', fontSize: '14px' }}>Income: Not Applicable</div>
-                  )}
-                </td>
-              </tr>
-              <tr>
-  <td colSpan={4} style={{ padding: '0', border: '1px solid #000' }}>
-    <div
-      style={{
-        ...previewTimelineRowStyle,
-        borderBottom: approvalSteps.length > 0 || showSeniorApprovalRow ? '1px solid #000' : 'none',
-      }}
-    >
-      <span style={previewTimelineLabelStyle}>Submitted by</span>
-      <span style={previewTimelineValueStyle}>
-        {renderPersonLine(submittedByUi.name, submittedByUi.email, submittedByUi.date)}
-      </span>
-    </div>
-
-    
-
-    {approvalSteps.map((entry, index) => {
-      const entryKey = String(entry.key || `${entry.label}-${index}`);
-      const hasExpandedDetails =
-        Boolean(entry.fullSubtitle) &&
-        entry.fullSubtitle !== entry.subtitle;
-      const detailText = hasExpandedDetails && expandedTimelineDetails[entryKey]
-        ? entry.fullSubtitle
-        : entry.subtitle;
-
-      return (
-        <div
-          key={entryKey}
-          style={{
-            ...previewTimelineRowStyle,
-            borderBottom: index === approvalSteps.length - 1 ? 'none' : '1px solid #000',
-          }}
-        >
-          <span style={previewTimelineLabelStyle}>{entry.label} by</span>
-          <span
-            style={{
-              ...previewTimelineValueStyle,
+              maxWidth: '100%',
+              margin: '0 auto',
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'flex-start',
-              gap: '4px',
+              alignItems: 'center',
+              gap: '18px',
             }}
           >
-            <span>
-              {renderPersonLine(entry.actor, entry.email, entry.timestamp)}
-            </span>
-            {detailText ? (
-              <span style={{ fontSize: '12px', color: '#495057', lineHeight: 1.4 }}>
-                {detailText}
-              </span>
-            ) : null}
-            {hasExpandedDetails ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setExpandedTimelineDetails((prev) => ({
-                    ...prev,
-                    [entryKey]: !prev[entryKey],
-                  }));
-                }}
+            {!showPreview && stageRemarksForDisplay.length > 0 && (
+              <div
                 style={{
-                  border: 'none',
-                  background: 'transparent',
-                  color: '#0d6efd',
-                  padding: 0,
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 600,
+                  backgroundColor: '#fff',
+                  padding: '24px',
+                  borderRadius: '18px',
+                  width: '100%',
+                  maxWidth: '1200px',
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+                  pointerEvents: canEditStageRemark ? 'auto' : undefined,
+                  userSelect: canEditStageRemark ? 'auto' : undefined,
                 }}
               >
-                {expandedTimelineDetails[entryKey] ? 'Show less' : 'Show full changes'}
-              </button>
-            ) : null}
-          </span>
-        </div>
-      );
-    })}
-    {approvalHistory.length === 0 ? (
-      <div style={previewTimelineRowStyle}>
-        No approval history available
-      </div>
-    ) : null}
-  </td>
-</tr>
-            </table>
+                <h5
+                  style={{
+                    margin: '0 0 16px',
+                    fontSize: '16px',
+                    color: '#0069ab',
+                    fontWeight: 600,
+                  }}
+                >
+                  Workflow Remarks
+                </h5>
+                <div className="row g-3">
+                  {stageRemarksForDisplay.map((entry) => (
+                    <div className="col-md-4" key={entry.label}>
+                      <label
+                        style={{
+                          fontSize: '13px',
+                          color: '#495057',
+                          marginBottom: '8px',
+                          fontWeight: 600,
+                          display: 'block',
+                        }}
+                      >
+                        {entry.label}
+                        {hasFilledText(entry.status) ? ` (${entry.status})` : ''}
+                      </label>
+                      {(() => {
+                        const entryStage = String(entry.label || '').toLowerCase();
+                        const isCurrentStageEditable =
+                          canEditStageRemark && loadedCurrentStage === entryStage;
+                        return (
+                          <textarea
+                            data-workflow-stage-remark-input={
+                              isCurrentStageEditable ? 'true' : undefined
+                            }
+                            value={isCurrentStageEditable ? stageRemarkInput : entry.remarks || ''}
+                            readOnly={!isCurrentStageEditable}
+                            onChange={(event) => {
+                              if (isCurrentStageEditable) {
+                                setStageRemarkInput(event.target.value);
+                              }
+                            }}
+                            rows={3}
+                            placeholder={
+                              isCurrentStageEditable
+                                ? `Enter ${entry.label} remarks (optional)`
+                                : `No ${entry.label} remarks`
+                            }
+                            style={{
+                              borderRadius: '10px',
+                              border: '1px solid #e0e0e0',
+                              padding: '10px 12px',
+                              fontSize: '0.9rem',
+                              width: '100%',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fcfdff',
+                              resize: isCurrentStageEditable ? 'vertical' : 'none',
+                              color: '#495057',
+                            }}
+                          />
+                        );
+                      })()}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            {isApprovalMode && !hideWorkflowActionsForFinalStatus ? (
-              <div style={{ marginTop: '18px', display: 'flex', justifyContent: 'center' }}>
-                <div className="finance-workflow-actions">
-                  {!isSuperAdminUser && canActOnCurrentStage && (
-                    <>
-                      <button
-                        type="button"
-                        className="finance-workflow-btn finance-workflow-btn--approve"
-                        onClick={() => handleWorkflowAction('approved')}
-                        disabled={isLoading}
-                      >
-                        <CheckCircle2 size={18} />
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        className="finance-workflow-btn finance-workflow-btn--return"
-                        onClick={() => handleWorkflowAction('returned')}
-                        disabled={isLoading}
-                      >
-                        <RotateCcw size={18} />
-                        Return
-                      </button>
-                      <button
-                        type="button"
-                        className="finance-workflow-btn finance-workflow-btn--reject"
-                        onClick={() => handleWorkflowAction('rejected')}
-                        disabled={isLoading}
-                      >
-                        <XCircle size={18} />
-                        Reject
-                      </button>
-                    </>
-                  )}
-                  {isSuperAdminUser && (
+            {!showPreview && (!isViewMode || canSuperAdminEditTerminalFinance) && (
+              <button
+                type="button"
+                onClick={() => handleSubmit()}
+                style={{
+                  backgroundColor: '#0069ab',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '12px',
+                  fontSize: '0.95rem',
+                  fontWeight: '500',
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.3s ease',
+                  minWidth: '140px',
+                  opacity: isLoading ? 0.7 : 1,
+                  whiteSpace: 'nowrap',
+                }}
+                disabled={isLoading}
+                onMouseEnter={(e) => {
+                  if (!isLoading) e.currentTarget.style.backgroundColor = '#005492';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#0069ab';
+                }}
+              >
+                {isLoading
+                  ? 'Submitting...'
+                  : isEditMode || canSuperAdminEditTerminalFinance
+                    ? 'Update Form'
+                    : 'Submit Form'}
+              </button>
+            )}
+
+            {(isApprovalMode || canActOnCurrentStage) &&
+            !hideWorkflowActionsForFinalStatus &&
+            !showPreview ? (
+              <div className="finance-workflow-actions">
+                {!isSuperAdminUser && canActOnCurrentStage && (
+                  <>
+                    <button
+                      type="button"
+                      className="finance-workflow-btn finance-workflow-btn--approve"
+                      onClick={() => handleWorkflowAction('approved')}
+                      disabled={isLoading}
+                    >
+                      <CheckCircle2 size={18} />
+                      Approve
+                    </button>
                     <button
                       type="button"
                       className="finance-workflow-btn finance-workflow-btn--return"
@@ -4696,79 +5532,1073 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
                       <RotateCcw size={18} />
                       Return
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      className="finance-workflow-btn finance-workflow-btn--reject"
+                      onClick={() => handleWorkflowAction('rejected')}
+                      disabled={isLoading}
+                    >
+                      <XCircle size={18} />
+                      Reject
+                    </button>
+                  </>
+                )}
+                {isSuperAdminUser && (
                   <button
                     type="button"
-                    className="finance-workflow-btn finance-workflow-btn--archive"
-                    onClick={() => handleWorkflowAction('archived')}
+                    className="finance-workflow-btn finance-workflow-btn--return"
+                    onClick={() => handleWorkflowAction('returned')}
                     disabled={isLoading}
                   >
-                    <Archive size={18} />
-                    Archive
+                    <RotateCcw size={18} />
+                    Return
                   </button>
-                </div>
+                )}
+                <button
+                  type="button"
+                  className="finance-workflow-btn finance-workflow-btn--archive"
+                  onClick={() => handleWorkflowAction('archived')}
+                  disabled={isLoading}
+                >
+                  <Archive size={18} />
+                  Archive
+                </button>
               </div>
             ) : null}
+          </div>
+        </div>
+      )}
 
+      {showPreview &&
+        (() => {
+          const getSubmittedDetailUi = () => {
+            const approvalHistory = getWorkflowTimeline(statusUpdates, {
+              name: applicantName || '',
+              email: email || '',
+              date: submittedAt
+                ? formatWorkflowTimestamp(submittedAt)
+                : getCurrentWorkflowTimestamp(),
+            });
+            const submittedTimestamp = getSubmittedTimestamp(
+              approvalHistory,
+              submittedAt ? formatWorkflowTimestamp(submittedAt) : '',
+              !id,
+            );
+            const submitted = approvalHistory.find((entry) => entry.label === 'Submitted');
+
+            if (!submitted) {
+              return { name: applicantName || '', email: email || '', date: submittedTimestamp };
+            }
+
+            return {
+              name: submitted.actor || applicantName || '',
+              email: submitted.email || email || '',
+              date: submittedTimestamp || submitted.timestamp || '',
+            };
+          };
+
+          const approvalHistory = getWorkflowTimeline(statusUpdates, {
+            name: applicantName || '',
+            email: email || '',
+            date: submittedAt
+              ? formatWorkflowTimestamp(submittedAt)
+              : getCurrentWorkflowTimestamp(),
+          });
+          const getApprovalDetailUi = (stageKeys: string[]) => {
+            const stages = stageKeys.map((stage) => String(stage || '').toLowerCase());
+            const approved = approvalHistory.filter((entry) => {
+              const stage = String(entry.stage || '').toLowerCase();
+              const decision = String(entry.decision || '').toLowerCase();
+              return (
+                stages.includes(stage) &&
+                entry.label === 'Approved' &&
+                (decision === 'approved' || decision.includes('approved') || !decision)
+              );
+            });
+
+            const latest = approved.length ? approved[approved.length - 1] : null;
+            return {
+              name: latest?.actor || '',
+              email: latest?.email || '',
+              date: latest?.timestamp || '',
+            };
+          };
+
+          const submittedByUi = getSubmittedDetailUi();
+          const level1ApprovalUi = getApprovalDetailUi(['level1', 'hod', 'coordinator', 'ithead']);
+          const dofApprovalUi = getApprovalDetailUi(['dof']);
+          const principalApprovalUi = getApprovalDetailUi(['principal']);
+          const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
+          const approvalSteps = approvalHistory.filter(
+            (entry) =>
+              entry.label === 'Approved' &&
+              !(
+                totalBudget > 10000 &&
+                (String(entry.stage).includes('principal') ||
+                  String(entry.stage).includes('chairman'))
+              ),
+          );
+          const showSeniorApprovalRow = totalBudget > 10000;
+
+          const renderPersonLine = (name?: string, mail?: string, timestamp?: string) => {
+            const trimmedName = String(name || '').trim();
+            const trimmedMail = String(mail || '').trim();
+            const trimmedTime = String(timestamp || '').trim();
+
+            const actorAlreadyHasMail =
+              trimmedMail.length > 0 &&
+              trimmedName.toLowerCase().includes(trimmedMail.toLowerCase());
+
+            const displayName = trimmedName || '-';
+            const displayMail = trimmedMail && !actorAlreadyHasMail ? ` (${trimmedMail})` : '';
+            const displayTime = trimmedTime ? ` on ${trimmedTime}` : '';
+
+            return (
+              <span>
+                {displayName}
+                {displayMail}
+                {displayTime}
+              </span>
+            );
+          };
+
+          const renderSeniorApprovalLine = (
+            actionLabel: 'Recommended by' | 'Approved by',
+            detail: { name?: string; email?: string; date?: string },
+          ) => {
+            const hasDetail = Boolean(
+              String(detail.name || detail.email || detail.date || '').trim(),
+            );
+            if (!hasDetail) return null;
+
+            return (
+              <div style={{ ...previewTimelineRowStyle, borderBottom: '1px solid #000' }}>
+                <span style={previewTimelineLabelStyle}>{actionLabel}</span>
+                <span style={previewTimelineValueStyle}>
+                  {renderPersonLine(detail.name, detail.email, detail.date)}
+                </span>
+              </div>
+            );
+          };
+
+          const getPreviewDecisionLabel = (entry: any): string => {
+            const label = String(entry?.label || '').trim();
+            if (label !== 'Approved') return `${label} by`;
+
+            const stageToken = String(entry?.stage || '').toLowerCase();
+            const actorToken = String(entry?.actor || '').toLowerCase();
+            const emailToken = String(entry?.email || '').toLowerCase();
+            const isPrincipalEntry =
+              stageToken.includes('principal') ||
+              actorToken.includes('principal') ||
+              emailToken.includes('principal@');
+
+            return isPrincipalEntry ? 'Approved by' : 'Recommended by';
+          };
+          const previewTimelineRowStyle: CSSProperties = {
+            padding: '8px 10px',
+            fontSize: '14px',
+            lineHeight: '1.45',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '4px',
+            alignItems: 'baseline',
+          };
+
+          const previewTimelineLabelStyle: CSSProperties = {
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
+          };
+
+          const previewTimelineValueStyle: CSSProperties = {
+            flex: '1 1 auto',
+            minWidth: 0,
+          };
+          return (
             <div
+              ref={componentRef}
               style={{
-                marginTop: '18px',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: '12px',
-                flexWrap: 'wrap',
+                position: 'relative',
+                backgroundColor: '#fff',
+                padding: '22px 18px',
+                width: '210mm',
+                boxSizing: 'border-box',
+                margin: '0 auto',
               }}
             >
-              <button
-                type="button"
-                onClick={() => navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard')}
+              <table
                 style={{
-                  backgroundColor: '#0069ab',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '10px 20px',
-                  borderRadius: '12px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  whiteSpace: 'nowrap',
+                  marginBottom: '14px',
+                  tableLayout: 'fixed',
+                  width: '94%',
+                  margin: '0 auto 14px auto',
+                  borderCollapse: 'collapse',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
-                disabled={isLoading}
               >
-                Back to Dashboard
-              </button>
+                <tr>
+                  <td
+                    style={{
+                      width: '16%',
+                      border: '1px solid #000',
+                      textAlign: 'center',
+                      verticalAlign: 'middle',
+                      padding: '10px 6px',
+                    }}
+                  >
+                    <img
+                      src={KSRCTLogo}
+                      alt="Logo"
+                      style={{ width: '75px', height: '75px', objectFit: 'contain' }}
+                    />
+                  </td>
+                  <td
+                    style={{
+                      width: '68%',
+                      border: '1px solid #000',
+                      textAlign: 'center',
+                      verticalAlign: 'middle',
+                      padding: '8px 10px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: '19px',
+                        fontWeight: 'bold',
+                        color: '#000',
+                        lineHeight: '1.05',
+                        marginBottom: '4px',
+                      }}
+                    >
+                      K.S.RANGASAMY COLLEGE OF TECHNOLOGY
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#000', marginBottom: '4px' }}>
+                      (Autonomous)
+                    </div>
+                    <div style={{ fontSize: '16px', color: '#000', lineHeight: '1.2' }}>
+                      Tiruchengode – 637 215, Namakkal Dt. Tamil Nadu
+                    </div>
+                  </td>
+                  <td
+                    style={{
+                      width: '16%',
+                      border: '1px solid #000',
+                      textAlign: 'center',
+                      verticalAlign: 'middle',
+                      padding: '10px 6px',
+                    }}
+                  >
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#000' }}>
+                      FINANCE
+                    </div>
+                    {proposalRef && (
+                      <div
+                        style={{
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          color: '#000',
+                          marginTop: '4px',
+                        }}
+                      >
+                        {proposalRef}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              </table>
 
-              <button
-                type="button"
-                onClick={handleDownloadPdfClick}
+              <h2
                 style={{
-                  backgroundColor: '#0069ab',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '10px 20px',
-                  borderRadius: '12px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  whiteSpace: 'nowrap',
+                  textAlign: 'center',
+                  margin: '0 0 18px 0',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.4px',
+                  color: '#000000',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
-                disabled={isLoading}
               >
-                {isLoading ? 'Generating...' : 'Download PDF'}
-              </button>
+                APPLICATION FOR FINANCIAL APPROVAL
+              </h2>
+
+              <table
+                style={{
+                  marginBottom: '14px',
+                  tableLayout: 'fixed',
+                  width: '94%',
+                  borderCollapse: 'collapse',
+                  margin: '0 auto 14px auto',
+                }}
+              >
+                <tr>
+                  <td
+                    style={{
+                      padding: '4.5px 5.5px',
+                      border: '1px solid #000',
+                      width: '18%',
+                      fontSize: '14px',
+                    }}
+                  >
+                    <strong>Name</strong>
+                  </td>
+                  <td
+                    style={{
+                      padding: '4.5px 5.5px',
+                      border: '1px solid #000',
+                      width: '32%',
+                      fontSize: '14px',
+                    }}
+                  >
+                    {applicantName || '\u00A0'}
+                  </td>
+                  <td
+                    style={{
+                      padding: '4.5px 5.5px',
+                      border: '1px solid #000',
+                      width: '20%',
+                      fontSize: '14px',
+                    }}
+                  >
+                    <strong>Date</strong>
+                  </td>
+                  <td
+                    style={{
+                      padding: '4.5px 5.5px',
+                      border: '1px solid #000',
+                      width: '30%',
+                      fontSize: '14px',
+                    }}
+                  >
+                    {date ? formatDMY(date) : '\u00A0'}
+                  </td>
+                </tr>
+                <tr>
+                  <td
+                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                  >
+                    <strong>Department</strong>
+                  </td>
+                  <td
+                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                  >
+                    {department || '\u00A0'}
+                  </td>
+                  <td
+                    style={{
+                      padding: '4.5px 5.5px',
+                      border: '1px solid #000',
+                      width: '15%',
+                      fontSize: '14px',
+                    }}
+                  >
+                    <strong>Designation</strong>
+                  </td>
+                  <td
+                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                  >
+                    {designation || '\u00A0'}
+                  </td>
+                </tr>
+                <tr>
+                  <td
+                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                  >
+                    <strong>Email</strong>
+                  </td>
+                  <td
+                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                  >
+                    {email || '\u00A0'}
+                  </td>
+                  <td
+                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                  >
+                    <strong>Mobile</strong>
+                  </td>
+                  <td
+                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                  >
+                    {mobile || '\u00A0'}
+                  </td>
+                </tr>
+                <tr>
+                  <td
+                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                    colSpan={1}
+                  >
+                    <strong>Beneficiary</strong>
+                  </td>
+                  <td
+                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                    colSpan={3}
+                  >
+                    {getBeneficiaryDisplayText()}
+                  </td>
+                </tr>
+                <tr>
+                  <td
+                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                    colSpan={1}
+                  >
+                    <strong>Description</strong>
+                  </td>
+                  <td
+                    style={{
+                      padding: '4.5px 5.5px',
+                      border: '1px solid #000',
+                      fontSize: '14px',
+                      wordWrap: 'break-word',
+                      overflowWrap: 'break-word',
+                      wordBreak: 'break-word',
+                    }}
+                    colSpan={3}
+                  >
+                    {description || '\u00A0'}
+                  </td>
+                </tr>
+                <tr>
+                  <td
+                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                    colSpan={1}
+                  >
+                    <strong>Head of Accounts</strong>
+                  </td>
+                  <td
+                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                    colSpan={1}
+                  >
+                    {primaryHead || '\u00A0'}
+                    {extraDropdownVisible && eventSubHead && ` - ${eventSubHead}`}
+                  </td>
+
+                  <td
+                    style={{
+                      padding: '8px 5.5px',
+                      border: '1px solid #000',
+                      fontSize: '14px',
+                      verticalAlign: 'middle',
+                      height: '42px',
+                    }}
+                  >
+                    <strong>Annexure</strong>
+                  </td>
+                  <td
+                    style={{
+                      padding: '8px 5.5px',
+                      border: '1px solid #000',
+                      fontSize: '14px',
+                      verticalAlign: 'middle',
+                      height: '42px',
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word',
+                    }}
+                  >
+                    {getAnnexureSummary()}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td
+                    colSpan={4}
+                    style={{ padding: '8px 6px', border: '1px solid #000', verticalAlign: 'top' }}
+                  >
+                    <table
+                      style={{
+                        width: '100%',
+                        borderCollapse: 'collapse',
+                        fontSize: '14px',
+                        marginTop: '4px',
+                        tableLayout: 'fixed',
+                      }}
+                    >
+                      <colgroup>
+                        <col style={{ width: '8%' }} />
+                        <col style={{ width: '40%' }} />
+                        <col style={{ width: '36%' }} />
+                        <col style={{ width: '16%' }} />
+                      </colgroup>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f8f8f8' }}>
+                          <th
+                            style={{
+                              padding: '3px 4px',
+                              border: '1px solid #000',
+                              textAlign: 'center',
+                            }}
+                          >
+                            S.No
+                          </th>
+                          <th
+                            style={{
+                              padding: '3px 4px',
+                              border: '1px solid #000',
+                              textAlign: 'center',
+                            }}
+                          >
+                            Budget Head
+                          </th>
+                          <th
+                            style={{
+                              padding: '3px 4px',
+                              border: '1px solid #000',
+                              textAlign: 'center',
+                            }}
+                          >
+                            Sub Head
+                          </th>
+                          <th
+                            style={{
+                              padding: '3px 4px',
+                              border: '1px solid #000',
+                              textAlign: 'center',
+                            }}
+                          >
+                            Amount
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {budgetRows.map((row, index) => (
+                          <tr key={index}>
+                            <td
+                              style={{
+                                padding: '2.5px 4px',
+                                border: '1px solid #000',
+                                textAlign: 'center',
+                              }}
+                            >
+                              {index + 1}
+                            </td>
+                            <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>
+                              {row.category || '\u00A0'}
+                            </td>
+                            <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>
+                              {getSubHeadDisplayText(row.head) || '\u00A0'}
+                            </td>
+                            <td
+                              style={{
+                                padding: '2.5px 4px',
+                                border: '1px solid #000',
+                                textAlign: 'right',
+                              }}
+                            >
+                              ₹ {Number(row.amount || 0)}
+                            </td>
+                          </tr>
+                        ))}
+                        {hasUnplannedBudgetPreview && (
+                          <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
+                            <td
+                              colSpan={3}
+                              style={{
+                                padding: '3px 4px',
+                                border: '1px solid #000',
+                                textAlign: 'left',
+                                fontWeight: 'bold',
+                              }}
+                            >
+                              Unplanned Expenditure:{unplannedBudgetDescription || '\u00A0'}
+                            </td>
+                            <td
+                              style={{
+                                padding: '3px 4px',
+                                border: '1px solid #000',
+                                textAlign: 'right',
+                              }}
+                            >
+                              ₹ {Number(unplannedBudgetAmount || 0)}
+                            </td>
+                          </tr>
+                        )}
+                        <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
+                          <td
+                            colSpan={3}
+                            style={{
+                              padding: '3px 4px',
+                              border: '1px solid #000',
+                              textAlign: 'right',
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            Total Budget:
+                          </td>
+                          <td
+                            style={{
+                              padding: '3px 4px',
+                              border: '1px solid #000',
+                              textAlign: 'right',
+                            }}
+                          >
+                            ₹ {totalBudget}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td
+                    colSpan={4}
+                    style={{
+                      padding: '6px 16px',
+                      border: '1px solid #000',
+                      textAlign: 'center',
+                      fontSize: '15px',
+                      backgroundColor: '#f8f9fa',
+                    }}
+                  >
+                    Rupees in Words:{' '}
+                    {numberToIndianWords(totalBudget)
+                      .replace(/\b\w/g, (l) => l.toUpperCase())
+                      .replace(/([A-Z])(?=[A-Z][a-z])/, '$1 ')
+                      .replace(/[A-Z]{2,}/g, (m) => m.charAt(0) + m.slice(1).toLowerCase())}
+                  </td>
+                </tr>
+                <tr>
+                  <td colSpan={4} style={{ padding: '6px 8px', border: '1px solid #000' }}>
+                    {showIncomeSection ? (
+                      <table
+                        style={{
+                          width: '100%',
+                          borderCollapse: 'collapse',
+                          fontSize: '14px',
+                          tableLayout: 'fixed',
+                        }}
+                      >
+                        <colgroup>
+                          <col style={{ width: '8%' }} />
+                          <col style={{ width: '25%' }} />
+                          <col style={{ width: '20%' }} />
+                          <col style={{ width: '15%' }} />
+                          <col style={{ width: '27%' }} />
+                        </colgroup>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f8f8f8' }}>
+                            <th
+                              style={{
+                                padding: '3px 4px',
+                                border: '1px solid #000',
+                                textAlign: 'center',
+                              }}
+                            >
+                              S.No
+                            </th>
+
+                            <th
+                              style={{
+                                padding: '3px 4px',
+                                border: '1px solid #000',
+                                textAlign: 'center',
+                              }}
+                            >
+                              Income Source
+                            </th>
+                            <th
+                              style={{
+                                padding: '3px 4px',
+                                border: '1px solid #000',
+                                textAlign: 'center',
+                              }}
+                            >
+                              Status
+                            </th>
+                            <th
+                              style={{
+                                padding: '3px 4px',
+                                border: '1px solid #000',
+                                textAlign: 'center',
+                              }}
+                            >
+                              Amount
+                            </th>
+                            <th
+                              style={{
+                                padding: '3px 4px',
+                                border: '1px solid #000',
+                                textAlign: 'center',
+                              }}
+                            >
+                              Remarks
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {incomeRows.map((row, index) => (
+                            <React.Fragment key={row.id}>
+                              <tr>
+                                <td
+                                  rowSpan={2}
+                                  style={{
+                                    padding: '2.5px 4px',
+                                    border: '1px solid #000',
+                                    textAlign: 'center',
+                                  }}
+                                >
+                                  {index + 1}
+                                </td>
+
+                                <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>
+                                  {row.incomeSource || ''}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: '2.5px 4px',
+                                    border: '1px solid #000',
+                                    textAlign: 'center',
+                                  }}
+                                >
+                                  {row.status || ''}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: '2.5px 4px',
+                                    border: '1px solid #000',
+                                    textAlign: 'right',
+                                  }}
+                                >
+                                  ₹ {row.amount ? ` ${row.amount}` : ''}
+                                </td>
+                                <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>
+                                  {row.remarks || ''}
+                                </td>
+                              </tr>
+                              <tr>
+                                <td
+                                  colSpan={1}
+                                  style={{
+                                    padding: '2.5px 4px',
+                                    border: '1px solid #000',
+                                    fontWeight: 'bold',
+                                    backgroundColor: '#f8f8f8',
+                                  }}
+                                >
+                                  <strong>Contribution</strong>
+                                  {row.contribution ? ` - ${row.contribution}` : ''}
+                                </td>
+                                <td
+                                  colSpan={3}
+                                  style={{
+                                    padding: '2.5px 4px',
+                                    border: '1px solid #000',
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'break-word',
+                                  }}
+                                >
+                                  <b>Credit Account:</b>
+                                  {row.creditAccount || '\u00A0'}
+                                </td>
+                              </tr>
+                            </React.Fragment>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ backgroundColor: '#f0f6ff', fontWeight: 'bold' }}>
+                            <td
+                              colSpan={3}
+                              style={{
+                                padding: '3px 4px',
+                                border: '1px solid #000',
+                                textAlign: 'right',
+                                color: '#0b3d75',
+                              }}
+                            >
+                              Total Income
+                            </td>
+                            <td
+                              style={{
+                                padding: '3px 4px',
+                                border: '1px solid #000',
+                                textAlign: 'right',
+                                color: '#0b3d75',
+                              }}
+                            >
+                              ₹ {totalIncome}
+                            </td>
+                            <td
+                              style={{
+                                padding: '3px 4px',
+                                border: '1px solid #000',
+                                color: '#0b3d75',
+                              }}
+                            >
+                              Rupees (in words):{' '}
+                              {numberToIndianWords(totalIncome)
+                                .replace(/\b\w/g, (l) => l.toUpperCase())
+                                .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
+                            </td>
+                          </tr>
+                          {shouldShowManagementRequestAmount && (
+                            <tr style={{ backgroundColor: '#fff8e1', fontWeight: 'bold' }}>
+                              <td
+                                colSpan={3}
+                                style={{
+                                  padding: '3px 4px',
+                                  border: '1px solid #000',
+                                  textAlign: 'right',
+                                  color: '#7a4b00',
+                                }}
+                              >
+                                Amount requested from Management
+                              </td>
+                              <td
+                                style={{
+                                  padding: '3px 4px',
+                                  border: '1px solid #000',
+                                  textAlign: 'right',
+                                  color: '#7a4b00',
+                                }}
+                              >
+                                ₹ {amountRequestedFromManagement}
+                              </td>
+                              <td
+                                style={{
+                                  padding: '3px 4px',
+                                  border: '1px solid #000',
+                                  color: '#7a4b00',
+                                }}
+                              >
+                                Rupees (in words):{' '}
+                                {numberToIndianWords(amountRequestedFromManagement)
+                                  .replace(/\b\w/g, (l) => l.toUpperCase())
+                                  .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
+                              </td>
+                            </tr>
+                          )}
+                        </tfoot>
+                      </table>
+                    ) : (
+                      <div style={{ textAlign: 'center', fontSize: '14px' }}>
+                        Income: Not Applicable
+                      </div>
+                    )}
+                  </td>
+                </tr>
+                <tr>
+                  <td colSpan={4} style={{ padding: '0', border: '1px solid #000' }}>
+                    <div
+                      style={{
+                        ...previewTimelineRowStyle,
+                        borderBottom:
+                          approvalSteps.length > 0 || showSeniorApprovalRow
+                            ? '1px solid #000'
+                            : 'none',
+                      }}
+                    >
+                      <span style={previewTimelineLabelStyle}>Submitted by</span>
+                      <span style={previewTimelineValueStyle}>
+                        {renderPersonLine(
+                          submittedByUi.name,
+                          submittedByUi.email,
+                          submittedByUi.date,
+                        )}
+                      </span>
+                    </div>
+
+                    {approvalSteps.map((entry, index) => {
+                      const entryKey = String(entry.key || `${entry.label}-${index}`);
+                      const hasExpandedDetails =
+                        Boolean(entry.fullSubtitle) && entry.fullSubtitle !== entry.subtitle;
+                      const detailText =
+                        hasExpandedDetails && expandedTimelineDetails[entryKey]
+                          ? entry.fullSubtitle
+                          : entry.subtitle;
+
+                      return (
+                        <div
+                          key={entryKey}
+                          style={{
+                            ...previewTimelineRowStyle,
+                            borderBottom:
+                              index === approvalSteps.length - 1 && !showSeniorApprovalRow
+                                ? 'none'
+                                : '1px solid #000',
+                          }}
+                        >
+                          <span style={previewTimelineLabelStyle}>
+                            {getPreviewDecisionLabel(entry)}
+                          </span>
+                          <span
+                            style={{
+                              ...previewTimelineValueStyle,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'flex-start',
+                              gap: '4px',
+                            }}
+                          >
+                            <span>
+                              {renderPersonLine(entry.actor, entry.email, entry.timestamp)}
+                            </span>
+                            {detailText ? (
+                              <span style={{ fontSize: '12px', color: '#495057', lineHeight: 1.4 }}>
+                                {detailText}
+                              </span>
+                            ) : null}
+                            {hasExpandedDetails ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExpandedTimelineDetails((prev) => ({
+                                    ...prev,
+                                    [entryKey]: !prev[entryKey],
+                                  }));
+                                }}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: '#0d6efd',
+                                  padding: 0,
+                                  cursor: 'pointer',
+                                  fontSize: '12px',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {expandedTimelineDetails[entryKey]
+                                  ? 'Show less'
+                                  : 'Show full changes'}
+                              </button>
+                            ) : null}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {approvalHistory.length === 0 ? (
+                      <div style={previewTimelineRowStyle}>No approval history available</div>
+                    ) : null}
+                    {showSeniorApprovalRow ? (
+                      <>
+                        {renderSeniorApprovalLine('Recommended by', {
+                          name: principalApprovalUi.name,
+                          email: principalApprovalUi.email,
+                          date: principalApprovalUi.date,
+                        })}
+                        {renderSeniorApprovalLine('Approved by', chairmanApprovalUi)}
+                      </>
+                    ) : null}
+                  </td>
+                </tr>
+              </table>
+
+              {(isApprovalMode || canActOnCurrentStage) && !hideWorkflowActionsForFinalStatus ? (
+                <div style={{ marginTop: '18px', display: 'flex', justifyContent: 'center' }}>
+                  <div className="finance-workflow-actions">
+                    {!isSuperAdminUser && canActOnCurrentStage && (
+                      <>
+                        <button
+                          type="button"
+                          className="finance-workflow-btn finance-workflow-btn--approve"
+                          onClick={() => handleWorkflowAction('approved')}
+                          disabled={isLoading}
+                        >
+                          <CheckCircle2 size={18} />
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          className="finance-workflow-btn finance-workflow-btn--return"
+                          onClick={() => handleWorkflowAction('returned')}
+                          disabled={isLoading}
+                        >
+                          <RotateCcw size={18} />
+                          Return
+                        </button>
+                        <button
+                          type="button"
+                          className="finance-workflow-btn finance-workflow-btn--reject"
+                          onClick={() => handleWorkflowAction('rejected')}
+                          disabled={isLoading}
+                        >
+                          <XCircle size={18} />
+                          Reject
+                        </button>
+                      </>
+                    )}
+                    {isSuperAdminUser && (
+                      <button
+                        type="button"
+                        className="finance-workflow-btn finance-workflow-btn--return"
+                        onClick={() => handleWorkflowAction('returned')}
+                        disabled={isLoading}
+                      >
+                        <RotateCcw size={18} />
+                        Return
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="finance-workflow-btn finance-workflow-btn--archive"
+                      onClick={() => handleWorkflowAction('archived')}
+                      disabled={isLoading}
+                    >
+                      <Archive size={18} />
+                      Archive
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div
+                style={{
+                  marginTop: '18px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: '12px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                {new URLSearchParams(location.search).get('preview') !== 'true' && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(isAdminWorkflowContext ? '/workflow/finance' : '/financecard')
+                    }
+                    style={{
+                      backgroundColor: '#0069ab',
+                      color: '#fff',
+                      border: 'none',
+                      padding: '10px 20px',
+                      borderRadius: '12px',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      whiteSpace: 'nowrap',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
+                    disabled={isLoading}
+                  >
+                    Back to Dashboard
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleDownloadPdfClick}
+                  style={{
+                    backgroundColor: '#0069ab',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '12px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    whiteSpace: 'nowrap',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#005492')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0069ab')}
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Generating...' : 'Download PDF'}
+                </button>
+              </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
 
       <CustomModal
         show={wfActionPopupOpen}
-        onHide={wfActionSubmitting ? (() => {}) : closeWfActionPopup}
+        onHide={wfActionSubmitting ? () => {} : closeWfActionPopup}
         title={wfActionType === 'returned' ? 'Return Item - Comments' : 'Reject Item - Comments'}
         size="sm"
         centered
@@ -4776,7 +6606,10 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
         keyboard={!wfActionSubmitting}
         hideCloseButton={wfActionSubmitting}
         footer={
-          <div className="d-flex justify-content-end gap-2 w-100">
+          <div
+            className="d-flex justify-content-end gap-2 w-100"
+            data-readonly-workflow-modal="true"
+          >
             <button
               type="button"
               className="btn btn-sm btn-outline-secondary"
@@ -4796,18 +6629,66 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
           </div>
         }
       >
+        <div data-readonly-workflow-modal="true">
+          {proposalRef && (
+            <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
+              Reference: <b>{proposalRef}</b>
+            </div>
+          )}
+          <textarea
+            value={wfActionComment}
+            onChange={(e) => setWfActionComment(e.target.value)}
+            disabled={wfActionSubmitting}
+            rows={4}
+            placeholder="Enter comments (required)..."
+            className="form-control"
+          />
+        </div>
+      </CustomModal>
+
+      <CustomModal
+        show={resubmitPopupOpen}
+        onHide={resubmitSubmitting ? () => {} : closeResubmitPopup}
+        title="Resubmit Item - Comments"
+        size="sm"
+        centered
+        backdrop={resubmitSubmitting ? 'static' : true}
+        keyboard={!resubmitSubmitting}
+        hideCloseButton={resubmitSubmitting}
+        footer={
+          <div className="d-flex justify-content-end gap-2 w-100">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={() => closeResubmitPopup()}
+              disabled={resubmitSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              onClick={submitResubmissionWithComment}
+              disabled={resubmitSubmitting}
+            >
+              {resubmitSubmitting ? 'Resubmitting...' : 'Resubmit'}
+            </button>
+          </div>
+        }
+      >
         {proposalRef && (
           <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
             Reference: <b>{proposalRef}</b>
           </div>
         )}
         <textarea
-          value={wfActionComment}
-          onChange={(e) => setWfActionComment(e.target.value)}
-          disabled={wfActionSubmitting}
+          value={resubmitComment}
+          onChange={(e) => setResubmitComment(e.target.value)}
+          disabled={resubmitSubmitting}
           rows={4}
-          placeholder="Enter comments (required)..."
+          placeholder="Enter resubmission comments (required)..."
           className="form-control"
+          autoFocus
         />
       </CustomModal>
 
@@ -4817,15 +6698,70 @@ const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
         message={alertConfig.message}
         type={alertConfig.type}
         title={alertConfig.title}
+        onConfirm={alertConfig.onConfirm}
         showCancel={alertConfig.showCancel}
         confirmText={alertConfig.confirmText}
-        onConfirm={alertConfig.onConfirm}
+        cancelText={alertConfig.cancelText}
       />
+      <CustomModal
+        show={principalApprovalPopupOpen}
+        onHide={closePrincipalApprovalPopup}
+        title="Principal Approval Form"
+        centered
+        backdrop={principalApprovalSubmitting ? 'static' : true}
+        keyboard={!principalApprovalSubmitting}
+        hideCloseButton={principalApprovalSubmitting}
+        footer={
+          <div className="d-flex justify-content-end gap-2 w-100">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={closePrincipalApprovalPopup}
+              disabled={principalApprovalSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-success"
+              onClick={submitPrincipalApproval}
+              disabled={principalApprovalSubmitting || !principalApprovalFile}
+            >
+              {principalApprovalSubmitting ? 'Submitting...' : 'Approve and Submit'}
+            </button>
+          </div>
+        }
+      >
+        <div style={{ fontSize: 14, marginBottom: 15 }}>
+          Please upload the required annexure document before approving this request.
+        </div>
+        <div className="mb-3">
+          <label className="form-label fw-bold">Upload Principal Annexure (PDF)</label>
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            required
+            className="form-control"
+            disabled={principalApprovalSubmitting}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (
+                file &&
+                ((file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) ||
+                  file.size >= 2 * 1024 * 1024)
+              ) {
+                showAlert('Only PDF files with a size less than 2MB are allowed.', 'error');
+                e.target.value = '';
+                setPrincipalApprovalFile(null);
+                return;
+              }
+              setPrincipalApprovalFile(file || null);
+            }}
+          />
+        </div>
+      </CustomModal>
     </div>
   );
 };
 
 export default FinanceApproval;
-
-
-
