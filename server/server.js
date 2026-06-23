@@ -121,6 +121,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Health check route
+app.get('/health-check', (req, res) => {
+  res.status(200).json({ status: 'ok', uptime: process.uptime() });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', userDashboardRoutes);
