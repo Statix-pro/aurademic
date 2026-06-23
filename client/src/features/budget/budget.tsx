@@ -46,6 +46,8 @@ interface BudgetHeadSelectGroup {
 }
 
 const normalizeText = (value: string | null | undefined): string => String(value || '').trim();
+const isReturnedBudgetStatus = (status: string | null | undefined): boolean =>
+  normalizeText(status).toLowerCase().includes('returned');
 
 type BudgetLine = {
   lineId?: number;
@@ -600,6 +602,7 @@ const Budget: React.FC = () => {
   const [resubmitPopupOpen, setResubmitPopupOpen] = useState(false);
   const [resubmitRemarks, setResubmitRemarks] = useState('');
   const [showGuidelines, setShowGuidelines] = useState(false);
+  const isReturnedResubmit = isEditMode && isReturnedBudgetStatus(proposalStatus);
   const openGuidelines = () => setShowGuidelines(true);
   const closeGuidelines = () => setShowGuidelines(false);
 
@@ -898,8 +901,6 @@ const Budget: React.FC = () => {
     if (isSubmitting) {
       return;
     }
-    const isReturnedResubmit =
-      isEditMode && (proposalStatus || '').toLowerCase().endsWith('_returned');
     const normalizedResubmitRemarks = normalizeText(submittedRemarks);
     if (isReturnedResubmit && submittedRemarks !== undefined && !normalizedResubmitRemarks) {
       showAlert('Remarks are required to resubmit this budget.', 'warning');
@@ -1391,10 +1392,14 @@ const Budget: React.FC = () => {
           'level1_returned',
           'ithead_returned',
           'dof_returned',
+          'principal_returned',
           'submitted',
           're_submitted',
         ];
-        const isStatusEditable = editableStatuses.includes((p.status || '').toLowerCase());
+        const normalizedLoadedStatus = (p.status || '').toLowerCase();
+        const isStatusEditable =
+          editableStatuses.includes(normalizedLoadedStatus) ||
+          isReturnedBudgetStatus(normalizedLoadedStatus);
         const isEditURL = location.pathname.includes('/edit');
         const currentStageKey = String(p.current_stage || p.currentStage || '').toLowerCase();
         const stagePermission = STAGE_PERMISSION_MAP[currentStageKey];
@@ -3249,7 +3254,15 @@ const Budget: React.FC = () => {
               e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 105, 171, 0.3)';
             }}
           >
-            {isSubmitting ? 'Saving...' : isEditMode ? 'Update Budget' : 'Submit Budget'}
+            {isSubmitting
+              ? isReturnedResubmit
+                ? 'Resubmitting...'
+                : 'Saving...'
+              : isReturnedResubmit
+                ? 'Resubmit Budget'
+                : isEditMode
+                  ? 'Update Budget'
+                  : 'Submit Budget'}
           </button>
         </div>
       )}
