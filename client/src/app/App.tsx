@@ -1,7 +1,6 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { SpeedInsights } from '@vercel/speed-insights/react';
 
 import { AuthProvider } from '../contexts/AuthContext';
 import AccessControlPage from '../features/admin/accessControl/AccessControlPage';
@@ -22,6 +21,7 @@ import {
   ProtectedRoute,
   AdminRoute,
   BudgetApprovalRoute,
+  FinanceWorkflowRoute,
   ModuleWorkflowRoute,
   SuperAdminRoute,
   ExpenditureApprovalRoute,
@@ -53,7 +53,6 @@ function App() {
         <BrowserRouter>
           <AuthProvider>
             <AbilityProvider>
-              <SpeedInsights />
               <Routes>
                 {/* Login */}
                 <Route path="/login" element={<Login />} />
