@@ -3,17 +3,33 @@ import path from 'path';
 
 import multer from 'multer';
 
-const uploadDir = path.join(process.cwd(), 'uploads', 'temp');
+import { tenantStorage } from '../config/connection.js';
 
-// Ensure upload directory exists
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+/**
+ * Resolves the upload directory for the current tenant.
+ * In a multi-tenant context, files are stored under uploads/{tenant-slug}/temp/.
+ * Falls back to uploads/temp/ when no tenant context is active (scripts, tests).
+ */
+const resolveUploadDir = () => {
+  const store = tenantStorage.getStore();
+  const tenantSlug = store?.dbName;
+
+  const uploadDir = tenantSlug
+    ? path.join(process.cwd(), 'uploads', tenantSlug, 'temp')
+    : path.join(process.cwd(), 'uploads', 'temp');
+
+  // Ensure upload directory exists
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
+  return uploadDir;
+};
 
 // Configure multer storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadDir);
+    cb(null, resolveUploadDir());
   },
   filename: (req, file, cb) => {
     // Add timestamp to prevent filename collisions
