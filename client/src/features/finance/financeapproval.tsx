@@ -1317,7 +1317,7 @@ const FinanceApproval: React.FC = () => {
     if (budgetLineId) {
       return `line:${budgetLineId}`;
     }
-    const effectiveHead = normalizeText(primaryHead) || normalizeText(row?.category);
+    const effectiveHead = normalizeText(row?.category) || normalizeText(primaryHead);
     const effectiveSubHead =
       (extraDropdownVisible ? normalizeText(eventSubHead) : '') || normalizeText(row?.head);
     const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(effectiveHead, effectiveSubHead);
@@ -1351,7 +1351,7 @@ const FinanceApproval: React.FC = () => {
   };
 
   const fetchBudgetAvailability = async (rowIndex: number, budgetHead: string, subHead: string) => {
-    const normalizedHead = normalizeText(primaryHead) || normalizeText(budgetHead);
+    const normalizedHead = normalizeText(budgetHead) || normalizeText(primaryHead);
     const normalizedSubHead =
       (extraDropdownVisible ? normalizeText(eventSubHead) : '') || normalizeText(subHead);
     const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(normalizedHead, normalizedSubHead);
@@ -1468,7 +1468,7 @@ const FinanceApproval: React.FC = () => {
       if (field === 'head') {
         fetchBudgetAvailability(
           index,
-          normalizeText(primaryHead) || updated[index].category,
+          updated[index].category || normalizeText(primaryHead),
           normalizeSubHeadForDb(value),
         );
       }
@@ -1491,7 +1491,7 @@ const FinanceApproval: React.FC = () => {
       return updated;
     });
 
-    const effectiveLookupHead = normalizeText(primaryHead) || selectedHead;
+    const effectiveLookupHead = selectedHead || normalizeText(primaryHead);
     const canFetchWithHeadOnly = shouldUseHeadOnlyAvailabilityMatch(
       effectiveLookupHead,
       selectedSubHead,
@@ -1817,8 +1817,7 @@ const FinanceApproval: React.FC = () => {
         return;
       }
 
-      const shouldResubmitAfterSave =
-        isEditMode && loadedWorkflowStatus === 'returned' && !isAdminWorkflowContext;
+      const shouldResubmitAfterSave = isReturnedFinanceResubmit;
       if (shouldResubmitAfterSave && resubmissionComment === undefined) {
         setResubmitComment('');
         setResubmitPopupOpen(true);
@@ -2048,7 +2047,7 @@ const FinanceApproval: React.FC = () => {
         debit_status: debitStatus || null,
         partial_amount: primaryIncomeRow?.amount || null,
         budget_rows: budgetRows.map((row, index) => {
-          const normalizedBudgetHead = normalizeText(primaryHead) || normalizeText(row.category);
+          const normalizedBudgetHead = normalizeText(row.category) || normalizeText(primaryHead);
           const normalizedSubHead = normalizeText(row.head);
           const headOnlyMatch = shouldUseHeadOnlyAvailabilityMatch(
             normalizedBudgetHead,
@@ -2121,9 +2120,11 @@ const FinanceApproval: React.FC = () => {
       showAlert(
         <div>
           <div>
-            {isEditMode
-              ? 'Finance request updated successfully!'
-              : 'Finance request submitted successfully!'}
+            {shouldResubmitAfterSave
+              ? 'Finance request resubmitted successfully!'
+              : isEditMode
+                ? 'Finance request updated successfully!'
+                : 'Finance request submitted successfully!'}
           </div>
           {refNo && (
             <div style={{ marginTop: '8px', fontWeight: 'bold' }}>Reference No.: {refNo}</div>
@@ -2425,6 +2426,8 @@ const FinanceApproval: React.FC = () => {
   // Tag
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [loadedWorkflowStatus, setLoadedWorkflowStatus] = useState<string>('');
+  const [loadedWorkflowLastDecision, setLoadedWorkflowLastDecision] = useState<string>('');
+  const [loadedWorkflowEditableByApplicant, setLoadedWorkflowEditableByApplicant] = useState(false);
   const [loadedCurrentStage, setLoadedCurrentStage] = useState<string>('');
   const [workflowPermittedStages, setWorkflowPermittedStages] = useState<string[]>([]);
 
@@ -2485,6 +2488,12 @@ const FinanceApproval: React.FC = () => {
   }, [isApprovalMode]);
 
   const normalizedWorkflowStatus = String(loadedWorkflowStatus || '').toLowerCase();
+  const isReturnedFinanceResubmit =
+    isEditMode &&
+    !isAdminWorkflowContext &&
+    (normalizedWorkflowStatus.includes('returned') ||
+      loadedWorkflowLastDecision.includes('returned') ||
+      loadedWorkflowEditableByApplicant);
   const hasDofApproval = statusUpdates.some((update: any) => {
     const stage = String(update?.stage || update?.role || '').toLowerCase();
     const decision = String(update?.decision || update?.status || '').toLowerCase();
@@ -2736,6 +2745,12 @@ const FinanceApproval: React.FC = () => {
             record.workflow_state?.status || record.workflow_status || record.overall_status || '',
           ).toLowerCase(),
         );
+        setLoadedWorkflowLastDecision(
+          String(
+            record.workflow_state?.lastDecision || record.workflow_last_decision || '',
+          ).toLowerCase(),
+        );
+        setLoadedWorkflowEditableByApplicant(Boolean(record.workflow_state?.isEditableByApplicant));
         setLoadedCurrentStage(
           String(record.workflow_state?.currentStage || record.workflow_stage || '').toLowerCase(),
         );
@@ -2975,7 +2990,7 @@ const FinanceApproval: React.FC = () => {
     }
 
     budgetRows.forEach((row, index) => {
-      const normalizedHead = normalizeText(primaryHead) || normalizeText(row.category);
+      const normalizedHead = normalizeText(row.category) || normalizeText(primaryHead);
       const rowSubHead = normalizeText(row.head);
       const effectiveSubHead =
         (extraDropdownVisible ? normalizeText(eventSubHead) : '') || rowSubHead;
@@ -5502,9 +5517,11 @@ const FinanceApproval: React.FC = () => {
               >
                 {isLoading
                   ? 'Submitting...'
-                  : isEditMode || canSuperAdminEditTerminalFinance
-                    ? 'Update Form'
-                    : 'Submit Form'}
+                  : isReturnedFinanceResubmit
+                    ? 'Resubmit Form'
+                    : isEditMode || canSuperAdminEditTerminalFinance
+                      ? 'Update Form'
+                      : 'Submit Form'}
               </button>
             )}
 
