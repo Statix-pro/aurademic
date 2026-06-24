@@ -12,11 +12,27 @@ import JournalManagement from '../features/admin/formManagement/JournalFormOptio
 import ProjectFormOptions from '../features/admin/formManagement/ProjectFormOptions';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
 import Login from '../features/auth/login/login';
+import Budget from '../features/budget/budget';
+import EventDashboard from '../features/events/components/EventDashboard';
+import EventEntry from '../features/events/components/EventEntry';
 import EventPage from '../features/events/components/EventPage';
+import ExpenditureApproval from '../features/expenditure/expenditureapproval';
+import FinanceApproval from '../features/finance/financeapproval';
+import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
 import Journalform from '../features/journals/journalform';
+import ProfilePage from '../features/profile/ProfilePage';
 import Projectform from '../features/projects/projectform';
-
+import Storybook from '../features/storybook/Storybook';
+import BudgetDashboard from '../features/user-dashboard/budgetdashboard/budgetdashboard';
+import ExpenditureDashboard from '../features/user-dashboard/expendituredashboard/expendituredashboard';
+import FinanceCard from '../features/user-dashboard/financecard/financecard';
+import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
+import ProjectsPage from '../features/user-dashboard/projectpage/ProjectsPage';
+import PublicationsPage from '../features/user-dashboard/publicationspage/PublicationsPage';
 import UserDashboard from '../features/user-dashboard/userdashboard';
+import { AbilityProvider } from '../shared/casl/AbilityContext';
+import MainLayout from '../shared/components/layout/MainLayout';
+import { MsalProvider } from '../shared/components/MsalProvider';
 import {
   ProtectedRoute,
   AdminRoute,
@@ -26,24 +42,7 @@ import {
   SuperAdminRoute,
   ExpenditureApprovalRoute,
 } from '../shared/components/ProtectedRoute';
-import { MsalProvider } from '../shared/components/MsalProvider';
-import EventDashboard from '../features/events/components/EventDashboard';
-import EventEntry from '../features/events/components/EventEntry';
-import PublicationsPage from '../features/user-dashboard/publicationspage/PublicationsPage';
-import ProjectsPage from '../features/user-dashboard/projectpage/ProjectsPage';
-import Storybook from '../features/storybook/Storybook';
-import FinanceApproval from '../features/finance/financeapproval';
-import FinanceCard from '../features/user-dashboard/financecard/financecard';
-import ExpenditureApproval from '../features/expenditure/expenditureapproval';
-import ExpenditureDashboard from '../features/user-dashboard/expendituredashboard/expendituredashboard';
-import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
-import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
-import Budget from '../features/budget/budget';
-import BudgetDashboard from '../features/user-dashboard/budgetdashboard/budgetdashboard';
 import UnderConstruction from '../shared/components/ui/UnderConstruction';
-import ProfilePage from '../features/profile/ProfilePage';
-import { AbilityProvider } from '../shared/casl/AbilityContext';
-import MainLayout from '../shared/components/layout/MainLayout';
 import WorkflowModulePage from '../shared/pages/workflow/WorkflowModulePage';
 
 function App() {
