@@ -1,0 +1,686 @@
+.workorderdashboard-page {
+  min-height: calc(100vh - 56px);
+  background: #f3f7fb;
+  padding: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-x: hidden;
+}
+
+.workorderdashboard-container {
+  width: 100%;
+  max-width: 1260px;
+  margin: 0 auto;
+}
+
+.workorderdashboard-card {
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.workorderdashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px 14px;
+}
+
+.workorderdashboard-title {
+  margin: 0;
+  color: #0a2540;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.workorderdashboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.workorderdashboard-export-btn,
+.workorderdashboard-add-btn {
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #0056b3;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 0 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.workorderdashboard-add-btn {
+  background: #0069ab;
+}
+
+.workorderdashboard-export-btn:hover,
+.workorderdashboard-add-btn:hover {
+  background: #004b9b;
+  transform: translateY(-1px);
+}
+
+.workorderdashboard-toolbar {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.1fr) minmax(160px, 0.7fr) minmax(230px, 0.9fr) minmax(160px, 0.7fr) minmax(230px, 1fr);
+  gap: 18px;
+  padding: 0 22px 22px;
+}
+
+.workorderdashboard-date-filter,
+.workorderdashboard-filter,
+.workorderdashboard-search {
+  min-height: 52px;
+  border: 1px solid #e0e6ef;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+}
+
+.workorderdashboard-date-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 14px;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.workorderdashboard-date-filter svg:first-child {
+  color: #7b8ba4;
+  flex: 0 0 auto;
+}
+
+.workorderdashboard-date-filter span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workorderdashboard-filter {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 7px 12px;
+  margin: 0;
+}
+
+.workorderdashboard-filter span {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.workorderdashboard-filter select {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #0a2540;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 4px 0 0;
+  cursor: pointer;
+}
+
+.workorderdashboard-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  margin: 0;
+  color: #8a96a8;
+}
+
+.workorderdashboard-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  color: #0a2540;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.workorderdashboard-search input::placeholder {
+  color: #8a96a8;
+  font-weight: 500;
+}
+
+.workorderdashboard-table-wrap {
+  margin: 0 22px;
+  overflow: hidden;
+  border: 1px solid #d8e3ef;
+  border-radius: 8px;
+}
+
+.workorderdashboard-table {
+  width: 100%;
+  min-width: 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #0a2540;
+}
+
+.workorderdashboard-table th {
+  height: 42px;
+  background: #e9f4ff;
+  color: #0069ab;
+  border-bottom: 1px solid #cfe0f1;
+  padding: 10px 9px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workorderdashboard-table td {
+  border-bottom: 1px solid #edf1f5;
+  padding: 13px 9px;
+  vertical-align: middle;
+  font-size: 13px;
+  color: #0a2540;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workorderdashboard-table th:nth-child(1),
+.workorderdashboard-table td:nth-child(1) {
+  width: 5%;
+  text-align: center;
+}
+
+.workorderdashboard-table th:nth-child(2),
+.workorderdashboard-table td:nth-child(2) {
+  width: 12%;
+}
+
+.workorderdashboard-table th:nth-child(3),
+.workorderdashboard-table td:nth-child(3) {
+  width: 15%;
+}
+
+.workorderdashboard-table th:nth-child(4),
+.workorderdashboard-table td:nth-child(4) {
+  width: 18%;
+}
+
+.workorderdashboard-table th:nth-child(5),
+.workorderdashboard-table td:nth-child(5) {
+  width: 7%;
+  text-align: center;
+}
+
+.workorderdashboard-table th:nth-child(6),
+.workorderdashboard-table td:nth-child(6) {
+  width: 10%;
+  text-align: center;
+}
+
+.workorderdashboard-table th:nth-child(7),
+.workorderdashboard-table td:nth-child(7) {
+  width: 18%;
+}
+
+.workorderdashboard-table th:nth-child(8),
+.workorderdashboard-table td:nth-child(8) {
+  width: 10%;
+  text-align: center;
+}
+
+.workorderdashboard-table th:nth-child(9),
+.workorderdashboard-table td:nth-child(9) {
+  width: 5%;
+  text-align: center;
+}
+
+.workorderdashboard-row:hover td {
+  background: #fbfdff;
+}
+
+.workorderdashboard-location,
+.workorderdashboard-assignee {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.workorderdashboard-location svg {
+  color: #7c95b5;
+  flex: 0 0 auto;
+}
+
+.workorderdashboard-location div,
+.workorderdashboard-assignee div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.workorderdashboard-location strong,
+.workorderdashboard-assignee strong {
+  color: #0a2540;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workorderdashboard-location span,
+.workorderdashboard-assignee span {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workorderdashboard-count-pill {
+  display: inline-flex;
+  min-width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: #dceeff;
+  color: #0069ab;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workorderdashboard-priority,
+.workorderdashboard-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 29px;
+  border-radius: 7px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.workorderdashboard-priority::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.workorderdashboard-priority--high {
+  background: #fff0f0;
+  color: #dc2626;
+}
+
+.workorderdashboard-priority--high::before {
+  background: #ef4444;
+}
+
+.workorderdashboard-priority--medium {
+  background: #fff8e8;
+  color: #d97706;
+}
+
+.workorderdashboard-priority--medium::before {
+  background: #f59e0b;
+}
+
+.workorderdashboard-priority--routine {
+  background: #fff8e8;
+  color: #d97706;
+}
+
+.workorderdashboard-priority--routine::before {
+  background: #f59e0b;
+}
+
+.workorderdashboard-priority--low {
+  background: #ecfdf3;
+  color: #16a34a;
+}
+
+.workorderdashboard-priority--low::before {
+  background: #22c55e;
+}
+
+.workorderdashboard-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  background: #0056b3;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+}
+
+.workorderdashboard-status--in-progress {
+  background: #e6f8ed;
+  color: #17823e;
+}
+
+.workorderdashboard-status--completed {
+  background: #dcf8e7;
+  color: #169246;
+}
+
+.workorderdashboard-status--pending {
+  background: #e7f2ff;
+  color: #0069ab;
+}
+
+.workorderdashboard-expand-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #0a2540;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.workorderdashboard-expand-btn:hover {
+  background: #eef6ff;
+}
+
+.workorderdashboard-expand-btn.open svg {
+  transform: rotate(180deg);
+}
+
+.workorderdashboard-detail-row td {
+  padding: 0 14px 14px;
+  background: #ffffff;
+  overflow: visible;
+}
+
+.workorderdashboard-detail-panel {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1.25fr;
+  gap: 0;
+  border: 1px solid #dfe7f0;
+  border-radius: 8px;
+  background: #fbfdff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  overflow: hidden;
+}
+
+.workorderdashboard-detail-section {
+  min-width: 0;
+  padding: 18px 18px 20px;
+  border-right: 1px solid #dfe7f0;
+}
+
+.workorderdashboard-detail-section:last-child {
+  border-right: 0;
+}
+
+.workorderdashboard-detail-section h6 {
+  margin: 0 0 12px;
+  color: #0069ab;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workorderdashboard-detail-section p {
+  margin: 0 0 20px;
+  color: #0a2540;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.workorderdashboard-detail-section dl {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+
+.workorderdashboard-detail-section dl div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.workorderdashboard-detail-section dt,
+.workorderdashboard-detail-section dd {
+  margin: 0;
+  font-size: 13px;
+}
+
+.workorderdashboard-detail-section dt {
+  color: #0a2540;
+  font-weight: 700;
+}
+
+.workorderdashboard-detail-section dd {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.workorderdashboard-detail-section ul {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.workorderdashboard-detail-section li {
+  color: #0a2540;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.workorderdashboard-photo-list {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.workorderdashboard-photo {
+  width: 92px;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.12), rgba(15, 23, 42, 0.03)),
+    repeating-linear-gradient(90deg, #a8b3bf 0 8px, #d5dce4 8px 14px);
+  position: relative;
+  text-decoration: none;
+}
+
+.workorderdashboard-photo--2 {
+  background:
+    linear-gradient(135deg, rgba(0, 86, 179, 0.2), rgba(255, 255, 255, 0.08)),
+    repeating-linear-gradient(0deg, #9aa7b5 0 7px, #d9e1e8 7px 13px);
+}
+
+.workorderdashboard-photo--3 {
+  background:
+    linear-gradient(135deg, rgba(217, 119, 6, 0.18), rgba(255, 255, 255, 0.08)),
+    repeating-linear-gradient(45deg, #8795a5 0 7px, #cfd8e3 7px 14px);
+}
+
+.workorderdashboard-photo span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  padding: 5px 6px;
+  background: rgba(15, 23, 42, 0.58);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workorderdashboard-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.workorderdashboard-no-photos {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workorderdashboard-view-all {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #e7f2ff;
+  color: #0069ab;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.workorderdashboard-view-all:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.workorderdashboard-empty {
+  height: 140px;
+  color: #667085 !important;
+  text-align: center !important;
+}
+
+.workorderdashboard-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 22px 18px;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workorderdashboard-pagination {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.workorderdashboard-pagination button {
+  min-width: 34px;
+  height: 34px;
+  border: 1px solid #d7e0ea;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #0a2540;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.workorderdashboard-pagination button.active {
+  border-color: #0056b3;
+  background: #0056b3;
+  color: #ffffff;
+}
+
+.workorderdashboard-pagination button:disabled {
+  color: #9aa4b2;
+  cursor: not-allowed;
+  background: #f8fafc;
+}
+
+@media (max-width: 1180px) {
+  .workorderdashboard-toolbar {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .workorderdashboard-page {
+    padding: 16px;
+  }
+
+  .workorderdashboard-header,
+  .workorderdashboard-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workorderdashboard-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .workorderdashboard-toolbar {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .workorderdashboard-table-wrap {
+    margin: 0 16px;
+  }
+
+  .workorderdashboard-detail-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .workorderdashboard-detail-section,
+  .workorderdashboard-detail-section:last-child {
+    border-right: 0;
+    border-bottom: 1px solid #dfe7f0;
+  }
+
+  .workorderdashboard-detail-section:last-child {
+    border-bottom: 0;
+  }
+}

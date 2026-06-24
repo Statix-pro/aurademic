@@ -1,0 +1,425 @@
+.journal-management,
+.project-management {
+  padding: 0;
+  background-color: transparent;
+  border-radius: 0;
+}
+
+.journal-management h2,
+.project-management h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 0;
+}
+
+/* ===== Table Container Styling ===== */
+.journal-management .table,
+.project-management .table {
+  background-color: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  margin-bottom: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  table-layout: fixed;
+}
+
+/* ===== Table Header Styling ===== */
+.journal-management .table thead th,
+.project-management .table thead th {
+  background-color: #f1f5f9 !important;
+  color: #0069ab; /* Synced with dashboard */
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: none !important;
+  letter-spacing: 0.01em;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0 !important;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.journal-management .table thead th:first-child {
+  border-top-left-radius: 8px;
+}
+
+.journal-management .table thead th:last-child,
+.project-management .table thead th:last-child {
+  border-top-right-radius: 8px;
+}
+
+/* ===== Column Width Definitions for Journal Table ===== */
+.journal-management .table th:nth-child(1),
+.journal-management .table td:nth-child(1) {
+  width: 18%;
+}
+
+.journal-management .table th:nth-child(2),
+.journal-management .table td:nth-child(2) {
+  width: 10%;
+  text-align: center;
+}
+
+.journal-management .table th:nth-child(3),
+.journal-management .table td:nth-child(3) {
+  width: 13%;
+}
+
+.journal-management .table th:nth-child(4),
+.journal-management .table td:nth-child(4) {
+  width: 10%;
+  text-align: center;
+}
+
+.journal-management .table th:nth-child(5),
+.journal-management .table td:nth-child(5) {
+  width: 10%;
+  text-align: center;
+}
+
+.journal-management .table th:nth-child(6),
+.journal-management .table td:nth-child(6) {
+  width: 8%;
+  text-align: center;
+}
+
+.journal-management .table th:nth-child(7),
+.journal-management .table td:nth-child(7) {
+  width: 8%;
+  text-align: center;
+}
+
+.journal-management .table th:nth-child(8),
+.journal-management .table td:nth-child(8) {
+  width: 10%;
+}
+
+.journal-management .table th:nth-child(9),
+.journal-management .table td:nth-child(9) {
+  width: 13%;
+  text-align: center;
+  overflow: visible;
+}
+
+/* ===== Column Width Definitions for Project Table ===== */
+.project-management .table th:nth-child(1),
+.project-management .table td:nth-child(1) {
+  width: 75%;
+}
+
+.project-management .table th:nth-child(2),
+.project-management .table td:nth-child(2) {
+  width: 25%;
+  text-align: center;
+}
+
+/* ===== Table Body Styling ===== */
+.journal-management .table tbody td,
+.project-management .table tbody td {
+  padding: 12px 16px;
+  vertical-align: middle;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
+  font-size: 0.875rem; /* Synced with dashboard */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Row hover effect */
+.journal-management .table tbody tr:hover,
+.project-management .table tbody tr:hover {
+  background-color: #f1f5f9;
+}
+
+/* Alternating row colors */
+.journal-management .table tbody tr:nth-child(even),
+.project-management .table tbody tr:nth-child(even) {
+  background-color: #fafbfc;
+}
+
+.journal-management .table tbody tr:nth-child(even):hover,
+.project-management .table tbody tr:nth-child(even):hover {
+  background-color: #f1f5f9;
+}
+
+/* Last row border radius */
+.journal-management .table tbody tr:last-child td:first-child {
+  border-bottom-left-radius: 8px;
+}
+
+.journal-management .table tbody tr:last-child td:last-child,
+.project-management .table tbody tr:last-child td:last-child {
+  border-bottom-right-radius: 8px;
+}
+
+/* ===== Category Badge Styling ===== */
+.journal-management .table .badge,
+.project-management .table .badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 50px;
+  letter-spacing: 0.3px;
+  text-transform: capitalize;
+  display: inline-block;
+}
+
+.journal-management .table .badge.bg-primary {
+  background-color: #eff6ff !important;
+  color: #2563eb !important;
+  border: 1px solid #bfdbfe;
+}
+
+.journal-management .table .badge.bg-secondary {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  border: 1px solid #e2e8f0;
+}
+
+/* ===== Website Link Styling ===== */
+.journal-management .table td:nth-child(8) {
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.journal-management .table td:nth-child(8) a,
+.journal-management .table td:nth-child(8) {
+  color: #0069ab;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.journal-management .table td:nth-child(8):hover {
+  color: #005492;
+}
+
+/* ===== Action Buttons Styling ===== */
+.journal-management .table td:last-child,
+.project-management .table td:last-child {
+  white-space: nowrap;
+}
+
+.journal-management .table .btn,
+.project-management .table .btn {
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.journal-management .table .btn-primary,
+.project-management .table .btn-primary {
+  background-color: #eff6ff !important;
+  color: #1d4ed8 !important;
+  padding: 0.45rem;
+  border-radius: 0.5rem;
+  border: none;
+}
+
+.journal-management .table .btn-danger,
+.project-management .table .btn-danger {
+  background-color: #fef2f2 !important;
+  color: #b91c1c !important;
+  padding: 0.45rem;
+  border-radius: 0.5rem;
+  border: none;
+}
+
+.journal-management .table .btn:hover,
+.project-management .table .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  filter: none;
+}
+
+/* ===== Header Section Styling ===== */
+.journal-management .d-flex.justify-content-between,
+.project-management .d-flex.justify-content-between {
+  margin-bottom: 16px;
+  padding: 16px 24px 0 24px;
+  /* border-bottom removal for flush look */
+}
+
+/* Add New Button in header */
+.journal-management>.d-flex>.btn-primary,
+.project-management>.d-flex>.btn-primary {
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0069ab 0%, #005492 100%);
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 105, 171, 0.3);
+  transition: all 0.2s ease;
+}
+
+.journal-management>.d-flex>.btn-primary:hover,
+.project-management>.d-flex>.btn-primary:hover {
+  background: linear-gradient(135deg, #005492 0%, #004a7a 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 105, 171, 0.4);
+}
+
+/* ===== Tab Button Styling for Project Management ===== */
+.project-management .btn-group {
+  margin-top: 12px;
+}
+
+.project-management .btn-group .btn {
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 0;
+}
+
+.project-management .btn-group .btn:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.project-management .btn-group .btn:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.project-management .btn-group .btn-outline-primary {
+  color: #0069ab;
+  border-color: #0069ab;
+  background: transparent;
+}
+
+.project-management .btn-group .btn-outline-primary:hover {
+  background: rgba(0, 105, 171, 0.1);
+  color: #005492;
+}
+
+.project-management .btn-group .btn-primary {
+  background: linear-gradient(135deg, #0069ab 0%, #005492 100%);
+  border: 1px solid #005492;
+  color: #ffffff;
+  box-shadow: none !important;
+}
+
+.project-management .btn-group .btn-primary:focus,
+.project-management .btn-group .btn-primary:active,
+.project-management .btn-group .btn-primary.active {
+  box-shadow: none !important;
+  border: 1px solid #004a7a;
+  outline: none !important;
+}
+
+/* ===== Modal Styling ===== */
+.modal-content {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+  padding: 16px 24px;
+  border-radius: 12px 12px 0 0;
+}
+
+.modal-header .modal-title {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-body .form-label {
+  font-weight: 500;
+  color: #475569;
+  margin-bottom: 6px;
+}
+
+.modal-body .form-control,
+.modal-body .form-select {
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.modal-body .form-control:focus,
+.modal-body .form-select:focus {
+  border-color: #0069ab;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+}
+
+/* ===== Empty State Styling ===== */
+.journal-management .table tbody td[colspan],
+.project-management .table tbody td[colspan] {
+  text-align: center;
+  padding: 40px 16px;
+  color: #64748b;
+  font-size: 0.95rem;
+  background-color: #fafbfc;
+}
+
+/* ===== Alert Styling ===== */
+.journal-management .alert,
+.project-management .alert {
+  border-radius: 8px;
+  border: none;
+  font-size: 0.9rem;
+}
+
+/* ===== Loading Spinner ===== */
+.journal-management .spinner-border,
+.project-management .spinner-border {
+  width: 2rem;
+  height: 2rem;
+}
+
+/* ===== Responsive Adjustments ===== */
+@media (max-width: 992px) {
+
+  .journal-management .table,
+  .project-management .table {
+    table-layout: auto;
+  }
+
+  .journal-management .table th,
+  .journal-management .table td,
+  .project-management .table th,
+  .project-management .table td {
+    width: auto !important;
+    padding: 12px;
+    font-size: 0.85rem;
+  }
+
+  .journal-management .table td:nth-child(8) {
+    max-width: 120px;
+  }
+}
+
+@media (max-width: 768px) {
+
+  .journal-management,
+  .project-management {
+    padding: 16px;
+  }
+
+  .journal-management h2,
+  .project-management h2 {
+    font-size: 1.25rem;
+  }
+
+  .journal-management .d-flex.justify-content-between,
+  .project-management .d-flex.justify-content-between {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start !important;
+  }
+}

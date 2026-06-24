@@ -1,0 +1,18 @@
+# SonarQube
+.scannerwork/
+sonar-project.properties
+
+# Dependencies
+node_modules/
+
+# Production
+dist/
+build/
+
+# IDE files
+.vs/
+.vscode/
+
+# Misc
+.DS_Store
+*.log
