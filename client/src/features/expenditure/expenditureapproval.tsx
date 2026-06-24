@@ -42,6 +42,7 @@ import {
   BUDGET_HEAD_GROUPS,
   SUB_HEAD_BY_BUDGET_HEAD,
   subscribeBudgetCatalog,
+  HOAC_GROUPS,
 } from '../../shared/hooks/budgetCatalogStore';
 import { useBudgetCatalog } from '../../shared/hooks/useBudgetCatalog';
 import { AccountOption, fetchAccountOptions } from '../../shared/utils/accountOptionsApi';
@@ -1842,9 +1843,6 @@ const ExpenditureApproval: React.FC = () => {
   const subcategoryOptions: OptionType[] = subcategoryOptionsByType[categoryType] || [];
   const subcategoryList: string[] = subcategoryOptions.map((option) => String(option.value));
   const hasSubcategories = subcategoryList.length > 0;
-
-  const extraDropdownVisible =
-    primaryHead === 'Events & Competitions' || primaryHead === 'Meetings & Audits';
 
   const addPayeeRow = () => setPayeeRows([...payeeRows, createPayeeRow()]);
   const removePayeeRow = (id: string) =>
