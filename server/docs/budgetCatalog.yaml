@@ -1,0 +1,111 @@
+tags:
+  - name: Budget Catalog
+    description: Master budget heads, sub-heads, and tags administration
+
+components:
+  schemas:
+    BudgetHead:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        is_active:
+          type: integer
+        is_deleted:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    BudgetSubHead:
+      type: object
+      properties:
+        id:
+          type: integer
+        head_id:
+          type: integer
+        name:
+          type: string
+        scope:
+          type: string
+        is_active:
+          type: integer
+        is_deleted:
+          type: integer
+
+paths:
+  /budget-catalog:
+    get:
+      summary: Retrieve active budget heads and sub-heads catalog
+      tags: [Budget Catalog]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: includeInactive
+          schema:
+            type: boolean
+          description: If true, returns inactive/deleted items (Super Admin only)
+      responses:
+        200:
+          description: List of budget heads with nested sub-heads
+
+  /budget-catalog/heads:
+    post:
+      summary: Create a new budget head (Super Admin only)
+      tags: [Budget Catalog]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+      responses:
+        200:
+          description: Head created successfully
+
+  /budget-catalog/heads/{id}:
+    patch:
+      summary: Update budget head configuration (Super Admin only)
+      tags: [Budget Catalog]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Head updated successfully
+
+    delete:
+      summary: Soft-delete a budget head (Super Admin only)
+      tags: [Budget Catalog]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Head deleted successfully

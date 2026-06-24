@@ -1,10 +1,11 @@
 import financeModel from './financeModel.js';
 import './financeWorkflowAdapter.js';
+import db from '../../config/connection.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
+
 import fs from 'fs';
 import path from 'path';
-import db from '../../config/connection.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -31,7 +32,11 @@ const sanitizeAnnexureExtension = (originalName) => {
   return SAFE_ANNEXURE_EXTENSIONS.has(normalizedExt) ? normalizedExt : '';
 };
 
-const FINANCE_PRINCIPAL_DOC_DIR = path.resolve(process.cwd(), 'uploads', 'finance-principal-documents');
+const FINANCE_PRINCIPAL_DOC_DIR = path.resolve(
+  process.cwd(),
+  'uploads',
+  'finance-principal-documents',
+);
 const FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX = '/uploads/finance-principal-documents/';
 
 const TEMP_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'temp');
@@ -57,22 +62,20 @@ const isPrincipalRoleRequest = (req) => {
 const hasFinanceWorkflowPermission = (req) => {
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
   return permissions.some((permission) =>
-    normalizeText(permission).toLowerCase().startsWith('finance.workflow.')
+    normalizeText(permission).toLowerCase().startsWith('finance.workflow.'),
   );
 };
 
-const canManagePrincipalDocumentsRequest = (req) => (
-  Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) ||
-  isPrincipalRoleRequest(req)
-);
+const canManagePrincipalDocumentsRequest = (req) =>
+  Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || isPrincipalRoleRequest(req);
 
 const isEligibleForPrincipalDocument = (finance) => {
   const totalBudget = Number(finance?.total_budget || finance?.proposed_amount || 0);
   const workflowStatus = normalizeText(
-    finance?.workflow_state?.status || finance?.workflow_status || finance?.overall_status
+    finance?.workflow_state?.status || finance?.workflow_status || finance?.overall_status,
   ).toLowerCase();
   const currentStage = normalizeText(
-    finance?.workflow_state?.currentStage || finance?.workflow_stage
+    finance?.workflow_state?.currentStage || finance?.workflow_stage,
   ).toLowerCase();
 
   if (!(totalBudget > 10000)) {
@@ -130,11 +133,7 @@ const resolveCurrentCycleStartMs = (financeRecord, entries = []) => {
     return resubmittedAtMs;
   }
 
-  return (
-    parseDateMs(workflowState.startedAt) ||
-    parseDateMs(financeRecord?.created_at) ||
-    null
-  );
+  return parseDateMs(workflowState.startedAt) || parseDateMs(financeRecord?.created_at) || null;
 };
 
 const filterEntriesForCurrentCycle = (entries, financeRecord) => {
@@ -164,12 +163,19 @@ const filterEntriesForCurrentCycle = (entries, financeRecord) => {
 };
 
 const isSuperAdminRequest = (req) => {
-  if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)) {
+  if (req.user?.is_super_admin || req.user?.isSuperAdmin || req.user?.is_superadmin) {
     return true;
   }
 
-  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
-  return roles.some((role) => normalizeText(role).toLowerCase() === 'super_admin');
+  const roles = Array.isArray(req.user?.roles)
+    ? req.user.roles
+    : normalizeText(req.user?.roles)
+      ? [req.user.roles]
+      : [];
+  const roleTokens = [req.user?.role, ...roles]
+    .map((role) => normalizeText(role).toLowerCase())
+    .filter(Boolean);
+  return roleTokens.some((role) => role === 'super_admin' || role === 'superadmin');
 };
 
 const normalizeActor = (req) => {
@@ -205,7 +211,8 @@ const resolveFinanceLevel1QueueRole = (req) => {
     ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
     : [];
 
-  const hasCoordinatorRole = normalizedRoles.includes('coordinator') || normalizedRoles.includes('entity_approver');
+  const hasCoordinatorRole =
+    normalizedRoles.includes('coordinator') || normalizedRoles.includes('entity_approver');
   const hasHodRole = normalizedRoles.includes('hod');
 
   if (hasCoordinatorRole && !hasHodRole) return 'coordinator';
@@ -216,7 +223,9 @@ const resolveFinanceLevel1QueueRole = (req) => {
 
 const hasAnyFinanceWorkflowPermission = (req) => {
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  return permissions.some((permission) => normalizeText(permission).startsWith('finance.workflow.'));
+  return permissions.some((permission) =>
+    normalizeText(permission).startsWith('finance.workflow.'),
+  );
 };
 
 const hasFinanceStagePermission = (req, stage) => {
@@ -230,9 +239,26 @@ const hasFinanceStagePermission = (req, stage) => {
   }
 
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  const normalizedPermissions = permissions.map((permission) => normalizeText(permission).toLowerCase());
+  const normalizedPermissions = permissions.map((permission) =>
+    normalizeText(permission).toLowerCase(),
+  );
+  if (
+    normalizedPermissions.includes('finance.workflow.*') ||
+    normalizedPermissions.includes(`finance.workflow.${normalizedStage}`)
+  ) {
+    return true;
+  }
 
-  return normalizedPermissions.includes(`finance.workflow.${normalizedStage}`);
+  const roles = Array.isArray(req.user?.roles)
+    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
+    : [];
+  const stageRoleMap = {
+    dof: ['dof'],
+    principal: ['principal'],
+    chairman: ['chairman'],
+  };
+
+  return (stageRoleMap[normalizedStage] || []).some((role) => roles.includes(role));
 };
 
 const hasFinanceWorkflowEditorAccess = (req) =>
@@ -269,33 +295,77 @@ const isHandledFinanceDomainError = (error) => {
   ].some((token) => message.includes(token));
 };
 
+const unwrapFinanceModelError = (message = '') =>
+  normalizeText(message).replace(/^Error (creating|updating) finance request:\s*/i, '');
+
 const handleWorkflowError = (res, error, fallbackMessage) => {
   if (error instanceof WorkflowError) {
     return res.status(error.statusCode || 400).json({
-      status: 'error',
+      success: false,
       message: error.message,
+      error: error.message,
       code: error.code,
     });
   }
 
   if (isHandledFinanceDomainError(error)) {
+    const message = unwrapFinanceModelError(error?.message);
     return res.status(409).json({
-      status: 'error',
-      message: error.message || 'Finance request cannot be processed due to budget validation',
+      success: false,
+      message: message || 'Finance request cannot be processed due to budget validation',
+      error: message || 'Finance request cannot be processed due to budget validation',
       code: 'FINANCE_BUDGET_VALIDATION_FAILED',
     });
   }
 
   console.error(fallbackMessage, error);
   return res.status(500).json({
-    status: 'error',
+    success: false,
     message: error.message || fallbackMessage,
+    error: error.message || fallbackMessage,
+  });
+};
+
+const handleCarryForwardError = (res, error, fallbackMessage) => {
+  const message = unwrapFinanceModelError(error?.message) || fallbackMessage;
+  const normalized = normalizeText(message).toLowerCase();
+
+  let statusCode = 500;
+  let code = 'FINANCE_CARRY_FORWARD_FAILED';
+  if (normalized.includes('not found')) {
+    statusCode = 404;
+    code = 'FINANCE_CARRY_FORWARD_NOT_FOUND';
+  } else if (
+    normalized.includes('invalid finance request id') ||
+    normalized.includes('target fiscal year is required') ||
+    normalized.includes('amount must be greater than zero') ||
+    normalized.includes('remarks are required')
+  ) {
+    statusCode = 400;
+    code = 'FINANCE_CARRY_FORWARD_INVALID_REQUEST';
+  } else if (
+    normalized.includes('only approved finance requests') ||
+    normalized.includes('target fiscal year must be after') ||
+    normalized.includes('exceeds available balance') ||
+    normalized.includes('already active')
+  ) {
+    statusCode = 409;
+    code = 'FINANCE_CARRY_FORWARD_CONFLICT';
+  } else {
+    console.error(fallbackMessage, error);
+  }
+
+  return res.status(statusCode).json({
+    success: false,
+    message,
+    error: message,
+    code,
   });
 };
 
 const sanitizeFinanceRecordForUser = (req, financeRecord) => {
   if (!financeRecord) return financeRecord;
-  
+
   if (!canManagePrincipalDocumentsRequest(req)) {
     return {
       ...financeRecord,
@@ -315,26 +385,31 @@ const financeController = {
       const hasApplicant = data.employee_id || data.applicant_name;
       if (!hasApplicant || !data.request_date || !data.beneficiary_type || !data.primary_head) {
         return res.status(400).json({
-          status: 'error',
-          message: 'Missing required fields (employee_id or applicant_name, request_date, beneficiary_type, primary_head)',
+          success: false,
+          message:
+            'Missing required fields (employee_id or applicant_name, request_date, beneficiary_type, primary_head)',
         });
       }
 
       if (!Array.isArray(data.budget_rows) || data.budget_rows.length === 0) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'At least one budget row is required',
         });
       }
 
       if (!userId) {
         return res.status(401).json({
-          status: 'error',
+          success: false,
           message: 'Invalid user context',
         });
       }
 
-      const financeId = await financeModel.createFinanceRequest(data, userId, normalizeText(req.user?.email) || null);
+      const financeId = await financeModel.createFinanceRequest(
+        data,
+        userId,
+        normalizeText(req.user?.email) || null,
+      );
       const budgetRows = Array.isArray(data.budget_rows) ? data.budget_rows : [];
       const plannedBudgetAmount = budgetRows.length
         ? budgetRows.reduce((sum, row) => sum + Number(row?.amount || 0), 0)
@@ -343,7 +418,8 @@ const financeController = {
       const unplannedBudgetAmount = unplannedBudgetEnabled
         ? Math.max(0, Number(data.unplanned_budget_amount || 0))
         : 0;
-      const totalBudgetAmount = plannedBudgetAmount + (Number.isFinite(unplannedBudgetAmount) ? unplannedBudgetAmount : 0);
+      const totalBudgetAmount =
+        plannedBudgetAmount + (Number.isFinite(unplannedBudgetAmount) ? unplannedBudgetAmount : 0);
       const amountBand = Number(totalBudgetAmount) > 10000 ? 'gt_10k' : 'lte_10k';
       const financeMeta = {
         unplannedBudgetEnabled,
@@ -365,6 +441,7 @@ const financeController = {
             moduleMeta: {
               trigger: 'create_finance_request',
               amountBand,
+              beneficiaryType: normalizeText(data.beneficiary_type) || null,
               financeMeta,
             },
           },
@@ -373,15 +450,24 @@ const financeController = {
         try {
           await financeModel.hardDeleteFinanceRequest(financeId);
         } catch (cleanupError) {
-          console.error('Failed to clean up finance request after workflow start failure', cleanupError);
+          console.error(
+            'Failed to clean up finance request after workflow start failure',
+            cleanupError,
+          );
         }
         throw workflowError;
       }
 
+      const createdFinance = await financeModel.getFinanceRequestById(financeId);
+
       return res.status(201).json({
-        status: 'success',
+        success: true,
         message: 'Finance request created successfully',
-        data: { id: financeId },
+        data: {
+          id: financeId,
+          requestRef: createdFinance?.proposal_ref || null,
+          proposal_ref: createdFinance?.proposal_ref || null,
+        },
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in createFinanceRequest');
@@ -395,27 +481,31 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
+          error: 'Invalid finance request ID',
         });
       }
 
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
+          error: 'Finance request not found',
         });
       }
 
       const isCreator = Boolean(userId && toPositiveInt(finance.created_by) === userId);
       const isWorkflowEditor = hasFinanceWorkflowEditorAccess(req);
       const workflowStatus = normalizeText(finance.workflow_state?.status).toLowerCase();
-      const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(workflowStatus);
+      const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(
+        workflowStatus,
+      );
 
       if (!isCreator && !isWorkflowEditor) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'You are not allowed to update this request',
         });
       }
@@ -427,31 +517,40 @@ const financeController = {
         workflowStatus === 'submitted' ||
         currentStage === 'level1';
 
-      if (isCreator && !isApplicantEditable) {
+      if (isCreator && !isWorkflowEditor && !isApplicantEditable) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'This request is not editable in current workflow state',
         });
       }
 
       if (isWorkflowEditor && isTerminalWorkflow && !isSuperAdminRequest(req)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'This request is not editable in current workflow state',
         });
       }
 
-      const result = await financeModel.updateFinanceRequest(financeId, req.body || {}, normalizeActor(req));
+      const result = await financeModel.updateFinanceRequest(
+        financeId,
+        req.body || {},
+        normalizeActor(req),
+      );
 
       if (result.affectedRows > 0) {
         return res.status(200).json({
-          status: 'success',
+          success: true,
           message: 'Finance request updated successfully',
+          data: {
+            id: financeId,
+            requestRef: finance.proposal_ref || null,
+            proposal_ref: finance.proposal_ref || null,
+          },
         });
       }
 
       return res.status(400).json({
-        status: 'error',
+        success: false,
         message: 'No changes applied',
       });
     } catch (error) {
@@ -466,7 +565,7 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -474,14 +573,14 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
 
       if (!userId || toPositiveInt(finance.created_by) !== userId) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'Only applicant can resubmit this request',
         });
       }
@@ -489,8 +588,18 @@ const financeController = {
       const workflowState = finance.workflow_state || null;
       if (!workflowState || normalizeText(workflowState.status).toLowerCase() !== 'returned') {
         return res.status(409).json({
-          status: 'error',
+          success: false,
           message: 'Only returned requests can be resubmitted',
+        });
+      }
+
+      const resubmissionComment = normalizeText(
+        req.body?.feedback || req.body?.comment || req.body?.remarks,
+      );
+      if (!resubmissionComment) {
+        return res.status(400).json({
+          success: false,
+          message: 'Resubmission comments are required',
         });
       }
 
@@ -503,26 +612,29 @@ const financeController = {
         unplannedBudgetDescription: normalizeText(finance.unplanned_budget_description) || null,
       };
 
+      const resubmitMetadata = {
+        origin: 'resubmit',
+        requestId: null,
+        moduleMetaVersion: 1,
+        moduleMeta: {
+          trigger: 'applicant_resubmit',
+          amountBand: Number(finance.total_budget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+          beneficiaryType: normalizeText(finance.beneficiary_type) || null,
+          financeMeta,
+        },
+      };
+
       const restartResult = await workflowService.startWorkflow({
         moduleKey: 'finance',
         recordId: financeId,
-        metadata: {
-          origin: 'resubmit',
-          requestId: null,
-          moduleMetaVersion: 1,
-          moduleMeta: {
-            trigger: 'applicant_resubmit',
-            amountBand: Number(finance.total_budget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
-            financeMeta,
-          },
-        },
+        metadata: resubmitMetadata,
       });
 
       const resubmittedAt = new Date().toISOString();
       await financeModel.updateFinanceWorkflowSnapshot(financeId, {
         ...(restartResult.state || {}),
         status: 'in_progress',
-        currentStage: 'level1',
+        currentStage: restartResult.state?.currentStage || 'level1',
         isEditableByApplicant: false,
         lastDecision: 'resubmitted',
         lastFeedback: null,
@@ -530,9 +642,24 @@ const financeController = {
         updatedAt: resubmittedAt,
         resolvedAt: null,
       });
+      await workflowService.logWorkflowResubmission({
+        moduleKey: 'finance',
+        recordId: financeId,
+        stage: restartResult.state?.currentStage || workflowState.currentStage || 'level1',
+        feedback: resubmissionComment,
+        actor: normalizeActor(req),
+        snapshotBefore: workflowState,
+        metadata: {
+          ...resubmitMetadata,
+          moduleMeta: {
+            ...resubmitMetadata.moduleMeta,
+            route: 'POST /api/finance-requests/:id/resubmit',
+          },
+        },
+      });
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: 'Finance request resubmitted successfully',
       });
     } catch (error) {
@@ -548,7 +675,7 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -556,14 +683,14 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
 
       if (!isSuperAdmin && (!userId || toPositiveInt(finance.created_by) !== userId)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'Only applicant can delete this request',
         });
       }
@@ -571,7 +698,8 @@ const financeController = {
       const workflowState = finance.workflow_state || null;
       const workflowStatus = normalizeText(workflowState?.status).toLowerCase();
       const currentStage = normalizeText(workflowState?.currentStage).toLowerCase();
-      const hasStartedApproval = Boolean(workflowState) && currentStage && currentStage !== 'level1';
+      const hasStartedApproval =
+        Boolean(workflowState) && currentStage && currentStage !== 'level1';
 
       if (
         !isSuperAdmin &&
@@ -579,14 +707,14 @@ const financeController = {
         ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(workflowStatus)
       ) {
         return res.status(409).json({
-          status: 'error',
+          success: false,
           message: 'This request can no longer be deleted',
         });
       }
 
       if (!isSuperAdmin && hasStartedApproval) {
         return res.status(409).json({
-          status: 'error',
+          success: false,
           message: 'This request can only be deleted before Level-1 approval',
         });
       }
@@ -594,7 +722,7 @@ const financeController = {
       await financeModel.deleteFinanceRequest(financeId, normalizeActor(req));
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: 'Finance request deleted successfully',
       });
     } catch (error) {
@@ -607,7 +735,7 @@ const financeController = {
       const financeId = toPositiveInt(req.params.id);
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -615,15 +743,16 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
 
       if (!canAccessFinanceRecord(req, finance)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'Access denied',
+          error: 'Access denied',
         });
       }
 
@@ -638,7 +767,7 @@ const financeController = {
         console.error('Failed to fetch finance status updates:', statusError);
       }
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: sanitizeFinanceRecordForUser(req, {
           ...finance,
           budget,
@@ -663,8 +792,8 @@ const financeController = {
       });
 
       return res.json({
-        status: 'success',
-        data: rows.map(row => sanitizeFinanceRecordForUser(req, row)),
+        success: true,
+        data: rows.map((row) => sanitizeFinanceRecordForUser(req, row)),
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in listFinanceRequests');
@@ -678,14 +807,14 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
 
       if (!Array.isArray(rows) || rows.length === 0) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Budget breakup data is required',
         });
       }
@@ -693,7 +822,7 @@ const financeController = {
       const exists = await financeModel.doesFinanceExist(financeId);
       if (!exists) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
@@ -701,7 +830,7 @@ const financeController = {
       await financeModel.addBudgetBreakup(financeId, rows);
 
       return res.status(201).json({
-        status: 'success',
+        success: true,
         message: 'Budget breakup added successfully',
       });
     } catch (error) {
@@ -714,7 +843,7 @@ const financeController = {
       const financeId = toPositiveInt(req.params.id);
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -722,7 +851,7 @@ const financeController = {
       const budget = await financeModel.getBudgetBreakup(financeId);
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: budget,
       });
     } catch (error) {
@@ -735,7 +864,6 @@ const financeController = {
       const tags = await financeModel.getBudgetTags();
       return res.status(200).json({
         success: true,
-        status: 'success',
         data: tags,
       });
     } catch (error) {
@@ -749,7 +877,6 @@ const financeController = {
       const units = await financeModel.getOrgUnitsByType(type);
       return res.status(200).json({
         success: true,
-        status: 'success',
         data: units,
         count: units.length,
       });
@@ -772,7 +899,6 @@ const financeController = {
 
       return res.status(200).json({
         success: true,
-        status: 'success',
         data: {
           all: units,
           grouped,
@@ -791,26 +917,29 @@ const financeController = {
       const subHead = normalizeText(req.query?.sub_head || req.query?.subHead);
       const preferredBudgetLineId = toPositiveInt(req.query?.budget_line_id);
       const excludeFinanceId = toPositiveInt(req.query?.finance_id);
-      const beneficiaryType = normalizeText(req.query?.beneficiary_type || req.query?.beneficiaryType) || null;
-      const beneficiaryValue = normalizeText(req.query?.beneficiary_value || req.query?.beneficiaryValue) || null;
+      const beneficiaryType =
+        normalizeText(req.query?.beneficiary_type || req.query?.beneficiaryType) || null;
+      const beneficiaryValue =
+        normalizeText(req.query?.beneficiary_value || req.query?.beneficiaryValue) || null;
       const departmentId = toPositiveInt(req.query?.department_id || req.query?.departmentId);
       const beneficiaryEntityId = toPositiveInt(
-        req.query?.beneficiary_entity_id || req.query?.beneficiaryEntityId
+        req.query?.beneficiary_entity_id || req.query?.beneficiaryEntityId,
       );
+      const fiscalYear = toPositiveInt(req.query?.fiscal_year || req.query?.fiscalYear);
       const headOnlyMatch = ['1', 'true', 'yes', 'on'].includes(
-        normalizeText(req.query?.head_only_match).toLowerCase()
+        normalizeText(req.query?.head_only_match).toLowerCase(),
       );
 
       if (!userId) {
         return res.status(401).json({
-          status: 'error',
+          success: false,
           message: 'Invalid user context',
         });
       }
 
       if (!budgetHead || (!headOnlyMatch && !subHead)) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: headOnlyMatch
             ? 'budget_head is required'
             : 'budget_head and sub_head are required',
@@ -829,10 +958,11 @@ const financeController = {
         beneficiaryValue,
         departmentId,
         beneficiaryEntityId,
+        fiscalYear,
       });
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: availability,
       });
     } catch (error) {
@@ -850,7 +980,7 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -859,16 +989,16 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
 
       const workflowStatus = normalizeText(
-        finance.workflow_state?.status || finance.workflow_status || finance.overall_status
+        finance.workflow_state?.status || finance.workflow_status || finance.overall_status,
       ).toLowerCase();
       const currentStage = normalizeText(
-        finance.workflow_state?.currentStage || finance.workflow_stage
+        finance.workflow_state?.currentStage || finance.workflow_stage,
       ).toLowerCase();
       const isTerminalWorkflow = ['completed', 'rejected', 'archived'].includes(workflowStatus);
       const canPersistStageRemark =
@@ -876,26 +1006,27 @@ const financeController = {
         hasFinanceStagePermission(req, currentStage);
 
       if (normalizedStageRemark && canPersistStageRemark) {
-        await financeModel.updateWorkflowStageRemark(financeId, currentStage, normalizedStageRemark);
+        await financeModel.updateWorkflowStageRemark(
+          financeId,
+          currentStage,
+          normalizedStageRemark,
+        );
       }
 
       if (actor.isSuperAdmin && normalizedDecision === 'returned' && isTerminalWorkflow) {
-        result = await financeModel.forceWorkflowTransition(
-          financeId,
-          {
-            decision: 'returned',
-            feedback,
-            actor,
-            stageHint:
-              normalizeText(finance.workflow_stage).toLowerCase() ||
-              normalizeText(
-                Array.isArray(finance.workflow_state?.flow)
-                  ? finance.workflow_state.flow[finance.workflow_state.flow.length - 1]
-                  : ''
-              ).toLowerCase() ||
-              'principal',
-          }
-        );
+        result = await financeModel.forceWorkflowTransition(financeId, {
+          decision: 'returned',
+          feedback,
+          actor,
+          stageHint:
+            normalizeText(finance.workflow_stage).toLowerCase() ||
+            normalizeText(
+              Array.isArray(finance.workflow_state?.flow)
+                ? finance.workflow_state.flow[finance.workflow_state.flow.length - 1]
+                : '',
+            ).toLowerCase() ||
+            'principal',
+        });
       } else {
         result = await workflowService.actOnWorkflow({
           moduleKey: 'finance',
@@ -915,7 +1046,7 @@ const financeController = {
       }
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: `Workflow ${result.decision} at stage ${result.stage}`,
         data: {
           previousState: result.previousState,
@@ -933,7 +1064,7 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -941,20 +1072,20 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
 
       if (!canAccessFinanceRecord(req, finance)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'Access denied',
         });
       }
 
       const workflowStatus = normalizeText(
-        finance.workflow_state?.status || finance.workflow_status || finance.overall_status
+        finance.workflow_state?.status || finance.workflow_status || finance.overall_status,
       ).toLowerCase();
       const isArchived = workflowStatus === 'archived' || workflowStatus === 'archive';
       const actor = normalizeActor(req);
@@ -965,23 +1096,24 @@ const financeController = {
 
         if (!hasFinanceStagePermission(req, archivedStage)) {
           return res.status(403).json({
-            status: 'error',
+            success: false,
             message: archivedStage
               ? `Only ${archivedStage.toUpperCase()} stage users (or super admin) can unarchive this request`
               : 'You are not allowed to unarchive this request',
           });
         }
 
-        const restoreResult = await financeModel.restoreWorkflowSnapshotFromLatestArchive(financeId);
+        const restoreResult =
+          await financeModel.restoreWorkflowSnapshotFromLatestArchive(financeId);
         if (!restoreResult.restored) {
           return res.status(409).json({
-            status: 'error',
+            success: false,
             message: restoreResult.reason || 'Unable to unarchive this request',
           });
         }
 
         return res.status(200).json({
-          status: 'success',
+          success: true,
           message: 'Finance request unarchived successfully',
           data: {
             workflow_state: restoreResult.restoredState,
@@ -991,25 +1123,22 @@ const financeController = {
 
       const isTerminalWorkflow = ['completed', 'rejected'].includes(workflowStatus);
       if (actor.isSuperAdmin && isTerminalWorkflow) {
-        const forcedArchiveResult = await financeModel.forceWorkflowTransition(
-          financeId,
-          {
-            decision: 'archived',
-            feedback: normalizeText(req.body?.feedback) || null,
-            actor,
-            stageHint:
-              normalizeText(finance.workflow_stage).toLowerCase() ||
-              normalizeText(
-                Array.isArray(finance.workflow_state?.flow)
-                  ? finance.workflow_state.flow[finance.workflow_state.flow.length - 1]
-                  : ''
-              ).toLowerCase() ||
-              'principal',
-          }
-        );
+        const forcedArchiveResult = await financeModel.forceWorkflowTransition(financeId, {
+          decision: 'archived',
+          feedback: normalizeText(req.body?.feedback) || null,
+          actor,
+          stageHint:
+            normalizeText(finance.workflow_stage).toLowerCase() ||
+            normalizeText(
+              Array.isArray(finance.workflow_state?.flow)
+                ? finance.workflow_state.flow[finance.workflow_state.flow.length - 1]
+                : '',
+            ).toLowerCase() ||
+            'principal',
+        });
 
         return res.status(200).json({
-          status: 'success',
+          success: true,
           message: 'Finance request archived successfully',
           data: {
             previousState: forcedArchiveResult.previousState,
@@ -1035,7 +1164,7 @@ const financeController = {
       });
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: 'Finance request archived successfully',
         data: {
           previousState: archiveResult.previousState,
@@ -1050,13 +1179,23 @@ const financeController = {
   async getFinanceQueue(req, res) {
     try {
       const stage = normalizeText(req.params.stage).toLowerCase();
-      const { page, limit, workflowStatus, level1Role } = req.query;
+      const {
+        page,
+        limit,
+        workflowStatus,
+        statusCategory,
+        level1Role,
+        q,
+        allProposals,
+        fiscalYear,
+      } = req.query;
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
-      const effectiveLevel1Role = stage === 'level1'
-        ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
-          ? normalizedLevel1Role
-          : resolveFinanceLevel1QueueRole(req))
-        : null;
+      const effectiveLevel1Role =
+        stage === 'level1'
+          ? ['hod', 'coordinator'].includes(normalizedLevel1Role)
+            ? normalizedLevel1Role
+            : resolveFinanceLevel1QueueRole(req)
+          : null;
 
       const queue = await workflowService.listQueue({
         moduleKey: 'finance',
@@ -1066,21 +1205,86 @@ const financeController = {
           page,
           limit,
           workflowStatus,
+          statusCategory,
+          fiscalYear,
           level1Role: effectiveLevel1Role,
+          q,
+          allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
         },
       });
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: queue.items.map((row) => sanitizeFinanceRecordForUser(req, row)),
         pagination: {
           total: queue.total,
           page: queue.page,
           limit: queue.limit,
+          statusCounts: queue.statusCounts,
         },
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in getFinanceQueue');
+    }
+  },
+
+  async getCarryForwardSummary(req, res) {
+    try {
+      if (!isSuperAdminRequest(req)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only super admin can carry forward finance cards',
+        });
+      }
+
+      const financeId = toPositiveInt(req.params.id);
+      if (!financeId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid finance request ID',
+        });
+      }
+
+      const summary = await financeModel.getCarryForwardSummary(financeId);
+      return res.status(200).json({
+        success: true,
+        data: summary,
+      });
+    } catch (error) {
+      return handleCarryForwardError(res, error, 'Error in getCarryForwardSummary');
+    }
+  },
+
+  async createCarryForwardAllocation(req, res) {
+    try {
+      if (!isSuperAdminRequest(req)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only super admin can carry forward finance cards',
+        });
+      }
+
+      const financeId = toPositiveInt(req.params.id);
+      if (!financeId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid finance request ID',
+        });
+      }
+
+      const carryForward = await financeModel.createCarryForwardAllocation(
+        financeId,
+        req.body || {},
+        normalizeActor(req),
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: 'Card carry-forward created successfully',
+        data: carryForward,
+      });
+    } catch (error) {
+      return handleCarryForwardError(res, error, 'Error in createCarryForwardAllocation');
     }
   },
 
@@ -1090,7 +1294,7 @@ const financeController = {
 
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -1098,27 +1302,46 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
 
       if (!canAccessFinanceRecord(req, finance)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'Access denied',
         });
       }
 
-      const rawTimeline = await workflowService.getTimeline({
-        moduleKey: 'finance',
-        recordId: financeId,
-      });
+      const rawTimeline = await financeModel.getStatusUpdates(financeId);
       const timeline = filterEntriesForCurrentCycle(rawTimeline, finance);
+      const timelineCompatible = timeline.map((row) => ({
+        id: row.id,
+        moduleKey: 'finance',
+        recordId: row.finance_id,
+        stage: row.stage || row.role || null,
+        decision: row.decision || row.status || null,
+        feedback: row.feedback ?? row.comment ?? null,
+        actorUserId: row.user_id || null,
+        actorEmail: row.actor_email || null,
+        actorRole: row.actor_role || null,
+        decidedAt: row.decided_at || row.created_at || null,
+        snapshotBefore: row.snapshot_before || null,
+        meta: row.meta || null,
+        summary: row.summary ?? row.comment ?? row.feedback ?? null,
+        details: row.details ?? null,
+        isAdmin: row.is_admin ?? null,
+        role: row.role || null,
+        status: row.status || null,
+        comment: row.comment ?? row.feedback ?? null,
+        createdAt: row.created_at || null,
+        userName: row.user_name || null,
+      }));
 
       return res.status(200).json({
-        status: 'success',
-        data: timeline,
+        success: true,
+        data: timelineCompatible,
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in getFinanceTimeline');
@@ -1127,19 +1350,21 @@ const financeController = {
 
   async getWorkflowMeta(req, res) {
     try {
-      const [metadata, availableBeneficiaryTypes] = await Promise.all([
+      const [metadata, availableBeneficiaryTypes, availableFiscalYears] = await Promise.all([
         workflowService.getWorkflowMetadata({
           moduleKey: 'finance',
           actor: normalizeActor(req),
         }),
         financeModel.listAvailableBeneficiaryTypes(),
+        financeModel.listAvailableFiscalYears(),
       ]);
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: {
           ...metadata,
           availableBeneficiaryTypes,
+          availableFiscalYears,
         },
       });
     } catch (error) {
@@ -1152,23 +1377,26 @@ const financeController = {
       const financeId = toPositiveInt(req.params.id);
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
+          error: 'Invalid finance request ID',
         });
       }
 
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
+          error: 'Finance request not found',
         });
       }
 
       if (!canAccessFinanceRecord(req, finance)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'Access denied',
+          error: 'Access denied',
         });
       }
 
@@ -1198,7 +1426,7 @@ const financeController = {
       }));
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: timelineCompatible,
       });
     } catch (error) {
@@ -1212,7 +1440,7 @@ const financeController = {
 
       if (!userEmail) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'User email not found',
         });
       }
@@ -1221,7 +1449,7 @@ const financeController = {
 
       if (!employee) {
         return res.status(200).json({
-          status: 'success',
+          success: true,
           data: {
             name: req.user?.name || '',
             email: userEmail,
@@ -1231,7 +1459,7 @@ const financeController = {
       }
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: employee,
       });
     } catch (error) {
@@ -1244,7 +1472,7 @@ const financeController = {
       const file = req.file;
       if (!file) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'No file uploaded',
         });
       }
@@ -1254,7 +1482,7 @@ const financeController = {
           fs.promises.unlink(file.path).catch(() => {});
         }
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Only PDF files with a size less than 2MB are allowed.',
         });
       }
@@ -1284,7 +1512,7 @@ const financeController = {
       await fs.promises.rename(sourcePath, finalPath);
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: 'Annexure uploaded successfully',
         data: {
           originalName: file.originalname,
@@ -1322,7 +1550,7 @@ const financeController = {
           await fs.promises.unlink(uploadedFilePath).catch(() => {});
         }
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
@@ -1332,7 +1560,7 @@ const financeController = {
           await fs.promises.unlink(uploadedFilePath).catch(() => {});
         }
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'No file uploaded',
         });
       }
@@ -1348,7 +1576,7 @@ const financeController = {
           await fs.promises.unlink(uploadedFilePath).catch(() => {});
         }
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Only PDF files with a size less than 2MB are allowed.',
         });
       }
@@ -1359,7 +1587,7 @@ const financeController = {
           await fs.promises.unlink(uploadedFilePath).catch(() => {});
         }
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
@@ -1369,7 +1597,7 @@ const financeController = {
           await fs.promises.unlink(uploadedFilePath).catch(() => {});
         }
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'You do not have access to upload this document',
         });
       }
@@ -1379,8 +1607,9 @@ const financeController = {
           await fs.promises.unlink(uploadedFilePath).catch(() => {});
         }
         return res.status(409).json({
-          status: 'error',
-          message: 'Principal document is only available for proposals above 10000 at principal stage or after principal approval',
+          success: false,
+          message:
+            'Principal document is only available for proposals above 10000 at principal stage or after principal approval',
         });
       }
 
@@ -1402,17 +1631,21 @@ const financeController = {
       savedFilePath = finalPath;
 
       const previousDocument = await financeModel.getPrincipalDocument(financeId);
-      
+
       const connection = await db.getConnection();
       try {
         await connection.beginTransaction();
-        await financeModel.setPrincipalDocument(financeId, {
-          original_name: originalName || file.originalname || null,
-          stored_name: storedName,
-          file_path: `${FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX}${storedName}`,
-          mime_type: 'application/pdf',
-          file_size: file.size,
-        }, { tx: connection });
+        await financeModel.setPrincipalDocument(
+          financeId,
+          {
+            original_name: originalName || file.originalname || null,
+            stored_name: storedName,
+            file_path: `${FINANCE_PRINCIPAL_DOC_PUBLIC_PREFIX}${storedName}`,
+            mime_type: 'application/pdf',
+            file_size: file.size,
+          },
+          { tx: connection },
+        );
         await connection.commit();
       } catch (dbError) {
         await connection.rollback();
@@ -1422,14 +1655,17 @@ const financeController = {
       }
 
       if (previousDocument?.file_path) {
-        const previousPath = path.resolve(process.cwd(), `.${String(previousDocument.file_path || '').trim()}`);
+        const previousPath = path.resolve(
+          process.cwd(),
+          `.${String(previousDocument.file_path || '').trim()}`,
+        );
         if (previousPath !== savedFilePath) {
           await fs.promises.unlink(previousPath).catch(() => {});
         }
       }
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: 'Principal document uploaded successfully',
         data: {
           originalName: originalName || file.originalname || null,
@@ -1459,14 +1695,14 @@ const financeController = {
       const financeId = toPositiveInt(req.params.id);
       if (!financeId) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'Invalid finance request ID',
         });
       }
 
       if (!canManagePrincipalDocumentsRequest(req)) {
         return res.status(403).json({
-          status: 'error',
+          success: false,
           message: 'You do not have access to delete this document',
         });
       }
@@ -1474,33 +1710,37 @@ const financeController = {
       const finance = await financeModel.getFinanceRequestById(financeId);
       if (!finance) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Finance request not found',
         });
       }
 
       if (!isEligibleForPrincipalDocument(finance)) {
         return res.status(409).json({
-          status: 'error',
-          message: 'Principal document is only available for proposals above 10000 at principal stage or after principal approval',
+          success: false,
+          message:
+            'Principal document is only available for proposals above 10000 at principal stage or after principal approval',
         });
       }
 
       const document = await financeModel.getPrincipalDocument(financeId);
       if (!document) {
         return res.status(404).json({
-          status: 'error',
+          success: false,
           message: 'Principal document not found',
         });
       }
 
       await financeModel.deletePrincipalDocument(financeId);
 
-      const resolvedPath = path.resolve(process.cwd(), `.${String(document.file_path || '').trim()}`);
+      const resolvedPath = path.resolve(
+        process.cwd(),
+        `.${String(document.file_path || '').trim()}`,
+      );
       await fs.promises.unlink(resolvedPath).catch(() => {});
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         message: 'Principal document deleted successfully',
       });
     } catch (error) {
@@ -1514,7 +1754,7 @@ const financeController = {
       const rows = await financeModel.searchApplicant(query);
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: rows,
       });
     } catch (error) {

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback, ChangeEvent, FormEvent } from "react";
-import { Table, Button, Form, Modal, Alert } from "react-bootstrap";
-import { Pencil, Trash2 } from "lucide-react";
-import authenticityUtility from "../../../shared/utils/authenticityUtility";
-import "./FormManagementStyles.css";
-import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
+import { Pencil, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, ChangeEvent, FormEvent } from 'react';
+import { Table, Button, Form, Modal, Alert } from 'react-bootstrap';
+
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import './FormManagementStyles.css';
+import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
 
 interface ProjectOption {
   id: number;
@@ -13,12 +14,12 @@ interface ProjectOption {
 type TabType = 'agencies' | 'schemes' | 'agency-types';
 
 const ProjectFormOptions: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>("agencies");
+  const [activeTab, setActiveTab] = useState<TabType>('agencies');
   const [options, setOptions] = useState<ProjectOption[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [currentOption, setCurrentOption] = useState<Partial<ProjectOption>>({ name: "" });
+  const [currentOption, setCurrentOption] = useState<Partial<ProjectOption>>({ name: '' });
   const [isEditing, setIsEditing] = useState(false);
 
   const [alertConfig, setAlertConfig] = useState<{
@@ -31,24 +32,33 @@ const ProjectFormOptions: React.FC = () => {
     confirmText?: string;
   }>({
     show: false,
-    message: "",
-    type: "info"
+    message: '',
+    type: 'info',
   });
 
-  const showAlert = (message: React.ReactNode, type: AlertType = "info", title?: string, showCancel = false, confirmText = "OK", onConfirm?: () => void) => {
+  const showAlert = (
+    message: React.ReactNode,
+    type: AlertType = 'info',
+    title?: string,
+    showCancel = false,
+    confirmText = 'OK',
+    onConfirm?: () => void,
+  ) => {
     setAlertConfig({ show: true, message, type, title, onConfirm, showCancel, confirmText });
   };
 
-  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+  const closeAlert = () => setAlertConfig((prev) => ({ ...prev, show: false }));
 
   const fetchOptions = useCallback(async () => {
     try {
       setLoading(true);
-      setError("");
-      const response = await authenticityUtility.get(`/form-options/project-options/${activeTab}`) as { data: ProjectOption[] };
+      setError('');
+      const response = (await authenticityUtility.get(
+        `/form-options/project-options/${activeTab}`,
+      )) as { data: ProjectOption[] };
       setOptions(Array.isArray(response.data) ? response.data : []);
     } catch (err: unknown) {
-      console.error("Error fetching options:", err);
+      console.error('Error fetching options:', err);
       setOptions([]);
     } finally {
       setLoading(false);
@@ -63,10 +73,13 @@ const ProjectFormOptions: React.FC = () => {
     e.preventDefault();
     try {
       setLoading(true);
-      setError("");
+      setError('');
 
       if (isEditing && currentOption.id) {
-        await authenticityUtility.put(`/form-options/project-options/${activeTab}/${currentOption.id}`, currentOption);
+        await authenticityUtility.put(
+          `/form-options/project-options/${activeTab}/${currentOption.id}`,
+          currentOption,
+        );
       } else {
         await authenticityUtility.post(`/form-options/project-options/${activeTab}`, currentOption);
       }
@@ -75,9 +88,11 @@ const ProjectFormOptions: React.FC = () => {
       fetchOptions();
       resetForm();
     } catch (err: unknown) {
-      console.error("Error saving option:", err);
+      console.error('Error saving option:', err);
       const error = err as { response?: { data?: { message?: string } } };
-      setError("Failed to save option. " + (error.response?.data?.message || "Please try again later."));
+      setError(
+        'Failed to save option. ' + (error.response?.data?.message || 'Please try again later.'),
+      );
     } finally {
       setLoading(false);
     }
@@ -85,26 +100,29 @@ const ProjectFormOptions: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     showAlert(
-      "Are you sure you want to delete this option?",
-      "warning",
-      "Confirm Deletion",
+      'Are you sure you want to delete this option?',
+      'warning',
+      'Confirm Deletion',
       true,
-      "Delete",
+      'Delete',
       async () => {
         closeAlert();
         try {
           setLoading(true);
-          setError("");
+          setError('');
           await authenticityUtility.delete(`/form-options/project-options/${activeTab}/${id}`);
           fetchOptions();
         } catch (err: unknown) {
-          console.error("Error deleting option:", err);
+          console.error('Error deleting option:', err);
           const error = err as { response?: { data?: { message?: string } } };
-          setError("Failed to delete option. " + (error.response?.data?.message || "Please try again later."));
+          setError(
+            'Failed to delete option. ' +
+              (error.response?.data?.message || 'Please try again later.'),
+          );
         } finally {
           setLoading(false);
         }
-      }
+      },
     );
   };
 
@@ -115,9 +133,9 @@ const ProjectFormOptions: React.FC = () => {
   };
 
   const resetForm = () => {
-    setCurrentOption({ name: "" });
+    setCurrentOption({ name: '' });
     setIsEditing(false);
-    setError("");
+    setError('');
   };
 
   return (
@@ -128,13 +146,35 @@ const ProjectFormOptions: React.FC = () => {
         <div>
           <h2>Project Options Management</h2>
           <div className="btn-group">
-            <Button variant={activeTab === "agencies" ? "primary" : "outline-primary"} onClick={() => setActiveTab("agencies")}>Agencies</Button>
-            <Button variant={activeTab === "schemes" ? "primary" : "outline-primary"} onClick={() => setActiveTab("schemes")}>Schemes</Button>
-            <Button variant={activeTab === "agency-types" ? "primary" : "outline-primary"} onClick={() => setActiveTab("agency-types")}>Agency Types</Button>
+            <Button
+              variant={activeTab === 'agencies' ? 'primary' : 'outline-primary'}
+              onClick={() => setActiveTab('agencies')}
+            >
+              Agencies
+            </Button>
+            <Button
+              variant={activeTab === 'schemes' ? 'primary' : 'outline-primary'}
+              onClick={() => setActiveTab('schemes')}
+            >
+              Schemes
+            </Button>
+            <Button
+              variant={activeTab === 'agency-types' ? 'primary' : 'outline-primary'}
+              onClick={() => setActiveTab('agency-types')}
+            >
+              Agency Types
+            </Button>
           </div>
         </div>
-        <Button variant="primary" onClick={() => { resetForm(); setShowModal(true); }} disabled={loading}>
-          Add New {activeTab.replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase())}
+        <Button
+          variant="primary"
+          onClick={() => {
+            resetForm();
+            setShowModal(true);
+          }}
+          disabled={loading}
+        >
+          Add New {activeTab.replace(/-/g, ' ').replace(/^\w/, (c) => c.toUpperCase())}
         </Button>
       </div>
 
@@ -152,10 +192,20 @@ const ProjectFormOptions: React.FC = () => {
                 <td>{option.name}</td>
                 <td>
                   <div className="btn-group">
-                    <Button variant="primary" size="sm" onClick={() => handleEdit(option)} title="Edit">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handleEdit(option)}
+                      title="Edit"
+                    >
                       <Pencil size={16} />
                     </Button>
-                    <Button variant="danger" size="sm" onClick={() => handleDelete(option.id)} title="Delete">
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleDelete(option.id)}
+                      title="Delete"
+                    >
                       <Trash2 size={16} />
                     </Button>
                   </div>
@@ -165,7 +215,7 @@ const ProjectFormOptions: React.FC = () => {
           ) : (
             <tr>
               <td colSpan={2} className="text-center text-muted py-4">
-                {loading ? "Loading..." : "No data available. Add your first entry to get started."}
+                {loading ? 'Loading...' : 'No data available. Add your first entry to get started.'}
               </td>
             </tr>
           )}
@@ -175,7 +225,8 @@ const ProjectFormOptions: React.FC = () => {
       <Modal show={showModal} onHide={() => setShowModal(false)}>
         <Modal.Header closeButton>
           <Modal.Title>
-            {isEditing ? "Edit" : "Add New"} {activeTab.replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase())}
+            {isEditing ? 'Edit' : 'Add New'}{' '}
+            {activeTab.replace(/-/g, ' ').replace(/^\w/, (c) => c.toUpperCase())}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
@@ -185,14 +236,25 @@ const ProjectFormOptions: React.FC = () => {
               <Form.Label>Name</Form.Label>
               <Form.Control
                 type="text"
-                value={currentOption.name || ""}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentOption({ ...currentOption, name: e.target.value })}
+                value={currentOption.name || ''}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setCurrentOption({ ...currentOption, name: e.target.value })
+                }
                 required
               />
             </Form.Group>
             <div className="d-flex justify-content-end">
-              <Button variant="secondary" className="me-2" onClick={() => setShowModal(false)} disabled={loading}>Cancel</Button>
-              <Button variant="primary" type="submit" disabled={loading}>{loading ? "Saving..." : "Save"}</Button>
+              <Button
+                variant="secondary"
+                className="me-2"
+                onClick={() => setShowModal(false)}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+              <Button variant="primary" type="submit" disabled={loading}>
+                {loading ? 'Saving...' : 'Save'}
+              </Button>
             </div>
           </Form>
         </Modal.Body>

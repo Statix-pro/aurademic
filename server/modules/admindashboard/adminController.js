@@ -20,10 +20,7 @@ const adminController = {
       const page = parseInt(req.query.page) || 1;
       const perPage = parseInt(req.query.per_page) || 10;
 
-      const { projects, total } = await adminModel.getAllProjects(
-        page,
-        perPage
-      );
+      const { projects, total } = await adminModel.getAllProjects(page, perPage);
       if (!projects) {
         return res.status(200).json({ data: [], total: 0 });
       }
@@ -63,10 +60,7 @@ const adminController = {
       const page = parseInt(req.query.page) || 1;
       const perPage = parseInt(req.query.per_page) || 10;
 
-      const { journals, total } = await adminModel.getAllJournals(
-        page,
-        perPage
-      );
+      const { journals, total } = await adminModel.getAllJournals(page, perPage);
 
       if (!journals) {
         return res.status(200).json({ data: [], total: 0 });
@@ -123,7 +117,7 @@ const adminController = {
         journalId,
         status,
         admin_comment,
-        req.user.id
+        req.user.id,
       );
 
       if (!updatedJournal) {
@@ -164,10 +158,7 @@ const adminController = {
       const requestId = parseInt(req.params.id);
       const { admin_comment } = req.body;
 
-      const result = await adminModel.approveJournalRequest(
-        requestId,
-        admin_comment
-      );
+      const result = await adminModel.approveJournalRequest(requestId, admin_comment);
 
       if (!result) {
         return res.status(404).json({
@@ -193,39 +184,7 @@ const adminController = {
       const requestId = parseInt(req.params.id);
       const { admin_comment } = req.body;
 
-      const result = await adminModel.rejectJournalRequest(
-        requestId,
-        admin_comment
-      );
-
-      if (!result) {
-        return res.status(404).json({
-          message: 'Journal request not found',
-        });
-      }
-
-      res.status(200).json({
-        message: 'Journal request rejected successfully',
-        data: result,
-      });
-    } catch (error) {
-      console.error('Error in rejectJournalRequest:', error);
-      res.status(500).json({
-        message: 'Error rejecting journal request',
-        error: error.message,
-      });
-    }
-  },
-
-  async rejectJournalRequest(req, res) {
-    try {
-      const requestId = parseInt(req.params.id);
-      const { admin_comment } = req.body;
-
-      const result = await adminModel.rejectJournalRequest(
-        requestId,
-        admin_comment
-      );
+      const result = await adminModel.rejectJournalRequest(requestId, admin_comment);
 
       if (!result) {
         return res.status(404).json({
@@ -265,10 +224,7 @@ const adminController = {
       const requestId = parseInt(req.params.id);
       const { admin_comment } = req.body;
 
-      const result = await adminModel.approveProjectRequest(
-        requestId,
-        admin_comment
-      );
+      const result = await adminModel.approveProjectRequest(requestId, admin_comment);
 
       if (!result) {
         return res.status(404).json({
@@ -294,10 +250,7 @@ const adminController = {
       const requestId = parseInt(req.params.id);
       const { admin_comment } = req.body;
 
-      const result = await adminModel.rejectProjectRequest(
-        requestId,
-        admin_comment
-      );
+      const result = await adminModel.rejectProjectRequest(requestId, admin_comment);
 
       if (!result) {
         return res.status(404).json({
@@ -325,8 +278,11 @@ const adminController = {
       const perPage = parseInt(req.query.per_page) || 10;
       const status = req.query.status; // Optional filter by status
 
-      const { statusUpdates, total } =
-        await adminModel.getAllJournalStatusUpdates(page, perPage, status);
+      const { statusUpdates, total } = await adminModel.getAllJournalStatusUpdates(
+        page,
+        perPage,
+        status,
+      );
 
       res.status(200).json({ data: statusUpdates, total });
     } catch (error) {
@@ -366,7 +322,7 @@ const adminController = {
 
       const result = await adminModel.updateStatusUpdateAdminReply(
         statusUpdateId,
-        admin_reply.trim()
+        admin_reply.trim(),
       );
 
       if (result.affectedRows > 0) {
@@ -436,10 +392,7 @@ const adminController = {
       // Validate status - allow only alphanumeric characters and underscores
       let status = null;
       if (req.query.status) {
-        if (
-          typeof req.query.status !== 'string' ||
-          !/^[a-zA-Z0-9_]+$/.test(req.query.status)
-        ) {
+        if (typeof req.query.status !== 'string' || !/^[a-zA-Z0-9_]+$/.test(req.query.status)) {
           return res.status(400).json({
             success: false,
             message: 'Invalid status format',
@@ -469,11 +422,7 @@ const adminController = {
         beneficiaryType,
       };
 
-      const { budgets, total } = await adminModel.getAllBudgets(
-        page,
-        perPage,
-        filters
-      );
+      const { budgets, total } = await adminModel.getAllBudgets(page, perPage, filters);
 
       res.status(200).json({
         success: true,
@@ -499,18 +448,17 @@ const adminController = {
       res.status(200).json({
         success: true,
         data: stats,
-        fiscalYear: fiscalYear || 'All'
+        fiscalYear: fiscalYear || 'All',
       });
     } catch (error) {
       console.error('Error in getBudgetStats:', error);
       res.status(500).json({
         success: false,
         message: 'Error retrieving budget stats',
-        error: error.message
+        error: error.message,
       });
     }
   },
-
 };
 
 export default adminController;

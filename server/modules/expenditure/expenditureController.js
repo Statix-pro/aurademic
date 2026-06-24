@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
 import * as expenditureModel from './expenditureModel.js';
 import './expenditureWorkflowAdapter.js';
 import workflowService from '../shared/workflow/workflowService.js';
@@ -19,6 +20,121 @@ const BULK_NEFT_TEMPLATE_DOWNLOAD_NAME = 'bulk-neft-template.xls';
 
 const normalizeText = (value) => String(value || '').trim();
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
+
+const toMoney = (value) => {
+  const parsed = Number(String(value ?? '').replace(/,/g, ''));
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+};
+
+const parseBoolean = (value) => {
+  if (typeof value === 'boolean') return value;
+  const normalized = normalizeText(value).toLowerCase();
+  if (!normalized) return false;
+  return ['1', 'true', 'yes', 'y', 'on'].includes(normalized);
+};
+
+const normalizeUnplannedRowsForMeta = (source = {}) => {
+  const rawRows = Array.isArray(source.unplanned_rows)
+    ? source.unplanned_rows
+    : Array.isArray(source.unplannedRows)
+      ? source.unplannedRows
+      : [];
+
+  if (rawRows.length) {
+    return rawRows
+      .map((row) => ({
+        head_of_account: normalizeText(row.head_of_account || row.headOfAccount) || null,
+        head_of_account_budget_line_id: toPositiveInt(
+          row.head_of_account_budget_line_id || row.headOfAccountBudgetLineId,
+        ),
+        head_of_account_budget_proposal_id: toPositiveInt(
+          row.head_of_account_budget_proposal_id || row.headOfAccountBudgetProposalId,
+        ),
+        budget_head: normalizeText(row.budget_head || row.budgetHead) || null,
+        sub_head: normalizeText(row.sub_head || row.subHead) || null,
+        amount: toMoney(row.amount),
+        description: normalizeText(row.description) || null,
+      }))
+      .filter(
+        (row) =>
+          row.head_of_account ||
+          row.head_of_account_budget_line_id ||
+          row.budget_head ||
+          row.sub_head ||
+          row.amount > 0,
+      );
+  }
+
+  if (!parseBoolean(source.unplanned_budget_enabled)) return [];
+
+  return [
+    {
+      head_of_account: normalizeText(source.unplanned_head_of_account) || null,
+      head_of_account_budget_line_id: toPositiveInt(
+        source.unplanned_head_of_account_budget_line_id,
+      ),
+      head_of_account_budget_proposal_id: toPositiveInt(
+        source.unplanned_head_of_account_budget_proposal_id,
+      ),
+      budget_head: normalizeText(source.unplanned_budget_head) || null,
+      sub_head: normalizeText(source.unplanned_budget_sub_head) || null,
+      amount: toMoney(source.unplanned_budget_amount),
+      description: normalizeText(source.unplanned_budget_description) || null,
+    },
+  ];
+};
+
+const resolveUnplannedBudgetMeta = (source = {}) => {
+  const rows = normalizeUnplannedRowsForMeta(source);
+  const enabled = parseBoolean(source.unplanned_budget_enabled) || rows.length > 0;
+  const amount = enabled
+    ? rows.reduce((sum, row) => sum + toMoney(row.amount), 0) ||
+      toMoney(source.unplanned_budget_amount)
+    : 0;
+  const primary = rows[0] || {};
+  return {
+    unplannedBudgetEnabled: enabled,
+    unplannedBudgetAmount: enabled ? amount : null,
+    unplannedHeadOfAccount:
+      primary.head_of_account || normalizeText(source.unplanned_head_of_account) || null,
+    unplannedHeadOfAccountBudgetLineId:
+      primary.head_of_account_budget_line_id ||
+      toPositiveInt(source.unplanned_head_of_account_budget_line_id),
+    unplannedHeadOfAccountBudgetProposalId:
+      primary.head_of_account_budget_proposal_id ||
+      toPositiveInt(source.unplanned_head_of_account_budget_proposal_id),
+    unplannedBudgetHead: primary.budget_head || normalizeText(source.unplanned_budget_head) || null,
+    unplannedBudgetSubHead:
+      primary.sub_head || normalizeText(source.unplanned_budget_sub_head) || null,
+    unplannedBudgetDescription:
+      primary.description || normalizeText(source.unplanned_budget_description) || null,
+    unplannedRows: rows,
+  };
+};
+
+const sumRowsByKeys = (rows, keys = []) =>
+  (Array.isArray(rows) ? rows : []).reduce((sum, row) => {
+    const value = keys.map((key) => row?.[key]).find((candidate) => normalizeText(candidate));
+    return sum + toMoney(value);
+  }, 0);
+
+const calculateSubmittedExpenditureTotal = (payload = {}) => {
+  const plannedTotal =
+    sumRowsByKeys(payload.advance_rows || payload.advancerows, ['advance', 'advance_amount']) +
+    sumRowsByKeys(payload.settlement_rows || payload.settlementrows, [
+      'settlement',
+      'settlement_amount',
+    ]) +
+    sumRowsByKeys(payload.expenditure_rows || payload.expenditurerows, [
+      'autoSum',
+      'auto_sum_amount',
+      'expenditure',
+    ]);
+  const unplanned = resolveUnplannedBudgetMeta(payload);
+  return (
+    plannedTotal + (unplanned.unplannedBudgetEnabled ? toMoney(unplanned.unplannedBudgetAmount) : 0)
+  );
+};
 
 const resolveCanonicalPayeeName = (payeeName, accountName) => {
   const normalizedPayeeName = normalizeText(payeeName);
@@ -99,22 +215,31 @@ const filterEntriesForCurrentCycle = (entries, record) => {
   });
 };
 
-const resolveActor = (req) => {
+const getNormalizedUserRoles = (req) => {
   const roles = Array.isArray(req.user?.roles)
     ? req.user.roles
     : normalizeText(req.user?.roles)
       ? [normalizeText(req.user?.roles)]
-      : normalizeText(req.user?.role)
-        ? [normalizeText(req.user?.role)]
-        : [];
+      : [];
+  const role = normalizeText(req.user?.role);
+  return [...roles, role].map((entry) => normalizeText(entry).toLowerCase()).filter(Boolean);
+};
 
-  const role = normalizeText(req.user?.role) || roles[0] || null;
-
+const getNormalizedUserPermissions = (req) => {
   const permissions = Array.isArray(req.user?.permissions)
     ? req.user.permissions
     : normalizeText(req.user?.permissions)
       ? [normalizeText(req.user?.permissions)]
       : [];
+  return permissions.map((entry) => normalizeText(entry).toLowerCase()).filter(Boolean);
+};
+
+const resolveActor = (req) => {
+  const roles = getNormalizedUserRoles(req);
+
+  const role = normalizeText(req.user?.role) || roles[0] || null;
+
+  const permissions = getNormalizedUserPermissions(req);
 
   return {
     id: req.user?.id,
@@ -123,23 +248,32 @@ const resolveActor = (req) => {
     role,
     roles,
     permissions,
-    isSuperAdmin: Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin),
+    isSuperAdmin:
+      Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || roles.includes('super_admin'),
   };
 };
 
 const sendError = (res, status, message) =>
-  res.status(status).json({ status: 'error', message });
+  res.status(status).json({ success: false, message, error: message });
+
+const unwrapTransactionMessage = (message = '') =>
+  normalizeText(message).replace(/^Transaction failed:\s*/i, '');
 
 const handleError = (res, err, fallback) => {
   if (err instanceof WorkflowError) {
     return res.status(err.statusCode || 400).json({
-      status: 'error',
+      success: false,
       message: err.message,
+      error: err.message,
       code: err.code,
     });
   }
   console.error(fallback, err);
-  return res.status(500).json({ status: 'error', message: err.message || fallback });
+  return res.status(500).json({
+    success: false,
+    message: fallback,
+    error: fallback,
+  });
 };
 
 const parseRequestPayload = (req) => {
@@ -149,6 +283,14 @@ const parseRequestPayload = (req) => {
   }
   return req.body || {};
 };
+
+const getExpenditureUploads = (req) => ({
+  billFiles: Array.isArray(req.files?.bill_files) ? req.files.bill_files : [],
+  bulkNeftFile: Array.isArray(req.files?.bulk_neft_file) ? req.files.bulk_neft_file[0] : null,
+  paymentProofFiles: Array.isArray(req.files?.payment_proof_files)
+    ? req.files.payment_proof_files
+    : [],
+});
 
 const VALID_REQUEST_TYPES = new Set(['Advance', 'Settlement', 'Expenditure']);
 
@@ -194,6 +336,59 @@ const normalizeIncomingPayload = (payload = {}) => {
   }
   if (normalized.balanceamount && !normalized.balance_amount) {
     normalized.balance_amount = normalized.balanceamount;
+  }
+  if (
+    normalized.unplannedbudgetenabled !== undefined &&
+    normalized.unplanned_budget_enabled === undefined
+  ) {
+    normalized.unplanned_budget_enabled = normalized.unplannedbudgetenabled;
+  }
+  if (
+    normalized.unplannedbudgetamount !== undefined &&
+    normalized.unplanned_budget_amount === undefined
+  ) {
+    normalized.unplanned_budget_amount = normalized.unplannedbudgetamount;
+  }
+  if (
+    normalized.unplannedheadofaccount !== undefined &&
+    normalized.unplanned_head_of_account === undefined
+  ) {
+    normalized.unplanned_head_of_account = normalized.unplannedheadofaccount;
+  }
+  if (
+    normalized.unplannedheadofaccountbudgetlineid !== undefined &&
+    normalized.unplanned_head_of_account_budget_line_id === undefined
+  ) {
+    normalized.unplanned_head_of_account_budget_line_id =
+      normalized.unplannedheadofaccountbudgetlineid;
+  }
+  if (
+    normalized.unplannedheadofaccountbudgetproposalid !== undefined &&
+    normalized.unplanned_head_of_account_budget_proposal_id === undefined
+  ) {
+    normalized.unplanned_head_of_account_budget_proposal_id =
+      normalized.unplannedheadofaccountbudgetproposalid;
+  }
+  if (
+    normalized.unplannedbudgethead !== undefined &&
+    normalized.unplanned_budget_head === undefined
+  ) {
+    normalized.unplanned_budget_head = normalized.unplannedbudgethead;
+  }
+  if (
+    normalized.unplannedbudgetsubhead !== undefined &&
+    normalized.unplanned_budget_sub_head === undefined
+  ) {
+    normalized.unplanned_budget_sub_head = normalized.unplannedbudgetsubhead;
+  }
+  if (
+    normalized.unplannedbudgetdescription !== undefined &&
+    normalized.unplanned_budget_description === undefined
+  ) {
+    normalized.unplanned_budget_description = normalized.unplannedbudgetdescription;
+  }
+  if (normalized.unplannedrows !== undefined && normalized.unplanned_rows === undefined) {
+    normalized.unplanned_rows = normalized.unplannedrows;
   }
   if (normalized.debitstatus && !normalized.debit_status) {
     normalized.debit_status = normalized.debitstatus;
@@ -258,6 +453,9 @@ const isDomainValidationError = (message = '') =>
   [
     'not found',
     'not yet approved',
+    'not approved',
+    'Payee must be selected from approved suggestions',
+    'New payees require DoF approval',
     'exceeds',
     'required',
     'Invalid request type',
@@ -266,9 +464,27 @@ const isDomainValidationError = (message = '') =>
     'cannot be created',
     'outstanding advance',
     'Create a new row',
-  ].some(
-    (fragment) => message.includes(fragment),
-  );
+    'Please select a valid',
+    'must be greater than',
+    'is not linked',
+    'are equal, so there is no amount',
+    'must be Savings or Current',
+    'are required',
+  ].some((fragment) => unwrapTransactionMessage(message).includes(fragment));
+
+const sendDomainValidationError = (res, err) => {
+  const message = unwrapTransactionMessage(err?.message);
+  if (!isDomainValidationError(message)) return false;
+  sendError(res, 400, message);
+  return true;
+};
+
+const sendAccessDeniedError = (res, err) => {
+  const message = unwrapTransactionMessage(err?.message);
+  if (!message.toLowerCase().includes('access denied')) return false;
+  sendError(res, 403, message);
+  return true;
+};
 
 const resolveBulkNeftTemplatePath = () => {
   if (fs.existsSync(BULK_NEFT_TEMPLATE_PATH)) return BULK_NEFT_TEMPLATE_PATH;
@@ -277,15 +493,14 @@ const resolveBulkNeftTemplatePath = () => {
 };
 
 const isSuperAdminRequest = (req) =>
-  Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin)
-  || (Array.isArray(req.user?.roles)
-    ? req.user.roles.some((role) => normalizeText(role).toLowerCase() === 'super_admin')
-    : false);
+  Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) ||
+  getNormalizedUserRoles(req).includes('super_admin');
 
 const hasAnyExpenditureWorkflowPermission = (req) => {
-  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  return permissions.some((permission) =>
-    normalizeText(permission).toLowerCase().startsWith('expenditure.workflow.')
+  const permissions = getNormalizedUserPermissions(req);
+  return permissions.some(
+    (permission) =>
+      permission.startsWith('expenditure.workflow.') || permission.startsWith('finance.workflow.'),
   );
 };
 
@@ -294,15 +509,15 @@ const hasExpenditureStagePermission = (req, stage) => {
   if (!normalizedStage) return false;
   if (isSuperAdminRequest(req)) return true;
 
-  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  const normalizedPermissions = permissions.map((permission) => normalizeText(permission).toLowerCase());
-  return normalizedPermissions.includes(`expenditure.workflow.${normalizedStage}`);
+  const permissions = getNormalizedUserPermissions(req);
+  return (
+    permissions.includes(`expenditure.workflow.${normalizedStage}`) ||
+    permissions.includes(`finance.workflow.${normalizedStage}`)
+  );
 };
 
 const canAccessExpenditureByRole = (req) => {
-  const normalizedRoles = Array.isArray(req.user?.roles)
-    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
-    : [];
+  const normalizedRoles = getNormalizedUserRoles(req);
 
   if (!normalizedRoles.length) {
     return false;
@@ -317,16 +532,15 @@ const canAccessExpenditureByRole = (req) => {
   }
 
   return normalizedRoles.some((role) =>
-    ['hod', 'coordinator', 'entity_approver', 'dof', 'principal'].includes(role)
+    ['hod', 'coordinator', 'entity_approver', 'dof', 'principal'].includes(role),
   );
 };
 
 const resolveExpenditureLevel1QueueRole = (req) => {
-  const normalizedRoles = Array.isArray(req.user?.roles)
-    ? req.user.roles.map((role) => normalizeText(role).toLowerCase())
-    : [];
+  const normalizedRoles = getNormalizedUserRoles(req);
 
-  const hasCoordinatorRole = normalizedRoles.includes('coordinator') || normalizedRoles.includes('entity_approver');
+  const hasCoordinatorRole =
+    normalizedRoles.includes('coordinator') || normalizedRoles.includes('entity_approver');
   const hasHodRole = normalizedRoles.includes('hod');
 
   if (hasCoordinatorRole && !hasHodRole) return 'coordinator';
@@ -375,20 +589,28 @@ const expenditureController = {
       const userId = toPositiveInt(req.user?.id);
       const userEmail = normalizeText(req.user?.email);
       const financeRequestId = toPositiveInt(req.query.finance_request_id);
+      const fiscalYear = toPositiveInt(req.query.fiscal_year || req.query.fiscalYear);
       if (!financeRequestId) return sendError(res, 400, 'finance_request_id is required');
 
       let budgets = await expenditureModel.getApprovedBudgets({
         userId,
         userEmail,
         financeRequestId,
+        fiscalYear,
+        // The expenditure form is opened from an approved finance request.
+        // Budget-line visibility must follow that approved finance request, not
+        // only the original finance creator, otherwise Head of Accounts is empty
+        // for valid applicant/admin flows.
+        allowAnyApprovedFinance: true,
       });
 
       const head = normalizeText(req.query.head).toLowerCase();
       const subHead = normalizeText(req.query.sub_head).toLowerCase();
       if (head) budgets = budgets.filter((budget) => budget.head.toLowerCase().includes(head));
-      if (subHead) budgets = budgets.filter((budget) => budget.subHead.toLowerCase().includes(subHead));
+      if (subHead)
+        budgets = budgets.filter((budget) => budget.subHead.toLowerCase().includes(subHead));
 
-      return res.json({ status: 'success', data: budgets });
+      return res.json({ success: true, data: budgets });
     } catch (err) {
       return handleError(res, err, 'Error fetching approved budgets');
     }
@@ -465,11 +687,12 @@ const expenditureController = {
 
   async listPayees(req, res) {
     try {
-      const { search = '', limit = 20, offset = 0 } = req.query;
+      const { search = '', limit = 20, offset = 0, status = 'all' } = req.query;
       const payees = await expenditureModel.listPayees({
         search,
         limit: Number(limit) || 20,
         offset: Number(offset) || 0,
+        status,
       });
 
       return res.json({ status: 'success', data: payees });
@@ -489,6 +712,76 @@ const expenditureController = {
       return res.json({ status: 'success', data: payee });
     } catch (err) {
       return handleError(res, err, 'Error fetching payee');
+    }
+  },
+
+  async updatePayee(req, res) {
+    try {
+      const id = toPositiveInt(req.params.id);
+      if (!id) return sendError(res, 400, 'Invalid payee ID');
+
+      const updated = await expenditureModel.updatePayeeById(id, req.body || {});
+      if (!updated) return sendError(res, 404, 'Payee not found');
+
+      const payee = await expenditureModel.getPayeeById(id);
+      return res.json({
+        success: true,
+        status: 'success',
+        message: 'Payee updated successfully',
+        data: payee,
+      });
+    } catch (err) {
+      const message = normalizeText(err.message);
+      if (message.includes('required') || message.includes('Invalid')) {
+        return sendError(res, 400, message);
+      }
+      return handleError(res, err, 'Error updating payee');
+    }
+  },
+
+  async updatePayeeApproval(req, res) {
+    try {
+      const id = toPositiveInt(req.params.id);
+      if (!id) return sendError(res, 400, 'Invalid payee ID');
+
+      const decision = normalizeText(req.body?.decision).toLowerCase();
+      const rejectionReason = normalizeText(req.body?.rejection_reason);
+      const updated = await expenditureModel.updatePayeeApproval(id, {
+        decision,
+        rejectionReason,
+        userId: toPositiveInt(req.user?.id),
+      });
+
+      if (!updated) return sendError(res, 404, 'Payee not found');
+
+      return res.json({
+        status: 'success',
+        message: `Payee ${decision} successfully`,
+      });
+    } catch (err) {
+      const message = normalizeText(err.message);
+      if (
+        message.includes('required') ||
+        message.includes('Invalid') ||
+        message.includes('Unsupported')
+      ) {
+        return sendError(res, 400, message);
+      }
+      return handleError(res, err, 'Error updating payee approval');
+    }
+  },
+
+  async deletePayee(req, res) {
+    try {
+      const id = toPositiveInt(req.params.id);
+      if (!id) return sendError(res, 400, 'Invalid payee ID');
+
+      const deleted = await expenditureModel.deletePayeeById(id);
+      if (!deleted) return sendError(res, 404, 'Payee not found');
+
+      return res.json({ status: 'success', message: 'Payee deleted successfully' });
+    } catch (err) {
+      return handleError(res, err, 'Error deleting payee');
     }
   },
 
@@ -522,6 +815,10 @@ const expenditureController = {
         data: payee,
       });
     } catch (err) {
+      const message = normalizeText(err.message);
+      if (message.includes('required') || message.includes('must be')) {
+        return sendError(res, 400, message);
+      }
       return handleError(res, err, 'Error creating payee');
     }
   },
@@ -547,11 +844,17 @@ const expenditureController = {
       }
       if (data.payment_details) {
         const paymentDetails = data.payment_details;
-        if (!paymentDetails.account_no || !paymentDetails.ifsc || !paymentDetails.bank_name) {
+        if (
+          !paymentDetails.account_no ||
+          !paymentDetails.ifsc ||
+          !paymentDetails.bank_name ||
+          !paymentDetails.beneficiary_org ||
+          !paymentDetails.account_type
+        ) {
           return sendError(
             res,
             400,
-            'payment_details must include account_no, ifsc and bank_name',
+            'payment_details must include account_no, ifsc, bank_name, beneficiary_org and account_type',
           );
         }
       }
@@ -564,7 +867,7 @@ const expenditureController = {
         data: result,
       });
     } catch (err) {
-      if (isDomainValidationError(err.message)) return sendError(res, 400, err.message);
+      if (sendDomainValidationError(res, err)) return;
       return handleError(res, err, 'Error submitting advance request');
     }
   },
@@ -588,17 +891,11 @@ const expenditureController = {
           'Invalid request type. Expected Advance, Settlement, or Expenditure.',
         );
       }
-const uploads = {
-  billFiles: Array.isArray(req.files?.bill_files)
-    ? req.files.bill_files
-    : [],
-
-  bulkNeftFile: Array.isArray(req.files?.bulk_neft_file)
-    ? req.files.bulk_neft_file[0]
-    : null,
-};
+      const uploads = getExpenditureUploads(req);
 
       const result = await expenditureModel.createExpenditureRequest(payload, userId, uploads);
+      const submittedTotal = calculateSubmittedExpenditureTotal(payload);
+      const expenditureMeta = resolveUnplannedBudgetMeta(payload);
 
       try {
         await workflowService.startWorkflow({
@@ -610,6 +907,9 @@ const uploads = {
             moduleMetaVersion: 1,
             moduleMeta: {
               trigger: 'create_expenditure_request',
+              beneficiaryType: normalizeText(payload.beneficiary_type) || null,
+              amountBand: submittedTotal > 10000 ? 'gt_10k' : 'lte_10k',
+              expenditureMeta,
             },
           },
         });
@@ -618,7 +918,10 @@ const uploads = {
           await expenditureModel.revertBudgetUsage(result.expenditureId);
           await expenditureModel.hardDeleteExpenditureRequest(result.expenditureId);
         } catch (cleanupError) {
-         console.error('Failed to fully clean up expenditure request after workflow failure',cleanupError);
+          console.error(
+            'Failed to fully clean up expenditure request after workflow failure',
+            cleanupError,
+          );
         }
         throw workflowError;
       }
@@ -629,7 +932,7 @@ const uploads = {
         data: result,
       });
     } catch (err) {
-      if (isDomainValidationError(err.message)) return sendError(res, 400, err.message);
+      if (sendDomainValidationError(res, err)) return;
       return handleError(res, err, 'Error submitting expenditure request');
     }
   },
@@ -648,15 +951,8 @@ const uploads = {
   async listExpenditures(req, res) {
     try {
       const userId = toPositiveInt(req.user?.id);
-      const {
-        mine,
-        status,
-        budget_line_id,
-        request_type,
-        finance_request_id,
-        page,
-        limit,
-      } = req.query;
+      const { mine, status, budget_line_id, request_type, finance_request_id, page, limit } =
+        req.query;
       const mineFlag = !(mine === 'false' || mine === '0');
       const result = await expenditureModel.listExpenditures({
         userId,
@@ -697,7 +993,10 @@ const uploads = {
         console.error('Failed to fetch expenditure status updates:', statusError);
       }
 
-      return res.json({ status: 'success', data: { ...record, ...details, status_updates: statusUpdates } });
+      return res.json({
+        status: 'success',
+        data: { ...record, ...details, status_updates: statusUpdates },
+      });
     } catch (err) {
       return handleError(res, err, 'Error fetching expenditure request');
     }
@@ -715,9 +1014,31 @@ const uploads = {
       const isOwner = userId && userId === toPositiveInt(record.created_by);
       const isWorkflowEditor = hasAnyExpenditureWorkflowPermission(req) || isSuperAdminRequest(req);
       const workflowState = parseWorkflowState(record.workflow_state) || null;
-      const workflowStatus = normalizeText(workflowState?.status || record.workflow_status || record.overall_status).toLowerCase();
-      const currentStage = normalizeText(workflowState?.currentStage || record.workflow_stage).toLowerCase();
-      const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(workflowStatus);
+      const workflowStatus = normalizeText(
+        workflowState?.status || record.workflow_status || record.overall_status,
+      ).toLowerCase();
+      const currentStage = normalizeText(
+        workflowState?.currentStage || record.workflow_stage,
+      ).toLowerCase();
+      const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(
+        workflowStatus,
+      );
+      const requestBody = req.body || {};
+      const paymentUpdateKeys = new Set([
+        'payment_status',
+        'payment_date',
+        'payment_ref_no',
+        'payment_mode',
+        'payment_debit_account',
+        'paymentdetails',
+        'payment_details',
+      ]);
+      const bodyKeys = Object.keys(requestBody).filter((key) => requestBody[key] !== undefined);
+      const isPaymentOnlyUpdate =
+        bodyKeys.length > 0 && bodyKeys.every((key) => paymentUpdateKeys.has(key));
+      const isFinalApprovedWorkflow =
+        ['approved', 'completed'].includes(workflowStatus) ||
+        normalizeText(record.overall_status).toLowerCase() === 'approved';
 
       if (!isOwner && !isWorkflowEditor) return sendError(res, 403, 'Access denied');
 
@@ -727,11 +1048,21 @@ const uploads = {
         workflowStatus === 'submitted' ||
         currentStage === 'level1';
 
-      if (isOwner && !isApplicantEditable) {
+      if (
+        isOwner &&
+        !isWorkflowEditor &&
+        !isApplicantEditable &&
+        !(isPaymentOnlyUpdate && isFinalApprovedWorkflow)
+      ) {
         return sendError(res, 403, 'This request is not editable in current workflow state');
       }
 
-      if (isWorkflowEditor && isTerminalWorkflow && !isSuperAdminRequest(req)) {
+      if (
+        isWorkflowEditor &&
+        isTerminalWorkflow &&
+        !isSuperAdminRequest(req) &&
+        !isPaymentOnlyUpdate
+      ) {
         return sendError(res, 403, 'This request is not editable in current workflow state');
       }
 
@@ -749,9 +1080,7 @@ const uploads = {
         req.body?.expenditure_rows ||
         req.body?.expenditurerows ||
         req.body?.payee_rows ||
-        req.body?.payeerows ||
-        req.body?.paymentdetails ||
-        req.body?.payment_details
+        req.body?.payeerows,
       );
 
       if (hasProposalPayload) {
@@ -769,18 +1098,19 @@ const uploads = {
             'Invalid request type. Expected Advance, Settlement, or Expenditure.',
           );
         }
+        const uploads = getExpenditureUploads(req);
 
-       const uploads = {
-  billFiles: Array.isArray(req.files?.bill_files)
-    ? req.files.bill_files
-    : [],
-
-  bulkNeftFile: Array.isArray(req.files?.bulk_neft_file)
-    ? req.files.bulk_neft_file[0]
-    : null,
-};
-
-        const result = await expenditureModel.updateExpenditureRequest(id, payload, userId, uploads);
+        const result = await expenditureModel.updateExpenditureRequest(
+          id,
+          payload,
+          userId,
+          uploads,
+          {
+            actor: resolveActor(req),
+            isSuperAdmin: isSuperAdminRequest(req),
+            isWorkflowEditor,
+          },
+        );
 
         return res.json({
           status: 'success',
@@ -789,14 +1119,24 @@ const uploads = {
         });
       }
 
-      const result = await expenditureModel.updateExpenditure(id, req.body || {}, resolveActor(req));
+      const result = await expenditureModel.updateExpenditure(
+        id,
+        req.body || {},
+        resolveActor(req),
+        getExpenditureUploads(req),
+      );
 
       return res.json({
         status: 'success',
         message: 'Expenditure request updated',
-        data: { affectedRows: result.affectedRows },
+        data: {
+          affectedRows: result.affectedRows,
+          payment_proof_files: result.payment_proof_files || [],
+        },
       });
     } catch (err) {
+      if (sendAccessDeniedError(res, err)) return;
+      if (sendDomainValidationError(res, err)) return;
       return handleError(res, err, 'Error updating expenditure request');
     }
   },
@@ -816,11 +1156,20 @@ const uploads = {
       }
 
       const workflowState = parseWorkflowState(record.workflow_state) || null;
-      const workflowStatus = normalizeText(workflowState?.status || record.workflow_status || record.overall_status).toLowerCase();
-      const currentStage = normalizeText(workflowState?.currentStage || record.workflow_stage).toLowerCase();
-      const hasStartedApproval = Boolean(workflowState) && currentStage && currentStage !== 'level1';
+      const workflowStatus = normalizeText(
+        workflowState?.status || record.workflow_status || record.overall_status,
+      ).toLowerCase();
+      const currentStage = normalizeText(
+        workflowState?.currentStage || record.workflow_stage,
+      ).toLowerCase();
+      const hasStartedApproval =
+        Boolean(workflowState) && currentStage && currentStage !== 'level1';
 
-      if (!isSuperAdmin && workflowStatus && ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(workflowStatus)) {
+      if (
+        !isSuperAdmin &&
+        workflowStatus &&
+        ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(workflowStatus)
+      ) {
         return sendError(res, 409, 'This request can no longer be deleted');
       }
 
@@ -831,7 +1180,8 @@ const uploads = {
       await expenditureModel.deleteExpenditure(id, { isSuperAdmin });
       return res.json({ status: 'success', message: 'Expenditure request deleted' });
     } catch (err) {
-      if (normalizeText(err.message).toLowerCase().includes('only pending')) return sendError(res, 409, err.message);
+      if (normalizeText(err.message).toLowerCase().includes('only pending'))
+        return sendError(res, 409, err.message);
       return handleError(res, err, 'Error deleting expenditure request');
     }
   },
@@ -855,12 +1205,13 @@ const uploads = {
 
   async getWorkflowMeta(req, res) {
     try {
-      const [metadata, availableBeneficiaryTypes] = await Promise.all([
+      const [metadata, availableBeneficiaryTypes, availableFiscalYears] = await Promise.all([
         workflowService.getWorkflowMetadata({
           moduleKey: 'expenditure',
           actor: resolveActor(req),
         }),
         expenditureModel.listAvailableBeneficiaryTypes(),
+        expenditureModel.listAvailableFiscalYears(),
       ]);
 
       return res.status(200).json({
@@ -868,6 +1219,7 @@ const uploads = {
         data: {
           ...metadata,
           availableBeneficiaryTypes,
+          availableFiscalYears,
         },
       });
     } catch (err) {
@@ -878,13 +1230,23 @@ const uploads = {
   async getExpenditureQueue(req, res) {
     try {
       const stage = normalizeText(req.params.stage).toLowerCase();
-      const { page, limit, workflowStatus, level1Role } = req.query;
+      const {
+        page,
+        limit,
+        workflowStatus,
+        statusCategory,
+        level1Role,
+        q,
+        allProposals,
+        fiscalYear,
+      } = req.query;
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
-      const effectiveLevel1Role = stage === 'level1'
-        ? (['hod', 'coordinator'].includes(normalizedLevel1Role)
-          ? normalizedLevel1Role
-          : resolveExpenditureLevel1QueueRole(req))
-        : null;
+      const effectiveLevel1Role =
+        stage === 'level1'
+          ? ['hod', 'coordinator'].includes(normalizedLevel1Role)
+            ? normalizedLevel1Role
+            : resolveExpenditureLevel1QueueRole(req)
+          : null;
 
       const queue = await workflowService.listQueue({
         moduleKey: 'expenditure',
@@ -894,7 +1256,11 @@ const uploads = {
           page,
           limit,
           workflowStatus,
+          statusCategory,
+          fiscalYear,
           level1Role: effectiveLevel1Role,
+          q,
+          allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
         },
       });
 
@@ -905,6 +1271,7 @@ const uploads = {
           total: queue.total,
           page: queue.page,
           limit: queue.limit,
+          statusCounts: queue.statusCounts,
         },
       });
     } catch (err) {
@@ -930,7 +1297,7 @@ const uploads = {
 
       const workflowState = parseWorkflowState(record.workflow_state) || null;
       const workflowStatus = normalizeText(
-        workflowState?.status || record.workflow_status || record.overall_status
+        workflowState?.status || record.workflow_status || record.overall_status,
       ).toLowerCase();
       const isTerminalWorkflow = ['completed', 'rejected', 'archived'].includes(workflowStatus);
 
@@ -958,14 +1325,37 @@ const uploads = {
             },
           },
         });
+
+        const reachedPrincipalAfterDofApproval =
+          result?.stage === 'dof' &&
+          result?.decision === 'approved' &&
+          normalizeText(result?.currentState?.currentStage).toLowerCase() === 'principal';
+
+        if (reachedPrincipalAfterDofApproval) {
+          const autoPrincipalResult = await expenditureModel.autoApprovePrincipalWorkflowStage(
+            expenditureId,
+            { actor },
+          );
+
+          if (autoPrincipalResult?.autoApproved) {
+            result = {
+              ...result,
+              currentState: autoPrincipalResult.currentState,
+              autoApprovedStages: ['principal'],
+            };
+          }
+        }
       }
 
       return res.status(200).json({
         status: 'success',
-        message: `Workflow ${result.decision} at stage ${result.stage}`,
+        message: result.autoApprovedStages?.includes('principal')
+          ? 'Workflow approved at stage dof; principal auto-approved'
+          : `Workflow ${result.decision} at stage ${result.stage}`,
         data: {
           previousState: result.previousState,
           currentState: result.currentState,
+          autoApprovedStages: result.autoApprovedStages || [],
         },
       });
     } catch (err) {
@@ -991,7 +1381,7 @@ const uploads = {
 
       const workflowState = parseWorkflowState(record.workflow_state) || null;
       const workflowStatus = normalizeText(
-        workflowState?.status || record.workflow_status || record.overall_status
+        workflowState?.status || record.workflow_status || record.overall_status,
       ).toLowerCase();
       const isArchived = workflowStatus === 'archived' || workflowStatus === 'archive';
       const actor = resolveActor(req);
@@ -1006,11 +1396,12 @@ const uploads = {
             403,
             archivedStage
               ? `Only ${archivedStage.toUpperCase()} stage users (or super admin) can unarchive this request`
-              : 'You are not allowed to unarchive this request'
+              : 'You are not allowed to unarchive this request',
           );
         }
 
-        const restoreResult = await expenditureModel.restoreWorkflowSnapshotFromLatestArchive(expenditureId);
+        const restoreResult =
+          await expenditureModel.restoreWorkflowSnapshotFromLatestArchive(expenditureId);
         if (!restoreResult.restored) {
           return sendError(res, 409, restoreResult.reason || 'Unable to unarchive this request');
         }
@@ -1095,30 +1486,57 @@ const uploads = {
         return sendError(res, 409, 'Only returned requests can be resubmitted');
       }
 
+      const resubmissionComment = normalizeText(
+        req.body?.feedback || req.body?.comment || req.body?.remarks,
+      );
+      if (!resubmissionComment) {
+        return sendError(res, 400, 'Resubmission comments are required');
+      }
+
+      const resubmitMetadata = {
+        origin: 'resubmit',
+        requestId: null,
+        moduleMetaVersion: 1,
+        moduleMeta: {
+          trigger: 'applicant_resubmit',
+          beneficiaryType: normalizeText(record.beneficiary_type) || null,
+          amountBand: Number(record.total_amount || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+          expenditureMeta: resolveUnplannedBudgetMeta(record),
+        },
+      };
+
       const restartResult = await workflowService.startWorkflow({
         moduleKey: 'expenditure',
         recordId: expenditureId,
-        metadata: {
-          origin: 'resubmit',
-          requestId: null,
-          moduleMetaVersion: 1,
-          moduleMeta: {
-            trigger: 'applicant_resubmit',
-          },
-        },
+        metadata: resubmitMetadata,
       });
 
       const resubmittedAt = new Date().toISOString();
       await expenditureModel.updateExpenditureWorkflowSnapshot(expenditureId, {
         ...(restartResult.state || {}),
         status: 'in_progress',
-        currentStage: 'level1',
+        currentStage: restartResult.state?.currentStage || 'level1',
         isEditableByApplicant: false,
         lastDecision: 'resubmitted',
         lastFeedback: null,
         resubmittedAt,
         updatedAt: resubmittedAt,
         resolvedAt: null,
+      });
+      await workflowService.logWorkflowResubmission({
+        moduleKey: 'expenditure',
+        recordId: expenditureId,
+        stage: restartResult.state?.currentStage || workflowState.currentStage || 'level1',
+        feedback: resubmissionComment,
+        actor: resolveActor(req),
+        snapshotBefore: workflowState,
+        metadata: {
+          ...resubmitMetadata,
+          moduleMeta: {
+            ...resubmitMetadata.moduleMeta,
+            route: 'POST /api/expenditure/:id/resubmit',
+          },
+        },
       });
 
       return res.status(200).json({
@@ -1146,15 +1564,34 @@ const uploads = {
         return sendError(res, 403, 'Access denied');
       }
 
-      const rawTimeline = await workflowService.getTimeline({
-        moduleKey: 'expenditure',
-        recordId: expenditureId,
-      });
+      const rawTimeline = await expenditureModel.getStatusUpdates(expenditureId);
       const timeline = filterEntriesForCurrentCycle(rawTimeline, record);
+      const timelineCompatible = timeline.map((row) => ({
+        id: row.id,
+        moduleKey: 'expenditure',
+        recordId: row.expenditure_id,
+        stage: row.stage || row.role || null,
+        decision: row.decision || row.status || null,
+        feedback: row.feedback ?? row.comment ?? null,
+        actorUserId: row.user_id || null,
+        actorEmail: row.actor_email || null,
+        actorRole: row.actor_role || null,
+        decidedAt: row.decided_at || row.created_at || null,
+        snapshotBefore: row.snapshot_before || null,
+        meta: row.meta || null,
+        summary: row.summary ?? row.comment ?? row.feedback ?? null,
+        details: row.details ?? null,
+        isAdmin: row.is_admin ?? null,
+        role: row.role || null,
+        status: row.status || null,
+        comment: row.comment ?? row.feedback ?? null,
+        createdAt: row.created_at || null,
+        userName: row.user_name || row.actor_name || null,
+      }));
 
       return res.status(200).json({
-        status: 'success',
-        data: timeline,
+        success: true,
+        data: timelineCompatible,
       });
     } catch (err) {
       return handleError(res, err, 'Error in getExpenditureWorkflowTimeline');
@@ -1196,7 +1633,7 @@ const uploads = {
       }));
 
       return res.status(200).json({
-        status: 'success',
+        success: true,
         data: timelineCompatible,
       });
     } catch (err) {

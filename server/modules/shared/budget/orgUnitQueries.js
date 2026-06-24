@@ -5,33 +5,33 @@
  * shared between budget/ and adminbudget/ modules.
  */
 
-import db from '../../../config/connection.js';
 import { normalizeText, normalizeEntityTypeCode } from './budgetUtils.js';
+import db from '../../../config/connection.js';
 
 // =====================================================
 // DEPARTMENTS
 // =====================================================
 
 export async function getDepartments() {
-    const [rows] = await db.execute(
-        `SELECT id, name, code, is_active
+  const [rows] = await db.execute(
+    `SELECT id, name, code, is_active
      FROM master_departments
      WHERE type = 'Academic' AND is_active = 1
-     ORDER BY name ASC`
-    );
+     ORDER BY name ASC`,
+  );
 
-    return rows;
+  return rows;
 }
 
 export async function getDepartmentByName(name, conn = db) {
-    const normalized = normalizeText(name);
+  const normalized = normalizeText(name);
 
-    if (!normalized) {
-        return null;
-    }
+  if (!normalized) {
+    return null;
+  }
 
-    const [rows] = await conn.execute(
-        `SELECT id, name, code
+  const [rows] = await conn.execute(
+    `SELECT id, name, code
      FROM master_departments
      WHERE is_active = 1 AND type = 'Academic'
     AND(
@@ -40,10 +40,10 @@ export async function getDepartmentByName(name, conn = db) {
     )
      ORDER BY CASE WHEN LOWER(TRIM(name)) = LOWER(TRIM(?)) THEN 0 ELSE 1 END
      LIMIT 1`,
-        [normalized, normalized, normalized]
-    );
+    [normalized, normalized, normalized],
+  );
 
-    return rows[0] || null;
+  return rows[0] || null;
 }
 
 // =====================================================
@@ -51,14 +51,14 @@ export async function getDepartmentByName(name, conn = db) {
 // =====================================================
 
 export async function getEntitiesByType(typeCode) {
-    const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
+  const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
 
-    if (!normalizedTypeCode) {
-        return [];
-    }
+  if (!normalizedTypeCode) {
+    return [];
+  }
 
-    const [rows] = await db.execute(
-        `SELECT me.id,
+  const [rows] = await db.execute(
+    `SELECT me.id,
             me.code,
             me.name,
             me.is_active,
@@ -68,46 +68,46 @@ export async function getEntitiesByType(typeCode) {
      JOIN master_entity_types met ON me.entity_type_id = met.id
      WHERE met.code = ? AND me.is_active = 1
      ORDER BY me.sort_order ASC, me.name ASC`,
-        [normalizedTypeCode]
-    );
+    [normalizedTypeCode],
+  );
 
-    return rows.map((entity) => ({
-        id: entity.id,
-        name: entity.name,
-        short_code: entity.code,
-        is_active: entity.is_active,
-        type_code: entity.type_code,
-        type_name: entity.type_name,
-    }));
+  return rows.map((entity) => ({
+    id: entity.id,
+    name: entity.name,
+    short_code: entity.code,
+    is_active: entity.is_active,
+    type_code: entity.type_code,
+    type_name: entity.type_name,
+  }));
 }
 
 export async function getOrgUnitsByType(typeCode) {
-    const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
+  const normalizedTypeCode = normalizeEntityTypeCode(typeCode);
 
-    if (normalizedTypeCode === 'DEPARTMENT' || normalizedTypeCode === 'DEPT') {
-        const departments = await getDepartments();
-        return departments.map((dept) => ({
-            id: dept.id,
-            name: dept.name,
-            short_code: dept.code,
-            is_active: dept.is_active,
-            type_code: 'DEPARTMENT',
-            type_name: 'Department',
-        }));
-    }
+  if (normalizedTypeCode === 'DEPARTMENT' || normalizedTypeCode === 'DEPT') {
+    const departments = await getDepartments();
+    return departments.map((dept) => ({
+      id: dept.id,
+      name: dept.name,
+      short_code: dept.code,
+      is_active: dept.is_active,
+      type_code: 'DEPARTMENT',
+      type_name: 'Department',
+    }));
+  }
 
-    if (!normalizedTypeCode) {
-        return [];
-    }
+  if (!normalizedTypeCode) {
+    return [];
+  }
 
-    return getEntitiesByType(normalizedTypeCode);
+  return getEntitiesByType(normalizedTypeCode);
 }
 
 export async function getAllOrgUnits() {
-    const departments = await getDepartments();
+  const departments = await getDepartments();
 
-    const [entityRows] = await db.execute(
-        `SELECT me.id,
+  const [entityRows] = await db.execute(
+    `SELECT me.id,
             me.code,
             me.name,
             me.is_active,
@@ -116,38 +116,38 @@ export async function getAllOrgUnits() {
      FROM master_entities me
      JOIN master_entity_types met ON me.entity_type_id = met.id
      WHERE me.is_active = 1
-     ORDER BY met.name ASC, me.sort_order ASC, me.name ASC`
-    );
+     ORDER BY met.name ASC, me.sort_order ASC, me.name ASC`,
+  );
 
-    const departmentRows = departments.map((department) => ({
-        id: department.id,
-        name: department.name,
-        short_code: department.code,
-        is_active: department.is_active,
-        type_code: 'DEPARTMENT',
-        type_name: 'Department',
-    }));
+  const departmentRows = departments.map((department) => ({
+    id: department.id,
+    name: department.name,
+    short_code: department.code,
+    is_active: department.is_active,
+    type_code: 'DEPARTMENT',
+    type_name: 'Department',
+  }));
 
-    const mappedEntities = entityRows.map((entity) => ({
-        id: entity.id,
-        name: entity.name,
-        short_code: entity.code,
-        is_active: entity.is_active,
-        type_code: entity.type_code,
-        type_name: entity.type_name,
-    }));
+  const mappedEntities = entityRows.map((entity) => ({
+    id: entity.id,
+    name: entity.name,
+    short_code: entity.code,
+    is_active: entity.is_active,
+    type_code: entity.type_code,
+    type_name: entity.type_name,
+  }));
 
-    return [...departmentRows, ...mappedEntities];
+  return [...departmentRows, ...mappedEntities];
 }
 
 export async function getOrgUnitEmails(orgUnitId) {
-    const [rows] = await db.execute(
-        `SELECT id, role, email, is_primary
+  const [rows] = await db.execute(
+    `SELECT id, role, email, is_primary
      FROM master_entity_contacts
      WHERE entity_id = ?
      ORDER BY is_primary DESC, role ASC`,
-        [orgUnitId]
-    );
+    [orgUnitId],
+  );
 
-    return rows;
+  return rows;
 }

@@ -1,5 +1,5 @@
-import db from '../../../config/connection.js';
 import { getWorkflowModule } from './workflowModuleRegistry.js';
+import { assertRecordScopeAccess, resolveQueueScopeFilters } from './workflowScopeResolver.js';
 import {
   WorkflowError,
   normalizeText,
@@ -11,10 +11,7 @@ import {
   isSuperAdminActor,
   normalizePermissionSet,
 } from './workflowValidators.js';
-import {
-  assertRecordScopeAccess,
-  resolveQueueScopeFilters,
-} from './workflowScopeResolver.js';
+import db from '../../../config/connection.js';
 
 const DEFAULT_FLOW = Object.freeze(['level1', 'dof', 'principal']);
 const TERMINAL_STATUSES = new Set(['completed', 'rejected', 'archived']);
@@ -57,7 +54,12 @@ const parseWorkflowState = (rawState) => {
   return state;
 };
 
-async function getWorkflowStateFromRecord(conn, moduleConfig, recordId, { forUpdate = false } = {}) {
+async function getWorkflowStateFromRecord(
+  conn,
+  moduleConfig,
+  recordId,
+  { forUpdate = false } = {},
+) {
   const tableName = ensureSafeIdentifier(moduleConfig.tableName, 'tableName');
   const idColumn = ensureSafeIdentifier(moduleConfig.idColumn, 'idColumn');
   const stateColumn = ensureSafeIdentifier(moduleConfig.stateColumn, 'stateColumn');
@@ -72,7 +74,7 @@ async function getWorkflowStateFromRecord(conn, moduleConfig, recordId, { forUpd
     `SELECT \`${stateColumn}\` AS workflow_state
      FROM \`${tableName}\`
      WHERE \`${idColumn}\` = ?${lockClause}`,
-    [normalizedRecordId]
+    [normalizedRecordId],
   );
 
   if (!rows.length) {
@@ -95,7 +97,7 @@ async function resolveEntityTypeCodeFromContext(conn, context = {}) {
      JOIN master_entity_types met ON met.id = me.entity_type_id
      WHERE me.id = ?
      LIMIT 1`,
-    [beneficiaryEntityId]
+    [beneficiaryEntityId],
   );
 
   if (!rows.length) {
@@ -143,7 +145,7 @@ async function resolveFlowConfig(conn, { moduleKey, beneficiaryType, entityTypeC
       normalizedBeneficiaryType,
       normalizedEntityTypeCode,
       normalizedEntityTypeCode,
-    ]
+    ],
   );
 
   if (!rows.length) {
@@ -165,7 +167,7 @@ async function resolveStagePolicy(conn, { moduleKey, stageKey }) {
        AND LOWER(TRIM(module_key)) IN (?, '*')
      ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END
      LIMIT 1`,
-    [normalizedStageKey, normalizedModuleKey, normalizedModuleKey]
+    [normalizedStageKey, normalizedModuleKey, normalizedModuleKey],
   );
 
   if (!rows.length) {
@@ -251,7 +253,11 @@ const assertWorkflowActionable = (state) => {
   }
 
   if (!ACTIONABLE_STATUSES.has(status)) {
-    throw new WorkflowError(`Workflow cannot be acted on in status: ${status}`, 409, 'WORKFLOW_NOT_ACTIONABLE');
+    throw new WorkflowError(
+      `Workflow cannot be acted on in status: ${status}`,
+      409,
+      'WORKFLOW_NOT_ACTIONABLE',
+    );
   }
 
   if (!currentStage) {
@@ -259,7 +265,11 @@ const assertWorkflowActionable = (state) => {
   }
 
   if (!flow.includes(currentStage)) {
-    throw new WorkflowError('Workflow current stage is not present in flow', 409, 'WORKFLOW_STAGE_INVALID');
+    throw new WorkflowError(
+      'Workflow current stage is not present in flow',
+      409,
+      'WORKFLOW_STAGE_INVALID',
+    );
   }
 
   return {
@@ -286,7 +296,11 @@ const computeNextWorkflowState = ({ state, decision, feedback }) => {
   const normalizedFeedback = normalizeText(feedback) || null;
 
   if (['rejected', 'returned'].includes(decision) && !normalizedFeedback) {
-    throw new WorkflowError('Feedback is required for returned/rejected decisions', 400, 'FEEDBACK_REQUIRED');
+    throw new WorkflowError(
+      'Feedback is required for returned/rejected decisions',
+      400,
+      'FEEDBACK_REQUIRED',
+    );
   }
 
   clonedState.lastDecision = decision;
@@ -347,7 +361,9 @@ const assertDecisionPermission = ({ moduleKey, currentStage, actor }) => {
   }
 
   // Role-based access (hod / coordinator / dof / principal / chairman)
-  if (canAccessStageByRole({ moduleKey: normalizedModuleKey, actor, stageKey: normalizedStageKey })) {
+  if (
+    canAccessStageByRole({ moduleKey: normalizedModuleKey, actor, stageKey: normalizedStageKey })
+  ) {
     return;
   }
 
@@ -355,19 +371,17 @@ const assertDecisionPermission = ({ moduleKey, currentStage, actor }) => {
 
   // For expenditure, also accept finance.workflow.* permissions
   const permissionModuleKeys =
-    normalizedModuleKey === 'expenditure'
-      ? ['expenditure', 'finance']
-      : [normalizedModuleKey];
+    normalizedModuleKey === 'expenditure' ? ['expenditure', 'finance'] : [normalizedModuleKey];
 
   const hasPermission = permissionModuleKeys.some((mk) =>
-    permissionSet.has(`${mk}.workflow.${normalizedStageKey}`)
+    permissionSet.has(`${mk}.workflow.${normalizedStageKey}`),
   );
 
   if (!hasPermission) {
     throw new WorkflowError(
       `Insufficient permission for stage: ${normalizedStageKey}`,
       403,
-      'WORKFLOW_PERMISSION_DENIED'
+      'WORKFLOW_PERMISSION_DENIED',
     );
   }
 };
@@ -514,13 +528,14 @@ export async function startWorkflow({ moduleKey, recordId, metadata = {} }) {
           })
         : null;
 
-    const flow = Array.isArray(adapterResolvedFlow) && adapterResolvedFlow.length > 0
-      ? validateFlowArray(adapterResolvedFlow, { field: 'workflow adapter start flow' })
-      : await resolveFlowConfig(conn, {
-          moduleKey,
-          beneficiaryType: context.beneficiaryType,
-          entityTypeCode,
-        });
+    const flow =
+      Array.isArray(adapterResolvedFlow) && adapterResolvedFlow.length > 0
+        ? validateFlowArray(adapterResolvedFlow, { field: 'workflow adapter start flow' })
+        : await resolveFlowConfig(conn, {
+            moduleKey,
+            beneficiaryType: context.beneficiaryType,
+            entityTypeCode,
+          });
 
     const initialState = buildInitialState(flow, {
       submittedTotalBudget: Number(context.totalBudget || 0),
@@ -565,7 +580,14 @@ export async function getWorkflow({ moduleKey, recordId }) {
   }
 }
 
-export async function actOnWorkflow({ moduleKey, recordId, decision, feedback, actor, metadata = {} }) {
+export async function actOnWorkflow({
+  moduleKey,
+  recordId,
+  decision,
+  feedback,
+  actor,
+  metadata = {},
+}) {
   const moduleConfig = getWorkflowModule(moduleKey);
   const normalizedDecision = validateDecision(decision);
   const normalizedActor = normalizeActorPayload(actor);
@@ -647,7 +669,7 @@ export async function actOnWorkflow({ moduleKey, recordId, decision, feedback, a
         normalizedActor.role,
         JSON.stringify(previousState),
         JSON.stringify(normalizedMeta),
-      ]
+      ],
     );
 
     await moduleConfig.adapter.updateRecordWorkflowSnapshot(recordId, nextState, {
@@ -705,7 +727,7 @@ export async function listQueue({ moduleKey, stage, actor, filters = {} }) {
         isSuperAdmin: isSuperAdminActor(normalizedActor),
         scopeFilters,
       },
-      { tx: conn }
+      { tx: conn },
     );
   } finally {
     conn.release();
@@ -738,7 +760,7 @@ export async function getTimeline({ moduleKey, recordId }) {
       WHERE module_key = ?
         AND record_id = ?
       ORDER BY decided_at ASC, id ASC`,
-    [normalizedModuleKey, normalizedRecordId]
+    [normalizedModuleKey, normalizedRecordId],
   );
 
   return rows.map((row) => ({
@@ -757,6 +779,54 @@ export async function getTimeline({ moduleKey, recordId }) {
   }));
 }
 
+export async function logWorkflowResubmission({
+  moduleKey,
+  recordId,
+  stage,
+  feedback = null,
+  actor = {},
+  snapshotBefore = null,
+  metadata = {},
+}) {
+  const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
+  const normalizedRecordId = toPositiveInt(recordId);
+  const normalizedStage = normalizeText(stage).toLowerCase() || 'level1';
+
+  if (!normalizedModuleKey || !normalizedRecordId) {
+    throw new WorkflowError('Invalid module or record ID', 400, 'INVALID_RESUBMIT_LOG_REQUEST');
+  }
+
+  const actorUserId = toPositiveInt(actor?.userId || actor?.id);
+  const actorEmail = normalizeText(actor?.email).toLowerCase() || null;
+  const actorRole = normalizeText(actor?.role).toLowerCase() || null;
+
+  await db.query(
+    `INSERT INTO workflow_actions (
+        module_key,
+        record_id,
+        stage,
+        decision,
+        feedback,
+        actor_user_id,
+        actor_email,
+        actor_role,
+        snapshot_before,
+        meta
+      ) VALUES (?, ?, ?, 'resubmitted', ?, ?, ?, ?, ?, ?)`,
+    [
+      normalizedModuleKey,
+      normalizedRecordId,
+      normalizedStage,
+      normalizeText(feedback) || null,
+      actorUserId,
+      actorEmail,
+      actorRole,
+      JSON.stringify(snapshotBefore || {}),
+      JSON.stringify(validateWorkflowMeta(metadata)),
+    ],
+  );
+}
+
 export async function getWorkflowMetadata({ moduleKey, actor }) {
   const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
   const normalizedActor = normalizeActorPayload(actor);
@@ -769,7 +839,7 @@ export async function getWorkflowMetadata({ moduleKey, actor }) {
          WHERE is_active = 1
            AND LOWER(TRIM(module_key)) IN (?, '*')
          ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END, id ASC`,
-      [normalizedModuleKey, normalizedModuleKey]
+      [normalizedModuleKey, normalizedModuleKey],
     ),
     db.query(
       `SELECT stage_key
@@ -777,7 +847,7 @@ export async function getWorkflowMetadata({ moduleKey, actor }) {
          WHERE is_active = 1
            AND LOWER(TRIM(module_key)) IN (?, '*')
          ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END, id ASC`,
-      [normalizedModuleKey, normalizedModuleKey]
+      [normalizedModuleKey, normalizedModuleKey],
     ),
   ]);
 
@@ -825,14 +895,19 @@ export async function getWorkflowMetadata({ moduleKey, actor }) {
   const allStageKeys = orderedStages;
   let permittedStageKeys = isSuperAdminActor(normalizedActor)
     ? allStageKeys
-    : allStageKeys.filter((stageKey) =>
-        permissionSet.has(`${normalizedModuleKey}.workflow.${stageKey}`) ||
-        canAccessStageByRole({ moduleKey: normalizedModuleKey, actor: normalizedActor, stageKey })
+    : allStageKeys.filter(
+        (stageKey) =>
+          permissionSet.has(`${normalizedModuleKey}.workflow.${stageKey}`) ||
+          canAccessStageByRole({
+            moduleKey: normalizedModuleKey,
+            actor: normalizedActor,
+            stageKey,
+          }),
       );
 
   if (!permittedStageKeys.length) {
     permittedStageKeys = allStageKeys.filter((stageKey) =>
-      canAccessStageByRole({ moduleKey: normalizedModuleKey, actor: normalizedActor, stageKey })
+      canAccessStageByRole({ moduleKey: normalizedModuleKey, actor: normalizedActor, stageKey }),
     );
   }
 
@@ -850,5 +925,6 @@ export default {
   listQueue,
   getTimeline,
   getWorkflow,
+  logWorkflowResubmission,
   getWorkflowMetadata,
 };

@@ -1,14 +1,33 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useLocation, useNavigate } from "react-router-dom";
-
-import authenticityUtility from '../../shared/utils/authenticityUtility';
-import { useAuth } from '../../contexts/AuthContext';
-import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import Select from 'react-select';
+
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  BUDGET_HEAD_GROUPS,
+  SUB_HEAD_BY_BUDGET_HEAD,
+  subscribeBudgetCatalog,
+} from '../../shared/hooks/budgetCatalogStore';
+import { useBudgetCatalog } from '../../shared/hooks/useBudgetCatalog';
+import authenticityUtility from '../../shared/utils/authenticityUtility';
+import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils';
+
 import './budget.css';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
-import { Eye, Edit2, CheckCircle2, RotateCcw, XCircle, Briefcase, Clock, AlertTriangle, Archive, Trash2, Bell } from "lucide-react";
+
+import {
+  Eye,
+  Edit2,
+  CheckCircle2,
+  RotateCcw,
+  XCircle,
+  Briefcase,
+  Clock,
+  AlertTriangle,
+  Archive,
+  Trash2,
+  Bell,
+} from 'lucide-react';
 
 interface SelectOption {
   value: string;
@@ -26,8 +45,9 @@ interface BudgetHeadSelectGroup {
   options: BudgetHeadSelectOption[];
 }
 
-const normalizeText = (value: string | null | undefined): string =>
-  String(value || '').trim();
+const normalizeText = (value: string | null | undefined): string => String(value || '').trim();
+const isReturnedBudgetStatus = (status: string | null | undefined): boolean =>
+  normalizeText(status).toLowerCase().includes('returned');
 
 type BudgetLine = {
   lineId?: number;
@@ -53,522 +73,6 @@ interface ApplicantSearchResult {
   mobile: string;
 }
 
-
-const BUDGET_HEAD_GROUPS: BudgetHeadGroup[] = [
-  {
-    label: 'Non-Recurring',
-    options: [
-      'Civil Infrastructure',
-      'Electrical Infrastructure',
-      'IT Infrastructure',
-      'Furniture & Fixtures',
-      'Vehicles',
-      'Equipment',
-      'Accessories & Kits',
-      'Library',
-    ],
-  },
-  { label: 'Recurring', options: [] },
-  {
-    label: 'Maintenance & Spares',
-    options: ['Maintenance Charges', 'Spares'],
-  },
-  {
-    label: 'Operational',
-    options: [
-      'Consumables',
-      'Software',
-      'Membership & Subscriptions',
-      'College Essentials',
-      'Printing',
-      'Stationery',
-      'Postal Expenses',
-      'Local Conveyance',
-      'Operational Expenses',
-    ],
-  },
-  {
-    label: 'Events & Competitions',
-    options: ['Academic Events', 'Club Activities', 'College Events', 'Conferences & Conclaves', 'Association Activities', 'Outreach Event', 'Cultural & Celebrations', 'Sports', 'Competitions'],
-  },
-  {
-    label: 'Meetings & Audits',
-    options: [
-      'Institutional Governance Meetings', 'Academic Governance Meetings', 'Institutional Audits', 'Government Meetings',
-    ],
-  },
-  {
-    label: 'Academics',
-    options: [
-      'Faculty Empowerment', 'Staff Empowerment', 'Student Empowerment', 'Student Capacity Building', 'Ranking & Accreditation', 'Examination Expenses', 'Awards & Recognition',
-    ],
-  },
-  {
-    label: 'Branding & Outreach',
-    options: ['Advertisement & Branding', 'Public Relations', 'Admissions'],
-  },
-  {
-    label: 'General',
-    options: [
-      'Research & Development',
-      'Administrative Expenses', 'Licenses & Taxes',
-      'Salary',
-      'Bills & Payments',
-      'Miscellaneous Expenses',
-    ],
-  },
-
-];
-
-const SUB_HEAD_BY_BUDGET_HEAD: Record<string, string[]> = {
-  'Civil Infrastructure': [
-    'Canopy',
-    'Construction Works',
-    'False Ceiling Works',
-    'Partition Works',
-    'Plumbing Works',
-    'Water Cooler'
-  ],
-  'Electrical Infrastructure': [
-    'Air Conditioner',
-    'Battery',
-    'Electrical Wiring',
-    'Generator',
-    'Lights & Fans',
-    'Lift Installation',
-    'UPS & Inverter'
-  ],
-  'IT Infrastructure': [
-    'A/V Equipment',
-    'Amplifiers',
-    'CCTV Materials',
-    'CMOS Battery',
-    'Desktops Computers',
-    'Hard Disks',
-    'Hardwares',
-    'Interactive Displays',
-    'Intercom',
-    'Keyboard',
-    'Laptops',
-    'Mic & Speakers',
-    'Mobiles & Tablet',
-    'Monitors',
-    'Mouse',
-    'Network Materials',
-    'Printers',
-    'Projectors',
-    'Softwares',
-    'Television',
-    'Wi-fi Router',
-    'Xerox Machine'
-  ],
-  'Furniture & Fixtures': [
-    'Chair',
-    'Computer Table',
-    'Discussion Table',
-    'Faculty Table',
-    'Wooden Cup Boards',
-    'Work Table'
-  ],
-  Vehicles: ['Heavy Motor Vehicle', 'Light Motor Vehicle', 'Two Wheeler'],
-  Equipment: [
-    'Consultancy Equipment',
-    'Equipment Upgrade',
-    'Lab Equipment',
-    'Minor Equipment',
-    'Office Equipment',
-    'Research Equipment',
-    'Sports Equipment'
-  ],
-  'Accessories & Kits': [
-    'Drilling Machine',
-    'Drone Kit',
-    'Lab Accessories',
-    'Power Tools',
-    'Weighing Machine',
-    'Others'
-  ],
-  'Library': [
-    'Books',
-    'Databases',
-    'E-Books',
-    'E-Journals',
-    'Journals',
-    'Magazines',
-    'Membership',
-    'Newspapers',
-    'Non Books (CD etc.)',
-    'Plagiarism Detection Tool',
-    'Remote Access Tool'
-  ],
-
-  'Maintenance Charges': [
-    'AC Maintenance',
-    'Annual Maintenance Charges',
-    'Building Maintenance',
-    'Computer Maintenance',
-    'Electrical Maintenance',
-    'Equipment Maintenance',
-    'Farm Maintenance',
-    'Furniture Maintenance',
-    'Garden Maintenance',
-    'General Repairs',
-    'Housekeeping Expenses',
-    'Infrastructure Maintenance',
-    'Lift Maintenance',
-    'Office Maintenance',
-    'Painting',
-    'Playground Maintenance',
-    'Plumbing Maintenance',
-    'Printer Maintenance',
-    'Software Maintenance',
-    'UPS Maintenance',
-    'Vehicle Maintenance',
-    'Toner Refill'
-  ],
-  Spares: ['Chargers', 'Printer Toner', 'SMPS'],
-  'Annual Maintenance Charges': ['Equipment Maintenance', 'Software Maintenance'],
-  Consumables: [
-    'Carpentary Items',
-    'Chemicals',
-    'Construction Materials',
-    'Cutting Tools',
-    'Electrical Components',
-    'Electronic Components',
-    'Glasswares',
-    'Mechanical Components',
-    'Metals & Alloys',
-    'Oils & Lubricants',
-    'Plasticwares',
-    'Others'
-  ],
-  Software: [
-    'AI Tools',
-    'Analysis',
-    'Antivirus',
-    'Firewall',
-    'Graphical Design',
-    'Grammer Check',
-    'Grievance',
-    'Modelling',
-    'Plagiarism',
-    'Programming',
-    'Others'
-  ],
-  'Membership & Subscriptions': [
-    'Annual Subscription Charges',
-    'Data Subscription Charges',
-    'E-Resources',
-    'Membership fees',
-    'Professional Body fees'
-  ],
-  'College Essentials': ['Books', 'Note Books', 'Log Books', 'ID Card', 'Student Uniform', 'Others'],
-  'Printing': [
-    'Banner',
-    'Beach Flag',
-    'ID Card',
-    'Badge',
-    'Brochure',
-    'Binding',
-    'Reports',
-    'Magazines',
-    'News Letters',
-    'Calendar',
-    'Certificates',
-    'Diary',
-    'Registers',
-    'Pamphlet',
-    'Vinyl Board',
-    'Sign Board',
-    'Letter Pad',
-    'Note Pad',
-    'Wiro Pad',
-    'Visiting Card',
-    'Others'
-  ],
-  'Stationery': [
-    'Files/ Folders',
-    'Pen/ Pencil/ Eraser',
-    'Print Sheets',
-    'Seal/ Stamp Pad',
-    'Stapler/ Punching Machine',
-    'Grade Sheet',
-    'Answer Booklet',
-    'Others'
-  ],
-  'Postal Expenses': [
-    'Courier Charges',
-    'Frieght Charges',
-    'Postal Charges',
-    'Others'
-  ],
-  'Local Conveyance': [
-    'Beta',
-    'Food & Refreshment',
-    'Travel Expense',
-    'Others'
-  ],
-  'Operational Expenses': [
-    'Water Bottle',
-    'Food & Refreshment',
-    'Pooja Expenses',
-    'Accessories',
-    'Legal stamp paper',
-    'Miscellaneous'
-  ],
-  'Conferences & Conclaves': [
-    'Conclave',
-    'Convention',
-    'Industry Interaction',
-    'International Conference',
-    'National Conference',
-    'Networking Event'
-  ],
-  'Association Activities': [
-    'Alumni Interaction',
-    'Alumni Meeting',
-    'Association Function',
-    'Parents Meeting'
-  ],
-  'Outreach Event': [
-    'Awareness Program',
-    'Campaigns',
-    'Crash Course',
-    'Education Fair',
-    'Mini Marathon',
-    'Rally',
-    'School Visit',
-    'Summer Internship'
-  ],
-  'Cultural & Celebrations': [
-    'Celebration Day',
-    'Festival Celebrations',
-    'Harmonicks',
-    'Hostel Day'
-  ],
-  'Sports': ['Sports Day', 'Sports Meet'],
-  'Club Activities': [
-    'Flash Mob',
-    'Fun Events',
-    'Road show',
-    'Wall Painting'
-  ],
-  'Competitions': [
-    'Competitions',
-    'Hackathons',
-    'Ideathon',
-    'Project Expo',
-    'Start-up meet'
-  ],
-
-  'Institutional Governance Meetings': [
-    'Examination Committee Meeting',
-    'Finance Committee Meeting',
-    'Governing Body Meeting',
-    'Placement Meeting',
-    'Research Advisory Board Meeting',
-    'Result Passing Board (RPB) Meeting'
-  ],
-
-  'Academic Governance Meetings': [
-    'Academic Council Meeting',
-    'Board of Studies (Bos) Meeting',
-    'DAB Meeting',
-    'Standing Committee Meeting'
-  ],
-  'Institutional Audits': ['Academic Audit', 'Administrative Audit', 'Energy & Green Audit'],
-  'Government Meetings': ['Government Meetings'],
-
-  'Faculty Empowerment': [
-    'Accommodation',
-    'Daily Allowance',
-    'Faculty Welfare',
-    'Food & Refreshment',
-    'Incentives',
-    'Leadership Meet',
-    'Medical Expenses',
-    'Membership Fees',
-    'Registration fee',
-    'Travel Allowance'
-  ],
-
-  'Academic Events': [
-    'Expert Visit',
-    'FDP (Faculty Development Programme)',
-    'Guest Lecture',
-    'Hands-on Training',
-    'Industry Visit',
-    'MoU Inking',
-    'Seminar',
-    'STTP (Short-Term Training Programme)',
-    'Webinar',
-    'Workshop'
-  ],
-
-  'College Events': [
-    'Annual Day',
-    'Dakshaa',
-    'Founder Day',
-    'Graduation Day',
-    'Orientation Session',
-    'Science Day',
-    'Student Induction Programme',
-    'Womens Day'
-  ],
-  'Staff Empowerment': [
-    'Accommodation',
-    'Daily Allowance',
-    'Food & Refreshment',
-    'Incentives',
-    'Medical Expenses',
-    'Registration fee',
-    'Staff Welfare',
-    'Travel Allowance'
-  ],
-  'Student Empowerment': [
-    'Accommodation',
-    'Certification Costs',
-    'Food & Refreshment',
-    'Incentives',
-    'Medical Expense',
-    'Prizes',
-    'Registration fee',
-    'Student Welfare',
-    'Travel Support'
-  ],
-  'Student Capacity Building': [
-    'Aptitude Training',
-    'Certification Programs',
-    'Competitive Exam Coaching',
-    'Exposure Visit',
-    'Higher Education Coaching',
-    'Internship',
-    'International Connect',
-    'Language Proficiency Courses',
-    'One Credit Course',
-    'Placement Drives',
-    'Placement Training',
-    'Skill Development Training',
-    'Value Added Course',
-    'Others'
-  ],
-
-  'Ranking & Accreditation': [
-    'NAAC Fees',
-    'NAAC Inspection',
-    'NBA Fees',
-    'NBA Inspection',
-    'QS Ranking',
-    'SDG Ranking',
-    'Other Rankings'
-  ],
-  'Examination Expenses': [
-    'Autonomous Exam Remuneration',
-    'Government Exam Remuneration',
-    'Online Exam Remuneration',
-    'QP Setting Expenses',
-    'Degree Recommendation',
-    'CoE Staff Remuneration'
-  ],
-  'Awards & Recognition': [
-    'Accommodation',
-    'Registration fee',
-    'Food & Refreshment',
-    'Driver Beta',
-    'Travel Allowance',
-    'Daily Allowance',
-    'Printing',
-    'Stationery',
-    'Others'
-  ],
-  'Advertisement & Branding': ['Digital Promotion', 'News Paper Advertisement'],
-  'Public Relations': [
-    'Branding',
-    'Corporate Gift',
-    'CSR Activity',
-    'Press & Media',
-    'Promotions',
-    'Sponsorship'
-  ],
-  Admissions: [
-    'Consultant Charges',
-    'Field Visits',
-    'School Visits',
-    'Stalls',
-    'Student Directory'
-  ],
-  'Research & Development': [
-    'Consultancy',
-    'HI Contribution',
-    'Institute Research Fellowship',
-    'Publication Support',
-    'Research Cenre Renewal',
-    'Research Grant',
-    'Seed Fund (Consumables)',
-    'Seed Fund (IPR Charges)',
-    'Seed Fund (Product Development)',
-    'Seed Fund (Testing)',
-    'Seed Fund (Travel)'
-  ],
-  'Administrative Expenses': [
-    'Affiliation Fees',
-    'AICTE Fees',
-    'Anna University Fees',
-    'Audit Fees',
-    'Autonomous Charges',
-    'Consortium Fees',
-    'DOTE Fees',
-    'Fee Fixation Expenses',
-    'Flag Day Expenses',
-    'Inspection Expenses',
-    'Insurance Charges',
-    'International Travel',
-    'Legal Expenses',
-    'Office Expenses',
-    'Scholarship Expenses',
-    'Stamp Charges',
-    'Testing Charges'
-  ],
-  'Licenses & Taxes': [
-    'Building Tax',
-    'DTCP Approval',
-    'License Renewal',
-    'Property Tax',
-    'Road Tax',
-    'Spirit License',
-    'Water Tax'
-  ],
-  'Salary': [
-    'Allowances',
-    'Emoluments',
-    'ESI Scheme',
-    'Monthly Salary',
-    'Professional Payments',
-    'Provident Fund',
-    'Wages'
-  ],
-  'Bills & Payments': [
-    'Diesel Expenses',
-    'Electricity Charges',
-    'Internet Charges',
-    'Telephone Charges'
-  ],
-  'Miscellaneous Expenses': [
-    'Bank Charges',
-    'Bank Interest',
-    'Fire Extinguisher',
-    'First Aid Kit Expenses',
-    'General Expenses',
-    'Irrecovable Fee',
-    'Laundry Service',
-    'Legal Expenses',
-    'Loan Processing Charges',
-    'RO  Mineral Water',
-    'Sewage Treatment',
-    'Others'
-  ],
-};
-
 const STAGE_PERMISSION_MAP: Record<string, string> = {
   level1: 'budget.workflow.level1',
   ithead: 'budget.workflow.ithead',
@@ -589,8 +93,11 @@ const FALLBACK_TAG_OPTIONS: SelectOption[] = [
   { value: 'Innovation', label: 'Innovation' },
   { value: 'Start-up', label: 'Start-up' },
   { value: 'Entrepreneurship', label: 'Entrepreneurship' },
+  { value: 'CoE Claims', label: 'CoE Claims' },
 ];
 
+const BUDGET_FIELD_LAYER = 1;
+const BUDGET_DROPDOWN_LAYER = 900;
 
 const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
   Department: 'DEPARTMENT',
@@ -600,10 +107,6 @@ const BENEFICIARY_TYPE_TO_ENTITY_API_TYPE: Record<string, string> = {
   Section: 'SECTION',
   'Professional Body': 'PROFESSIONAL_BODY',
 };
-
-const BUDGET_HEAD_SUB_HEAD_CATALOG = Object.entries(SUB_HEAD_BY_BUDGET_HEAD).flatMap(
-  ([budgetHead, subHeads]) => subHeads.map((subHead) => ({ budgetHead, subHead }))
-);
 
 const MONTH_KEYS = [
   'Apr',
@@ -636,49 +139,122 @@ const EMPTY_MONTHS: Record<string, string> = {
 };
 
 type GuidelineSectionId =
-  | "skill"
-  | "events"
-  | "research"
-  | "it"
-  | "lab"
-  | "departmentEvents"
-  | "assoc"
-  | "outreach"
-  | "academics"
-  | "office"
-  | "student";
+  | 'skill'
+  | 'events'
+  | 'research'
+  | 'it'
+  | 'lab'
+  | 'departmentEvents'
+  | 'assoc'
+  | 'outreach'
+  | 'academics'
+  | 'office'
+  | 'student';
 
 const guidelineSkillingRows = [
-  { designation: "Assistant Professor", registration: 3000, travel: 3000, food: 5000, accommodation: 5000 },
-  { designation: "Associate Professor", registration: 4000, travel: 4000, food: 6500, accommodation: 6500 },
-  { designation: "Professor", registration: 5000, travel: 5000, food: 8000, accommodation: 8000 },
-  { designation: "Leadership Team", registration: 10000, travel: 10000, food: 10000, accommodation: 10000 },
-  { designation: "Staff", registration: 2000, travel: 2000, food: 3000, accommodation: 3000 },
+  {
+    designation: 'Assistant Professor',
+    registration: 3000,
+    travel: 3000,
+    food: 5000,
+    accommodation: 5000,
+  },
+  {
+    designation: 'Associate Professor',
+    registration: 4000,
+    travel: 4000,
+    food: 6500,
+    accommodation: 6500,
+  },
+  { designation: 'Professor', registration: 5000, travel: 5000, food: 8000, accommodation: 8000 },
+  {
+    designation: 'Leadership Team',
+    registration: 10000,
+    travel: 10000,
+    food: 10000,
+    accommodation: 10000,
+  },
+  { designation: 'Staff', registration: 2000, travel: 2000, food: 3000, accommodation: 3000 },
 ];
 
-const guidelineDeptData: Record<Exclude<GuidelineSectionId, "skill" | "events" | "research">, string[]> = {
-  it: ["Hardwares", "Softwares", "Hard Disks", "Monitors", "Mouse", "Keyboard", "CMOS Battery", "Wi-fi Router", "Network Materials", "Laptops", "Interactive Displays", "Desktop Computers", "CCTV Materials", "Television", "Projectors", "Printers", "Mobiles & Tablet", "Mic & Speakers", "Amplifiers", "A/V Equipment", "Intercom", "Photocopy Machine"],
-  lab: ["Equipment", "Consumables", "Maintenance", "Calibration"],
-  departmentEvents: ["Webinar", "Guest Lecture", "Hands-on Training", "Conclave", "Convention", "Networking Event", "Industry Interaction"],
-  assoc: ["Association Function", "Alumni Meeting", "Alumni Interaction", "Parents Meeting"],
-  outreach: ["School Visit", "Awareness Program", "Campaigns", "Crash Course", "Summer Internship", "Mini Marathon", "Education Fair", "Rally"],
-  academics: ["DAB Meeting", "BoS Meeting", "Printing", "Awards & Recognition"],
-  office: ["Stationary", "Test Notes", "Printing"],
-  student: ["Skill Development Training", "Aptitude Training", "Higher Education Coaching", "Competitive Exam Coaching", "Placement Training", "Placement Drives", "One Credit Course", "Value Added Course", "Certification Programs", "Exposure Visit", "Language Proficiency Courses"],
+const guidelineDeptData: Record<
+  Exclude<GuidelineSectionId, 'skill' | 'events' | 'research'>,
+  string[]
+> = {
+  it: [
+    'Hardwares',
+    'Softwares',
+    'Hard Disks',
+    'Monitors',
+    'Mouse',
+    'Keyboard',
+    'CMOS Battery',
+    'Wi-fi Router',
+    'Network Materials',
+    'Laptops',
+    'Interactive Displays',
+    'Desktop Computers',
+    'CCTV Materials',
+    'Television',
+    'Projectors',
+    'Printers',
+    'Mobiles & Tablet',
+    'Mic & Speakers',
+    'Amplifiers',
+    'A/V Equipment',
+    'Intercom',
+    'Photocopy Machine',
+  ],
+  lab: ['Equipment', 'Consumables', 'Maintenance', 'Calibration'],
+  departmentEvents: [
+    'Webinar',
+    'Guest Lecture',
+    'Hands-on Training',
+    'Conclave',
+    'Convention',
+    'Networking Event',
+    'Industry Interaction',
+  ],
+  assoc: ['Association Function', 'Alumni Meeting', 'Alumni Interaction', 'Parents Meeting'],
+  outreach: [
+    'School Visit',
+    'Awareness Program',
+    'Campaigns',
+    'Crash Course',
+    'Summer Internship',
+    'Mini Marathon',
+    'Education Fair',
+    'Rally',
+  ],
+  academics: ['DAB Meeting', 'BoS Meeting', 'Printing'],
+  office: ['Stationery', 'Test Notes', 'Printing'],
+  student: [
+    'Skill Development Training',
+    'Aptitude Training',
+    'Higher Education Coaching',
+    'Competitive Exam Coaching',
+    'Placement Training',
+    'Placement Drives',
+    'One Credit Course',
+    'Value Added Course',
+    'Certification Programs',
+    'Exposure Visit',
+    'Language Proficiency Courses',
+  ],
 };
 
 const guidelineHeadButtons: Array<{ id: GuidelineSectionId; label: string }> = [
-  { id: "skill", label: "Skilling" },
-  { id: "events", label: "Events" },
-  { id: "research", label: "Research" },
-  { id: "it", label: "IT Infrastructure" },
-  { id: "lab", label: "Laboratory" },
-  { id: "departmentEvents", label: "Events" },
-  { id: "assoc", label: "Association" },
-  { id: "outreach", label: "Outreach" },
-  { id: "academics", label: "Academics" },
-  { id: "office", label: "Office" },
-  { id: "student", label: "Skilling" },
+  { id: 'skill', label: 'Skilling' },
+  { id: 'events', label: 'Events' },
+  { id: 'research', label: 'Research' },
+  { id: 'it', label: 'IT Infrastructure' },
+  { id: 'lab', label: 'Laboratory' },
+  { id: 'departmentEvents', label: 'Events' },
+  { id: 'assoc', label: 'Association' },
+  { id: 'outreach', label: 'Outreach' },
+  { id: 'academics', label: 'Academics' },
+  { id: 'office', label: 'Office' },
+  { id: 'student', label: 'Skilling' },
 ];
 
 const guidelineCurrency = (value: number) => `\u20B9 ${value}`;
@@ -689,7 +265,7 @@ const BudgetProposalGuidelines: React.FC<{ embedded?: boolean }> = ({ embedded =
   const renderButton = (id: GuidelineSectionId, label: string) => (
     <button
       key={`${id}-${label}`}
-      className={`budgetTabButton ${activeSection === id ? "active" : ""}`}
+      className={`budgetTabButton ${activeSection === id ? 'active' : ''}`}
       onClick={(event) => {
         event.stopPropagation();
         setActiveSection((current) => (current === id ? null : id));
@@ -700,17 +276,25 @@ const BudgetProposalGuidelines: React.FC<{ embedded?: boolean }> = ({ embedded =
     </button>
   );
 
-  const renderDepartmentChips = (id: Exclude<GuidelineSectionId, "skill" | "events" | "research">) => (
-    <div className={`budgetSectionCard ${activeSection === id ? "isVisible" : ""}`} onClick={(event) => event.stopPropagation()}>
+  const renderDepartmentChips = (
+    id: Exclude<GuidelineSectionId, 'skill' | 'events' | 'research'>,
+  ) => (
+    <div
+      className={`budgetSectionCard ${activeSection === id ? 'isVisible' : ''}`}
+      onClick={(event) => event.stopPropagation()}
+    >
       <div className="budgetSectionCardInner">
         <div className="budgetChipContainer">
           {guidelineDeptData[id].map((item) => (
-            <div className="budgetChip" key={item}>{item}</div>
+            <div className="budgetChip" key={item}>
+              {item}
+            </div>
           ))}
         </div>
-        {id === "it" ? (
+        {id === 'it' ? (
           <div className="budgetNote">
-            Budget for IT Infrastructure should be a separate one since it has to be approved by the <b>Director - IT</b>.
+            Budget for IT Infrastructure should be a separate one since it has to be approved by the{' '}
+            <b>Director - IT</b>.
           </div>
         ) : null}
       </div>
@@ -718,8 +302,11 @@ const BudgetProposalGuidelines: React.FC<{ embedded?: boolean }> = ({ embedded =
   );
 
   return (
-    <div className={`budgetPage ${embedded ? "budgetPageEmbedded" : ""}`} onClick={() => setActiveSection(null)}>
-      <div className={`budgetCard ${embedded ? "budgetCardEmbedded" : ""}`}>
+    <div
+      className={`budgetPage ${embedded ? 'budgetPageEmbedded' : ''}`}
+      onClick={() => setActiveSection(null)}
+    >
+      <div className={`budgetCard ${embedded ? 'budgetCardEmbedded' : ''}`}>
         <div className="cardContent">
           <div className="budgetHeader">Budget Proposal Guidelines</div>
           <div className="budgetSectionTitleWrap">
@@ -727,16 +314,26 @@ const BudgetProposalGuidelines: React.FC<{ embedded?: boolean }> = ({ embedded =
             <div className="budgetSectionLine" />
           </div>
           <div className="budgetTabRow">
-            {renderButton("skill", "Skilling")}
-            {renderButton("events", "Events")}
-            {renderButton("research", "Research")}
+            {renderButton('skill', 'Skilling')}
+            {renderButton('events', 'Events')}
+            {renderButton('research', 'Research')}
           </div>
-          <div className={`budgetSectionCard ${activeSection === "skill" ? "isVisible" : ""}`} onClick={(event) => event.stopPropagation()}>
+          <div
+            className={`budgetSectionCard ${activeSection === 'skill' ? 'isVisible' : ''}`}
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="budgetSectionCardInner">
               <div className="budgetTableWrap">
                 <table className="budgetEntryTable">
                   <thead>
-                    <tr><th>Designation</th><th>Registration</th><th>Travel</th><th>Food</th><th>Accommodation</th><th>Total</th></tr>
+                    <tr>
+                      <th>Designation</th>
+                      <th>Registration</th>
+                      <th>Travel</th>
+                      <th>Food</th>
+                      <th>Accommodation</th>
+                      <th>Total</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {guidelineSkillingRows.map((row) => {
@@ -755,41 +352,85 @@ const BudgetProposalGuidelines: React.FC<{ embedded?: boolean }> = ({ embedded =
                   </tbody>
                 </table>
               </div>
-              <div className="budgetNote">Conference registration fee should be included under <b>Skilling</b>.</div>
+              <div className="budgetNote">
+                Conference registration fee should be included under <b>Skilling</b>.
+              </div>
             </div>
           </div>
-          <div className={`budgetSectionCard ${activeSection === "events" ? "isVisible" : ""}`} onClick={(event) => event.stopPropagation()}>
+          <div
+            className={`budgetSectionCard ${activeSection === 'events' ? 'isVisible' : ''}`}
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="budgetSectionCardInner">
               <div className="budgetTableWrap">
                 <p>For Handling Courses</p>
                 <table className="budgetEntryTable">
-                  <thead><tr><th>Event Type</th><th>Budget</th></tr></thead>
+                  <thead>
+                    <tr>
+                      <th>Event Type</th>
+                      <th>Budget</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    <tr><td>Webinar</td><td className="centerTd">{guidelineCurrency(1500)}</td></tr>
-                    <tr><td>Guest Lecture</td><td className="centerTd">{guidelineCurrency(3000)}+ {guidelineCurrency(2000)} (Travel)</td></tr>
-                    <tr><td>Hands-on Training</td><td className="centerTd">{guidelineCurrency(3000)}</td></tr>
+                    <tr>
+                      <td>Webinar</td>
+                      <td className="centerTd">{guidelineCurrency(1500)}</td>
+                    </tr>
+                    <tr>
+                      <td>Guest Lecture</td>
+                      <td className="centerTd">
+                        {guidelineCurrency(3000)}+ {guidelineCurrency(2000)} (Travel)
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Hands-on Training</td>
+                      <td className="centerTd">{guidelineCurrency(3000)}</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
-              <div className="budgetNote">Budget indicated is applicable per programme conducted.</div>
+              <div className="budgetNote">
+                Budget indicated is applicable per programme conducted.
+              </div>
             </div>
           </div>
-          <div className={`budgetSectionCard ${activeSection === "research" ? "isVisible" : ""}`} onClick={(event) => event.stopPropagation()}>
+          <div
+            className={`budgetSectionCard ${activeSection === 'research' ? 'isVisible' : ''}`}
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="budgetSectionCardInner">
               <div className="budgetTableWrap">
                 <table className="budgetEntryTable">
-                  <thead><tr><th>Category</th><th>Budget</th></tr></thead>
+                  <thead>
+                    <tr>
+                      <th>Category</th>
+                      <th>Budget</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    <tr><td>IPR Filing</td><td className="centerTd">{guidelineCurrency(2500)}</td></tr>
-                    <tr><td>Seed Fund</td><td className="centerTd" rowSpan={2}>{guidelineCurrency(10000)}</td></tr>
-                    <tr><td>Consumables</td></tr>
+                    <tr>
+                      <td>IPR Filing</td>
+                      <td className="centerTd">{guidelineCurrency(2500)}</td>
+                    </tr>
+                    <tr>
+                      <td>Seed Fund</td>
+                      <td className="centerTd" rowSpan={2}>
+                        {guidelineCurrency(10000)}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Consumables</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
               <div className="budgetNote">
                 <ul>
                   <li>IPR filing charge cannot be claimed for mandatory publication.</li>
-                  <li>The combined budget for Seed Fund and Consumables is limited to {` ${guidelineCurrency(10000)}.`}</li>
+                  <li>
+                    The combined budget for Seed Fund and Consumables is limited to{' '}
+                    {` ${guidelineCurrency(10000)}.`}
+                  </li>
                   <li>Seed fund may be increased for deserving research projects with approval.</li>
                 </ul>
               </div>
@@ -804,14 +445,14 @@ const BudgetProposalGuidelines: React.FC<{ embedded?: boolean }> = ({ embedded =
             {guidelineHeadButtons.slice(3).map((button) => renderButton(button.id, button.label))}
           </div>
           <div onClick={(event) => event.stopPropagation()}>
-            {renderDepartmentChips("it")}
-            {renderDepartmentChips("lab")}
-            {renderDepartmentChips("departmentEvents")}
-            {renderDepartmentChips("assoc")}
-            {renderDepartmentChips("outreach")}
-            {renderDepartmentChips("academics")}
-            {renderDepartmentChips("office")}
-            {renderDepartmentChips("student")}
+            {renderDepartmentChips('it')}
+            {renderDepartmentChips('lab')}
+            {renderDepartmentChips('departmentEvents')}
+            {renderDepartmentChips('assoc')}
+            {renderDepartmentChips('outreach')}
+            {renderDepartmentChips('academics')}
+            {renderDepartmentChips('office')}
+            {renderDepartmentChips('student')}
           </div>
         </div>
       </div>
@@ -819,8 +460,19 @@ const BudgetProposalGuidelines: React.FC<{ embedded?: boolean }> = ({ embedded =
   );
 };
 
-
 const Budget: React.FC = () => {
+  const budgetCatalog = useBudgetCatalog();
+  const catalogErrorAlertedRef = useRef<string | null>(null);
+  const [catalogVersion, setCatalogVersion] = useState(0);
+  useEffect(() => subscribeBudgetCatalog(() => setCatalogVersion((n) => n + 1)), []);
+  const BUDGET_HEAD_SUB_HEAD_CATALOG = useMemo(
+    () =>
+      Object.entries(SUB_HEAD_BY_BUDGET_HEAD).flatMap(([budgetHead, subHeads]) =>
+        subHeads.map((subHead) => ({ budgetHead, subHead })),
+      ),
+    [catalogVersion],
+  );
+
   const [alertConfig, setAlertConfig] = useState<{
     show: boolean;
     message: React.ReactNode;
@@ -833,7 +485,7 @@ const Budget: React.FC = () => {
   }>({
     show: false,
     message: '',
-    type: 'info'
+    type: 'info',
   });
 
   const showAlert = (
@@ -843,7 +495,7 @@ const Budget: React.FC = () => {
     onConfirm?: () => void,
     showCancel = false,
     confirmText = 'OK',
-    cancelText = 'Cancel'
+    cancelText = 'Cancel',
   ) => {
     setAlertConfig({
       show: true,
@@ -853,19 +505,47 @@ const Budget: React.FC = () => {
       onConfirm,
       showCancel,
       confirmText,
-      cancelText
+      cancelText,
     });
   };
 
-  const closeAlert = () => setAlertConfig(prev => ({ ...prev, show: false }));
+  const closeAlert = () => setAlertConfig((prev) => ({ ...prev, show: false }));
+
+  useEffect(() => {
+    if (!budgetCatalog.error) {
+      catalogErrorAlertedRef.current = null;
+      return;
+    }
+
+    if (catalogErrorAlertedRef.current === budgetCatalog.error) {
+      return;
+    }
+
+    catalogErrorAlertedRef.current = budgetCatalog.error;
+    showAlert(
+      budgetCatalog.error,
+      'error',
+      'Budget catalog unavailable',
+      () => {
+        closeAlert();
+        catalogErrorAlertedRef.current = null;
+        void budgetCatalog.refresh().catch((err) => {
+          const message = err?.message || 'Failed to load budget catalog';
+          catalogErrorAlertedRef.current = message;
+          showAlert(message, 'error', 'Budget catalog unavailable');
+        });
+      },
+      true,
+      'Retry',
+      'Dismiss',
+    );
+  }, [budgetCatalog.error, budgetCatalog.refresh]);
 
   // Form state
   const [applicantName, setApplicantName] = useState('');
   const [applicantSearchQuery, setApplicantSearchQuery] = useState('');
   const [applicantEmployeeId, setApplicantEmployeeId] = useState<number | null>(null);
-  const [applicantSearchResults, setApplicantSearchResults] = useState<ApplicantSearchResult[]>(
-    []
-  );
+  const [applicantSearchResults, setApplicantSearchResults] = useState<ApplicantSearchResult[]>([]);
   const [showApplicantDropdown, setShowApplicantDropdown] = useState(false);
   const [date, setDate] = useState('');
   const [department, setDepartment] = useState('');
@@ -878,22 +558,22 @@ const Budget: React.FC = () => {
   const [beneficiaryEmployeeId, setBeneficiaryEmployeeId] = useState<number | null>(null);
   const [beneficiarySearchQuery, setBeneficiarySearchQuery] = useState('');
   const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<ApplicantSearchResult[]>(
-    []
+    [],
   );
   const [showBeneficiaryDropdown, setShowBeneficiaryDropdown] = useState(false);
   const [subcategorySelections, setSubcategorySelections] = useState<string[]>([]);
   const [categorySelections, setCategorySelections] = useState<SelectOption[]>([]);
   const [categoryItem, setCategoryItem] = useState('');
   const [tagOptions, setTagOptions] = useState<SelectOption[]>([]);
-  const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<Record<string, SelectOption[]>>({});
+  const [subcategoryOptionsByType, setSubcategoryOptionsByType] = useState<
+    Record<string, SelectOption[]>
+  >({});
   const { user } = useAuth();
   const isSuperAdminUser =
-    Boolean(user?.is_super_admin)
-    || Boolean((user as any)?.isSuperAdmin)
-    || (
-    Array.isArray(user?.roles) &&
-    user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin')
-  );
+    Boolean(user?.is_super_admin) ||
+    Boolean((user as any)?.isSuperAdmin) ||
+    (Array.isArray(user?.roles) &&
+      user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin'));
 
   const { id } = useParams();
   const location = useLocation();
@@ -906,13 +586,10 @@ const Budget: React.FC = () => {
 
   const isEditMode = location.pathname.includes('/edit') && !!id;
 
-
   const isViewMode = !!id && !location.pathname.includes('/edit');
-
 
   const isNewMode = !id;
   const isReviewerAmountOnlyEdit = false;
-
 
   const [isEditable, setIsEditable] = useState(isNewMode);
   const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(!id);
@@ -922,7 +599,10 @@ const Budget: React.FC = () => {
   const [actionPopupOpen, setActionPopupOpen] = useState(false);
   const [actionType, setActionType] = useState<'return' | 'reject' | null>(null);
   const [actionComment, setActionComment] = useState('');
+  const [resubmitPopupOpen, setResubmitPopupOpen] = useState(false);
+  const [resubmitRemarks, setResubmitRemarks] = useState('');
   const [showGuidelines, setShowGuidelines] = useState(false);
+  const isReturnedResubmit = isEditMode && isReturnedBudgetStatus(proposalStatus);
   const openGuidelines = () => setShowGuidelines(true);
   const closeGuidelines = () => setShowGuidelines(false);
 
@@ -947,11 +627,9 @@ const Budget: React.FC = () => {
     return `${fyStart}-${String(fyStart + 1).slice(2)}`;
   };
 
-
   const [explicitFiscalYear, setExplicitFiscalYear] = useState<string>(
-    location.state?.fiscalYear || getCurrentFY()
+    location.state?.fiscalYear || getCurrentFY(),
   );
-
 
   const [budgetLines, setBudgetLines] = useState<BudgetLine[]>([
     {
@@ -966,7 +644,6 @@ const Budget: React.FC = () => {
 
   const [expandedRows, setExpandedRows] = useState<number[]>([0]);
 
-
   const getSubcategoryLabel = (type: string): string => {
     if (!type) return 'Sub category';
     if (type.includes(' ')) return type;
@@ -976,8 +653,6 @@ const Budget: React.FC = () => {
   const isMultipleSelect = (type: string): boolean => {
     return ['Faculty_Team', 'Student_Team'].includes(type);
   };
-
-
 
   const subcategoryOptions: SelectOption[] = beneficiaryType
     ? subcategoryOptionsByType[beneficiaryType] || []
@@ -1001,7 +676,6 @@ const Budget: React.FC = () => {
     }),
   };
 
-
   const getSubHeads = (head: string) => SUB_HEAD_BY_BUDGET_HEAD[head] || [];
 
   const updateLine = (index: number, field: keyof BudgetLine, value: string) => {
@@ -1011,7 +685,6 @@ const Budget: React.FC = () => {
         ...updated[index],
         [field]: value,
       };
-
 
       if (field === 'budgetHead' && value !== updated[index].budgetHead) {
         updated[index].subHead = '';
@@ -1063,9 +736,7 @@ const Budget: React.FC = () => {
   };
 
   const deleteLine = (index: number) => {
-    setBudgetLines((prev) =>
-      prev.length === 1 ? prev : prev.filter((_, i) => i !== index)
-    );
+    setBudgetLines((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)));
   };
 
   const lineTotal = (line: BudgetLine) => {
@@ -1088,9 +759,9 @@ const Budget: React.FC = () => {
     }
 
     try {
-      const response = await authenticityUtility.get(
-        `${budgetApiBase}/search-applicant?q=${encodeURIComponent(query)}`
-      ) as { success?: boolean; status?: string; data?: ApplicantSearchResult[] };
+      const response = (await authenticityUtility.get(
+        `${budgetApiBase}/search-applicant?q=${encodeURIComponent(query)}`,
+      )) as { success?: boolean; status?: string; data?: ApplicantSearchResult[] };
 
       if (response.status === 'success' || response.success) {
         setApplicantSearchResults(Array.isArray(response.data) ? response.data : []);
@@ -1106,7 +777,9 @@ const Budget: React.FC = () => {
   const handleSelectApplicant = (emp: ApplicantSearchResult) => {
     setApplicantName((emp.name || '').trim());
     setApplicantSearchQuery((emp.name || '').trim());
-    setApplicantEmployeeId(Number.isInteger(Number(emp.employee_id)) ? Number(emp.employee_id) : null);
+    setApplicantEmployeeId(
+      Number.isInteger(Number(emp.employee_id)) ? Number(emp.employee_id) : null,
+    );
     setDepartment(emp.department || '');
     setApplicantEntity((emp as any).entity || '');
     setDesignation(emp.designation || '');
@@ -1129,9 +802,9 @@ const Budget: React.FC = () => {
         typeParam = '&type=Non-Teaching';
       }
 
-      const response = await authenticityUtility.get(
-        `${budgetApiBase}/search-applicant?q=${encodeURIComponent(query)}${typeParam}`
-      ) as { success?: boolean; status?: string; data?: ApplicantSearchResult[] };
+      const response = (await authenticityUtility.get(
+        `${budgetApiBase}/search-applicant?q=${encodeURIComponent(query)}${typeParam}`,
+      )) as { success?: boolean; status?: string; data?: ApplicantSearchResult[] };
 
       if (response.status === 'success' || response.success) {
         setBeneficiarySearchResults(Array.isArray(response.data) ? response.data : []);
@@ -1146,7 +819,9 @@ const Budget: React.FC = () => {
 
   const handleSelectBeneficiary = (emp: ApplicantSearchResult) => {
     setBeneficiaryValue((emp.name || '').trim());
-    setBeneficiaryEmployeeId(Number.isInteger(Number(emp.employee_id)) ? Number(emp.employee_id) : null);
+    setBeneficiaryEmployeeId(
+      Number.isInteger(Number(emp.employee_id)) ? Number(emp.employee_id) : null,
+    );
     setBeneficiarySearchQuery((emp.name || '').trim());
     setShowBeneficiaryDropdown(false);
   };
@@ -1154,33 +829,29 @@ const Budget: React.FC = () => {
   const getBudgetHeadSelectGroups = (rowIndex: number): BudgetHeadSelectGroup[] => {
     const query = normalizeText(budgetHeadFilter[rowIndex]).toLowerCase();
 
-    const headGroups: BudgetHeadSelectGroup[] = BUDGET_HEAD_GROUPS
-      .map((group) => ({
-        label: group.label,
-        options: group.options
-          .filter((head) => !query || head.toLowerCase().includes(query))
-          .map(
-            (head) =>
-              ({
-                value: `head:${head}`,
-                label: head,
-                budgetHead: head,
-                optionType: 'budget-head',
-              }) as BudgetHeadSelectOption
-          ),
-      }))
-      .filter((group) => group.options.length > 0);
+    const headGroups: BudgetHeadSelectGroup[] = BUDGET_HEAD_GROUPS.map((group) => ({
+      label: group.label,
+      options: group.options
+        .filter((head) => !query || head.toLowerCase().includes(query))
+        .map(
+          (head) =>
+            ({
+              value: `head:${head}`,
+              label: head,
+              budgetHead: head,
+              optionType: 'budget-head',
+            }) as BudgetHeadSelectOption,
+        ),
+    })).filter((group) => group.options.length > 0);
 
     if (!query) {
       return headGroups;
     }
 
-    const quickMatches: BudgetHeadSelectOption[] = BUDGET_HEAD_SUB_HEAD_CATALOG
-      .filter(
-        ({ budgetHead, subHead }) =>
-          subHead.toLowerCase().includes(query) ||
-          budgetHead.toLowerCase().includes(query)
-      )
+    const quickMatches: BudgetHeadSelectOption[] = BUDGET_HEAD_SUB_HEAD_CATALOG.filter(
+      ({ budgetHead, subHead }) =>
+        subHead.toLowerCase().includes(query) || budgetHead.toLowerCase().includes(query),
+    )
       .slice(0, 12)
       .map(
         ({ budgetHead, subHead }) =>
@@ -1190,7 +861,7 @@ const Budget: React.FC = () => {
             budgetHead,
             subHead,
             optionType: 'head-sub-head',
-          }) as BudgetHeadSelectOption
+          }) as BudgetHeadSelectOption,
       );
 
     if (quickMatches.length === 0) {
@@ -1208,7 +879,7 @@ const Budget: React.FC = () => {
 
   const handleBudgetHeadSelect = (
     rowIndex: number,
-    selectedOption: BudgetHeadSelectOption | null
+    selectedOption: BudgetHeadSelectOption | null,
   ) => {
     if (!selectedOption) {
       updateLine(rowIndex, 'budgetHead', '');
@@ -1226,12 +897,16 @@ const Budget: React.FC = () => {
     setBudgetHeadFilter((prev) => ({ ...prev, [rowIndex]: '' }));
   };
 
-
-
-  const handleSubmitBudget = async () => {
+  const handleSubmitBudget = async (submittedRemarks?: string) => {
     if (isSubmitting) {
       return;
     }
+    const normalizedResubmitRemarks = normalizeText(submittedRemarks);
+    if (isReturnedResubmit && submittedRemarks !== undefined && !normalizedResubmitRemarks) {
+      showAlert('Remarks are required to resubmit this budget.', 'warning');
+      return;
+    }
+
     if (!budgetLines.length) {
       showAlert('Please add at least one budget line.', 'warning');
       return;
@@ -1273,14 +948,15 @@ const Budget: React.FC = () => {
 
       // Month splitup must EXACTLY match unit_amount * quantity
       const totalMonthAmount = Object.values(line.monthAmounts || {}).reduce(
-        (sum, val) => sum + (Number(val) || 0), 0
+        (sum, val) => sum + (Number(val) || 0),
+        0,
       );
 
       const expectedTotal = unitAmount * quantity;
       if (Math.abs(totalMonthAmount - expectedTotal) > 0.01) {
         showAlert(
           `Line ${i + 1}: Month total (₹${totalMonthAmount.toFixed(2)}) must equal Unit Amount × Qty (₹${expectedTotal.toFixed(2)})`,
-          'warning'
+          'warning',
         );
         return;
       }
@@ -1318,9 +994,20 @@ const Budget: React.FC = () => {
 
     // Fiscal year validation
     const safeFY = String(explicitFiscalYear);
-    const fiscalYearInt = parseInt(safeFY.split("-")[0]);
+    const fiscalYearInt = parseInt(safeFY.split('-')[0]);
     if (isNaN(fiscalYearInt)) {
-      showAlert("Error: Invalid Fiscal Year calculated. Please refresh.", 'error');
+      showAlert('Error: Invalid Fiscal Year calculated. Please refresh.', 'error');
+      return;
+    }
+
+    if (isReturnedResubmit && submittedRemarks === undefined) {
+      setResubmitRemarks('');
+      setResubmitPopupOpen(true);
+      return;
+    }
+
+    if (isReturnedResubmit && !normalizedResubmitRemarks) {
+      showAlert('Remarks are required to resubmit this budget.', 'warning');
       return;
     }
 
@@ -1328,22 +1015,59 @@ const Budget: React.FC = () => {
       budget_head: line.budgetHead?.trim(),
       sub_head: line.subHead?.trim(),
       unit_amount: Number(line.amount),
-      quantity: Number(line.qty),  // Now guaranteed > 0
+      quantity: Number(line.qty), // Now guaranteed > 0
       line_description: line.description?.trim(),
       month_allocations: line.monthAmounts || {},
     }));
 
+    const consolidatedLines = (() => {
+      const grouped = new Map<string, any>();
+      formattedLines.forEach((line) => {
+        const key = `${String(line.budget_head || '')
+          .trim()
+          .toLowerCase()}::${String(line.sub_head || '')
+          .trim()
+          .toLowerCase()}`;
+        if (grouped.has(key)) {
+          const existing = grouped.get(key);
+          const existingTotal = Number(existing.unit_amount || 0) * Number(existing.quantity || 1);
+          const currentTotal = Number(line.unit_amount || 0) * Number(line.quantity || 1);
+          existing.unit_amount = existingTotal + currentTotal;
+          existing.quantity = 1;
+          if (line.line_description && line.line_description.trim()) {
+            if (
+              existing.line_description &&
+              !existing.line_description.includes(line.line_description)
+            ) {
+              existing.line_description += `; ${line.line_description}`;
+            } else if (!existing.line_description) {
+              existing.line_description = line.line_description;
+            }
+          }
+          const combinedMonths = { ...existing.month_allocations };
+          Object.entries(line.month_allocations || {}).forEach(([m, v]) => {
+            combinedMonths[m] = String(Number(combinedMonths[m] || 0) + Number(v || 0));
+          });
+          existing.month_allocations = combinedMonths;
+        } else {
+          grouped.set(key, { ...line });
+        }
+      });
+      return Array.from(grouped.values());
+    })();
+
     const payload = {
       request_date: date,
       fiscal_year: fiscalYearInt,
-      employee_id: Number.isInteger(Number(applicantEmployeeId)) && Number(applicantEmployeeId) > 0
-        ? Number(applicantEmployeeId)
-        : undefined,
+      employee_id:
+        Number.isInteger(Number(applicantEmployeeId)) && Number(applicantEmployeeId) > 0
+          ? Number(applicantEmployeeId)
+          : undefined,
       beneficiary_type: beneficiaryType?.trim(),
       beneficiary_employee_id:
         ['Faculty', 'Staff'].includes(beneficiaryType) &&
-          Number.isInteger(Number(beneficiaryEmployeeId)) &&
-          Number(beneficiaryEmployeeId) > 0
+        Number.isInteger(Number(beneficiaryEmployeeId)) &&
+        Number(beneficiaryEmployeeId) > 0
           ? Number(beneficiaryEmployeeId)
           : undefined,
       beneficiary_value: displayBeneficiaryValue,
@@ -1351,7 +1075,8 @@ const Budget: React.FC = () => {
       applicant_name: applicantName?.trim(),
       applicant_entity: applicantEntity?.trim() || null,
       budget_tag: selectedTag?.trim(),
-      lines: formattedLines,
+      lines: consolidatedLines,
+      ...(isReturnedResubmit ? { resubmission_remarks: normalizedResubmitRemarks } : {}),
     };
 
     try {
@@ -1359,21 +1084,23 @@ const Budget: React.FC = () => {
       const isPrivilegedReviewer = isAdminContextEdit && isEditMode;
       const endpoint = isPrivilegedReviewer
         ? `/adminbudget/${id}`
-        : (isEditMode ? `${budgetApiBase}/${id}` : budgetApiBase);
+        : isEditMode
+          ? `${budgetApiBase}/${id}`
+          : budgetApiBase;
 
       const requestPayload = isPrivilegedReviewer
         ? {
-          ...payload,
-          lines: formattedLines.map((line, lineIndex) => ({
-            line_id: budgetLines[lineIndex]?.lineId,
-            budget_head: line.budget_head,
-            sub_head: line.sub_head,
-            line_description: line.line_description,
-            unit_amount: Number(line.unit_amount),
-            quantity: Number(line.quantity),
-            month_allocations: line.month_allocations || {},
-          })),
-        }
+            ...payload,
+            lines: formattedLines.map((line, lineIndex) => ({
+              line_id: budgetLines[lineIndex]?.lineId,
+              budget_head: line.budget_head,
+              sub_head: line.sub_head,
+              line_description: line.line_description,
+              unit_amount: Number(line.unit_amount),
+              quantity: Number(line.quantity),
+              month_allocations: line.month_allocations || {},
+            })),
+          }
         : payload;
 
       const httpMethod = isEditMode ? 'put' : 'post';
@@ -1384,36 +1111,57 @@ const Budget: React.FC = () => {
         throw new Error(result.message || 'Submission failed on server');
       }
 
+      if (isReturnedResubmit) {
+        setResubmitPopupOpen(false);
+        setResubmitRemarks('');
+      }
+
+      const isDirectDoFApproval =
+        !isEditMode && String(result.data?.currentStage || '').toLowerCase() === 'completed';
+
       showAlert(
-        isPrivilegedReviewer
-          ? 'Budget updated successfully!'
-          : isEditMode
-            ? `Budget updated successfully!`
-            : (
-              <>
-                Budget submitted successfully!
-                <br />
-                Reference No.: <strong>{result.data.proposalRef}</strong>
-              </>
-            ),
+        isPrivilegedReviewer ? (
+          'Budget updated successfully!'
+        ) : isEditMode ? (
+          isReturnedResubmit ? (
+            'Budget resubmitted successfully!'
+          ) : (
+            'Budget updated successfully!'
+          )
+        ) : (
+          <>
+            {isDirectDoFApproval
+              ? 'Budget approved successfully!'
+              : 'Budget submitted successfully!'}
+            <br />
+            Reference No.: <strong>{result.data.proposalRef}</strong>
+          </>
+        ),
         'success',
         undefined,
         () => {
           closeAlert();
           if (!isEditMode) {
             // Reset form
-            setBudgetLines([{
-              budgetHead: '', subHead: '', amount: '', qty: '1', monthAmounts: { ...EMPTY_MONTHS }, description: '',
-            }]);
+            setBudgetLines([
+              {
+                budgetHead: '',
+                subHead: '',
+                amount: '',
+                qty: '1',
+                monthAmounts: { ...EMPTY_MONTHS },
+                description: '',
+              },
+            ]);
             setExpandedRows([0]);
             // ... rest of reset code
           }
           if (isPrivilegedReviewer) {
-            navigate("/admin/budget");
+            navigate('/admin/budget');
           } else {
-            navigate("/budgetcard");
+            navigate('/budgetcard');
           }
-        }
+        },
       );
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } }; message?: string };
@@ -1423,9 +1171,6 @@ const Budget: React.FC = () => {
       setIsSubmitting(false);
     }
   };
-
-
-
 
   useEffect(() => {
     let cancelled = false;
@@ -1440,25 +1185,31 @@ const Budget: React.FC = () => {
       const nextOptions: Record<string, SelectOption[]> = {};
 
       try {
-        const json = await authenticityUtility.get(`${budgetApiBase}/org-units`) as any;
+        const json = (await authenticityUtility.get(`${budgetApiBase}/org-units`)) as any;
         const grouped = json?.data?.grouped;
 
         if (grouped && typeof grouped === 'object') {
-          Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).forEach(([beneficiaryKey, apiType]) => {
-            const rows = Array.isArray((grouped as Record<string, any[]>)[apiType])
-              ? (grouped as Record<string, any[]>)[apiType]
-              : [];
-            nextOptions[beneficiaryKey] = toOptions(rows);
-          });
+          Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE).forEach(
+            ([beneficiaryKey, apiType]) => {
+              const rows = Array.isArray((grouped as Record<string, any[]>)[apiType])
+                ? (grouped as Record<string, any[]>)[apiType]
+                : [];
+              nextOptions[beneficiaryKey] = toOptions(rows);
+            },
+          );
         } else {
           throw new Error('Grouped org-units payload unavailable');
         }
       } catch (bulkError) {
         console.error('Failed to fetch bulk org units, falling back to per-type calls:', bulkError);
 
-        for (const [beneficiaryKey, apiType] of Object.entries(BENEFICIARY_TYPE_TO_ENTITY_API_TYPE)) {
+        for (const [beneficiaryKey, apiType] of Object.entries(
+          BENEFICIARY_TYPE_TO_ENTITY_API_TYPE,
+        )) {
           try {
-            const json = await authenticityUtility.get(`${budgetApiBase}/org-units/${apiType}`) as any;
+            const json = (await authenticityUtility.get(
+              `${budgetApiBase}/org-units/${apiType}`,
+            )) as any;
             const rows = Array.isArray(json?.data) ? json.data : [];
             nextOptions[beneficiaryKey] = toOptions(rows);
           } catch (error) {
@@ -1517,23 +1268,20 @@ const Budget: React.FC = () => {
     }
   }, []);
 
-
-
   useEffect(() => {
     if (beneficiaryType === 'Institution') {
       setBeneficiaryValue('K.S.Rangasamy College of Technology');
     }
   }, [beneficiaryType]);
 
-
   useEffect(() => {
     if (!id) return;
 
     const loadProposal = async () => {
       try {
-        const json = await authenticityUtility.get(`${budgetApiBase}/${id}`) as any;
+        const json = (await authenticityUtility.get(`${budgetApiBase}/${id}`)) as any;
         if (!json?.success) {
-          console.error("Failed to load proposal", json);
+          console.error('Failed to load proposal', json);
           return;
         }
 
@@ -1541,27 +1289,24 @@ const Budget: React.FC = () => {
         const p = data.master || data;
 
         if (!p) {
-          console.error("No proposal data found");
+          console.error('No proposal data found');
           return;
         }
 
         setProposalStatus((p.status || '').toString());
         setProposalStage((p.current_stage || p.currentStage || '').toString());
 
-
-        setApplicantName(p.applicant_name || p.user_name || p.name || "");
-        setApplicantSearchQuery(p.applicant_name || p.user_name || p.name || "");
+        setApplicantName(p.applicant_name || p.user_name || p.name || '');
+        setApplicantSearchQuery(p.applicant_name || p.user_name || p.name || '');
         setApplicantEmployeeId(
           Number.isInteger(Number(p.employee_id)) && Number(p.employee_id) > 0
             ? Number(p.employee_id)
-            : null
+            : null,
         );
-        setEmail(p.applicant_email || p.email || p.user_email || "");
+        setEmail(p.applicant_email || p.email || p.user_email || '');
 
-
-        setDesignation(p.designation || p.user_designation || "");
-        setMobile(p.mobile || p.user_mobile || p.phone || "");
-
+        setDesignation(p.designation || p.user_designation || '');
+        setMobile(p.mobile || p.user_mobile || p.phone || '');
 
         const normalizedBeneficiaryType =
           p.beneficiary_type === 'ProfessionalBodies'
@@ -1577,10 +1322,12 @@ const Budget: React.FC = () => {
 
         const normalizedBeneficiaryValue =
           normalizedBeneficiaryType === 'Department'
-            ? (p.department || p.beneficiary_value || '')
-            : ['Centre', 'Cell', 'Club', 'Section', 'Professional Body'].includes(normalizedBeneficiaryType)
-              ? (p.org_unit_name || p.beneficiary_value || '')
-              : (p.beneficiary_value || '');
+            ? p.department || p.beneficiary_value || ''
+            : ['Centre', 'Cell', 'Club', 'Section', 'Professional Body'].includes(
+                  normalizedBeneficiaryType,
+                )
+              ? p.org_unit_name || p.beneficiary_value || ''
+              : p.beneficiary_value || '';
 
         const normalizedApplicantDepartment =
           p.applicant_department ||
@@ -1595,8 +1342,7 @@ const Budget: React.FC = () => {
         setApplicantEntity(p.applicant_entity || p.user_entity || '');
 
         // Date
-        setDate((p.request_date || "").split("T")[0]);
-
+        setDate((p.request_date || '').split('T')[0]);
 
         const apiLines = Array.isArray(data.lines) ? data.lines : [];
         const approvedAllocations = data.approved_allocations;
@@ -1606,8 +1352,10 @@ const Budget: React.FC = () => {
           !Array.isArray(approvedAllocations) &&
           Object.keys(approvedAllocations).length > 0;
         const apiAllocations = isAdminContextEdit
-          ? (hasApprovedAllocations ? approvedAllocations : (data.allocations || {}))
-          : (data.allocations || {});
+          ? hasApprovedAllocations
+            ? approvedAllocations
+            : data.allocations || {}
+          : data.allocations || {};
 
         const mappedLines = apiLines.map((ln: any) => {
           const lineAllocations = apiAllocations[ln.id] || {};
@@ -1616,22 +1364,22 @@ const Budget: React.FC = () => {
           const approvedLineTotal = Number(ln.approved_line_total ?? ln.line_total ?? 0);
           const inferredApprovedQty =
             approvedUnit > 0 && Number.isFinite(approvedLineTotal) && approvedLineTotal > 0
-              ? (approvedLineTotal / approvedUnit)
+              ? approvedLineTotal / approvedUnit
               : proposedQty;
           const roundedApprovedQty = Number.isFinite(inferredApprovedQty)
-            ? (Math.abs(inferredApprovedQty - Math.round(inferredApprovedQty)) < 0.0001
+            ? Math.abs(inferredApprovedQty - Math.round(inferredApprovedQty)) < 0.0001
               ? Math.round(inferredApprovedQty)
-              : inferredApprovedQty)
+              : inferredApprovedQty
             : proposedQty;
 
           return {
             lineId: Number(ln.id),
-            budgetHead: (ln.budget_head || "").toString(),
-            subHead: (ln.sub_head || "").toString(),
-            amount: String(parseInt((ln.approved_unit_amount ?? ln.unit_amount) || "0", 10)),
+            budgetHead: (ln.budget_head || '').toString(),
+            subHead: (ln.sub_head || '').toString(),
+            amount: String(parseInt((ln.approved_unit_amount ?? ln.unit_amount) || '0', 10)),
             qty: String(roundedApprovedQty > 0 ? roundedApprovedQty : proposedQty),
             monthAmounts: lineAllocations,
-            description: (ln.line_description || "").toString(),
+            description: (ln.line_description || '').toString(),
           };
         });
 
@@ -1639,9 +1387,19 @@ const Budget: React.FC = () => {
           setBudgetLines(mappedLines);
         }
 
-
-        const editableStatuses = ['draft', 'level1_returned', 'ithead_returned', 'dof_returned', 'submitted', 're_submitted'];
-        const isStatusEditable = editableStatuses.includes((p.status || '').toLowerCase());
+        const editableStatuses = [
+          'draft',
+          'level1_returned',
+          'ithead_returned',
+          'dof_returned',
+          'principal_returned',
+          'submitted',
+          're_submitted',
+        ];
+        const normalizedLoadedStatus = (p.status || '').toLowerCase();
+        const isStatusEditable =
+          editableStatuses.includes(normalizedLoadedStatus) ||
+          isReturnedBudgetStatus(normalizedLoadedStatus);
         const isEditURL = location.pathname.includes('/edit');
         const currentStageKey = String(p.current_stage || p.currentStage || '').toLowerCase();
         const stagePermission = STAGE_PERMISSION_MAP[currentStageKey];
@@ -1652,25 +1410,27 @@ const Budget: React.FC = () => {
         const canPrivilegedAdminEdit =
           isAdminContextEdit &&
           isEditURL &&
-          (
-            isSuperAdminUser ||
+          (isSuperAdminUser ||
             hasPermission(user, 'budget.admin.view') ||
             hasPermission(user, 'budget.admin.manage') ||
             hasAnyBudgetWorkflowPermission ||
-            (Boolean(stagePermission) && hasPermission(user, stagePermission))
-          );
+            (Boolean(stagePermission) && hasPermission(user, stagePermission)));
         const canOverrideEditLock = canPrivilegedAdminEdit;
         const viewModePath = isAdminContextEdit ? `/budget/${id}?admin=true` : `/budget/${id}`;
         const accessType = json.accessType || 'owner';
 
         // Applicants/beneficiaries can only view; they cannot edit someone else's proposal.
-        if ((accessType === 'applicant' || accessType === 'beneficiary') && !canPrivilegedAdminEdit) {
+        if (
+          (accessType === 'applicant' || accessType === 'beneficiary') &&
+          !canPrivilegedAdminEdit
+        ) {
           setIsEditable(false);
           setExpandedRows(mappedLines.map((_, idx) => idx));
           if (isEditURL) {
-            const viewOnlyMessage = accessType === 'beneficiary'
-              ? 'You are the beneficiary for this proposal. You can only view it, not edit.'
-              : 'You are the applicant for this proposal. You can only view it, not edit.';
+            const viewOnlyMessage =
+              accessType === 'beneficiary'
+                ? 'You are the beneficiary for this proposal. You can only view it, not edit.'
+                : 'You are the applicant for this proposal. You can only view it, not edit.';
             showAlert(viewOnlyMessage, 'info', undefined, () => {
               closeAlert();
               navigate(viewModePath);
@@ -1681,16 +1441,20 @@ const Budget: React.FC = () => {
           setExpandedRows(mappedLines.map((_, idx) => idx));
         } else if (isEditURL && !isStatusEditable && !canOverrideEditLock) {
           setIsEditable(false);
-          showAlert(`This proposal cannot be edited because it is currently '${p.status}'. Switching to View mode.`, 'warning', undefined, () => {
-            closeAlert();
-            navigate(viewModePath);
-          });
+          showAlert(
+            `This proposal cannot be edited because it is currently '${p.status}'. Switching to View mode.`,
+            'warning',
+            undefined,
+            () => {
+              closeAlert();
+              navigate(viewModePath);
+            },
+          );
         } else {
           setIsEditable(true);
         }
-
       } catch (e) {
-        console.error("loadProposal error", e);
+        console.error('loadProposal error', e);
       }
     };
 
@@ -1736,7 +1500,7 @@ const Budget: React.FC = () => {
         }
       },
       true,
-      'Approve'
+      'Approve',
     );
   };
 
@@ -1767,7 +1531,7 @@ const Budget: React.FC = () => {
         }
       },
       true,
-      'Archive'
+      'Archive',
     );
   };
 
@@ -1818,20 +1582,18 @@ const Budget: React.FC = () => {
     }
   };
 
-
   useEffect(() => {
-
     if (id || applicantName) return;
 
     const fetchUserDetails = async () => {
       try {
-        const json = await authenticityUtility.get(`${budgetApiBase}/faculty`) as any;
+        const json = (await authenticityUtility.get(`${budgetApiBase}/faculty`)) as any;
 
         if (json.success && json.data) {
           setApplicantEmployeeId(
             Number.isInteger(Number(json.data.employee_id)) && Number(json.data.employee_id) > 0
               ? Number(json.data.employee_id)
-              : null
+              : null,
           );
           setApplicantName(json.data.name || '');
           setApplicantSearchQuery(json.data.name || '');
@@ -1839,12 +1601,11 @@ const Budget: React.FC = () => {
           setApplicantEntity(json.data.entity_name || json.data.entity || '');
           setEmail(json.data.email || '');
 
-
           if (json.data.designation) setDesignation(json.data.designation);
           if (json.data.mobile) setMobile(json.data.mobile);
         }
       } catch (error) {
-        console.error("Failed to auto-fill user details", error);
+        console.error('Failed to auto-fill user details', error);
       }
     };
 
@@ -1876,6 +1637,41 @@ const Budget: React.FC = () => {
   }, [beneficiaryType]);
 
   const showTagDropdown = !!beneficiaryType?.trim();
+  const isBudgetFormLocked = isViewMode || !isEditable;
+  const normalizedProposalStatus = proposalStatus.toLowerCase();
+  const normalizedProposalStage = proposalStage.toLowerCase();
+  const isFinalApprovedStatus =
+    normalizedProposalStatus === 'approved' ||
+    normalizedProposalStatus === 'completed' ||
+    normalizedProposalStatus === 'principal_approved';
+  const isTerminalProposalStatus =
+    isFinalApprovedStatus ||
+    ['rejected', 'archived', 'archive'].some((token) => normalizedProposalStatus.includes(token));
+  const stageApprovedStatusMap: Record<string, string[]> = {
+    level1: [
+      'level1_approved',
+      'hod_approved',
+      'coordinator_approved',
+      'ithead_approved',
+      'dof_approved',
+      'principal_approved',
+      'completed',
+    ],
+    ithead: ['ithead_approved', 'dof_approved', 'principal_approved', 'completed'],
+    dof: ['dof_approved', 'principal_approved', 'completed'],
+    principal: ['principal_approved', 'completed'],
+  };
+  const isCurrentStageAlreadyApproved = (
+    stageApprovedStatusMap[normalizedProposalStage] || []
+  ).some((statusToken) => normalizedProposalStatus === statusToken);
+  const canShowAdminActions =
+    !isSuperAdmin(user) &&
+    !isEditMode &&
+    Boolean(normalizedProposalStage) &&
+    !['completed', 'approved', 'archived', 'rejected'].includes(normalizedProposalStage) &&
+    !isTerminalProposalStatus &&
+    !isCurrentStageAlreadyApproved &&
+    canProcessStage(proposalStage);
 
   return (
     <div className="budgetPage">
@@ -1891,9 +1687,7 @@ const Budget: React.FC = () => {
       </div>
 
       <fieldset disabled={isViewMode} style={{ border: 0, padding: 0, margin: 0 }}>
-
         <div className="budgetCard">
-
           <div
             className="cardHeader"
             style={{
@@ -1903,14 +1697,13 @@ const Budget: React.FC = () => {
               cursor: 'pointer',
               padding: '15px 20px',
               borderBottom: '1px solid #e0e0e0',
-              transition: 'all 0.3s ease'
+              transition: 'all 0.3s ease',
             }}
             onClick={() => setIsApplicantCardOpen(!isApplicantCardOpen)}
           >
             <h5 style={{ margin: 0, fontSize: '16px', color: '#0069ab', fontWeight: '600' }}>
               Applicant Details
             </h5>
-
 
             <svg
               width="12"
@@ -1919,7 +1712,7 @@ const Budget: React.FC = () => {
               className={`card-toggle-arrow ${isApplicantCardOpen ? 'open' : ''}`}
               style={{
                 transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                cursor: 'pointer'
+                cursor: 'pointer',
               }}
             >
               <polyline
@@ -1931,18 +1724,22 @@ const Budget: React.FC = () => {
                 fill="none"
               />
             </svg>
-
           </div>
 
-
           <div className="cardContent" style={{ padding: '20px' }}>
-
-
             {!isApplicantCardOpen && (
               <div className="row">
                 <div className="col-md-7">
                   <div className="formGroup" style={{ marginBottom: 0 }}>
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                    <label
+                      style={{
+                        fontSize: '14px',
+                        color: '#495057',
+                        marginBottom: '8px',
+                        fontWeight: '600',
+                        display: 'block',
+                      }}
+                    >
                       Applicant Name
                     </label>
                     <input
@@ -1951,7 +1748,11 @@ const Budget: React.FC = () => {
                       disabled={true}
                       placeholder="Enter full name"
                       className="budget-input"
-                      style={{ backgroundColor: '#fff', border: '1px solid #e0e0e0', cursor: 'pointer' }}
+                      style={{
+                        backgroundColor: '#fff',
+                        border: '1px solid #e0e0e0',
+                        cursor: 'pointer',
+                      }}
                       onClick={() => setIsApplicantCardOpen(true)}
                       readOnly
                     />
@@ -1959,7 +1760,15 @@ const Budget: React.FC = () => {
                 </div>
                 <div className="col-md-5">
                   <div className="formGroup" style={{ marginBottom: 0 }}>
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                    <label
+                      style={{
+                        fontSize: '14px',
+                        color: '#495057',
+                        marginBottom: '8px',
+                        fontWeight: '600',
+                        display: 'block',
+                      }}
+                    >
                       Date
                     </label>
                     <input
@@ -1967,7 +1776,11 @@ const Budget: React.FC = () => {
                       value={date}
                       disabled={true}
                       className="budget-input"
-                      style={{ backgroundColor: '#fff', border: '1px solid #e0e0e0', cursor: 'pointer' }}
+                      style={{
+                        backgroundColor: '#fff',
+                        border: '1px solid #e0e0e0',
+                        cursor: 'pointer',
+                      }}
                       onClick={() => setIsApplicantCardOpen(true)}
                       readOnly
                     />
@@ -1976,13 +1789,20 @@ const Budget: React.FC = () => {
               </div>
             )}
 
-
             {isApplicantCardOpen && (
               <>
                 <div className="row mb-3" style={{ marginBottom: '15px' }}>
                   <div className="col-md-7">
                     <div className="formGroup" style={{ position: 'relative' }}>
-                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                      <label
+                        style={{
+                          fontSize: '14px',
+                          color: '#495057',
+                          marginBottom: '8px',
+                          fontWeight: '600',
+                          display: 'block',
+                        }}
+                      >
                         Applicant Name
                       </label>
                       <input
@@ -2025,7 +1845,7 @@ const Budget: React.FC = () => {
                             border: '1px solid #e0e0e0',
                             borderRadius: '12px',
                             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                            zIndex: 1000,
+                            zIndex: BUDGET_DROPDOWN_LAYER,
                             maxHeight: '250px',
                             overflowY: 'auto',
                             marginTop: '4px',
@@ -2073,7 +1893,7 @@ const Budget: React.FC = () => {
                               border: '1px solid #e0e0e0',
                               borderRadius: '12px',
                               boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                              zIndex: 1000,
+                              zIndex: BUDGET_DROPDOWN_LAYER,
                               marginTop: '4px',
                             }}
                           >
@@ -2086,7 +1906,15 @@ const Budget: React.FC = () => {
                   </div>
                   <div className="col-md-5">
                     <div className="formGroup">
-                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                      <label
+                        style={{
+                          fontSize: '14px',
+                          color: '#495057',
+                          marginBottom: '8px',
+                          fontWeight: '600',
+                          display: 'block',
+                        }}
+                      >
                         Date
                       </label>
                       <input
@@ -2095,8 +1923,14 @@ const Budget: React.FC = () => {
                         onChange={(e) => setDate(e.target.value)}
                         disabled={!isEditable}
                         className="budget-input"
-                        onFocus={(e) => { e.currentTarget.style.borderColor = '#0069ab'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)'; }}
-                        onBlur={(e) => { e.currentTarget.style.borderColor = '#e0e0e0'; e.currentTarget.style.boxShadow = 'none'; }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = '#0069ab';
+                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = '#e0e0e0';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
                         required
                       />
                     </div>
@@ -2106,7 +1940,15 @@ const Budget: React.FC = () => {
                 <div className="row mb-3" style={{ marginBottom: '15px' }}>
                   <div className="col-md-7">
                     <div className="formGroup">
-                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                      <label
+                        style={{
+                          fontSize: '14px',
+                          color: '#495057',
+                          marginBottom: '8px',
+                          fontWeight: '600',
+                          display: 'block',
+                        }}
+                      >
                         Department
                       </label>
                       <input
@@ -2116,15 +1958,29 @@ const Budget: React.FC = () => {
                         disabled={!isEditable}
                         placeholder="Department name"
                         className="budget-input"
-                        onFocus={(e) => { e.currentTarget.style.borderColor = '#0069ab'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)'; }}
-                        onBlur={(e) => { e.currentTarget.style.borderColor = '#e0e0e0'; e.currentTarget.style.boxShadow = 'none'; }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = '#0069ab';
+                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = '#e0e0e0';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
                         required
                       />
                     </div>
                   </div>
                   <div className="col-md-5">
                     <div className="formGroup">
-                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                      <label
+                        style={{
+                          fontSize: '14px',
+                          color: '#495057',
+                          marginBottom: '8px',
+                          fontWeight: '600',
+                          display: 'block',
+                        }}
+                      >
                         Designation
                       </label>
                       <input
@@ -2134,8 +1990,14 @@ const Budget: React.FC = () => {
                         disabled={!isEditable}
                         placeholder="e.g., Manager, Staff"
                         className="budget-input"
-                        onFocus={(e) => { e.currentTarget.style.borderColor = '#0069ab'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)'; }}
-                        onBlur={(e) => { e.currentTarget.style.borderColor = '#e0e0e0'; e.currentTarget.style.boxShadow = 'none'; }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = '#0069ab';
+                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = '#e0e0e0';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
                         required
                       />
                     </div>
@@ -2145,7 +2007,15 @@ const Budget: React.FC = () => {
                 <div className="row mb-3" style={{ marginBottom: '15px' }}>
                   <div className="col-md-7">
                     <div className="formGroup">
-                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                      <label
+                        style={{
+                          fontSize: '14px',
+                          color: '#495057',
+                          marginBottom: '8px',
+                          fontWeight: '600',
+                          display: 'block',
+                        }}
+                      >
                         Email
                       </label>
                       <input
@@ -2155,15 +2025,29 @@ const Budget: React.FC = () => {
                         disabled={!isEditable}
                         placeholder="example@email.com"
                         className="budget-input"
-                        onFocus={(e) => { e.currentTarget.style.borderColor = '#0069ab'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)'; }}
-                        onBlur={(e) => { e.currentTarget.style.borderColor = '#e0e0e0'; e.currentTarget.style.boxShadow = 'none'; }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = '#0069ab';
+                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = '#e0e0e0';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
                         required
                       />
                     </div>
                   </div>
                   <div className="col-md-5">
                     <div className="formGroup">
-                      <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                      <label
+                        style={{
+                          fontSize: '14px',
+                          color: '#495057',
+                          marginBottom: '8px',
+                          fontWeight: '600',
+                          display: 'block',
+                        }}
+                      >
                         Mobile
                       </label>
                       <input
@@ -2174,8 +2058,14 @@ const Budget: React.FC = () => {
                         placeholder="10 digit mobile"
                         pattern="[0-9]{10}"
                         className="budget-input"
-                        onFocus={(e) => { e.currentTarget.style.borderColor = '#0069ab'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)'; }}
-                        onBlur={(e) => { e.currentTarget.style.borderColor = '#e0e0e0'; e.currentTarget.style.boxShadow = 'none'; }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = '#0069ab';
+                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = '#e0e0e0';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
                         required
                       />
                     </div>
@@ -2186,18 +2076,29 @@ const Budget: React.FC = () => {
           </div>
         </div>
 
-
         <div className="budgetCard">
           <div className="cardContent">
             <div className="row mb-3" style={{ marginBottom: '15px' }}>
               <div className="col-md-3">
                 <div className="form-group">
-                  <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block' }}>
+                  <label
+                    style={{
+                      fontSize: '14px',
+                      color: '#495057',
+                      marginBottom: '8px',
+                      fontWeight: '600',
+                      display: 'block',
+                    }}
+                  >
                     Beneficiary
                   </label>
-                  <div style={{ position: 'relative', zIndex: 1000 }}>
+                  <div style={{ position: 'relative', zIndex: BUDGET_FIELD_LAYER }}>
                     <Select
-                      value={beneficiaryType ? { value: beneficiaryType, label: beneficiaryType } as SelectOption : null}
+                      value={
+                        beneficiaryType
+                          ? ({ value: beneficiaryType, label: beneficiaryType } as SelectOption)
+                          : null
+                      }
                       onChange={(selected: any) => {
                         const val = selected?.value || '';
                         setBeneficiaryType(val);
@@ -2223,11 +2124,12 @@ const Budget: React.FC = () => {
                         { value: 'Club', label: 'Club' },
                         { value: 'Section', label: 'Section' },
                         { value: 'Professional Body', label: 'Professional Body' },
-                        { value: 'Institution', label: 'Institution' }
+                        { value: 'Institution', label: 'Institution' },
                       ]}
                       placeholder=""
                       isSearchable={true}
                       isClearable={false}
+                      isDisabled={isBudgetFormLocked}
                       menuPosition="fixed"
                       menuPlacement="auto"
                       styles={{
@@ -2236,41 +2138,40 @@ const Budget: React.FC = () => {
                           minHeight: '45px',
                           height: 45,
                           borderRadius: 12,
-                          border: state.isFocused
-                            ? '1px solid #0069ab'
-                            : '1px solid #e0e0e0',
+                          border: state.isFocused ? '1px solid #0069ab' : '1px solid #e0e0e0',
                           backgroundColor: '#fcfdff',
-                          boxShadow: state.isFocused
-                            ? '0 0 0 3px rgba(0, 105, 171, 0.15)'
-                            : 'none'
+                          boxShadow: state.isFocused ? '0 0 0 3px rgba(0, 105, 171, 0.15)' : 'none',
                         }),
                         dropdownIndicator: (base: any, state: any) => ({
                           ...base,
                           padding: '0 15px',
-                          color: '#666', transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                          color: '#666',
+                          transform: state.selectProps.menuIsOpen
+                            ? 'rotate(180deg)'
+                            : 'rotate(0deg)',
                         }),
                         indicatorSeparator: () => ({ display: 'none' }),
                         valueContainer: (base: any) => ({
                           ...base,
                           padding: '2px 15px',
-                          color: '#333'
+                          color: '#333',
                         }),
                         singleValue: (base: any) => ({
                           ...base,
                           color: '#333',
-                          fontSize: '0.95rem'
+                          fontSize: '0.95rem',
                         }),
                         input: (base: any) => ({
                           ...base,
                           color: '#333',
-                          padding: '0 15px'
+                          padding: '0 15px',
                         }),
                         menu: (base: any) => ({
                           ...base,
-                          zIndex: 999999,
+                          zIndex: BUDGET_DROPDOWN_LAYER,
                           backgroundColor: 'white',
                           borderRadius: 12,
-                          boxShadow: '0 8px 25px rgba(0,0,0,0.15)'
+                          boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
                         }),
                         option: (base: any, state: any) => ({
                           ...base,
@@ -2280,19 +2181,30 @@ const Budget: React.FC = () => {
                             : state.isFocused
                               ? 'rgba(0,105,171,0.1)'
                               : 'white',
-                          color: state.isSelected ? 'white' : '#333'
-                        })
+                          color: state.isSelected ? 'white' : '#333',
+                        }),
                       }}
                     />
                   </div>
                 </div>
-
               </div>
 
               <div className="col-md-6">
                 {['Faculty', 'Staff'].includes(beneficiaryType) ? (
-                  <div className="form-group" style={{ height: '72px', display: 'flex', flexDirection: 'column' }}>
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
+                  <div
+                    className="form-group"
+                    style={{ height: '72px', display: 'flex', flexDirection: 'column' }}
+                  >
+                    <label
+                      style={{
+                        fontSize: '14px',
+                        color: '#495057',
+                        marginBottom: '8px',
+                        fontWeight: '600',
+                        display: 'block',
+                        flexShrink: 0,
+                      }}
+                    >
                       {beneficiaryType === 'Staff' ? 'Staff Name' : 'Faculty Name'}
                     </label>
                     <div style={{ position: 'relative', flex: 1 }}>
@@ -2325,7 +2237,11 @@ const Budget: React.FC = () => {
                             }
                           }, 200);
                         }}
-                        placeholder={beneficiaryType === 'Staff' ? "Search staff by name or ERP ID" : "Search faculty by name or ERP ID"}
+                        placeholder={
+                          beneficiaryType === 'Staff'
+                            ? 'Search staff by name or ERP ID'
+                            : 'Search faculty by name or ERP ID'
+                        }
                         style={{
                           borderRadius: '12px',
                           border: '1px solid #e0e0e0',
@@ -2335,55 +2251,57 @@ const Budget: React.FC = () => {
                           flex: 1,
                           backgroundColor: '#fcfdff',
                           transition: 'all 0.3s ease',
-                          outline: 'none'
+                          outline: 'none',
                         }}
                         required
                       />
-                      {isEditable && showBeneficiaryDropdown && beneficiarySearchResults.length > 0 && (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            top: '100%',
-                            left: 0,
-                            right: 0,
-                            backgroundColor: '#fff',
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '12px',
-                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                            zIndex: 1001,
-                            maxHeight: '250px',
-                            overflowY: 'auto',
-                            marginTop: '4px',
-                          }}
-                        >
-                          {beneficiarySearchResults.map((emp) => (
-                            <div
-                              key={emp.employee_id}
-                              onMouseDown={(evt) => {
-                                evt.preventDefault();
-                                handleSelectBeneficiary(emp);
-                              }}
-                              style={{
-                                padding: '10px 15px',
-                                cursor: 'pointer',
-                                borderBottom: '1px solid #f0f0f0',
-                                transition: 'background-color 0.2s',
-                              }}
-                              onMouseEnter={(evt) => {
-                                evt.currentTarget.style.backgroundColor = '#f8f9fa';
-                              }}
-                              onMouseLeave={(evt) => {
-                                evt.currentTarget.style.backgroundColor = '#fff';
-                              }}
-                            >
-                              <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
-                              <div style={{ fontSize: '12px', color: '#6c757d' }}>
-                                {emp.designation} | {emp.department}
+                      {isEditable &&
+                        showBeneficiaryDropdown &&
+                        beneficiarySearchResults.length > 0 && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              backgroundColor: '#fff',
+                              border: '1px solid #e0e0e0',
+                              borderRadius: '12px',
+                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                              zIndex: BUDGET_DROPDOWN_LAYER,
+                              maxHeight: '250px',
+                              overflowY: 'auto',
+                              marginTop: '4px',
+                            }}
+                          >
+                            {beneficiarySearchResults.map((emp) => (
+                              <div
+                                key={emp.employee_id}
+                                onMouseDown={(evt) => {
+                                  evt.preventDefault();
+                                  handleSelectBeneficiary(emp);
+                                }}
+                                style={{
+                                  padding: '10px 15px',
+                                  cursor: 'pointer',
+                                  borderBottom: '1px solid #f0f0f0',
+                                  transition: 'background-color 0.2s',
+                                }}
+                                onMouseEnter={(evt) => {
+                                  evt.currentTarget.style.backgroundColor = '#f8f9fa';
+                                }}
+                                onMouseLeave={(evt) => {
+                                  evt.currentTarget.style.backgroundColor = '#fff';
+                                }}
+                              >
+                                <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
+                                <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                                  {emp.designation} | {emp.department}
+                                </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                            ))}
+                          </div>
+                        )}
                       {isEditable &&
                         showBeneficiaryDropdown &&
                         beneficiarySearchQuery.length >= 2 &&
@@ -2398,7 +2316,7 @@ const Budget: React.FC = () => {
                               border: '1px solid #e0e0e0',
                               borderRadius: '12px',
                               boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                              zIndex: 1001,
+                              zIndex: BUDGET_DROPDOWN_LAYER,
                               marginTop: '4px',
                             }}
                           >
@@ -2410,8 +2328,20 @@ const Budget: React.FC = () => {
                     </div>
                   </div>
                 ) : beneficiaryType === 'Institution' ? (
-                  <div className="form-group" style={{ height: '72px', display: 'flex', flexDirection: 'column' }}>
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
+                  <div
+                    className="form-group"
+                    style={{ height: '72px', display: 'flex', flexDirection: 'column' }}
+                  >
+                    <label
+                      style={{
+                        fontSize: '14px',
+                        color: '#495057',
+                        marginBottom: '8px',
+                        fontWeight: '600',
+                        display: 'block',
+                        flexShrink: 0,
+                      }}
+                    >
                       Institution
                     </label>
                     <input
@@ -2431,21 +2361,33 @@ const Budget: React.FC = () => {
                         color: '#495057',
                         cursor: 'not-allowed',
                         transition: 'all 0.3s ease',
-                        outline: 'none'
+                        outline: 'none',
                       }}
                       required
                     />
                   </div>
                 ) : subcategoryList.length > 0 ? (
-                  <div className="form-group" style={{ height: '72px', display: 'flex', flexDirection: 'column' }}>
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
+                  <div
+                    className="form-group"
+                    style={{ height: '72px', display: 'flex', flexDirection: 'column' }}
+                  >
+                    <label
+                      style={{
+                        fontSize: '14px',
+                        color: '#495057',
+                        marginBottom: '8px',
+                        fontWeight: '600',
+                        display: 'block',
+                        flexShrink: 0,
+                      }}
+                    >
                       {getSubcategoryLabel(beneficiaryType)}
                     </label>
-                    <div style={{ position: 'relative', zIndex: 1000, flex: 1 }}>
+                    <div style={{ position: 'relative', zIndex: BUDGET_FIELD_LAYER, flex: 1 }}>
                       <Select
                         value={
                           categoryItem
-                            ? { value: categoryItem, label: categoryItem } as SelectOption
+                            ? ({ value: categoryItem, label: categoryItem } as SelectOption)
                             : null
                         }
                         onChange={(selected: any) => {
@@ -2457,6 +2399,7 @@ const Budget: React.FC = () => {
                         placeholder=""
                         isSearchable={true}
                         isClearable={false}
+                        isDisabled={isBudgetFormLocked}
                         menuPosition="fixed"
                         menuPlacement="auto"
                         styles={{
@@ -2465,31 +2408,35 @@ const Budget: React.FC = () => {
                             minHeight: ' 45px',
                             height: '45',
                             borderRadius: 12,
-                            border: state.isFocused
-                              ? '1px solid #0069ab'
-                              : '1px solid #e0e0e0',
+                            border: state.isFocused ? '1px solid #0069ab' : '1px solid #e0e0e0',
                             boxShadow: state.isFocused
                               ? '0 0 0 3px rgba(0, 105, 171, 0.15)'
                               : 'none',
                             backgroundColor: '#fcfdff',
                             fontSize: '0.95rem',
-                            fontFamily: 'inherit'
+                            fontFamily: 'inherit',
                           }),
                           dropdownIndicator: (base: any, state: any) => ({
                             ...base,
                             padding: '0 15px',
-                            transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                            transform: state.selectProps.menuIsOpen
+                              ? 'rotate(180deg)'
+                              : 'rotate(0deg)',
                           }),
                           indicatorSeparator: () => ({ display: 'none' }),
                           valueContainer: (base: any) => ({
                             ...base,
-                            padding: '2px 15px'
+                            padding: '2px 15px',
                           }),
                           option: (base: any, state: any) => ({
                             ...base,
                             padding: '10px 15px',
-                            backgroundColor: state.isSelected ? '#0069ab' : state.isFocused ? 'rgba(0,105,171,0.1)' : '#fff'
-                          })
+                            backgroundColor: state.isSelected
+                              ? '#0069ab'
+                              : state.isFocused
+                                ? 'rgba(0,105,171,0.1)'
+                                : '#fff',
+                          }),
                         }}
                       />
                     </div>
@@ -2500,18 +2447,30 @@ const Budget: React.FC = () => {
               </div>
               <div className="col-md-3">
                 {showTagDropdown ? (
-                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', marginBottom: '15px' }}>
-                    <label style={{ fontSize: '14px', color: '#495057', marginBottom: '8px', fontWeight: '600', display: 'block', flexShrink: 0 }}>
+                  <div
+                    className="form-group"
+                    style={{ display: 'flex', flexDirection: 'column', marginBottom: '15px' }}
+                  >
+                    <label
+                      style={{
+                        fontSize: '14px',
+                        color: '#495057',
+                        marginBottom: '8px',
+                        fontWeight: '600',
+                        display: 'block',
+                        flexShrink: 0,
+                      }}
+                    >
                       Tag
                     </label>
-                    <div style={{ position: 'relative', zIndex: 1000, flex: 1 }}>
+                    <div style={{ position: 'relative', zIndex: BUDGET_FIELD_LAYER, flex: 1 }}>
                       <Select
                         value={selectedTag ? { value: selectedTag, label: selectedTag } : null}
                         onChange={(selected: any) => setSelectedTag(selected?.value || '')}
                         options={tagOptions}
                         placeholder=""
                         isSearchable={true}
-                        isClearable={false}   // no cross
+                        isClearable={false} // no cross
                         isDisabled={!isEditable}
                         menuPosition="fixed"
                         menuPlacement="auto"
@@ -2522,15 +2481,19 @@ const Budget: React.FC = () => {
                             height: '45px',
                             borderRadius: 12,
                             border: state.isFocused ? '1px solid #0069ab' : '1px solid #e0e0e0',
-                            boxShadow: state.isFocused ? '0 0 0 3px rgba(0, 105, 171, 0.15)' : 'none',
+                            boxShadow: state.isFocused
+                              ? '0 0 0 3px rgba(0, 105, 171, 0.15)'
+                              : 'none',
                             backgroundColor: isEditable ? '#fcfdff' : '#e9ecef',
                             fontSize: '0.95rem',
-                            fontFamily: 'inherit'
+                            fontFamily: 'inherit',
                           }),
                           dropdownIndicator: (base: any, state: any) => ({
                             ...base,
                             padding: '0 15px',
-                            transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                            transform: state.selectProps.menuIsOpen
+                              ? 'rotate(180deg)'
+                              : 'rotate(0deg)',
                           }),
                           indicatorSeparator: () => ({ display: 'none' }),
                           valueContainer: (base: any) => ({ ...base, padding: '2px 15px' }),
@@ -2542,8 +2505,8 @@ const Budget: React.FC = () => {
                               : state.isFocused
                                 ? 'rgba(0,105,171,0.1)'
                                 : '#fff',
-                            color: state.isSelected ? 'white' : '#333'
-                          })
+                            color: state.isSelected ? 'white' : '#333',
+                          }),
                         }}
                       />
                     </div>
@@ -2593,7 +2556,6 @@ const Budget: React.FC = () => {
 
                     return (
                       <React.Fragment key={idx}>
-
                         <tr>
                           <td className="centerTd">{idx + 1}</td>
                           <td>
@@ -2602,11 +2564,11 @@ const Budget: React.FC = () => {
                               value={
                                 line.budgetHead
                                   ? ({
-                                    value: line.budgetHead,
-                                    label: line.budgetHead,
-                                    budgetHead: line.budgetHead,
-                                    optionType: 'budget-head',
-                                  } as BudgetHeadSelectOption)
+                                      value: line.budgetHead,
+                                      label: line.budgetHead,
+                                      budgetHead: line.budgetHead,
+                                      optionType: 'budget-head',
+                                    } as BudgetHeadSelectOption)
                                   : null
                               }
                               onChange={(selected: any) =>
@@ -2626,7 +2588,10 @@ const Budget: React.FC = () => {
                               isClearable={true}
                               isDisabled={!isEditable || isReviewerAmountOnlyEdit}
                               maxMenuHeight={200}
+                              menuPosition="fixed"
                               menuPlacement="auto"
+                              menuPortalTarget={document.body}
+                              menuShouldScrollIntoView={false}
                               formatGroupLabel={(group: any) => (
                                 <div
                                   style={{
@@ -2675,7 +2640,7 @@ const Budget: React.FC = () => {
                                 menu: (base: any) => ({
                                   ...base,
                                   marginTop: '2px',
-                                  zIndex: 9999,
+                                  zIndex: BUDGET_DROPDOWN_LAYER,
                                   borderRadius: '4px',
                                   boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                                 }),
@@ -2693,12 +2658,13 @@ const Budget: React.FC = () => {
                                       ? 'rgba(0,105,171,0.1)'
                                       : 'white',
                                 }),
+                                menuPortal: (base: any) => ({
+                                  ...base,
+                                  zIndex: BUDGET_DROPDOWN_LAYER,
+                                }),
                               }}
                             />
-
-
                           </td>
-
 
                           <td>
                             <Select
@@ -2719,8 +2685,14 @@ const Budget: React.FC = () => {
                               placeholder=""
                               isSearchable={true}
                               isClearable={false}
-                              isDisabled={!line.budgetHead || !isEditable || isReviewerAmountOnlyEdit}
+                              isDisabled={
+                                !line.budgetHead || !isEditable || isReviewerAmountOnlyEdit
+                              }
                               maxMenuHeight={200}
+                              menuPosition="fixed"
+                              menuPlacement="auto"
+                              menuPortalTarget={document.body}
+                              menuShouldScrollIntoView={false}
                               styles={{
                                 control: (base: any, state: any) => ({
                                   ...base,
@@ -2743,7 +2715,7 @@ const Budget: React.FC = () => {
                                 menu: (base: any) => ({
                                   ...base,
                                   marginTop: '2px',
-                                  zIndex: 9999,
+                                  zIndex: BUDGET_DROPDOWN_LAYER,
                                   borderRadius: '4px',
                                 }),
                                 option: (base: any, state: any) => ({
@@ -2755,12 +2727,13 @@ const Budget: React.FC = () => {
                                       ? 'rgba(0,105,171,0.1)'
                                       : 'white',
                                 }),
+                                menuPortal: (base: any) => ({
+                                  ...base,
+                                  zIndex: BUDGET_DROPDOWN_LAYER,
+                                }),
                               }}
                             />
-
-
                           </td>
-
 
                           <td>
                             <input
@@ -2771,8 +2744,8 @@ const Budget: React.FC = () => {
                               value={line.amount}
                               onChange={(e) => {
                                 const v = e.target.value;
-                                const safe = v === "" ? "" : Math.max(0, Number(v)).toString();
-                                updateLine(idx, "amount", safe);
+                                const safe = v === '' ? '' : Math.max(0, Number(v)).toString();
+                                updateLine(idx, 'amount', safe);
                               }}
                               onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                             />
@@ -2787,15 +2760,13 @@ const Budget: React.FC = () => {
                               value={line.qty}
                               onChange={(e) => {
                                 const v = e.target.value;
-                                const safe = v === "" ? "" : Math.max(0, Number(v)).toString();
-                                updateLine(idx, "qty", safe);
+                                const safe = v === '' ? '' : Math.max(0, Number(v)).toString();
+                                updateLine(idx, 'qty', safe);
                               }}
                               onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                             />
                           </td>
                           <td className="centerTd totalCell">{formatINR(total)}</td>
-
-
 
                           <td
                             className="centerTd"
@@ -2807,10 +2778,9 @@ const Budget: React.FC = () => {
                               alignItems: 'center',
                               justifyContent: 'center',
                               height: '80px',
-                              gap: '2px'
+                              gap: '2px',
                             }}
                           >
-
                             <button
                               type="button"
                               onClick={() => toggleRowSchedule(idx)}
@@ -2826,7 +2796,7 @@ const Budget: React.FC = () => {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                transition: 'background 0.2s ease'
+                                transition: 'background 0.2s ease',
                               }}
                             >
                               <svg
@@ -2836,7 +2806,7 @@ const Budget: React.FC = () => {
                                 className={`action-dropdown-arrow ${expandedRows.includes(idx) ? 'open' : ''}`}
                                 style={{
                                   transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                  transformOrigin: 'center'
+                                  transformOrigin: 'center',
                                 }}
                               >
                                 <polyline
@@ -2861,11 +2831,7 @@ const Budget: React.FC = () => {
                                   if (!line.description?.trim()) missing.push('Description');
                                   // Added: Check if Amount is missing or zero
                                   if (Number(line.amount || 0) <= 0) missing.push('Amount');
-                                  if (
-                                    Math.abs(
-                                      lineTotal(line) - lineMonthsTotal(line)
-                                    ) > 0.01
-                                  )
+                                  if (Math.abs(lineTotal(line) - lineMonthsTotal(line)) > 0.01)
                                     missing.push('Months balance');
                                 });
 
@@ -2873,21 +2839,21 @@ const Budget: React.FC = () => {
                                   ? `Fill: ${missing.join(', ')} first!`
                                   : 'Add row';
                               })()}
-                              disabled={isReviewerAmountOnlyEdit || budgetLines.some(
-                                (line) =>
-                                  !line.budgetHead ||
-                                  !line.subHead ||
-                                  !line.description?.trim() ||
-                                  Math.abs(
-                                    lineTotal(line) - lineMonthsTotal(line)
-                                  ) > 0.01 ||
-                                  // Added: Direct check for amount on the current line (replaces inefficient hasZeroAmountLine call)
-                                  Number(line.amount || 0) <= 0
-                              )}
+                              disabled={
+                                isReviewerAmountOnlyEdit ||
+                                budgetLines.some(
+                                  (line) =>
+                                    !line.budgetHead ||
+                                    !line.subHead ||
+                                    !line.description?.trim() ||
+                                    Math.abs(lineTotal(line) - lineMonthsTotal(line)) > 0.01 ||
+                                    // Added: Direct check for amount on the current line (replaces inefficient hasZeroAmountLine call)
+                                    Number(line.amount || 0) <= 0,
+                                )
+                              }
                             >
                               +
                             </button>
-
 
                             <button
                               type="button"
@@ -2900,7 +2866,6 @@ const Budget: React.FC = () => {
                             </button>
                           </td>
                         </tr>
-
 
                         {expandedRows.includes(idx) && (
                           <tr>
@@ -2922,9 +2887,7 @@ const Budget: React.FC = () => {
                                   <textarea
                                     value={line.description || ''}
                                     readOnly={isReviewerAmountOnlyEdit}
-                                    onChange={(e) =>
-                                      updateLine(idx, 'description', e.target.value)
-                                    }
+                                    onChange={(e) => updateLine(idx, 'description', e.target.value)}
                                     rows={1}
                                     style={{
                                       borderRadius: '12px',
@@ -2959,16 +2922,15 @@ const Budget: React.FC = () => {
                                     alignItems: 'flex-start',
                                   }}
                                 >
-
                                   <div className="monthGrid">
                                     {MONTH_KEYS.map((month) => {
-                                      const value = line.monthAmounts[month] || "";
+                                      const value = line.monthAmounts[month] || '';
                                       const isActive = !!value && parseFloat(value) > 0;
 
                                       return (
                                         <div
                                           key={month}
-                                          className={`monthBox ${isActive ? "monthBox--active" : ""}`}
+                                          className={`monthBox ${isActive ? 'monthBox--active' : ''}`}
                                         >
                                           <div className="monthLabel">{month}</div>
                                           <input
@@ -2976,20 +2938,21 @@ const Budget: React.FC = () => {
                                             min={0}
                                             placeholder="0"
                                             className="monthAmountInput"
-                                            value={line.monthAmounts[month] || ""}
+                                            value={line.monthAmounts[month] || ''}
                                             onChange={(e) => {
                                               const v = e.target.value;
                                               const safe =
-                                                v === "" ? "" : Math.max(0, Number(v)).toString();
+                                                v === '' ? '' : Math.max(0, Number(v)).toString();
                                               updateLineMonthAmount(idx, month, safe);
                                             }}
-                                            onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                                            onWheel={(e) =>
+                                              (e.currentTarget as HTMLInputElement).blur()
+                                            }
                                           />
                                         </div>
                                       );
                                     })}
                                   </div>
-
 
                                   <div
                                     className="monthSummaryBox"
@@ -3034,7 +2997,6 @@ const Budget: React.FC = () => {
                                       <strong>₹ {formatINR(monthsTotal)}</strong>
                                     </div>
 
-
                                     <div
                                       style={{
                                         height: '1px',
@@ -3042,7 +3004,6 @@ const Budget: React.FC = () => {
                                         margin: '12px 0',
                                       }}
                                     />
-
 
                                     <div
                                       style={{
@@ -3102,7 +3063,6 @@ const Budget: React.FC = () => {
                                           ? 'Distribute remaining across months'
                                           : 'Reduce some month amounts'}
                                     </div>
-
                                   </div>
                                 </div>
                               </div>
@@ -3130,7 +3090,7 @@ const Budget: React.FC = () => {
       </fieldset>
 
       {/* ADMIN ACTION BUTTONS */}
-      {(new URLSearchParams(location.search).get('admin') === 'true' || canProcessStage(proposalStage)) && !isSuperAdmin(user) && !isEditMode && (
+      {canShowAdminActions && (
         <div
           className="budget-admin-actions"
           style={{
@@ -3172,7 +3132,7 @@ const Budget: React.FC = () => {
             onClick={() => openActionPopup('return')}
             disabled={
               ['completed', 'rejected', 'archived', 'archive'].some((token) =>
-                proposalStatus.toLowerCase().includes(token)
+                proposalStatus.toLowerCase().includes(token),
               ) || !canProcessStage(proposalStage)
             }
             style={{
@@ -3190,7 +3150,8 @@ const Budget: React.FC = () => {
               boxShadow: '0 4px 12px rgba(255, 193, 7, 0.3)',
             }}
           >
-            <RotateCcw size={18} />Return
+            <RotateCcw size={18} />
+            Return
           </button>
 
           <button
@@ -3213,16 +3174,18 @@ const Budget: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-
             }}
           >
-            <XCircle size={18} />  Reject
+            <XCircle size={18} /> Reject
           </button>
 
           <button
             className="budget-admin-btn budget-admin-btn--archive"
             onClick={onArchive}
-            disabled={proposalStatus.toLowerCase().includes('archived') || proposalStatus.toLowerCase().includes('archive')}
+            disabled={
+              proposalStatus.toLowerCase().includes('archived') ||
+              proposalStatus.toLowerCase().includes('archive')
+            }
             style={{
               padding: '12px 24px',
               background: '#eef2ff',
@@ -3238,7 +3201,8 @@ const Budget: React.FC = () => {
               boxShadow: '0 4px 12px rgba(108, 117, 125, 0.3)',
             }}
           >
-            <Archive size={18} />Archive
+            <Archive size={18} />
+            Archive
           </button>
         </div>
       )}
@@ -3246,51 +3210,59 @@ const Budget: React.FC = () => {
       {!isViewMode && (
         <div
           style={{
-            padding: "30px 0",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
+            padding: '30px 0',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
           }}
         >
           <button
             type="submit"
             className="submitBudgetBtn"
-            onClick={handleSubmitBudget}
+            onClick={() => handleSubmitBudget()}
             disabled={isSubmitting}
             style={{
-              padding: "12px 40px",
-              fontSize: "16px",
-              fontWeight: "700",
-              backgroundColor: "#0069ab",
-              color: "white",
-              border: "none",
-              borderRadius: "12px",
-              cursor: isSubmitting ? "not-allowed" : "pointer",
+              padding: '12px 40px',
+              fontSize: '16px',
+              fontWeight: '700',
+              backgroundColor: '#0069ab',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
               opacity: isSubmitting ? 0.7 : 1,
-              minWidth: "150px",
-              boxShadow: "0 6px 20px rgba(0, 105, 171, 0.3)",
-              transition: "all 0.3s ease",
+              minWidth: '150px',
+              boxShadow: '0 6px 20px rgba(0, 105, 171, 0.3)',
+              transition: 'all 0.3s ease',
             }}
             onMouseOver={(e) => {
               if (isSubmitting) return;
-              e.currentTarget.style.backgroundColor = "#0056b3";
-              e.currentTarget.style.transform = "translateY(-3px)";
-              e.currentTarget.style.boxShadow = "0 8px 25px rgba(0, 105, 171, 0.4)";
+              e.currentTarget.style.backgroundColor = '#0056b3';
+              e.currentTarget.style.transform = 'translateY(-3px)';
+              e.currentTarget.style.boxShadow = '0 8px 25px rgba(0, 105, 171, 0.4)';
             }}
             onMouseOut={(e) => {
               if (isSubmitting) return;
-              e.currentTarget.style.backgroundColor = "#0069ab";
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 6px 20px rgba(0, 105, 171, 0.3)";
+              e.currentTarget.style.backgroundColor = '#0069ab';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 105, 171, 0.3)';
             }}
             onFocus={(e) => {
-              e.currentTarget.style.boxShadow = "0 0 0 4px rgba(0, 105, 171, 0.25)";
+              e.currentTarget.style.boxShadow = '0 0 0 4px rgba(0, 105, 171, 0.25)';
             }}
             onBlur={(e) => {
-              e.currentTarget.style.boxShadow = "0 6px 20px rgba(0, 105, 171, 0.3)";
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 105, 171, 0.3)';
             }}
           >
-            {isSubmitting ? "Saving..." : isEditMode ? "Update Budget" : "Submit Budget"}
+            {isSubmitting
+              ? isReturnedResubmit
+                ? 'Resubmitting...'
+                : 'Saving...'
+              : isReturnedResubmit
+                ? 'Resubmit Budget'
+                : isEditMode
+                  ? 'Update Budget'
+                  : 'Submit Budget'}
           </button>
         </div>
       )}
@@ -3379,6 +3351,85 @@ const Budget: React.FC = () => {
                 }}
               >
                 Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {resubmitPopupOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 999999,
+            padding: 16,
+          }}
+          onClick={() => {
+            if (!isSubmitting) setResubmitPopupOpen(false);
+          }}
+        >
+          <div
+            style={{
+              width: 'min(520px, 95vw)',
+              background: '#fff',
+              borderRadius: 12,
+              padding: 18,
+              boxShadow: '0 10px 35px rgba(0,0,0,0.25)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h5 style={{ margin: 0, marginBottom: 10 }}>Resubmit Budget - Remarks</h5>
+
+            <textarea
+              value={resubmitRemarks}
+              onChange={(e) => setResubmitRemarks(e.target.value)}
+              rows={4}
+              placeholder="Enter resubmission remarks (required)..."
+              style={{
+                width: '100%',
+                borderRadius: 10,
+                border: '1px solid #e0e0e0',
+                padding: '10px 12px',
+                outline: 'none',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+              }}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
+              <button
+                type="button"
+                onClick={() => setResubmitPopupOpen(false)}
+                disabled={isSubmitting}
+                style={{
+                  border: '1px solid #ddd',
+                  background: '#fff',
+                  borderRadius: 10,
+                  padding: '8px 14px',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSubmitBudget(resubmitRemarks)}
+                disabled={isSubmitting}
+                style={{
+                  border: 'none',
+                  background: '#f59e0b',
+                  color: '#fff',
+                  borderRadius: 10,
+                  padding: '8px 14px',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isSubmitting ? 'Submitting...' : 'Resubmit'}
               </button>
             </div>
           </div>

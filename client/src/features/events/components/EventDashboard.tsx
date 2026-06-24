@@ -1,14 +1,14 @@
-import React, { useEffect, useRef, useState, ChangeEvent } from "react";
-import FullCalendar from "@fullcalendar/react";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
-import { DayCellContentArg } from "@fullcalendar/core";
-import EventDetailsPopup from "./EventDetailsPopup";
-import { Clock, Building2, Layers, MapPin } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { DayCellContentArg } from '@fullcalendar/core';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin, { DateClickArg } from '@fullcalendar/interaction';
+import FullCalendar from '@fullcalendar/react';
+import { Clock, Building2, Layers, MapPin } from 'lucide-react';
+import React, { useEffect, useRef, useState, ChangeEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 
+import EventDetailsPopup from './EventDetailsPopup';
 
-import "../styles/Dashboard.css";
+import '../styles/Dashboard.css';
 
 interface EventData {
   category: string;
@@ -21,45 +21,45 @@ interface EventData {
 
 const allEvents: EventData[] = [
   {
-    category: "Workshop",
-    department: "EE (VLSI D&T)",
-    time: "09:00 AM - 12:30 PM",
-    name: "3D Printing Materials Mechanical Engineering Mechanical Engineering Mechanical Engineering",
-    venue: "Cyberdome",
-    date: "2025-10-07",
+    category: 'Workshop',
+    department: 'EE (VLSI D&T)',
+    time: '09:00 AM - 12:30 PM',
+    name: '3D Printing Materials Mechanical Engineering Mechanical Engineering Mechanical Engineering',
+    venue: 'Cyberdome',
+    date: '2025-10-07',
   },
   {
-    category: "Seminar",
-    department: "Computer Science",
-    time: "01:00 PM - 03:00 PM",
-    name: "AI in Industry 4.0",
-    venue: "Innovation Lab",
-    date: "2025-10-09",
+    category: 'Seminar',
+    department: 'Computer Science',
+    time: '01:00 PM - 03:00 PM',
+    name: 'AI in Industry 4.0',
+    venue: 'Innovation Lab',
+    date: '2025-10-09',
   },
   {
-    category: "Competition",
-    department: "SM Volunteers",
-    time: "03:30 PM - 05:30 PM",
-    name: "Robotics Challenge",
-    venue: "Robotics Lab",
-    date: "2025-10-07",
+    category: 'Competition',
+    department: 'SM Volunteers',
+    time: '03:30 PM - 05:30 PM',
+    name: 'Robotics Challenge',
+    venue: 'Robotics Lab',
+    date: '2025-10-07',
   },
   {
-    category: "Workshop",
-    department: "Civil",
-    time: "10:00 AM - 01:00 PM",
-    name: "Sustainable Materials",
-    venue: "Auditorium",
-    date: "2025-10-12",
+    category: 'Workshop',
+    department: 'Civil',
+    time: '10:00 AM - 01:00 PM',
+    name: 'Sustainable Materials',
+    venue: 'Auditorium',
+    date: '2025-10-12',
   },
 ];
 
 const formatDate = (dateStr: string): string => {
   const date = new Date(dateStr);
-  const options: Intl.DateTimeFormatOptions = { weekday: "long" };
-  const dayName = date.toLocaleDateString("en-US", options);
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const options: Intl.DateTimeFormatOptions = { weekday: 'long' };
+  const dayName = date.toLocaleDateString('en-US', options);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
   return `${day}.${month}.${year} (${dayName})`;
 };
@@ -72,7 +72,7 @@ const Dashboard: React.FC = () => {
   const headerRef = useRef<HTMLHeadingElement>(null);
 
   const today = new Date();
-  const todayStr = today.toISOString().split("T")[0];
+  const todayStr = today.toISOString().split('T')[0];
 
   const [selectedEvent, setSelectedEvent] = useState<EventData | null>(null);
   const [displayMonth, setDisplayMonth] = useState(today.getMonth());
@@ -85,18 +85,18 @@ const Dashboard: React.FC = () => {
   const [year, setYear] = useState(today.getFullYear());
 
   const months = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   const years: number[] = [];
   for (let i = 2020; i <= 2035; i++) years.push(i);
@@ -112,14 +112,13 @@ const Dashboard: React.FC = () => {
     if (window.innerWidth <= 480) avail = Math.max(300, avail);
     else if (window.innerWidth <= 768) avail = Math.max(400, avail);
 
-    if (leftFrameRef.current)
-      leftFrameRef.current.style.height = `${frameRect.height}px`;
+    if (leftFrameRef.current) leftFrameRef.current.style.height = `${frameRect.height}px`;
   };
 
   useEffect(() => {
     computeCalendarHeight();
-    window.addEventListener("resize", computeCalendarHeight);
-    return () => window.removeEventListener("resize", computeCalendarHeight);
+    window.addEventListener('resize', computeCalendarHeight);
+    return () => window.removeEventListener('resize', computeCalendarHeight);
   }, [filteredEvents]);
 
   useEffect(() => {
@@ -129,8 +128,8 @@ const Dashboard: React.FC = () => {
   const handleDateClick = (info: DateClickArg) => {
     const clickedDate = info.date;
     const yyyy = clickedDate.getFullYear();
-    const mm = String(clickedDate.getMonth() + 1).padStart(2, "0");
-    const dd = String(clickedDate.getDate()).padStart(2, "0");
+    const mm = String(clickedDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(clickedDate.getDate()).padStart(2, '0');
     const dateStr = `${yyyy}-${mm}-${dd}`;
     setSelectedDate(dateStr);
     setFilteredEvents(allEvents.filter((e) => e.date === dateStr));
@@ -163,7 +162,7 @@ const Dashboard: React.FC = () => {
     if (!api) return;
     api.today();
     const now = new Date();
-    const nowStr = now.toISOString().split("T")[0];
+    const nowStr = now.toISOString().split('T')[0];
     setSelectedDate(nowStr);
     setDisplayMonth(now.getMonth());
     setMonth(now.getMonth());
@@ -189,7 +188,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <div>
-
       <div className="dashboard-container">
         <div className="dashboard-content">
           <div className="dashboard-main">
@@ -197,7 +195,7 @@ const Dashboard: React.FC = () => {
               <h3>
                 {selectedDate
                   ? `Events scheduled on ${formatDate(selectedDate)}`
-                  : "All Upcoming Events"}
+                  : 'All Upcoming Events'}
               </h3>
               {filteredEvents.length === 0 ? (
                 <p className="no-events">No events scheduled for this day.</p>
@@ -207,7 +205,7 @@ const Dashboard: React.FC = () => {
                     className="event-card"
                     key={index}
                     onClick={() => setSelectedEvent(event)}
-                    style={{ cursor: "pointer" }}
+                    style={{ cursor: 'pointer' }}
                   >
                     <div className="event-top">
                       <span className="event-category">
@@ -234,22 +232,22 @@ const Dashboard: React.FC = () => {
             <div className="right-frame" ref={rightFrameRef}>
               <div
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "10px",
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '10px',
                 }}
               >
                 <h3 ref={headerRef}>Event Calendar</h3>
                 <button
-                  onClick={() => navigate("/event/1")}
+                  onClick={() => navigate('/event/1')}
                   style={{
-                    padding: "6px 12px",
-                    backgroundColor: "#003b73",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
+                    padding: '6px 12px',
+                    backgroundColor: '#003b73',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
                   }}
                 >
                   Add Event
@@ -262,35 +260,21 @@ const Dashboard: React.FC = () => {
                   </button>
                 </div>
                 <div className="month-year-container">
-                  <button
-                    className="nav-btn nav-prev"
-                    onClick={handlePrevMonth}
-                  ></button>
+                  <button className="nav-btn nav-prev" onClick={handlePrevMonth}></button>
                   <span className="month-year-text">
                     {months[displayMonth]} {displayYear}
                   </span>
-                  <button
-                    className="nav-btn nav-next"
-                    onClick={handleNextMonth}
-                  ></button>
+                  <button className="nav-btn nav-next" onClick={handleNextMonth}></button>
                 </div>
                 <div className="calendar-right">
-                  <select
-                    className="month-select"
-                    value={month}
-                    onChange={handleMonthChange}
-                  >
+                  <select className="month-select" value={month} onChange={handleMonthChange}>
                     {months.map((m, i) => (
                       <option key={i} value={i}>
                         {m}
                       </option>
                     ))}
                   </select>
-                  <select
-                    className="year-select"
-                    value={year}
-                    onChange={handleYearChange}
-                  >
+                  <select className="year-select" value={year} onChange={handleYearChange}>
                     {years.map((y) => (
                       <option key={y} value={y}>
                         {y}
@@ -315,35 +299,25 @@ const Dashboard: React.FC = () => {
                   dayCellClassNames={(arg: DayCellContentArg) => {
                     const date = arg.date;
                     const yyyy = date.getFullYear();
-                    const mm = String(date.getMonth() + 1).padStart(2, "0");
-                    const dd = String(date.getDate()).padStart(2, "0");
+                    const mm = String(date.getMonth() + 1).padStart(2, '0');
+                    const dd = String(date.getDate()).padStart(2, '0');
                     const cellDateStr = `${yyyy}-${mm}-${dd}`;
-                    return cellDateStr === selectedDate
-                      ? ["selected-date"]
-                      : [];
+                    return cellDateStr === selectedDate ? ['selected-date'] : [];
                   }}
                   dayCellContent={(arg: DayCellContentArg) => {
                     const date = arg.date;
                     const yyyy = date.getFullYear();
-                    const mm = String(date.getMonth() + 1).padStart(2, "0");
-                    const dd = String(date.getDate()).padStart(2, "0");
+                    const mm = String(date.getMonth() + 1).padStart(2, '0');
+                    const dd = String(date.getDate()).padStart(2, '0');
                     const cellDateStr = `${yyyy}-${mm}-${dd}`;
-                    const eventCount = allEvents.filter(
-                      (e) => e.date === cellDateStr,
-                    ).length;
+                    const eventCount = allEvents.filter((e) => e.date === cellDateStr).length;
                     const isSunday = date.getDay() === 0;
                     return (
-                      <div
-                        className={`fc-day-content-inline ${isSunday ? "sunday-red" : ""}`}
-                      >
-                        <div className="inline-day-number">
-                          {arg.dayNumberText}
-                        </div>
+                      <div className={`fc-day-content-inline ${isSunday ? 'sunday-red' : ''}`}>
+                        <div className="inline-day-number">{arg.dayNumberText}</div>
                         {eventCount > 0 && (
-                          <div
-                            className={`event-badge event-count-${Math.min(eventCount, 10)}`}
-                          >
-                            {eventCount > 9 ? "9+" : eventCount}
+                          <div className={`event-badge event-count-${Math.min(eventCount, 10)}`}>
+                            {eventCount > 9 ? '9+' : eventCount}
                           </div>
                         )}
                       </div>
@@ -356,10 +330,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {selectedEvent && (
-          <EventDetailsPopup
-            event={selectedEvent}
-            onClose={() => setSelectedEvent(null)}
-          />
+          <EventDetailsPopup event={selectedEvent} onClose={() => setSelectedEvent(null)} />
         )}
       </div>
     </div>

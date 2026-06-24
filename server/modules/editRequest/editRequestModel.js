@@ -4,7 +4,7 @@ const editRequestModel = {
   async createEditRequest({ entity_id, user_id, entity_type }) {
     const [result] = await db.query(
       'INSERT INTO edit_requests (entity_id, user_id, entity_type, status) VALUES (?, ?, ?, ?)',
-      [entity_id, user_id, entity_type, 'pending']
+      [entity_id, user_id, entity_type, 'pending'],
     );
     return result;
   },
@@ -22,7 +22,7 @@ const editRequestModel = {
       `SELECT * FROM edit_requests 
             WHERE entity_id = ? AND user_id = ? AND entity_type = ? 
             LIMIT 1`,
-      [entityId, userId, entityType]
+      [entityId, userId, entityType],
     );
     return rows.length > 0 ? rows[0] : null;
   },
@@ -42,7 +42,7 @@ const editRequestModel = {
     try {
       const [result] = await db.query(
         'UPDATE edit_requests SET status = ? WHERE entity_id = ? AND entity_type = ? AND user_id = ?',
-        [status, entityId, entityType, userId]
+        [status, entityId, entityType, userId],
       );
       return result;
     } catch (error) {

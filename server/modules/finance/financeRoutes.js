@@ -1,4 +1,5 @@
 import express from 'express';
+
 import financeController from './financeController.js';
 import financeModel from './financeModel.js';
 import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
@@ -6,17 +7,18 @@ import upload from '../../middleware/uploadMiddleware.js';
 
 const router = express.Router();
 
-const FINANCE_WORKFLOW_PERMISSIONS = [
-  'finance.workflow.*',
-];
+const FINANCE_WORKFLOW_PERMISSIONS = ['finance.workflow.*'];
 
 const canAccessFinanceWorkflow = permissionMiddleware(FINANCE_WORKFLOW_PERMISSIONS);
+const refreshFinanceAuthorization = permissionMiddleware([]);
 
 const canDeleteFinanceRequest = async (req, res, next) => {
   try {
     const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
     const hasWorkflowPermission = permissions.some((permission) =>
-      String(permission || '').trim().startsWith('finance.workflow.')
+      String(permission || '')
+        .trim()
+        .startsWith('finance.workflow.'),
     );
 
     if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || hasWorkflowPermission) {
@@ -26,7 +28,12 @@ const canDeleteFinanceRequest = async (req, res, next) => {
     const financeId = Number.parseInt(req.params.id, 10);
     const userId = Number.parseInt(req.user?.id, 10);
 
-    if (!Number.isInteger(financeId) || financeId <= 0 || !Number.isInteger(userId) || userId <= 0) {
+    if (
+      !Number.isInteger(financeId) ||
+      financeId <= 0 ||
+      !Number.isInteger(userId) ||
+      userId <= 0
+    ) {
       return next();
     }
 
@@ -63,7 +70,11 @@ router.get('/budget-availability', financeController.getBudgetAvailability);
 router.get('/search-applicant', financeController.searchApplicant);
 router.get('/me', financeController.getCurrentEmployeeInfo);
 router.post('/annexure/upload', upload.single('file'), financeController.uploadAnnexureFile);
-router.post('/:id/principal-document', upload.single('file'), financeController.uploadPrincipalDocument);
+router.post(
+  '/:id/principal-document',
+  upload.single('file'),
+  financeController.uploadPrincipalDocument,
+);
 router.delete('/:id/principal-document', financeController.deletePrincipalDocument);
 
 // Workflow metadata + queues
@@ -72,7 +83,21 @@ router.get('/queue/:stage', canAccessFinanceWorkflow, financeController.getFinan
 
 // Workflow actions
 router.patch('/:id/approval', canAccessFinanceWorkflow, financeController.approveFinanceWorkflow);
-router.patch('/:id/archive-toggle', canAccessFinanceWorkflow, financeController.toggleArchiveStatus);
+router.patch(
+  '/:id/archive-toggle',
+  canAccessFinanceWorkflow,
+  financeController.toggleArchiveStatus,
+);
+router.get(
+  '/:id/carry-forward',
+  canAccessFinanceWorkflow,
+  financeController.getCarryForwardSummary,
+);
+router.post(
+  '/:id/carry-forward',
+  canAccessFinanceWorkflow,
+  financeController.createCarryForwardAllocation,
+);
 router.post('/:id/resubmit', financeController.resubmitFinanceRequest);
 router.delete('/:id', canDeleteFinanceRequest, financeController.deleteFinanceRequest);
 
@@ -86,6 +111,6 @@ router.get('/:id/budget', financeController.getBudgetBreakup);
 
 // Request CRUD
 router.get('/:id', financeController.getFinanceRequest);
-router.put('/:id', financeController.updateFinanceRequest);
+router.put('/:id', refreshFinanceAuthorization, financeController.updateFinanceRequest);
 
 export default router;

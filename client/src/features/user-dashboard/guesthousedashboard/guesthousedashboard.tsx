@@ -1,15 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
-import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import FullCalendar from '@fullcalendar/react';
+import React, { useEffect, useRef, useState } from 'react';
 
-import './guesthousedashboard.css';  // Fixed spelling
-import {
-  FaRegClock,
-  FaBuilding,
-  FaLayerGroup,
-  FaMapMarkerAlt, FaPlus
-} from 'react-icons/fa';  // ← Named imports
+import './guesthousedashboard.css'; // Fixed spelling
+import { FaRegClock, FaBuilding, FaLayerGroup, FaMapMarkerAlt, FaPlus } from 'react-icons/fa'; // ← Named imports
 
 interface EventType {
   category: string;
@@ -27,7 +22,7 @@ const allEvents: EventType[] = [
     time: '09:00 AM - 12:30 PM',
     name: '3D Printing Materials',
     venue: 'Cyberdome',
-    date: '2025-10-07'
+    date: '2025-10-07',
   },
   {
     category: 'Seminar',
@@ -35,7 +30,7 @@ const allEvents: EventType[] = [
     time: '01:00 PM - 03:00 PM',
     name: 'AI in Industry 4.0',
     venue: 'Innovation Lab',
-    date: '2025-10-09'
+    date: '2025-10-09',
   },
   {
     category: 'Competition',
@@ -43,7 +38,7 @@ const allEvents: EventType[] = [
     time: '03:30 PM - 05:30 PM',
     name: 'Robotics Challenge',
     venue: 'Robotics Lab',
-    date: '2025-10-07'
+    date: '2025-10-07',
   },
   {
     category: 'Workshop',
@@ -51,8 +46,8 @@ const allEvents: EventType[] = [
     time: '10:00 AM - 01:00 PM',
     name: 'Sustainable Materials',
     venue: 'Auditorium',
-    date: '2025-10-12'
-  }
+    date: '2025-10-12',
+  },
 ];
 
 const formatDate = (dateStr: string): string => {
@@ -84,8 +79,18 @@ const GuestHouseDashboard: React.FC = () => {
   const [year, setYear] = useState(today.getFullYear());
 
   const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   const years = Array.from({ length: 16 }, (_, i) => 2020 + i);
 
@@ -116,7 +121,7 @@ const GuestHouseDashboard: React.FC = () => {
   }, [filteredEvents]);
 
   useEffect(() => {
-    setFilteredEvents(allEvents.filter(e => e.date === selectedDate));
+    setFilteredEvents(allEvents.filter((e) => e.date === selectedDate));
   }, [selectedDate]);
 
   const handleDateClick = (info: any) => {
@@ -126,7 +131,7 @@ const GuestHouseDashboard: React.FC = () => {
     const dd = String(clickedDate.getDate()).padStart(2, '0');
     const dateStr = `${yyyy}-${mm}-${dd}`;
     setSelectedDate(dateStr);
-    setFilteredEvents(allEvents.filter(e => e.date === dateStr));
+    setFilteredEvents(allEvents.filter((e) => e.date === dateStr));
   };
 
   // Calendar navigation
@@ -183,7 +188,6 @@ const GuestHouseDashboard: React.FC = () => {
 
   return (
     <div className="guesthouse-dashboard-wrapper">
-
       <div className="guesthouse-dashboard-container">
         <div className="guesthouse-dashboard-main">
           {/* LEFT FRAME */}
@@ -191,15 +195,13 @@ const GuestHouseDashboard: React.FC = () => {
             <div className="frame-top-actions">
               <button
                 className="add-booking-btn"
-                onClick={() => window.location.href = '/guesthouse-booking'}
+                onClick={() => (window.location.href = '/guesthouse-booking')}
               >
                 Add +
               </button>
             </div>
 
-            <h3>
-              {selectedDate ? formatDate(selectedDate) : 'All Upcoming Events'}
-            </h3>
+            <h3>{selectedDate ? formatDate(selectedDate) : 'All Upcoming Events'}</h3>
 
             {filteredEvents.length === 0 ? (
               <p className="no-events">No rooms booked for this day.</p>
@@ -241,7 +243,6 @@ const GuestHouseDashboard: React.FC = () => {
           <div className="right-frame" ref={rightFrameRef}>
             <h3 ref={headerRef}> Calendar</h3>
 
-
             <div className="calendar-header">
               <div className="calendar-left">
                 <button className="today-btn" onClick={handleTodayClick}>
@@ -258,12 +259,16 @@ const GuestHouseDashboard: React.FC = () => {
               <div className="calendar-right">
                 <select className="month-select" value={month} onChange={handleMonthChange}>
                   {months.map((m, i) => (
-                    <option key={i} value={i}>{m}</option>
+                    <option key={i} value={i}>
+                      {m}
+                    </option>
                   ))}
                 </select>
                 <select className="year-select" value={year} onChange={handleYearChange}>
-                  {years.map(y => (
-                    <option key={y} value={y}>{y}</option>
+                  {years.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -273,9 +278,9 @@ const GuestHouseDashboard: React.FC = () => {
                 ref={calendarRef}
                 plugins={[dayGridPlugin, interactionPlugin]}
                 initialView="dayGridMonth"
-                events={allEvents.map(e => ({
+                events={allEvents.map((e) => ({
                   title: e.name,
-                  date: e.date
+                  date: e.date,
                 }))}
                 dateClick={handleDateClick}
                 eventDisplay="none"
@@ -294,7 +299,7 @@ const GuestHouseDashboard: React.FC = () => {
                   const mm = String(date.getMonth() + 1).padStart(2, '0');
                   const dd = String(date.getDate()).padStart(2, '0');
                   const cellDateStr = `${yyyy}-${mm}-${dd}`;
-                  const eventCount = allEvents.filter(e => e.date === cellDateStr).length;
+                  const eventCount = allEvents.filter((e) => e.date === cellDateStr).length;
                   const isSunday = date.getDay() === 0;
                   return (
                     <div className={`fc-day-content-inline ${isSunday ? 'sunday-red' : ''}`}>

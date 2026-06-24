@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+
+import { useAuth } from '../../contexts/AuthContext';
+import CustomTagInput from '../../shared/components/ui/CustomTagInput';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
+
 import './journalform.css';
 import '../../shared/styles/forms.css';
 import '../../shared/components/ui/common.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { Trash2, Plus, GripVertical, ChevronDown } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
-
-import CustomTagInput from '../../shared/components/ui/CustomTagInput';
 
 // Type definitions
 interface Author {
@@ -195,24 +196,14 @@ const JournalForm: React.FC = () => {
     '14. Life Below Water',
     '15. Life on Land',
     '16. Peace and Justice Strong Institutions',
-    '17. Partnerships for the Goals'
+    '17. Partnerships for the Goals',
   ];
 
   // Available Collaboration options
-  const allCollaborations = [
-    'International',
-    'IITs',
-    'NITs',
-    'National Research Labs',
-    'Nil'
-  ];
+  const allCollaborations = ['International', 'IITs', 'NITs', 'National Research Labs', 'Nil'];
 
   // Available Acknowledgement options
-  const allAcknowledgements = [
-    'Nil',
-    'DST-FIST',
-    'MODROBS'
-  ];
+  const allAcknowledgements = ['Nil', 'DST-FIST', 'MODROBS'];
 
   // Add defensive state initialization
   const initializeArrayState = <T,>(defaultValue: T, length: number = MAX_AUTHORS): T[] => {
@@ -237,8 +228,7 @@ const JournalForm: React.FC = () => {
     return !urlJournalId;
   });
   const [editRequestStatus, setEditRequestStatus] = useState<EditRequestStatus>(null);
-  const [adminApprovalStatus, setAdminApprovalStatus] =
-    useState<ApprovalWorkflowStatus>('pending');
+  const [adminApprovalStatus, setAdminApprovalStatus] = useState<ApprovalWorkflowStatus>('pending');
   const [showRejectedAlert, setShowRejectedAlert] = useState<boolean>(false);
   const [canRequestEdit, setCanRequestEdit] = useState<boolean>(false);
   const [othersValue, setOthersValue] = useState<string>('');
@@ -378,7 +368,16 @@ const JournalForm: React.FC = () => {
   const getCategoryFromType = (type: string): string | null => {
     if (!type) return null;
 
-    const journalTypes = ['Article', 'Journal Article', 'Research Article', 'Erratum', 'Editorial', 'Note', 'Review', 'Retraction'];
+    const journalTypes = [
+      'Article',
+      'Journal Article',
+      'Research Article',
+      'Erratum',
+      'Editorial',
+      'Note',
+      'Review',
+      'Retraction',
+    ];
     if (journalTypes.includes(type)) return 'Journal';
     if (type === 'Conference paper') return 'Conference';
     if (type === 'Book Chapter') return 'Book Chapter';
@@ -397,7 +396,8 @@ const JournalForm: React.FC = () => {
   // Acknowledgement multi-select state
   const [selectedAcknowledgements, setSelectedAcknowledgements] = useState<string[]>([]);
   const [acknowledgementSearchQuery, setAcknowledgementSearchQuery] = useState<string>('');
-  const [showAcknowledgementSuggestions, setShowAcknowledgementSuggestions] = useState<boolean>(false);
+  const [showAcknowledgementSuggestions, setShowAcknowledgementSuggestions] =
+    useState<boolean>(false);
 
   // Check if we're in view mode based on URL
   const isViewMode = !!(journalId && window.location.search.includes('mode=view'));
@@ -409,9 +409,7 @@ const JournalForm: React.FC = () => {
   if (pathname.includes('/conference')) {
     categoryParam = 'Conference';
   } else if (pathname.includes('/book')) {
-    categoryParam = pathname.includes('/book-chapter')
-      ? 'Book Chapter'
-      : 'Book';
+    categoryParam = pathname.includes('/book-chapter') ? 'Book Chapter' : 'Book';
   } else {
     categoryParam = 'Journal';
   }
@@ -502,8 +500,7 @@ const JournalForm: React.FC = () => {
       return null;
     });
 
-    return () =>
-      delayDebounceFn.forEach((timeout) => timeout && clearTimeout(timeout));
+    return () => delayDebounceFn.forEach((timeout) => timeout && clearTimeout(timeout));
   }, [searchQueries, authors, isViewMode]);
 
   useEffect(() => {
@@ -615,9 +612,9 @@ const JournalForm: React.FC = () => {
     try {
       // API call with proper URL construction
       const queryParam = journalSearchQuery ? journalSearchQuery.trim() : '';
-      const data = await authenticityUtility.get(
-        `/journals/search?query=${encodeURIComponent(queryParam)}`
-      ) as any;
+      const data = (await authenticityUtility.get(
+        `/journals/search?query=${encodeURIComponent(queryParam)}`,
+      )) as any;
 
       // Response validation
       if (data && data.status === 'success' && Array.isArray(data.data)) {
@@ -645,35 +642,27 @@ const JournalForm: React.FC = () => {
       setJournalSearchResults([]);
       setShowJournalSuggestions(false);
 
-      setError(
-        error.response?.data?.message ||
-        error.message ||
-        'Failed to search journals'
-      );
+      setError(error.response?.data?.message || error.message || 'Failed to search journals');
     }
   };
 
   const searchAuthor = async (query: string, index: number) => {
     // Allow empty query to show initial list on focus
     try {
-      const authors = await authenticityUtility.get(
-        `/authors/search?query=${encodeURIComponent(query)}&designation=${encodeURIComponent(authorDesignations[index])}&_=${Date.now()}`
-      ) as any;
+      const authors = (await authenticityUtility.get(
+        `/authors/search?query=${encodeURIComponent(query)}&designation=${encodeURIComponent(authorDesignations[index])}&_=${Date.now()}`,
+      )) as any;
 
       if (authors && Array.isArray(authors)) {
         setSearchResults((prevResults) => {
-          const prevArray = Array.isArray(prevResults)
-            ? prevResults
-            : Array(MAX_AUTHORS).fill([]);
+          const prevArray = Array.isArray(prevResults) ? prevResults : Array(MAX_AUTHORS).fill([]);
           const newResults = [...prevArray];
           newResults[index] = authors;
           return newResults;
         });
 
         setShowSuggestions((prev) => {
-          const prevArray = Array.isArray(prev)
-            ? prev
-            : Array(MAX_AUTHORS).fill(false);
+          const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
           const newShow = [...prevArray];
           newShow[index] = authors.length > 0;
           return newShow;
@@ -693,24 +682,20 @@ const JournalForm: React.FC = () => {
 
       setError(
         error.response?.data?.message ||
-        error.message ||
-        'Failed to search for authors. Please try again.'
+          error.message ||
+          'Failed to search for authors. Please try again.',
       );
 
       // Clear results for this index
       setSearchResults((prevResults) => {
-        const prevArray = Array.isArray(prevResults)
-          ? prevResults
-          : Array(MAX_AUTHORS).fill([]);
+        const prevArray = Array.isArray(prevResults) ? prevResults : Array(MAX_AUTHORS).fill([]);
         const newResults = [...prevArray];
         newResults[index] = [];
         return newResults;
       });
 
       setShowSuggestions((prev) => {
-        const prevArray = Array.isArray(prev)
-          ? prev
-          : Array(MAX_AUTHORS).fill(false);
+        const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
         const newShow = [...prevArray];
         newShow[index] = false;
         return newShow;
@@ -722,9 +707,9 @@ const JournalForm: React.FC = () => {
     if (!journalId) return;
 
     try {
-      const response = await authenticityUtility.get(
-        `/edit-requests/journals/${journalId}?_=${Date.now()}`
-      ) as any;
+      const response = (await authenticityUtility.get(
+        `/edit-requests/journals/${journalId}?_=${Date.now()}`,
+      )) as any;
 
       if (response.data) {
         const status = response.data.status;
@@ -766,15 +751,10 @@ const JournalForm: React.FC = () => {
       setJournalRequestLoading(true);
       setJournalRequestError('');
 
-      const response = await authenticityUtility.post(
-        '/journal-requests',
-        journalRequest
-      ) as any;
+      const response = (await authenticityUtility.post('/journal-requests', journalRequest)) as any;
 
       if (response.status === 'success') {
-        alert(
-          'Journal request submitted successfully! It will be reviewed by an administrator.'
-        );
+        alert('Journal request submitted successfully! It will be reviewed by an administrator.');
         setShowJournalRequestModal(false);
         setJournalRequest({
           journal_name: '',
@@ -787,15 +767,11 @@ const JournalForm: React.FC = () => {
           category: '',
         });
       } else {
-        setJournalRequestError(
-          response.message || 'Failed to submit journal request'
-        );
+        setJournalRequestError(response.message || 'Failed to submit journal request');
       }
     } catch (error: any) {
       console.error('Error submitting journal request:', error);
-      setJournalRequestError(
-        error.response?.data?.message || 'Failed to submit journal request'
-      );
+      setJournalRequestError(error.response?.data?.message || 'Failed to submit journal request');
     } finally {
       setJournalRequestLoading(false);
     }
@@ -827,14 +803,14 @@ const JournalForm: React.FC = () => {
       setConferenceRequestLoading(true);
       setConferenceRequestError('');
 
-      const response = await authenticityUtility.post(
+      const response = (await authenticityUtility.post(
         '/conference-requests',
-        conferenceRequest
-      ) as any;
+        conferenceRequest,
+      )) as any;
 
       if (response.status === 'success') {
         alert(
-          'Conference request submitted successfully! It will be reviewed by an administrator.'
+          'Conference request submitted successfully! It will be reviewed by an administrator.',
         );
         setShowConferenceRequestModal(false);
         setConferenceRequest({
@@ -846,14 +822,12 @@ const JournalForm: React.FC = () => {
           category: '',
         });
       } else {
-        setConferenceRequestError(
-          response.message || 'Failed to submit conference request'
-        );
+        setConferenceRequestError(response.message || 'Failed to submit conference request');
       }
     } catch (error: any) {
       console.error('Error submitting conference request:', error);
       setConferenceRequestError(
-        error.response?.data?.message || 'Failed to submit conference request'
+        error.response?.data?.message || 'Failed to submit conference request',
       );
     } finally {
       setConferenceRequestLoading(false);
@@ -884,9 +858,9 @@ const JournalForm: React.FC = () => {
     }
 
     try {
-      const response = await authenticityUtility.post(
-        `/edit-requests/journals/${journalId}`
-      ) as any;
+      const response = (await authenticityUtility.post(
+        `/edit-requests/journals/${journalId}`,
+      )) as any;
 
       if (response && response.success === true) {
         setEditRequestStatus('pending');
@@ -924,7 +898,7 @@ const JournalForm: React.FC = () => {
 
         // Set quartile radio button
         const quartileRadio = document.querySelector(
-          `input[name="quartile"][value="${journalData.quartile}"]`
+          `input[name="quartile"][value="${journalData.quartile}"]`,
         ) as HTMLInputElement;
         if (quartileRadio) quartileRadio.checked = true;
 
@@ -942,27 +916,24 @@ const JournalForm: React.FC = () => {
 
         // Handle Anna University listing
         const annaUnivRadio = document.querySelector(
-          `input[name="listedInAnnaUniversity"][value="${journalData.anna_university_listed ? 'yes' : 'no'}"]`
+          `input[name="listedInAnnaUniversity"][value="${journalData.anna_university_listed ? 'yes' : 'no'}"]`,
         ) as HTMLInputElement;
         if (annaUnivRadio) annaUnivRadio.checked = true;
 
         if (journalData.anna_university_listed) {
           const annexureInput = document.querySelector(
-            'input[name="annexureNo"]'
+            'input[name="annexureNo"]',
           ) as HTMLInputElement;
-          if (annexureInput)
-            annexureInput.value = journalData.anna_university_annexure_no || '';
+          if (annexureInput) annexureInput.value = journalData.anna_university_annexure_no || '';
         }
         // Set date of submission and status
         if (journalData.date_of_submission) {
           const dateInput = document.getElementById('dateOfSubmissionInput') as HTMLInputElement;
           const ds = String(journalData.date_of_submission);
-          if (dateInput)
-            dateInput.value = ds.includes('T') ? ds.split('T')[0] : ds;
+          if (dateInput) dateInput.value = ds.includes('T') ? ds.split('T')[0] : ds;
 
           const statusDropdown = document.getElementById('statusDropdown') as HTMLSelectElement;
-          if (statusDropdown)
-            statusDropdown.value = journalData.status || 'waiting';
+          if (statusDropdown) statusDropdown.value = journalData.status || 'waiting';
         }
         // Set volume
         if (journalData.volume) {
@@ -982,7 +953,7 @@ const JournalForm: React.FC = () => {
 
         // Set issue type
         const issueTypeRadio = document.querySelector(
-          `input[name="issueType"][value="${journalData.issue_type}"]`
+          `input[name="issueType"][value="${journalData.issue_type}"]`,
         ) as HTMLInputElement;
         if (issueTypeRadio) issueTypeRadio.checked = true;
 
@@ -1006,7 +977,9 @@ const JournalForm: React.FC = () => {
 
         // Set Credit To
         if (journalData.credit_to) {
-          setSelectedCreditTo(Array.isArray(journalData.credit_to) ? journalData.credit_to : [journalData.credit_to]);
+          setSelectedCreditTo(
+            Array.isArray(journalData.credit_to) ? journalData.credit_to : [journalData.credit_to],
+          );
         }
 
         // Set Book Chapter Title
@@ -1019,10 +992,9 @@ const JournalForm: React.FC = () => {
           setReferenceNumber(journalData.reference_number);
           // Also set the input field value
           const referenceNumberInput = document.getElementById(
-            'referenceNumberInput'
+            'referenceNumberInput',
           ) as HTMLInputElement;
-          if (referenceNumberInput)
-            referenceNumberInput.value = journalData.reference_number;
+          if (referenceNumberInput) referenceNumberInput.value = journalData.reference_number;
         }
 
         // Set accepted date
@@ -1123,7 +1095,9 @@ const JournalForm: React.FC = () => {
       setIsInternational(journalData.category === 'International');
       setStatus(journalData.status || 'waiting');
       setDrivenBy(journalData.driven_by || 'faculty');
-      setAnnaUniversityListed(journalData.anna_university_listed === 1 || journalData.anna_university_listed === true);
+      setAnnaUniversityListed(
+        journalData.anna_university_listed === 1 || journalData.anna_university_listed === true,
+      );
 
       // Set Abstract and Keywords
       setAbstract(journalData.abstract || '');
@@ -1161,9 +1135,10 @@ const JournalForm: React.FC = () => {
       // Parse and set acknowledgements (may already be parsed by backend)
       if (journalData.acknowledgement) {
         try {
-          const parsedAck = typeof journalData.acknowledgement === 'string'
-            ? JSON.parse(journalData.acknowledgement)
-            : journalData.acknowledgement;
+          const parsedAck =
+            typeof journalData.acknowledgement === 'string'
+              ? JSON.parse(journalData.acknowledgement)
+              : journalData.acknowledgement;
           setAcknowledgements(parsedAck);
           if (parsedAck.Others) {
             setOtherAcknowledgement(parsedAck.otherValue || '');
@@ -1198,13 +1173,13 @@ const JournalForm: React.FC = () => {
       // Set Collaborations from author_affiliation
       if (journalData.author_affiliation && Array.isArray(journalData.author_affiliation)) {
         const collaborations = journalData.author_affiliation.filter((item: string) =>
-          allCollaborations.includes(item)
+          allCollaborations.includes(item),
         );
         setSelectedCollaborations(collaborations);
 
         // Check for "others" value (not in predefined list)
-        const othersCollab = journalData.author_affiliation.find((item: string) =>
-          !allCollaborations.includes(item) && item !== 'others'
+        const othersCollab = journalData.author_affiliation.find(
+          (item: string) => !allCollaborations.includes(item) && item !== 'others',
         );
         if (othersCollab) {
           setOthersSelected(true);
@@ -1216,8 +1191,9 @@ const JournalForm: React.FC = () => {
 
       // Set Acknowledgements from acknowledgement object (already parsed by backend)
       if (journalData.acknowledgement && typeof journalData.acknowledgement === 'object') {
-        const ackArray = Object.keys(journalData.acknowledgement).filter((key: string) =>
-          journalData.acknowledgement[key] === true && allAcknowledgements.includes(key)
+        const ackArray = Object.keys(journalData.acknowledgement).filter(
+          (key: string) =>
+            journalData.acknowledgement[key] === true && allAcknowledgements.includes(key),
         );
         setSelectedAcknowledgements(ackArray);
 
@@ -1235,9 +1211,7 @@ const JournalForm: React.FC = () => {
         fetchedAuthors = journalData.authors.map((author: any, index: number) => {
           const normalizedDesignation = computeDesignation(author);
           const computedAuthorId =
-            normalizedDesignation === 'student'
-              ? author.student_id || ''
-              : author.author_id || '';
+            normalizedDesignation === 'student' ? author.student_id || '' : author.author_id || '';
 
           return {
             id: index + 1,
@@ -1247,42 +1221,33 @@ const JournalForm: React.FC = () => {
             designation: normalizedDesignation as 'faculty' | 'student' | 'external',
             name: author.name,
             department: author.department,
-            organization: normalizedDesignation === 'student' && !author.organization
-              ? 'K.S.Rangasamy College of Technology'
-              : author.organization,
+            organization:
+              normalizedDesignation === 'student' && !author.organization
+                ? 'K.S.Rangasamy College of Technology'
+                : author.organization,
             country: author.country,
             state: author.state || '',
-            is_first_author:
-              author.is_first_author === 1 || author.is_first_author === true,
+            is_first_author: author.is_first_author === 1 || author.is_first_author === true,
             is_primary: author.is_primary === 1 || author.is_primary === true,
-            register_no:
-              normalizedDesignation === 'student'
-                ? author.student_id || ''
-                : '',
+            register_no: normalizedDesignation === 'student' ? author.student_id || '' : '',
           };
         });
         setAuthors(fetchedAuthors);
 
         // Trim parallel arrays to match authors length
         setSearchResults((prev) => {
-          const prevArray = Array.isArray(prev)
-            ? prev
-            : Array(MAX_AUTHORS).fill([]);
+          const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill([]);
           return prevArray.slice(0, fetchedAuthors.length);
         });
         setShowSuggestions((prev) => {
-          const prevArray = Array.isArray(prev)
-            ? prev
-            : Array(MAX_AUTHORS).fill(false);
+          const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
           return prevArray.slice(0, fetchedAuthors.length);
         });
 
         // Update search queries for authors
         suppressAuthorAutoSearchRef.current = true;
         setSearchQueries((prevQueries) => {
-          const prevArray = Array.isArray(prevQueries)
-            ? prevQueries
-            : Array(MAX_AUTHORS).fill('');
+          const prevArray = Array.isArray(prevQueries) ? prevQueries : Array(MAX_AUTHORS).fill('');
           const newQueries = [...prevArray];
           journalData.authors.forEach((author: any, index: number) => {
             const normalizedDesignation = computeDesignation(author);
@@ -1323,21 +1288,17 @@ const JournalForm: React.FC = () => {
             organization: extAuthor.organization || '',
             country: extAuthor.country || '',
             state: extAuthor.state || '',
-            is_first_author:
-              extAuthor.is_first_author === 1 || extAuthor.is_first_author === true,
-            is_primary:
-              extAuthor.is_primary === 1 || extAuthor.is_primary === true,
+            is_first_author: extAuthor.is_first_author === 1 || extAuthor.is_first_author === true,
+            is_primary: extAuthor.is_primary === 1 || extAuthor.is_primary === true,
             register_no: '',
-          })
+          }),
         );
         combinedAuthors = [...fetchedAuthors, ...externalAuthorsFromJson];
         setAuthors(combinedAuthors);
 
         // Ensure authorDesignations and search-related arrays cover external authors too
         setAuthorDesignations((prev) => {
-          const base = Array.isArray(prev)
-            ? prev
-            : Array(MAX_AUTHORS).fill('faculty');
+          const base = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill('faculty');
           const next = [...base];
           externalAuthorsFromJson.forEach((author: Author, idx: number) => {
             const index = fetchedAuthors.length + idx;
@@ -1349,26 +1310,20 @@ const JournalForm: React.FC = () => {
         });
 
         setSearchQueries((prev) => {
-          const base = Array.isArray(prev)
-            ? prev
-            : Array(MAX_AUTHORS).fill('');
+          const base = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill('');
           const next = [...base];
           // For external authors, the search field is not used – keep empty for those rows
           return next.slice(0, combinedAuthors.length);
         });
 
         setSearchResults((prev) => {
-          const base = Array.isArray(prev)
-            ? prev
-            : Array(MAX_AUTHORS).fill([]);
+          const base = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill([]);
           const next = [...base];
           return next.slice(0, combinedAuthors.length);
         });
 
         setShowSuggestions((prev) => {
-          const base = Array.isArray(prev)
-            ? prev
-            : Array(MAX_AUTHORS).fill(false);
+          const base = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
           const next = [...base];
           return next.slice(0, combinedAuthors.length);
         });
@@ -1376,14 +1331,10 @@ const JournalForm: React.FC = () => {
 
       // Track external authors separately for easier JSON construction on submit
       setExternalAuthorDetails(
-        Array.isArray(journalData.external_details)
-          ? journalData.external_details
-          : []
+        Array.isArray(journalData.external_details) ? journalData.external_details : [],
       );
 
-      const normalizedApprovalStatus = normalizeApprovalStatus(
-        journalData.admin_approval_status
-      );
+      const normalizedApprovalStatus = normalizeApprovalStatus(journalData.admin_approval_status);
       setAdminApprovalStatus(normalizedApprovalStatus);
 
       // Check if the current user is the primary or first author
@@ -1391,8 +1342,7 @@ const JournalForm: React.FC = () => {
       if (currentUserEmail && fetchedAuthors.length > 0) {
         const isEligible = fetchedAuthors.some(
           (author) =>
-            (author.is_primary || author.is_first_author) &&
-            author.email === currentUserEmail
+            (author.is_primary || author.is_first_author) && author.email === currentUserEmail,
         );
         setCanRequestEdit(isEligible && normalizedApprovalStatus === 'approved');
       } else {
@@ -1413,9 +1363,7 @@ const JournalForm: React.FC = () => {
       return true;
     } catch (error: any) {
       console.error('Error fetching journal details:', error);
-      setError(
-        'Failed to fetch journal details: ' + (error.message || 'Unknown error')
-      );
+      setError('Failed to fetch journal details: ' + (error.message || 'Unknown error'));
       return false;
     }
   };
@@ -1471,9 +1419,7 @@ const JournalForm: React.FC = () => {
   const handleDesignationChange = (index: number, designation: string) => {
     setAuthorDesignations((prev) => {
       // Ensure prev is an array
-      const prevArray = Array.isArray(prev)
-        ? prev
-        : Array(MAX_AUTHORS).fill('faculty');
+      const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill('faculty');
       const newDesignations = [...prevArray];
       newDesignations[index] = designation;
       return newDesignations;
@@ -1503,9 +1449,7 @@ const JournalForm: React.FC = () => {
     // Also clear the search query for that row
     setSearchQueries((prev) => {
       // Ensure prev is an array
-      const prevArray = Array.isArray(prev)
-        ? prev
-        : Array(MAX_AUTHORS).fill('');
+      const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill('');
       const newQueries = [...prevArray];
       newQueries[index] = '';
       return newQueries;
@@ -1513,24 +1457,24 @@ const JournalForm: React.FC = () => {
 
     // Clear search results and suggestions for synchronization
     setSearchResults((prev) => {
-      const prevArray = Array.isArray(prev)
-        ? prev
-        : Array(MAX_AUTHORS).fill([]);
+      const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill([]);
       const newResults = [...prevArray];
       newResults[index] = [];
       return newResults;
     });
     setShowSuggestions((prev) => {
-      const prevArray = Array.isArray(prev)
-        ? prev
-        : Array(MAX_AUTHORS).fill(false);
+      const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
       const newShow = [...prevArray];
       newShow[index] = false;
       return newShow;
     });
   };
 
-  const handleManualAuthorChange = (index: number, field: keyof Author, value: string | boolean) => {
+  const handleManualAuthorChange = (
+    index: number,
+    field: keyof Author,
+    value: string | boolean,
+  ) => {
     setAuthors((prevAuthors) => {
       const newAuthors = [...prevAuthors];
       newAuthors[index] = {
@@ -1544,7 +1488,9 @@ const JournalForm: React.FC = () => {
   const addAuthor = () => {
     if (authors.length < MAX_AUTHORS) {
       justAddedAuthorRef.current = true; // Flag to prevent dropdown on new row
-      setTimeout(() => { justAddedAuthorRef.current = false; }, 100); // Reset after short delay
+      setTimeout(() => {
+        justAddedAuthorRef.current = false;
+      }, 100); // Reset after short delay
       const newAuthorId = authorIndex;
       setAuthors((prevAuthors) => [
         ...prevAuthors,
@@ -1565,9 +1511,7 @@ const JournalForm: React.FC = () => {
       setAuthorIndex((prevIndex) => prevIndex + 1);
       setAuthorDesignations((prev) => {
         // Ensure prev is an array
-        const prevArray = Array.isArray(prev)
-          ? prev
-          : Array(MAX_AUTHORS).fill('faculty');
+        const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill('faculty');
         const newD = [...prevArray];
         newD[authors.length] = 'faculty'; // Default new author to faculty
         return newD;
@@ -1575,21 +1519,15 @@ const JournalForm: React.FC = () => {
 
       // Sync parallel arrays
       setSearchQueries((prev) => {
-        const prevArray = Array.isArray(prev)
-          ? prev
-          : Array(MAX_AUTHORS).fill('');
+        const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill('');
         return [...prevArray, ''];
       });
       setSearchResults((prev) => {
-        const prevArray = Array.isArray(prev)
-          ? prev
-          : Array(MAX_AUTHORS).fill([]);
+        const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill([]);
         return [...prevArray, []];
       });
       setShowSuggestions((prev) => {
-        const prevArray = Array.isArray(prev)
-          ? prev
-          : Array(MAX_AUTHORS).fill(false);
+        const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
         return [...prevArray, false];
       });
     }
@@ -1623,9 +1561,7 @@ const JournalForm: React.FC = () => {
 
       // Sync searchQueries
       setSearchQueries((prev) => {
-        const prevArray = Array.isArray(prev)
-          ? prev
-          : Array(MAX_AUTHORS).fill('');
+        const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill('');
         const arr = [...prevArray];
         arr.splice(deleteIndex, 1);
         return arr;
@@ -1633,9 +1569,7 @@ const JournalForm: React.FC = () => {
 
       // Sync searchResults
       setSearchResults((prev) => {
-        const prevArray = Array.isArray(prev)
-          ? prev
-          : Array(MAX_AUTHORS).fill([]);
+        const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill([]);
         const arr = [...prevArray];
         arr.splice(deleteIndex, 1);
         return arr;
@@ -1643,9 +1577,7 @@ const JournalForm: React.FC = () => {
 
       // Sync showSuggestions
       setShowSuggestions((prev) => {
-        const prevArray = Array.isArray(prev)
-          ? prev
-          : Array(MAX_AUTHORS).fill(false);
+        const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
         const arr = [...prevArray];
         arr.splice(deleteIndex, 1);
         return arr;
@@ -1654,9 +1586,7 @@ const JournalForm: React.FC = () => {
       // Sync authorDesignations
       setAuthorDesignations((prev) => {
         // Ensure prev is an array
-        const prevArray = Array.isArray(prev)
-          ? prev
-          : Array(MAX_AUTHORS).fill('faculty');
+        const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill('faculty');
         const arr = [...prevArray];
         arr.splice(deleteIndex, 1);
         return arr;
@@ -1696,9 +1626,7 @@ const JournalForm: React.FC = () => {
 
     // Sync searchQueries
     setSearchQueries((prev) => {
-      const prevArray = Array.isArray(prev)
-        ? prev
-        : Array(MAX_AUTHORS).fill('');
+      const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill('');
       const newQueries = [...prevArray];
       const [draggedQuery] = newQueries.splice(dragIndex, 1);
       newQueries.splice(dropIndex, 0, draggedQuery);
@@ -1707,9 +1635,7 @@ const JournalForm: React.FC = () => {
 
     // Sync searchResults
     setSearchResults((prev) => {
-      const prevArray = Array.isArray(prev)
-        ? prev
-        : Array(MAX_AUTHORS).fill([]);
+      const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill([]);
       const newResults = [...prevArray];
       const [draggedResult] = newResults.splice(dragIndex, 1);
       newResults.splice(dropIndex, 0, draggedResult);
@@ -1718,9 +1644,7 @@ const JournalForm: React.FC = () => {
 
     // Sync showSuggestions
     setShowSuggestions((prev) => {
-      const prevArray = Array.isArray(prev)
-        ? prev
-        : Array(MAX_AUTHORS).fill(false);
+      const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
       const newShow = [...prevArray];
       const [draggedShow] = newShow.splice(dragIndex, 1);
       newShow.splice(dropIndex, 0, draggedShow);
@@ -1730,9 +1654,7 @@ const JournalForm: React.FC = () => {
     // Sync authorDesignations
     setAuthorDesignations((prev) => {
       // Ensure prev is an array
-      const prevArray = Array.isArray(prev)
-        ? prev
-        : Array(MAX_AUTHORS).fill('faculty');
+      const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill('faculty');
       const newDesignations = [...prevArray];
       const [draggedDesignation] = newDesignations.splice(dragIndex, 1);
       newDesignations.splice(dropIndex, 0, draggedDesignation);
@@ -1744,9 +1666,7 @@ const JournalForm: React.FC = () => {
     const newValue = e.target.value;
     setSearchQueries((prevQueries) => {
       try {
-        const prevArray = Array.isArray(prevQueries)
-          ? prevQueries
-          : initializeArrayState('');
+        const prevArray = Array.isArray(prevQueries) ? prevQueries : initializeArrayState('');
         const newQueries = [...prevArray];
         newQueries[index] = newValue;
         return newQueries;
@@ -1796,19 +1716,14 @@ const JournalForm: React.FC = () => {
         organization: selectedAuthor.organization,
         country: selectedAuthor.country,
         designation: normalizedDesignation as 'faculty' | 'student' | 'external',
-        register_no:
-          normalizedDesignation === 'student'
-            ? selectedAuthor.student_id || ''
-            : '',
+        register_no: normalizedDesignation === 'student' ? selectedAuthor.student_id || '' : '',
       };
       return updatedAuthors;
     });
 
     // REFACTOR: Set search query to the faculty_id for display purposes.
     setSearchQueries((prevQueries) => {
-      const prevArray = Array.isArray(prevQueries)
-        ? prevQueries
-        : Array(MAX_AUTHORS).fill('');
+      const prevArray = Array.isArray(prevQueries) ? prevQueries : Array(MAX_AUTHORS).fill('');
       const newQueries = [...prevArray];
       const normalizedDesignation = computeDesignation(selectedAuthor);
       newQueries[index] =
@@ -1820,9 +1735,7 @@ const JournalForm: React.FC = () => {
 
     // Hide suggestions
     setShowSuggestions((prev) => {
-      const prevArray = Array.isArray(prev)
-        ? prev
-        : Array(MAX_AUTHORS).fill(false);
+      const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
       const newShow = [...prevArray];
       newShow[index] = false;
       return newShow;
@@ -1878,9 +1791,7 @@ const JournalForm: React.FC = () => {
               className="form-control"
               placeholder="Organization"
               name="organization"
-              value={
-                author.organization || 'K.S.Rangasamy College of Technology'
-              }
+              value={author.organization || 'K.S.Rangasamy College of Technology'}
               onChange={(e) =>
                 handleManualAuthorChange(index, e.target.name as keyof Author, e.target.value)
               }
@@ -1953,11 +1864,8 @@ const JournalForm: React.FC = () => {
               placeholder="Search or enter Author ID"
               value={
                 isViewMode
-                  ? (
-                    authorDesignations[index] ||
-                    author.designation ||
-                    'faculty'
-                  ).toLowerCase() === 'student'
+                  ? (authorDesignations[index] || author.designation || 'faculty').toLowerCase() ===
+                    'student'
                     ? author.register_no || ''
                     : author.author_id || ''
                   : searchQueries[index] || ''
@@ -1969,7 +1877,7 @@ const JournalForm: React.FC = () => {
                 const selectedAuthor = authors[index];
                 const hasSelectedAuthor = Boolean(
                   selectedAuthor?.name &&
-                  (selectedAuthor?.author_id || selectedAuthor?.register_no)
+                  (selectedAuthor?.author_id || selectedAuthor?.register_no),
                 );
                 if (hasSelectedAuthor) return;
                 // Trigger search on focus to show dropdown when clicking
@@ -1981,9 +1889,9 @@ const JournalForm: React.FC = () => {
               disabled={!editMode && isViewMode}
               autoComplete="off"
             />
-            {showSuggestions[index] &&
-              (searchResults[index] || []).length > 0 && (
-                <div style={{
+            {showSuggestions[index] && (searchResults[index] || []).length > 0 && (
+              <div
+                style={{
                   position: 'absolute',
                   top: '100%',
                   left: 0,
@@ -1995,29 +1903,42 @@ const JournalForm: React.FC = () => {
                   zIndex: 1000,
                   maxHeight: '250px',
                   overflowY: 'auto',
-                  marginTop: '4px'
-                }}>
-                  {(searchResults[index] || []).map((result) => (
+                  marginTop: '4px',
+                }}
+              >
+                {(searchResults[index] || []).map((result) => (
+                  <div
+                    key={result?.id || ''}
+                    onMouseDown={() => handleAuthorSelect(result, index)}
+                    style={{
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid #f0f0f0',
+                      transition: 'background-color 0.2s',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fff')}
+                  >
                     <div
-                      key={result?.id || ''}
-                      onMouseDown={() => handleAuthorSelect(result, index)}
                       style={{
-                        padding: '8px 12px',
-                        cursor: 'pointer',
-                        borderBottom: '1px solid #f0f0f0',
-                        transition: 'background-color 0.2s'
+                        fontWeight: '600',
+                        color: '#333',
+                        fontSize: '13px',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
                     >
-                      <div style={{ fontWeight: '600', color: '#333', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{result?.name || ''}</div>
-                      <div style={{ fontSize: '11px', color: '#6c757d' }}>
-                        {result?.author_id || ''} | {result?.designation || 'Faculty'} | {result?.department || ''}
-                      </div>
+                      {result?.name || ''}
                     </div>
-                  ))}
-                </div>
-              )}
+                    <div style={{ fontSize: '11px', color: '#6c757d' }}>
+                      {result?.author_id || ''} | {result?.designation || 'Faculty'} |{' '}
+                      {result?.department || ''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           {/* These readOnly fields will display the data after a faculty member is selected */}
           <input
@@ -2049,9 +1970,7 @@ const JournalForm: React.FC = () => {
   const handleAuthorSearchBlur = (index: number) => {
     setTimeout(() => {
       setShowSuggestions((prev) => {
-        const prevArray = Array.isArray(prev)
-          ? prev
-          : Array(MAX_AUTHORS).fill(false);
+        const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
         if (prevArray[index] === false) {
           return prevArray;
         }
@@ -2067,7 +1986,7 @@ const JournalForm: React.FC = () => {
       prevAuthors.map((author, index) => ({
         ...author,
         is_primary: index === selectedIndex,
-      }))
+      })),
     );
   };
 
@@ -2220,9 +2139,7 @@ const JournalForm: React.FC = () => {
     if (!journalId) return;
 
     try {
-      const response = await authenticityUtility.get(
-        `/journals/${journalId}/status-updates`
-      );
+      const response = await authenticityUtility.get(`/journals/${journalId}/status-updates`);
       if (response.data && Array.isArray(response.data)) {
         setStatusUpdates(response.data);
       }
@@ -2242,13 +2159,10 @@ const JournalForm: React.FC = () => {
 
     try {
       setLoadingStatusUpdate(true);
-      const response = await authenticityUtility.post(
-        `/journals/${journalId}/status-updates`,
-        {
-          status: newStatusUpdate.status,
-          user_comment: newStatusUpdate.userComment,
-        }
-      ) as any;
+      const response = (await authenticityUtility.post(`/journals/${journalId}/status-updates`, {
+        status: newStatusUpdate.status,
+        user_comment: newStatusUpdate.userComment,
+      })) as any;
 
       if (response.status === 'success') {
         setNewStatusUpdate({ status: '', userComment: '' });
@@ -2257,10 +2171,7 @@ const JournalForm: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Error submitting status update:', error);
-      alert(
-        'Error submitting status update: ' +
-        (error.response?.data?.message || error.message)
-      );
+      alert('Error submitting status update: ' + (error.response?.data?.message || error.message));
     } finally {
       setLoadingStatusUpdate(false);
     }
@@ -2275,10 +2186,7 @@ const JournalForm: React.FC = () => {
     for (const author of authors) {
       const designation = (author.designation || '').toLowerCase();
       const baseMissing =
-        !author.name ||
-        !author.designation ||
-        !author.department ||
-        !author.organization;
+        !author.name || !author.designation || !author.department || !author.organization;
       if (baseMissing) return 'All author fields must be filled';
 
       if (designation === 'student') {
@@ -2374,8 +2282,8 @@ const JournalForm: React.FC = () => {
           return 'Please enter both from and to page numbers';
         }
       } else if (pageOrArticleChoice === 'article') {
-        const articleNumber =
-          (document.getElementById('articleNumberInput') as HTMLInputElement)?.value;
+        const articleNumber = (document.getElementById('articleNumberInput') as HTMLInputElement)
+          ?.value;
         if (!articleNumber) {
           return 'Please enter the article number';
         }
@@ -2397,11 +2305,13 @@ const JournalForm: React.FC = () => {
         const normalizedType = String(currentType || '').trim();
         if (normalizedType) return normalizedType;
       }
-      const element = (event.currentTarget as HTMLFormElement).elements.namedItem(name) as HTMLInputElement;
+      const element = (event.currentTarget as HTMLFormElement).elements.namedItem(
+        name,
+      ) as HTMLInputElement;
       if (!element) return defaultValue;
       if (element.type === 'radio') {
         const checkedRadio = document.querySelector(
-          `input[name="${name}"]:checked`
+          `input[name="${name}"]:checked`,
         ) as HTMLInputElement;
         return checkedRadio ? checkedRadio.value : defaultValue;
       }
@@ -2485,27 +2395,17 @@ const JournalForm: React.FC = () => {
     }
 
     if (metrics.dateOfSubmission) {
-      if (!getFormValue('dateOfSubmissionInput'))
-        errors.push('Date of Submission is required');
-      if (metrics.volume && !getFormValue('volumeInput'))
-        errors.push('Volume is required');
-      if (metrics.issue && !getFormValue('issueInput'))
-        errors.push('Issue is required');
-      if (
-        metrics.pages &&
-        (!getFormValue('pagesFromInput') || !getFormValue('pagesToInput'))
-      ) {
+      if (!getFormValue('dateOfSubmissionInput')) errors.push('Date of Submission is required');
+      if (metrics.volume && !getFormValue('volumeInput')) errors.push('Volume is required');
+      if (metrics.issue && !getFormValue('issueInput')) errors.push('Issue is required');
+      if (metrics.pages && (!getFormValue('pagesFromInput') || !getFormValue('pagesToInput'))) {
         errors.push('Both From and To pages are required');
       }
       if (metrics.articleNumber && !getFormValue('articleNumberInput')) {
         errors.push('Article Number is required');
       }
-      if (metrics.doi && !getFormValue('doiInput'))
-        errors.push('DOI is required');
-      if (
-        metrics.acceptedForPublication &&
-        !getFormValue('acceptedDateInput')
-      ) {
+      if (metrics.doi && !getFormValue('doiInput')) errors.push('DOI is required');
+      if (metrics.acceptedForPublication && !getFormValue('acceptedDateInput')) {
         errors.push('Accepted Date is required');
       }
       if (metrics.availableOnline && !getFormValue('availableDateInput')) {
@@ -2531,7 +2431,7 @@ const JournalForm: React.FC = () => {
 
     // Prepare acknowledgements object for JSON
     const acknowledgementData: any = {};
-    selectedAcknowledgements.forEach(ack => {
+    selectedAcknowledgements.forEach((ack) => {
       acknowledgementData[ack] = true;
     });
     if (acknowledgements.Others) {
@@ -2573,7 +2473,11 @@ const JournalForm: React.FC = () => {
       title: getFormValue('title'),
       book_chapter_title: isBookChapter ? bookChapterTitle : null,
       type: getFormValue('type'),
-      journal_name: isJournal ? journalDetails.name : (isConference ? publicationDetails.conference_title : ''),
+      journal_name: isJournal
+        ? journalDetails.name
+        : isConference
+          ? publicationDetails.conference_title
+          : '',
       author_affiliation: getCollaborations(),
       driven_by: drivenBy,
       acknowledgement: acknowledgementData,
@@ -2590,10 +2494,7 @@ const JournalForm: React.FC = () => {
         pageOrArticleChoice === 'pages'
           ? parseInt(getFormValue('pagesToInput', '0') || '0') || null
           : null,
-      article_number:
-        pageOrArticleChoice === 'article'
-          ? getFormValue('articleNumberInput')
-          : null,
+      article_number: pageOrArticleChoice === 'article' ? getFormValue('articleNumberInput') : null,
       doi: getFormValue('doiInput'),
       scopus_id: scopusId,
       scie_id: scieId,
@@ -2642,18 +2543,14 @@ const JournalForm: React.FC = () => {
       journalData.quartile = quartileValue || null;
 
       // Parse Impact Factor and Cite Score - always collect if present
-      journalData.impact_factor = impactFactorValue && impactFactorValue !== ''
-        ? parseFloat(impactFactorValue)
-        : null;
-      journalData.cite_score = citeScoreValue && citeScoreValue !== ''
-        ? parseFloat(citeScoreValue)
-        : null;
+      journalData.impact_factor =
+        impactFactorValue && impactFactorValue !== '' ? parseFloat(impactFactorValue) : null;
+      journalData.cite_score =
+        citeScoreValue && citeScoreValue !== '' ? parseFloat(citeScoreValue) : null;
 
       journalData.anna_university_listed = annaUniversityListed;
-      journalData.anna_university_annexure_no = annaUniversityListed && annexureValue
-        ? annexureValue.trim()
-        : null;
-
+      journalData.anna_university_annexure_no =
+        annaUniversityListed && annexureValue ? annexureValue.trim() : null;
     }
 
     try {
@@ -2717,13 +2614,10 @@ const JournalForm: React.FC = () => {
         if (isEditFlow && author.dbAuthorId) {
           await authenticityUtility.put(
             `/journals/${currentJournalId}/authors/${author.dbAuthorId}`,
-            authorData
+            authorData,
           );
         } else {
-          await authenticityUtility.post(
-            `/journals/${currentJournalId}/authors`,
-            authorData
-          );
+          await authenticityUtility.post(`/journals/${currentJournalId}/authors`, authorData);
         }
       }
 
@@ -2731,10 +2625,7 @@ const JournalForm: React.FC = () => {
       // STEP 3: Process indexes (common to both flows)
       // ══════════════════════════════════════════════════════════════════════
       for (const indexName of selectedIndexes) {
-        await authenticityUtility.post(
-          `/journals/${currentJournalId}/indexes`,
-          { indexName }
-        );
+        await authenticityUtility.post(`/journals/${currentJournalId}/indexes`, { indexName });
       }
 
       // ══════════════════════════════════════════════════════════════════════
@@ -2744,10 +2635,10 @@ const JournalForm: React.FC = () => {
         const formData = new FormData();
         formData.append('file', selectedFile);
         try {
-          const uploadResponse = await authenticityUtility.postFile(
+          const uploadResponse = (await authenticityUtility.postFile(
             `/journals/${currentJournalId}/upload`,
-            formData
-          ) as any;
+            formData,
+          )) as any;
           const filePath = uploadResponse?.data?.filePath || uploadResponse?.filePath;
           if (filePath) {
             setUploadedFile({ path: filePath, name: selectedFile.name });
@@ -2767,13 +2658,16 @@ const JournalForm: React.FC = () => {
       // ══════════════════════════════════════════════════════════════════════
       if (isEditFlow) {
         try {
-          await authenticityUtility.patch(
-            `/edit-requests/journals/${currentJournalId}`,
-            { status: 'none', userId: user?.id }
-          );
+          await authenticityUtility.patch(`/edit-requests/journals/${currentJournalId}`, {
+            status: 'none',
+            userId: user?.id,
+          });
         } catch (editRequestError: any) {
           // Non-critical: Log but don't fail the submission
-          console.warn('Non-critical: Could not clear edit request status:', editRequestError.message);
+          console.warn(
+            'Non-critical: Could not clear edit request status:',
+            editRequestError.message,
+          );
         }
       }
 
@@ -2794,7 +2688,6 @@ const JournalForm: React.FC = () => {
       const url = new URL(window.location.href);
       url.searchParams.set('mode', 'view');
       window.history.replaceState({}, '', url.toString());
-
     } catch (error: any) {
       console.error('Error submitting journal:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
@@ -2821,15 +2714,13 @@ const JournalForm: React.FC = () => {
   try {
     return (
       <div className="journal-form-body">
-
         <div className="container journal-form-container">
           {/* View Mode & Edit Request Alerts */}
           {isViewMode &&
             (adminApprovalStatus === 'approved' ? (
               <div className="alert alert-info d-flex justify-content-between align-items-center">
                 <span>
-                  View Mode - This publication is admin approved. Request edit to
-                  modify it.
+                  View Mode - This publication is admin approved. Request edit to modify it.
                 </span>
                 <button
                   className="btn btn-warning"
@@ -2845,20 +2736,14 @@ const JournalForm: React.FC = () => {
               </div>
             ) : (
               <div className="alert alert-info d-flex justify-content-between align-items-center">
-                <span>
-                  View Mode - This submission is unapproved. You can edit it
-                  directly.
-                </span>
+                <span>View Mode - This submission is unapproved. You can edit it directly.</span>
                 <button className="btn btn-primary" onClick={openEditableMode}>
                   Edit Now
                 </button>
               </div>
             ))}
           {editRequestStatus === 'rejected' && showRejectedAlert && (
-            <div
-              className="alert alert-danger alert-dismissible fade show"
-              role="alert"
-            >
+            <div className="alert alert-danger alert-dismissible fade show" role="alert">
               Your previous edit request was rejected.
               <button
                 type="button"
@@ -2981,9 +2866,7 @@ const JournalForm: React.FC = () => {
                           author.designation ||
                           'faculty'
                         ).toLowerCase()}
-                        onChange={(e) =>
-                          handleDesignationChange(index, e.target.value)
-                        }
+                        onChange={(e) => handleDesignationChange(index, e.target.value)}
                         disabled={!editMode && isViewMode}
                       >
                         <option value="faculty">Faculty</option>
@@ -3056,7 +2939,7 @@ const JournalForm: React.FC = () => {
                         id="title"
                         name="title"
                         className="form-control"
-                        placeholder={effectiveIsBookChapter ? "Enter book chapter title" : "Title"}
+                        placeholder={effectiveIsBookChapter ? 'Enter book chapter title' : 'Title'}
                         required
                         disabled={!editMode && isViewMode}
                       />
@@ -3067,12 +2950,7 @@ const JournalForm: React.FC = () => {
                         Type
                       </label>
                       {isViewMode ? (
-                        <input
-                          type="text"
-                          className="form-control"
-                          value={currentType}
-                          readOnly
-                        />
+                        <input type="text" className="form-control" value={currentType} readOnly />
                       ) : (
                         <select
                           id="typeSelect"
@@ -3081,7 +2959,12 @@ const JournalForm: React.FC = () => {
                           value={currentType}
                           onChange={(e) => setCurrentType(e.target.value)}
                           required
-                          disabled={(!editMode && isViewMode) || effectiveIsConference || effectiveIsBookChapter || effectiveIsBook}
+                          disabled={
+                            (!editMode && isViewMode) ||
+                            effectiveIsConference ||
+                            effectiveIsBookChapter ||
+                            effectiveIsBook
+                          }
                         >
                           <option value="">Select Type</option>
                           {effectiveIsJournal && (
@@ -3095,16 +2978,12 @@ const JournalForm: React.FC = () => {
                             </>
                           )}
                           {effectiveIsConference && (
-                            <option value="Conference paper">
-                              Conference paper
-                            </option>
+                            <option value="Conference paper">Conference paper</option>
                           )}
                           {effectiveIsBookChapter && (
                             <option value="Book Chapter">Book Chapter</option>
                           )}
-                          {effectiveIsBook && (
-                            <option value="Book">Book</option>
-                          )}
+                          {effectiveIsBook && <option value="Book">Book</option>}
                         </select>
                       )}
                     </div>
@@ -3137,13 +3016,16 @@ const JournalForm: React.FC = () => {
                         onChange={(values) => setSelectedIndexes(dedupeTagsCaseInsensitive(values))}
                         suggestions={(() => {
                           const availableIndexes = ['SCIE', 'Scopus', 'PubMed', 'Google Scholar'];
-                          return availableIndexes.filter(index =>
-                            index.toLowerCase().includes(indexSearchQuery.toLowerCase()) &&
-                            !selectedIndexes.includes(index)
+                          return availableIndexes.filter(
+                            (index) =>
+                              index.toLowerCase().includes(indexSearchQuery.toLowerCase()) &&
+                              !selectedIndexes.includes(index),
                           );
                         })()}
                         onSearch={setIndexSearchQuery}
-                        placeholder={selectedIndexes.length === 0 ? "Type to search and select indexes" : ""}
+                        placeholder={
+                          selectedIndexes.length === 0 ? 'Type to search and select indexes' : ''
+                        }
                         disabled={!editMode && isViewMode}
                       />
                     </div>
@@ -3155,12 +3037,17 @@ const JournalForm: React.FC = () => {
                         name="collaboration"
                         value={selectedCollaborations}
                         onChange={setSelectedCollaborations}
-                        suggestions={allCollaborations.filter(collab =>
-                          collab.toLowerCase().includes(collaborationSearchQuery.toLowerCase()) &&
-                          !selectedCollaborations.includes(collab)
+                        suggestions={allCollaborations.filter(
+                          (collab) =>
+                            collab.toLowerCase().includes(collaborationSearchQuery.toLowerCase()) &&
+                            !selectedCollaborations.includes(collab),
                         )}
                         onSearch={setCollaborationSearchQuery}
-                        placeholder={selectedCollaborations.length === 0 ? "Type to search and select collaborations" : ""}
+                        placeholder={
+                          selectedCollaborations.length === 0
+                            ? 'Type to search and select collaborations'
+                            : ''
+                        }
                         disabled={!editMode && isViewMode}
                       />
 
@@ -3195,8 +3082,11 @@ const JournalForm: React.FC = () => {
                     {effectiveIsJournal && (
                       <div className="mb-3">
                         <div className="d-flex align-items-center flex-nowrap">
-                          <label className="form-label mb-0 me-2" style={{ minWidth: 'fit-content', whiteSpace: 'nowrap' }}>
-                            Listed in Anna university  CFR Annexure
+                          <label
+                            className="form-label mb-0 me-2"
+                            style={{ minWidth: 'fit-content', whiteSpace: 'nowrap' }}
+                          >
+                            Listed in Anna university CFR Annexure
                           </label>
                           <div className="radio-group me-2 mt-2">
                             <div className="radio-item">
@@ -3241,30 +3131,38 @@ const JournalForm: React.FC = () => {
                     {/* Acknowledgement Section - SDG-style multi-select - Hidden for Book category */}
                     {!effectiveIsBook && (
                       <div className="mb-3">
-                        <label className="form-label">
-                          Acknowledgement
-                        </label>
+                        <label className="form-label">Acknowledgement</label>
                         <CustomTagInput
                           name="acknowledgement"
                           value={selectedAcknowledgements}
                           onChange={(newTags) => {
-                            if (newTags.includes('Nil') && !selectedAcknowledgements.includes('Nil')) {
+                            if (
+                              newTags.includes('Nil') &&
+                              !selectedAcknowledgements.includes('Nil')
+                            ) {
                               setSelectedAcknowledgements(['Nil']);
                               setOtherAcknowledgement('');
                             } else if (newTags.length > 1 && newTags.includes('Nil')) {
                               // If currently have "Nil" and added something else, remove "Nil"
-                              const withoutNil = newTags.filter(t => t !== 'Nil');
+                              const withoutNil = newTags.filter((t) => t !== 'Nil');
                               setSelectedAcknowledgements(withoutNil);
                             } else {
                               setSelectedAcknowledgements(newTags);
                             }
                           }}
-                          suggestions={allAcknowledgements.filter(ack =>
-                            ack.toLowerCase().includes(acknowledgementSearchQuery.toLowerCase()) &&
-                            !selectedAcknowledgements.includes(ack)
+                          suggestions={allAcknowledgements.filter(
+                            (ack) =>
+                              ack
+                                .toLowerCase()
+                                .includes(acknowledgementSearchQuery.toLowerCase()) &&
+                              !selectedAcknowledgements.includes(ack),
                           )}
                           onSearch={setAcknowledgementSearchQuery}
-                          placeholder={selectedAcknowledgements.length === 0 ? "Type to search and select acknowledgements" : ""}
+                          placeholder={
+                            selectedAcknowledgements.length === 0
+                              ? 'Type to search and select acknowledgements'
+                              : ''
+                          }
                           disabled={!editMode && isViewMode}
                         />
 
@@ -3345,14 +3243,19 @@ const JournalForm: React.FC = () => {
                         name="sdgs"
                         value={selectedSDGs}
                         onChange={setSelectedSDGs}
-                        suggestions={allSDGs.filter(sdg =>
-                          sdg.toLowerCase().includes(sdgSearchQuery.toLowerCase()) &&
-                          !selectedSDGs.includes(sdg)
+                        suggestions={allSDGs.filter(
+                          (sdg) =>
+                            sdg.toLowerCase().includes(sdgSearchQuery.toLowerCase()) &&
+                            !selectedSDGs.includes(sdg),
                         )}
                         onSearch={setSdgSearchQuery}
-                        placeholder={selectedSDGs.length === 0 ? "Type to search and select SDGs" : ""}
+                        placeholder={
+                          selectedSDGs.length === 0 ? 'Type to search and select SDGs' : ''
+                        }
                         disabled={!editMode && isViewMode}
-                        renderTag={(tag) => typeof tag === 'string' && tag.includes('.') ? tag.split('.')[0] : tag}
+                        renderTag={(tag) =>
+                          typeof tag === 'string' && tag.includes('.') ? tag.split('.')[0] : tag
+                        }
                       />
                     </div>
                   </div>
@@ -3365,10 +3268,7 @@ const JournalForm: React.FC = () => {
                     {effectiveIsJournal && (
                       <div className="mb-3 position-relative">
                         <div className="d-flex justify-content-between align-items-center mb-2">
-                          <label
-                            htmlFor="journalSearch"
-                            className="form-label mb-0"
-                          >
+                          <label htmlFor="journalSearch" className="form-label mb-0">
                             Journal Name
                           </label>
                           <div>
@@ -3401,7 +3301,8 @@ const JournalForm: React.FC = () => {
                         />
                         {showJournalSuggestions &&
                           journalSearchResults.length > 0 &&
-                          !isViewMode && editMode && (
+                          !isViewMode &&
+                          editMode && (
                             <ul className="list-group" style={suggestionsStyle}>
                               {journalSearchResults.map((journal, index) => (
                                 <li
@@ -3481,9 +3382,7 @@ const JournalForm: React.FC = () => {
                             className="form-control"
                             placeholder="Enter book title"
                             value={bookChapterTitle}
-                            onChange={(e) =>
-                              setBookChapterTitle(e.target.value)
-                            }
+                            onChange={(e) => setBookChapterTitle(e.target.value)}
                             disabled={!editMode && isViewMode}
                           />
                         </div>
@@ -3616,7 +3515,11 @@ const JournalForm: React.FC = () => {
                               : journalDetails.printISSN || ''
                           }
                           onChange={(e) => {
-                            if (effectiveIsConference || effectiveIsBook || effectiveIsBookChapter) {
+                            if (
+                              effectiveIsConference ||
+                              effectiveIsBook ||
+                              effectiveIsBookChapter
+                            ) {
                               setPublicationDetails((prev) => ({
                                 ...prev,
                                 print_isbn: e.target.value,
@@ -3654,7 +3557,11 @@ const JournalForm: React.FC = () => {
                               : journalDetails.onlineISSN || ''
                           }
                           onChange={(e) => {
-                            if (effectiveIsConference || effectiveIsBook || effectiveIsBookChapter) {
+                            if (
+                              effectiveIsConference ||
+                              effectiveIsBook ||
+                              effectiveIsBookChapter
+                            ) {
                               setPublicationDetails((prev) => ({
                                 ...prev,
                                 online_isbn: e.target.value,
@@ -3679,45 +3586,30 @@ const JournalForm: React.FC = () => {
 
                     {/* Journal Request Modal */}
                     {showJournalRequestModal && (
-                      <div
-                        className="modal fade show"
-                        style={{ display: 'block' }}
-                        tabIndex={-1}
-                      >
+                      <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1}>
                         <div className="modal-dialog">
                           <div className="modal-content">
                             <div className="modal-header">
-                              <h5 className="modal-title">
-                                Request Custom Journal
-                              </h5>
+                              <h5 className="modal-title">Request Custom Journal</h5>
                               <button
                                 type="button"
                                 className="btn-close"
-                                onClick={() =>
-                                  setShowJournalRequestModal(false)
-                                }
+                                onClick={() => setShowJournalRequestModal(false)}
                               ></button>
                             </div>
                             <div className="modal-body">
                               {journalRequestError && (
-                                <div className="alert alert-danger">
-                                  {journalRequestError}
-                                </div>
+                                <div className="alert alert-danger">{journalRequestError}</div>
                               )}
                               <form onSubmit={handleJournalRequestSubmit}>
                                 <div className="mb-3">
-                                  <label className="form-label">
-                                    Journal Name *
-                                  </label>
+                                  <label className="form-label">Journal Name *</label>
                                   <input
                                     type="text"
                                     className="form-control"
                                     value={journalRequest.journal_name}
                                     onChange={(e) =>
-                                      handleJournalRequestChange(
-                                        'journal_name',
-                                        e.target.value
-                                      )
+                                      handleJournalRequestChange('journal_name', e.target.value)
                                     }
                                     required
                                   />
@@ -3729,18 +3621,13 @@ const JournalForm: React.FC = () => {
                                       className="form-control"
                                       value={journalRequest.category}
                                       onChange={(e) =>
-                                        handleJournalRequestChange(
-                                          'category',
-                                          e.target.value
-                                        )
+                                        handleJournalRequestChange('category', e.target.value)
                                       }
                                       required
                                     >
                                       <option value="">Select Level</option>
                                       <option value="National">National</option>
-                                      <option value="International">
-                                        International
-                                      </option>
+                                      <option value="International">International</option>
                                     </select>
                                     <ChevronDown
                                       size={12}
@@ -3756,18 +3643,13 @@ const JournalForm: React.FC = () => {
                                   </div>
                                 </div>
                                 <div className="mb-3">
-                                  <label className="form-label">
-                                    Publisher *
-                                  </label>
+                                  <label className="form-label">Publisher *</label>
                                   <input
                                     type="text"
                                     className="form-control"
                                     value={journalRequest.publisher}
                                     onChange={(e) =>
-                                      handleJournalRequestChange(
-                                        'publisher',
-                                        e.target.value
-                                      )
+                                      handleJournalRequestChange('publisher', e.target.value)
                                     }
                                     required
                                   />
@@ -3779,45 +3661,32 @@ const JournalForm: React.FC = () => {
                                     className="form-control"
                                     value={journalRequest.website}
                                     onChange={(e) =>
-                                      handleJournalRequestChange(
-                                        'website',
-                                        e.target.value
-                                      )
+                                      handleJournalRequestChange('website', e.target.value)
                                     }
                                     required
                                   />
                                 </div>
                                 <div className="row mb-3">
                                   <div className="col-6">
-                                    <label className="form-label">
-                                      Print ISSN *
-                                    </label>
+                                    <label className="form-label">Print ISSN *</label>
                                     <input
                                       type="text"
                                       className="form-control"
                                       value={journalRequest.print_issn}
                                       onChange={(e) =>
-                                        handleJournalRequestChange(
-                                          'print_issn',
-                                          e.target.value
-                                        )
+                                        handleJournalRequestChange('print_issn', e.target.value)
                                       }
                                       required
                                     />
                                   </div>
                                   <div className="col-6">
-                                    <label className="form-label">
-                                      Online ISSN *
-                                    </label>
+                                    <label className="form-label">Online ISSN *</label>
                                     <input
                                       type="text"
                                       className="form-control"
                                       value={journalRequest.online_issn}
                                       onChange={(e) =>
-                                        handleJournalRequestChange(
-                                          'online_issn',
-                                          e.target.value
-                                        )
+                                        handleJournalRequestChange('online_issn', e.target.value)
                                       }
                                       required
                                     />
@@ -3825,38 +3694,28 @@ const JournalForm: React.FC = () => {
                                 </div>
                                 <div className="row mb-3">
                                   <div className="col-6">
-                                    <label className="form-label">
-                                      Impact Factor *
-                                    </label>
+                                    <label className="form-label">Impact Factor *</label>
                                     <input
                                       type="number"
                                       step="0.001"
                                       className="form-control"
                                       value={journalRequest.impact_factor}
                                       onChange={(e) =>
-                                        handleJournalRequestChange(
-                                          'impact_factor',
-                                          e.target.value
-                                        )
+                                        handleJournalRequestChange('impact_factor', e.target.value)
                                       }
                                       placeholder="e.g., 5.123"
                                       required
                                     />
                                   </div>
                                   <div className="col-6">
-                                    <label className="form-label">
-                                      Cite Score *
-                                    </label>
+                                    <label className="form-label">Cite Score *</label>
                                     <input
                                       type="number"
                                       step="0.001"
                                       className="form-control"
                                       value={journalRequest.cite_score}
                                       onChange={(e) =>
-                                        handleJournalRequestChange(
-                                          'cite_score',
-                                          e.target.value
-                                        )
+                                        handleJournalRequestChange('cite_score', e.target.value)
                                       }
                                       placeholder="e.g., 8.5"
                                       required
@@ -3867,9 +3726,7 @@ const JournalForm: React.FC = () => {
                                   <button
                                     type="button"
                                     className="btn btn-secondary me-2"
-                                    onClick={() =>
-                                      setShowJournalRequestModal(false)
-                                    }
+                                    onClick={() => setShowJournalRequestModal(false)}
                                     disabled={journalRequestLoading}
                                   >
                                     Cancel
@@ -3879,9 +3736,7 @@ const JournalForm: React.FC = () => {
                                     className="btn btn-primary"
                                     disabled={journalRequestLoading}
                                   >
-                                    {journalRequestLoading
-                                      ? 'Submitting...'
-                                      : 'Submit Request'}
+                                    {journalRequestLoading ? 'Submitting...' : 'Submit Request'}
                                   </button>
                                 </div>
                               </form>
@@ -3893,36 +3748,24 @@ const JournalForm: React.FC = () => {
 
                     {/* Conference Request Modal */}
                     {showConferenceRequestModal && (
-                      <div
-                        className="modal fade show"
-                        style={{ display: 'block' }}
-                        tabIndex={-1}
-                      >
+                      <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1}>
                         <div className="modal-dialog">
                           <div className="modal-content">
                             <div className="modal-header">
-                              <h5 className="modal-title">
-                                Request Custom Conference
-                              </h5>
+                              <h5 className="modal-title">Request Custom Conference</h5>
                               <button
                                 type="button"
                                 className="btn-close"
-                                onClick={() =>
-                                  setShowConferenceRequestModal(false)
-                                }
+                                onClick={() => setShowConferenceRequestModal(false)}
                               ></button>
                             </div>
                             <div className="modal-body">
                               {conferenceRequestError && (
-                                <div className="alert alert-danger">
-                                  {conferenceRequestError}
-                                </div>
+                                <div className="alert alert-danger">{conferenceRequestError}</div>
                               )}
                               <form onSubmit={handleConferenceRequestSubmit}>
                                 <div className="mb-3">
-                                  <label className="form-label">
-                                    Conference Name *
-                                  </label>
+                                  <label className="form-label">Conference Name *</label>
                                   <input
                                     type="text"
                                     className="form-control"
@@ -3930,7 +3773,7 @@ const JournalForm: React.FC = () => {
                                     onChange={(e) =>
                                       handleConferenceRequestChange(
                                         'conference_name',
-                                        e.target.value
+                                        e.target.value,
                                       )
                                     }
                                     required
@@ -3943,18 +3786,13 @@ const JournalForm: React.FC = () => {
                                       className="form-control"
                                       value={conferenceRequest.category}
                                       onChange={(e) =>
-                                        handleConferenceRequestChange(
-                                          'category',
-                                          e.target.value
-                                        )
+                                        handleConferenceRequestChange('category', e.target.value)
                                       }
                                       required
                                     >
                                       <option value="">Select Level</option>
                                       <option value="National">National</option>
-                                      <option value="International">
-                                        International
-                                      </option>
+                                      <option value="International">International</option>
                                     </select>
                                     <ChevronDown
                                       size={12}
@@ -3970,18 +3808,13 @@ const JournalForm: React.FC = () => {
                                   </div>
                                 </div>
                                 <div className="mb-3">
-                                  <label className="form-label">
-                                    Publisher
-                                  </label>
+                                  <label className="form-label">Publisher</label>
                                   <input
                                     type="text"
                                     className="form-control"
                                     value={conferenceRequest.publisher}
                                     onChange={(e) =>
-                                      handleConferenceRequestChange(
-                                        'publisher',
-                                        e.target.value
-                                      )
+                                      handleConferenceRequestChange('publisher', e.target.value)
                                     }
                                   />
                                 </div>
@@ -3992,43 +3825,30 @@ const JournalForm: React.FC = () => {
                                     className="form-control"
                                     value={conferenceRequest.website}
                                     onChange={(e) =>
-                                      handleConferenceRequestChange(
-                                        'website',
-                                        e.target.value
-                                      )
+                                      handleConferenceRequestChange('website', e.target.value)
                                     }
                                   />
                                 </div>
                                 <div className="row mb-3">
                                   <div className="col-6">
-                                    <label className="form-label">
-                                      Print ISBN
-                                    </label>
+                                    <label className="form-label">Print ISBN</label>
                                     <input
                                       type="text"
                                       className="form-control"
                                       value={conferenceRequest.print_isbn}
                                       onChange={(e) =>
-                                        handleConferenceRequestChange(
-                                          'print_isbn',
-                                          e.target.value
-                                        )
+                                        handleConferenceRequestChange('print_isbn', e.target.value)
                                       }
                                     />
                                   </div>
                                   <div className="col-6">
-                                    <label className="form-label">
-                                      Online ISBN
-                                    </label>
+                                    <label className="form-label">Online ISBN</label>
                                     <input
                                       type="text"
                                       className="form-control"
                                       value={conferenceRequest.online_isbn}
                                       onChange={(e) =>
-                                        handleConferenceRequestChange(
-                                          'online_isbn',
-                                          e.target.value
-                                        )
+                                        handleConferenceRequestChange('online_isbn', e.target.value)
                                       }
                                     />
                                   </div>
@@ -4037,9 +3857,7 @@ const JournalForm: React.FC = () => {
                                   <button
                                     type="button"
                                     className="btn btn-secondary me-2"
-                                    onClick={() =>
-                                      setShowConferenceRequestModal(false)
-                                    }
+                                    onClick={() => setShowConferenceRequestModal(false)}
                                     disabled={conferenceRequestLoading}
                                   >
                                     Cancel
@@ -4049,9 +3867,7 @@ const JournalForm: React.FC = () => {
                                     className="btn btn-primary"
                                     disabled={conferenceRequestLoading}
                                   >
-                                    {conferenceRequestLoading
-                                      ? 'Submitting...'
-                                      : 'Submit Request'}
+                                    {conferenceRequestLoading ? 'Submitting...' : 'Submit Request'}
                                   </button>
                                 </div>
                               </form>
@@ -4062,20 +3878,19 @@ const JournalForm: React.FC = () => {
                     )}
 
                     {/* Modal backdrop */}
-                    {showConferenceRequestModal && (
-                      <div className="modal-backdrop fade show"></div>
-                    )}
+                    {showConferenceRequestModal && <div className="modal-backdrop fade show"></div>}
 
                     {/* Modal backdrop */}
-                    {showJournalRequestModal && (
-                      <div className="modal-backdrop fade show"></div>
-                    )}
+                    {showJournalRequestModal && <div className="modal-backdrop fade show"></div>}
 
                     {effectiveIsJournal && (
                       <div className="mb-3">
                         <div className="row g-3">
                           <div className="col-6">
-                            <label className="form-label" style={{ fontSize: '14px', marginBottom: '0.5rem' }}>
+                            <label
+                              className="form-label"
+                              style={{ fontSize: '14px', marginBottom: '0.5rem' }}
+                            >
                               Impact Factor
                             </label>
                             <input
@@ -4086,11 +3901,18 @@ const JournalForm: React.FC = () => {
                               className="form-control"
                               disabled={true}
                               readOnly
-                              style={{ backgroundColor: '#e9ecef', cursor: 'not-allowed', color: '#495057' }}
+                              style={{
+                                backgroundColor: '#e9ecef',
+                                cursor: 'not-allowed',
+                                color: '#495057',
+                              }}
                             />
                           </div>
                           <div className="col-6">
-                            <label className="form-label" style={{ fontSize: '14px', marginBottom: '0.5rem' }}>
+                            <label
+                              className="form-label"
+                              style={{ fontSize: '14px', marginBottom: '0.5rem' }}
+                            >
                               Cite Score
                             </label>
                             <input
@@ -4101,7 +3923,11 @@ const JournalForm: React.FC = () => {
                               className="form-control"
                               disabled={true}
                               readOnly
-                              style={{ backgroundColor: '#e9ecef', cursor: 'not-allowed', color: '#495057' }}
+                              style={{
+                                backgroundColor: '#e9ecef',
+                                cursor: 'not-allowed',
+                                color: '#495057',
+                              }}
                             />
                           </div>
                         </div>
@@ -4109,16 +3935,12 @@ const JournalForm: React.FC = () => {
                     )}
                     <div className="mb-3">
                       <div className="d-flex align-items-center gap-3 mb-2">
-                        <label className="form-label mb-0">
-                          Submitted on
-                        </label>
+                        <label className="form-label mb-0">Submitted on</label>
                         <label className="toggle-switch mb-0">
                           <input
                             type="checkbox"
                             checked={metrics.dateOfSubmission}
-                            onChange={() =>
-                              handleMetricToggle('dateOfSubmission')
-                            }
+                            onChange={() => handleMetricToggle('dateOfSubmission')}
                             disabled={!editMode && isViewMode}
                           />
                           <span className="slider"></span>
@@ -4129,10 +3951,7 @@ const JournalForm: React.FC = () => {
                           name="dateOfSubmissionInput"
                           className="form-control"
                           style={{ maxWidth: '150px' }}
-                          disabled={
-                            !metrics.dateOfSubmission ||
-                            (!editMode && isViewMode)
-                          }
+                          disabled={!metrics.dateOfSubmission || (!editMode && isViewMode)}
                         />
                       </div>
                       <div className="d-flex align-items-center gap-3 mt-4">
@@ -4148,9 +3967,7 @@ const JournalForm: React.FC = () => {
                           >
                             <option value="submitted">Submitted</option>
                             <option value="underReview">Under Review</option>
-                            <option value="revisionSubmitted">
-                              Revision Submitted
-                            </option>
+                            <option value="revisionSubmitted">Revision Submitted</option>
                             <option value="accepted">Accepted</option>
                             <option value="published">Published</option>
                           </select>
@@ -4190,9 +4007,7 @@ const JournalForm: React.FC = () => {
                         disabled={!editMode && isViewMode}
                         style={{ resize: 'vertical', minHeight: '120px' }}
                       />
-                      <small className="text-muted">
-                        Character count: {abstract.length}
-                      </small>
+                      <small className="text-muted">Character count: {abstract.length}</small>
                     </div>
                   )}
                   <div className="mb-3">
@@ -4229,9 +4044,7 @@ const JournalForm: React.FC = () => {
                             type="text"
                             id="volumeInput"
                             className="form-control"
-                            disabled={
-                              !metrics.volume || (!editMode && isViewMode)
-                            }
+                            disabled={!metrics.volume || (!editMode && isViewMode)}
                           />
                         </div>
                       </div>
@@ -4253,9 +4066,7 @@ const JournalForm: React.FC = () => {
                             type="text"
                             id="issueInput"
                             className="form-control"
-                            disabled={
-                              !metrics.issue || (!editMode && isViewMode)
-                            }
+                            disabled={!metrics.issue || (!editMode && isViewMode)}
                           />
                         </div>
                       </div>
@@ -4315,7 +4126,9 @@ const JournalForm: React.FC = () => {
                               />
                               <span className="slider"></span>
                             </label>
-                            <span className="tooltip-text">Toggle to switch between Page Number and Article Number</span>
+                            <span className="tooltip-text">
+                              Toggle to switch between Page Number and Article Number
+                            </span>
                           </div>
                         </div>
                         {pageOrArticleChoice === 'pages' && (
@@ -4395,10 +4208,7 @@ const JournalForm: React.FC = () => {
                           ) : (
                             // Edit mode - display with prefix input and preview button
                             <div className="d-flex align-items-center flex-grow-1">
-                              <span
-                                className="text-muted me-2"
-                                style={{ fontSize: '0.875rem' }}
-                              >
+                              <span className="text-muted me-2" style={{ fontSize: '0.875rem' }}>
                                 https://www.doi.org/
                               </span>
                               <input
@@ -4415,22 +4225,15 @@ const JournalForm: React.FC = () => {
                                   type="button"
                                   className="btn btn-outline-secondary btn-sm ms-2"
                                   onClick={() => {
-                                    const doiInput =
-                                      document.getElementById('doiInput') as HTMLInputElement;
-                                    const doiValue = doiInput
-                                      ? doiInput.value.trim()
-                                      : '';
+                                    const doiInput = document.getElementById(
+                                      'doiInput',
+                                    ) as HTMLInputElement;
+                                    const doiValue = doiInput ? doiInput.value.trim() : '';
                                     if (doiValue) {
-                                      const fullDoiUrl = doiValue.startsWith(
-                                        'http'
-                                      )
+                                      const fullDoiUrl = doiValue.startsWith('http')
                                         ? doiValue
                                         : `https://www.doi.org/${doiValue}`;
-                                      window.open(
-                                        fullDoiUrl,
-                                        '_blank',
-                                        'noopener,noreferrer'
-                                      );
+                                      window.open(fullDoiUrl, '_blank', 'noopener,noreferrer');
                                     } else {
                                       alert('Please enter a DOI first');
                                     }
@@ -4482,64 +4285,60 @@ const JournalForm: React.FC = () => {
                       )}
 
                       {/* Credit To Field */}
-                      {(selectedIndexes.includes('SCIE') || selectedIndexes.includes('Scopus') || selectedIndexes.includes('PubMed') || selectedIndexes.includes('Google Scholar')) && authors.length > 0 && (
-                        <div className="metric-item-vertical mb-3">
-                          <label className="form-label mb-2">Credit to</label>
-                          <select
-                            className="form-control reference-number-input"
-                            value={selectedCreditTo[0] || ''}
-                            onChange={(e) => {
-                              const newSelected = [...selectedCreditTo];
-                              newSelected[0] = e.target.value;
-                              setSelectedCreditTo(newSelected.filter(v => v));
-                            }}
-                            disabled={!editMode && isViewMode}
-                          >
-                            <option value="">Select Author</option>
-                            {authors
-                              .filter(
-                                (author) => author.name && author.name.trim() && author.designation === 'faculty'
-                              )
-                              .map((author) => (
-                                <option
-                                  key={author.id}
-                                  value={
-                                    author.author_id || author.register_no
-                                  }
-                                >
-                                  {author.name} (
-                                  {author.author_id || author.register_no})
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-                      )}
+                      {(selectedIndexes.includes('SCIE') ||
+                        selectedIndexes.includes('Scopus') ||
+                        selectedIndexes.includes('PubMed') ||
+                        selectedIndexes.includes('Google Scholar')) &&
+                        authors.length > 0 && (
+                          <div className="metric-item-vertical mb-3">
+                            <label className="form-label mb-2">Credit to</label>
+                            <select
+                              className="form-control reference-number-input"
+                              value={selectedCreditTo[0] || ''}
+                              onChange={(e) => {
+                                const newSelected = [...selectedCreditTo];
+                                newSelected[0] = e.target.value;
+                                setSelectedCreditTo(newSelected.filter((v) => v));
+                              }}
+                              disabled={!editMode && isViewMode}
+                            >
+                              <option value="">Select Author</option>
+                              {authors
+                                .filter(
+                                  (author) =>
+                                    author.name &&
+                                    author.name.trim() &&
+                                    author.designation === 'faculty',
+                                )
+                                .map((author) => (
+                                  <option
+                                    key={author.id}
+                                    value={author.author_id || author.register_no}
+                                  >
+                                    {author.name} ({author.author_id || author.register_no})
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                        )}
 
                       {/* Reference Number Field - Hidden for Book category */}
                       {!effectiveIsBook && (
                         <div className="metric-item-vertical mb-3">
-                          <label className="form-label mb-2">
-                            Reference Nos.
-                          </label>
+                          <label className="form-label mb-2">Reference Nos.</label>
                           <input
                             type="text"
                             id="referenceNumberInput"
                             className="form-control reference-number-input"
                             value={referenceNumber}
-                            onChange={(e) =>
-                              setReferenceNumber(e.target.value)
-                            }
+                            onChange={(e) => setReferenceNumber(e.target.value)}
                             placeholder="Enter KSRCT References"
                             disabled={!editMode && isViewMode}
                           />
                           <div className="mt-1">
                             <small className="text-muted">
                               Count:{' '}
-                              {
-                                referenceNumber
-                                  .split(',')
-                                  .filter((num) => num.trim() !== '').length
-                              }
+                              {referenceNumber.split(',').filter((num) => num.trim() !== '').length}
                             </small>
                           </div>
                         </div>
@@ -4553,9 +4352,7 @@ const JournalForm: React.FC = () => {
                               type="checkbox"
                               id="acceptedToggle"
                               checked={metrics.acceptedForPublication}
-                              onChange={() =>
-                                handleMetricToggle('acceptedForPublication')
-                              }
+                              onChange={() => handleMetricToggle('acceptedForPublication')}
                               disabled={!editMode && isViewMode}
                             />
                             <span className="slider"></span>
@@ -4565,27 +4362,20 @@ const JournalForm: React.FC = () => {
                             id="acceptedDateInput"
                             className="form-control"
                             placeholder="dd-mm-yyyy"
-                            disabled={
-                              !metrics.acceptedForPublication ||
-                              (!editMode && isViewMode)
-                            }
+                            disabled={!metrics.acceptedForPublication || (!editMode && isViewMode)}
                           />
                         </div>
                       </div>
 
                       <div className="metric-item-vertical mb-3">
                         <div className="d-flex justify-content-between align-items-center">
-                          <label className="form-label mb-0">
-                            Published on
-                          </label>
+                          <label className="form-label mb-0">Published on</label>
                           <label className="toggle-switch">
                             <input
                               type="checkbox"
                               id="availableToggle"
                               checked={metrics.availableOnline}
-                              onChange={() =>
-                                handleMetricToggle('availableOnline')
-                              }
+                              onChange={() => handleMetricToggle('availableOnline')}
                               disabled={!editMode && isViewMode}
                             />
                             <span className="slider"></span>
@@ -4595,10 +4385,7 @@ const JournalForm: React.FC = () => {
                             id="availableDateInput"
                             className="form-control"
                             placeholder="dd-mm-yyyy"
-                            disabled={
-                              !metrics.availableOnline ||
-                              (!editMode && isViewMode)
-                            }
+                            disabled={!metrics.availableOnline || (!editMode && isViewMode)}
                           />
                         </div>
                       </div>
@@ -4624,14 +4411,9 @@ const JournalForm: React.FC = () => {
                         ) : (
                           // EDIT or CREATE MODE
                           <div className="upload-section">
-                            <label
-                              htmlFor="file-upload"
-                              className="upload-button"
-                            >
+                            <label htmlFor="file-upload" className="upload-button">
                               {/* Dynamically change button text based on whether a file is already present */}
-                              {uploadedFile || selectedFile
-                                ? 'Change File'
-                                : '+ Upload Article'}
+                              {uploadedFile || selectedFile ? 'Change File' : '+ Upload Article'}
                               <input
                                 id="file-upload"
                                 type="file"
@@ -4655,9 +4437,7 @@ const JournalForm: React.FC = () => {
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
-                                  {selectedFile
-                                    ? selectedFile.name
-                                    : uploadedFile!.name}
+                                  {selectedFile ? selectedFile.name : uploadedFile!.name}
                                 </a>
                               ) : (
                                 // Placeholder text when no file is chosen
@@ -4685,8 +4465,6 @@ const JournalForm: React.FC = () => {
                 </div>
               )}
 
-
-
               {/* Submit Button */}
               <div className="text-center mt-4 mb-5">
                 <button
@@ -4705,23 +4483,15 @@ const JournalForm: React.FC = () => {
                 <div className="form-card">
                   <div className="empty-state">
                     <h5>No Journal Found</h5>
-                    <p>
-                      Please create a journal entry first to track status
-                      updates
-                    </p>
+                    <p>Please create a journal entry first to track status updates</p>
                   </div>
                 </div>
               ) : (
                 <>
                   {/* Status Update Form */}
                   <div className="form-card">
-                    <h6 className="form-section-title mb-3">
-                      Add Status Update
-                    </h6>
-                    <form
-                      onSubmit={handleStatusUpdateSubmit}
-                      className="status-update-form"
-                    >
+                    <h6 className="form-section-title mb-3">Add Status Update</h6>
+                    <form onSubmit={handleStatusUpdateSubmit} className="status-update-form">
                       <div className="row">
                         <div className="col-md-4">
                           <label className="form-label">Status</label>
@@ -4739,12 +4509,8 @@ const JournalForm: React.FC = () => {
                             <option value="">Select Status</option>
                             <option value="submitted">Submitted</option>
                             <option value="under_review">Under Review</option>
-                            <option value="revision_requested">
-                              Revision Requested
-                            </option>
-                            <option value="revision_submitted">
-                              Revision Submitted
-                            </option>
+                            <option value="revision_requested">Revision Requested</option>
+                            <option value="revision_submitted">Revision Submitted</option>
                             <option value="accepted">Accepted</option>
                             <option value="rejected">Rejected</option>
                             <option value="published">Published</option>
@@ -4801,25 +4567,20 @@ const JournalForm: React.FC = () => {
                             {statusUpdates.map((update, index) => (
                               <tr key={update.id}>
                                 <td>{index + 1}</td>
-                                <td>
-                                  {new Date(
-                                    update.created_at
-                                  ).toLocaleDateString()}
-                                </td>
+                                <td>{new Date(update.created_at).toLocaleDateString()}</td>
                                 <td>
                                   <span
-                                    className={`badge ${update.status === 'accepted'
-                                      ? 'bg-success'
-                                      : update.status === 'rejected'
-                                        ? 'bg-danger'
-                                        : update.status === 'published'
-                                          ? 'bg-primary'
-                                          : 'bg-warning'
-                                      }`}
+                                    className={`badge ${
+                                      update.status === 'accepted'
+                                        ? 'bg-success'
+                                        : update.status === 'rejected'
+                                          ? 'bg-danger'
+                                          : update.status === 'published'
+                                            ? 'bg-primary'
+                                            : 'bg-warning'
+                                    }`}
                                   >
-                                    {update.status
-                                      .replace('_', ' ')
-                                      .toUpperCase()}
+                                    {update.status.replace('_', ' ').toUpperCase()}
                                   </span>
                                 </td>
                                 <td>{update.user_comment || '-'}</td>
@@ -4842,13 +4603,11 @@ const JournalForm: React.FC = () => {
     console.error('Error in JournalForm component:', error);
     return (
       <div className="journal-form-body">
-
         <div className="container journal-form-container">
           <div className="alert alert-danger">
             <h4>Error Loading Form</h4>
             <p>
-              There was an error loading the journal form. Please refresh the
-              page and try again.
+              There was an error loading the journal form. Please refresh the page and try again.
             </p>
             <p>Error details: {error.message}</p>
           </div>

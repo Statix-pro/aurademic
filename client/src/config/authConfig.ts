@@ -1,4 +1,4 @@
-import { Configuration } from "@azure/msal-browser";
+import { Configuration } from '@azure/msal-browser';
 
 const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
 const tenantId = import.meta.env.VITE_MICROSOFT_TENANT_ID;
@@ -17,15 +17,15 @@ export const msalConfig: Configuration = {
     redirectUri: window.location.origin,
   },
   cache: {
-    cacheLocation: "sessionStorage",
+    cacheLocation: 'sessionStorage',
     storeAuthStateInCookie: false,
   },
 };
 
 export const loginRequest = {
-  scopes: ["User.Read"],
+  scopes: ['User.Read'],
 };
 
 export const graphConfig = {
-  graphMeEndpoint: "https://graph.microsoft.com/v1.0/me",
+  graphMeEndpoint: 'https://graph.microsoft.com/v1.0/me',
 };

@@ -89,9 +89,11 @@ export async function resolveSubmissionDepartment(req, beneficiaryType, payload 
 
   if (['Faculty', 'Staff'].includes(normalizedBeneficiaryType)) {
     if (Number.isInteger(parsedBeneficiaryEmployeeId) && parsedBeneficiaryEmployeeId > 0) {
-      const employeeDepartment = await AdminBudgetModel.getEmployeeDepartmentByEmployeeId(parsedBeneficiaryEmployeeId);
+      const employeeDepartment = await AdminBudgetModel.getEmployeeDepartmentByEmployeeId(
+        parsedBeneficiaryEmployeeId,
+      );
       const resolvedFacultyDepartment = normalizeText(
-        employeeDepartment?.parent_department_name || employeeDepartment?.name
+        employeeDepartment?.parent_department_name || employeeDepartment?.name,
       );
 
       if (resolvedFacultyDepartment) {
@@ -100,7 +102,9 @@ export async function resolveSubmissionDepartment(req, beneficiaryType, payload 
     }
 
     if (!userDepartment) {
-      throw new Error(`Department not set for ${normalizedBeneficiaryType.toLowerCase()} beneficiary`);
+      throw new Error(
+        `Department not set for ${normalizedBeneficiaryType.toLowerCase()} beneficiary`,
+      );
     }
 
     return userDepartment;
@@ -126,9 +130,7 @@ export async function getFacultyDetails(req, res) {
     const empData = await AdminBudgetModel.getUserDepartmentByUserId(userId);
     const assignments = await AdminBudgetModel.getUserAssignments(userId);
     const department =
-      empData?.parent_department_name
-      || empData?.name
-      || await resolveUserDepartment(req);
+      empData?.parent_department_name || empData?.name || (await resolveUserDepartment(req));
     const role = resolveAccessRoleFromPermissions(req);
 
     return res.json({
@@ -195,7 +197,9 @@ export async function getOrgUnits(req, res) {
   try {
     const mappedType = normalizeEntityTypeParam(req.params.type);
 
-    if (!['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(mappedType)) {
+    if (
+      !['DEPARTMENT', 'CENTRE', 'CELL', 'CLUB', 'PROFESSIONAL_BODY', 'SECTION'].includes(mappedType)
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -271,6 +275,22 @@ export async function getAllDepartments(req, res) {
   }
 }
 
+export async function getAvailableFiscalYears(req, res) {
+  try {
+    const years = await AdminBudgetModel.listAvailableFiscalYears();
+    return res.json({
+      success: true,
+      data: years,
+    });
+  } catch (error) {
+    console.error('Admin budget fiscal years error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch fiscal years',
+    });
+  }
+}
+
 export async function get(req, res) {
   try {
     const proposalId = Number.parseInt(req.params.id, 10);
@@ -303,7 +323,7 @@ export async function get(req, res) {
       userEmail,
       userRole,
       userDepartment,
-      userDepartmentId
+      userDepartmentId,
     );
 
     if (!hasAccess) {
@@ -341,7 +361,15 @@ export async function getHodBudgets(req, res) {
       });
     }
 
-    const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      fiscalYear,
+      q,
+      departmentFilter,
+      beneficiaryType,
+    } = req.query;
 
     const budgets = await AdminBudgetModel.listBudgets({
       userId,
@@ -364,7 +392,9 @@ export async function getHodBudgets(req, res) {
       data: budgets.budgets,
       pagination: budgets.pagination,
       department,
-      currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : AdminBudgetModel.getCurrentFinancialYear(),
+      currentFiscalYear: fiscalYear
+        ? Number.parseInt(fiscalYear, 10)
+        : AdminBudgetModel.getCurrentFinancialYear(),
     });
   } catch (error) {
     console.error('Admin budget HOD queue error:', error);
@@ -388,7 +418,15 @@ export async function getCoordinatorBudgets(req, res) {
       });
     }
 
-    const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      fiscalYear,
+      q,
+      departmentFilter,
+      beneficiaryType,
+    } = req.query;
 
     const budgets = await AdminBudgetModel.listBudgets({
       userId,
@@ -408,7 +446,9 @@ export async function getCoordinatorBudgets(req, res) {
       success: true,
       data: budgets.budgets,
       pagination: budgets.pagination,
-      currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : AdminBudgetModel.getCurrentFinancialYear(),
+      currentFiscalYear: fiscalYear
+        ? Number.parseInt(fiscalYear, 10)
+        : AdminBudgetModel.getCurrentFinancialYear(),
     });
   } catch (error) {
     console.error('Admin budget coordinator queue error:', error);
@@ -421,7 +461,15 @@ export async function getCoordinatorBudgets(req, res) {
 
 export async function getItheadBudgets(req, res) {
   try {
-    const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      fiscalYear,
+      q,
+      departmentFilter,
+      beneficiaryType,
+    } = req.query;
     const isSuperAdminUser = hasSuperAdminAccess(req);
     const userId = getUserId(req);
     const userEmail = normalizeText(req.user?.email);
@@ -444,7 +492,9 @@ export async function getItheadBudgets(req, res) {
       success: true,
       data: budgets.budgets,
       pagination: budgets.pagination,
-      currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : AdminBudgetModel.getCurrentFinancialYear(),
+      currentFiscalYear: fiscalYear
+        ? Number.parseInt(fiscalYear, 10)
+        : AdminBudgetModel.getCurrentFinancialYear(),
     });
   } catch (error) {
     console.error('Admin budget IT Head queue error:', error);
@@ -457,7 +507,15 @@ export async function getItheadBudgets(req, res) {
 
 export async function getDofBudgets(req, res) {
   try {
-    const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      fiscalYear,
+      q,
+      departmentFilter,
+      beneficiaryType,
+    } = req.query;
     const isSuperAdmin = hasSuperAdminAccess(req);
     const userId = getUserId(req);
     const userEmail = normalizeText(req.user?.email);
@@ -480,7 +538,9 @@ export async function getDofBudgets(req, res) {
       success: true,
       data: budgets.budgets,
       pagination: budgets.pagination,
-      currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : AdminBudgetModel.getCurrentFinancialYear(),
+      currentFiscalYear: fiscalYear
+        ? Number.parseInt(fiscalYear, 10)
+        : AdminBudgetModel.getCurrentFinancialYear(),
     });
   } catch (error) {
     console.error('Admin budget DoF queue error:', error);
@@ -493,7 +553,15 @@ export async function getDofBudgets(req, res) {
 
 export async function getPrincipalBudgets(req, res) {
   try {
-    const { page = 1, limit = 10, status, fiscalYear, q, departmentFilter, beneficiaryType } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      fiscalYear,
+      q,
+      departmentFilter,
+      beneficiaryType,
+    } = req.query;
     const isSuperAdmin = hasSuperAdminAccess(req);
     const userId = getUserId(req);
     const userEmail = normalizeText(req.user?.email);
@@ -516,7 +584,9 @@ export async function getPrincipalBudgets(req, res) {
       success: true,
       data: budgets.budgets,
       pagination: budgets.pagination,
-      currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : AdminBudgetModel.getCurrentFinancialYear(),
+      currentFiscalYear: fiscalYear
+        ? Number.parseInt(fiscalYear, 10)
+        : AdminBudgetModel.getCurrentFinancialYear(),
     });
   } catch (error) {
     console.error('Admin budget principal queue error:', error);
@@ -562,7 +632,8 @@ export async function approve(req, res) {
     const isSuperAdmin = hasSuperAdminAccess(req);
     const level1Route = AdminBudgetModel.resolveLevel1Route(proposal);
 
-    const isCompletedReversal = currentStage === 'completed' && normalizedDecision === 'returned' && isSuperAdmin;
+    const isCompletedReversal =
+      currentStage === 'completed' && normalizedDecision === 'returned' && isSuperAdmin;
     const flowStages = normalizeText(proposal.approval_flow).split('_').filter(Boolean);
     const lastStage = flowStages.length > 0 ? flowStages[flowStages.length - 1] : 'dof';
     const effectiveStage = isCompletedReversal ? lastStage : currentStage;
@@ -575,10 +646,10 @@ export async function approve(req, res) {
     }
 
     if (
-      normalizedDecision !== 'archived'
-      && !isCompletedReversal
-      && !isSuperAdmin
-      && !hasPermission(req, requiredPermission)
+      normalizedDecision !== 'archived' &&
+      !isCompletedReversal &&
+      !isSuperAdmin &&
+      !hasPermission(req, requiredPermission)
     ) {
       return res.status(403).json({
         success: false,
@@ -587,11 +658,13 @@ export async function approve(req, res) {
     }
 
     if (
-      normalizedDecision !== 'archived'
-      && effectiveStage === 'level1'
-      && level1Route.routeType === 'entity_contact'
+      normalizedDecision !== 'archived' &&
+      effectiveStage === 'level1' &&
+      level1Route.routeType === 'entity_contact'
     ) {
-      const entityAssignee = await AdminBudgetModel.resolveEntityLevel1Assignee(level1Route.entityId);
+      const entityAssignee = await AdminBudgetModel.resolveEntityLevel1Assignee(
+        level1Route.entityId,
+      );
 
       if (!entityAssignee?.email && !isSuperAdmin) {
         return res.status(403).json({
@@ -612,7 +685,7 @@ export async function approve(req, res) {
       userEmail,
       normalizedDecision === 'archived' ? 'admin' : isSuperAdmin ? 'super_admin' : effectiveStage,
       userDepartment,
-      userDepartmentId
+      userDepartmentId,
     );
 
     if (!hasAccess) {
@@ -625,7 +698,9 @@ export async function approve(req, res) {
     await AdminBudgetModel.processApproval(proposalId, {
       role: effectiveStage,
       decision: normalizedDecision,
-      feedback: ['rejected', 'returned', 'archived'].includes(normalizedDecision) ? feedback : undefined,
+      feedback: ['rejected', 'returned', 'archived'].includes(normalizedDecision)
+        ? feedback
+        : undefined,
       approverUserId: userId,
       approverEmail: userEmail,
       isCompletedReversal,
@@ -644,9 +719,9 @@ export async function approve(req, res) {
     console.error('Admin budget approval error:', error);
 
     if (
-      error.message.includes('Stage mismatch')
-      || error.message.includes('Feedback required')
-      || error.message.includes('expected')
+      error.message.includes('Stage mismatch') ||
+      error.message.includes('Feedback required') ||
+      error.message.includes('expected')
     ) {
       return res.status(400).json({
         success: false,
@@ -710,7 +785,7 @@ export async function updateApprovedAmounts(req, res) {
       userEmail,
       isSuperAdmin ? 'super_admin' : authorizedRole,
       userDepartment,
-      userDepartmentId
+      userDepartmentId,
     );
 
     if (!hasAccess) {
@@ -795,11 +870,6 @@ export async function deleteProposal(req, res) {
   }
 }
 
-
-
-
-
-
 export async function getEntitiesByType(req, res) {
   try {
     const mappedType = normalizeEntityTypeParam(req.params.type);
@@ -811,9 +881,10 @@ export async function getEntitiesByType(req, res) {
       });
     }
 
-    const data = mappedType === 'DEPARTMENT'
-      ? await AdminBudgetModel.getDepartments()
-      : await AdminBudgetModel.getEntitiesByType(mappedType);
+    const data =
+      mappedType === 'DEPARTMENT'
+        ? await AdminBudgetModel.getDepartments()
+        : await AdminBudgetModel.getEntitiesByType(mappedType);
 
     return res.json({
       success: true,
@@ -938,7 +1009,8 @@ export async function getEntityContacts(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Contacts are available only for CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY',
+        message:
+          'Contacts are available only for CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY',
       });
     }
 
@@ -973,7 +1045,8 @@ export async function updateEntityContacts(req, res) {
     if (!MUTABLE_ENTITY_TYPES.has(mappedType)) {
       return res.status(400).json({
         success: false,
-        message: 'Contacts are editable only for CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY',
+        message:
+          'Contacts are editable only for CENTRE, CELL, CLUB, SECTION, and PROFESSIONAL_BODY',
       });
     }
 
@@ -984,7 +1057,11 @@ export async function updateEntityContacts(req, res) {
       });
     }
 
-    const updatedContacts = await AdminBudgetModel.updateEntityContacts(mappedType, entityId, contacts);
+    const updatedContacts = await AdminBudgetModel.updateEntityContacts(
+      mappedType,
+      entityId,
+      contacts,
+    );
 
     return res.json({
       success: true,
@@ -1019,7 +1096,9 @@ export async function getApprovalFlows(req, res) {
 export async function getFreezeConfig(req, res) {
   try {
     const { fiscalYear } = req.query;
-    const fy = fiscalYear ? Number.parseInt(fiscalYear, 10) : AdminBudgetModel.getCurrentFinancialYear();
+    const fy = fiscalYear
+      ? Number.parseInt(fiscalYear, 10)
+      : AdminBudgetModel.getCurrentFinancialYear();
     const config = await AdminBudgetModel.getFreezeConfig(fy);
 
     return res.json({
@@ -1047,8 +1126,11 @@ export async function upsertFreezeConfig(req, res) {
       });
     }
 
-    const fiscalYear = Number.parseInt(req.body?.fiscalYear, 10) || AdminBudgetModel.getCurrentFinancialYear();
-    const cutoffDate = normalizeText(req.body?.cutoffDate) || AdminBudgetModel.getDefaultFreezeCutoffDate(fiscalYear);
+    const fiscalYear =
+      Number.parseInt(req.body?.fiscalYear, 10) || AdminBudgetModel.getCurrentFinancialYear();
+    const cutoffDate =
+      normalizeText(req.body?.cutoffDate) ||
+      AdminBudgetModel.getDefaultFreezeCutoffDate(fiscalYear);
     const requestedFreezeState = req.body?.isFrozen === false ? 0 : 1;
     const isFrozen = isSuperAdminUser ? requestedFreezeState : 1;
 
@@ -1094,7 +1176,8 @@ export async function upsertFreezeConfig(req, res) {
     if (error?.code === 'ER_NO_SUCH_TABLE') {
       return res.status(500).json({
         success: false,
-        message: 'Freeze config table is missing. Run migration: 20260308_add_budget_time_freeze_config.sql',
+        message:
+          'Freeze config table is missing. Run migration: 20260308_add_budget_time_freeze_config.sql',
       });
     }
     return res.status(500).json({
@@ -1120,7 +1203,9 @@ export async function getAggregates(req, res) {
     return res.json({
       success: true,
       data: aggregates,
-      currentFiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : AdminBudgetModel.getCurrentFinancialYear(),
+      currentFiscalYear: fiscalYear
+        ? Number.parseInt(fiscalYear, 10)
+        : AdminBudgetModel.getCurrentFinancialYear(),
     });
   } catch (error) {
     console.error('Aggregates error:', error);
@@ -1151,8 +1236,9 @@ export async function toggleArchive(req, res) {
       });
     }
 
-    const isArchived = ['archive', 'archived'].includes(normalizeText(proposal.status).toLowerCase())
-      || ['archive', 'archived'].includes(normalizeText(proposal.current_stage).toLowerCase());
+    const isArchived =
+      ['archive', 'archived'].includes(normalizeText(proposal.status).toLowerCase()) ||
+      ['archive', 'archived'].includes(normalizeText(proposal.current_stage).toLowerCase());
     const currentStage = normalizeText(proposal.current_stage).toLowerCase();
     const requiredPermission = WORKFLOW_STAGE_PERMISSION[currentStage];
     const isSuperAdmin = hasSuperAdminAccess(req);
@@ -1160,9 +1246,9 @@ export async function toggleArchive(req, res) {
     if (!isArchived) {
       const normalizedStatus = normalizeText(proposal.status).toLowerCase();
       const isTerminalForArchive =
-        normalizedStatus === 'completed'
-        || normalizedStatus.includes('rejected')
-        || normalizedStatus.includes('returned');
+        normalizedStatus === 'completed' ||
+        normalizedStatus.includes('rejected') ||
+        normalizedStatus.includes('returned');
 
       if (isTerminalForArchive) {
         return res.status(400).json({
@@ -1204,7 +1290,10 @@ export async function toggleArchive(req, res) {
 
     return res.json({
       success: true,
-      message: result.action === 'unarchived' ? 'Proposal unarchived successfully' : 'Proposal archived successfully',
+      message:
+        result.action === 'unarchived'
+          ? 'Proposal unarchived successfully'
+          : 'Proposal archived successfully',
       data: {
         action: result.action,
         proposalId,
@@ -1221,7 +1310,16 @@ export async function toggleArchive(req, res) {
 
 export async function adminList(req, res) {
   try {
-    const { page = 1, limit = 20, status, fiscalYear, q, departmentFilter, beneficiaryType, scope: scopeParam } = req.query;
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      fiscalYear,
+      q,
+      departmentFilter,
+      beneficiaryType,
+      scope: scopeParam,
+    } = req.query;
 
     const budgets = await AdminBudgetModel.listBudgets({
       role: getAuthorizedRole(req, scopeParam),
@@ -1254,14 +1352,7 @@ export async function adminList(req, res) {
 
 export async function getSuperAdminFlowDashboard(req, res) {
   try {
-    const {
-      page = 1,
-      limit = 20,
-      status,
-      fiscalYear,
-      q,
-      department,
-    } = req.query;
+    const { page = 1, limit = 20, status, fiscalYear, q, department } = req.query;
 
     const result = await AdminBudgetModel.listSuperAdminFlowBudgets({
       page: Number.parseInt(page, 10),
@@ -1278,7 +1369,9 @@ export async function getSuperAdminFlowDashboard(req, res) {
       pagination: result.pagination,
       filters: {
         status: normalizeText(status) || undefined,
-        fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : AdminBudgetModel.getCurrentFinancialYear(),
+        fiscalYear: fiscalYear
+          ? Number.parseInt(fiscalYear, 10)
+          : AdminBudgetModel.getCurrentFinancialYear(),
         q: normalizeText(q) || undefined,
         department: normalizeText(department) || undefined,
       },
@@ -1315,7 +1408,7 @@ export async function search(req, res) {
           budget.proposal_ref?.toLowerCase().includes(query) ||
           budget.beneficiary_value?.toLowerCase().includes(query) ||
           budget.department?.toLowerCase().includes(query) ||
-          budget.org_unit_name?.toLowerCase().includes(query)
+          budget.org_unit_name?.toLowerCase().includes(query),
       );
     }
 
@@ -1351,16 +1444,18 @@ async function exportBudgets(req, res) {
       const csvRows = budgets.budgets
         .map(
           (budget) =>
-            `${budget.proposal_ref},${budget.fiscal_year},${budget.beneficiary_type},"${budget.beneficiary_value || ''
-            }",${budget.department || ''},${budget.total_amount},${budget.status},${budget.current_stage},${budget.created_date
-            }`
+            `${budget.proposal_ref},${budget.fiscal_year},${budget.beneficiary_type},"${
+              budget.beneficiary_value || ''
+            }",${budget.department || ''},${budget.total_amount},${budget.status},${budget.current_stage},${
+              budget.created_date
+            }`,
         )
         .join('\n');
 
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename=budget-export-FY${fiscalYear || AdminBudgetModel.getCurrentFinancialYear()}-${Date.now()}.csv`
+        `attachment; filename=budget-export-FY${fiscalYear || AdminBudgetModel.getCurrentFinancialYear()}-${Date.now()}.csv`,
       );
 
       return res.send(csvHeader + csvRows);
@@ -1386,7 +1481,9 @@ export { exportBudgets as export };
 export async function getStats(req, res) {
   try {
     const { fiscalYear, scope: scopeParam } = req.query;
-    const fy = fiscalYear ? Number.parseInt(fiscalYear, 10) : AdminBudgetModel.getCurrentFinancialYear();
+    const fy = fiscalYear
+      ? Number.parseInt(fiscalYear, 10)
+      : AdminBudgetModel.getCurrentFinancialYear();
     const role = getAuthorizedRole(req, scopeParam);
     const stats = await AdminBudgetModel.getBudgetStatsByFY(fy, { role });
 
@@ -1460,12 +1557,10 @@ export async function updateFlowConfig(req, res) {
     const requiresPrincipal = Number(req.body?.requiresPrincipal);
 
     if (
-      !normalizedFlow.length
-      && (
-        ![0, 1].includes(requiresLevel1)
-        || ![0, 1].includes(requiresDof)
-        || ![0, 1].includes(requiresPrincipal)
-      )
+      !normalizedFlow.length &&
+      (![0, 1].includes(requiresLevel1) ||
+        ![0, 1].includes(requiresDof) ||
+        ![0, 1].includes(requiresPrincipal))
     ) {
       return res.status(400).json({
         success: false,
@@ -1496,9 +1591,10 @@ export async function updateFlowConfig(req, res) {
     const statusCode = /invalid stage key/i.test(String(error?.message || '')) ? 400 : 500;
     return res.status(statusCode).json({
       success: false,
-      message: statusCode === 400
-        ? (error.message || 'Invalid flow configuration')
-        : 'Failed to update approval flow config',
+      message:
+        statusCode === 400
+          ? error.message || 'Invalid flow configuration'
+          : 'Failed to update approval flow config',
     });
   }
 }
@@ -1513,7 +1609,10 @@ export async function getBatch(req, res) {
       });
     }
 
-    const proposalIds = ids.split(',').map((id) => Number.parseInt(id.trim(), 10)).filter(Boolean);
+    const proposalIds = ids
+      .split(',')
+      .map((id) => Number.parseInt(id.trim(), 10))
+      .filter(Boolean);
     if (!proposalIds.length) {
       return res.status(400).json({
         success: false,
@@ -1535,7 +1634,7 @@ export async function getBatch(req, res) {
         userEmail,
         userRole,
         userDepartment,
-        userDepartmentId
+        userDepartmentId,
       );
       if (hasAccess) {
         authorizedProposalIds.push(proposalId);

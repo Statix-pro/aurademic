@@ -4,12 +4,13 @@ import '../../shared/styles/forms.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { Trash2, Plus, ChevronDown } from 'lucide-react';
-import CustomFileUploader from '../../shared/components/ui/CustomFileUploader';
-
-import authenticityUtility from '../../shared/utils/authenticityUtility';
-import debounce from 'lodash.debounce';
-import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+
+import { useAuth } from '../../contexts/AuthContext';
+import CustomFileUploader from '../../shared/components/ui/CustomFileUploader';
+import authenticityUtility from '../../shared/utils/authenticityUtility';
+
+import debounce from 'lodash.debounce';
 
 // Type definitions
 interface User {
@@ -211,22 +212,18 @@ const ResearchProjectForm: React.FC = () => {
     bankStatement: { enabled: false, filePath: '', file: null },
   });
 
-  const [principalInvestigatorState, setPrincipalInvestigatorState] =
-    useState<Investigator | null>(null);
-  const [isCurrentUserPrincipalState, setIsCurrentUserPrincipalState] =
-    useState(false);
+  const [principalInvestigatorState, setPrincipalInvestigatorState] = useState<Investigator | null>(
+    null,
+  );
+  const [isCurrentUserPrincipalState, setIsCurrentUserPrincipalState] = useState(false);
 
   const MAX_INVESTIGATORS = 10;
   const [investigatorIndex, setInvestigatorIndex] = useState(2);
-  const [searchQueries, setSearchQueries] = useState(
-    Array(MAX_INVESTIGATORS).fill('')
-  );
+  const [searchQueries, setSearchQueries] = useState(Array(MAX_INVESTIGATORS).fill(''));
   const [searchResults, setSearchResults] = useState<SearchResult[][]>(
-    Array(MAX_INVESTIGATORS).fill([])
+    Array(MAX_INVESTIGATORS).fill([]),
   );
-  const [showSuggestions, setShowSuggestions] = useState(
-    Array(MAX_INVESTIGATORS).fill(false)
-  );
+  const [showSuggestions, setShowSuggestions] = useState(Array(MAX_INVESTIGATORS).fill(false));
 
   const [error, setError] = useState<string | null>(null);
   const [investigators, setInvestigators] = useState<Investigator[]>([
@@ -244,13 +241,15 @@ const ResearchProjectForm: React.FC = () => {
     },
   ]);
   const [investigatorDesignations, setInvestigatorDesignations] = useState(
-    Array(MAX_INVESTIGATORS).fill('faculty')
+    Array(MAX_INVESTIGATORS).fill('faculty'),
   );
   const MAX_FINANCIAL_CONTRIBUTIONS = 10;
   const [financialContributions, setFinancialContributions] = useState<FinancialContribution[]>([
     { id: 1, agencyType: '', agency: '', amount: '', agencyTypeSearchTerm: '' },
   ]);
-  const [showAgencyTypeDropdowns, setShowAgencyTypeDropdowns] = useState<{ [key: number]: boolean }>({});
+  const [showAgencyTypeDropdowns, setShowAgencyTypeDropdowns] = useState<{
+    [key: number]: boolean;
+  }>({});
 
   const [enableCollaboration, setEnableCollaboration] = useState(false);
   const [collaborations, setCollaborations] = useState<Collaboration[]>([
@@ -385,11 +384,7 @@ const ResearchProjectForm: React.FC = () => {
     }
 
     for (const contribution of financialContributions) {
-      if (
-        !contribution.agencyType ||
-        !contribution.agency ||
-        !contribution.amount
-      ) {
+      if (!contribution.agencyType || !contribution.agency || !contribution.amount) {
         return 'All financial contribution fields (Agency Type, Agency, Amount) must be filled';
       }
       if (!contribution.agencyType) {
@@ -480,7 +475,7 @@ const ResearchProjectForm: React.FC = () => {
     if (query.length > 0) {
       try {
         const results: SearchResult[] = await authenticityUtility.get(
-          `/authors/search?query=${encodeURIComponent(query)}&_=${Date.now()}`
+          `/authors/search?query=${encodeURIComponent(query)}&_=${Date.now()}`,
         );
         setSearchResults((prevResults) => {
           const newResults = [...prevResults];
@@ -523,7 +518,7 @@ const ResearchProjectForm: React.FC = () => {
 
   useEffect(() => {
     const delayDebounceFn = searchQueries.map((query, index) =>
-      setTimeout(() => searchInvestigator(query, index), 300)
+      setTimeout(() => searchInvestigator(query, index), 300),
     );
 
     return () => delayDebounceFn.forEach(clearTimeout);
@@ -534,7 +529,7 @@ const ResearchProjectForm: React.FC = () => {
       prevInvestigators.map((inv, index) => ({
         ...inv,
         is_principal: index === 0,
-      }))
+      })),
     );
   }, []);
 
@@ -563,16 +558,11 @@ const ResearchProjectForm: React.FC = () => {
     const normalizedDesignation = computeDesignation(selectedInvestigator);
     const computedInvestigatorId =
       normalizedDesignation === 'student'
-        ? selectedInvestigator.student_id ||
-        selectedInvestigator.register_no ||
-        ''
+        ? selectedInvestigator.student_id || selectedInvestigator.register_no || ''
         : selectedInvestigator.author_id || '';
 
     if (!selectedInvestigator || !computedInvestigatorId) {
-      console.error(
-        'Invalid investigator selected or missing ID:',
-        selectedInvestigator
-      );
+      console.error('Invalid investigator selected or missing ID:', selectedInvestigator);
       return;
     }
 
@@ -582,10 +572,8 @@ const ResearchProjectForm: React.FC = () => {
 
       updatedInvestigators[index] = {
         ...originalInvestigatorData,
-        author_id:
-          normalizedDesignation === 'faculty' ? computedInvestigatorId : '',
-        register_no:
-          normalizedDesignation === 'student' ? computedInvestigatorId : '',
+        author_id: normalizedDesignation === 'faculty' ? computedInvestigatorId : '',
+        register_no: normalizedDesignation === 'student' ? computedInvestigatorId : '',
         name: selectedInvestigator.name,
         department: selectedInvestigator.department,
         organization: selectedInvestigator.organization,
@@ -712,18 +700,12 @@ const ResearchProjectForm: React.FC = () => {
   const removeInvestigator = (id: number): void => {
     if (id === 1) return;
     setInvestigators((prevInvestigators) => {
-      const newInvestigators = prevInvestigators.filter(
-        (investigator) => investigator.id !== id
-      );
+      const newInvestigators = prevInvestigators.filter((investigator) => investigator.id !== id);
       return newInvestigators;
     });
     setInvestigatorIndex((prevIndex) => Math.max(2, prevIndex - 1));
-    setSearchQueries((prevQueries) =>
-      prevQueries.filter((_, index) => index !== id - 1)
-    );
-    setSearchResults((prevResults) =>
-      prevResults.filter((_, index) => index !== id - 1)
-    );
+    setSearchQueries((prevQueries) => prevQueries.filter((_, index) => index !== id - 1));
+    setSearchResults((prevResults) => prevResults.filter((_, index) => index !== id - 1));
     setShowSuggestions((prev) => prev.filter((_, index) => index !== id - 1));
   };
 
@@ -744,7 +726,7 @@ const ResearchProjectForm: React.FC = () => {
       prevInvestigators.map((inv, index) => ({
         ...inv,
         is_primary: index === selectedIndex,
-      }))
+      })),
     );
   };
 
@@ -770,9 +752,7 @@ const ResearchProjectForm: React.FC = () => {
               placeholder="Register No."
               name="register_no"
               value={investigator.register_no || ''}
-              onChange={(e) =>
-                handleInputChange(index, e.target.name, e.target.value)
-              }
+              onChange={(e) => handleInputChange(index, e.target.name, e.target.value)}
               {...inputProps}
             />
             <input
@@ -781,9 +761,7 @@ const ResearchProjectForm: React.FC = () => {
               placeholder="Name"
               name="name"
               value={investigator.name || ''}
-              onChange={(e) =>
-                handleInputChange(index, e.target.name, e.target.value)
-              }
+              onChange={(e) => handleInputChange(index, e.target.name, e.target.value)}
               {...inputProps}
             />
             <input
@@ -792,9 +770,7 @@ const ResearchProjectForm: React.FC = () => {
               placeholder="Department"
               name="department"
               value={investigator.department || ''}
-              onChange={(e) =>
-                handleInputChange(index, e.target.name, e.target.value)
-              }
+              onChange={(e) => handleInputChange(index, e.target.name, e.target.value)}
               {...inputProps}
             />
             <input
@@ -803,9 +779,7 @@ const ResearchProjectForm: React.FC = () => {
               placeholder="Organization"
               name="organization"
               value={investigator.organization || 'K.S.Rangasamy College of Technology'}
-              onChange={(e) =>
-                handleInputChange(index, e.target.name, e.target.value)
-              }
+              onChange={(e) => handleInputChange(index, e.target.name, e.target.value)}
               {...inputProps}
               readOnly
             />
@@ -815,9 +789,7 @@ const ResearchProjectForm: React.FC = () => {
               placeholder="Country"
               name="country"
               value={investigator.country || 'India'}
-              onChange={(e) =>
-                handleInputChange(index, e.target.name, e.target.value)
-              }
+              onChange={(e) => handleInputChange(index, e.target.name, e.target.value)}
               {...inputProps}
               readOnly
             />
@@ -836,9 +808,7 @@ const ResearchProjectForm: React.FC = () => {
               placeholder="Name"
               name="name"
               value={investigator.name || ''}
-              onChange={(e) =>
-                handleInputChange(index, e.target.name, e.target.value)
-              }
+              onChange={(e) => handleInputChange(index, e.target.name, e.target.value)}
               {...inputProps}
             />
             <input
@@ -847,9 +817,7 @@ const ResearchProjectForm: React.FC = () => {
               placeholder="Department"
               name="department"
               value={investigator.department || ''}
-              onChange={(e) =>
-                handleInputChange(index, e.target.name, e.target.value)
-              }
+              onChange={(e) => handleInputChange(index, e.target.name, e.target.value)}
               {...inputProps}
             />
             <input
@@ -858,9 +826,7 @@ const ResearchProjectForm: React.FC = () => {
               placeholder="Organization"
               name="organization"
               value={investigator.organization || ''}
-              onChange={(e) =>
-                handleInputChange(index, e.target.name, e.target.value)
-              }
+              onChange={(e) => handleInputChange(index, e.target.name, e.target.value)}
               {...inputProps}
             />
             <input
@@ -869,9 +835,7 @@ const ResearchProjectForm: React.FC = () => {
               placeholder="Country"
               name="country"
               value={investigator.country || ''}
-              onChange={(e) =>
-                handleInputChange(index, e.target.name, e.target.value)
-              }
+              onChange={(e) => handleInputChange(index, e.target.name, e.target.value)}
               {...inputProps}
             />
           </div>
@@ -903,7 +867,8 @@ const ResearchProjectForm: React.FC = () => {
                       onClick={() => handleInvestigatorSelect(result, index)}
                       style={{ cursor: 'pointer' }}
                     >
-                      {result.author_id || result.student_id} - {result.name} - {result.organization}
+                      {result.author_id || result.student_id} - {result.name} -{' '}
+                      {result.organization}
                       {result.department && ` - ${result.department}`}
                     </li>
                   ))}
@@ -956,9 +921,7 @@ const ResearchProjectForm: React.FC = () => {
         },
       ]);
     } else {
-      alert(
-        `You can add maximum ${MAX_FINANCIAL_CONTRIBUTIONS} Financial Contributions.`
-      );
+      alert(`You can add maximum ${MAX_FINANCIAL_CONTRIBUTIONS} Financial Contributions.`);
     }
   };
 
@@ -979,17 +942,13 @@ const ResearchProjectForm: React.FC = () => {
   };
 
   const removeCollaboration = async (id: number): Promise<void> => {
-    const updatedCollaborations = collaborations.filter(
-      (collaboration) => collaboration.id !== id
-    );
+    const updatedCollaborations = collaborations.filter((collaboration) => collaboration.id !== id);
     setCollaborations(updatedCollaborations);
 
     // Only try to delete from backend if projectId exists and the collaboration has a numeric ID
     if (projectId && typeof id === 'number') {
       try {
-        await authenticityUtility.delete(
-          `/projects/${projectId}/collaborations/${id}`
-        );
+        await authenticityUtility.delete(`/projects/${projectId}/collaborations/${id}`);
       } catch (error) {
         console.error('Error deleting collaboration from backend:', error);
       }
@@ -1003,7 +962,7 @@ const ResearchProjectForm: React.FC = () => {
           return { ...collaboration, [field]: value };
         }
         return collaboration;
-      })
+      }),
     );
   };
 
@@ -1039,13 +998,11 @@ const ResearchProjectForm: React.FC = () => {
         const { tempId, ...newData } = disbursement;
         const response: AuthResponse = await authenticityUtility.post(
           `/projects/${projectId}/grant-disbursements`,
-          newData
+          newData,
         );
         // Update state with real ID
         setGrantDisbursements((prev) =>
-          prev.map((d) =>
-            d.tempId === tempId ? { ...response.data, isNew: false } : d
-          )
+          prev.map((d) => (d.tempId === tempId ? { ...response.data, isNew: false } : d)),
         );
       }
     }
@@ -1062,7 +1019,7 @@ const ResearchProjectForm: React.FC = () => {
       // Call API to delete from backend if it has an ID
       try {
         await authenticityUtility.delete(
-          `/projects/${projectId}/grant-disbursements/${disbursementToDelete.id}`
+          `/projects/${projectId}/grant-disbursements/${disbursementToDelete.id}`,
         );
         //  console.log(`Disbursement with ID ${disbursementToDelete.id} deleted from backend`);
       } catch (error) {
@@ -1072,9 +1029,7 @@ const ResearchProjectForm: React.FC = () => {
     }
 
     // Update frontend state
-    const updatedDisbursements = grantDisbursements.filter(
-      (_, i) => i !== index
-    );
+    const updatedDisbursements = grantDisbursements.filter((_, i) => i !== index);
     setGrantDisbursements(updatedDisbursements);
   };
 
@@ -1088,10 +1043,7 @@ const ResearchProjectForm: React.FC = () => {
   };
 
   const handleFileUpload = (file: File, docType: string): void => {
-    if (
-      docType.startsWith('sanctionLetter') ||
-      docType.startsWith('ucAndSoE')
-    ) {
+    if (docType.startsWith('sanctionLetter') || docType.startsWith('ucAndSoE')) {
       const idPartMatcher = /(\d+)$/; // Regex to find numbers at the end
       const match = docType.match(idPartMatcher);
       const idFromDocTypeString = match ? match[0] : null;
@@ -1099,10 +1051,8 @@ const ResearchProjectForm: React.FC = () => {
       if (idFromDocTypeString) {
         const updatedGrantDisbursements = grantDisbursements.map((g) => {
           // Check if current grant 'g' matches the idFromDocTypeString (could be g.id or g.tempId)
-          const matchesId =
-            g.id != null && g.id.toString() === idFromDocTypeString;
-          const matchesTempId =
-            g.tempId != null && g.tempId.toString() === idFromDocTypeString;
+          const matchesId = g.id != null && g.id.toString() === idFromDocTypeString;
+          const matchesTempId = g.tempId != null && g.tempId.toString() === idFromDocTypeString;
 
           if (matchesId || matchesTempId) {
             const updatedGrant = { ...g }; // Clone the grant to modify
@@ -1128,10 +1078,7 @@ const ResearchProjectForm: React.FC = () => {
         });
         setGrantDisbursements(updatedGrantDisbursements);
       } else {
-        console.error(
-          'Could not extract ID from docType for grant file:',
-          docType
-        );
+        console.error('Could not extract ID from docType for grant file:', docType);
       }
     } else {
       // For other documents (non-grant specific)
@@ -1148,20 +1095,15 @@ const ResearchProjectForm: React.FC = () => {
   };
 
   const handleFileDelete = (docType: string): void => {
-    if (
-      docType.startsWith('sanctionLetter') ||
-      docType.startsWith('ucAndSoE')
-    ) {
+    if (docType.startsWith('sanctionLetter') || docType.startsWith('ucAndSoE')) {
       const idPartMatcher = /(\d+)$/;
       const match = docType.match(idPartMatcher);
       const idFromDocTypeString = match ? match[0] : null;
 
       if (idFromDocTypeString) {
         const updatedGrantDisbursements = grantDisbursements.map((g) => {
-          const matchesId =
-            g.id != null && g.id.toString() === idFromDocTypeString;
-          const matchesTempId =
-            g.tempId != null && g.tempId.toString() === idFromDocTypeString;
+          const matchesId = g.id != null && g.id.toString() === idFromDocTypeString;
+          const matchesTempId = g.tempId != null && g.tempId.toString() === idFromDocTypeString;
 
           if (matchesId || matchesTempId) {
             const updatedGrant = { ...g };
@@ -1203,8 +1145,12 @@ const ResearchProjectForm: React.FC = () => {
       [docType]: {
         ...prev[docType as keyof Documents],
         enabled: !prev[docType as keyof Documents].enabled,
-        filePath: !prev[docType as keyof Documents].enabled ? prev[docType as keyof Documents].filePath : '',
-        file: !prev[docType as keyof Documents].enabled ? prev[docType as keyof Documents].file : null,
+        filePath: !prev[docType as keyof Documents].enabled
+          ? prev[docType as keyof Documents].filePath
+          : '',
+        file: !prev[docType as keyof Documents].enabled
+          ? prev[docType as keyof Documents].file
+          : null,
       },
     }));
   };
@@ -1263,9 +1209,7 @@ const ResearchProjectForm: React.FC = () => {
   const removeFinancialContribution = async (indexToRemove: number): Promise<void> => {
     const contributionToDelete = financialContributions[indexToRemove];
     if (!contributionToDelete) {
-      console.error(
-        `No financial contribution found at index ${indexToRemove}`
-      );
+      console.error(`No financial contribution found at index ${indexToRemove}`);
       return;
     }
 
@@ -1273,20 +1217,17 @@ const ResearchProjectForm: React.FC = () => {
     if (contributionToDelete.id && projectId) {
       try {
         await authenticityUtility.delete(
-          `/projects/${projectId}/contributions/${contributionToDelete.id}`
+          `/projects/${projectId}/contributions/${contributionToDelete.id}`,
         );
       } catch (error) {
-        console.error(
-          'Error deleting financial contribution from backend:',
-          error
-        );
+        console.error('Error deleting financial contribution from backend:', error);
         // Continue with frontend deletion even if backend fails
       }
     }
 
     // Always update frontend state (whether backend call succeeded or failed)
     const updatedContributions = financialContributions.filter(
-      (_, index) => index !== indexToRemove
+      (_, index) => index !== indexToRemove,
     );
     setFinancialContributions(updatedContributions);
   };
@@ -1301,7 +1242,7 @@ const ResearchProjectForm: React.FC = () => {
     if (!projectId) return;
     try {
       const response: AuthResponse = await authenticityUtility.post(
-        `/edit-requests/research_projects/${projectId}`
+        `/edit-requests/research_projects/${projectId}`,
       );
 
       if (response && response.success === true) {
@@ -1322,7 +1263,7 @@ const ResearchProjectForm: React.FC = () => {
 
     try {
       const response: AuthResponse = await authenticityUtility.get(
-        `/edit-requests/research_projects/${projectId}?_=${Date.now()}`
+        `/edit-requests/research_projects/${projectId}?_=${Date.now()}`,
       );
 
       if (response && response.data) {
@@ -1411,7 +1352,9 @@ const ResearchProjectForm: React.FC = () => {
       setCategory(
         typeof projectData.category === 'string'
           ? projectData.category.split(',').map((c: string) => c.trim())
-          : projectData.category ? [projectData.category] : []
+          : projectData.category
+            ? [projectData.category]
+            : [],
       );
 
       // Set application number
@@ -1433,7 +1376,7 @@ const ResearchProjectForm: React.FC = () => {
             partner: collaboration.partner || '',
             address: collaboration.address || '',
             support: collaboration.support || '',
-          }))
+          })),
         );
       } else {
         setCollaborations([]);
@@ -1447,13 +1390,11 @@ const ResearchProjectForm: React.FC = () => {
               ? JSON.parse(projectData.financial_contributions)
               : projectData.financial_contributions;
 
-          const updatedContributions = contributionsData.map(
-            (contribution: any) => ({
-              ...contribution,
-              agencyType: contribution.agency_type || '',
-              agencyTypeSearchTerm: contribution.agency_type || '', // Initialize search term
-            })
-          );
+          const updatedContributions = contributionsData.map((contribution: any) => ({
+            ...contribution,
+            agencyType: contribution.agency_type || '',
+            agencyTypeSearchTerm: contribution.agency_type || '', // Initialize search term
+          }));
           setFinancialContributions(updatedContributions);
         } catch (e) {
           console.error('Error parsing financial contributions:', e);
@@ -1466,7 +1407,7 @@ const ResearchProjectForm: React.FC = () => {
             ? projectData.investigators
             : JSON.parse(projectData.investigators);
 
-          let updatedInvestigators = investigatorsData.map((inv: any) => {
+          const updatedInvestigators = investigatorsData.map((inv: any) => {
             return {
               ...inv,
               is_principal: inv.is_principal === 1 || inv.is_principal === true,
@@ -1490,10 +1431,7 @@ const ResearchProjectForm: React.FC = () => {
 
           setInvestigators(updatedInvestigators); // This triggers the useEffect
         } catch (e) {
-          console.error(
-            'fetchProjectDetails - Error processing investigators:',
-            e
-          );
+          console.error('fetchProjectDetails - Error processing investigators:', e);
           // Reset investigators to default if processing fails
           setInvestigators([
             {
@@ -1511,9 +1449,7 @@ const ResearchProjectForm: React.FC = () => {
           ]);
         }
       } else {
-        console.warn(
-          'fetchProjectDetails - No investigators data found in projectData.'
-        );
+        console.warn('fetchProjectDetails - No investigators data found in projectData.');
         // Reset investigators to default if none are found
         setInvestigators([
           {
@@ -1581,9 +1517,7 @@ const ResearchProjectForm: React.FC = () => {
             fy: grant.fiscal_year || '',
             agency: grant.agency || '',
             amount: grant.amount || '',
-            date: grant.disbursement_date
-              ? formatDateForInput(grant.disbursement_date)
-              : '',
+            date: grant.disbursement_date ? formatDateForInput(grant.disbursement_date) : '',
             sanctionLetter: {
               enabled: !!grant.sanction_letter_path,
               filePath: grant.sanction_letter_path || '',
@@ -1708,8 +1642,7 @@ const ResearchProjectForm: React.FC = () => {
         date_of_presentation: projectDetails.dateOfPresentation.enabled
           ? projectDetails.dateOfPresentation.value
           : null,
-        date_of_result_announcement: projectDetails.dateOfResultAnnouncement
-          .enabled
+        date_of_result_announcement: projectDetails.dateOfResultAnnouncement.enabled
           ? projectDetails.dateOfResultAnnouncement.value
           : null,
         sanction_order_amount: projectDetails.sanctionOrderAmount.enabled
@@ -1718,8 +1651,7 @@ const ResearchProjectForm: React.FC = () => {
         sanction_order_date: projectDetails.sanctionOrderDate.enabled
           ? projectDetails.sanctionOrderDate.value
           : null,
-        project_duration_start_date: projectDetails.projectDurationStartDate
-          .enabled
+        project_duration_start_date: projectDetails.projectDurationStartDate.enabled
           ? projectDetails.projectDurationStartDate.value
           : null,
         project_duration_end_date: projectDetails.projectDurationEndDate.enabled
@@ -1737,9 +1669,7 @@ const ResearchProjectForm: React.FC = () => {
         duration_days: duration.days,
         category: category.join(', '),
         is_collaboration_enabled: enableCollaboration,
-        collaborations: JSON.stringify(
-          enableCollaboration ? collaborations : []
-        ),
+        collaborations: JSON.stringify(enableCollaboration ? collaborations : []),
         date_of_submission: submissionDate,
         submission_status: submissionStatus,
         application_number: applicationNumber,
@@ -1761,10 +1691,7 @@ const ResearchProjectForm: React.FC = () => {
 
       if (projectId) {
         // Update existing project
-        response = await authenticityUtility.put(
-          `/projects/${projectId}`,
-          projectData
-        );
+        response = await authenticityUtility.put(`/projects/${projectId}`, projectData);
         newProjectId = projectId;
       } else {
         // Create new project
@@ -1793,24 +1720,16 @@ const ResearchProjectForm: React.FC = () => {
         };
 
         try {
-          await authenticityUtility.post(
-            `/projects/${newProjectId}/authors`,
-            authorData
-          );
+          await authenticityUtility.post(`/projects/${newProjectId}/authors`, authorData);
         } catch (error: any) {
-          throw new Error(
-            `Failed to add investigator ${investigator.name}: ${error.message}`
-          );
+          throw new Error(`Failed to add investigator ${investigator.name}: ${error.message}`);
         }
       }
 
       // Add financial contributions if any
       if (financialContributions?.length > 0) {
         for (const contribution of financialContributions) {
-          await authenticityUtility.post(
-            `/projects/${newProjectId}/contributions`,
-            contribution
-          );
+          await authenticityUtility.post(`/projects/${newProjectId}/contributions`, contribution);
         }
       }
 
@@ -1818,7 +1737,7 @@ const ResearchProjectForm: React.FC = () => {
         // Add project details (this endpoint might work similarly for both create and update)
         await authenticityUtility.post(
           `/projects/${newProjectId}/details`,
-          formattedProjectDetails
+          formattedProjectDetails,
         );
       } catch (error) {
         console.error('Error adding project details:', error);
@@ -1833,10 +1752,7 @@ const ResearchProjectForm: React.FC = () => {
             // formData.append('file_path', data.filePath);
 
             try {
-              await authenticityUtility.postFile(
-                `/projects/${newProjectId}/upload`,
-                formData
-              );
+              await authenticityUtility.postFile(`/projects/${newProjectId}/upload`, formData);
             } catch (error) {
               console.error(`Error uploading document ${docType}:`, error);
             }
@@ -1848,9 +1764,7 @@ const ResearchProjectForm: React.FC = () => {
 
       // Provide more detailed error message to user
       const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        'An unexpected error occurred';
+        error.response?.data?.message || error.message || 'An unexpected error occurred';
       alert(`Error submitting research project: ${errorMessage}`);
 
       // Log detailed error information for debugging
@@ -1874,7 +1788,7 @@ const ResearchProjectForm: React.FC = () => {
     async (query: string) => {
       try {
         const response: any[] = await authenticityUtility.get(
-          `/project-options/agencies/search?query=${query}`
+          `/project-options/agencies/search?query=${query}`,
         );
         setAgencyOptions(response);
         setShowAgencyDropdown(true);
@@ -1882,19 +1796,16 @@ const ResearchProjectForm: React.FC = () => {
         console.error('Error searching agencies:', error);
       }
     },
-    [setAgencyOptions, setShowAgencyDropdown]
+    [setAgencyOptions, setShowAgencyDropdown],
   );
 
-  const debouncedSearchAgencies = useMemo(
-    () => debounce(searchAgencies, 300),
-    [searchAgencies]
-  );
+  const debouncedSearchAgencies = useMemo(() => debounce(searchAgencies, 300), [searchAgencies]);
 
   const searchSchemes = useCallback(
     async (query: string) => {
       try {
         const response: any[] = await authenticityUtility.get(
-          `/project-options/schemes/search?query=${query}`
+          `/project-options/schemes/search?query=${query}`,
         );
         setSchemeOptions(response);
         setShowSchemeDropdown(true);
@@ -1902,13 +1813,10 @@ const ResearchProjectForm: React.FC = () => {
         console.error('Error searching schemes:', error);
       }
     },
-    [setSchemeOptions, setShowSchemeDropdown]
+    [setSchemeOptions, setShowSchemeDropdown],
   );
 
-  const debouncedSearchSchemes = useMemo(
-    () => debounce(searchSchemes, 300),
-    [searchSchemes]
-  );
+  const debouncedSearchSchemes = useMemo(() => debounce(searchSchemes, 300), [searchSchemes]);
 
   const searchAgencyTypes = useCallback(
     async (query: string) => {
@@ -1919,7 +1827,7 @@ const ResearchProjectForm: React.FC = () => {
       }
       try {
         const response: any[] = await authenticityUtility.get(
-          `/project-options/agency-types/search?query=${query}`
+          `/project-options/agency-types/search?query=${query}`,
         );
         setAgencyTypeOptions(response);
         // Visibility is handled by onFocus/onChange now
@@ -1928,12 +1836,12 @@ const ResearchProjectForm: React.FC = () => {
         setAgencyTypeOptions([]); // Clear options on error
       }
     },
-    [setAgencyTypeOptions] // Removed setShowAgencyTypeDropdown dependency
+    [setAgencyTypeOptions], // Removed setShowAgencyTypeDropdown dependency
   );
 
   const debouncedSearchAgencyTypes = useMemo(
     () => debounce(searchAgencyTypes, 300),
-    [searchAgencyTypes]
+    [searchAgencyTypes],
   );
 
   // Single unified click outside handler
@@ -1946,12 +1854,7 @@ const ResearchProjectForm: React.FC = () => {
       const isAgencyTypeInput = target.closest('.agency-type-input-wrapper'); // Add class to agency type input wrapper
       const isDropdownMenu = target.closest('.dropdown-menu');
 
-      if (
-        !isAgencyInput &&
-        !isSchemeInput &&
-        !isAgencyTypeInput &&
-        !isDropdownMenu
-      ) {
+      if (!isAgencyInput && !isSchemeInput && !isAgencyTypeInput && !isDropdownMenu) {
         setShowAgencyDropdown(false);
         setShowSchemeDropdown(false);
         setShowAgencyTypeDropdowns({}); // Close all agency type dropdowns
@@ -1969,11 +1872,7 @@ const ResearchProjectForm: React.FC = () => {
       debouncedSearchSchemes.cancel();
       debouncedSearchAgencyTypes.cancel();
     };
-  }, [
-    debouncedSearchAgencies,
-    debouncedSearchSchemes,
-    debouncedSearchAgencyTypes,
-  ]);
+  }, [debouncedSearchAgencies, debouncedSearchSchemes, debouncedSearchAgencyTypes]);
 
   // Add project request functions
   const handleProjectRequestSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
@@ -1990,13 +1889,11 @@ const ResearchProjectForm: React.FC = () => {
 
       const response: AuthResponse = await authenticityUtility.post(
         '/project-requests',
-        projectRequest
+        projectRequest,
       );
 
       if (response.status === 'success') {
-        alert(
-          'Request submitted successfully! It will be reviewed by an administrator.'
-        );
+        alert('Request submitted successfully! It will be reviewed by an administrator.');
         setShowProjectRequestModal(false);
         setProjectRequest({
           request_type: '',
@@ -2008,9 +1905,7 @@ const ResearchProjectForm: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Error submitting project request:', error);
-      setProjectRequestError(
-        error.response?.data?.message || 'Failed to submit request'
-      );
+      setProjectRequestError(error.response?.data?.message || 'Failed to submit request');
     } finally {
       setProjectRequestLoading(false);
     }
@@ -2025,7 +1920,6 @@ const ResearchProjectForm: React.FC = () => {
 
   return (
     <div className="journal-form-body">
-
       <div className="container-fluid p-4 journal-form-container">
         {' '}
         {/* Use a fluid container for more space */}
@@ -2128,15 +2022,10 @@ const ResearchProjectForm: React.FC = () => {
                 </div>
               </div>
               {validationErrors.investigators && (
-                <div className="alert alert-danger">
-                  {validationErrors.investigators}
-                </div>
+                <div className="alert alert-danger">{validationErrors.investigators}</div>
               )}
               {investigators.map((investigator, index) => (
-                <div
-                  key={investigator.id}
-                  className="investigator-row mb-3"
-                >
+                <div key={investigator.id} className="investigator-row mb-3">
                   {/* Radio button with tooltip */}
                   <div className="custom-tooltip">
                     <input
@@ -2149,9 +2038,7 @@ const ResearchProjectForm: React.FC = () => {
                       required
                       disabled={isFormDisabled}
                     />
-                    <span className="tooltip-text">
-                      {index === 0 ? 'PI' : 'Co-PI'}
-                    </span>
+                    <span className="tooltip-text">{index === 0 ? 'PI' : 'Co-PI'}</span>
                   </div>
 
                   {/* Designation dropdown with ChevronDown */}
@@ -2163,9 +2050,7 @@ const ResearchProjectForm: React.FC = () => {
                         investigator.designation ||
                         'faculty'
                       ).toLowerCase()}
-                      onChange={(e) =>
-                        handleDesignationChange(index, e.target.value)
-                      }
+                      onChange={(e) => handleDesignationChange(index, e.target.value)}
                       disabled={isFormDisabled}
                     >
                       <option value="faculty">Faculty</option>
@@ -2196,10 +2081,7 @@ const ResearchProjectForm: React.FC = () => {
                         type="button"
                         className="btn btn-sm btn-add-author"
                         onClick={addInvestigator}
-                        disabled={
-                          investigators.length >= MAX_INVESTIGATORS ||
-                          isFormDisabled
-                        }
+                        disabled={investigators.length >= MAX_INVESTIGATORS || isFormDisabled}
                         aria-label="Add investigator"
                         title="Add investigator"
                       >
@@ -2238,9 +2120,7 @@ const ResearchProjectForm: React.FC = () => {
                       required
                     />
                     {validationErrors.title && (
-                      <div className="invalid-feedback">
-                        {validationErrors.title}
-                      </div>
+                      <div className="invalid-feedback">{validationErrors.title}</div>
                     )}
                   </div>
                   <div className="form-group">
@@ -2271,9 +2151,7 @@ const ResearchProjectForm: React.FC = () => {
                       ))}
                     </div>
                     {validationErrors.category && (
-                      <div className="alert alert-danger mt-2">
-                        {validationErrors.category}
-                      </div>
+                      <div className="alert alert-danger mt-2">{validationErrors.category}</div>
                     )}
                   </div>
                 </div>
@@ -2310,9 +2188,7 @@ const ResearchProjectForm: React.FC = () => {
                           setShowAgencyDropdown(true);
                           if (e.target.value === '') setAgency('');
                         }}
-                        onBlur={() =>
-                          setTimeout(() => setShowAgencyDropdown(false), 150)
-                        }
+                        onBlur={() => setTimeout(() => setShowAgencyDropdown(false), 150)}
                         placeholder="Search and select agency"
                         required
                         {...inputProps}
@@ -2347,9 +2223,7 @@ const ResearchProjectForm: React.FC = () => {
                       )}
                     </div>
                     {validationErrors.agency && (
-                      <div className="invalid-feedback d-block">
-                        {validationErrors.agency}
-                      </div>
+                      <div className="invalid-feedback d-block">{validationErrors.agency}</div>
                     )}
                   </div>
 
@@ -2383,9 +2257,7 @@ const ResearchProjectForm: React.FC = () => {
                           setShowSchemeDropdown(true);
                           if (e.target.value === '') setScheme('');
                         }}
-                        onBlur={() =>
-                          setTimeout(() => setShowSchemeDropdown(false), 150)
-                        }
+                        onBlur={() => setTimeout(() => setShowSchemeDropdown(false), 150)}
                         placeholder="Search and select scheme"
                         required
                         {...inputProps}
@@ -2420,9 +2292,7 @@ const ResearchProjectForm: React.FC = () => {
                       )}
                     </div>
                     {validationErrors.scheme && (
-                      <div className="invalid-feedback d-block">
-                        {validationErrors.scheme}
-                      </div>
+                      <div className="invalid-feedback d-block">{validationErrors.scheme}</div>
                     )}
                   </div>
                   <div className="form-group">
@@ -2475,9 +2345,7 @@ const ResearchProjectForm: React.FC = () => {
                       </div>
                     </div>
                     {validationErrors.duration && (
-                      <div className="validation-error">
-                        {validationErrors.duration}
-                      </div>
+                      <div className="validation-error">{validationErrors.duration}</div>
                     )}
                   </div>
                 </div>
@@ -2508,10 +2376,7 @@ const ResearchProjectForm: React.FC = () => {
                     type="button"
                     className="btn btn-primary btn-add"
                     onClick={addFinancialContribution}
-                    disabled={
-                      financialContributions.length >=
-                      MAX_FINANCIAL_CONTRIBUTIONS
-                    }
+                    disabled={financialContributions.length >= MAX_FINANCIAL_CONTRIBUTIONS}
                     {...inputProps}
                   >
                     + Add
@@ -2519,10 +2384,7 @@ const ResearchProjectForm: React.FC = () => {
                 </div>
               </div>
               {financialContributions.map((contribution, index) => (
-                <div
-                  key={contribution.id}
-                  className="row align-items-center mb-2"
-                >
+                <div key={contribution.id} className="row align-items-center mb-2">
                   <div className="col-auto">{index + 1}.</div>
                   <div className="col position-relative agency-type-input-wrapper">
                     <input
@@ -2537,8 +2399,7 @@ const ResearchProjectForm: React.FC = () => {
                           newContributions[index] = {
                             ...newContributions[index],
                             agencyTypeSearchTerm: newValue,
-                            ...(newValue !==
-                              newContributions[index].agencyType && {
+                            ...(newValue !== newContributions[index].agencyType && {
                               agencyType: '',
                             }),
                           };
@@ -2565,15 +2426,12 @@ const ResearchProjectForm: React.FC = () => {
                             ...prev,
                             [index]: false,
                           }));
-                          const currentContribution =
-                            financialContributions[index];
+                          const currentContribution = financialContributions[index];
                           if (
                             currentContribution.agencyTypeSearchTerm !==
                             currentContribution.agencyType
                           ) {
-                            const newContributions = [
-                              ...financialContributions,
-                            ];
+                            const newContributions = [...financialContributions];
                             newContributions[index].agencyTypeSearchTerm =
                               newContributions[index].agencyType ?? '';
                             setFinancialContributions(newContributions);
@@ -2583,41 +2441,36 @@ const ResearchProjectForm: React.FC = () => {
                       {...inputProps}
                       required
                     />
-                    {showAgencyTypeDropdowns[index] &&
-                      agencyTypeOptions.length > 0 && (
-                        <ul
-                          className="dropdown-menu show"
-                          style={{
-                            width: '100%',
-                            position: 'absolute',
-                            zIndex: 1000,
-                          }}
-                        >
-                          {agencyTypeOptions.map((option) => (
-                            <li
-                              key={option.id}
-                              className="dropdown-item"
-                              onMouseDown={() => {
-                                const newContributions = [
-                                  ...financialContributions,
-                                ];
-                                newContributions[index].agencyType =
-                                  option.name;
-                                newContributions[index].agencyTypeSearchTerm =
-                                  option.name;
-                                setFinancialContributions(newContributions);
-                                setShowAgencyTypeDropdowns((prev) => ({
-                                  ...prev,
-                                  [index]: false,
-                                }));
-                                setAgencyTypeOptions([]);
-                              }}
-                            >
-                              {option.name}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                    {showAgencyTypeDropdowns[index] && agencyTypeOptions.length > 0 && (
+                      <ul
+                        className="dropdown-menu show"
+                        style={{
+                          width: '100%',
+                          position: 'absolute',
+                          zIndex: 1000,
+                        }}
+                      >
+                        {agencyTypeOptions.map((option) => (
+                          <li
+                            key={option.id}
+                            className="dropdown-item"
+                            onMouseDown={() => {
+                              const newContributions = [...financialContributions];
+                              newContributions[index].agencyType = option.name;
+                              newContributions[index].agencyTypeSearchTerm = option.name;
+                              setFinancialContributions(newContributions);
+                              setShowAgencyTypeDropdowns((prev) => ({
+                                ...prev,
+                                [index]: false,
+                              }));
+                              setAgencyTypeOptions([]);
+                            }}
+                          >
+                            {option.name}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                   <div className="col">
                     <input
@@ -2626,11 +2479,7 @@ const ResearchProjectForm: React.FC = () => {
                       placeholder="Agency"
                       value={contribution.agency}
                       onChange={(e) =>
-                        handleFinancialContributionChange(
-                          index,
-                          'agency',
-                          e.target.value
-                        )
+                        handleFinancialContributionChange(index, 'agency', e.target.value)
                       }
                       {...inputProps}
                     />
@@ -2642,11 +2491,7 @@ const ResearchProjectForm: React.FC = () => {
                       placeholder="Amount (₹)"
                       value={contribution.amount}
                       onChange={(e) =>
-                        handleFinancialContributionChange(
-                          index,
-                          'amount',
-                          e.target.value
-                        )
+                        handleFinancialContributionChange(index, 'amount', e.target.value)
                       }
                       {...inputProps}
                     />
@@ -2701,11 +2546,7 @@ const ResearchProjectForm: React.FC = () => {
                         placeholder="Search & select agency type"
                         value={collab.partner}
                         onChange={(e) =>
-                          handleCollaborationChange(
-                            collab.id,
-                            'partner',
-                            e.target.value
-                          )
+                          handleCollaborationChange(collab.id, 'partner', e.target.value)
                         }
                         {...inputProps}
                       />
@@ -2717,11 +2558,7 @@ const ResearchProjectForm: React.FC = () => {
                         placeholder="Agency"
                         value={collab.address}
                         onChange={(e) =>
-                          handleCollaborationChange(
-                            collab.id,
-                            'address',
-                            e.target.value
-                          )
+                          handleCollaborationChange(collab.id, 'address', e.target.value)
                         }
                         {...inputProps}
                       />
@@ -2731,11 +2568,7 @@ const ResearchProjectForm: React.FC = () => {
                         className="form-select"
                         value={collab.support}
                         onChange={(e) =>
-                          handleCollaborationChange(
-                            collab.id,
-                            'support',
-                            e.target.value
-                          )
+                          handleCollaborationChange(collab.id, 'support', e.target.value)
                         }
                         {...inputProps}
                         required
@@ -2769,16 +2602,18 @@ const ResearchProjectForm: React.FC = () => {
                       name="journalArticle"
                       onChange={handleJournalArticleUpload}
                       onDelete={handleJournalArticleDelete}
-                      fileName={journalArticle.file?.name || journalArticle.filePath?.split('/').pop()}
+                      fileName={
+                        journalArticle.file?.name || journalArticle.filePath?.split('/').pop()
+                      }
                       file={journalArticle.file}
-                      fileUrl={journalArticle.filePath ? getFileUrl(journalArticle.filePath) : undefined}
+                      fileUrl={
+                        journalArticle.filePath ? getFileUrl(journalArticle.filePath) : undefined
+                      }
                       accept=".pdf,.doc,.docx"
                       disabled={isFormDisabled}
                       buttonText="Upload"
                     />
-                    <small className="form-text text-muted">
-                      Max 120 MB, PDF / Word
-                    </small>
+                    <small className="form-text text-muted">Max 120 MB, PDF / Word</small>
                   </div>
                 </div>
               </div>
@@ -2786,9 +2621,7 @@ const ResearchProjectForm: React.FC = () => {
               <div className="col-md-6">
                 <div className="form-card h-100 date-submission-card">
                   <div className="mb-3 d-flex align-items-center">
-                    <label className="form-label mb-0 me-3">
-                      Date of Submission
-                    </label>
+                    <label className="form-label mb-0 me-3">Date of Submission</label>
                     <div className="form-check form-switch me-3">
                       <input
                         className="form-check-input"
@@ -2820,17 +2653,13 @@ const ResearchProjectForm: React.FC = () => {
                     >
                       <option value="submitted">Submitted</option>
                       <option value="underReview">Under Review</option>
-                      <option value="revisionSubmitted">
-                        Revision Submitted
-                      </option>
+                      <option value="revisionSubmitted">Revision Submitted</option>
                       <option value="accepted">Accepted</option>
                       <option value="published">Published</option>
                     </select>
                   </div>
                   <div>
-                    <label className="form-label mb-1">
-                      Application Number
-                    </label>
+                    <label className="form-label mb-1">Application Number</label>
                     <input
                       type="text"
                       className="form-control"
@@ -2880,10 +2709,7 @@ const ResearchProjectForm: React.FC = () => {
                   ].map((item) => (
                     <div className="col-md-6 mb-2" key={item.key}>
                       <div className="d-flex align-items-center">
-                        <label
-                          className="form-label me-auto"
-                          style={{ minWidth: '220px' }}
-                        >
+                        <label className="form-label me-auto" style={{ minWidth: '220px' }}>
                           {item.label}
                         </label>
                         <div className="form-check form-switch me-2">
@@ -2891,9 +2717,7 @@ const ResearchProjectForm: React.FC = () => {
                             className="form-check-input"
                             type="checkbox"
                             checked={projectDetails[item.key as keyof ProjectDetails].enabled}
-                            onChange={() =>
-                              handleProjectDetailsToggle(item.key)
-                            }
+                            onChange={() => handleProjectDetailsToggle(item.key)}
                             {...inputProps}
                           />
                         </div>
@@ -2905,12 +2729,10 @@ const ResearchProjectForm: React.FC = () => {
                             item.type === 'number'
                               ? projectDetails[item.key as keyof ProjectDetails].value || ''
                               : formatDateForInput(
-                                projectDetails[item.key as keyof ProjectDetails].value
-                              )
+                                  projectDetails[item.key as keyof ProjectDetails].value,
+                                )
                           }
-                          onChange={(e) =>
-                            handleProjectDetailsChange(item.key, e.target.value)
-                          }
+                          onChange={(e) => handleProjectDetailsChange(item.key, e.target.value)}
                           required={projectDetails[item.key as keyof ProjectDetails].enabled}
                           {...inputProps}
                         />
@@ -2933,22 +2755,16 @@ const ResearchProjectForm: React.FC = () => {
                   </button>
                 </div>
                 {grantDisbursements.map((grant, index) => {
-                  const grantIdentifier =
-                    grant.id != null ? grant.id : grant.tempId;
+                  const grantIdentifier = grant.id != null ? grant.id : grant.tempId;
                   return (
-                    <div
-                      key={grant.id ?? grant.tempId}
-                      className="row g-2 align-items-center mb-2"
-                    >
+                    <div key={grant.id ?? grant.tempId} className="row g-2 align-items-center mb-2">
                       <div className="col">
                         <input
                           type="text"
                           className="form-control"
                           placeholder="FY"
                           value={grant.fy}
-                          onChange={(e) =>
-                            handleInputChange(index, 'fy', e.target.value)
-                          }
+                          onChange={(e) => handleInputChange(index, 'fy', e.target.value)}
                           {...inputProps}
                         />
                       </div>
@@ -2958,9 +2774,7 @@ const ResearchProjectForm: React.FC = () => {
                           className="form-control"
                           placeholder="Agency"
                           value={grant.agency}
-                          onChange={(e) =>
-                            handleInputChange(index, 'agency', e.target.value)
-                          }
+                          onChange={(e) => handleInputChange(index, 'agency', e.target.value)}
                           {...inputProps}
                         />
                       </div>
@@ -2970,9 +2784,7 @@ const ResearchProjectForm: React.FC = () => {
                           className="form-control"
                           placeholder="Amount (₹)"
                           value={grant.amount}
-                          onChange={(e) =>
-                            handleInputChange(index, 'amount', e.target.value)
-                          }
+                          onChange={(e) => handleInputChange(index, 'amount', e.target.value)}
                           {...inputProps}
                         />
                       </div>
@@ -2981,20 +2793,27 @@ const ResearchProjectForm: React.FC = () => {
                           type="date"
                           className="form-control"
                           value={formatDateForInput(grant.date)}
-                          onChange={(e) =>
-                            handleInputChange(index, 'date', e.target.value)
-                          }
+                          onChange={(e) => handleInputChange(index, 'date', e.target.value)}
                           {...inputProps}
                         />
                       </div>
                       <div className="col-auto">
                         <CustomFileUploader
                           name={`sanctionLetter${grantIdentifier}`}
-                          onChange={(file) => handleFileUpload(file, `sanctionLetter${grantIdentifier}`)}
+                          onChange={(file) =>
+                            handleFileUpload(file, `sanctionLetter${grantIdentifier}`)
+                          }
                           onDelete={() => handleFileDelete(`sanctionLetter${grantIdentifier}`)}
-                          fileName={grant.sanctionLetter.file?.name || grant.sanctionLetter.filePath?.split('/').pop()}
+                          fileName={
+                            grant.sanctionLetter.file?.name ||
+                            grant.sanctionLetter.filePath?.split('/').pop()
+                          }
                           file={grant.sanctionLetter.file}
-                          fileUrl={grant.sanctionLetter.filePath ? getFileUrl(grant.sanctionLetter.filePath) : undefined}
+                          fileUrl={
+                            grant.sanctionLetter.filePath
+                              ? getFileUrl(grant.sanctionLetter.filePath)
+                              : undefined
+                          }
                           disabled={isFormDisabled || !grant.sanctionLetter.enabled}
                           buttonText="Sanction Letter"
                         />
@@ -3004,9 +2823,15 @@ const ResearchProjectForm: React.FC = () => {
                           name={`ucAndSoE${grantIdentifier}`}
                           onChange={(file) => handleFileUpload(file, `ucAndSoE${grantIdentifier}`)}
                           onDelete={() => handleFileDelete(`ucAndSoE${grantIdentifier}`)}
-                          fileName={grant.ucAndSoE.file?.name || grant.ucAndSoE.filePath?.split('/').pop()}
+                          fileName={
+                            grant.ucAndSoE.file?.name || grant.ucAndSoE.filePath?.split('/').pop()
+                          }
                           file={grant.ucAndSoE.file}
-                          fileUrl={grant.ucAndSoE.filePath ? getFileUrl(grant.ucAndSoE.filePath) : undefined}
+                          fileUrl={
+                            grant.ucAndSoE.filePath
+                              ? getFileUrl(grant.ucAndSoE.filePath)
+                              : undefined
+                          }
                           disabled={isFormDisabled || !grant.ucAndSoE.enabled}
                           buttonText="UC & SoE"
                         />
@@ -3073,10 +2898,7 @@ const ResearchProjectForm: React.FC = () => {
                   ].map((doc) => (
                     <div className="col-md-6 mb-3" key={doc.key}>
                       <div className="d-flex align-items-center gap-2">
-                        <label
-                          className="form-label mb-0"
-                          style={{ minWidth: '180px' }}
-                        >
+                        <label className="form-label mb-0" style={{ minWidth: '180px' }}>
                           {doc.label}
                         </label>
                         <div className="form-check form-switch">
@@ -3103,7 +2925,9 @@ const ResearchProjectForm: React.FC = () => {
                               ? getFileUrl(documents[doc.key as keyof Documents]?.filePath || '')
                               : undefined
                           }
-                          disabled={isFormDisabled || !documents[doc.key as keyof Documents]?.enabled}
+                          disabled={
+                            isFormDisabled || !documents[doc.key as keyof Documents]?.enabled
+                          }
                           buttonText="Upload"
                         />
                       </div>
@@ -3131,101 +2955,83 @@ const ResearchProjectForm: React.FC = () => {
           </div>
         )}
         {/* Project Request Modal */}
-        {
-          showProjectRequestModal && (
-            <div
-              className="modal fade show"
-              style={{ display: 'block', zIndex: 1050 }}
-              tabIndex={-1}
-              onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                  setShowProjectRequestModal(false);
-                }
-              }}
-            >
-              <div className="modal-dialog" style={{ zIndex: 1055 }}>
-                <div className="modal-content">
-                  <div className="modal-header">
-                    <h5 className="modal-title">
-                      Request New{' '}
-                      {projectRequest.request_type
-                        .replace('_', ' ')
-                        .replace(/\b\w/g, (l) => l.toUpperCase())}
-                    </h5>
+        {showProjectRequestModal && (
+          <div
+            className="modal fade show"
+            style={{ display: 'block', zIndex: 1050 }}
+            tabIndex={-1}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowProjectRequestModal(false);
+              }
+            }}
+          >
+            <div className="modal-dialog" style={{ zIndex: 1055 }}>
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">
+                    Request New{' '}
+                    {projectRequest.request_type
+                      .replace('_', ' ')
+                      .replace(/\b\w/g, (l) => l.toUpperCase())}
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => setShowProjectRequestModal(false)}
+                  ></button>
+                </div>
+                <form onSubmit={handleProjectRequestSubmit}>
+                  <div className="modal-body">
+                    <div className="mb-3">
+                      <label className="form-label">Name</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={projectRequest.name}
+                        onChange={(e) => handleProjectRequestChange('name', e.target.value)}
+                        placeholder={`Enter ${projectRequest.request_type.replace('_', ' ')} name`}
+                        required
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Description (Optional)</label>
+                      <textarea
+                        className="form-control"
+                        value={projectRequest.description}
+                        onChange={(e) => handleProjectRequestChange('description', e.target.value)}
+                        placeholder="Enter description..."
+                        rows={3}
+                      />
+                    </div>
+                    {projectRequestError && (
+                      <div className="alert alert-danger">{projectRequestError}</div>
+                    )}
+                  </div>
+                  <div className="modal-footer">
                     <button
                       type="button"
-                      className="btn-close"
+                      className="btn btn-secondary"
                       onClick={() => setShowProjectRequestModal(false)}
-                    ></button>
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={projectRequestLoading}
+                    >
+                      {projectRequestLoading ? 'Submitting...' : 'Submit Request'}
+                    </button>
                   </div>
-                  <form onSubmit={handleProjectRequestSubmit}>
-                    <div className="modal-body">
-                      <div className="mb-3">
-                        <label className="form-label">Name</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          value={projectRequest.name}
-                          onChange={(e) =>
-                            handleProjectRequestChange('name', e.target.value)
-                          }
-                          placeholder={`Enter ${projectRequest.request_type.replace('_', ' ')} name`}
-                          required
-                        />
-                      </div>
-                      <div className="mb-3">
-                        <label className="form-label">
-                          Description (Optional)
-                        </label>
-                        <textarea
-                          className="form-control"
-                          value={projectRequest.description}
-                          onChange={(e) =>
-                            handleProjectRequestChange(
-                              'description',
-                              e.target.value
-                            )
-                          }
-                          placeholder="Enter description..."
-                          rows={3}
-                        />
-                      </div>
-                      {projectRequestError && (
-                        <div className="alert alert-danger">
-                          {projectRequestError}
-                        </div>
-                      )}
-                    </div>
-                    <div className="modal-footer">
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => setShowProjectRequestModal(false)}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="btn btn-primary"
-                        disabled={projectRequestLoading}
-                      >
-                        {projectRequestLoading
-                          ? 'Submitting...'
-                          : 'Submit Request'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
+                </form>
               </div>
-              <div
-                className="modal-backdrop fade show"
-                style={{ zIndex: 1040 }}
-              ></div>
             </div>
-          )
-        }
-      </div >
-    </div >
+            <div className="modal-backdrop fade show" style={{ zIndex: 1040 }}></div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 

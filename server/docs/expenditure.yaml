@@ -1,0 +1,159 @@
+tags:
+  - name: Expenditure
+    description: Payouts, advances, NEFT file generators, payee approvals, and settlements
+
+components:
+  schemas:
+    ExpenditureRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        finance_request_id:
+          type: integer
+          description: Linked pre-event finance request
+        payout_type:
+          type: string
+          enum: [ADVANCE, ACTUAL_SETTLEMENT, DIRECT_PAYMENT]
+        total_amount:
+          type: number
+          format: float
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+paths:
+  /expenditure:
+    get:
+      summary: List all expenditure requests
+      tags: [Expenditure]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of expenditures
+
+    post:
+      summary: Create a new expenditure or settlement request with attachments
+      tags: [Expenditure]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                finance_request_id:
+                  type: integer
+                payout_type:
+                  type: string
+                bill_files:
+                  type: string
+                  format: binary
+                payment_proof_files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        200:
+          description: Request created successfully
+
+  /expenditure/advance:
+    post:
+      summary: Create an interim advance request
+      tags: [Expenditure]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Advance request created
+
+  /expenditure/{id}:
+    get:
+      summary: Get details of an expenditure request
+      tags: [Expenditure]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Expenditure details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenditureRequest'
+
+    put:
+      summary: Update an expenditure request
+      tags: [Expenditure]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Request updated successfully
+
+    delete:
+      summary: Delete an expenditure request
+      tags: [Expenditure]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Request deleted successfully
+
+  /expenditure/payees:
+    get:
+      summary: List payees configured for bank settlements
+      tags: [Expenditure]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of payees
+
+    post:
+      summary: Create a new payee profile
+      tags: [Expenditure]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Payee created successfully

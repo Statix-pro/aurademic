@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
-import Select from "react-select";
-import "../styles/EventForm.css";
-import { v4 as uuidv4 } from "uuid";
-import { Plus, Trash2, Eye, CloudUpload } from "lucide-react";
-import authenticityUtility from "../../../shared/utils/authenticityUtility";
+import React, { useState, useEffect } from 'react';
+import Select from 'react-select';
+import '../styles/EventForm.css';
+import { v4 as uuidv4 } from 'uuid';
+import { Plus, Trash2, Eye, CloudUpload } from 'lucide-react';
+
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
 interface EventData {
   eventId?: string;
@@ -13,7 +14,7 @@ interface EventData {
   eventType: string;
   dateFrom: string;
   dateTo: string;
-  mode: "Physical" | "Virtual" | "Hybrid";
+  mode: 'Physical' | 'Virtual' | 'Hybrid';
   meetingLink: string;
   registrationFeeEnabled: boolean;
   registrationFeeAmount: string;
@@ -63,164 +64,164 @@ interface PreEventProps {
 }
 
 // Time options
-const hours = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"];
-const minutes = ["00", "15", "30", "45"];
-const periods = ["AM", "PM"];
+const hours = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+const minutes = ['00', '15', '30', '45'];
+const periods = ['AM', 'PM'];
 
 // Options
 const categoryOptions = [
-  { value: "technical", label: "Technical" },
-  { value: "non-technical", label: "Non-Technical" },
+  { value: 'technical', label: 'Technical' },
+  { value: 'non-technical', label: 'Non-Technical' },
 ];
 
 const eventTypeOptions = [
-  { value: "Conference", label: "Conference" },
-  { value: "Seminar", label: "Seminar" },
-  { value: "Workshop", label: "Workshop" },
-  { value: "Symposium", label: "Symposium" },
-  { value: "Training", label: "Training" },
-  { value: "Webinar", label: "Webinar" },
-  { value: "Hackathon", label: "Hackathon" },
-  { value: "FDP", label: "FDP" },
+  { value: 'Conference', label: 'Conference' },
+  { value: 'Seminar', label: 'Seminar' },
+  { value: 'Workshop', label: 'Workshop' },
+  { value: 'Symposium', label: 'Symposium' },
+  { value: 'Training', label: 'Training' },
+  { value: 'Webinar', label: 'Webinar' },
+  { value: 'Hackathon', label: 'Hackathon' },
+  { value: 'FDP', label: 'FDP' },
 ];
 
 const topicOptions = [
-  { value: "AI/ML", label: "AI/ML" },
-  { value: "IoT", label: "IoT" },
-  { value: "Blockchain", label: "Blockchain" },
-  { value: "Cybersecurity", label: "Cybersecurity" },
-  { value: "Cloud Computing", label: "Cloud Computing" },
-  { value: "Data Science", label: "Data Science" },
-  { value: "Web Development", label: "Web Development" },
-  { value: "Mobile App Development", label: "Mobile App Development" },
-  { value: "Robotics", label: "Robotics" },
-  { value: "Embedded Systems", label: "Embedded Systems" },
+  { value: 'AI/ML', label: 'AI/ML' },
+  { value: 'IoT', label: 'IoT' },
+  { value: 'Blockchain', label: 'Blockchain' },
+  { value: 'Cybersecurity', label: 'Cybersecurity' },
+  { value: 'Cloud Computing', label: 'Cloud Computing' },
+  { value: 'Data Science', label: 'Data Science' },
+  { value: 'Web Development', label: 'Web Development' },
+  { value: 'Mobile App Development', label: 'Mobile App Development' },
+  { value: 'Robotics', label: 'Robotics' },
+  { value: 'Embedded Systems', label: 'Embedded Systems' },
 ];
 
 const participantOptions = [
-  { value: "50-100", label: "50-100" },
-  { value: "100-200", label: "100-200" },
-  { value: "200-500", label: "200-500" },
-  { value: "500+", label: "500+" },
+  { value: '50-100', label: '50-100' },
+  { value: '100-200', label: '100-200' },
+  { value: '200-500', label: '200-500' },
+  { value: '500+', label: '500+' },
 ];
 
 const themeOptions = [
-  { value: "Innovation", label: "Innovation" },
-  { value: "Sustainability", label: "Sustainability" },
-  { value: "Digital Transformation", label: "Digital Transformation" },
-  { value: "Research", label: "Research" },
-  { value: "Industry Collaboration", label: "Industry Collaboration" },
+  { value: 'Innovation', label: 'Innovation' },
+  { value: 'Sustainability', label: 'Sustainability' },
+  { value: 'Digital Transformation', label: 'Digital Transformation' },
+  { value: 'Research', label: 'Research' },
+  { value: 'Industry Collaboration', label: 'Industry Collaboration' },
 ];
 
 const sdgOptions = [
-  { value: "SDG 1", label: "No Poverty" },
-  { value: "SDG 2", label: "Zero Hunger" },
-  { value: "SDG 3", label: "Good Health and Well-being" },
-  { value: "SDG 4", label: "Quality Education" },
-  { value: "SDG 5", label: "Gender Equality" },
-  { value: "SDG 6", label: "Clean Water and Sanitation" },
-  { value: "SDG 7", label: "Affordable and Clean Energy" },
-  { value: "SDG 8", label: "Decent Work and Economic Growth" },
-  { value: "SDG 9", label: "Industry, Innovation and Infrastructure" },
-  { value: "SDG 10", label: "Reduced Inequalities" },
+  { value: 'SDG 1', label: 'No Poverty' },
+  { value: 'SDG 2', label: 'Zero Hunger' },
+  { value: 'SDG 3', label: 'Good Health and Well-being' },
+  { value: 'SDG 4', label: 'Quality Education' },
+  { value: 'SDG 5', label: 'Gender Equality' },
+  { value: 'SDG 6', label: 'Clean Water and Sanitation' },
+  { value: 'SDG 7', label: 'Affordable and Clean Energy' },
+  { value: 'SDG 8', label: 'Decent Work and Economic Growth' },
+  { value: 'SDG 9', label: 'Industry, Innovation and Infrastructure' },
+  { value: 'SDG 10', label: 'Reduced Inequalities' },
 ];
 
 const MultiValueLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return <div style={{ fontSize: "12px" }}>{children}</div>;
+  return <div style={{ fontSize: '12px' }}>{children}</div>;
 };
 
 // Helper function to get today's date in YYYY-MM-DD format
 const getTodayDate = (): string => {
   const today = new Date();
-  return today.toISOString().split("T")[0];
+  return today.toISOString().split('T')[0];
 };
 
 const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
   const [showBudgetModal, setShowBudgetModal] = useState(false);
 
   const [eventData, setEventData] = useState<EventData>({
-    name: "",
-    description: "",
-    category: "",
-    eventType: "",
-    dateFrom: "",
-    dateTo: "",
-    mode: "Physical",
-    meetingLink: "",
+    name: '',
+    description: '',
+    category: '',
+    eventType: '',
+    dateFrom: '',
+    dateTo: '',
+    mode: 'Physical',
+    meetingLink: '',
     registrationFeeEnabled: false,
-    registrationFeeAmount: "",
-    registrationLink: "",
-    selectedBankAccount: "",
+    registrationFeeAmount: '',
+    registrationLink: '',
+    selectedBankAccount: '',
     inauguralEnabled: false,
-    inauguralDate: "",
-    inauguralTime: { hour: "09", minute: "00", period: "AM" },
-    inauguralVenue: "",
-    inauguralVenueDropdown: "",
+    inauguralDate: '',
+    inauguralTime: { hour: '09', minute: '00', period: 'AM' },
+    inauguralVenue: '',
+    inauguralVenueDropdown: '',
     valedictoryEnabled: false,
-    valedictoryDate: "",
-    valedictoryTime: { hour: "05", minute: "00", period: "PM" },
-    valedictoryVenue: "",
-    valedictoryVenueDropdown: "",
-    modeVenueDropdown: "",
-    modeVenueOther: "",
+    valedictoryDate: '',
+    valedictoryTime: { hour: '05', minute: '00', period: 'PM' },
+    valedictoryVenue: '',
+    valedictoryVenueDropdown: '',
+    modeVenueDropdown: '',
+    modeVenueOther: '',
     theme: [],
     sdg: [],
-    budgetRows: [{ id: uuidv4(), head: "", amount: "" }],
+    budgetRows: [{ id: uuidv4(), head: '', amount: '' }],
   });
 
   const today = getTodayDate();
 
   // Form state management
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
-  const [selectedParticipants, setSelectedParticipants] = useState<string>("");
+  const [selectedParticipants, setSelectedParticipants] = useState<string>('');
   const [theme, setTheme] = useState<any[]>([]);
   const [sdg, setSdg] = useState<any[]>([]);
 
   // Mode state
-  const [mode, setMode] = useState<"Physical" | "Virtual" | "Hybrid">("Physical");
-  const [modeVenueDropdown, setModeVenueDropdown] = useState("");
-  const [modeVenueOther, setModeVenueOther] = useState("");
+  const [mode, setMode] = useState<'Physical' | 'Virtual' | 'Hybrid'>('Physical');
+  const [modeVenueDropdown, setModeVenueDropdown] = useState('');
+  const [modeVenueOther, setModeVenueOther] = useState('');
 
   // Registration state
   const [registrationFeeEnabled, setRegistrationFeeEnabled] = useState(false);
-  const [registrationFeeAmount, setRegistrationFeeAmount] = useState("");
-  const [registrationLink, setRegistrationLink] = useState("");
-  const [selectedBankAccount, setSelectedBankAccount] = useState("");
+  const [registrationFeeAmount, setRegistrationFeeAmount] = useState('');
+  const [registrationLink, setRegistrationLink] = useState('');
+  const [selectedBankAccount, setSelectedBankAccount] = useState('');
 
   // Inaugural state
   const [inauguralEnabled, setInauguralEnabled] = useState(false);
-  const [inauguralDate, setInauguralDate] = useState("");
+  const [inauguralDate, setInauguralDate] = useState('');
   const [inauguralTime, setInauguralTime] = useState({
-    hour: "09",
-    minute: "00",
-    period: "AM",
+    hour: '09',
+    minute: '00',
+    period: 'AM',
   });
-  const [inauguralVenue, setInauguralVenue] = useState("");
-  const [inauguralVenueDropdown, setInauguralVenueDropdown] = useState("");
+  const [inauguralVenue, setInauguralVenue] = useState('');
+  const [inauguralVenueDropdown, setInauguralVenueDropdown] = useState('');
 
   // Valedictory state
   const [valedictoryEnabled, setValedictoryEnabled] = useState(false);
-  const [valedictoryDate, setValedictoryDate] = useState("");
+  const [valedictoryDate, setValedictoryDate] = useState('');
   const [valedictoryTime, setValedictoryTime] = useState({
-    hour: "05",
-    minute: "00",
-    period: "PM",
+    hour: '05',
+    minute: '00',
+    period: 'PM',
   });
-  const [valedictoryVenue, setValedictoryVenue] = useState("");
-  const [valedictoryVenueDropdown, setValedictoryVenueDropdown] = useState("");
+  const [valedictoryVenue, setValedictoryVenue] = useState('');
+  const [valedictoryVenueDropdown, setValedictoryVenueDropdown] = useState('');
 
   // Budget state
   const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([
-    { id: uuidv4(), head: "", amount: "" },
+    { id: uuidv4(), head: '', amount: '' },
   ]);
 
   // Collaboration state
   const [collaborationData, setCollaborationData] = useState<CollaborationData>({
-    institution: "",
-    departments: "",
-    professionalBodies: "",
-    cellsClubs: "",
-    hostInstitution: "",
+    institution: '',
+    departments: '',
+    professionalBodies: '',
+    cellsClubs: '',
+    hostInstitution: '',
   });
 
   // Coordinators state
@@ -232,10 +233,10 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
   };
 
   const handleModeChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
-    const newMode = e.target.value as "Physical" | "Virtual" | "Hybrid";
+    const newMode = e.target.value as 'Physical' | 'Virtual' | 'Hybrid';
     setMode(newMode);
-    setModeVenueDropdown("");
-    setModeVenueOther("");
+    setModeVenueDropdown('');
+    setModeVenueOther('');
   };
 
   const handleCollaborationChange = (field: string, value: string): void => {
@@ -244,7 +245,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
 
   // Budget handlers
   const addBudgetRow = (): void => {
-    setBudgetRows([...budgetRows, { id: uuidv4(), head: "", amount: "" }]);
+    setBudgetRows([...budgetRows, { id: uuidv4(), head: '', amount: '' }]);
   };
 
   const deleteBudgetRow = (id: string): void => {
@@ -266,44 +267,60 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
         date_from: eventData.dateFrom,
         date_to: eventData.dateTo,
         mode: mode,
-        meeting_link: mode === "Virtual" || mode === "Hybrid" ? eventData.meetingLink : null,
-        venue: mode === "Physical" || mode === "Hybrid" ?
-          (modeVenueDropdown !== "Others" ? modeVenueDropdown : modeVenueOther) : null,
+        meeting_link: mode === 'Virtual' || mode === 'Hybrid' ? eventData.meetingLink : null,
+        venue:
+          mode === 'Physical' || mode === 'Hybrid'
+            ? modeVenueDropdown !== 'Others'
+              ? modeVenueDropdown
+              : modeVenueOther
+            : null,
         registration_fee_enabled: registrationFeeEnabled,
         registration_fee_amount: registrationFeeEnabled ? registrationFeeAmount : null,
         registration_link: registrationFeeEnabled ? registrationLink : null,
         bank_account: registrationFeeEnabled ? selectedBankAccount : null,
         topics: selectedTopics,
         expected_participants: selectedParticipants,
-        themes: theme.map(t => t.value),
-        sdgs: sdg.map(s => s.value),
+        themes: theme.map((t) => t.value),
+        sdgs: sdg.map((s) => s.value),
         inaugural_enabled: inauguralEnabled,
         inaugural_date: inauguralEnabled ? inauguralDate : null,
-        inaugural_time: inauguralEnabled ? `${inauguralTime.hour}:${inauguralTime.minute} ${inauguralTime.period}` : null,
-        inaugural_venue: inauguralEnabled ?
-          (inauguralVenueDropdown !== "Others" ? inauguralVenueDropdown : inauguralVenue) : null,
+        inaugural_time: inauguralEnabled
+          ? `${inauguralTime.hour}:${inauguralTime.minute} ${inauguralTime.period}`
+          : null,
+        inaugural_venue: inauguralEnabled
+          ? inauguralVenueDropdown !== 'Others'
+            ? inauguralVenueDropdown
+            : inauguralVenue
+          : null,
         valedictory_enabled: valedictoryEnabled,
         valedictory_date: valedictoryEnabled ? valedictoryDate : null,
-        valedictory_time: valedictoryEnabled ? `${valedictoryTime.hour}:${valedictoryTime.minute} ${valedictoryTime.period}` : null,
-        valedictory_venue: valedictoryEnabled ?
-          (valedictoryVenueDropdown !== "Others" ? valedictoryVenueDropdown : valedictoryVenue) : null,
+        valedictory_time: valedictoryEnabled
+          ? `${valedictoryTime.hour}:${valedictoryTime.minute} ${valedictoryTime.period}`
+          : null,
+        valedictory_venue: valedictoryEnabled
+          ? valedictoryVenueDropdown !== 'Others'
+            ? valedictoryVenueDropdown
+            : valedictoryVenue
+          : null,
         collaboration_data: collaborationData,
         coordinators: coordinators,
-        budget: budgetRows.filter(row => row.head && row.amount).map(row => ({
-          head: row.head,
-          amount: parseFloat(row.amount) || 0,
-        })),
+        budget: budgetRows
+          .filter((row) => row.head && row.amount)
+          .map((row) => ({
+            head: row.head,
+            amount: parseFloat(row.amount) || 0,
+          })),
       };
 
       // console.log("🔴 Prepared event data:", eventSubmitData);
 
-      const response = await authenticityUtility.post("/events/pre-event", eventSubmitData);
+      const response = await authenticityUtility.post('/events/pre-event', eventSubmitData);
       // console.log("🟢 Backend response:", response);
-      alert("✅ Event created successfully!");
-      goToTab("finance");
+      alert('✅ Event created successfully!');
+      goToTab('finance');
     } catch (error: any) {
-      console.error("🔴 Frontend error:", error);
-      console.error("🔴 Error response:", error.response?.data);
+      console.error('🔴 Frontend error:', error);
+      console.error('🔴 Error response:', error.response?.data);
       alert(`❌ Failed to create event: ${error.response?.data?.error || error.message}`);
     }
   };
@@ -319,7 +336,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             <input
               type="text"
               value={eventData.name}
-              onChange={(e) => handleEventDataChange("name", e.target.value)}
+              onChange={(e) => handleEventDataChange('name', e.target.value)}
               placeholder="Enter event name"
               required
             />
@@ -329,7 +346,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             <label>Category *</label>
             <select
               value={eventData.category}
-              onChange={(e) => handleEventDataChange("category", e.target.value)}
+              onChange={(e) => handleEventDataChange('category', e.target.value)}
               required
             >
               <option value="">-- Select Category --</option>
@@ -347,7 +364,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             <label>Event Type *</label>
             <select
               value={eventData.eventType}
-              onChange={(e) => handleEventDataChange("eventType", e.target.value)}
+              onChange={(e) => handleEventDataChange('eventType', e.target.value)}
               required
             >
               <option value="">-- Select Event Type --</option>
@@ -363,7 +380,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             <label>Description</label>
             <textarea
               value={eventData.description}
-              onChange={(e) => handleEventDataChange("description", e.target.value)}
+              onChange={(e) => handleEventDataChange('description', e.target.value)}
               placeholder="Enter event description"
               rows={3}
             />
@@ -376,7 +393,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             <input
               type="date"
               value={eventData.dateFrom}
-              onChange={(e) => handleEventDataChange("dateFrom", e.target.value)}
+              onChange={(e) => handleEventDataChange('dateFrom', e.target.value)}
               min={today}
               required
             />
@@ -387,7 +404,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             <input
               type="date"
               value={eventData.dateTo}
-              onChange={(e) => handleEventDataChange("dateTo", e.target.value)}
+              onChange={(e) => handleEventDataChange('dateTo', e.target.value)}
               min={eventData.dateFrom || today}
               required
             />
@@ -401,9 +418,9 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
               isMulti
               name="topics"
               options={topicOptions}
-              value={topicOptions.filter(option => selectedTopics.includes(option.value))}
+              value={topicOptions.filter((option) => selectedTopics.includes(option.value))}
               onChange={(selected) => {
-                const values = selected ? selected.map(item => item.value) : [];
+                const values = selected ? selected.map((item) => item.value) : [];
                 setSelectedTopics(values);
               }}
               className="event-react-select__control"
@@ -466,10 +483,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
           style={{ display: 'flex', gap: '16px', alignItems: 'center' }}
         >
           {/* Mode */}
-          <div
-            className="event-form-group"
-            style={{ minWidth: '320px', width: '320px' }}
-          >
+          <div className="event-form-group" style={{ minWidth: '320px', width: '320px' }}>
             <label>Mode</label>
             <select
               value={mode}
@@ -484,10 +498,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
 
           {/* Physical → Venue */}
           {(mode === 'Physical' || mode === 'Hybrid') && (
-            <div
-              className="event-form-group"
-              style={{ minWidth: '320px', width: '320px' }}
-            >
+            <div className="event-form-group" style={{ minWidth: '320px', width: '320px' }}>
               <label style={{ marginBottom: '4px' }}>Venue</label>
               {modeVenueDropdown !== 'Others' ? (
                 <select
@@ -504,9 +515,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                   <option value="">Select venue</option>
                   <option value="Cyberdome">Cyberdome</option>
                   <option value="Visveshwaraya">Visveshwaraya</option>
-                  <option value="Biotech Seminar Hall">
-                    Biotech Seminar Hall
-                  </option>
+                  <option value="Biotech Seminar Hall">Biotech Seminar Hall</option>
                   <option value="ECC Seminar Hall">ECC Seminar Hall</option>
                   <option value="Founder Hall">Founder Hall</option>
                   <option value="Idea Lab">Idea Lab</option>
@@ -537,7 +546,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
               <input
                 type="text"
                 value={eventData.meetingLink}
-                onChange={(e) => handleEventDataChange("meetingLink", e.target.value)}
+                onChange={(e) => handleEventDataChange('meetingLink', e.target.value)}
                 placeholder="Enter meeting link"
               />
             </div>
@@ -559,10 +568,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             className="event-form-row"
             style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}
           >
-            <div
-              className="event-form-group"
-              style={{ minWidth: '200px', flex: '1 1 200px' }}
-            >
+            <div className="event-form-group" style={{ minWidth: '200px', flex: '1 1 200px' }}>
               <label
                 style={{
                   display: 'flex',
@@ -572,10 +578,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                 }}
               >
                 Inaugural
-                <label
-                  className="event-switch"
-                  style={{ transform: 'translateY(2px)' }}
-                >
+                <label className="event-switch" style={{ transform: 'translateY(2px)' }}>
                   <input
                     type="checkbox"
                     checked={inauguralEnabled}
@@ -593,20 +596,12 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                 style={{ width: '100%' }}
               />
             </div>
-            <div
-              className="event-form-group"
-              style={{ minWidth: '220px', flex: '1 1 180px' }}
-            >
+            <div className="event-form-group" style={{ minWidth: '220px', flex: '1 1 180px' }}>
               <label style={{ marginBottom: '4px' }}>Inaugural Time</label>
-              <div
-                className="event-time-picker"
-                style={{ display: 'flex', gap: '4px' }}
-              >
+              <div className="event-time-picker" style={{ display: 'flex', gap: '4px' }}>
                 <select
                   value={inauguralTime.hour}
-                  onChange={(e) =>
-                    setInauguralTime({ ...inauguralTime, hour: e.target.value })
-                  }
+                  onChange={(e) => setInauguralTime({ ...inauguralTime, hour: e.target.value })}
                   disabled={!inauguralEnabled}
                 >
                   {hours.map((h) => (
@@ -685,9 +680,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                     <option value="">Select venue</option>
                     <option value="Cyberdome">Cyberdome</option>
                     <option value="Visveshwaraya">Visveshwaraya</option>
-                    <option value="Biotech Seminar Hall">
-                      Biotech Seminar Hall
-                    </option>
+                    <option value="Biotech Seminar Hall">Biotech Seminar Hall</option>
                     <option value="ECC Seminar Hall">ECC Seminar Hall</option>
                     <option value="Founder Hall">Founder Hall</option>
                     <option value="Idea Lab">Idea Lab</option>
@@ -725,10 +718,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
               marginTop: '15px',
             }}
           >
-            <div
-              className="event-form-group"
-              style={{ minWidth: '200px', flex: '1 1 200px' }}
-            >
+            <div className="event-form-group" style={{ minWidth: '200px', flex: '1 1 200px' }}>
               <label
                 style={{
                   display: 'flex',
@@ -738,10 +728,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                 }}
               >
                 Valedictory
-                <label
-                  className="event-switch"
-                  style={{ transform: 'translateY(2px)' }}
-                >
+                <label className="event-switch" style={{ transform: 'translateY(2px)' }}>
                   <input
                     type="checkbox"
                     checked={valedictoryEnabled}
@@ -759,15 +746,9 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                 style={{ width: '100%' }}
               />
             </div>
-            <div
-              className="event-form-group"
-              style={{ minWidth: '220px', flex: '1 1 180px' }}
-            >
+            <div className="event-form-group" style={{ minWidth: '220px', flex: '1 1 180px' }}>
               <label style={{ marginBottom: '4px' }}>Valedictory Time</label>
-              <div
-                className="event-time-picker"
-                style={{ display: 'flex', gap: '4px' }}
-              >
+              <div className="event-time-picker" style={{ display: 'flex', gap: '4px' }}>
                 <select
                   value={valedictoryTime.hour}
                   onChange={(e) =>
@@ -854,9 +835,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                     <option value="">Select venue</option>
                     <option value="Cyberdome">Cyberdome</option>
                     <option value="Visveshwaraya">Visveshwaraya</option>
-                    <option value="Biotech Seminar Hall">
-                      Biotech Seminar Hall
-                    </option>
+                    <option value="Biotech Seminar Hall">Biotech Seminar Hall</option>
                     <option value="ECC Seminar Hall">ECC Seminar Hall</option>
                     <option value="Founder Hall">Founder Hall</option>
                     <option value="Idea Lab">Idea Lab</option>
@@ -876,8 +855,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                     }}
                     onChange={(e) => setValedictoryVenue(e.target.value)}
                     onBlur={(e) => {
-                      if (!e.target.value.trim())
-                        setValedictoryVenueDropdown('');
+                      if (!e.target.value.trim()) setValedictoryVenueDropdown('');
                     }}
                     autoFocus
                   />
@@ -899,9 +877,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             <label>Registration Fee</label>
             <select
               value={registrationFeeEnabled ? 'yes' : 'no'}
-              onChange={(e) =>
-                setRegistrationFeeEnabled(e.target.value === 'yes')
-              }
+              onChange={(e) => setRegistrationFeeEnabled(e.target.value === 'yes')}
               style={{ width: '100%', height: '40px', padding: '8px' }}
             >
               <option value="no">No</option>
@@ -961,7 +937,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             <input
               type="text"
               value={collaborationData.institution}
-              onChange={(e) => handleCollaborationChange("institution", e.target.value)}
+              onChange={(e) => handleCollaborationChange('institution', e.target.value)}
               placeholder="Name of the Institution"
             />
           </div>
@@ -970,7 +946,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             <input
               type="text"
               value={collaborationData.departments}
-              onChange={(e) => handleCollaborationChange("departments", e.target.value)}
+              onChange={(e) => handleCollaborationChange('departments', e.target.value)}
               placeholder="Name of the Department"
             />
           </div>
@@ -979,7 +955,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             <input
               type="text"
               value={collaborationData.professionalBodies}
-              onChange={(e) => handleCollaborationChange("professionalBodies", e.target.value)}
+              onChange={(e) => handleCollaborationChange('professionalBodies', e.target.value)}
               placeholder="Name of the Professional Body"
             />
           </div>
@@ -988,7 +964,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             <input
               type="text"
               value={collaborationData.cellsClubs}
-              onChange={(e) => handleCollaborationChange("cellsClubs", e.target.value)}
+              onChange={(e) => handleCollaborationChange('cellsClubs', e.target.value)}
               placeholder="Name of the Cell/ Club"
             />
           </div>
@@ -1021,10 +997,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
       {showBudgetModal && (
         <div className="event-message-overlay">
           <div className="event-message-box">
-            <button
-              className="event-close-btn"
-              onClick={() => setShowBudgetModal(false)}
-            >
+            <button className="event-close-btn" onClick={() => setShowBudgetModal(false)}>
               &times;
             </button>
             <p>Enter the Budget Details</p>
@@ -1099,10 +1072,8 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                         onChange={(e) => {
                           setBudgetRows(
                             budgetRows.map((r) =>
-                              r.id === row.id
-                                ? { ...r, head: e.target.value }
-                                : r
-                            )
+                              r.id === row.id ? { ...r, head: e.target.value } : r,
+                            ),
                           );
                         }}
                         style={{ width: '100%', padding: '6px' }}
@@ -1130,10 +1101,8 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                         onChange={(e) => {
                           setBudgetRows(
                             budgetRows.map((r) =>
-                              r.id === row.id
-                                ? { ...r, amount: e.target.value }
-                                : r
-                            )
+                              r.id === row.id ? { ...r, amount: e.target.value } : r,
+                            ),
                           );
                         }}
                         style={{
@@ -1157,11 +1126,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                       {budgetRows.length > 1 && (
                         <button
                           type="button"
-                          onClick={() =>
-                            setBudgetRows(
-                              budgetRows.filter((r) => r.id !== row.id)
-                            )
-                          }
+                          onClick={() => setBudgetRows(budgetRows.filter((r) => r.id !== row.id))}
                           className="event-icon-btn"
                         >
                           <Trash2 size={16} />
@@ -1171,10 +1136,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                         <button
                           type="button"
                           onClick={() => {
-                            setBudgetRows([
-                              ...budgetRows,
-                              { id: uuidv4(), head: '', amount: '' },
-                            ]);
+                            setBudgetRows([...budgetRows, { id: uuidv4(), head: '', amount: '' }]);
                           }}
                           className="event-add"
                         >
@@ -1204,10 +1166,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                       border: '1px solid #ccc',
                     }}
                   >
-                    {budgetRows.reduce(
-                      (sum, row) => sum + (parseFloat(row.amount) || 0),
-                      0
-                    )}
+                    {budgetRows.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0)}
                   </td>
                   <td style={{ border: '1px solid #ccc' }}></td>
                 </tr>

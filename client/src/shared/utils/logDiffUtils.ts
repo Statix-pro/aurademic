@@ -45,7 +45,8 @@ export const summarizeLineChanges = (lines: any[]): LineChangeSummary => {
   const detailFull: string[] = [];
 
   normalizedLines.forEach((line: any, lineIdx: number) => {
-    const lineNo = Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no) || (lineIdx + 1);
+    const lineNo =
+      Number(line?.lineNo ?? line?.line_no ?? line?.rowNo ?? line?.row_no) || lineIdx + 1;
     const rawChanges = line?.changes;
     const changeList = Array.isArray(rawChanges)
       ? rawChanges.map((change: any) => normalizeLogText(change)).filter(Boolean)
@@ -54,8 +55,10 @@ export const summarizeLineChanges = (lines: any[]): LineChangeSummary => {
         : [];
 
     const lowered = changeList.map((change: string) => change.toLowerCase());
-    const isOnlyAdded = changeList.length === 1 && (lowered[0] === 'line added' || lowered[0] === 'added');
-    const isOnlyRemoved = changeList.length === 1 && (lowered[0] === 'line removed' || lowered[0] === 'removed');
+    const isOnlyAdded =
+      changeList.length === 1 && (lowered[0] === 'line added' || lowered[0] === 'added');
+    const isOnlyRemoved =
+      changeList.length === 1 && (lowered[0] === 'line removed' || lowered[0] === 'removed');
     const lineDetails = `Line ${lineNo}: ${changeList.join('; ') || 'Updated'}`;
     detailFull.push(lineDetails);
 

@@ -9,9 +9,7 @@ async function query(sql, params = []) {
 // 🔹 Get all pre-events
 export const getPreEvents = async (req, res) => {
   try {
-    const events = await query(
-      'SELECT * FROM pre_events ORDER BY start_date DESC'
-    );
+    const events = await query('SELECT * FROM pre_events ORDER BY start_date DESC');
     res.status(200).json(events);
   } catch (err) {
     console.error('❌ Error in getPreEvents:', err.message);
@@ -32,41 +30,29 @@ export const getPreEventById = async (req, res) => {
 
     // Fetch related arrays
 
-    const event_types = await query(
-      'SELECT type_name FROM event_types WHERE pre_event_id=?',
-      [id]
-    );
-    const departments = await query(
-      'SELECT name FROM departments WHERE pre_event_id=?',
-      [id]
-    );
+    const event_types = await query('SELECT type_name FROM event_types WHERE pre_event_id=?', [id]);
+    const departments = await query('SELECT name FROM departments WHERE pre_event_id=?', [id]);
     const target_audience = await query(
       'SELECT audience FROM target_audience WHERE pre_event_id=?',
-      [id]
+      [id],
     );
-    const themes = await query(
-      'SELECT theme FROM themes WHERE pre_event_id=?',
-      [id]
-    );
-    const sdgs = await query('SELECT sdg_name FROM sdgs WHERE pre_event_id=?', [
-      id,
-    ]);
+    const themes = await query('SELECT theme FROM themes WHERE pre_event_id=?', [id]);
+    const sdgs = await query('SELECT sdg_name FROM sdgs WHERE pre_event_id=?', [id]);
     const collaborations = await query(
       'SELECT collaborator FROM collaborations WHERE pre_event_id=?',
-      [id]
+      [id],
     );
 
     // Updated coordinator query to match frontend expectations
     const coordinators = await query(
       'SELECT id, name, department, mobile, email FROM coordinators WHERE pre_event_id=?',
-      [id]
+      [id],
     );
 
     // Updated budget query to match frontend budgetRows structure
-    const budgetRows = await query(
-      'SELECT id, head, amount FROM budgets WHERE pre_event_id=?',
-      [id]
-    );
+    const budgetRows = await query('SELECT id, head, amount FROM budgets WHERE pre_event_id=?', [
+      id,
+    ]);
 
     // Format response to match frontend expectations
     const result = {
@@ -127,8 +113,7 @@ export const createPreEvent = async (req, res) => {
   } = req.body;
 
   // Handle legacy field names for backward compatibility
-  const event_type =
-    eventType.length > 0 ? eventType : req.body.event_type || [];
+  const event_type = eventType.length > 0 ? eventType : req.body.event_type || [];
   const target_audience =
     targetAudience.length > 0 ? targetAudience : req.body.target_audience || [];
   const start_date = startDate || req.body.start_date;
@@ -153,7 +138,7 @@ export const createPreEvent = async (req, res) => {
     });
   }
 
-  const conn = await db.getConnection();
+  const conn = await eventDb.getConnection();
 
   try {
     await conn.beginTransaction();
@@ -180,7 +165,7 @@ export const createPreEvent = async (req, res) => {
         level,
         description,
         expectedParticipants,
-      ]
+      ],
     );
 
     const preEventId = result.insertId;
@@ -191,15 +176,10 @@ export const createPreEvent = async (req, res) => {
         return;
       }
 
-      const rows = values
-        .filter((v) => v && v.trim())
-        .map((v) => [preEventId, v.trim()]);
+      const rows = values.filter((v) => v && v.trim()).map((v) => [preEventId, v.trim()]);
 
       if (rows.length > 0) {
-        await conn.query(
-          `INSERT INTO ${table} (pre_event_id, ${column}) VALUES ?`,
-          [rows]
-        );
+        await conn.query(`INSERT INTO ${table} (pre_event_id, ${column}) VALUES ?`, [rows]);
       }
     };
 
@@ -213,9 +193,7 @@ export const createPreEvent = async (req, res) => {
 
     // Insert coordinators with proper field mapping
     if (coordinators && coordinators.length > 0) {
-      const validCoordinators = coordinators.filter(
-        (c) => c.name && c.name.trim()
-      );
+      const validCoordinators = coordinators.filter((c) => c.name && c.name.trim());
 
       if (validCoordinators.length > 0) {
         const rows = validCoordinators.map((c) => [
@@ -228,25 +206,24 @@ export const createPreEvent = async (req, res) => {
 
         await conn.query(
           `INSERT INTO coordinators (pre_event_id, name, department, mobile, email) VALUES ?`,
-          [rows]
+          [rows],
         );
       }
     }
 
     // Insert budget data with proper validation
     if (budget && budget.length > 0) {
-      const validBudgets = budget.filter(
-        (b) => b.head && b.head.trim() && b.amount
-      );
+      const validBudgets = budget.filter((b) => b.head && b.head.trim() && b.amount);
 
       if (validBudgets.length > 0) {
         for (const budgetItem of validBudgets) {
           const amount = parseFloat(budgetItem.amount) || 0;
           if (amount > 0) {
-            await conn.query(
-              'INSERT INTO budgets (pre_event_id, head, amount) VALUES (?, ?, ?)',
-              [preEventId, budgetItem.head.trim(), amount]
-            );
+            await conn.query('INSERT INTO budgets (pre_event_id, head, amount) VALUES (?, ?, ?)', [
+              preEventId,
+              budgetItem.head.trim(),
+              amount,
+            ]);
           }
         }
       }
@@ -266,8 +243,7 @@ export const createPreEvent = async (req, res) => {
     console.error('❌ Full error details:', err);
     res.status(500).json({
       error: err.message,
-      details:
-        'Failed to create pre-event. Please check your data and try again.',
+      details: 'Failed to create pre-event. Please check your data and try again.',
     });
   } finally {
     conn.release();
@@ -304,8 +280,7 @@ export const updatePreEvent = async (req, res) => {
   } = req.body;
 
   // Handle legacy field names
-  const event_type =
-    eventType.length > 0 ? eventType : req.body.event_type || [];
+  const event_type = eventType.length > 0 ? eventType : req.body.event_type || [];
   const target_audience =
     targetAudience.length > 0 ? targetAudience : req.body.target_audience || [];
   const start_date = startDate || req.body.start_date;
@@ -347,7 +322,7 @@ export const updatePreEvent = async (req, res) => {
         description,
         expectedParticipants,
         id,
-      ]
+      ],
     );
 
     if (result.affectedRows === 0) {
@@ -377,15 +352,10 @@ export const updatePreEvent = async (req, res) => {
         return;
       }
 
-      const rows = values
-        .filter((v) => v && v.trim())
-        .map((v) => [id, v.trim()]);
+      const rows = values.filter((v) => v && v.trim()).map((v) => [id, v.trim()]);
 
       if (rows.length > 0) {
-        await conn.query(
-          `INSERT INTO ${table} (pre_event_id, ${column}) VALUES ?`,
-          [rows]
-        );
+        await conn.query(`INSERT INTO ${table} (pre_event_id, ${column}) VALUES ?`, [rows]);
       }
     };
 
@@ -398,9 +368,7 @@ export const updatePreEvent = async (req, res) => {
 
     // Reinsert coordinators
     if (coordinators && coordinators.length > 0) {
-      const validCoordinators = coordinators.filter(
-        (c) => c.name && c.name.trim()
-      );
+      const validCoordinators = coordinators.filter((c) => c.name && c.name.trim());
 
       if (validCoordinators.length > 0) {
         const rows = validCoordinators.map((c) => [
@@ -413,25 +381,24 @@ export const updatePreEvent = async (req, res) => {
 
         await conn.query(
           `INSERT INTO coordinators (pre_event_id, name, department, mobile, email) VALUES ?`,
-          [rows]
+          [rows],
         );
       }
     }
 
     // Reinsert budget data
     if (budget && budget.length > 0) {
-      const validBudgets = budget.filter(
-        (b) => b.head && b.head.trim() && b.amount
-      );
+      const validBudgets = budget.filter((b) => b.head && b.head.trim() && b.amount);
 
       if (validBudgets.length > 0) {
         for (const budgetItem of validBudgets) {
           const amount = parseFloat(budgetItem.amount) || 0;
           if (amount > 0) {
-            await conn.query(
-              'INSERT INTO budgets (pre_event_id, head, amount) VALUES (?, ?, ?)',
-              [id, budgetItem.head.trim(), amount]
-            );
+            await conn.query('INSERT INTO budgets (pre_event_id, head, amount) VALUES (?, ?, ?)', [
+              id,
+              budgetItem.head.trim(),
+              amount,
+            ]);
           }
         }
       }
@@ -446,15 +413,11 @@ export const updatePreEvent = async (req, res) => {
     });
   } catch (err) {
     await conn.rollback();
-    console.error(
-      '❌ Update transaction rolled back due to error:',
-      err.message
-    );
+    console.error('❌ Update transaction rolled back due to error:', err.message);
     console.error('❌ Full error details:', err);
     res.status(500).json({
       error: err.message,
-      details:
-        'Failed to update pre-event. Please check your data and try again.',
+      details: 'Failed to update pre-event. Please check your data and try again.',
     });
   } finally {
     conn.release();

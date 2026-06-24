@@ -9,12 +9,12 @@ interface CustomCardProps extends CardProps {
   dashed?: boolean;
 }
 
-const CustomCard: React.FC<CustomCardProps> = ({ 
-  children, 
-  title, 
-  className = '', 
-  dashed = false, 
-  ...props 
+const CustomCard: React.FC<CustomCardProps> = ({
+  children,
+  title,
+  className = '',
+  dashed = false,
+  ...props
 }) => {
   return (
     <Card className={`custom-card ${dashed ? 'dashed' : ''} ${className}`} {...props}>

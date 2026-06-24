@@ -1,8 +1,9 @@
-import React, { useState, useEffect, ChangeEvent } from "react";
-import { Modal, Button, Form, Badge, Alert, Card, Row, Col } from "react-bootstrap";
-import { Reply, User, FileText } from "lucide-react";
-import authenticityUtility from "../../../shared/utils/authenticityUtility";
-import "./JournalStatusDetails.css";
+import { Reply, User, FileText } from 'lucide-react';
+import React, { useState, useEffect, ChangeEvent } from 'react';
+import { Modal, Button, Form, Badge, Alert, Card, Row, Col } from 'react-bootstrap';
+
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import './JournalStatusDetails.css';
 
 interface JournalStatusDetailsProps {
   journalId: number | null;
@@ -37,7 +38,7 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
   const [error, setError] = useState<string | null>(null);
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [selectedStatusUpdate, setSelectedStatusUpdate] = useState<StatusUpdate | null>(null);
-  const [adminReply, setAdminReply] = useState("");
+  const [adminReply, setAdminReply] = useState('');
   const [submittingReply, setSubmittingReply] = useState(false);
 
   const fetchJournalWithStatusUpdates = async () => {
@@ -47,14 +48,16 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
       setLoading(true);
       setError(null);
 
-      const response = await authenticityUtility.get(`/admin/journals/${journalId}/with-status-updates`) as {
+      const response = (await authenticityUtility.get(
+        `/admin/journals/${journalId}/with-status-updates`,
+      )) as {
         data: { journal: Journal; statusUpdates: StatusUpdate[] };
       };
       setJournal(response.data.journal);
       setStatusUpdates(response.data.statusUpdates || []);
     } catch (err) {
-      console.error("Error fetching journal with status updates:", err);
-      setError("Error fetching journal details. Please try again later.");
+      console.error('Error fetching journal with status updates:', err);
+      setError('Error fetching journal details. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -68,13 +71,13 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
 
   const handleReply = (statusUpdate: StatusUpdate) => {
     setSelectedStatusUpdate(statusUpdate);
-    setAdminReply(statusUpdate.admin_reply || "");
+    setAdminReply(statusUpdate.admin_reply || '');
     setShowReplyModal(true);
   };
 
   const handleSubmitReply = async () => {
     if (!adminReply.trim() || !selectedStatusUpdate) {
-      setError("Admin reply is required");
+      setError('Admin reply is required');
       return;
     }
 
@@ -82,27 +85,27 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
       setSubmittingReply(true);
       setError(null);
 
-      const response = await authenticityUtility.patch(
+      const response = (await authenticityUtility.patch(
         `/admin/status-updates/${selectedStatusUpdate.id}/admin-reply`,
-        { admin_reply: adminReply.trim() }
-      ) as { message?: string };
+        { admin_reply: adminReply.trim() },
+      )) as { message?: string };
 
       if (response.message) {
         setStatusUpdates((prev) =>
           prev.map((update) =>
             update.id === selectedStatusUpdate.id
               ? { ...update, admin_reply: adminReply.trim() }
-              : update
-          )
+              : update,
+          ),
         );
 
         setShowReplyModal(false);
         setSelectedStatusUpdate(null);
-        setAdminReply("");
+        setAdminReply('');
       }
     } catch (err) {
-      console.error("Error submitting reply:", err);
-      setError("Error submitting reply. Please try again.");
+      console.error('Error submitting reply:', err);
+      setError('Error submitting reply. Please try again.');
     } finally {
       setSubmittingReply(false);
     }
@@ -110,26 +113,26 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { variant: string; label: string }> = {
-      submitted: { variant: "primary", label: "Submitted" },
-      under_review: { variant: "warning", label: "Under Review" },
-      accepted: { variant: "success", label: "Accepted" },
-      rejected: { variant: "danger", label: "Rejected" },
-      published: { variant: "info", label: "Published" },
-      revision_required: { variant: "secondary", label: "Revision Required" },
+      submitted: { variant: 'primary', label: 'Submitted' },
+      under_review: { variant: 'warning', label: 'Under Review' },
+      accepted: { variant: 'success', label: 'Accepted' },
+      rejected: { variant: 'danger', label: 'Rejected' },
+      published: { variant: 'info', label: 'Published' },
+      revision_required: { variant: 'secondary', label: 'Revision Required' },
     };
 
-    const config = statusConfig[status] || { variant: "secondary", label: status };
+    const config = statusConfig[status] || { variant: 'secondary', label: status };
     return <Badge bg={config.variant}>{config.label}</Badge>;
   };
 
   const formatDate = (dateString: string | undefined): string => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -143,7 +146,12 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
         </div>
         <div className="d-flex align-items-center gap-2">
           {getStatusBadge(update.status)}
-          <Button variant="outline-primary" size="sm" onClick={() => handleReply(update)} title="Reply">
+          <Button
+            variant="outline-primary"
+            size="sm"
+            onClick={() => handleReply(update)}
+            title="Reply"
+          >
             <Reply size={16} />
           </Button>
         </div>
@@ -151,7 +159,9 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
       <Card.Body>
         <Row>
           <Col md={6}>
-            <p><strong>Date:</strong> {formatDate(update.created_at)}</p>
+            <p>
+              <strong>Date:</strong> {formatDate(update.created_at)}
+            </p>
             {update.user_comment && (
               <div>
                 <strong>User Comment:</strong>
@@ -186,7 +196,7 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
             Journal Status Updates
           </Modal.Title>
         </Modal.Header>
-        <Modal.Body style={{ maxHeight: "70vh", overflowY: "auto" }}>
+        <Modal.Body style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           {loading ? (
             <div className="text-center p-4">
               <div className="spinner-border" role="status">
@@ -194,7 +204,9 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
               </div>
             </div>
           ) : error ? (
-            <Alert variant="danger" className="error">{error}</Alert>
+            <Alert variant="danger" className="error">
+              {error}
+            </Alert>
           ) : (
             <>
               {journal && (
@@ -202,14 +214,26 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
                   <h5>Journal Information</h5>
                   <Row>
                     <Col md={6}>
-                      <p><strong>Title:</strong> {journal.title}</p>
-                      <p><strong>Journal Name:</strong> {journal.journal_name}</p>
-                      <p><strong>Status:</strong> {getStatusBadge(journal.status || '')}</p>
+                      <p>
+                        <strong>Title:</strong> {journal.title}
+                      </p>
+                      <p>
+                        <strong>Journal Name:</strong> {journal.journal_name}
+                      </p>
+                      <p>
+                        <strong>Status:</strong> {getStatusBadge(journal.status || '')}
+                      </p>
                     </Col>
                     <Col md={6}>
-                      <p><strong>Category:</strong> {journal.category}</p>
-                      <p><strong>Publisher:</strong> {journal.publisher}</p>
-                      <p><strong>DOI:</strong> {journal.doi || "N/A"}</p>
+                      <p>
+                        <strong>Category:</strong> {journal.category}
+                      </p>
+                      <p>
+                        <strong>Publisher:</strong> {journal.publisher}
+                      </p>
+                      <p>
+                        <strong>DOI:</strong> {journal.doi || 'N/A'}
+                      </p>
                     </Col>
                   </Row>
                 </div>
@@ -218,7 +242,7 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
               <div className="status-history-header">
                 <h5>Status Update History</h5>
                 <span className="status-count">
-                  {statusUpdates.length} update{statusUpdates.length !== 1 ? "s" : ""}
+                  {statusUpdates.length} update{statusUpdates.length !== 1 ? 's' : ''}
                 </span>
               </div>
 
@@ -233,7 +257,9 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
           )}
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={onHide}>Close</Button>
+          <Button variant="secondary" onClick={onHide}>
+            Close
+          </Button>
         </Modal.Footer>
       </Modal>
 
@@ -245,12 +271,18 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
           {selectedStatusUpdate && (
             <div className="mb-3">
               <h6>Journal: {journal?.title}</h6>
-              <p><strong>User:</strong> {selectedStatusUpdate.user_name}</p>
-              <p><strong>Status:</strong> {getStatusBadge(selectedStatusUpdate.status)}</p>
+              <p>
+                <strong>User:</strong> {selectedStatusUpdate.user_name}
+              </p>
+              <p>
+                <strong>Status:</strong> {getStatusBadge(selectedStatusUpdate.status)}
+              </p>
               {selectedStatusUpdate.user_comment && (
                 <div>
                   <strong>User Comment:</strong>
-                  <div className="border p-2 mt-1 bg-light">{selectedStatusUpdate.user_comment}</div>
+                  <div className="border p-2 mt-1 bg-light">
+                    {selectedStatusUpdate.user_comment}
+                  </div>
                 </div>
               )}
             </div>
@@ -268,9 +300,15 @@ const JournalStatusDetails: React.FC<JournalStatusDetailsProps> = ({ journalId, 
           </Form.Group>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowReplyModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSubmitReply} disabled={submittingReply || !adminReply.trim()}>
-            {submittingReply ? "Submitting..." : "Submit Reply"}
+          <Button variant="secondary" onClick={() => setShowReplyModal(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmitReply}
+            disabled={submittingReply || !adminReply.trim()}
+          >
+            {submittingReply ? 'Submitting...' : 'Submit Reply'}
           </Button>
         </Modal.Footer>
       </Modal>

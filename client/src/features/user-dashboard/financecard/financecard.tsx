@@ -1,12 +1,26 @@
 // client/src/features/user-dashboard/financecard/financecard.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import './financecard.css';
-import { Eye, Edit2, Briefcase, Clock, XCircle, CheckCircle, Archive, Search, Info, Trash2, FileText, Download, RotateCcw } from 'lucide-react';
+import {
+  Eye,
+  Edit2,
+  Briefcase,
+  Clock,
+  XCircle,
+  CheckCircle,
+  Archive,
+  Search,
+  Info,
+  Trash2,
+  FileText,
+  Download,
+  RotateCcw,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import Select from 'react-select';
-import authenticityUtility from '../../../shared/utils/authenticityUtility';
-import { useAuth } from '../../../contexts/AuthContext';
 
+import { useAuth } from '../../../contexts/AuthContext';
+import CustomModal from '../../../shared/components/ui/CustomModal';
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
 interface FinanceCardItem {
   id: number;
@@ -23,6 +37,8 @@ interface FinanceCardItem {
   approved_total_amount?: number | string | null;
   overall_status: string;
   workflow_status?: string;
+  fiscal_year?: number | string | null;
+  fiscalYear?: number | string | null;
   created_at: string;
   updated_at?: string;
   beneficiary_name?: string;
@@ -77,32 +93,45 @@ interface FinanceLogEvent {
 
 const FinanceCard: React.FC = () => {
   const { user } = useAuth();
+  const formatFiscalYearValue = (startYear: number) =>
+    `${startYear}-${String(startYear + 1).slice(-2)}`;
+  const getCurrentFiscalYear = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    return formatFiscalYearValue(month >= 4 ? year : year - 1);
+  };
+  const getCurrentFiscalYearStart = () => Number.parseInt(getCurrentFiscalYear().split('-')[0], 10);
   const [data, setData] = useState<FinanceCardItem[]>([]);
   const [filteredData, setFilteredData] = useState<FinanceCardItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    return String(month >= 4 ? year : year - 1);
-  });
+  const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(() =>
+    getCurrentFiscalYear(),
+  );
   const [selectedBeneficiary, setSelectedBeneficiary] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
   const [activeInfoId, setActiveInfoId] = useState<number | null>(null);
   const [loadingInfoId, setLoadingInfoId] = useState<number | null>(null);
-  const [showFinanceStatusDetail, setShowFinanceStatusDetail] = useState<Record<number, boolean>>({});
-  const [statusUpdatesById, setStatusUpdatesById] = useState<Record<number, FinanceStatusUpdate[]>>({});
+  const [showFinanceStatusDetail, setShowFinanceStatusDetail] = useState<Record<number, boolean>>(
+    {},
+  );
+  const [statusUpdatesById, setStatusUpdatesById] = useState<Record<number, FinanceStatusUpdate[]>>(
+    {},
+  );
+  const [previewRecordId, setPreviewRecordId] = useState<number | null>(null);
   const navigate = useNavigate();
   const principalDocInputRef = useRef<HTMLInputElement | null>(null);
   const [principalDocTargetId, setPrincipalDocTargetId] = useState<number | null>(null);
   const [principalDocBusyId, setPrincipalDocBusyId] = useState<number | null>(null);
-  const isSuperAdminUser = Boolean((user as any)?.is_super_admin || (user as any)?.isSuperAdmin) || (
-    Array.isArray((user as any)?.roles) &&
-    (user as any).roles.some((role: unknown) => String(role || '').toLowerCase() === 'super_admin')
-  );
+  const isSuperAdminUser =
+    Boolean((user as any)?.is_super_admin || (user as any)?.isSuperAdmin) ||
+    (Array.isArray((user as any)?.roles) &&
+      (user as any).roles.some(
+        (role: unknown) => String(role || '').toLowerCase() === 'super_admin',
+      ));
 
   useEffect(() => {
     fetchDashboard();
@@ -136,7 +165,7 @@ const FinanceCard: React.FC = () => {
     try {
       setLoading(true);
       setStatusUpdatesById({});
-      const res = await authenticityUtility.get('/finance-requests?mine=true') as {
+      const res = (await authenticityUtility.get('/finance-requests?mine=true')) as {
         status: string;
         data?: FinanceCardItem[];
       };
@@ -155,18 +184,21 @@ const FinanceCard: React.FC = () => {
     return month >= 4 ? year : year - 1;
   };
 
-  const getCurrentFiscalYear = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    return String(month >= 4 ? year : year - 1);
+  const getItemFiscalYear = (item: FinanceCardItem) => {
+    const explicitYear = Number.parseInt(String(item.fiscal_year ?? item.fiscalYear ?? ''), 10);
+    if (Number.isFinite(explicitYear) && explicitYear > 0) {
+      return formatFiscalYearValue(explicitYear);
+    }
+
+    return formatFiscalYearValue(getFiscalYear(item.created_at));
   };
 
-  const formatFiscalYearLabel = (startYear: string) =>
-    `FY ${startYear}-${String(Number(startYear) + 1).slice(-2)}`;
+  const formatFiscalYearLabel = (fiscalYear: string) => `FY ${fiscalYear}`;
 
   const getWorkflowStatus = (item: FinanceCardItem) =>
-    String(item.workflow_state?.status || item.workflow_status || item.overall_status || '').toLowerCase();
+    String(
+      item.workflow_state?.status || item.workflow_status || item.overall_status || '',
+    ).toLowerCase();
 
   const getCurrentStage = (item: FinanceCardItem) =>
     String(item.workflow_state?.currentStage || '').toLowerCase();
@@ -183,7 +215,8 @@ const FinanceCard: React.FC = () => {
     if (currentStage === 'level1' && status === 'submitted') {
       return 'submitted';
     }
-    if (status === 'submitted' || status === 'in_progress' || status === 'pending' || !status) return 'pending';
+    if (status === 'submitted' || status === 'in_progress' || status === 'pending' || !status)
+      return 'pending';
     return 'pending';
   };
 
@@ -239,14 +272,24 @@ const FinanceCard: React.FC = () => {
   const isPendingLikeStatus = (item: FinanceCardItem) => {
     const normalizedStatus = getNormalizedStatus(item);
     const currentStage = getCurrentStage(item);
-    return normalizedStatus === 'pending' || normalizedStatus === 'submitted' || normalizedStatus === 'resubmitted' || currentStage === 'level1';
+    return (
+      normalizedStatus === 'pending' ||
+      normalizedStatus === 'submitted' ||
+      normalizedStatus === 'resubmitted' ||
+      currentStage === 'level1'
+    );
   };
 
   const getDisplayAmount = (item: FinanceCardItem) => {
     const normalizedStatus = getNormalizedStatus(item);
-    const rawAmount = normalizedStatus === 'approved'
-      ? (item.approved_total_amount ?? item.total_budget ?? item.proposed_amount ?? 0)
-      : (item.total_budget ?? item.proposed_amount ?? item.amount ?? item.workflow_state?.submittedTotalBudget ?? 0);
+    const rawAmount =
+      normalizedStatus === 'approved'
+        ? (item.approved_total_amount ?? item.total_budget ?? item.proposed_amount ?? 0)
+        : (item.total_budget ??
+          item.proposed_amount ??
+          item.amount ??
+          item.workflow_state?.submittedTotalBudget ??
+          0);
     const parsedAmount = Number(rawAmount);
     return Number.isFinite(parsedAmount) ? parsedAmount : 0;
   };
@@ -256,7 +299,11 @@ const FinanceCard: React.FC = () => {
   const getPrincipalDocumentUrl = (item: FinanceCardItem) => {
     const filePath = String(getPrincipalDocument(item)?.file_path || '').trim();
     if (!filePath) return '';
-    if (filePath.startsWith('http://') || filePath.startsWith('https://') || filePath.startsWith('blob:')) {
+    if (
+      filePath.startsWith('http://') ||
+      filePath.startsWith('https://') ||
+      filePath.startsWith('blob:')
+    ) {
       return filePath;
     }
     return `${authenticityUtility.getBaseURL()}${filePath}`;
@@ -264,22 +311,29 @@ const FinanceCard: React.FC = () => {
 
   const isPrincipalUser = Boolean(
     Array.isArray(user?.roles) &&
-    user.roles.some((role) => String(role || '').trim().toLowerCase() === 'principal')
+    user.roles.some(
+      (role) =>
+        String(role || '')
+          .trim()
+          .toLowerCase() === 'principal',
+    ),
   );
 
   const isPrincipalDocumentEligible = (item: FinanceCardItem) => {
     const amount = getDisplayAmount(item);
     const workflowStatus = getWorkflowStatus(item);
 
-    return amount > 10000 && (
-      workflowStatus === 'approved' ||
-      workflowStatus === 'completed' ||
-      workflowStatus === 'principal_approved' ||
-      workflowStatus === 'chairman_approved'
+    return (
+      amount > 10000 &&
+      (workflowStatus === 'approved' ||
+        workflowStatus === 'completed' ||
+        workflowStatus === 'principal_approved' ||
+        workflowStatus === 'chairman_approved')
     );
   };
 
-  const isPrincipalDocumentFeatureVisible = (item: FinanceCardItem) => getDisplayAmount(item) > 10000;
+  const isPrincipalDocumentFeatureVisible = (item: FinanceCardItem) =>
+    getDisplayAmount(item) > 10000;
 
   const canShowPrincipalDocumentAction = (item: FinanceCardItem) => {
     return Boolean(getPrincipalDocumentUrl(item));
@@ -309,7 +363,11 @@ const FinanceCard: React.FC = () => {
     formData.append('file', file);
     setPrincipalDocBusyId(item.id);
     try {
-      const response = await authenticityUtility.postFile(`/finance-requests/${item.id}/principal-document`, formData) as {
+      const response = (await authenticityUtility.postFile(
+        `/finance-requests/${item.id}/principal-document`,
+        formData,
+      )) as {
+        success?: boolean;
         status?: string;
         message?: string;
         data?: {
@@ -320,8 +378,9 @@ const FinanceCard: React.FC = () => {
           size?: number;
         };
       };
+      const isUploadSuccess = response?.success === true || response?.status === 'success';
 
-      if (response?.status !== 'success') {
+      if (!isUploadSuccess) {
         window.alert(response?.message || 'Failed to upload principal document');
         return;
       }
@@ -341,13 +400,17 @@ const FinanceCard: React.FC = () => {
               stored_name: response?.data?.storedName || null,
               file_path: response?.data?.filePath || null,
               mime_type: response?.data?.mimeType || 'application/pdf',
-              file_size: Number.isFinite(Number(response?.data?.size)) ? Number(response.data.size) : file.size,
+              file_size: Number.isFinite(Number(response?.data?.size))
+                ? Number(response.data.size)
+                : file.size,
             },
           };
-        })
+        }),
       );
     } catch (error: any) {
-      window.alert(error?.response?.data?.message || error?.message || 'Failed to upload principal document');
+      window.alert(
+        error?.response?.data?.message || error?.message || 'Failed to upload principal document',
+      );
     } finally {
       setPrincipalDocBusyId(null);
     }
@@ -361,21 +424,26 @@ const FinanceCard: React.FC = () => {
 
     setPrincipalDocBusyId(item.id);
     try {
-      const response = await authenticityUtility.delete(`/finance-requests/${item.id}/principal-document`) as {
+      const response = (await authenticityUtility.delete(
+        `/finance-requests/${item.id}/principal-document`,
+      )) as {
+        success?: boolean;
         status?: string;
         message?: string;
       };
 
-      if (response?.status !== 'success') {
+      if (response?.success !== true && response?.status !== 'success') {
         window.alert(response?.message || 'Failed to delete principal document');
         return;
       }
 
       setData((prev) =>
-        prev.map((row) => (row.id === item.id ? { ...row, principal_document: null } : row))
+        prev.map((row) => (row.id === item.id ? { ...row, principal_document: null } : row)),
       );
     } catch (error: any) {
-      window.alert(error?.response?.data?.message || error?.message || 'Failed to delete principal document');
+      window.alert(
+        error?.response?.data?.message || error?.message || 'Failed to delete principal document',
+      );
     } finally {
       setPrincipalDocBusyId(null);
     }
@@ -390,7 +458,10 @@ const FinanceCard: React.FC = () => {
       return;
     }
 
-    if ((file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) || file.size >= 2 * 1024 * 1024) {
+    if (
+      (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) ||
+      file.size >= 2 * 1024 * 1024
+    ) {
       window.alert('Only PDF files with a size less than 2MB are allowed.');
       return;
     }
@@ -405,16 +476,26 @@ const FinanceCard: React.FC = () => {
   const formatLabel = (value?: string | null) => {
     const normalized = String(value || '').trim();
     if (!normalized) return '-';
-    return normalized
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (char) => char.toUpperCase());
+    return normalized.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
-  const getStageBadgeLabel = (item: FinanceCardItem, stage?: string | null, actorRole?: string | null) => {
-    const stageToken = String(stage || '').trim().toLowerCase();
-    const actorRoleToken = String(actorRole || '').trim().toLowerCase();
-    const level1RouteType = String(item?.level1_route_type || '').trim().toLowerCase();
-    const beneficiaryTypeToken = String(item?.beneficiary_type || '').trim().toLowerCase();
+  const getStageBadgeLabel = (
+    item: FinanceCardItem,
+    stage?: string | null,
+    actorRole?: string | null,
+  ) => {
+    const stageToken = String(stage || '')
+      .trim()
+      .toLowerCase();
+    const actorRoleToken = String(actorRole || '')
+      .trim()
+      .toLowerCase();
+    const level1RouteType = String(item?.level1_route_type || '')
+      .trim()
+      .toLowerCase();
+    const beneficiaryTypeToken = String(item?.beneficiary_type || '')
+      .trim()
+      .toLowerCase();
     const beneficiaryEntityId = Number(item?.beneficiary_entity_id || 0);
 
     if (stageToken === 'level1') {
@@ -428,7 +509,9 @@ const FinanceCard: React.FC = () => {
         return 'Coordinator';
       }
       if (
-        ['centre', 'cell', 'club', 'section', 'professional body', 'professional bodies'].includes(beneficiaryTypeToken) ||
+        ['centre', 'cell', 'club', 'section', 'professional body', 'professional bodies'].includes(
+          beneficiaryTypeToken,
+        ) ||
         (['faculty', 'staff'].includes(beneficiaryTypeToken) && beneficiaryEntityId > 0)
       ) {
         return 'Coordinator';
@@ -448,7 +531,9 @@ const FinanceCard: React.FC = () => {
     String(update.createdAt || update.decidedAt || '').trim();
 
   const getUpdateSortPriority = (update: FinanceStatusUpdate) => {
-    const decisionToken = String(update.decision || update.status || '').trim().toLowerCase();
+    const decisionToken = String(update.decision || update.status || '')
+      .trim()
+      .toLowerCase();
     if (decisionToken.includes('returned')) return 10;
     if (decisionToken === 'updated') return 20;
     if (decisionToken.includes('approved') || decisionToken.includes('completed')) return 30;
@@ -461,7 +546,9 @@ const FinanceCard: React.FC = () => {
     if (!value || value === '-') return '-';
 
     const normalizedLabel = String(label || '').toLowerCase();
-    const isAmountField = ['amount', 'budget', 'balance', 'partial'].some((token) => normalizedLabel.includes(token));
+    const isAmountField = ['amount', 'budget', 'balance', 'partial'].some((token) =>
+      normalizedLabel.includes(token),
+    );
     if (isAmountField) {
       const num = Number(value);
       if (Number.isFinite(num)) {
@@ -472,11 +559,9 @@ const FinanceCard: React.FC = () => {
     const parsedMs = Date.parse(value);
     if (
       Number.isFinite(parsedMs) &&
-      (
-        normalizedLabel.includes('date') ||
+      (normalizedLabel.includes('date') ||
         /^\d{4}-\d{2}-\d{2}$/.test(value) ||
-        value.includes('GMT')
-      )
+        value.includes('GMT'))
     ) {
       return new Date(parsedMs).toLocaleDateString('en-IN', {
         day: '2-digit',
@@ -507,10 +592,14 @@ const FinanceCard: React.FC = () => {
     const incomeRowsChanged = Boolean(details?.incomeRowsChanged);
 
     if (budgetRowsCount > 0) {
-      parts.push(`Budget rows ${budgetRowsChanged ? 'updated' : 'reviewed'} (${budgetRowsCount} row(s))`);
+      parts.push(
+        `Budget rows ${budgetRowsChanged ? 'updated' : 'reviewed'} (${budgetRowsCount} row(s))`,
+      );
     }
     if (incomeRowsCount > 0) {
-      parts.push(`Income rows ${incomeRowsChanged ? 'updated' : 'reviewed'} (${incomeRowsCount} row(s))`);
+      parts.push(
+        `Income rows ${incomeRowsChanged ? 'updated' : 'reviewed'} (${incomeRowsCount} row(s))`,
+      );
     }
 
     return parts.join(' | ');
@@ -530,16 +619,27 @@ const FinanceCard: React.FC = () => {
   };
 
   const getProposalRef = (item: FinanceCardItem) =>
-    String(item.proposal_ref || '').trim()
-    || `#F-${new Date(item.created_at).getFullYear()}-${String(item.id).padStart(4, '0')}`;
+    String(item.proposal_ref || '').trim() ||
+    `#F-${new Date(item.created_at).getFullYear()}-${String(item.id).padStart(4, '0')}`;
 
-  const buildFinanceLogEvents = (item: FinanceCardItem, updates: FinanceStatusUpdate[]): FinanceLogEvent[] => {
-    const formatActorIdentity = (name?: string | null, email?: string | null, fallback?: string | null) => {
+  const buildFinanceLogEvents = (
+    item: FinanceCardItem,
+    updates: FinanceStatusUpdate[],
+  ): FinanceLogEvent[] => {
+    const formatActorIdentity = (
+      name?: string | null,
+      email?: string | null,
+      fallback?: string | null,
+    ) => {
       const normalizedName = String(name || '').trim();
       const normalizedEmail = String(email || '').trim();
       const normalizedFallback = String(fallback || '').trim();
 
-      if (normalizedName && normalizedEmail && normalizedName.toLowerCase() !== normalizedEmail.toLowerCase()) {
+      if (
+        normalizedName &&
+        normalizedEmail &&
+        normalizedName.toLowerCase() !== normalizedEmail.toLowerCase()
+      ) {
         return `${normalizedName} (${normalizedEmail})`;
       }
 
@@ -548,18 +648,29 @@ const FinanceCard: React.FC = () => {
       return normalizedFallback || '-';
     };
 
-    const events: FinanceLogEvent[] = [{
-      key: `created-${item.id}`,
-      badge: 'SUBMITTED',
-      title: 'Proposal created',
-      subtitle: 'Initial finance request submitted',
-      actorLabel: 'Submitted By',
-      actorValue: item.applicant_name,
-      actorBadgeLabel: '',
-      timestamp: item.created_at,
-      dateLabel: formatDateTime(item.created_at),
-      decision: 'submitted',
-    }];
+    const hasSubmittedUpdate = updates.some((update) => {
+      const decision = String(update.decision || update.status || '')
+        .trim()
+        .toLowerCase();
+      return decision === 'submitted';
+    });
+
+    const events: FinanceLogEvent[] = hasSubmittedUpdate
+      ? []
+      : [
+          {
+            key: `created-${item.id}`,
+            badge: 'SUBMITTED',
+            title: 'Proposal created',
+            subtitle: 'Initial finance request submitted',
+            actorLabel: 'Submitted By',
+            actorValue: item.applicant_name,
+            actorBadgeLabel: '',
+            timestamp: item.created_at,
+            dateLabel: formatDateTime(item.created_at),
+            decision: 'submitted',
+          },
+        ];
 
     const sortedUpdates = [...updates].sort((left, right) => {
       const leftMs = Date.parse(getUpdateTimestamp(left) || '') || 0;
@@ -592,8 +703,9 @@ const FinanceCard: React.FC = () => {
       const isRejected = decision.includes('rejected');
       const isApproved = decision.includes('approved') || decision.includes('completed');
       const isUpdated = decision === 'updated';
-      const isAdmin = Boolean(update.isAdmin)
-        || ['admin', 'super_admin', 'superadmin'].includes(String(actorRole || '').toLowerCase());
+      const isAdmin =
+        Boolean(update.isAdmin) ||
+        ['admin', 'super_admin', 'superadmin'].includes(String(actorRole || '').toLowerCase());
 
       let badge = 'UPDATED';
       let title = 'Proposal edited';
@@ -617,9 +729,11 @@ const FinanceCard: React.FC = () => {
       } else if (isUpdated) {
         badge = 'UPDATED';
         title = 'Proposal updated';
-        const details = update.details && typeof update.details === 'object' ? update.details : null;
+        const details =
+          update.details && typeof update.details === 'object' ? update.details : null;
         const changedFields = Array.isArray(details?.changedFields) ? details.changedFields : [];
-        const fieldCountSummary = changedFields.length > 0 ? `${changedFields.length} field(s) updated` : '';
+        const fieldCountSummary =
+          changedFields.length > 0 ? `${changedFields.length} field(s) updated` : '';
         const rowSummary = buildRowUpdateSummary(details);
         const fieldSummary = changedFields.length
           ? changedFields
@@ -629,12 +743,13 @@ const FinanceCard: React.FC = () => {
                 const after = formatAuditValue(label, field?.after);
                 return `${label}: ${before} -> ${after}`;
               })
-          .join(' | ')
+              .join(' | ')
           : '';
         const fallbackSummary = trimUpdatedSummary(String(eventSummary || '').trim());
-        subtitle = [fieldCountSummary, rowSummary || fallbackSummary, fieldSummary]
-          .filter(Boolean)
-          .join(' | ') || 'Proposal updated';
+        subtitle =
+          [fieldCountSummary, rowSummary || fallbackSummary, fieldSummary]
+            .filter(Boolean)
+            .join(' | ') || 'Proposal updated';
         if (isAdmin) {
           actorBadgeLabel = 'SUPERADMIN';
         }
@@ -647,7 +762,7 @@ const FinanceCard: React.FC = () => {
         subtitle,
         actorLabel,
         actorValue,
-        actorBadgeLabel: isUpdated ? actorBadgeLabel : (stage !== '-' ? stage : ''),
+        actorBadgeLabel: isUpdated ? actorBadgeLabel : stage !== '-' ? stage : '',
         timestamp: eventCreatedAt || item.created_at,
         dateLabel: formatDateTime(eventCreatedAt || item.created_at),
         decision,
@@ -662,14 +777,18 @@ const FinanceCard: React.FC = () => {
 
     try {
       setLoadingInfoId(requestId);
-      const response = await authenticityUtility.get(`/finance-requests/${requestId}/status-updates`) as {
-        status: string;
+      const response = (await authenticityUtility.get(
+        `/finance-requests/${requestId}/status-updates`,
+      )) as {
+        status?: string;
+        success?: boolean;
         data?: FinanceStatusUpdate[];
       };
 
       setStatusUpdatesById((prev) => ({
         ...prev,
-        [requestId]: response.status === 'success' ? (response.data || []) : [],
+        [requestId]:
+          response.success === true || response.status === 'success' ? response.data || [] : [],
       }));
     } catch (error) {
       console.error('Failed to fetch finance status updates', error);
@@ -701,10 +820,12 @@ const FinanceCard: React.FC = () => {
     const normalizedStatus = getNormalizedStatus(item);
     const currentStage = getCurrentStage(item);
 
-    return Boolean(item.workflow_state?.isEditableByApplicant) ||
+    return (
+      Boolean(item.workflow_state?.isEditableByApplicant) ||
       normalizedStatus === 'returned' ||
       normalizedStatus === 'submitted' ||
-      currentStage === 'level1';
+      currentStage === 'level1'
+    );
   };
 
   const handleEditClick = (item: FinanceCardItem) => {
@@ -716,8 +837,10 @@ const FinanceCard: React.FC = () => {
     const normalizedStatus = getNormalizedStatus(item);
     const currentStage = getCurrentStage(item);
 
-    return currentStage === 'level1' &&
-      !['approved', 'rejected', 'returned', 'archived'].includes(normalizedStatus);
+    return (
+      currentStage === 'level1' &&
+      !['approved', 'rejected', 'returned', 'archived'].includes(normalizedStatus)
+    );
   };
 
   const handleDeleteClick = async (item: FinanceCardItem) => {
@@ -727,8 +850,12 @@ const FinanceCard: React.FC = () => {
     if (!confirmed) return;
 
     try {
-      const response = await authenticityUtility.delete(`/finance-requests/${item.id}`) as { status?: string; message?: string };
-      if (response.status !== 'success') {
+      const response = (await authenticityUtility.delete(`/finance-requests/${item.id}`)) as {
+        success?: boolean;
+        status?: string;
+        message?: string;
+      };
+      if (response.success !== true && response.status !== 'success') {
         window.alert(response.message || 'Failed to delete finance request');
         return;
       }
@@ -748,24 +875,25 @@ const FinanceCard: React.FC = () => {
     let result = [...data];
 
     if (selectedStatus === 'pending') {
-      result = result.filter(item => isPendingLikeStatus(item));
+      result = result.filter((item) => isPendingLikeStatus(item));
     } else if (selectedStatus !== 'all') {
-      result = result.filter(item => getNormalizedStatus(item) === selectedStatus);
+      result = result.filter((item) => getNormalizedStatus(item) === selectedStatus);
     }
 
     if (selectedFiscalYear !== 'all') {
-      result = result.filter(item => getFiscalYear(item.created_at).toString() === selectedFiscalYear);
+      result = result.filter((item) => getItemFiscalYear(item) === selectedFiscalYear);
     }
 
     if (selectedBeneficiary !== 'all') {
-      result = result.filter(item => item.beneficiary_type === selectedBeneficiary);
+      result = result.filter((item) => item.beneficiary_type === selectedBeneficiary);
     }
 
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
-      result = result.filter(item => 
-        (item.applicant_name?.toLowerCase() || '').includes(lowerSearch) ||
-        (item.primary_head?.toLowerCase() || '').includes(lowerSearch)
+      result = result.filter(
+        (item) =>
+          (item.applicant_name?.toLowerCase() || '').includes(lowerSearch) ||
+          (item.primary_head?.toLowerCase() || '').includes(lowerSearch),
       );
     }
 
@@ -774,11 +902,11 @@ const FinanceCard: React.FC = () => {
 
   const stats = {
     total: data.length,
-    pending: data.filter(item => isPendingLikeStatus(item)).length,
-    returned: data.filter(item => getNormalizedStatus(item) === 'returned').length,
-    rejected: data.filter(item => getNormalizedStatus(item) === 'rejected').length,
-    approved: data.filter(item => getNormalizedStatus(item) === 'approved').length,
-    archived: data.filter(item => getNormalizedStatus(item) === 'archived').length,
+    pending: data.filter((item) => isPendingLikeStatus(item)).length,
+    returned: data.filter((item) => getNormalizedStatus(item) === 'returned').length,
+    rejected: data.filter((item) => getNormalizedStatus(item) === 'rejected').length,
+    approved: data.filter((item) => getNormalizedStatus(item) === 'approved').length,
+    archived: data.filter((item) => getNormalizedStatus(item) === 'archived').length,
   };
 
   const statCards = [
@@ -791,34 +919,37 @@ const FinanceCard: React.FC = () => {
   ] as const;
 
   const currentFiscalYear = getCurrentFiscalYear();
+  const currentFiscalYearStart = getCurrentFiscalYearStart();
   const fiscalYears = Array.from(
-    new Set(data.map((item) => getFiscalYear(item.created_at).toString()).filter(Boolean))
-  )
-    .concat(currentFiscalYear)
-    .filter((fy, index, array) => array.indexOf(fy) === index)
-    .sort()
-    .reverse();
+    new Set([
+      ...data.map((item) => getItemFiscalYear(item)).filter(Boolean),
+      currentFiscalYear,
+      formatFiscalYearValue(currentFiscalYearStart - 1),
+    ]),
+  ).sort((a, b) => Number.parseInt(b.split('-')[0], 10) - Number.parseInt(a.split('-')[0], 10));
   const beneficiaryTypes = Array.from(
     new Set(
       data
         .map((item) => item.beneficiary_type?.trim())
-        .filter((type): type is string => Boolean(type))
-    )
+        .filter((type): type is string => Boolean(type)),
+    ),
   ).sort();
   const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = filteredData.length === 0 ? 0 : (safeCurrentPage - 1) * pageSize;
   const pageEndIndex = Math.min(pageStartIndex + pageSize, filteredData.length);
   const paginatedData = filteredData.slice(pageStartIndex, pageEndIndex);
-  const activeInfoItem = activeInfoId !== null ? data.find((item) => item.id === activeInfoId) ?? null : null;
+  const activeInfoItem =
+    activeInfoId !== null ? (data.find((item) => item.id === activeInfoId) ?? null) : null;
   const activeStatusUpdates = activeInfoId !== null ? statusUpdatesById[activeInfoId] || [] : [];
-  const activeLogEvents = activeInfoItem ? buildFinanceLogEvents(activeInfoItem, activeStatusUpdates) : [];
+  const activeLogEvents = activeInfoItem
+    ? buildFinanceLogEvents(activeInfoItem, activeStatusUpdates)
+    : [];
   const fiscalYearOptions = [
     ...fiscalYears.map((fy) => ({
       value: fy,
       label: formatFiscalYearLabel(fy),
     })),
-    { value: 'all', label: 'All Years' },
   ];
   const beneficiaryTypeOptions = [
     { value: 'all', label: 'All Beneficiaries' },
@@ -827,79 +958,8 @@ const FinanceCard: React.FC = () => {
       label: type,
     })),
   ];
-  const selectStyles = {
-    control: (base: any, state: any) => ({
-      ...base,
-      minHeight: '46px',
-      height: '46px',
-      borderRadius: '12px',
-      borderColor: state.isFocused ? '#0069ab' : '#d7dee8',
-      boxShadow: state.isFocused ? '0 0 0 3px rgba(0, 105, 171, 0.12)' : 'none',
-      backgroundColor: '#ffffff',
-      fontSize: '0.95rem',
-      cursor: 'pointer',
-      '&:hover': {
-        borderColor: '#c7d6e4',
-      },
-    }),
-    valueContainer: (base: any) => ({
-      ...base,
-      padding: '0 14px',
-    }),
-    input: (base: any) => ({
-      ...base,
-      margin: 0,
-      padding: 0,
-    }),
-    placeholder: (base: any) => ({
-      ...base,
-      color: '#334155',
-    }),
-    singleValue: (base: any) => ({
-      ...base,
-      color: '#334155',
-    }),
-    indicatorsContainer: (base: any) => ({
-      ...base,
-      height: '44px',
-    }),
-    dropdownIndicator: (base: any, state: any) => ({
-      ...base,
-      color: state.isFocused ? '#0069ab' : '#708299',
-      padding: '0 14px',
-      transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-      transition: 'transform 0.18s ease',
-      '&:hover': {
-        color: '#0069ab',
-      },
-    }),
-    indicatorSeparator: () => ({ display: 'none' }),
-    menu: (base: any) => ({
-      ...base,
-      borderRadius: '12px',
-      overflow: 'hidden',
-      zIndex: 20,
-      boxShadow: '0 14px 30px rgba(15, 23, 42, 0.12)',
-    }),
-    option: (base: any, state: any) => ({
-      ...base,
-      padding: '10px 14px',
-      backgroundColor: state.isSelected
-        ? '#0069ab'
-        : state.isFocused
-          ? 'rgba(0, 105, 171, 0.08)'
-          : '#fff',
-      color: state.isSelected ? '#fff' : '#334155',
-      cursor: 'pointer',
-    }),
-  } as const;
   const handlePdfPreviewClick = (requestId: number) => {
-    navigate(`/finance/${requestId}`, {
-      state: {
-        openPreview: true,
-        autoDownloadPdf: false,
-      },
-    });
+    setPreviewRecordId(requestId);
   };
 
   return (
@@ -923,47 +983,63 @@ const FinanceCard: React.FC = () => {
               <div className="header-right-section">
                 <div className="search-box">
                   <Search size={18} className="search-icon" />
-                  <input 
-                    type="text" 
-                    placeholder="Search applicant or primary head..." 
+                  <input
+                    type="text"
+                    placeholder="Search applicant or primary head..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
-                  {searchTerm && <XCircle size={16} className="clear-icon" onClick={() => setSearchTerm('')} />}
+                  {searchTerm && (
+                    <XCircle size={16} className="clear-icon" onClick={() => setSearchTerm('')} />
+                  )}
                 </div>
 
                 <div className="filter-group">
                   <div className="filter-item">
-                    <Select
-                      value={
-                        fiscalYearOptions.find((option) => option.value === (selectedFiscalYear || currentFiscalYear)) ||
-                        fiscalYearOptions.find((option) => option.value === currentFiscalYear) ||
-                        fiscalYearOptions[0]
+                    <select
+                      className="financecard-financial-year"
+                      value={selectedFiscalYear || currentFiscalYear}
+                      onChange={(event) =>
+                        setSelectedFiscalYear(event.target.value || currentFiscalYear)
                       }
-                      onChange={(option: any) => setSelectedFiscalYear(option?.value || currentFiscalYear)}
-                      options={fiscalYearOptions}
-                      isSearchable={false}
-                      isClearable={false}
-                      placeholder={formatFiscalYearLabel(currentFiscalYear)}
-                      menuPlacement="auto"
-                      styles={selectStyles}
-                    />
+                      aria-label="Select financial year"
+                    >
+                      {fiscalYearOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="filter-item">
-                    <Select
-                      value={beneficiaryTypeOptions.find((option) => option.value === selectedBeneficiary) || beneficiaryTypeOptions[0]}
-                      onChange={(option: any) => setSelectedBeneficiary(option?.value || 'all')}
-                      options={beneficiaryTypeOptions}
-                      isSearchable={false}
-                      isClearable={false}
-                      placeholder="All Types"
-                      menuPlacement="auto"
-                      styles={selectStyles}
-                    />
+                    <select
+                      className="financecard-beneficiary-filter"
+                      value={selectedBeneficiary}
+                      onChange={(event) => setSelectedBeneficiary(event.target.value || 'all')}
+                      aria-label="Select beneficiary type"
+                    >
+                      {beneficiaryTypeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
-                <button className="financecard-add-btn" onClick={() => navigate('/finance/new')}>
+                <button
+                  className="financecard-add-btn"
+                  onClick={() =>
+                    navigate('/finance/new', {
+                      state: {
+                        fiscalYear:
+                          selectedFiscalYear && selectedFiscalYear !== 'all'
+                            ? selectedFiscalYear
+                            : currentFiscalYear,
+                      },
+                    })
+                  }
+                >
                   Add +
                 </button>
               </div>
@@ -991,12 +1067,13 @@ const FinanceCard: React.FC = () => {
 
             {/* CONTENT */}
             <div className="financecard-body">
-              {loading && (
-                <div className="financecard-state">Loading finance requests...</div>
-              )}
+              {loading && <div className="financecard-state">Loading finance requests...</div>}
 
               {!loading && filteredData.length === 0 && (
-                <div className="financecard-state" style={{ padding: '60px 20px', fontSize: '15px' }}>
+                <div
+                  className="financecard-state"
+                  style={{ padding: '60px 20px', fontSize: '15px' }}
+                >
                   No finance requests found
                 </div>
               )}
@@ -1012,8 +1089,8 @@ const FinanceCard: React.FC = () => {
                     const principalDocumentUrl = getPrincipalDocumentUrl(item);
                     const principalDocumentTitle = String(
                       principalDocument?.original_name ||
-                      principalDocument?.stored_name ||
-                      'Principal Document'
+                        principalDocument?.stored_name ||
+                        'Principal Document',
                     ).trim();
                     const showPrincipalDocumentAction = canShowPrincipalDocumentAction(item);
                     const principalActionLoading = principalDocBusyId === item.id;
@@ -1025,11 +1102,13 @@ const FinanceCard: React.FC = () => {
                             <span className="card-applicant-name">{item.applicant_name}</span>
                             <span className="card-category-tag">{item.budget_tag || '-'}</span>
                           </div>
-                          
+
                           <div className="card-header-right">
                             <div className="card-amount-box">
                               <span className="amount-label">Proposed</span>
-                              <span className="amount-value">Rs {getDisplayAmount(item).toLocaleString()}</span>
+                              <span className="amount-value">
+                                ₹{getDisplayAmount(item).toLocaleString()}
+                              </span>
                             </div>
                             <div className="card-actions-main">
                               <button
@@ -1074,7 +1153,11 @@ const FinanceCard: React.FC = () => {
                         <div className="card-row-bottom">
                           <div className="card-row-middle">
                             <span className="beneficiary-label">Beneficiary :</span>
-                            <span className="beneficiary-value">{item.beneficiary_name || item.beneficiary_value || item.applicant_name}</span>
+                            <span className="beneficiary-value">
+                              {item.beneficiary_name ||
+                                item.beneficiary_value ||
+                                item.applicant_name}
+                            </span>
                           </div>
                           <div className="card-footer-right">
                             {showPrincipalDocumentAction && (
@@ -1087,7 +1170,8 @@ const FinanceCard: React.FC = () => {
                                     if (!principalDocumentUrl) return;
                                     const link = document.createElement('a');
                                     link.href = principalDocumentUrl;
-                                    link.download = principalDocumentTitle || 'Principal Document.pdf';
+                                    link.download =
+                                      principalDocumentTitle || 'Principal Document.pdf';
                                     document.body.appendChild(link);
                                     link.click();
                                     document.body.removeChild(link);
@@ -1103,7 +1187,13 @@ const FinanceCard: React.FC = () => {
                                       type="button"
                                       className="icon-btn-subtle financecard-principal-mini-btn"
                                       title={`View ${principalDocumentTitle}`}
-                                      onClick={() => window.open(principalDocumentUrl, '_blank', 'noopener,noreferrer')}
+                                      onClick={() =>
+                                        window.open(
+                                          principalDocumentUrl,
+                                          '_blank',
+                                          'noopener,noreferrer',
+                                        )
+                                      }
                                       disabled={principalActionLoading}
                                     >
                                       <Eye size={16} />
@@ -1134,10 +1224,12 @@ const FinanceCard: React.FC = () => {
                             <button
                               type="button"
                               className={`status-pill-solid status-${status} finance-status-pill ${isStatusExpanded ? 'finance-status-pill--active' : ''}`}
-                              onClick={() => setShowFinanceStatusDetail((prev) => ({
-                                ...prev,
-                                [item.id]: !prev[item.id],
-                              }))}
+                              onClick={() =>
+                                setShowFinanceStatusDetail((prev) => ({
+                                  ...prev,
+                                  [item.id]: !prev[item.id],
+                                }))
+                              }
                               aria-expanded={isStatusExpanded}
                               aria-label={`Toggle workflow timeline for ${item.applicant_name}`}
                             >
@@ -1145,20 +1237,24 @@ const FinanceCard: React.FC = () => {
                             </button>
                             {isStatusExpanded && (
                               <div className="finance-status-detail-line">
-                                {['hod', 'dof', 'principal', 'chairman'].map((stage, stageIndex, array) => {
-                                  const stageState = getFinanceTimelineState(item, stage);
-                                  return (
-                                    <React.Fragment key={stage}>
-                                      <div
-                                        className={`finance-status-line-circle finance-status-circle-${stageState}`}
-                                        title={stage.toUpperCase()}
-                                      />
-                                      {stageIndex < array.length - 1 && (
-                                        <div className={`finance-status-line-connector finance-status-line-connector--${stageState}`} />
-                                      )}
-                                    </React.Fragment>
-                                  );
-                                })}
+                                {['hod', 'dof', 'principal', 'chairman'].map(
+                                  (stage, stageIndex, array) => {
+                                    const stageState = getFinanceTimelineState(item, stage);
+                                    return (
+                                      <React.Fragment key={stage}>
+                                        <div
+                                          className={`finance-status-line-circle finance-status-circle-${stageState}`}
+                                          title={stage.toUpperCase()}
+                                        />
+                                        {stageIndex < array.length - 1 && (
+                                          <div
+                                            className={`finance-status-line-connector finance-status-line-connector--${stageState}`}
+                                          />
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  },
+                                )}
                               </div>
                             )}
                           </div>
@@ -1229,7 +1325,9 @@ const FinanceCard: React.FC = () => {
                 </div>
                 <div className="financecard-log-summary-row">
                   <span className="financecard-log-label">Last Edited:</span>
-                  <span className="financecard-log-value">{formatDateTime(activeInfoItem.updated_at || activeInfoItem.created_at)}</span>
+                  <span className="financecard-log-value">
+                    {formatDateTime(activeInfoItem.updated_at || activeInfoItem.created_at)}
+                  </span>
                 </div>
               </div>
 
@@ -1238,7 +1336,10 @@ const FinanceCard: React.FC = () => {
                   <div className="financecard-log-empty">Loading updates...</div>
                 ) : (
                   activeLogEvents.map((event) => (
-                    <div key={event.key} className={`financecard-log-entry financecard-log-entry-modal${event.actorBadgeLabel ? ' financecard-log-entry--admin' : ''}`}>
+                    <div
+                      key={event.key}
+                      className={`financecard-log-entry financecard-log-entry-modal${event.actorBadgeLabel ? ' financecard-log-entry--admin' : ''}`}
+                    >
                       {event.actorBadgeLabel === 'SUPERADMIN' && (
                         <span className="financecard-log-admin-mark" title="Updated by Admin">
                           {`\u2605 ${event.actorBadgeLabel}`}
@@ -1246,16 +1347,23 @@ const FinanceCard: React.FC = () => {
                       )}
                       <div className="financecard-log-entry-top">
                         <div className="financecard-log-entry-title">
-                          <span className={`financecard-log-badge financecard-log-badge--${event.badge.toLowerCase()}`}>
+                          <span
+                            className={`financecard-log-badge financecard-log-badge--${event.badge.toLowerCase()}`}
+                          >
                             {event.badge}
                           </span>
                           <span className="financecard-log-title-text">{event.title}</span>
                         </div>
-                        {event.actorBadgeLabel && !['SUPERADMIN', 'HOD', 'DOF'].includes(event.actorBadgeLabel) && (
-                          <span className="financecard-log-stage-pill">{event.actorBadgeLabel}</span>
-                        )}
+                        {event.actorBadgeLabel &&
+                          !['SUPERADMIN', 'HOD', 'DOF'].includes(event.actorBadgeLabel) && (
+                            <span className="financecard-log-stage-pill">
+                              {event.actorBadgeLabel}
+                            </span>
+                          )}
                       </div>
-                      <div className="financecard-log-role">{event.subtitle || 'Status update'}</div>
+                      <div className="financecard-log-role">
+                        {event.subtitle || 'Status update'}
+                      </div>
                       <div className="financecard-log-actor-line">
                         <strong>{event.actorLabel}:</strong> {event.actorValue}
                       </div>
@@ -1280,6 +1388,22 @@ const FinanceCard: React.FC = () => {
           </div>
         </div>
       )}
+      <CustomModal
+        show={previewRecordId !== null}
+        onHide={() => setPreviewRecordId(null)}
+        title="Request Print Preview"
+        size="xl"
+        centered
+        className="pdf-popup-preview-modal"
+      >
+        {previewRecordId !== null && (
+          <iframe
+            src={`/finance/${previewRecordId}?preview=true`}
+            style={{ width: '100%', height: 'calc(100vh - 92px)', border: 'none' }}
+            title="Request Preview"
+          />
+        )}
+      </CustomModal>
     </>
   );
 };

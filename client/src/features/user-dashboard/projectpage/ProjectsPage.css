@@ -328,7 +328,7 @@
 }
 
 /* Default fallback */
-.status-badge:not([class*="status-"]) {
+.status-badge:not([class*='status-']) {
   background: #e1f0ff;
   color: #0069ab;
   border: 1px solid #b3d9ff;

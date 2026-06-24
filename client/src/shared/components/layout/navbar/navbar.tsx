@@ -1,9 +1,9 @@
-import React, { useState, useRef } from "react";
-import "./navbar.css";
-import { Link, useLocation } from "react-router-dom";
-import { ShieldCheck, PieChart } from "lucide-react";
+import React, { useState, useRef } from 'react';
+import './navbar.css';
+import { Link, useLocation } from 'react-router-dom';
+import { ShieldCheck, PieChart } from 'lucide-react';
 
-import { useAuth } from "../../../../contexts/AuthContext";
+import { useAuth } from '../../../../contexts/AuthContext';
 import {
   canAccessAdminArea,
   canAccessBudgetApproval,
@@ -11,7 +11,7 @@ import {
   canAccessFinanceWorkflow,
   canManageAccessControl,
   isSuperAdmin,
-} from "../../../utils/permissionUtils";
+} from '../../../utils/permissionUtils';
 
 /* ═══════════════════════════════════════════
    SVG Icon Components (Lucide-style, 24×24)
@@ -70,9 +70,7 @@ const IconFinance = () => (
 );
 
 // Reports — pie chart
-const IconReports = () => (
-  <PieChart className="sb-icon" size={20} strokeWidth={1.8} />
-);
+const IconReports = () => <PieChart className="sb-icon" size={20} strokeWidth={1.8} />;
 
 // Bookings — calendar with clock
 const IconBookings = () => (
@@ -169,9 +167,7 @@ const IconKpi = () => (
 );
 
 // Super Admin — shield with checkmark
-const IconSuperAdmin = () => (
-  <ShieldCheck className="sb-icon" size={20} strokeWidth={1.8} />
-);
+const IconSuperAdmin = () => <ShieldCheck className="sb-icon" size={20} strokeWidth={1.8} />;
 
 // Logout — door exit
 const IconLogout = () => (
@@ -244,10 +240,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
   const showAdminMenu =
-    showAdminDashboard ||
-    showBudgetApproval ||
-    showFinanceWorkflow ||
-    showExpenditureWorkflow;
+    showAdminDashboard || showBudgetApproval || showFinanceWorkflow || showExpenditureWorkflow;
   const showSuperAdminMenu = isSuperAdmin(user);
 
   const toggleDropdown = (menuName: string) => {
@@ -265,13 +258,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
 
   const isActive = (path: string) => location.pathname === path;
   const isGroupActive = (paths: string[]) =>
-    paths.some(
-      (p) => location.pathname === p || location.pathname.startsWith(`${p}/`)
-    );
+    paths.some((p) => location.pathname === p || location.pathname.startsWith(`${p}/`));
 
   return (
     <aside
-      className={`sidebar ${isExpanded ? "expanded" : "collapsed"}`}
+      className={`sidebar ${isExpanded ? 'expanded' : 'collapsed'}`}
       ref={sidebarRef}
       onMouseEnter={() => {
         if (collapsed) setIsHovered(true);
@@ -287,7 +278,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
         {/* 1. Dashboard */}
         <Link
           to="/dashboard"
-          className={`sb-link ${isActive("/dashboard") ? "active" : ""}`}
+          className={`sb-link ${isActive('/dashboard') ? 'active' : ''}`}
           onClick={handleLinkClick}
           title="Dashboard"
         >
@@ -299,49 +290,43 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
         <div className="sb-group">
           <button
             className={`sb-link ${
-              isGroupActive([
-                "/publications",
-                "/projects",
-                "/fellowship",
-                "/patent",
-                "/journal",
-              ])
-                ? "active"
-                : ""
-            } ${activeMenu === "Research" ? "open" : ""}`}
-            onClick={() => toggleDropdown("Research")}
+              isGroupActive(['/publications', '/projects', '/fellowship', '/patent', '/journal'])
+                ? 'active'
+                : ''
+            } ${activeMenu === 'Research' ? 'open' : ''}`}
+            onClick={() => toggleDropdown('Research')}
             title="Research"
           >
             <IconResearch />
             <span className="sb-text">Research</span>
             <ChevronDown />
           </button>
-          {isExpanded && activeMenu === "Research" && (
+          {isExpanded && activeMenu === 'Research' && (
             <div className="sb-submenu">
               <Link
                 to="/publications"
-                className={`sb-sublink ${isActive("/publications") ? "active" : ""}`}
+                className={`sb-sublink ${isActive('/publications') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Publication
               </Link>
               <Link
                 to="/projects"
-                className={`sb-sublink ${isActive("/projects") ? "active" : ""}`}
+                className={`sb-sublink ${isActive('/projects') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Project
               </Link>
               <Link
                 to="/fellowship"
-                className={`sb-sublink ${isActive("/fellowship") ? "active" : ""}`}
+                className={`sb-sublink ${isActive('/fellowship') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Fellowship
               </Link>
               <Link
                 to="/patent"
-                className={`sb-sublink ${isActive("/patent") ? "active" : ""}`}
+                className={`sb-sublink ${isActive('/patent') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Patent
@@ -355,41 +340,41 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           <button
             className={`sb-link ${
               isGroupActive([
-                "/budgetcard",
-                "/financecard",
-                "/expenditurecard",
-                "/finance",
-                "/budget",
+                '/budgetcard',
+                '/financecard',
+                '/expenditurecard',
+                '/finance',
+                '/budget',
               ])
-                ? "active"
-                : ""
-            } ${activeMenu === "Finance" ? "open" : ""}`}
-            onClick={() => toggleDropdown("Finance")}
+                ? 'active'
+                : ''
+            } ${activeMenu === 'Finance' ? 'open' : ''}`}
+            onClick={() => toggleDropdown('Finance')}
             title="Finance"
           >
             <IconFinance />
             <span className="sb-text">Finance</span>
             <ChevronDown />
           </button>
-          {isExpanded && activeMenu === "Finance" && (
+          {isExpanded && activeMenu === 'Finance' && (
             <div className="sb-submenu">
               <Link
                 to="/budgetcard"
-                className={`sb-sublink ${isActive("/budgetcard") ? "active" : ""}`}
+                className={`sb-sublink ${isActive('/budgetcard') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Budget
               </Link>
               <Link
                 to="/financecard"
-                className={`sb-sublink ${isActive("/financecard") ? "active" : ""}`}
+                className={`sb-sublink ${isActive('/financecard') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
-                Approval
+                Application
               </Link>
               <Link
                 to="/expenditurecard"
-                className={`sb-sublink ${isActive("/expenditurecard") ? "active" : ""}`}
+                className={`sb-sublink ${isActive('/expenditurecard') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Expenditure
@@ -402,42 +387,34 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
         <div className="sb-group">
           <button
             className={`sb-link ${
-              isGroupActive(["/admin/budgetdashboard", "/reports"])
-                ? "active"
-                : ""
-            } ${activeMenu === "Reports" ? "open" : ""}`}
-            onClick={() => toggleDropdown("Reports")}
+              isGroupActive(['/admin/budgetdashboard', '/reports']) ? 'active' : ''
+            } ${activeMenu === 'Reports' ? 'open' : ''}`}
+            onClick={() => toggleDropdown('Reports')}
             title="Reports"
           >
             <IconReports />
             <span className="sb-text">Reports</span>
             <ChevronDown />
           </button>
-          {isExpanded && activeMenu === "Reports" && (
+          {isExpanded && activeMenu === 'Reports' && (
             <div className="sb-submenu">
               <Link
                 to="/admin/budgetdashboard"
-                className={`sb-sublink ${
-                  isActive("/admin/budgetdashboard") ? "active" : ""
-                }`}
+                className={`sb-sublink ${isActive('/admin/budgetdashboard') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Budget Dashboard
               </Link>
               <Link
                 to="/reports/finance"
-                className={`sb-sublink ${
-                  isActive("/reports/finance") ? "active" : ""
-                }`}
+                className={`sb-sublink ${isActive('/reports/finance') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Finance Dashboard
               </Link>
               <Link
                 to="/reports/expenditure"
-                className={`sb-sublink ${
-                  isActive("/reports/expenditure") ? "active" : ""
-                }`}
+                className={`sb-sublink ${isActive('/reports/expenditure') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Expenditure Dashboard
@@ -451,63 +428,51 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           <button
             className={`sb-link ${
               isGroupActive([
-                "/guestHouse-dashboard",
-                "/vehicle-booking",
-                "/hall-booking",
-                "/eventdashboard",
-                "/event",
-                "/workorder",
+                '/guestHouse-dashboard',
+                '/vehicle-booking',
+                '/hall-booking',
+                '/eventdashboard',
+                '/event',
               ])
-                ? "active"
-                : ""
-            } ${activeMenu === "Bookings" ? "open" : ""}`}
-            onClick={() => toggleDropdown("Bookings")}
+                ? 'active'
+                : ''
+            } ${activeMenu === 'Bookings' ? 'open' : ''}`}
+            onClick={() => toggleDropdown('Bookings')}
             title="Bookings"
           >
             <IconBookings />
             <span className="sb-text">Bookings</span>
             <ChevronDown />
           </button>
-          {isExpanded && activeMenu === "Bookings" && (
+          {isExpanded && activeMenu === 'Bookings' && (
             <div className="sb-submenu">
               <Link
                 to="/guestHouse-dashboard"
-                className={`sb-sublink ${
-                  isActive("/guestHouse-dashboard") ? "active" : ""
-                }`}
+                className={`sb-sublink ${isActive('/guestHouse-dashboard') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Guest House
               </Link>
               <Link
                 to="/vehicle-booking"
-                className={`sb-sublink ${
-                  isActive("/vehicle-booking") ? "active" : ""
-                }`}
+                className={`sb-sublink ${isActive('/vehicle-booking') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Vehicle
               </Link>
               <Link
                 to="/hall-booking"
-                className={`sb-sublink ${isActive("/hall-booking") ? "active" : ""}`}
+                className={`sb-sublink ${isActive('/hall-booking') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Hall Booking
               </Link>
               <Link
                 to="/eventdashboard"
-                className={`sb-sublink ${isActive("/eventdashboard") ? "active" : ""}`}
+                className={`sb-sublink ${isActive('/eventdashboard') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Event
-              </Link>
-              <Link
-                to="/workorder"
-                className={`sb-sublink ${isGroupActive(["/workorder"]) ? "active" : ""}`}
-                onClick={handleLinkClick}
-              >
-                Work Order
               </Link>
             </div>
           )}
@@ -516,7 +481,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
         {/* 5. Task */}
         <Link
           to="/task"
-          className={`sb-link ${isActive("/task") ? "active" : ""}`}
+          className={`sb-link ${isActive('/task') ? 'active' : ''}`}
           onClick={handleLinkClick}
           title="Task"
         >
@@ -530,50 +495,44 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
             <button
               className={`sb-link ${
                 isGroupActive([
-                  "/publication-dashboard",
-                  "/project-dashboard",
-                  "/admin-dashboard",
-                  "/admin/budget",
-                  "/workflow/finance",
-                  "/workflow/expenditure",
+                  '/publication-dashboard',
+                  '/project-dashboard',
+                  '/admin-dashboard',
+                  '/admin/budget',
+                  '/workflow/finance',
+                  '/workflow/expenditure',
                 ])
-                  ? "active"
-                  : ""
-              } ${activeMenu === "Approvals" ? "open" : ""}`}
-              onClick={() => toggleDropdown("Approvals")}
+                  ? 'active'
+                  : ''
+              } ${activeMenu === 'Approvals' ? 'open' : ''}`}
+              onClick={() => toggleDropdown('Approvals')}
               title="Approvals"
             >
               <IconAdmin />
               <span className="sb-text">Approvals</span>
               <ChevronDown />
             </button>
-            {isExpanded && activeMenu === "Approvals" && (
+            {isExpanded && activeMenu === 'Approvals' && (
               <div className="sb-submenu">
                 {showAdminDashboard && (
                   <>
                     <Link
                       to="/publication-dashboard"
-                      className={`sb-sublink ${
-                        isActive("/publication-dashboard") ? "active" : ""
-                      }`}
+                      className={`sb-sublink ${isActive('/publication-dashboard') ? 'active' : ''}`}
                       onClick={handleLinkClick}
                     >
                       Publication Approval
                     </Link>
                     <Link
                       to="/project-dashboard"
-                      className={`sb-sublink ${
-                        isActive("/project-dashboard") ? "active" : ""
-                      }`}
+                      className={`sb-sublink ${isActive('/project-dashboard') ? 'active' : ''}`}
                       onClick={handleLinkClick}
                     >
                       Project Approval
                     </Link>
                     <Link
                       to="/admin-dashboard"
-                      className={`sb-sublink ${
-                        isActive("/admin-dashboard") ? "active" : ""
-                      }`}
+                      className={`sb-sublink ${isActive('/admin-dashboard') ? 'active' : ''}`}
                       onClick={handleLinkClick}
                     >
                       Dashboard
@@ -583,7 +542,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 {showBudgetApproval && (
                   <Link
                     to="/admin/budget"
-                    className={`sb-sublink ${isActive("/admin/budget") ? "active" : ""}`}
+                    className={`sb-sublink ${isActive('/admin/budget') ? 'active' : ''}`}
                     onClick={handleLinkClick}
                   >
                     Budget Approval
@@ -592,9 +551,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 {showFinanceWorkflow && (
                   <Link
                     to="/workflow/finance"
-                    className={`sb-sublink ${
-                      isActive("/workflow/finance") ? "active" : ""
-                    }`}
+                    className={`sb-sublink ${isActive('/workflow/finance') ? 'active' : ''}`}
                     onClick={handleLinkClick}
                   >
                     Finance Approval
@@ -603,12 +560,10 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 {showExpenditureWorkflow && (
                   <Link
                     to="/workflow/expenditure"
-                    className={`sb-sublink ${
-                      isActive("/workflow/expenditure") ? "active" : ""
-                    }`}
+                    className={`sb-sublink ${isActive('/workflow/expenditure') ? 'active' : ''}`}
                     onClick={handleLinkClick}
                   >
-                    Expenditure Workflow
+                    Expenditure Approval
                   </Link>
                 )}
               </div>
@@ -621,25 +576,23 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           <div className="sb-group">
             <button
               className={`sb-link ${
-                isGroupActive(["/access-control", "/admin/master-data"])
-                  ? "active"
-                  : ""
-              } ${activeMenu === "SuperAdmin" ? "open" : ""}`}
-              onClick={() => toggleDropdown("SuperAdmin")}
+                isGroupActive(['/access-control', '/admin/master-data', '/admin/budget-catalog'])
+                  ? 'active'
+                  : ''
+              } ${activeMenu === 'SuperAdmin' ? 'open' : ''}`}
+              onClick={() => toggleDropdown('SuperAdmin')}
               title="Super Admin"
             >
               <IconSuperAdmin />
               <span className="sb-text">Super Admin</span>
               <ChevronDown />
             </button>
-            {isExpanded && activeMenu === "SuperAdmin" && (
+            {isExpanded && activeMenu === 'SuperAdmin' && (
               <div className="sb-submenu">
                 {showAccessControl && (
                   <Link
                     to="/access-control"
-                    className={`sb-sublink ${
-                      isActive("/access-control") ? "active" : ""
-                    }`}
+                    className={`sb-sublink ${isActive('/access-control') ? 'active' : ''}`}
                     onClick={handleLinkClick}
                   >
                     Access Control
@@ -648,12 +601,19 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 {showMasterData && (
                   <Link
                     to="/admin/master-data"
-                    className={`sb-sublink ${
-                      isActive("/admin/master-data") ? "active" : ""
-                    }`}
+                    className={`sb-sublink ${isActive('/admin/master-data') ? 'active' : ''}`}
                     onClick={handleLinkClick}
                   >
                     Master Data
+                  </Link>
+                )}
+                {showMasterData && (
+                  <Link
+                    to="/admin/budget-catalog"
+                    className={`sb-sublink ${isActive('/admin/budget-catalog') ? 'active' : ''}`}
+                    onClick={handleLinkClick}
+                  >
+                    Budget Catalog
                   </Link>
                 )}
               </div>
@@ -668,7 +628,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
 
         <Link
           to="/profile"
-          className={`sb-link ${isActive("/profile") ? "active" : ""}`}
+          className={`sb-link ${isActive('/profile') ? 'active' : ''}`}
           onClick={handleLinkClick}
           title="My Profile"
         >
@@ -678,7 +638,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
 
         <Link
           to="/kpi"
-          className={`sb-link ${isActive("/kpi") ? "active" : ""}`}
+          className={`sb-link ${isActive('/kpi') ? 'active' : ''}`}
           onClick={handleLinkClick}
           title="KPI"
         >

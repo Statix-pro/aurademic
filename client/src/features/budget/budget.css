@@ -53,7 +53,6 @@
 }
 
 @media (max-width: 768px) {
-
   .budgetPage .col-md-4,
   .budgetPage .col-md-5,
   .budgetPage .col-md-6,
@@ -300,7 +299,7 @@
 }
 
 /* Hide number input spinners (all number inputs) */
-.budgetPage input[type="number"] {
+.budgetPage input[type='number'] {
   -moz-appearance: textfield;
   /* Firefox */
   appearance: textfield;
@@ -308,23 +307,23 @@
 }
 
 /* Remove spinner arrows completely */
-.budgetPage input[type="number"]::-webkit-outer-spin-button,
-.budgetPage input[type="number"]::-webkit-inner-spin-button {
+.budgetPage input[type='number']::-webkit-outer-spin-button,
+.budgetPage input[type='number']::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
 /* Ensure table inputs + month inputs also clean */
-.budgetPage .tableInput[type="number"],
-.budgetPage .monthAmountInput[type="number"] {
+.budgetPage .tableInput[type='number'],
+.budgetPage .monthAmountInput[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
 
-.budgetPage .tableInput[type="number"]::-webkit-outer-spin-button,
-.budgetPage .tableInput[type="number"]::-webkit-inner-spin-button,
-.budgetPage .monthAmountInput[type="number"]::-webkit-outer-spin-button,
-.budgetPage .monthAmountInput[type="number"]::-webkit-inner-spin-button {
+.budgetPage .tableInput[type='number']::-webkit-outer-spin-button,
+.budgetPage .tableInput[type='number']::-webkit-inner-spin-button,
+.budgetPage .monthAmountInput[type='number']::-webkit-outer-spin-button,
+.budgetPage .monthAmountInput[type='number']::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
@@ -458,7 +457,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
 .budgetGuidelinesButton:hover {
@@ -581,7 +582,9 @@
   border: none;
   font: inherit;
   font-weight: 600;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
 .budgetTabButton.active {
